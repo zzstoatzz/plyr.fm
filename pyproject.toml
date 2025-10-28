@@ -1,0 +1,118 @@
+[project]
+name = "relay"
+dynamic = ["version"]
+description = "decentralized music streaming platform built on ATProto"
+authors = [{ name = "zzstoatzz", email = "thrast36@gmail.com" }]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "httpx>=0.28.0",
+    "pydantic>=2.11.0",
+    "pydantic-settings>=2.7.0",
+    "python-dotenv>=1.1.0",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14.0",
+    "asyncpg>=0.30.0",
+    "redis[hiredis]>=5.2.0",
+    "atproto>=0.0.55",
+    "boto3>=1.37.0",
+    "python-multipart>=0.0.20",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+]
+
+requires-python = ">=3.11"
+readme = "README.md"
+license = "Apache-2.0"
+
+keywords = [
+    "music",
+    "streaming",
+    "atproto",
+    "bluesky",
+    "decentralized",
+]
+
+[dependency-groups]
+dev = [
+    "dirty-equals>=0.9.0",
+    "ipython>=8.12.3",
+    "pdbpp>=0.10.3",
+    "pre-commit>=4.0.0",
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.25.2",
+    "pytest-cov>=6.1.1",
+    "pytest-env>=1.1.5",
+    "pytest-timeout>=2.4.0",
+    "pytest-xdist>=3.6.1",
+    "ruff>=0.12.0",
+    "httpx>=0.28.0",
+]
+
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning>=0.7.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
+fallback-version = "0.0.0"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+timeout = 10
+env = [
+    "RELAY_TEST_MODE=1",
+]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]
+pythonpath = ["."]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+ignore = [
+    "COM812",
+    "PLR0913", # Too many arguments
+    "SIM102", # Dont require combining if statements
+]
+extend-select = [
+    "B", # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "I", # isort
+    "PIE", # flake8-pie
+    "RUF", # Ruff-specific
+    "SIM", # flake8-simplify
+    "UP", # pyupgrade
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "I001"]
+"tests/**/*.py" = ["S101"] # Allow assert in tests
+"src/relay/api/**/*.py" = ["B008"] # Allow Depends() and File() in FastAPI route defaults
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "sandbox/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
