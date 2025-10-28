@@ -100,8 +100,8 @@ wheels = [
 
 [[package]]
 name = "atproto"
-version = "0.0.63"
-source = { registry = "https://pypi.org/simple" }
+version = "0.0.1.dev460"
+source = { git = "https://github.com/zzstoatzz/atproto?rev=main#efe6f7407ae7edb7f35b410a1eb8dba7a5c63e7f" }
 dependencies = [
     { name = "click" },
     { name = "cryptography" },
@@ -111,10 +111,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "typing-extensions" },
     { name = "websockets" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c1/ab/4b69c283091cc6687d4f58d4951076a37302f414e6ba258b616cc9788b5d/atproto-0.0.63.tar.gz", hash = "sha256:7a2328d7318771db4225ec61b23a85e70fcae0cd60208ffe9fcf8f637ca20cc0", size = 204207, upload-time = "2025-10-22T19:56:05.075Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cd/6f/b6a9f79953314a08c45550775fba7864444243a1c4cdd660d90477480d74/atproto-0.0.63-py3-none-any.whl", hash = "sha256:bc08a8a90cf043246ead252a59e39055b170cd82f2f5cd7c0243af95d021ac4b", size = 431894, upload-time = "2025-10-22T19:56:02.91Z" },
 ]
 
 [[package]]
@@ -1535,7 +1531,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.14.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
-    { name = "atproto", specifier = ">=0.0.55" },
+    { name = "atproto", git = "https://github.com/zzstoatzz/atproto?rev=main" },
     { name = "boto3", specifier = ">=1.37.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.0" },

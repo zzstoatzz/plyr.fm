@@ -1,11 +1,14 @@
-"""authentication and session management."""
+"""OAuth 2.1 authentication and session management."""
 
 import secrets
 from dataclasses import dataclass
 from typing import Annotated
 
-from atproto import Client, IdResolver
+from atproto_oauth import OAuthClient
+from atproto_oauth.stores.memory import MemorySessionStore, MemoryStateStore
 from fastapi import Cookie, HTTPException
+
+from relay.config import settings
 
 
 @dataclass
@@ -15,16 +18,33 @@ class Session:
     session_id: str
     did: str
     handle: str
+    oauth_session: dict  # store OAuth session data
 
 
-# in-memory session store (MVP - replace with redis/db later)
+# in-memory stores (MVP - replace with redis/db later)
 _sessions: dict[str, Session] = {}
+_state_store = MemoryStateStore()
+_session_store = MemorySessionStore()
+
+# OAuth client
+oauth_client = OAuthClient(
+    client_id=settings.atproto_client_id,
+    redirect_uri=settings.atproto_redirect_uri,
+    scope="atproto",
+    state_store=_state_store,
+    session_store=_session_store,
+)
 
 
-def create_session(did: str, handle: str) -> str:
+def create_session(did: str, handle: str, oauth_session: dict) -> str:
     """create a new session for authenticated user."""
     session_id = secrets.token_urlsafe(32)
-    _sessions[session_id] = Session(session_id=session_id, did=did, handle=handle)
+    _sessions[session_id] = Session(
+        session_id=session_id,
+        did=did,
+        handle=handle,
+        oauth_session=oauth_session,
+    )
     return session_id
 
 
@@ -38,37 +58,39 @@ def delete_session(session_id: str) -> None:
     _sessions.pop(session_id, None)
 
 
-def verify_app_password(handle: str, app_password: str) -> tuple[str, str]:
-    """verify atproto app password and return (did, handle)."""
+async def start_oauth_flow(handle: str) -> tuple[str, str]:
+    """start OAuth flow and return (auth_url, state)."""
     try:
-        # resolve handle to DID, then get DID document to find PDS
-        resolver = IdResolver()
+        auth_url, state = await oauth_client.start_authorization(handle)
+        return auth_url, state
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"failed to start OAuth flow: {e}",
+        ) from e
 
-        # first resolve handle to DID
-        did = resolver.handle.resolve(handle)
 
-        # then get DID document
-        did_doc = resolver.did.resolve(did)
-
-        # find PDS service endpoint from DID document
-        pds_url = None
-        if hasattr(did_doc, "service") and did_doc.service:
-            for service in did_doc.service:
-                if service.id == "#atproto_pds":
-                    pds_url = service.service_endpoint
-                    break
-
-        if not pds_url:
-            raise ValueError("no PDS service found for this handle")
-
-        # create client with user's actual PDS
-        client = Client(base_url=pds_url)
-        profile = client.login(handle, app_password)
-        return profile.did, profile.handle
+async def handle_oauth_callback(code: str, state: str, iss: str) -> tuple[str, str, dict]:
+    """handle OAuth callback and return (did, handle, oauth_session)."""
+    try:
+        oauth_session = await oauth_client.handle_callback(
+            code=code,
+            state=state,
+            iss=iss,
+        )
+        # OAuth session is already stored in session_store, just extract key info
+        session_data = {
+            "did": oauth_session.did,
+            "handle": oauth_session.handle,
+            "pds_url": oauth_session.pds_url,
+            "authserver_iss": oauth_session.authserver_iss,
+            "scope": oauth_session.scope,
+        }
+        return oauth_session.did, oauth_session.handle, session_data
     except Exception as e:
         raise HTTPException(
             status_code=401,
-            detail=f"authentication failed: {e}",
+            detail=f"OAuth callback failed: {e}",
         ) from e
 
 

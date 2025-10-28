@@ -2,36 +2,57 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse, RedirectResponse
 
-from relay.auth import Session, create_session, delete_session, require_auth, verify_app_password
+from relay.auth import (
+    Session,
+    create_session,
+    delete_session,
+    handle_oauth_callback,
+    require_auth,
+    start_oauth_flow,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login")
-async def login(
-    handle: Annotated[str, Form()],
-    app_password: Annotated[str, Form()],
-) -> JSONResponse:
-    """login with atproto app password."""
-    did, verified_handle = verify_app_password(handle, app_password)
-    session_id = create_session(did, verified_handle)
+@router.get("/start")
+async def start_login(handle: str) -> RedirectResponse:
+    """start OAuth flow for a given handle."""
+    auth_url, _state = await start_oauth_flow(handle)
+    return RedirectResponse(url=auth_url)
 
-    response = JSONResponse(
-        content={
-            "did": did,
-            "handle": verified_handle,
-            "message": "logged in successfully",
-        }
+
+@router.get("/callback")
+async def oauth_callback(
+    code: Annotated[str, Query()],
+    state: Annotated[str, Query()],
+    iss: Annotated[str, Query()],
+) -> RedirectResponse:
+    """handle OAuth callback and create session."""
+    did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
+    session_id = create_session(did, handle, oauth_session)
+
+    # redirect to localhost endpoint to set cookie properly for localhost domain
+    response = RedirectResponse(
+        url=f"http://localhost:8000/auth/session?session_id={session_id}",
+        status_code=303
     )
+    return response
+
+
+@router.get("/session")
+async def set_session_cookie(session_id: str) -> RedirectResponse:
+    """intermediate endpoint to set session cookie for localhost domain."""
+    response = RedirectResponse(url="http://localhost:5173", status_code=303)
     response.set_cookie(
         key="session_id",
         value=session_id,
         httponly=True,
-        secure=False,  # set to True in production with HTTPS
+        secure=False,
         samesite="lax",
+        domain="localhost",
     )
     return response
 
