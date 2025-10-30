@@ -1,12 +1,15 @@
 <script lang="ts">
+	import { API_URL } from '$lib/config';
+
 	let handle = '';
 	let loading = false;
 
-	function startOAuth() {
+	function startOAuth(e: SubmitEvent) {
+		e.preventDefault();
 		if (!handle.trim()) return;
 		loading = true;
 		// redirect to backend OAuth start endpoint
-		window.location.href = `http://localhost:8000/auth/start?handle=${encodeURIComponent(handle)}`;
+		window.location.href = `${API_URL}/auth/start?handle=${encodeURIComponent(handle)}`;
 	}
 </script>
 
@@ -15,9 +18,9 @@
 		<h1>relay</h1>
 		<p>decentralized music streaming</p>
 
-		<form on:submit|preventDefault={startOAuth}>
+		<form onsubmit={startOAuth}>
 			<div class="input-group">
-				<label for="handle">bluesky handle</label>
+				<label for="handle">atproto handle</label>
 				<input
 					id="handle"
 					type="text"
@@ -29,42 +32,51 @@
 			</div>
 
 			<button type="submit" disabled={loading || !handle.trim()}>
-				{loading ? 'redirecting...' : 'login with bluesky'}
+				{loading ? 'redirecting...' : 'sign in with atproto'}
 			</button>
 		</form>
 	</div>
 </div>
 
 <style>
+	:global(body) {
+		margin: 0;
+		padding: 0;
+		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+		background: #0a0a0a;
+		color: #fff;
+	}
+
 	.container {
 		min-height: 100vh;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+		background: #0a0a0a;
 		padding: 1rem;
 	}
 
 	.login-card {
-		background: #0f3460;
-		border-radius: 12px;
+		background: #1a1a1a;
+		border: 1px solid #2a2a2a;
+		border-radius: 8px;
 		padding: 3rem;
 		max-width: 400px;
 		width: 100%;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 	}
 
 	h1 {
 		font-size: 2.5rem;
 		margin: 0 0 0.5rem 0;
-		color: #e94560;
+		color: #fff;
 		text-align: center;
 	}
 
 	p {
-		color: rgba(255, 255, 255, 0.7);
+		color: #888;
 		text-align: center;
 		margin: 0 0 2rem 0;
+		font-size: 0.95rem;
 	}
 
 	.input-group {
@@ -73,7 +85,7 @@
 
 	label {
 		display: block;
-		color: rgba(255, 255, 255, 0.9);
+		color: #aaa;
 		margin-bottom: 0.5rem;
 		font-size: 0.9rem;
 	}
@@ -81,18 +93,18 @@
 	input {
 		width: 100%;
 		padding: 0.75rem;
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 6px;
+		background: #0a0a0a;
+		border: 1px solid #333;
+		border-radius: 4px;
 		color: white;
 		font-size: 1rem;
 		transition: all 0.2s;
+		box-sizing: border-box;
 	}
 
 	input:focus {
 		outline: none;
-		border-color: #e94560;
-		background: rgba(255, 255, 255, 0.08);
+		border-color: #3a7dff;
 	}
 
 	input:disabled {
@@ -101,16 +113,16 @@
 	}
 
 	input::placeholder {
-		color: rgba(255, 255, 255, 0.3);
+		color: #666;
 	}
 
 	button {
 		width: 100%;
 		padding: 0.75rem;
-		background: #e94560;
+		background: #3a7dff;
 		color: white;
 		border: none;
-		border-radius: 6px;
+		border-radius: 4px;
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
@@ -118,9 +130,9 @@
 	}
 
 	button:hover:not(:disabled) {
-		background: #d63651;
+		background: #2868e6;
 		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+		box-shadow: 0 4px 12px rgba(58, 125, 255, 0.3);
 	}
 
 	button:disabled {

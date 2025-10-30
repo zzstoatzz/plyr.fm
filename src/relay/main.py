@@ -58,7 +58,7 @@ async def client_metadata() -> dict:
         "client_name": "relay",
         "client_uri": client_uri,
         "redirect_uris": [settings.atproto_redirect_uri],
-        "scope": "atproto",
+        "scope": "atproto repo:app.relay.track",
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
         "token_endpoint_auth_method": "none",

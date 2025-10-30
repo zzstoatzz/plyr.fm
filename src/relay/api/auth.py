@@ -36,7 +36,7 @@ async def oauth_callback(
 
     # redirect to localhost endpoint to set cookie properly for localhost domain
     response = RedirectResponse(
-        url=f"http://localhost:8000/auth/session?session_id={session_id}",
+        url=f"http://localhost:8001/auth/session?session_id={session_id}",
         status_code=303
     )
     return response

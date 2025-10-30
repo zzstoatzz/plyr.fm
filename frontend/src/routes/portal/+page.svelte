@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-
-	interface User {
-		did: string;
-		handle: string;
-	}
+	import Header from '$lib/components/Header.svelte';
+	import type { User, Track} from '$lib/types';
+	import { API_URL } from '$lib/config';
 
 	let user: User | null = null;
 	let loading = true;
+	let tracks: Track[] = [];
+	let loadingTracks = false;
 
 	// form state
 	let uploading = false;
@@ -22,11 +22,12 @@
 
 	onMount(async () => {
 		try {
-			const response = await fetch('http://localhost:8000/auth/me', {
+			const response = await fetch('`${API_URL}`/auth/me', {
 				credentials: 'include'
 			});
 			if (response.ok) {
 				user = await response.json();
+				await loadMyTracks();
 			} else {
 				// not authenticated, redirect to login
 				window.location.href = '/login';
@@ -38,7 +39,24 @@
 		}
 	});
 
-	async function handleUpload(e: Event) {
+	async function loadMyTracks() {
+		loadingTracks = true;
+		try {
+			const response = await fetch('`${API_URL}`/tracks/me', {
+				credentials: 'include'
+			});
+			if (response.ok) {
+				const data = await response.json();
+				tracks = data.tracks;
+			}
+		} catch (e) {
+			console.error('failed to load tracks:', e);
+		} finally {
+			loadingTracks = false;
+		}
+	}
+
+	async function handleUpload(e: SubmitEvent) {
 		e.preventDefault();
 		if (!file) return;
 
@@ -53,7 +71,7 @@
 		if (album) formData.append('album', album);
 
 		try {
-			const response = await fetch('http://localhost:8000/tracks/', {
+			const response = await fetch('`${API_URL}`/tracks/', {
 				method: 'POST',
 				body: formData,
 				credentials: 'include'
@@ -68,6 +86,8 @@
 				file = null;
 				// @ts-ignore
 				document.getElementById('file-input').value = '';
+				// reload tracks
+				await loadMyTracks();
 			} else {
 				const error = await response.json();
 				uploadError = error.detail || `upload failed (${response.status} ${response.statusText})`;
@@ -79,27 +99,50 @@
 		}
 	}
 
+	async function deleteTrack(trackId: number, trackTitle: string) {
+		if (!confirm(`delete "${trackTitle}"?`)) return;
+
+		try {
+			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
+				method: 'DELETE',
+				credentials: 'include'
+			});
+
+			if (response.ok) {
+				await loadMyTracks();
+			} else {
+				const error = await response.json();
+				alert(error.detail || 'failed to delete track');
+			}
+		} catch (e) {
+			alert(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
+		}
+	}
+
 	function handleFileChange(e: Event) {
 		const target = e.target as HTMLInputElement;
 		if (target.files && target.files[0]) {
 			file = target.files[0];
 		}
 	}
+
+	async function logout() {
+		await fetch('`${API_URL}`/auth/logout', {
+			method: 'POST',
+			credentials: 'include'
+		});
+		window.location.href = '/';
+	}
 </script>
 
 {#if loading}
 	<div class="loading">loading...</div>
 {:else if user}
+	<Header {user} onLogout={logout} />
 	<main>
-		<header>
-			<div class="header-content">
-				<div>
-					<h1>artist portal</h1>
-					<p class="user-info">logged in as @{user.handle}</p>
-				</div>
-				<a href="/" class="back-link">← back to tracks</a>
-			</div>
-		</header>
+		<div class="portal-header">
+			<h2>artist portal</h2>
+		</div>
 
 		<section class="upload-section">
 			<h2>upload track</h2>
@@ -112,7 +155,7 @@
 				<div class="message error">{uploadError}</div>
 			{/if}
 
-			<form on:submit={handleUpload}>
+			<form onsubmit={handleUpload}>
 				<div class="form-group">
 					<label for="title">track title</label>
 					<input
@@ -154,7 +197,7 @@
 						id="file-input"
 						type="file"
 						accept="audio/*"
-						on:change={handleFileChange}
+						onchange={handleFileChange}
 						required
 						disabled={uploading}
 					/>
@@ -168,18 +211,47 @@
 				</button>
 			</form>
 		</section>
+
+		<section class="tracks-section">
+			<h2>your tracks</h2>
+
+			{#if loadingTracks}
+				<p class="empty">loading tracks...</p>
+			{:else if tracks.length === 0}
+				<p class="empty">no tracks uploaded yet</p>
+			{:else}
+				<div class="tracks-list">
+					{#each tracks as track}
+						<div class="track-item">
+							<div class="track-info">
+								<div class="track-title">{track.title}</div>
+								<div class="track-meta">
+									{track.artist}
+									{#if track.album}
+										<span class="separator">•</span>
+										<span class="album">{track.album}</span>
+									{/if}
+								</div>
+								<div class="track-date">
+									{new Date(track.created_at).toLocaleDateString()}
+								</div>
+							</div>
+							<button
+								class="delete-btn"
+								onclick={() => deleteTrack(track.id, track.title)}
+								title="delete track"
+							>
+								×
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</section>
 	</main>
 {/if}
 
 <style>
-	:global(body) {
-		margin: 0;
-		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-		background: #0a0a0a;
-		color: #fff;
-	}
-
 	.loading {
 		display: flex;
 		align-items: center;
@@ -191,43 +263,18 @@
 	main {
 		max-width: 800px;
 		margin: 0 auto;
-		padding: 2rem 1rem;
+		padding: 0 1rem 2rem;
 	}
 
-	header {
-		margin-bottom: 3rem;
+	.portal-header {
+		margin-bottom: 2rem;
 	}
 
-	.header-content {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-	}
-
-	h1 {
-		font-size: 2.5rem;
-		margin: 0 0 0.5rem;
-	}
-
-	.user-info {
-		color: #888;
+	.portal-header h2 {
+		font-size: 1.5rem;
 		margin: 0;
 	}
 
-	.back-link {
-		color: #3a7dff;
-		text-decoration: none;
-		font-size: 0.9rem;
-		padding: 0.5rem 1rem;
-		border: 1px solid #3a7dff;
-		border-radius: 4px;
-		transition: all 0.2s;
-	}
-
-	.back-link:hover {
-		background: #3a7dff;
-		color: white;
-	}
 
 	.upload-section h2 {
 		font-size: 1.5rem;
@@ -340,5 +387,101 @@
 
 	button:active:not(:disabled) {
 		transform: translateY(0);
+	}
+
+	.tracks-section {
+		margin-top: 3rem;
+	}
+
+	.tracks-section h2 {
+		font-size: 1.5rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.empty {
+		color: #666;
+		padding: 2rem;
+		text-align: center;
+		background: #1a1a1a;
+		border-radius: 8px;
+		border: 1px solid #2a2a2a;
+	}
+
+	.tracks-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.track-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		background: #1a1a1a;
+		border: 1px solid #2a2a2a;
+		border-radius: 6px;
+		padding: 1rem;
+		transition: all 0.2s;
+	}
+
+	.track-item:hover {
+		background: #222;
+		border-color: #333;
+	}
+
+	.track-info {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.track-title {
+		font-weight: 600;
+		font-size: 1rem;
+		margin-bottom: 0.25rem;
+		color: #fff;
+	}
+
+	.track-meta {
+		font-size: 0.9rem;
+		color: #aaa;
+		margin-bottom: 0.25rem;
+	}
+
+	.separator {
+		margin: 0 0.5rem;
+		color: #666;
+	}
+
+	.album {
+		color: #888;
+	}
+
+	.track-date {
+		font-size: 0.85rem;
+		color: #666;
+	}
+
+	.delete-btn {
+		flex-shrink: 0;
+		width: 36px;
+		height: 36px;
+		padding: 0;
+		background: transparent;
+		border: 1px solid #444;
+		border-radius: 4px;
+		color: #888;
+		font-size: 1.5rem;
+		line-height: 1;
+		cursor: pointer;
+		transition: all 0.2s;
+		margin-left: 1rem;
+	}
+
+	.delete-btn:hover {
+		background: rgba(233, 69, 96, 0.1);
+		border-color: rgba(233, 69, 96, 0.5);
+		color: #ff6b6b;
+		transform: none;
+		box-shadow: none;
 	}
 </style>

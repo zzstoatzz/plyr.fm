@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # app settings
     app_name: str = "relay"
     debug: bool = False
+    port: int = Field(default=8001, description="Server port")
 
     # database
     database_url: str = Field(
@@ -30,15 +31,15 @@ class Settings(BaseSettings):
         description="Redis connection string",
     )
 
+    # storage
+    storage_backend: str = Field(default="filesystem", description="Storage backend (filesystem or r2)")
+
     # cloudflare r2
-    r2_account_id: str = Field(default="", description="Cloudflare R2 account ID")
-    r2_access_key_id: str = Field(default="", description="R2 access key ID")
-    r2_secret_access_key: str = Field(default="", description="R2 secret access key")
-    r2_bucket_name: str = Field(default="relay-audio", description="R2 bucket name")
-    r2_endpoint_url: str = Field(
-        default="",
-        description="R2 endpoint URL (computed from account_id if not provided)",
-    )
+    aws_access_key_id: str = Field(default="", description="AWS access key ID")
+    aws_secret_access_key: str = Field(default="", description="AWS secret access key")
+    r2_bucket: str = Field(default="", description="R2 bucket name")
+    r2_endpoint_url: str = Field(default="", description="R2 endpoint URL")
+    r2_public_bucket_url: str = Field(default="", description="R2 public bucket URL")
 
     # atproto
     atproto_pds_url: str = Field(
@@ -51,13 +52,6 @@ class Settings(BaseSettings):
         default="http://localhost:8000/auth/callback",
         description="OAuth redirect URI",
     )
-
-    @property
-    def r2_endpoint(self) -> str:
-        """get r2 endpoint url."""
-        if self.r2_endpoint_url:
-            return self.r2_endpoint_url
-        return f"https://{self.r2_account_id}.r2.cloudflarestorage.com"
 
 
 settings = Settings()

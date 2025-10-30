@@ -1,5 +1,6 @@
 """OAuth 2.1 authentication and session management."""
 
+import json
 import secrets
 from dataclasses import dataclass
 from typing import Annotated
@@ -9,6 +10,7 @@ from atproto_oauth.stores.memory import MemorySessionStore, MemoryStateStore
 from fastapi import Cookie, HTTPException
 
 from relay.config import settings
+from relay.models import UserSession, get_db
 
 
 @dataclass
@@ -20,9 +22,12 @@ class Session:
     handle: str
     oauth_session: dict  # store OAuth session data
 
+    def get_oauth_session_id(self) -> str:
+        """extract OAuth session ID for retrieving from session store."""
+        return self.oauth_session.get("session_id", self.did)
 
-# in-memory stores (MVP - replace with redis/db later)
-_sessions: dict[str, Session] = {}
+
+# OAuth stores (state store still in-memory for now)
 _state_store = MemoryStateStore()
 _session_store = MemorySessionStore()
 
@@ -30,7 +35,7 @@ _session_store = MemorySessionStore()
 oauth_client = OAuthClient(
     client_id=settings.atproto_client_id,
     redirect_uri=settings.atproto_redirect_uri,
-    scope="atproto",
+    scope="atproto repo:app.relay.track",
     state_store=_state_store,
     session_store=_session_store,
 )
@@ -39,23 +44,55 @@ oauth_client = OAuthClient(
 def create_session(did: str, handle: str, oauth_session: dict) -> str:
     """create a new session for authenticated user."""
     session_id = secrets.token_urlsafe(32)
-    _sessions[session_id] = Session(
-        session_id=session_id,
-        did=did,
-        handle=handle,
-        oauth_session=oauth_session,
-    )
+
+    # store in database
+    db = next(get_db())
+    try:
+        db_session = UserSession(
+            session_id=session_id,
+            did=did,
+            handle=handle,
+            oauth_session_data=json.dumps(oauth_session),
+        )
+        db.add(db_session)
+        db.commit()
+    finally:
+        db.close()
+
     return session_id
 
 
 def get_session(session_id: str) -> Session | None:
     """retrieve session by id."""
-    return _sessions.get(session_id)
+    db = next(get_db())
+    try:
+        db_session = db.query(UserSession).filter(
+            UserSession.session_id == session_id
+        ).first()
+
+        if not db_session:
+            return None
+
+        return Session(
+            session_id=db_session.session_id,
+            did=db_session.did,
+            handle=db_session.handle,
+            oauth_session=json.loads(db_session.oauth_session_data),
+        )
+    finally:
+        db.close()
 
 
 def delete_session(session_id: str) -> None:
     """delete a session."""
-    _sessions.pop(session_id, None)
+    db = next(get_db())
+    try:
+        db.query(UserSession).filter(
+            UserSession.session_id == session_id
+        ).delete()
+        db.commit()
+    finally:
+        db.close()
 
 
 async def start_oauth_flow(handle: str) -> tuple[str, str]:
@@ -78,13 +115,28 @@ async def handle_oauth_callback(code: str, state: str, iss: str) -> tuple[str, s
             state=state,
             iss=iss,
         )
-        # OAuth session is already stored in session_store, just extract key info
+
+        # serialize DPoP private key for storage
+        from cryptography.hazmat.primitives import serialization
+
+        dpop_key_pem = oauth_session.dpop_private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode("utf-8")
+
+        # store full OAuth session with tokens in database
         session_data = {
             "did": oauth_session.did,
             "handle": oauth_session.handle,
             "pds_url": oauth_session.pds_url,
             "authserver_iss": oauth_session.authserver_iss,
             "scope": oauth_session.scope,
+            "access_token": oauth_session.access_token,
+            "refresh_token": oauth_session.refresh_token,
+            "dpop_private_key_pem": dpop_key_pem,
+            "dpop_authserver_nonce": oauth_session.dpop_authserver_nonce,
+            "dpop_pds_nonce": oauth_session.dpop_pds_nonce or "",
         }
         return oauth_session.did, oauth_session.handle, session_data
     except Exception as e:

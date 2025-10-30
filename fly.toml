@@ -1,0 +1,37 @@
+app = 'relay-api'
+primary_region = 'iad'
+
+[build]
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 250
+    soft_limit = 200
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+[env]
+  PORT = '8000'
+  STORAGE_BACKEND = 'r2'
+  R2_BUCKET = 'relay'
+  R2_ENDPOINT_URL = 'https://8feb33b5fb57ce2bc093bc6f4141f40a.r2.cloudflarestorage.com'
+  R2_PUBLIC_BUCKET_URL = 'https://pub-841ec0f5a7854eaab01292d44aca4820.r2.dev'
+  ATPROTO_PDS_URL = 'https://pds.zzstoatzz.io'
+
+# secrets to set via: fly secrets set KEY=value
+# - DATABASE_URL
+# - AWS_ACCESS_KEY_ID
+# - AWS_SECRET_ACCESS_KEY
+# - ATPROTO_CLIENT_ID (will be https://relay-api.fly.dev/client-metadata.json after deployment)
+# - ATPROTO_REDIRECT_URI (will be https://relay-api.fly.dev/auth/callback after deployment)

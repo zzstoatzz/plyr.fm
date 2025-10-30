@@ -3,10 +3,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-# sqlite database in local data directory
-DATABASE_URL = "sqlite:///./data/relay.db"
+from relay.config import settings
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# use postgres from settings (neon or local)
+engine = create_engine(settings.database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

@@ -1,5 +1,14 @@
 """storage implementations."""
 
-from relay.storage.filesystem import FilesystemStorage, storage
+from relay.config import settings
 
-__all__ = ["FilesystemStorage", "storage"]
+if settings.storage_backend == "r2":
+    from relay.storage.r2 import R2Storage
+
+    storage = R2Storage()
+else:
+    from relay.storage.filesystem import FilesystemStorage
+
+    storage = FilesystemStorage()
+
+__all__ = ["storage"]

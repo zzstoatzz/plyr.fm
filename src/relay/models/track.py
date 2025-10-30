@@ -3,23 +3,27 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from relay.models.database import Base
 
 
 class Track(Base):
-    """track model."""
+    """track model.
+
+    only essential fields are explicit columns.
+    use metadata JSONB for flexible fields that may evolve.
+    """
 
     __tablename__ = "tracks"
 
+    # essential fields
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String, nullable=False)
     artist: Mapped[str] = mapped_column(String, nullable=False)
-    album: Mapped[str | None] = mapped_column(String, nullable=True)
-    duration: Mapped[int | None] = mapped_column(Integer, nullable=True)  # seconds
     file_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    file_type: Mapped[str] = mapped_column(String, nullable=False)  # mp3 or wav
+    file_type: Mapped[str] = mapped_column(String, nullable=False)
     artist_did: Mapped[str] = mapped_column(String, nullable=False, index=True)
     artist_handle: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -27,3 +31,21 @@ class Track(Base):
         default=datetime.utcnow,
         nullable=False,
     )
+
+    # flexible extra fields (album, duration, genre, etc.)
+    extra: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+
+    # ATProto integration fields
+    r2_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    atproto_record_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+    atproto_record_cid: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    @property
+    def album(self) -> str | None:
+        """get album from extra."""
+        return self.extra.get("album")
+
+    @property
+    def duration(self) -> int | None:
+        """get duration from extra (in seconds)."""
+        return self.extra.get("duration")

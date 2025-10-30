@@ -19,6 +19,7 @@ dependencies = [
     "python-multipart>=0.0.20",
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
+    "psycopg[binary]>=3.2.12",
 ]
 
 requires-python = ">=3.11"

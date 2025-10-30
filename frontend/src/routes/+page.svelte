@@ -1,30 +1,31 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import TrackItem from '$lib/components/TrackItem.svelte';
+	import Header from '$lib/components/Header.svelte';
+	import type { Track, User } from '$lib/types';
+	import { API_URL } from '$lib/config';
 
-	interface Track {
-		id: number;
-		title: string;
-		artist: string;
-		album?: string;
-		file_id: string;
-		file_type: string;
-		artist_handle: string;
-	}
+	let tracks = $state<Track[]>([]);
+	let currentTrack = $state<Track | null>(null);
+	let audioElement = $state<HTMLAudioElement | undefined>(undefined);
+	let user = $state<User | null>(null);
 
-	interface User {
-		did: string;
-		handle: string;
-	}
+	// player state - using Svelte's built-in bindings
+	let paused = $state(true);
+	let currentTime = $state(0);
+	let duration = $state(0);
+	let volume = $state(0.7);
 
-	let tracks: Track[] = [];
-	let currentTrack: Track | null = null;
-	let audioElement: HTMLAudioElement;
-	let user: User | null = null;
+	// derived values
+	let hasTracks = $derived(tracks.length > 0);
+	let isAuthenticated = $derived(user !== null);
+	let formattedCurrentTime = $derived(formatTime(currentTime));
+	let formattedDuration = $derived(formatTime(duration));
 
 	onMount(async () => {
 		// check authentication
 		try {
-			const authResponse = await fetch('http://localhost:8000/auth/me', {
+			const authResponse = await fetch('`${API_URL}`/auth/me', {
 				credentials: 'include'
 			});
 			if (authResponse.ok) {
@@ -35,21 +36,51 @@
 		}
 
 		// load tracks
-		const response = await fetch('http://localhost:8000/tracks/');
+		const response = await fetch('`${API_URL}`/tracks/');
 		const data = await response.json();
 		tracks = data.tracks;
 	});
 
+	// Use $effect to reactively handle track changes only
+	let previousTrackId: number | null = null;
+	$effect(() => {
+		if (!currentTrack || !audioElement) return;
+
+		// Only load new track if it actually changed
+		if (currentTrack.id !== previousTrackId) {
+			previousTrackId = currentTrack.id;
+			audioElement.src = `${API_URL}/audio/${currentTrack.file_id}`;
+			audioElement.load();
+
+			if (!paused) {
+				audioElement.play().catch(err => {
+					console.error('playback failed:', err);
+					paused = true;
+				});
+			}
+		}
+	});
+
 	function playTrack(track: Track) {
-		currentTrack = track;
-		if (audioElement) {
-			audioElement.src = `http://localhost:8000/audio/${track.file_id}`;
-			audioElement.play();
+		if (currentTrack?.id === track.id) {
+			// toggle play/pause on same track
+			paused = !paused;
+		} else {
+			// switch tracks
+			currentTrack = track;
+			paused = false;
 		}
 	}
 
+	function formatTime(seconds: number): string {
+		if (!seconds || isNaN(seconds)) return '0:00';
+		const mins = Math.floor(seconds / 60);
+		const secs = Math.floor(seconds % 60);
+		return `${mins}:${secs.toString().padStart(2, '0')}`;
+	}
+
 	async function logout() {
-		await fetch('http://localhost:8000/auth/logout', {
+		await fetch('`${API_URL}`/auth/logout', {
 			method: 'POST',
 			credentials: 'include'
 		});
@@ -57,50 +88,22 @@
 	}
 </script>
 
+<Header {user} onLogout={logout} />
+
 <main>
-	<header>
-		<div class="header-top">
-			<div>
-				<h1>relay</h1>
-				<p>decentralized music on ATProto</p>
-			</div>
-			<div class="auth-section">
-				{#if user}
-					<span class="user-info">@{user.handle}</span>
-					<button onclick={logout} class="logout-btn">logout</button>
-				{:else}
-					<a href="/login" class="login-link">login</a>
-				{/if}
-			</div>
-		</div>
-		{#if user}
-			<a href="/portal">artist portal →</a>
-		{/if}
-	</header>
 
 	<section class="tracks">
 		<h2>latest tracks</h2>
-		{#if tracks.length === 0}
+		{#if !hasTracks}
 			<p class="empty">no tracks yet</p>
 		{:else}
 			<div class="track-list">
 				{#each tracks as track}
-					<button
-						class="track"
-						class:playing={currentTrack?.id === track.id}
-						onclick={() => playTrack(track)}
-					>
-						<div class="track-info">
-							<div class="track-title">{track.title}</div>
-							<div class="track-artist">
-								{track.artist}
-								{#if track.album}
-									<span class="album">- {track.album}</span>
-								{/if}
-							</div>
-							<div class="track-meta">@{track.artist_handle}</div>
-						</div>
-					</button>
+					<TrackItem
+						{track}
+						isPlaying={currentTrack?.id === track.id}
+						onPlay={playTrack}
+					/>
 				{/each}
 			</div>
 		{/if}
@@ -108,10 +111,66 @@
 
 	{#if currentTrack}
 		<div class="player">
-			<div class="now-playing">
-				<strong>{currentTrack.title}</strong> by {currentTrack.artist}
+			<audio
+				bind:this={audioElement}
+				bind:paused
+				bind:currentTime
+				bind:duration
+				bind:volume
+				onended={() => {
+					currentTime = 0;
+					paused = true;
+				}}
+			></audio>
+
+			<div class="player-content">
+				<div class="player-info">
+					<div class="player-title">{currentTrack.title}</div>
+					<div class="player-artist">{currentTrack.artist}</div>
+				</div>
+
+				<div class="player-controls">
+					<button class="control-btn" onclick={() => paused = !paused} title={paused ? 'Play' : 'Pause'}>
+						{#if !paused}
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+								<rect x="6" y="4" width="4" height="16" rx="1"></rect>
+								<rect x="14" y="4" width="4" height="16" rx="1"></rect>
+							</svg>
+						{:else}
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M8 5v14l11-7z"></path>
+							</svg>
+						{/if}
+					</button>
+
+					<div class="time-control">
+						<span class="time">{formattedCurrentTime}</span>
+						<input
+							type="range"
+							class="seek-bar"
+							min="0"
+							max={duration || 0}
+							bind:value={currentTime}
+						/>
+						<span class="time">{formattedDuration}</span>
+					</div>
+
+					<div class="volume-control">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+							<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+							<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+						</svg>
+						<input
+							type="range"
+							class="volume-bar"
+							min="0"
+							max="1"
+							step="0.01"
+							bind:value={volume}
+						/>
+					</div>
+				</div>
 			</div>
-			<audio bind:this={audioElement} controls></audio>
 		</div>
 	{/if}
 </main>
@@ -120,97 +179,26 @@
 	:global(body) {
 		margin: 0;
 		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
 		background: #0a0a0a;
-		color: #fff;
+		color: #e0e0e0;
+		-webkit-font-smoothing: antialiased;
 	}
 
 	main {
 		max-width: 800px;
 		margin: 0 auto;
-		padding: 2rem 1rem 120px;
-	}
-
-	header {
-		margin-bottom: 3rem;
-	}
-
-	.header-top {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		margin-bottom: 1rem;
-	}
-
-	h1 {
-		font-size: 2.5rem;
-		margin: 0 0 0.5rem;
-	}
-
-	header p {
-		color: #888;
-		margin: 0 0 1rem;
-	}
-
-	.auth-section {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.user-info {
-		color: #aaa;
-		font-size: 0.9rem;
-	}
-
-	.logout-btn {
-		background: transparent;
-		border: 1px solid #444;
-		color: #aaa;
-		padding: 0.4rem 0.8rem;
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 0.9rem;
-		transition: all 0.2s;
-	}
-
-	.logout-btn:hover {
-		border-color: #666;
-		color: #fff;
-	}
-
-	.login-link {
-		color: #3a7dff;
-		text-decoration: none;
-		font-size: 0.9rem;
-		padding: 0.4rem 0.8rem;
-		border: 1px solid #3a7dff;
-		border-radius: 4px;
-		transition: all 0.2s;
-	}
-
-	.login-link:hover {
-		background: #3a7dff;
-		color: white;
-	}
-
-	header > a {
-		color: #3a7dff;
-		text-decoration: none;
-		font-size: 0.9rem;
-	}
-
-	header > a:hover {
-		text-decoration: underline;
+		padding: 0 1rem 120px;
 	}
 
 	.tracks h2 {
 		font-size: 1.5rem;
 		margin-bottom: 1.5rem;
+		color: #e8e8e8;
 	}
 
 	.empty {
-		color: #666;
+		color: #808080;
 		padding: 2rem;
 		text-align: center;
 	}
@@ -221,47 +209,6 @@
 		gap: 0.5rem;
 	}
 
-	.track {
-		background: #1a1a1a;
-		border: 1px solid #2a2a2a;
-		border-left: 3px solid transparent;
-		padding: 1rem;
-		cursor: pointer;
-		text-align: left;
-		transition: all 0.2s;
-		width: 100%;
-	}
-
-	.track:hover {
-		background: #222;
-		border-left-color: #3a7dff;
-	}
-
-	.track.playing {
-		background: #1a2332;
-		border-left-color: #3a7dff;
-	}
-
-	.track-title {
-		font-weight: 600;
-		font-size: 1.1rem;
-		margin-bottom: 0.25rem;
-	}
-
-	.track-artist {
-		color: #aaa;
-		margin-bottom: 0.25rem;
-	}
-
-	.album {
-		color: #888;
-	}
-
-	.track-meta {
-		font-size: 0.85rem;
-		color: #666;
-	}
-
 	.player {
 		position: fixed;
 		bottom: 0;
@@ -270,22 +217,172 @@
 		background: #1a1a1a;
 		border-top: 1px solid #2a2a2a;
 		padding: 1rem;
-		display: flex;
-		align-items: center;
-		gap: 1rem;
+		z-index: 100;
 	}
 
-	.now-playing {
-		flex: 1;
+	.player-content {
+		max-width: 1200px;
+		margin: 0 auto;
+		display: flex;
+		align-items: center;
+		gap: 2rem;
+	}
+
+	.player-info {
+		flex: 0 0 200px;
 		min-width: 0;
 	}
 
-	.now-playing strong {
-		color: #fff;
+	.player-title {
+		font-weight: 600;
+		font-size: 0.95rem;
+		margin-bottom: 0.25rem;
+		color: #e8e8e8;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
-	audio {
+	.player-artist {
+		color: #b0b0b0;
+		font-size: 0.85rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.player-controls {
 		flex: 1;
-		max-width: 400px;
+		display: flex;
+		align-items: center;
+		gap: 1.5rem;
+	}
+
+	.control-btn {
+		background: transparent;
+		border: none;
+		color: #fff;
+		cursor: pointer;
+		padding: 0.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.2s;
+		border-radius: 50%;
+	}
+
+	.control-btn:hover {
+		background: rgba(58, 125, 255, 0.1);
+		color: #3a7dff;
+	}
+
+	.time-control {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.time {
+		font-size: 0.8rem;
+		color: #888;
+		font-variant-numeric: tabular-nums;
+		min-width: 40px;
+	}
+
+	.seek-bar {
+		flex: 1;
+		height: 4px;
+		-webkit-appearance: none;
+		appearance: none;
+		background: #2a2a2a;
+		border-radius: 2px;
+		outline: none;
+		cursor: pointer;
+	}
+
+	.seek-bar::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 12px;
+		height: 12px;
+		background: #3a7dff;
+		border-radius: 50%;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.seek-bar::-webkit-slider-thumb:hover {
+		background: #5a8fff;
+		transform: scale(1.2);
+	}
+
+	.seek-bar::-moz-range-thumb {
+		width: 12px;
+		height: 12px;
+		background: #3a7dff;
+		border-radius: 50%;
+		border: none;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.seek-bar::-moz-range-thumb:hover {
+		background: #5a8fff;
+		transform: scale(1.2);
+	}
+
+	.volume-control {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex: 0 0 120px;
+	}
+
+	.volume-control svg {
+		flex-shrink: 0;
+		color: #888;
+	}
+
+	.volume-bar {
+		flex: 1;
+		height: 4px;
+		-webkit-appearance: none;
+		appearance: none;
+		background: #2a2a2a;
+		border-radius: 2px;
+		outline: none;
+		cursor: pointer;
+	}
+
+	.volume-bar::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 10px;
+		height: 10px;
+		background: #888;
+		border-radius: 50%;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.volume-bar::-webkit-slider-thumb:hover {
+		background: #aaa;
+		transform: scale(1.2);
+	}
+
+	.volume-bar::-moz-range-thumb {
+		width: 10px;
+		height: 10px;
+		background: #888;
+		border-radius: 50%;
+		border: none;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.volume-bar::-moz-range-thumb:hover {
+		background: #aaa;
+		transform: scale(1.2);
 	}
 </style>
