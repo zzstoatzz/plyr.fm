@@ -522,7 +522,7 @@
 
 	.track-item {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: space-between;
 		background: #1a1a1a;
 		border: 1px solid #2a2a2a;
@@ -573,6 +573,7 @@
 		gap: 0.5rem;
 		flex-shrink: 0;
 		margin-left: 1rem;
+		padding-top: 0.25rem;
 	}
 
 	.action-btn {
