@@ -430,4 +430,35 @@
 		background: #aaa;
 		transform: scale(1.2);
 	}
+
+	@media (max-width: 768px) {
+		.player {
+			padding: 0.75rem;
+		}
+
+		.player-content {
+			flex-direction: column;
+			gap: 0.75rem;
+			align-items: stretch;
+		}
+
+		.player-info {
+			flex: none;
+			width: 100%;
+		}
+
+		.player-controls {
+			flex-direction: column;
+			gap: 0.75rem;
+		}
+
+		.time-control {
+			width: 100%;
+		}
+
+		.volume-control {
+			width: 100%;
+			flex: none;
+		}
+	}
 </style>

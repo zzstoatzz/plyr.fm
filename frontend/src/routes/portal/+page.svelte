@@ -629,6 +629,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+		flex: 1;
+		min-width: 0;
 	}
 
 	.edit-input {
