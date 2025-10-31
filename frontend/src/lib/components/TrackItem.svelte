@@ -170,4 +170,39 @@
 		color: #8ab3ff;
 		border-bottom-color: #8ab3ff;
 	}
+
+	@media (max-width: 768px) {
+		.track-container {
+			padding: 0.75rem;
+			gap: 0.5rem;
+		}
+
+		.track {
+			gap: 0.5rem;
+		}
+
+		.track-avatar {
+			width: 48px;
+			height: 48px;
+		}
+
+		.track-title {
+			font-size: 1rem;
+			margin-bottom: 0.15rem;
+		}
+
+		.track-artist {
+			font-size: 0.9rem;
+			margin-bottom: 0.15rem;
+		}
+
+		.track-meta {
+			font-size: 0.75rem;
+			flex-wrap: wrap;
+		}
+
+		.atproto-link {
+			display: none;
+		}
+	}
 </style>

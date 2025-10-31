@@ -433,32 +433,36 @@
 
 	@media (max-width: 768px) {
 		.player {
-			padding: 0.75rem;
+			padding: 0.75rem 1rem;
 		}
 
 		.player-content {
-			flex-direction: column;
-			gap: 0.75rem;
-			align-items: stretch;
+			flex-direction: row;
+			gap: 1rem;
+			align-items: center;
 		}
 
 		.player-info {
-			flex: none;
-			width: 100%;
+			flex: 1;
+			min-width: 0;
 		}
 
 		.player-controls {
-			flex-direction: column;
-			gap: 0.75rem;
+			flex: 0 0 auto;
+			gap: 1rem;
 		}
 
 		.time-control {
-			width: 100%;
+			display: none;
 		}
 
 		.volume-control {
-			width: 100%;
-			flex: none;
+			display: none;
+		}
+
+		.control-btn {
+			width: 48px;
+			height: 48px;
 		}
 	}
 </style>
