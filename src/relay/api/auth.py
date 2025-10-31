@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from relay.auth import (
     Session,
+    check_artist_profile_exists,
     create_session,
     delete_session,
     handle_oauth_callback,
@@ -36,9 +37,15 @@ async def oauth_callback(
     did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
     session_id = create_session(did, handle, oauth_session)
 
+    # check if artist profile exists
+    has_profile = check_artist_profile_exists(did)
+
+    # redirect to profile setup if needed, otherwise to portal
+    redirect_path = "/portal" if has_profile else "/profile/setup"
+
     # pass session_id as URL parameter for cross-domain auth
     response = RedirectResponse(
-        url=f"{settings.frontend_url}/portal?session_id={session_id}",
+        url=f"{settings.frontend_url}{redirect_path}?session_id={session_id}",
         status_code=303
     )
     return response

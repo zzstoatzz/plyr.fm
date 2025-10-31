@@ -21,6 +21,11 @@
 		class="track"
 		onclick={() => onPlay(track)}
 	>
+		{#if track.artist_avatar_url}
+			<div class="track-avatar">
+				<img src={track.artist_avatar_url} alt={track.artist} />
+			</div>
+		{/if}
 		<div class="track-info">
 			<div class="track-title">{track.title}</div>
 			<div class="track-artist">
@@ -88,6 +93,28 @@
 		cursor: pointer;
 		text-align: left;
 		padding: 0;
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.track-avatar {
+		flex-shrink: 0;
+		width: 40px;
+		height: 40px;
+	}
+
+	.track-avatar img {
+		width: 100%;
+		height: 100%;
+		border-radius: 50%;
+		object-fit: cover;
+		border: 2px solid #333;
+	}
+
+	.track-info {
 		flex: 1;
 		min-width: 0;
 	}

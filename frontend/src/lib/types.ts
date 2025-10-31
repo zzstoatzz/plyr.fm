@@ -6,6 +6,7 @@ export interface Track {
 	file_id: string;
 	file_type: string;
 	artist_handle: string;
+	artist_avatar_url?: string;
 	r2_url?: string;
 	atproto_record_uri?: string;
 	play_count: number;

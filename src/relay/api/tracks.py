@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session
 
 from relay.atproto import create_track_record
 from relay.auth import Session as AuthSession
-from relay.auth import require_auth
+from relay.auth import require_artist_profile, require_auth
 from relay.config import settings
-from relay.models import AudioFormat, Track, get_db
+from relay.models import Artist, AudioFormat, Track, get_db
 from relay.storage import storage
 
 logger = logging.getLogger(__name__)
@@ -21,13 +21,12 @@ router = APIRouter(prefix="/tracks", tags=["tracks"])
 @router.post("/")
 async def upload_track(
     title: Annotated[str, Form()],
-    artist: Annotated[str, Form()],
     album: Annotated[str | None, Form()] = None,
     file: UploadFile = File(...),
-    auth_session: AuthSession = Depends(require_auth),
+    auth_session: AuthSession = Depends(require_artist_profile),
     db: Session = Depends(get_db),
 ) -> dict:
-    """upload a new track (requires authentication)."""
+    """upload a new track (requires authentication and artist profile)."""
     # validate file type
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")
@@ -54,6 +53,14 @@ async def upload_track(
         if isinstance(storage, R2Storage):
             r2_url = storage.get_url(file_id)
 
+    # get artist profile
+    artist = db.query(Artist).filter(Artist.did == auth_session.did).first()
+    if not artist:
+        raise HTTPException(
+            status_code=500,
+            detail="artist profile not found - this should not happen after require_artist_profile",
+        )
+
     # create ATProto record (if R2 URL available)
     atproto_uri = None
     atproto_cid = None
@@ -62,7 +69,7 @@ async def upload_track(
             atproto_uri, atproto_cid = await create_track_record(
                 auth_session=auth_session,
                 title=title,
-                artist=artist,
+                artist=artist.display_name,
                 audio_url=r2_url,
                 file_type=ext[1:],  # remove dot
                 album=album,
@@ -79,11 +86,9 @@ async def upload_track(
 
     track = Track(
         title=title,
-        artist=artist,
         file_id=file_id,
         file_type=ext[1:],  # remove the dot
         artist_did=auth_session.did,
-        artist_handle=auth_session.handle,
         extra=extra,
         r2_url=r2_url,
         atproto_record_uri=atproto_uri,
@@ -97,12 +102,12 @@ async def upload_track(
     return {
         "id": track.id,
         "title": track.title,
-        "artist": track.artist,
+        "artist": artist.display_name,
+        "artist_handle": artist.handle,
         "album": track.album,
         "file_id": track.file_id,
         "file_type": track.file_type,
         "artist_did": track.artist_did,
-        "artist_handle": track.artist_handle,
         "r2_url": track.r2_url,
         "atproto_record_uri": track.atproto_record_uri,
         "created_at": track.created_at.isoformat(),
@@ -112,18 +117,19 @@ async def upload_track(
 @router.get("/")
 async def list_tracks(db: Session = Depends(get_db)) -> dict:
     """list all tracks."""
-    tracks = db.query(Track).order_by(Track.created_at.desc()).all()
+    tracks = db.query(Track).join(Artist).order_by(Track.created_at.desc()).all()
 
     return {
         "tracks": [
             {
                 "id": track.id,
                 "title": track.title,
-                "artist": track.artist,
+                "artist": track.artist.display_name,
+                "artist_handle": track.artist.handle,
+                "artist_avatar_url": track.artist.avatar_url,
                 "album": track.album,
                 "file_id": track.file_id,
                 "file_type": track.file_type,
-                "artist_handle": track.artist_handle,
                 "r2_url": track.r2_url,
                 "atproto_record_uri": track.atproto_record_uri,
                 "play_count": track.play_count,
@@ -142,6 +148,7 @@ async def list_my_tracks(
     """list tracks uploaded by authenticated user."""
     tracks = (
         db.query(Track)
+        .join(Artist)
         .filter(Track.artist_did == auth_session.did)
         .order_by(Track.created_at.desc())
         .all()
@@ -152,11 +159,11 @@ async def list_my_tracks(
             {
                 "id": track.id,
                 "title": track.title,
-                "artist": track.artist,
+                "artist": track.artist.display_name,
+                "artist_handle": track.artist.handle,
                 "album": track.album,
                 "file_id": track.file_id,
                 "file_type": track.file_type,
-                "artist_handle": track.artist_handle,
                 "r2_url": track.r2_url,
                 "atproto_record_uri": track.atproto_record_uri,
                 "play_count": track.play_count,
@@ -200,10 +207,65 @@ async def delete_track(
     return {"message": "track deleted successfully"}
 
 
+@router.patch("/{track_id}")
+async def update_track_metadata(
+    track_id: int,
+    title: Annotated[str | None, Form()] = None,
+    album: Annotated[str | None, Form()] = None,
+    auth_session: AuthSession = Depends(require_auth),
+    db: Session = Depends(get_db),
+) -> dict:
+    """update track metadata (only by owner)."""
+    track = db.query(Track).join(Artist).filter(Track.id == track_id).first()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="track not found")
+
+    # verify ownership
+    if track.artist_did != auth_session.did:
+        raise HTTPException(
+            status_code=403,
+            detail="you can only edit your own tracks",
+        )
+
+    # update fields if provided
+    if title is not None:
+        track.title = title
+
+    if album is not None:
+        if album:
+            # set or update album
+            if track.extra is None:
+                track.extra = {}
+            track.extra["album"] = album
+        else:
+            # remove album if empty string
+            if track.extra and "album" in track.extra:
+                del track.extra["album"]
+
+    db.commit()
+    db.refresh(track)
+
+    return {
+        "id": track.id,
+        "title": track.title,
+        "artist": track.artist.display_name,
+        "artist_handle": track.artist.handle,
+        "artist_avatar_url": track.artist.avatar_url,
+        "album": track.album,
+        "file_id": track.file_id,
+        "file_type": track.file_type,
+        "r2_url": track.r2_url,
+        "atproto_record_uri": track.atproto_record_uri,
+        "play_count": track.play_count,
+        "created_at": track.created_at.isoformat(),
+    }
+
+
 @router.get("/{track_id}")
 async def get_track(track_id: int, db: Session = Depends(get_db)) -> dict:
     """get a specific track."""
-    track = db.query(Track).filter(Track.id == track_id).first()
+    track = db.query(Track).join(Artist).filter(Track.id == track_id).first()
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
@@ -211,11 +273,11 @@ async def get_track(track_id: int, db: Session = Depends(get_db)) -> dict:
     return {
         "id": track.id,
         "title": track.title,
-        "artist": track.artist,
+        "artist": track.artist.display_name,
+        "artist_handle": track.artist.handle,
         "album": track.album,
         "file_id": track.file_id,
         "file_type": track.file_type,
-        "artist_handle": track.artist_handle,
         "r2_url": track.r2_url,
         "atproto_record_uri": track.atproto_record_uri,
         "play_count": track.play_count,

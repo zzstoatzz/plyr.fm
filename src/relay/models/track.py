@@ -2,9 +2,9 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from relay.models.database import Base
 
@@ -21,16 +21,22 @@ class Track(Base):
     # essential fields
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String, nullable=False)
-    artist: Mapped[str] = mapped_column(String, nullable=False)
     file_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     file_type: Mapped[str] = mapped_column(String, nullable=False)
-    artist_did: Mapped[str] = mapped_column(String, nullable=False, index=True)
-    artist_handle: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
         nullable=False,
     )
+
+    # artist relationship
+    artist_did: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("artists.did"),
+        nullable=False,
+        index=True,
+    )
+    artist: Mapped["Artist"] = relationship("Artist", back_populates="tracks")
 
     # flexible extra fields (album, duration, genre, etc.)
     extra: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")

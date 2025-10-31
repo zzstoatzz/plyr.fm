@@ -21,9 +21,15 @@
 
 		<nav>
 			{#if isAuthenticated}
-				{#if $page.url.pathname !== '/portal'}
-					<a href="/portal" class="nav-link">portal</a>
-				{/if}
+				<div class="nav-links">
+					{#if $page.url.pathname !== '/portal'}
+						<a href="/portal" class="nav-link">portal</a>
+					{/if}
+					{#if $page.url.pathname !== '/profile'}
+						<a href="/profile" class="nav-link">profile</a>
+					{/if}
+				</div>
+				<div class="divider"></div>
 				<span class="user-info">@{user.handle}</span>
 				<button onclick={onLogout} class="btn-secondary">logout</button>
 			{:else}
@@ -79,6 +85,12 @@
 		gap: 1rem;
 	}
 
+	.nav-links {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+
 	.nav-link {
 		color: #b0b0b0;
 		text-decoration: none;
@@ -90,9 +102,20 @@
 		color: #e8e8e8;
 	}
 
+	.divider {
+		width: 1px;
+		height: 20px;
+		background: #444;
+		margin: 0 0.5rem;
+	}
+
 	.user-info {
-		color: #909090;
-		font-size: 0.9rem;
+		color: #666;
+		font-size: 0.85rem;
+		padding: 0.25rem 0.5rem;
+		background: #1a1a1a;
+		border-radius: 4px;
+		border: 1px solid #333;
 	}
 
 	.btn-primary {

@@ -163,6 +163,19 @@ async def handle_oauth_callback(code: str, state: str, iss: str) -> tuple[str, s
 
 from fastapi import Cookie, Header, HTTPException
 
+
+def check_artist_profile_exists(did: str) -> bool:
+    """check if artist profile exists for a DID."""
+    from relay.models import Artist
+
+    db = next(get_db())
+    try:
+        artist = db.query(Artist).filter(Artist.did == did).first()
+        return artist is not None
+    finally:
+        db.close()
+
+
 def require_auth(
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
     authorization: Annotated[str | None, Header()] = None,
@@ -193,6 +206,27 @@ def require_auth(
         raise HTTPException(
             status_code=401,
             detail="invalid or expired session",
+        )
+
+    return session
+
+
+def require_artist_profile(
+    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
+    authorization: Annotated[str | None, Header()] = None,
+) -> Session:
+    """fastapi dependency to require authentication AND complete artist profile.
+
+    Returns 403 with specific message if artist profile doesn't exist,
+    prompting frontend to redirect to profile setup.
+    """
+    session = require_auth(session_id_cookie, authorization)
+
+    # check if artist profile exists
+    if not check_artist_profile_exists(session.did):
+        raise HTTPException(
+            status_code=403,
+            detail="artist_profile_required",
         )
 
     return session

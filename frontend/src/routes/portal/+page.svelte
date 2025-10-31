@@ -16,9 +16,13 @@
 
 	// form fields
 	let title = '';
-	let artist = '';
 	let album = '';
 	let file: File | null = null;
+
+	// editing state
+	let editingTrackId: number | null = null;
+	let editTitle = '';
+	let editAlbum = '';
 
 	onMount(async () => {
 		// check if session_id is in URL (from OAuth callback)
@@ -94,7 +98,6 @@
 		const formData = new FormData();
 		formData.append('file', file);
 		formData.append('title', title);
-		formData.append('artist', artist);
 		if (album) formData.append('album', album);
 
 		try {
@@ -110,7 +113,6 @@
 				uploadSuccess = 'track uploaded successfully!';
 				// reset form
 				title = '';
-				artist = '';
 				album = '';
 				file = null;
 				// @ts-ignore
@@ -145,6 +147,45 @@
 			} else {
 				const error = await response.json();
 				alert(error.detail || 'failed to delete track');
+			}
+		} catch (e) {
+			alert(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
+		}
+	}
+
+	function startEditTrack(track: typeof tracks[0]) {
+		editingTrackId = track.id;
+		editTitle = track.title;
+		editAlbum = track.album || '';
+	}
+
+	function cancelEdit() {
+		editingTrackId = null;
+		editTitle = '';
+		editAlbum = '';
+	}
+
+	async function saveTrackEdit(trackId: number) {
+		const sessionId = localStorage.getItem('session_id');
+		const formData = new FormData();
+		formData.append('title', editTitle);
+		formData.append('album', editAlbum);
+
+		try {
+			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
+				method: 'PATCH',
+				body: formData,
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
+			});
+
+			if (response.ok) {
+				await loadMyTracks();
+				cancelEdit();
+			} else {
+				const error = await response.json();
+				alert(error.detail || 'failed to update track');
 			}
 		} catch (e) {
 			alert(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
@@ -205,18 +246,6 @@
 				</div>
 
 				<div class="form-group">
-					<label for="artist">artist name</label>
-					<input
-						id="artist"
-						type="text"
-						bind:value={artist}
-						required
-						disabled={uploading}
-						placeholder="artist name"
-					/>
-				</div>
-
-				<div class="form-group">
 					<label for="album">album (optional)</label>
 					<input
 						id="album"
@@ -259,26 +288,68 @@
 				<div class="tracks-list">
 					{#each tracks as track}
 						<div class="track-item">
-							<div class="track-info">
-								<div class="track-title">{track.title}</div>
-								<div class="track-meta">
-									{track.artist}
-									{#if track.album}
-										<span class="separator">•</span>
-										<span class="album">{track.album}</span>
-									{/if}
+							{#if editingTrackId === track.id}
+								<div class="track-info editing">
+									<input
+										type="text"
+										bind:value={editTitle}
+										placeholder="track title"
+										class="edit-input"
+									/>
+									<input
+										type="text"
+										bind:value={editAlbum}
+										placeholder="album (optional)"
+										class="edit-input"
+									/>
 								</div>
-								<div class="track-date">
-									{new Date(track.created_at).toLocaleDateString()}
+								<div class="track-actions">
+									<button
+										class="action-btn save-btn"
+										onclick={() => saveTrackEdit(track.id)}
+										title="save changes"
+									>
+										✓
+									</button>
+									<button
+										class="action-btn cancel-btn"
+										onclick={cancelEdit}
+										title="cancel"
+									>
+										✕
+									</button>
 								</div>
-							</div>
-							<button
-								class="delete-btn"
-								onclick={() => deleteTrack(track.id, track.title)}
-								title="delete track"
-							>
-								×
-							</button>
+							{:else}
+								<div class="track-info">
+									<div class="track-title">{track.title}</div>
+									<div class="track-meta">
+										{track.artist}
+										{#if track.album}
+											<span class="separator">•</span>
+											<span class="album">{track.album}</span>
+										{/if}
+									</div>
+									<div class="track-date">
+										{new Date(track.created_at).toLocaleDateString()}
+									</div>
+								</div>
+								<div class="track-actions">
+									<button
+										class="action-btn edit-btn"
+										onclick={() => startEditTrack(track)}
+										title="edit track"
+									>
+										✎
+									</button>
+									<button
+										class="action-btn delete-btn"
+										onclick={() => deleteTrack(track.id, track.title)}
+										title="delete track"
+									>
+										×
+									</button>
+								</div>
+							{/if}
 						</div>
 					{/each}
 				</div>
@@ -497,8 +568,14 @@
 		color: #666;
 	}
 
-	.delete-btn {
+	.track-actions {
+		display: flex;
+		gap: 0.5rem;
 		flex-shrink: 0;
+		margin-left: 1rem;
+	}
+
+	.action-btn {
 		width: 36px;
 		height: 36px;
 		padding: 0;
@@ -506,11 +583,22 @@
 		border: 1px solid #444;
 		border-radius: 4px;
 		color: #888;
-		font-size: 1.5rem;
+		font-size: 1.2rem;
 		line-height: 1;
 		cursor: pointer;
 		transition: all 0.2s;
-		margin-left: 1rem;
+	}
+
+	.edit-btn:hover {
+		background: rgba(106, 159, 255, 0.1);
+		border-color: rgba(106, 159, 255, 0.5);
+		color: #6a9fff;
+		transform: none;
+		box-shadow: none;
+	}
+
+	.delete-btn {
+		font-size: 1.5rem;
 	}
 
 	.delete-btn:hover {
@@ -519,5 +607,42 @@
 		color: #ff6b6b;
 		transform: none;
 		box-shadow: none;
+	}
+
+	.save-btn:hover {
+		background: rgba(46, 160, 67, 0.1);
+		border-color: rgba(46, 160, 67, 0.5);
+		color: #5ce87b;
+		transform: none;
+		box-shadow: none;
+	}
+
+	.cancel-btn:hover {
+		background: rgba(136, 136, 136, 0.1);
+		border-color: rgba(136, 136, 136, 0.5);
+		color: #aaa;
+		transform: none;
+		box-shadow: none;
+	}
+
+	.track-info.editing {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.edit-input {
+		width: 100%;
+		padding: 0.5rem;
+		background: #0a0a0a;
+		border: 1px solid #333;
+		border-radius: 4px;
+		color: white;
+		font-size: 0.9rem;
+	}
+
+	.edit-input:focus {
+		outline: none;
+		border-color: #6a9fff;
 	}
 </style>
