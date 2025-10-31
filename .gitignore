@@ -12,3 +12,4 @@ wheels/
 # Local data
 data/
 .env
+test-audio/

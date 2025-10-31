@@ -8,6 +8,7 @@ export interface Track {
 	artist_handle: string;
 	r2_url?: string;
 	atproto_record_uri?: string;
+	play_count: number;
 }
 
 export interface User {

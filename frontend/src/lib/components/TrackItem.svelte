@@ -31,6 +31,8 @@
 			</div>
 			<div class="track-meta">
 				<span>@{track.artist_handle}</span>
+				<span class="separator">•</span>
+				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
 				{#if track.atproto_record_uri}
 					{@const parts = track.atproto_record_uri.split('/')}
 					{@const did = parts[2]}
@@ -122,6 +124,11 @@
 
 	.track-meta .separator {
 		color: #555;
+	}
+
+	.plays {
+		color: #999;
+		font-size: 0.8rem;
 	}
 
 	.atproto-link {

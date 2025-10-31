@@ -40,6 +40,9 @@ class Track(Base):
     atproto_record_uri: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_cid: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # engagement metrics
+    play_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
     @property
     def album(self) -> str | None:
         """get album from extra."""

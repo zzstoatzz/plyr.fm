@@ -17,6 +17,9 @@
 	let duration = $state(0);
 	let volume = $state(0.7);
 
+	// play count tracking
+	let playCountedForTrack = $state<number | null>(null);
+
 	// derived values
 	let hasTracks = $derived(tracks.length > 0);
 	let isAuthenticated = $derived(user !== null);
@@ -61,6 +64,7 @@
 		// Only load new track if it actually changed
 		if (currentTrack.id !== previousTrackId) {
 			previousTrackId = currentTrack.id;
+			playCountedForTrack = null; // reset play count flag for new track
 			audioElement.src = `${API_URL}/audio/${currentTrack.file_id}`;
 			audioElement.load();
 
@@ -70,6 +74,26 @@
 					paused = true;
 				});
 			}
+		}
+	});
+
+	// track play count threshold: 30 seconds OR 50% of duration, whichever is less
+	$effect(() => {
+		if (!currentTrack || playCountedForTrack === currentTrack.id || !duration) return;
+
+		// calculate threshold: minimum of 30 seconds or 50% of track duration
+		const threshold = Math.min(30, duration * 0.5);
+
+		// check if we've crossed the threshold
+		if (currentTime >= threshold) {
+			playCountedForTrack = currentTrack.id;
+
+			// increment play count on server
+			fetch(`${API_URL}/tracks/${currentTrack.id}/play`, {
+				method: 'POST'
+			}).catch(err => {
+				console.error('failed to increment play count:', err);
+			});
 		}
 	});
 

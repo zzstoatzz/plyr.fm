@@ -124,6 +124,7 @@ async def list_tracks(db: Session = Depends(get_db)) -> dict:
                 "artist_handle": track.artist_handle,
                 "r2_url": track.r2_url,
                 "atproto_record_uri": track.atproto_record_uri,
+                "play_count": track.play_count,
                 "created_at": track.created_at.isoformat(),
             }
             for track in tracks
@@ -156,6 +157,7 @@ async def list_my_tracks(
                 "artist_handle": track.artist_handle,
                 "r2_url": track.r2_url,
                 "atproto_record_uri": track.atproto_record_uri,
+                "play_count": track.play_count,
                 "created_at": track.created_at.isoformat(),
             }
             for track in tracks
@@ -214,5 +216,22 @@ async def get_track(track_id: int, db: Session = Depends(get_db)) -> dict:
         "artist_handle": track.artist_handle,
         "r2_url": track.r2_url,
         "atproto_record_uri": track.atproto_record_uri,
+        "play_count": track.play_count,
         "created_at": track.created_at.isoformat(),
     }
+
+
+@router.post("/{track_id}/play")
+async def increment_play_count(track_id: int, db: Session = Depends(get_db)) -> dict:
+    """increment play count for a track (called after 30 seconds of playback)."""
+    track = db.query(Track).filter(Track.id == track_id).first()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="track not found")
+
+    # atomic increment using ORM
+    track.play_count += 1
+    db.commit()
+    db.refresh(track)
+
+    return {"play_count": track.play_count}
