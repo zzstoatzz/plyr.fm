@@ -13,7 +13,8 @@ relay is a music streaming platform built on the AT Protocol (ATProto), the same
 - **track editing** for artists to manage their catalog
 - **play count tracking** to measure engagement
 
-## tech stack
+<details>
+<summary>tech stack</summary>
 
 ### backend
 - **framework**: FastAPI (Python)
@@ -33,22 +34,50 @@ relay is a music streaming platform built on the AT Protocol (ATProto), the same
 - **backend**: automatic on backend file changes
 - **frontend**: automatic on every push to main
 
-## quick start
+</details>
 
-### local development
+<details>
+<summary>local development</summary>
 
-\`\`\`bash
+### prerequisites
+
+- [uv](https://docs.astral.sh/uv/) for Python package management
+- [bun](https://bun.sh/) for frontend development
+- [just](https://github.com/casey/just) for task running (recommended)
+
+### quick start
+
+using [just](https://github.com/casey/just):
+
+```bash
+# install dependencies
+uv sync
+cd frontend && bun install
+
+# run backend
+just serve
+
+# run frontend (new terminal)
+just dev
+```
+
+or manually:
+
+```bash
 # backend
 uv sync
 uv run uvicorn relay.main:app --reload --port 8001
 
 # frontend (new terminal)
 cd frontend && bun install && bun run dev
-\`\`\`
+```
 
 visit http://localhost:5173
 
-## features
+</details>
+
+<details>
+<summary>features</summary>
 
 ### for listeners
 - ✅ browse latest tracks
@@ -64,19 +93,32 @@ visit http://localhost:5173
 - ✅ view play counts
 - ✅ publish to ATProto
 
-## deployment
+</details>
+
+<details>
+<summary>deployment</summary>
 
 fully automatic via GitHub:
 
-\`\`\`bash
+```bash
 git push origin main  # deploys both frontend and backend
-\`\`\`
+```
+
+or using just:
+
+```bash
+just deploy-backend   # deploy backend to fly.io
+just deploy-frontend  # deploy frontend to cloudflare pages
+```
 
 see [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) for details.
 
-## project structure
+</details>
 
-\`\`\`
+<details>
+<summary>project structure</summary>
+
+```
 relay/
 ├── src/relay/              # backend (python)
 │   ├── api/               # fastapi routes
@@ -88,16 +130,22 @@ relay/
 │   └── src/routes/       # pages
 ├── docs/                  # documentation
 ├── .github/workflows/     # ci/cd
+├── Justfile               # task runner recipes
 └── README.md
-\`\`\`
+```
 
-## costs
+</details>
+
+<details>
+<summary>costs</summary>
 
 ~$5-6/month for MVP:
 - cloudflare pages: free
 - cloudflare r2: ~$0.16
 - fly.io: $5
 - neon: free
+
+</details>
 
 ## links
 
