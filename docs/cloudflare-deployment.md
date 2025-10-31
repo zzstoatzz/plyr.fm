@@ -1,152 +1,109 @@
-# cloudflare pages deployment guide
+# cloudflare pages deployment
 
-## overview
+## current setup
 
-the relay frontend is deployed to **cloudflare pages** using direct uploads (not git-connected).
+relay uses **git-connected deployments** via GitHub.
 
-- **backend**: fly.io (see fly.toml)
-- **frontend**: cloudflare pages
+- **frontend**: cloudflare pages (automatic from main branch)
+- **backend**: fly.io (automatic via github actions)
 - **storage**: cloudflare r2 for audio files
-- **database**: neon postgresql
+- **database**: neon postgresql (serverless)
 
-## how cloudflare pages deployments work
+## deployment workflow
 
-### deployment types
+### automatic deployments
 
-1. **git-connected deployments** (not currently used)
-   - automatic deploys on git push
-   - production URL (`relay-4i6.pages.dev`) updates automatically
-   - preview deployments for branches
+both frontend and backend deploy automatically on push to `main`:
 
-2. **direct uploads** (current method)
-   - manual deploys via `wrangler pages deploy`
-   - each deploy gets immutable preview URL (e.g., `https://b5157854.relay-4i6.pages.dev`)
-   - production URL only updates from git commits (if git is connected)
+**frontend (cloudflare pages)**:
+- triggers on any change to `main` branch
+- builds with: `cd frontend && bun install && bun run build`
+- output: `frontend/.svelte-kit/cloudflare`
+- production URL: https://relay-4i6.pages.dev
 
-### current setup
+**backend (fly.io)**:
+- triggers only when backend files change (`src/`, `pyproject.toml`, `uv.lock`, `Dockerfile`, `fly.toml`)
+- deploys via `.github/workflows/deploy-backend.yml`
+- uses `FLY_API_TOKEN` secret
+- production URL: https://relay-api.fly.dev
 
-we use **direct uploads** which means:
-- ✅ fast deploys without pushing to git
-- ✅ instant preview URLs for testing
-- ❌ production URL (`relay-4i6.pages.dev`) doesn't auto-update
-- ❌ preview URLs accumulate and aren't auto-cleaned
+### manual deployments
 
-## deployment commands
-
-### deploy frontend
+if needed, you can still deploy manually:
 
 ```bash
-cd frontend
-bun run build
+# frontend
+cd frontend && bun run build
 bun x wrangler pages deploy .svelte-kit/cloudflare --project-name relay
+
+# backend
+flyctl deploy
 ```
 
-this creates a new deployment with a unique URL like `https://abc12345.relay-4i6.pages.dev`
+## environment variables
 
-### view all deployments
+### cloudflare pages
 
-```bash
-cd frontend
-bun x wrangler pages deployment list --project-name relay
-```
+set in cloudflare dashboard under **Settings → Environment variables**:
 
-### delete old deployments
+- `PUBLIC_API_URL`: `https://relay-api.fly.dev`
 
-```bash
-# delete a specific deployment by ID
-bun x wrangler pages deployment delete <deployment-id> --project-name relay
+### fly.io
 
-# example
-bun x wrangler pages deployment delete b5157854-fd7c-445e-9828-b48688aeb25b --project-name relay
-```
+set in `fly.toml` or via `flyctl secrets`:
 
-**note**: old deployments don't incur storage costs (cloudflare dedupes static assets), but it's good practice to clean them up periodically.
+- `DATABASE_URL`: neon connection string
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`: cloudflare r2 credentials
+- `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`: atproto OAuth credentials
 
-## promotion strategy
+### github actions
 
-### option 1: use preview URLs (current)
-- test on preview URL like `https://abc12345.relay-4i6.pages.dev`
-- share preview URL for testing
-- no promotion needed
+set in GitHub repo under **Settings → Secrets → Actions**:
 
-### option 2: connect to git (recommended for production)
-1. in cloudflare dashboard: pages > relay > settings > builds & deployments
-2. connect github repository
-3. set production branch to `main`
-4. every commit to `main` updates production URL automatically
-
-### option 3: manual promotion
-- cloudflare doesn't support promoting direct uploads to production
-- to update production URL with uncommitted changes:
-  1. commit changes to git
-  2. push to main branch
-  3. wait for automatic deploy (if git-connected)
-
-## recommended workflow
-
-### for development
-```bash
-# make changes
-# test locally at http://localhost:5174
-
-# deploy to preview URL for testing
-cd frontend && bun run build && bun x wrangler pages deploy .svelte-kit/cloudflare --project-name relay
-
-# test on preview URL: https://abc12345.relay-4i6.pages.dev
-```
-
-### for production releases
-```bash
-# 1. commit changes
-git add .
-git commit -m "description"
-
-# 2. push to main (triggers auto-deploy if git-connected)
-git push origin main
-
-# 3. or manually deploy from committed code
-cd frontend && bun run build && bun x wrangler pages deploy .svelte-kit/cloudflare --project-name relay --branch main
-```
-
-## cost & cleanup
-
-### costs
-- cloudflare pages free tier: unlimited static requests, 500 builds/month
-- direct uploads count toward build quota
-- old deployments don't incur storage costs (deduped)
-
-### cleanup recommendations
-1. **delete old preview deployments monthly**
-   ```bash
-   # list deployments older than 7 days
-   bun x wrangler pages deployment list --project-name relay | grep "days ago\|weeks ago\|months ago"
-
-   # delete each one
-   bun x wrangler pages deployment delete <id> --project-name relay
-   ```
-
-2. **or connect to git** to use automatic cleanup
-   - cloudflare auto-removes preview deployments after 30 days
-   - production deployments persist
-
-## production URLs
-
-- **current preview**: varies (e.g., `https://b5157854.relay-4i6.pages.dev`)
-- **production URL**: `https://relay-4i6.pages.dev` (only updates from git)
-- **backend API**: `https://relay-api.fly.dev`
+- `FLY_API_TOKEN`: fly.io deploy token (created with `fly tokens create deploy`)
 
 ## troubleshooting
 
-### "my changes aren't showing on the production URL"
-- production URL only updates from git commits
-- use the preview URL from your deploy output
-- or commit changes and redeploy
+### frontend deployment fails
 
-### "I have too many preview deployments"
-- delete old ones with `wrangler pages deployment delete`
-- consider connecting to git for automatic cleanup
+check cloudflare pages build logs:
+1. go to cloudflare dashboard → pages → relay
+2. click on latest deployment
+3. view build logs
 
-### "deployment failed"
-- check build logs in cloudflare dashboard
-- ensure `bun run build` works locally
-- verify wrangler is authenticated: `bun x wrangler whoami`
+common issues:
+- missing `PUBLIC_API_URL` environment variable
+- build fails locally (test with `cd frontend && bun run build`)
+
+### backend deployment fails
+
+check github actions logs:
+1. go to github repo → actions
+2. click on failed workflow run
+3. view logs
+
+common issues:
+- invalid `FLY_API_TOKEN` secret
+- fly.toml misconfiguration
+- missing secrets on fly.io
+
+### preview deployments not working
+
+preview deployment URLs (like `https://abc123.relay-4i6.pages.dev`) have known issues with SvelteKit SSR. use the production URL instead: https://relay-4i6.pages.dev
+
+## monitoring
+
+- **frontend**: cloudflare pages analytics in dashboard
+- **backend**: `flyctl logs` or fly.io dashboard
+- **database**: neon console metrics
+
+## costs
+
+current setup is very cost-effective:
+
+- **cloudflare pages**: free tier (unlimited requests, 500 builds/month)
+- **cloudflare r2**: ~$0.16/month for 1000 tracks
+- **fly.io**: ~$5/month (2x shared-cpu-1x VMs)
+- **neon**: free tier (0.5GB storage, 191 compute hours/month)
+
+**total**: ~$5-6/month for MVP
