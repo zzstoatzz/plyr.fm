@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import type { Track, User } from '$lib/types';
@@ -10,8 +11,9 @@
 	let audioElement = $state<HTMLAudioElement | undefined>(undefined);
 	let user = $state<User | null>(null);
 	let loading = $state(true);
+	let trackNotFound = $state(false);
 
-	// player state - using Svelte's built-in bindings
+	// player state
 	let paused = $state(true);
 	let currentTime = $state(0);
 	let duration = $state(0);
@@ -36,11 +38,9 @@
 				if (authResponse.ok) {
 					user = await authResponse.json();
 				} else {
-					// invalid session, clear it
 					localStorage.removeItem('session_id');
 				}
 			} catch (e) {
-				// not authenticated, that's fine
 				localStorage.removeItem('session_id');
 			}
 		}
@@ -50,10 +50,21 @@
 		const data = await response.json();
 		tracks = data.tracks;
 
+		// get track id from URL and auto-play
+		const trackId = parseInt($page.params.id);
+		const track = tracks.find(t => t.id === trackId);
+
+		if (track) {
+			currentTrack = track;
+			paused = false;  // auto-play
+		} else {
+			trackNotFound = true;
+		}
+
 		loading = false;
 	});
 
-	// Use $effect to reactively handle track changes only
+	// Use $effect to reactively handle track changes
 	let previousTrackId: number | null = null;
 	$effect(() => {
 		if (!currentTrack || !audioElement) return;
@@ -112,88 +123,95 @@
 	<Header {user} onLogout={logout} />
 
 	<main>
-
-	<section class="tracks">
-		<h2>latest tracks</h2>
-		{#if !hasTracks}
-			<p class="empty">no tracks yet</p>
+		{#if trackNotFound}
+			<div class="not-found">
+				<h2>track not found</h2>
+				<p>the requested track doesn't exist or has been removed.</p>
+				<a href="/" class="back-link">← back to all tracks</a>
+			</div>
 		{:else}
-			<div class="track-list">
-				{#each tracks as track}
-					<TrackItem
-						{track}
-						isPlaying={currentTrack?.id === track.id}
-						onPlay={playTrack}
-					/>
-				{/each}
+			<section class="tracks">
+				<h2>latest tracks</h2>
+				{#if !hasTracks}
+					<p class="empty">no tracks yet</p>
+				{:else}
+					<div class="track-list">
+						{#each tracks as track}
+							<TrackItem
+								{track}
+								isPlaying={currentTrack?.id === track.id}
+								onPlay={playTrack}
+							/>
+						{/each}
+					</div>
+				{/if}
+			</section>
+		{/if}
+
+		{#if currentTrack}
+			<div class="player">
+				<audio
+					bind:this={audioElement}
+					bind:paused
+					bind:currentTime
+					bind:duration
+					bind:volume
+					onended={() => {
+						currentTime = 0;
+						paused = true;
+					}}
+				></audio>
+
+				<div class="player-content">
+					<div class="player-info">
+						<div class="player-title">{currentTrack.title}</div>
+						<div class="player-artist">{currentTrack.artist}</div>
+					</div>
+
+					<div class="player-controls">
+						<button class="control-btn" onclick={() => paused = !paused} title={paused ? 'Play' : 'Pause'}>
+							{#if !paused}
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+									<rect x="6" y="4" width="4" height="16" rx="1"></rect>
+									<rect x="14" y="4" width="4" height="16" rx="1"></rect>
+								</svg>
+							{:else}
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+									<path d="M8 5v14l11-7z"></path>
+								</svg>
+							{/if}
+						</button>
+
+						<div class="time-control">
+							<span class="time">{formattedCurrentTime}</span>
+							<input
+								type="range"
+								class="seek-bar"
+								min="0"
+								max={duration || 0}
+								bind:value={currentTime}
+							/>
+							<span class="time">{formattedDuration}</span>
+						</div>
+
+						<div class="volume-control">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+								<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+								<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+							</svg>
+							<input
+								type="range"
+								class="volume-bar"
+								min="0"
+								max="1"
+								step="0.01"
+								bind:value={volume}
+							/>
+						</div>
+					</div>
+				</div>
 			</div>
 		{/if}
-	</section>
-
-	{#if currentTrack}
-		<div class="player">
-			<audio
-				bind:this={audioElement}
-				bind:paused
-				bind:currentTime
-				bind:duration
-				bind:volume
-				onended={() => {
-					currentTime = 0;
-					paused = true;
-				}}
-			></audio>
-
-			<div class="player-content">
-				<div class="player-info">
-					<div class="player-title">{currentTrack.title}</div>
-					<div class="player-artist">{currentTrack.artist}</div>
-				</div>
-
-				<div class="player-controls">
-					<button class="control-btn" onclick={() => paused = !paused} title={paused ? 'Play' : 'Pause'}>
-						{#if !paused}
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-								<rect x="6" y="4" width="4" height="16" rx="1"></rect>
-								<rect x="14" y="4" width="4" height="16" rx="1"></rect>
-							</svg>
-						{:else}
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-								<path d="M8 5v14l11-7z"></path>
-							</svg>
-						{/if}
-					</button>
-
-					<div class="time-control">
-						<span class="time">{formattedCurrentTime}</span>
-						<input
-							type="range"
-							class="seek-bar"
-							min="0"
-							max={duration || 0}
-							bind:value={currentTime}
-						/>
-						<span class="time">{formattedDuration}</span>
-					</div>
-
-					<div class="volume-control">
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-							<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-							<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-						</svg>
-						<input
-							type="range"
-							class="volume-bar"
-							min="0"
-							max="1"
-							step="0.01"
-							bind:value={volume}
-						/>
-					</div>
-				</div>
-			</div>
-		</div>
-	{/if}
 	</main>
 {/if}
 
@@ -210,6 +228,32 @@
 		max-width: 800px;
 		margin: 0 auto;
 		padding: 0 1rem 120px;
+	}
+
+	.not-found {
+		text-align: center;
+		padding: 3rem 1rem;
+	}
+
+	.not-found h2 {
+		font-size: 1.5rem;
+		margin-bottom: 1rem;
+		color: #e8e8e8;
+	}
+
+	.not-found p {
+		color: #808080;
+		margin-bottom: 2rem;
+	}
+
+	.back-link {
+		color: #3a7dff;
+		text-decoration: none;
+		transition: color 0.2s;
+	}
+
+	.back-link:hover {
+		color: #6a9fff;
 	}
 
 	.tracks h2 {

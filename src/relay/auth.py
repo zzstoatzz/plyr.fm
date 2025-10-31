@@ -146,10 +146,27 @@ async def handle_oauth_callback(code: str, state: str, iss: str) -> tuple[str, s
         ) from e
 
 
+from fastapi import Cookie, Header, HTTPException
+
 def require_auth(
-    session_id: Annotated[str | None, Cookie()] = None,
+    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
+    authorization: Annotated[str | None, Header()] = None,
 ) -> Session:
-    """fastapi dependency to require authentication."""
+    """fastapi dependency to require authentication.
+
+    Accepts session_id from either:
+    - Cookie (for same-domain requests)
+    - Authorization header as Bearer token (for cross-domain requests)
+    """
+    session_id = None
+
+    # try cookie first (for localhost/same-domain)
+    if session_id_cookie:
+        session_id = session_id_cookie
+    # try authorization header (for cross-domain)
+    elif authorization and authorization.startswith("Bearer "):
+        session_id = authorization.removeprefix("Bearer ")
+
     if not session_id:
         raise HTTPException(
             status_code=401,

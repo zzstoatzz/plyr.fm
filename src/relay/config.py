@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     r2_endpoint_url: str = Field(default="", description="R2 endpoint URL")
     r2_public_bucket_url: str = Field(default="", description="R2 public bucket URL")
 
+    # frontend
+    frontend_url: str = Field(
+        default="http://localhost:5173",
+        description="Frontend URL for redirects",
+    )
+
     # atproto
     atproto_pds_url: str = Field(
         default="https://bsky.social",

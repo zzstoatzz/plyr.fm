@@ -15,9 +15,6 @@ build
 .env
 .env.local
 data/
-frontend/
 sandbox/
 tests/
 docs/
-*.md
-!README.md

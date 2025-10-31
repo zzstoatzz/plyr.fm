@@ -29,7 +29,10 @@ app = FastAPI(
 # configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # configure appropriately for production
+    allow_origins=[
+        "http://localhost:5173",
+        "https://relay-4i6.pages.dev",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

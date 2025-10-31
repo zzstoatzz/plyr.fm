@@ -1,6 +1,7 @@
 """authentication api endpoints."""
 
 from typing import Annotated
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -13,6 +14,7 @@ from relay.auth import (
     require_auth,
     start_oauth_flow,
 )
+from relay.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -34,25 +36,10 @@ async def oauth_callback(
     did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
     session_id = create_session(did, handle, oauth_session)
 
-    # redirect to localhost endpoint to set cookie properly for localhost domain
+    # pass session_id as URL parameter for cross-domain auth
     response = RedirectResponse(
-        url=f"http://localhost:8001/auth/session?session_id={session_id}",
+        url=f"{settings.frontend_url}/portal?session_id={session_id}",
         status_code=303
-    )
-    return response
-
-
-@router.get("/session")
-async def set_session_cookie(session_id: str) -> RedirectResponse:
-    """intermediate endpoint to set session cookie for localhost domain."""
-    response = RedirectResponse(url="http://localhost:5173", status_code=303)
-    response.set_cookie(
-        key="session_id",
-        value=session_id,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        domain="localhost",
     )
     return response
 

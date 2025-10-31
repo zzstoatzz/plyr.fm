@@ -11,3 +11,11 @@ serve:
 # run frontend dev server
 dev:
     cd frontend && bun run dev
+
+# deploy backend to fly.io
+deploy-backend:
+    flyctl deploy
+
+# deploy frontend to cloudflare pages
+deploy-frontend:
+    cd frontend && bun run build && bun x wrangler pages deploy .svelte-kit/cloudflare

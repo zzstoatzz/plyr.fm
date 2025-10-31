@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/stores';
 	import type { User } from '$lib/types';
 
 	interface Props {
@@ -20,7 +21,9 @@
 
 		<nav>
 			{#if isAuthenticated}
-				<a href="/portal" class="nav-link">portal</a>
+				{#if $page.url.pathname !== '/portal'}
+					<a href="/portal" class="nav-link">portal</a>
+				{/if}
 				<span class="user-info">@{user.handle}</span>
 				<button onclick={onLogout} class="btn-secondary">logout</button>
 			{:else}

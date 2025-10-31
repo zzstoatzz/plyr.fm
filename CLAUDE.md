@@ -11,3 +11,4 @@ decentralized music streaming platform on ATProto.
 - **frontend**: SvelteKit with **bun** (not npm/pnpm)
 - **backend**: FastAPI deployed on Fly.io
 - **deployment**: `flyctl deploy` (runs in background per user prefs)
+- **logs**: `flyctl logs` is BLOCKING - must run in background with `run_in_background=true` then check output with BashOutput

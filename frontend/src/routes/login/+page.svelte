@@ -39,14 +39,6 @@
 </div>
 
 <style>
-	:global(body) {
-		margin: 0;
-		padding: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-		background: #0a0a0a;
-		color: #fff;
-	}
-
 	.container {
 		min-height: 100vh;
 		display: flex;

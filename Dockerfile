@@ -6,11 +6,11 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # install dependencies
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # copy application code
-COPY . .
+COPY src ./src
 
 # install the project itself
 RUN uv sync --frozen --no-dev

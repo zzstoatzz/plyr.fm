@@ -21,18 +21,41 @@
 	let file: File | null = null;
 
 	onMount(async () => {
+		// check if session_id is in URL (from OAuth callback)
+		const params = new URLSearchParams(window.location.search);
+		const sessionId = params.get('session_id');
+
+		if (sessionId) {
+			// store session_id in localStorage
+			localStorage.setItem('session_id', sessionId);
+			// remove from URL
+			window.history.replaceState({}, '', '/portal');
+		}
+
+		// get session_id from localStorage
+		const storedSessionId = localStorage.getItem('session_id');
+
+		if (!storedSessionId) {
+			window.location.href = '/login';
+			return;
+		}
+
 		try {
-			const response = await fetch('`${API_URL}`/auth/me', {
-				credentials: 'include'
+			const response = await fetch(`${API_URL}/auth/me`, {
+				headers: {
+					'Authorization': `Bearer ${storedSessionId}`
+				}
 			});
 			if (response.ok) {
 				user = await response.json();
 				await loadMyTracks();
 			} else {
-				// not authenticated, redirect to login
+				// session invalid, clear and redirect
+				localStorage.removeItem('session_id');
 				window.location.href = '/login';
 			}
 		} catch (e) {
+			localStorage.removeItem('session_id');
 			window.location.href = '/login';
 		} finally {
 			loading = false;
@@ -41,9 +64,12 @@
 
 	async function loadMyTracks() {
 		loadingTracks = true;
+		const sessionId = localStorage.getItem('session_id');
 		try {
-			const response = await fetch('`${API_URL}`/tracks/me', {
-				credentials: 'include'
+			const response = await fetch(`${API_URL}/tracks/me`, {
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
 			});
 			if (response.ok) {
 				const data = await response.json();
@@ -64,6 +90,7 @@
 		uploadError = '';
 		uploadSuccess = '';
 
+		const sessionId = localStorage.getItem('session_id');
 		const formData = new FormData();
 		formData.append('file', file);
 		formData.append('title', title);
@@ -71,10 +98,12 @@
 		if (album) formData.append('album', album);
 
 		try {
-			const response = await fetch('`${API_URL}`/tracks/', {
+			const response = await fetch(`${API_URL}/tracks/`, {
 				method: 'POST',
 				body: formData,
-				credentials: 'include'
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
 			});
 
 			if (response.ok) {
@@ -102,10 +131,13 @@
 	async function deleteTrack(trackId: number, trackTitle: string) {
 		if (!confirm(`delete "${trackTitle}"?`)) return;
 
+		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
 				method: 'DELETE',
-				credentials: 'include'
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
 			});
 
 			if (response.ok) {
@@ -127,10 +159,14 @@
 	}
 
 	async function logout() {
-		await fetch('`${API_URL}`/auth/logout', {
+		const sessionId = localStorage.getItem('session_id');
+		await fetch(`${API_URL}/auth/logout`, {
 			method: 'POST',
-			credentials: 'include'
+			headers: {
+				'Authorization': `Bearer ${sessionId}`
+			}
 		});
+		localStorage.removeItem('session_id');
 		window.location.href = '/';
 	}
 </script>
