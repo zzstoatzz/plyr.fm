@@ -1,150 +1,152 @@
-# cloudflare deployment guide
+# cloudflare pages deployment guide
 
-## prerequisites
+## overview
 
-1. cloudflare account
-2. domain configured in cloudflare (optional but recommended)
-3. wrangler CLI installed: `npm install -g wrangler`
+the relay frontend is deployed to **cloudflare pages** using direct uploads (not git-connected).
 
-## setup steps
+- **backend**: fly.io (see fly.toml)
+- **frontend**: cloudflare pages
+- **storage**: cloudflare r2 for audio files
+- **database**: neon postgresql
 
-### 1. create r2 bucket
+## how cloudflare pages deployments work
 
-```bash
-wrangler r2 bucket create relay-audio
-```
+### deployment types
 
-this creates the bucket for audio storage.
+1. **git-connected deployments** (not currently used)
+   - automatic deploys on git push
+   - production URL (`relay-4i6.pages.dev`) updates automatically
+   - preview deployments for branches
 
-### 2. generate r2 access keys
+2. **direct uploads** (current method)
+   - manual deploys via `wrangler pages deploy`
+   - each deploy gets immutable preview URL (e.g., `https://b5157854.relay-4i6.pages.dev`)
+   - production URL only updates from git commits (if git is connected)
 
-in cloudflare dashboard:
-1. go to r2 > manage r2 api tokens
-2. create api token with read & write permissions
-3. save access key id and secret access key
+### current setup
 
-### 3. set backend secrets
+we use **direct uploads** which means:
+- ✅ fast deploys without pushing to git
+- ✅ instant preview URLs for testing
+- ❌ production URL (`relay-4i6.pages.dev`) doesn't auto-update
+- ❌ preview URLs accumulate and aren't auto-cleaned
 
-```bash
-cd /path/to/relay
+## deployment commands
 
-# database connection
-wrangler secret put DATABASE_URL
-# paste your neon postgres connection string
-
-# r2 credentials
-wrangler secret put AWS_ACCESS_KEY_ID
-wrangler secret put AWS_SECRET_ACCESS_KEY
-
-# atproto oauth
-wrangler secret put ATPROTO_CLIENT_ID
-wrangler secret put ATPROTO_CLIENT_SECRET
-```
-
-### 4. configure environment variables
-
-update `wrangler.toml` with your values:
-- r2 bucket name (should be `relay-audio`)
-- pds url (currently `https://pds.zzstoatzz.io`)
-- r2 endpoint url: `https://<your-account-id>.r2.cloudflarestorage.com`
-- r2 public url: custom domain or `https://pub-<id>.r2.dev`
-
-### 5. deploy backend (python workers)
-
-```bash
-# from project root
-wrangler deploy
-```
-
-this deploys your fastapi backend to cloudflare workers.
-
-note: you'll get a url like `https://relay-api.<your-subdomain>.workers.dev`
-
-### 6. configure frontend api url
-
-update `frontend/wrangler.toml`:
-```toml
-[env.production.vars]
-API_URL = "https://relay-api.<your-subdomain>.workers.dev"
-```
-
-### 7. deploy frontend (pages)
+### deploy frontend
 
 ```bash
 cd frontend
-
-# build for production
 bun run build
-
-# deploy to pages
-wrangler pages deploy .svelte-kit/cloudflare --project-name relay-frontend
+bun x wrangler pages deploy .svelte-kit/cloudflare --project-name relay
 ```
 
-you'll get a url like `https://relay-frontend.pages.dev`
+this creates a new deployment with a unique URL like `https://abc12345.relay-4i6.pages.dev`
 
-### 8. configure custom domains (optional)
-
-in cloudflare dashboard:
-1. **frontend**: pages > relay-frontend > custom domains
-   - add `relay.example.com`
-2. **backend**: workers > relay-api > triggers > custom domains
-   - add `api.relay.example.com`
-3. **r2 public access**: r2 > relay-audio > settings > public access
-   - add custom domain `audio.relay.example.com`
-
-## cost estimate
-
-### free tier (perfect for mvp):
-- pages: unlimited static requests, 100k function requests/day
-- workers: 100k requests/day
-- r2: 10 gb storage, 1m class a ops, 10m class b ops
-- **total: $0/month**
-
-### paid tier (when you grow):
-- workers: $5/month (10m requests)
-- r2: ~$0.015/gb-month (100 gb audio = $1.50/month)
-- **total: ~$5-10/month for moderate usage**
-
-## local development
-
-keep using current setup:
-```bash
-# backend
-uv run uvicorn relay.main:app --reload --port 8001
-
-# frontend
-cd frontend && bun run dev
-```
-
-## testing deployment locally
+### view all deployments
 
 ```bash
-# test backend with wrangler
-wrangler dev
-
-# test frontend
-cd frontend && wrangler pages dev .svelte-kit/cloudflare
+cd frontend
+bun x wrangler pages deployment list --project-name relay
 ```
+
+### delete old deployments
+
+```bash
+# delete a specific deployment by ID
+bun x wrangler pages deployment delete <deployment-id> --project-name relay
+
+# example
+bun x wrangler pages deployment delete b5157854-fd7c-445e-9828-b48688aeb25b --project-name relay
+```
+
+**note**: old deployments don't incur storage costs (cloudflare dedupes static assets), but it's good practice to clean them up periodically.
+
+## promotion strategy
+
+### option 1: use preview URLs (current)
+- test on preview URL like `https://abc12345.relay-4i6.pages.dev`
+- share preview URL for testing
+- no promotion needed
+
+### option 2: connect to git (recommended for production)
+1. in cloudflare dashboard: pages > relay > settings > builds & deployments
+2. connect github repository
+3. set production branch to `main`
+4. every commit to `main` updates production URL automatically
+
+### option 3: manual promotion
+- cloudflare doesn't support promoting direct uploads to production
+- to update production URL with uncommitted changes:
+  1. commit changes to git
+  2. push to main branch
+  3. wait for automatic deploy (if git-connected)
+
+## recommended workflow
+
+### for development
+```bash
+# make changes
+# test locally at http://localhost:5174
+
+# deploy to preview URL for testing
+cd frontend && bun run build && bun x wrangler pages deploy .svelte-kit/cloudflare --project-name relay
+
+# test on preview URL: https://abc12345.relay-4i6.pages.dev
+```
+
+### for production releases
+```bash
+# 1. commit changes
+git add .
+git commit -m "description"
+
+# 2. push to main (triggers auto-deploy if git-connected)
+git push origin main
+
+# 3. or manually deploy from committed code
+cd frontend && bun run build && bun x wrangler pages deploy .svelte-kit/cloudflare --project-name relay --branch main
+```
+
+## cost & cleanup
+
+### costs
+- cloudflare pages free tier: unlimited static requests, 500 builds/month
+- direct uploads count toward build quota
+- old deployments don't incur storage costs (deduped)
+
+### cleanup recommendations
+1. **delete old preview deployments monthly**
+   ```bash
+   # list deployments older than 7 days
+   bun x wrangler pages deployment list --project-name relay | grep "days ago\|weeks ago\|months ago"
+
+   # delete each one
+   bun x wrangler pages deployment delete <id> --project-name relay
+   ```
+
+2. **or connect to git** to use automatic cleanup
+   - cloudflare auto-removes preview deployments after 30 days
+   - production deployments persist
+
+## production URLs
+
+- **current preview**: varies (e.g., `https://b5157854.relay-4i6.pages.dev`)
+- **production URL**: `https://relay-4i6.pages.dev` (only updates from git)
+- **backend API**: `https://relay-api.fly.dev`
 
 ## troubleshooting
 
-### python workers issues
-- ensure `compatibility_flags = ["python_workers"]` in wrangler.toml
-- python workers are in beta - some packages may not work
-- use `pywrangler` for complex dependency bundling
+### "my changes aren't showing on the production URL"
+- production URL only updates from git commits
+- use the preview URL from your deploy output
+- or commit changes and redeploy
 
-### r2 access issues
-- verify bucket exists: `wrangler r2 bucket list`
-- check secrets are set: `wrangler secret list`
-- ensure r2 endpoint url includes account id
+### "I have too many preview deployments"
+- delete old ones with `wrangler pages deployment delete`
+- consider connecting to git for automatic cleanup
 
-### cors issues
-- configure cors in workers for frontend access
-- update frontend api url to match workers deployment
-
-## next steps
-
-1. set up ci/cd with github actions
-2. configure domain dns in cloudflare
-3. enable cloudflare analytics
-4. set up error tracking (sentry, etc.)
+### "deployment failed"
+- check build logs in cloudflare dashboard
+- ensure `bun run build` works locally
+- verify wrangler is authenticated: `bun x wrangler whoami`
