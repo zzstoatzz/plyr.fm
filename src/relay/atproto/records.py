@@ -1,12 +1,89 @@
 """ATProto record creation for relay tracks."""
 
 import json
+import logging
 from datetime import datetime, timezone
 
 from atproto_oauth.models import OAuthSession
 
 from relay.auth import Session as AuthSession
-from relay.auth import oauth_client
+from relay.auth import oauth_client, update_session_tokens
+
+logger = logging.getLogger(__name__)
+
+
+def _reconstruct_oauth_session(oauth_data: dict) -> OAuthSession:
+    """reconstruct OAuthSession from serialized data."""
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import serialization
+
+    # deserialize DPoP private key
+    dpop_key_pem = oauth_data.get("dpop_private_key_pem")
+    if not dpop_key_pem:
+        raise ValueError("DPoP private key not found in session")
+
+    dpop_private_key = serialization.load_pem_private_key(
+        dpop_key_pem.encode("utf-8"),
+        password=None,
+        backend=default_backend(),
+    )
+
+    return OAuthSession(
+        did=oauth_data["did"],
+        handle=oauth_data["handle"],
+        pds_url=oauth_data["pds_url"],
+        authserver_iss=oauth_data["authserver_iss"],
+        access_token=oauth_data["access_token"],
+        refresh_token=oauth_data["refresh_token"],
+        dpop_private_key=dpop_private_key,
+        dpop_authserver_nonce=oauth_data.get("dpop_authserver_nonce", ""),
+        dpop_pds_nonce=oauth_data.get("dpop_pds_nonce", ""),
+        scope=oauth_data["scope"],
+    )
+
+
+async def _refresh_session_tokens(
+    auth_session: AuthSession,
+    oauth_session: OAuthSession,
+) -> OAuthSession:
+    """refresh expired access token using refresh token."""
+    logger.info(f"refreshing access token for {auth_session.did}")
+
+    try:
+        # use OAuth client to refresh tokens
+        refreshed_session = await oauth_client.refresh_session(oauth_session)
+
+        # serialize updated tokens back to database
+        from cryptography.hazmat.primitives import serialization
+
+        dpop_key_pem = refreshed_session.dpop_private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode("utf-8")
+
+        updated_session_data = {
+            "did": refreshed_session.did,
+            "handle": refreshed_session.handle,
+            "pds_url": refreshed_session.pds_url,
+            "authserver_iss": refreshed_session.authserver_iss,
+            "scope": refreshed_session.scope,
+            "access_token": refreshed_session.access_token,
+            "refresh_token": refreshed_session.refresh_token,
+            "dpop_private_key_pem": dpop_key_pem,
+            "dpop_authserver_nonce": refreshed_session.dpop_authserver_nonce,
+            "dpop_pds_nonce": refreshed_session.dpop_pds_nonce or "",
+        }
+
+        # update session in database
+        update_session_tokens(auth_session.session_id, updated_session_data)
+
+        logger.info(f"successfully refreshed access token for {auth_session.did}")
+        return refreshed_session
+
+    except Exception as e:
+        logger.error(f"failed to refresh token for {auth_session.did}: {e}", exc_info=True)
+        raise ValueError(f"failed to refresh access token: {e}") from e
 
 
 async def create_track_record(
@@ -42,32 +119,7 @@ async def create_track_record(
         raise ValueError(f"OAuth session data missing or invalid for {auth_session.did}")
 
     # reconstruct OAuthSession from database
-    from cryptography.hazmat.backends import default_backend
-    from cryptography.hazmat.primitives import serialization
-
-    # deserialize DPoP private key
-    dpop_key_pem = oauth_data.get("dpop_private_key_pem")
-    if not dpop_key_pem:
-        raise ValueError("DPoP private key not found in session - please log out and log back in")
-
-    dpop_private_key = serialization.load_pem_private_key(
-        dpop_key_pem.encode("utf-8"),
-        password=None,
-        backend=default_backend(),
-    )
-
-    oauth_session = OAuthSession(
-        did=oauth_data["did"],
-        handle=oauth_data["handle"],
-        pds_url=oauth_data["pds_url"],
-        authserver_iss=oauth_data["authserver_iss"],
-        access_token=oauth_data["access_token"],
-        refresh_token=oauth_data["refresh_token"],
-        dpop_private_key=dpop_private_key,
-        dpop_authserver_nonce=oauth_data.get("dpop_authserver_nonce", ""),
-        dpop_pds_nonce=oauth_data.get("dpop_pds_nonce", ""),
-        scope=oauth_data["scope"],
-    )
+    oauth_session = _reconstruct_oauth_session(oauth_data)
 
     # construct record
     record = {
@@ -93,17 +145,32 @@ async def create_track_record(
         "record": record,
     }
 
-    response = await oauth_client.make_authenticated_request(
-        session=oauth_session,
-        method="POST",
-        url=url,
-        json=payload,
-    )
+    # try creating the record, refresh token if expired
+    for attempt in range(2):  # max 2 attempts: initial + 1 retry after refresh
+        response = await oauth_client.make_authenticated_request(
+            session=oauth_session,
+            method="POST",
+            url=url,
+            json=payload,
+        )
 
-    if response.status_code not in (200, 201):
+        # success
+        if response.status_code in (200, 201):
+            result = response.json()
+            return result["uri"], result["cid"]
+
+        # token expired - refresh and retry
+        if response.status_code == 401 and attempt == 0:
+            try:
+                error_data = response.json()
+                if "exp" in error_data.get("message", ""):
+                    logger.info(f"access token expired for {auth_session.did}, attempting refresh")
+                    oauth_session = await _refresh_session_tokens(auth_session, oauth_session)
+                    continue  # retry with refreshed token
+            except (json.JSONDecodeError, KeyError):
+                pass  # not a token expiration error
+
+        # other error or retry failed
         raise Exception(
             f"Failed to create ATProto record: {response.status_code} {response.text}"
         )
-
-    result = response.json()
-    return result["uri"], result["cid"]

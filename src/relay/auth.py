@@ -83,6 +83,21 @@ def get_session(session_id: str) -> Session | None:
         db.close()
 
 
+def update_session_tokens(session_id: str, oauth_session_data: dict) -> None:
+    """update OAuth session data for a session (e.g., after token refresh)."""
+    db = next(get_db())
+    try:
+        db_session = db.query(UserSession).filter(
+            UserSession.session_id == session_id
+        ).first()
+
+        if db_session:
+            db_session.oauth_session_data = json.dumps(oauth_session_data)
+            db.commit()
+    finally:
+        db.close()
+
+
 def delete_session(session_id: str) -> None:
     """delete a session."""
     db = next(get_db())
