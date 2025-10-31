@@ -572,8 +572,8 @@
 		display: flex;
 		gap: 0.5rem;
 		flex-shrink: 0;
-		margin-left: 1rem;
-		padding-top: 0.25rem;
+		margin-left: 0.75rem;
+		align-self: flex-start;
 	}
 
 	.action-btn {
