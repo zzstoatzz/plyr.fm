@@ -8,8 +8,36 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
+ENV/
+
+# Python tools
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
 # Local data
 data/
 .env
+.env.local
 test-audio/
+
+# Development/sandbox
+sandbox/
+python_modules/
+
+# Wrangler (Cloudflare)
+.wrangler/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

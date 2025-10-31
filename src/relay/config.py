@@ -46,6 +46,10 @@ class Settings(BaseSettings):
         default="http://localhost:5173",
         description="Frontend URL for redirects",
     )
+    cors_origins: list[str] = Field(
+        default=["http://localhost:5173", "https://relay-4i6.pages.dev"],
+        description="CORS allowed origins",
+    )
 
     # atproto
     atproto_pds_url: str = Field(

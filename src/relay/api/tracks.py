@@ -1,5 +1,6 @@
 """tracks api endpoints."""
 
+import logging
 from pathlib import Path
 from typing import Annotated
 
@@ -13,6 +14,7 @@ from relay.config import settings
 from relay.models import AudioFormat, Track, get_db
 from relay.storage import storage
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tracks", tags=["tracks"])
 
 
@@ -68,7 +70,7 @@ async def upload_track(
             )
         except Exception as e:
             # log but don't fail upload if record creation fails
-            print(f"warning: failed to create ATProto record: {e}")
+            logger.warning(f"failed to create ATProto record: {e}", exc_info=True)
 
     # create track record with artist identity
     extra = {}
@@ -189,7 +191,7 @@ async def delete_track(
         storage.delete(track.file_id)
     except Exception as e:
         # log but don't fail - maybe file was already deleted
-        print(f"warning: failed to delete file {track.file_id}: {e}")
+        logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)
 
     # delete track record
     db.delete(track)
