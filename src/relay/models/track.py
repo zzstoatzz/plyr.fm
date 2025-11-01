@@ -41,6 +41,14 @@ class Track(Base):
     # flexible extra fields (album, duration, genre, etc.)
     extra: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
 
+    # featured artists (list of {did, handle, display_name})
+    features: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default="[]",
+    )
+
     # ATProto integration fields
     r2_url: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_uri: Mapped[str | None] = mapped_column(String, nullable=True)

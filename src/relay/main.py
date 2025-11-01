@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from relay.api import artists_router, audio_router, auth_router, tracks_router
+from relay.api import artists_router, audio_router, auth_router, search_router, tracks_router
 from relay.config import settings
 from relay.models import init_db
 
@@ -40,6 +40,7 @@ app.include_router(auth_router)
 app.include_router(artists_router)
 app.include_router(tracks_router)
 app.include_router(audio_router)
+app.include_router(search_router)
 
 
 @app.get("/health")
