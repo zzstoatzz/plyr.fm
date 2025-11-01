@@ -4,6 +4,7 @@ decentralized music streaming platform on ATProto.
 
 ## critical reminders
 
+- **pull requests**: always create a PR for review before merging to main - we will have users soon
 - **testing**: empirical first - run code and prove it works before writing tests
 - **auth**: OAuth 2.1 implementation from fork (`git+https://github.com/zzstoatzz/atproto@main`)
 - **storage**: Cloudflare R2 for audio files
