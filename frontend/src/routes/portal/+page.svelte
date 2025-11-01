@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Header from '$lib/components/Header.svelte';
-	import type { User, Track} from '$lib/types';
+	import HandleSearch from '$lib/components/HandleSearch.svelte';
+	import type { User, Track, FeaturedArtist} from '$lib/types';
 	import { API_URL } from '$lib/config';
 
 	let user: User | null = null;
@@ -18,11 +19,13 @@
 	let title = '';
 	let album = '';
 	let file: File | null = null;
+	let featuredArtists: FeaturedArtist[] = [];
 
 	// editing state
 	let editingTrackId: number | null = null;
 	let editTitle = '';
 	let editAlbum = '';
+	let editFeaturedArtists: FeaturedArtist[] = [];
 
 	onMount(async () => {
 		// check if session_id is in URL (from OAuth callback)
@@ -99,6 +102,11 @@
 		formData.append('file', file);
 		formData.append('title', title);
 		if (album) formData.append('album', album);
+		if (featuredArtists.length > 0) {
+			// send features as JSON array of handles
+			const handles = featuredArtists.map(a => a.handle);
+			formData.append('features', JSON.stringify(handles));
+		}
 
 		try {
 			const response = await fetch(`${API_URL}/tracks/`, {
@@ -115,6 +123,7 @@
 				title = '';
 				album = '';
 				file = null;
+				featuredArtists = [];
 				// @ts-ignore
 				document.getElementById('file-input').value = '';
 				// reload tracks
@@ -157,12 +166,14 @@
 		editingTrackId = track.id;
 		editTitle = track.title;
 		editAlbum = track.album || '';
+		editFeaturedArtists = track.features || [];
 	}
 
 	function cancelEdit() {
 		editingTrackId = null;
 		editTitle = '';
 		editAlbum = '';
+		editFeaturedArtists = [];
 	}
 
 	async function saveTrackEdit(trackId: number) {
@@ -170,6 +181,13 @@
 		const formData = new FormData();
 		formData.append('title', editTitle);
 		formData.append('album', editAlbum);
+		if (editFeaturedArtists.length > 0) {
+			const handles = editFeaturedArtists.map(a => a.handle);
+			formData.append('features', JSON.stringify(handles));
+		} else {
+			// send empty array to clear features
+			formData.append('features', JSON.stringify([]));
+		}
 
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
@@ -257,6 +275,16 @@
 				</div>
 
 				<div class="form-group">
+					<label for="features">featured artists (optional)</label>
+					<HandleSearch
+						bind:selected={featuredArtists}
+						onAdd={(artist) => { featuredArtists = [...featuredArtists, artist]; }}
+						onRemove={(did) => { featuredArtists = featuredArtists.filter(a => a.did !== did); }}
+						disabled={uploading}
+					/>
+				</div>
+
+				<div class="form-group">
 					<label for="file-input">audio file</label>
 					<input
 						id="file-input"
@@ -287,51 +315,72 @@
 			{:else}
 				<div class="tracks-list">
 					{#each tracks as track}
-						<div class="track-item">
+						<div class="track-item" class:editing={editingTrackId === track.id}>
 							{#if editingTrackId === track.id}
-								<div class="track-info editing">
-									<input
-										type="text"
-										bind:value={editTitle}
-										placeholder="track title"
-										class="edit-input"
-									/>
-									<input
-										type="text"
-										bind:value={editAlbum}
-										placeholder="album (optional)"
-										class="edit-input"
-									/>
-								</div>
-								<div class="track-actions">
-									<button
-										class="action-btn save-btn"
-										onclick={() => saveTrackEdit(track.id)}
-										title="save changes"
-									>
-										✓
-									</button>
-									<button
-										class="action-btn cancel-btn"
-										onclick={cancelEdit}
-										title="cancel"
-									>
-										✕
-									</button>
+								<div class="edit-container">
+									<div class="edit-fields">
+										<div class="edit-field-group">
+											<label class="edit-label">track title</label>
+											<input
+												type="text"
+												bind:value={editTitle}
+												placeholder="track title"
+												class="edit-input"
+											/>
+										</div>
+										<div class="edit-field-group">
+											<label class="edit-label">album (optional)</label>
+											<input
+												type="text"
+												bind:value={editAlbum}
+												placeholder="album (optional)"
+												class="edit-input"
+											/>
+										</div>
+										<div class="edit-field-group">
+											<label class="edit-label">featured artists (optional)</label>
+											<HandleSearch
+												bind:selected={editFeaturedArtists}
+												onAdd={(artist) => { editFeaturedArtists = [...editFeaturedArtists, artist]; }}
+												onRemove={(did) => { editFeaturedArtists = editFeaturedArtists.filter(a => a.did !== did); }}
+											/>
+										</div>
+									</div>
+									<div class="edit-actions">
+										<button
+											class="action-btn save-btn"
+											onclick={() => saveTrackEdit(track.id)}
+											title="save changes"
+										>
+											✓
+										</button>
+										<button
+											class="action-btn cancel-btn"
+											onclick={cancelEdit}
+											title="cancel"
+										>
+											✕
+										</button>
+									</div>
 								</div>
 							{:else}
 								<div class="track-info">
 									<div class="track-title">{track.title}</div>
 									<div class="track-meta">
 										{track.artist}
+										{#if track.features && track.features.length > 0}
+											<span class="features">feat. {track.features.map(f => f.display_name).join(', ')}</span>
+										{/if}
 										{#if track.album}
 											<span class="separator">•</span>
 											<span class="album">{track.album}</span>
 										{/if}
 									</div>
-									<div class="track-date">
-										{new Date(track.created_at).toLocaleDateString()}
-									</div>
+									{#if track.created_at}
+										<div class="track-date">
+											{new Date(track.created_at).toLocaleDateString()}
+										</div>
+									{/if}
 								</div>
 								<div class="track-actions">
 									<button
@@ -531,6 +580,11 @@
 		transition: all 0.2s;
 	}
 
+	.track-item.editing {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
 	.track-item:hover {
 		background: #222;
 		border-color: #333;
@@ -539,6 +593,37 @@
 	.track-info {
 		flex: 1;
 		min-width: 0;
+	}
+
+	.edit-container {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.edit-fields {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		flex: 1;
+	}
+
+	.edit-field-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.edit-actions {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
+	}
+
+	.edit-label {
+		font-size: 0.85rem;
+		color: #aaa;
 	}
 
 	.track-title {
@@ -561,6 +646,12 @@
 
 	.album {
 		color: #888;
+	}
+
+	.features {
+		color: #8ab3ff;
+		font-weight: 500;
+		margin-left: 0.5rem;
 	}
 
 	.track-date {
@@ -624,14 +715,6 @@
 		color: #aaa;
 		transform: none;
 		box-shadow: none;
-	}
-
-	.track-info.editing {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		flex: 1;
-		min-width: 0;
 	}
 
 	.edit-input {

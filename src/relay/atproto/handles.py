@@ -35,7 +35,7 @@ async def resolve_handle(handle: str) -> dict | None:
 
             # fetch profile info
             profile_response = await client.get(
-                "https://bsky.social/xrpc/app.bsky.actor.getProfile",
+                "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile",
                 params={"actor": did},
                 timeout=5.0,
             )
@@ -82,7 +82,7 @@ async def search_handles(query: str, limit: int = 10) -> list[dict]:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                "https://bsky.social/xrpc/app.bsky.actor.searchActorsTypeahead",
+                "https://public.api.bsky.app/xrpc/app.bsky.actor.searchActorsTypeahead",
                 params={"q": query, "limit": min(limit, 25)},
                 timeout=5.0,
             )

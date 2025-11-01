@@ -112,6 +112,7 @@ async def upload_track(
                 file_type=ext[1:],  # remove dot
                 album=album,
                 duration=None,  # TODO: extract from audio file
+                features=featured_artists if featured_artists else None,
             )
         except Exception as e:
             # log but don't fail upload if record creation fails
@@ -170,6 +171,7 @@ async def list_tracks(db: Session = Depends(get_db)) -> dict:
                 "album": track.album,
                 "file_id": track.file_id,
                 "file_type": track.file_type,
+                "features": track.features,
                 "r2_url": track.r2_url,
                 "atproto_record_uri": track.atproto_record_uri,
                 "play_count": track.play_count,
@@ -204,6 +206,7 @@ async def list_my_tracks(
                 "album": track.album,
                 "file_id": track.file_id,
                 "file_type": track.file_type,
+                "features": track.features,
                 "r2_url": track.r2_url,
                 "atproto_record_uri": track.atproto_record_uri,
                 "play_count": track.play_count,

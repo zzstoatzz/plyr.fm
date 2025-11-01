@@ -30,6 +30,11 @@
 			<div class="track-title">{track.title}</div>
 			<div class="track-artist">
 				{track.artist}
+				{#if track.features && track.features.length > 0}
+					<span class="features">
+						feat. {track.features.map(f => f.display_name).join(', ')}
+					</span>
+				{/if}
 				{#if track.album}
 					<span class="album">- {track.album}</span>
 				{/if}
@@ -135,6 +140,12 @@
 	.track-artist {
 		color: #b0b0b0;
 		margin-bottom: 0.25rem;
+	}
+
+	.features {
+		color: #8ab3ff;
+		font-weight: 500;
+		margin: 0 0.5rem;
 	}
 
 	.album {

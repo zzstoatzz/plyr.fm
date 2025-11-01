@@ -1,3 +1,10 @@
+export interface FeaturedArtist {
+	did: string;
+	handle: string;
+	display_name: string;
+	avatar_url?: string;
+}
+
 export interface Track {
 	id: number;
 	title: string;
@@ -10,6 +17,8 @@ export interface Track {
 	r2_url?: string;
 	atproto_record_uri?: string;
 	play_count: number;
+	features?: FeaturedArtist[];
+	created_at?: string;
 }
 
 export interface User {

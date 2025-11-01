@@ -94,6 +94,7 @@ async def create_track_record(
     file_type: str,
     album: str | None = None,
     duration: int | None = None,
+    features: list[dict] | None = None,
 ) -> tuple[str, str]:
     """create app.relay.track record on user's PDS.
 
@@ -105,6 +106,7 @@ async def create_track_record(
         file_type: file extension (mp3, wav, etc)
         album: optional album name
         duration: optional duration in seconds
+        features: optional list of featured artists [{did, handle, display_name, avatar_url}]
 
     returns:
         tuple of (record_uri, record_cid)
@@ -136,6 +138,16 @@ async def create_track_record(
         record["album"] = album
     if duration:
         record["duration"] = duration
+    if features:
+        # only include essential fields for ATProto record
+        record["features"] = [
+            {
+                "did": f["did"],
+                "handle": f["handle"],
+                "displayName": f.get("display_name", f["handle"]),
+            }
+            for f in features
+        ]
 
     # make authenticated request to create record
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
