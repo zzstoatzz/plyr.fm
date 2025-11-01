@@ -1,5 +1,6 @@
 """tracks api endpoints."""
 
+import json
 import logging
 from pathlib import Path
 from typing import Annotated
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from relay.atproto import create_track_record
+from relay.atproto.handles import resolve_handle
 from relay.auth import Session as AuthSession
 from relay.auth import require_artist_profile, require_auth
 from relay.config import settings
@@ -17,16 +19,23 @@ from relay.storage import storage
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tracks", tags=["tracks"])
 
+# max featured artists per track
+MAX_FEATURES = 5
+
 
 @router.post("/")
 async def upload_track(
     title: Annotated[str, Form()],
     album: Annotated[str | None, Form()] = None,
+    features: Annotated[str | None, Form()] = None,  # JSON array of handles
     file: UploadFile = File(...),
     auth_session: AuthSession = Depends(require_artist_profile),
     db: Session = Depends(get_db),
 ) -> dict:
-    """upload a new track (requires authentication and artist profile)."""
+    """upload a new track (requires authentication and artist profile).
+
+    features: optional JSON array of ATProto handles, e.g., ["user1.bsky.social", "user2.bsky.social"]
+    """
     # validate file type
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")
@@ -61,6 +70,35 @@ async def upload_track(
             detail="artist profile not found - this should not happen after require_artist_profile",
         )
 
+    # resolve featured artist handles
+    featured_artists = []
+    if features:
+        try:
+            handles_list = json.loads(features)
+            if not isinstance(handles_list, list):
+                raise HTTPException(status_code=400, detail="features must be a JSON array of handles")
+
+            if len(handles_list) > MAX_FEATURES:
+                raise HTTPException(status_code=400, detail=f"maximum {MAX_FEATURES} featured artists allowed")
+
+            # resolve each handle
+            for handle in handles_list:
+                if not isinstance(handle, str):
+                    raise HTTPException(status_code=400, detail="each feature must be a string handle")
+
+                # prevent self-featuring
+                if handle.lstrip("@") == artist.handle:
+                    continue  # skip self-feature silently
+
+                resolved = await resolve_handle(handle)
+                if not resolved:
+                    raise HTTPException(status_code=400, detail=f"failed to resolve handle: {handle}")
+
+                featured_artists.append(resolved)
+
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"invalid JSON in features: {e}") from e
+
     # create ATProto record (if R2 URL available)
     atproto_uri = None
     atproto_cid = None
@@ -90,6 +128,7 @@ async def upload_track(
         file_type=ext[1:],  # remove the dot
         artist_did=auth_session.did,
         extra=extra,
+        features=featured_artists,  # list of {did, handle, display_name, avatar_url}
         r2_url=r2_url,
         atproto_record_uri=atproto_uri,
         atproto_record_cid=atproto_cid,
@@ -108,6 +147,7 @@ async def upload_track(
         "file_id": track.file_id,
         "file_type": track.file_type,
         "artist_did": track.artist_did,
+        "features": track.features,
         "r2_url": track.r2_url,
         "atproto_record_uri": track.atproto_record_uri,
         "created_at": track.created_at.isoformat(),
@@ -212,10 +252,14 @@ async def update_track_metadata(
     track_id: int,
     title: Annotated[str | None, Form()] = None,
     album: Annotated[str | None, Form()] = None,
+    features: Annotated[str | None, Form()] = None,  # JSON array of handles
     auth_session: AuthSession = Depends(require_auth),
     db: Session = Depends(get_db),
 ) -> dict:
-    """update track metadata (only by owner)."""
+    """update track metadata (only by owner).
+
+    features: optional JSON array of ATProto handles, e.g., ["user1.bsky.social", "user2.bsky.social"]
+    """
     track = db.query(Track).join(Artist).filter(Track.id == track_id).first()
 
     if not track:
@@ -242,6 +286,37 @@ async def update_track_metadata(
             # remove album if empty string
             if track.extra and "album" in track.extra:
                 del track.extra["album"]
+
+    if features is not None:
+        # resolve featured artist handles
+        featured_artists = []
+        try:
+            handles_list = json.loads(features)
+            if not isinstance(handles_list, list):
+                raise HTTPException(status_code=400, detail="features must be a JSON array of handles")
+
+            if len(handles_list) > MAX_FEATURES:
+                raise HTTPException(status_code=400, detail=f"maximum {MAX_FEATURES} featured artists allowed")
+
+            # resolve each handle
+            for handle in handles_list:
+                if not isinstance(handle, str):
+                    raise HTTPException(status_code=400, detail="each feature must be a string handle")
+
+                # prevent self-featuring
+                if handle.lstrip("@") == track.artist.handle:
+                    continue  # skip self-feature silently
+
+                resolved = await resolve_handle(handle)
+                if not resolved:
+                    raise HTTPException(status_code=400, detail=f"failed to resolve handle: {handle}")
+
+                featured_artists.append(resolved)
+
+            track.features = featured_artists
+
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"invalid JSON in features: {e}") from e
 
     db.commit()
     db.refresh(track)
