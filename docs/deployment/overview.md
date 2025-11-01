@@ -1,13 +1,22 @@
-# cloudflare pages deployment
+# deployment overview
 
-## current setup
+relay uses automated deployments for both frontend and backend.
 
-relay uses **git-connected deployments** via GitHub.
+## architecture
 
 - **frontend**: cloudflare pages (automatic from main branch)
 - **backend**: fly.io (automatic via github actions)
 - **storage**: cloudflare r2 for audio files
 - **database**: neon postgresql (serverless)
+
+## preview deployments
+
+cloudflare automatically creates preview deployments for all branches:
+- preview URLs: `https://<hash>.relay-4i6.pages.dev`
+- preview builds use production backend and database
+- CORS is configured to allow all `*.relay-4i6.pages.dev` subdomains
+
+**note**: preview deployments currently share production backend/database. see [`database-migrations.md`](./database-migrations.md) for details on environment separation.
 
 ## deployment workflow
 
@@ -87,9 +96,27 @@ common issues:
 - fly.toml misconfiguration
 - missing secrets on fly.io
 
-### preview deployments not working
+### preview deployments: CORS errors
 
-preview deployment URLs (like `https://abc123.relay-4i6.pages.dev`) have known issues with SvelteKit SSR. use the production URL instead: https://relay-4i6.pages.dev
+if preview deployments show CORS errors, verify backend CORS configuration in `src/relay/main.py`:
+
+```python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^https://([a-z0-9]+\.)?relay-4i6\.pages\.dev$",
+    allow_origins=["http://localhost:5173"],
+    # ...
+)
+```
+
+this regex pattern allows:
+- `https://relay-4i6.pages.dev` (production)
+- `https://4f113bf9.relay-4i6.pages.dev` (preview with hash subdomain)
+- `http://localhost:5173` (local development)
+
+### database migrations fail
+
+see [`database-migrations.md`](./database-migrations.md) for troubleshooting migration issues
 
 ## monitoring
 

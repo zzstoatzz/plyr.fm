@@ -1,8 +1,34 @@
-# relay ATProto integration documentation
+# relay documentation
 
-this directory contains the complete plan and implementation guides for integrating relay with ATProto.
+this directory contains all documentation for the relay project.
 
-## documents
+## deployment
+
+### [`deployment/overview.md`](./deployment/overview.md)
+
+**deployment guide** - how relay deploys to production.
+
+covers:
+- cloudflare pages (frontend)
+- fly.io (backend)
+- automated deployments via github
+- preview deployments and CORS
+- environment variables and secrets
+- troubleshooting common deployment issues
+
+### [`deployment/database-migrations.md`](./deployment/database-migrations.md)
+
+**database migrations** - how database schema changes are managed.
+
+covers:
+- automated migration workflow via fly.io release commands
+- database environment architecture (dev vs prod)
+- creating and testing migrations with alembic
+- how database connection resolution works
+- future improvements for multi-environment setup
+- migration safety and rollback procedures
+
+## ATProto integration
 
 ### [`atproto-integration-plan.md`](./atproto-integration-plan.md)
 
