@@ -3,6 +3,9 @@ primary_region = 'iad'
 
 [build]
 
+[deploy]
+  release_command = './scripts/migrate.sh'
+
 [http_service]
   internal_port = 8000
   force_https = true
