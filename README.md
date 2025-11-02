@@ -111,7 +111,7 @@ just deploy-backend   # deploy backend to fly.io
 just deploy-frontend  # deploy frontend to cloudflare pages
 ```
 
-see [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) for details.
+see [docs/deployment/overview.md](docs/deployment/overview.md) for details.
 
 </details>
 
@@ -155,6 +155,6 @@ relay/
 
 ## documentation
 
-- [deployment guide](docs/cloudflare-deployment.md)
+- [deployment guide](docs/deployment/overview.md)
 - [latest status](sandbox/2025-10-31-status-update.md)
 - [archived docs](sandbox/archive/)
