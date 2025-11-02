@@ -26,11 +26,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# configure CORS with regex to allow cloudflare preview deployments
+# configure CORS - allow localhost for dev and cloudflare pages for production
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https://([a-z0-9]+\.)?relay-4i6\.pages\.dev$",
-    allow_origins=["http://localhost:5173"],
+    allow_origin_regex=r"^(https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

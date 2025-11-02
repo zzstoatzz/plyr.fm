@@ -37,7 +37,7 @@
 		{/if}
 		<div class="track-info">
 			<div class="track-title">{track.title}</div>
-			<div class="track-artist">
+			<div class="track-metadata">
 				<a
 					href="/u/{track.artist_handle}"
 					class="artist-link"
@@ -45,31 +45,42 @@
 					{track.artist}
 				</a>
 				{#if track.features && track.features.length > 0}
+					<span class="metadata-separator">•</span>
 					<span class="features">
 						feat. {track.features.map(f => f.display_name).join(', ')}
 					</span>
 				{/if}
 				{#if track.album}
-					<span class="album">- {track.album}</span>
+					<span class="metadata-separator">•</span>
+					<span class="album">
+						<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
+							<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
+						</svg>
+						{track.album}
+					</span>
 				{/if}
 			</div>
 			<div class="track-meta">
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
-		{#if track.atproto_record_url}
-					<span class="separator">•</span>
-					<a
-						href={track.atproto_record_url}
-						target="_blank"
-						rel="noopener"
-						class="atproto-link"
-					>
-						view record
-					</a>
-				{/if}
 			</div>
 		</div>
 	</button>
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
+		{#if track.atproto_record_url}
+			<a
+				href={track.atproto_record_url}
+				target="_blank"
+				rel="noopener"
+				class="action-button"
+				title="view atproto record"
+			>
+				<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+					<path d="M8 2C4.69 2 2 4.69 2 8s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10.5c-2.48 0-4.5-2.02-4.5-4.5S5.52 3.5 8 3.5s4.5 2.02 4.5 4.5-2.02 4.5-4.5 4.5z" fill="currentColor"/>
+					<circle cx="8" cy="8" r="2" fill="currentColor"/>
+				</svg>
+			</a>
+		{/if}
 		<ShareButton url={shareUrl} />
 	</div>
 </div>
@@ -114,8 +125,8 @@
 
 	.track-avatar {
 		flex-shrink: 0;
-		width: 40px;
-		height: 40px;
+		width: 48px;
+		height: 48px;
 		display: block;
 		text-decoration: none;
 		transition: transform 0.2s;
@@ -141,30 +152,46 @@
 	.track-info {
 		flex: 1;
 		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
 	}
 
 	.track-actions {
 		display: flex;
 		gap: 0.5rem;
 		flex-shrink: 0;
+		align-items: center;
 	}
 
 	.track-title {
 		font-weight: 600;
-		font-size: 1.1rem;
-		margin-bottom: 0.25rem;
+		font-size: 1.05rem;
 		color: #e8e8e8;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
-	.track-artist {
+	.track-metadata {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
 		color: #b0b0b0;
-		margin-bottom: 0.25rem;
+		font-size: 0.9rem;
+	}
+
+	.metadata-separator {
+		color: #555;
+		font-size: 0.7rem;
 	}
 
 	.artist-link {
-		color: inherit;
+		color: #b0b0b0;
 		text-decoration: none;
 		transition: color 0.2s;
+		font-weight: 500;
 	}
 
 	.artist-link:hover {
@@ -174,41 +201,57 @@
 	.features {
 		color: #8ab3ff;
 		font-weight: 500;
-		margin: 0 0.5rem;
 	}
 
 	.album {
 		color: #909090;
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.album-icon {
+		width: 14px;
+		height: 14px;
+		opacity: 0.7;
 	}
 
 	.track-meta {
-		font-size: 0.85rem;
+		font-size: 0.8rem;
 		color: #808080;
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 	}
 
-	.track-meta .separator {
-		color: #555;
-	}
-
 	.plays {
 		color: #999;
-		font-size: 0.8rem;
 	}
 
-	.atproto-link {
-		color: #6a9fff;
-		text-decoration: none;
-		font-size: 0.8rem;
+	.action-button {
+		width: 32px;
+		height: 32px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: 1px solid #333;
+		border-radius: 4px;
+		color: #888;
+		cursor: pointer;
 		transition: all 0.2s;
-		border-bottom: 1px solid transparent;
+		text-decoration: none;
 	}
 
-	.atproto-link:hover {
-		color: #8ab3ff;
-		border-bottom-color: #8ab3ff;
+	.action-button:hover {
+		background: #1a1a1a;
+		border-color: #6a9fff;
+		color: #6a9fff;
+	}
+
+	.action-button svg {
+		width: 16px;
+		height: 16px;
 	}
 
 	@media (max-width: 768px) {
@@ -222,27 +265,31 @@
 		}
 
 		.track-avatar {
-			width: 48px;
-			height: 48px;
+			width: 44px;
+			height: 44px;
 		}
 
 		.track-title {
-			font-size: 1rem;
-			margin-bottom: 0.15rem;
+			font-size: 0.95rem;
 		}
 
-		.track-artist {
-			font-size: 0.9rem;
-			margin-bottom: 0.15rem;
+		.track-metadata {
+			font-size: 0.85rem;
+			gap: 0.4rem;
 		}
 
 		.track-meta {
 			font-size: 0.75rem;
-			flex-wrap: wrap;
 		}
 
-		.atproto-link {
-			display: none;
+		.action-button {
+			width: 28px;
+			height: 28px;
+		}
+
+		.action-button svg {
+			width: 14px;
+			height: 14px;
 		}
 	}
 </style>
