@@ -19,13 +19,18 @@
 <div class="track-container" class:playing={isPlaying}>
 	<button
 		class="track"
-		onclick={() => onPlay(track)}
+		onclick={(e) => {
+			// only play if clicking the track itself, not a link inside
+			if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
+				return;
+			}
+			onPlay(track);
+		}}
 	>
 		{#if track.artist_avatar_url}
 			<a
-				href="/@{track.artist_handle}"
+				href="/u/{track.artist_handle}"
 				class="track-avatar"
-				onclick={(e) => e.stopPropagation()}
 			>
 				<img src={track.artist_avatar_url} alt={track.artist} />
 			</a>
@@ -34,9 +39,8 @@
 			<div class="track-title">{track.title}</div>
 			<div class="track-artist">
 				<a
-					href="/@{track.artist_handle}"
+					href="/u/{track.artist_handle}"
 					class="artist-link"
-					onclick={(e) => e.stopPropagation()}
 				>
 					{track.artist}
 				</a>
@@ -58,7 +62,6 @@
 						target="_blank"
 						rel="noopener"
 						class="atproto-link"
-						onclick={(e) => e.stopPropagation()}
 					>
 						view record
 					</a>

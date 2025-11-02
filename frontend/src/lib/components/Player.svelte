@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { player } from '$lib/player.svelte';
+	import { API_URL } from '$lib/config';
 	import { onMount } from 'svelte';
 
 	let formattedCurrentTime = $derived(formatTime(player.currentTime));
@@ -29,6 +30,43 @@
 	$effect(() => {
 		localStorage.setItem('player_volume', player.volume.toString());
 	});
+
+	// handle track changes - load new audio when track changes
+	let previousTrackId = $state<number | null>(null);
+	let isLoadingTrack = $state(false);
+
+	$effect(() => {
+		if (!player.currentTrack || !player.audioElement) return;
+
+		// only load new track if it actually changed
+		if (player.currentTrack.id !== previousTrackId) {
+			previousTrackId = player.currentTrack.id;
+			player.playCountedForTrack = null;
+			isLoadingTrack = true;
+
+			player.audioElement.src = `${API_URL}/audio/${player.currentTrack.file_id}`;
+			player.audioElement.load();
+
+			// wait for audio to be ready before allowing playback
+			player.audioElement.addEventListener('loadeddata', () => {
+				isLoadingTrack = false;
+			}, { once: true });
+		}
+	});
+
+	// sync paused state with audio element
+	$effect(() => {
+		if (!player.audioElement || isLoadingTrack) return;
+
+		if (player.paused) {
+			player.audioElement.pause();
+		} else {
+			player.audioElement.play().catch(err => {
+				console.error('playback failed:', err);
+				player.paused = true;
+			});
+		}
+	});
 </script>
 
 {#if player.currentTrack}
@@ -47,7 +85,7 @@
 				<div class="player-title" class:scrolling={player.currentTrack.title.length > 30}>
 					<span>{player.currentTrack.title}</span>
 				</div>
-				<a href="/@{player.currentTrack.artist_handle}" class="player-artist-link">
+				<a href="/u/{player.currentTrack.artist_handle}" class="player-artist-link">
 					{player.currentTrack.artist}
 				</a>
 			</div>

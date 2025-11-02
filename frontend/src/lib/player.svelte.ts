@@ -15,22 +15,10 @@ class PlayerState {
 		if (this.currentTrack?.id === track.id) {
 			// toggle play/pause for same track
 			this.paused = !this.paused;
-			return;
-		}
-
-		// new track
-		this.currentTrack = track;
-		this.paused = false;
-		this.currentTime = 0;
-		this.playCountedForTrack = null;
-
-		if (this.audioElement) {
-			this.audioElement.src = `${API_URL}/audio/${track.file_id}`;
-			this.audioElement.load();
-			this.audioElement.play().catch(err => {
-				console.error('playback failed:', err);
-				this.paused = true;
-			});
+		} else {
+			// switch tracks
+			this.currentTrack = track;
+			this.paused = false;
 		}
 	}
 

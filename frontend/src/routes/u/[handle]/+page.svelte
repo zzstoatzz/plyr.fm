@@ -51,7 +51,7 @@
 			}
 		} catch (e) {
 			error = 'failed to load artist';
-			console.error(e);
+			console.error('failed to load artist:', e);
 		} finally {
 			loading = false;
 		}
