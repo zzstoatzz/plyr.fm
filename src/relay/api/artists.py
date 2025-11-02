@@ -1,7 +1,7 @@
 """artist profile API endpoints."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -131,7 +131,7 @@ async def update_my_artist_profile(
         if request.avatar_url is not None:
             artist.avatar_url = request.avatar_url
 
-        artist.updated_at = datetime.utcnow()
+        artist.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(artist)
 

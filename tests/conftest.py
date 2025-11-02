@@ -1,12 +1,17 @@
 """pytest configuration for relay tests."""
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import AsyncGenerator
+from datetime import UTC, datetime
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncEngine,
+    AsyncSession,
+    create_async_engine,
+)
 from sqlalchemy.orm import sessionmaker
 
 from relay.models import Base
@@ -38,7 +43,7 @@ async def _create_clear_database_procedure(
     def schema(table: sa.Table) -> str:
         return table.schema or "public"
 
-    def timestamp_column(table: sa.Table) -> str:
+    def timestamp_column(table: sa.Table) -> str | None:
         """find the timestamp column to use for filtering"""
         if "created_at" in table.columns:
             return "created_at"
@@ -119,7 +124,7 @@ async def _setup_database(test_database_url: str) -> None:
 
 
 @pytest.fixture(scope="session")
-def _database_setup(test_database_url: str) -> AsyncGenerator[None, None]:
+def _database_setup(test_database_url: str):
     """create tables and stored procedures once per test session."""
     import asyncio
 
@@ -146,7 +151,7 @@ async def _clear_db(_engine: AsyncEngine) -> AsyncGenerator[None, None]:
 
     this fixture must be yielded before the session fixture to prevent locking.
     """
-    start_time = datetime.now(timezone.utc)
+    start_time = datetime.now(UTC)
 
     try:
         yield
@@ -160,7 +165,9 @@ async def _clear_db(_engine: AsyncEngine) -> AsyncGenerator[None, None]:
 
 
 @pytest.fixture
-async def db_session(_engine: AsyncEngine, _clear_db: None) -> AsyncGenerator[AsyncSession, None]:
+async def db_session(
+    _engine: AsyncEngine, _clear_db: None
+) -> AsyncGenerator[AsyncSession, None]:
     """provide a database session for each test.
 
     the _clear_db fixture is used as a dependency to ensure proper cleanup order.
