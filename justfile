@@ -12,6 +12,12 @@ serve:
 dev:
     cd frontend && bun run dev
 
+# run tests with docker-compose
+test:
+    docker compose -f docker-compose.test.yml up -d
+    uv run pytest tests/
+    docker compose -f docker-compose.test.yml down
+
 # deploy backend to fly.io
 deploy-backend:
     flyctl deploy
