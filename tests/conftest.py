@@ -100,7 +100,7 @@ async def _create_clear_database_procedure(
 def test_database_url(worker_id: str) -> str:
     """generate a unique test database URL for each pytest worker.
 
-    uses port 5433 which maps to the test database in docker-compose.test.yml.
+    uses port 5433 which maps to the test database in tests/docker-compose.yml.
     """
     base_url = "postgresql+asyncpg://relay_test:relay_test@localhost:5433/relay_test"
 
