@@ -28,6 +28,13 @@ repos:
         types: [python]
         pass_filenames: false
 
+      - id: frontend-build
+        name: frontend build check
+        entry: bash -c 'cd frontend && bun run build'
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
