@@ -6,10 +6,14 @@
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { player } from '$lib/player.svelte';
+	import type { PageData } from './$types';
+
+	// receive server-loaded data
+	let { data }: { data: PageData } = $props();
 
 	let handle = $derived($page.params.handle);
-	let artist: Artist | null = $state(null);
-	let tracks: Track[] = $state([]);
+	let artist: Artist | null = $state(data.artist); // initialize with server data
+	let tracks: Track[] = $state(data.tracks); // initialize with server data
 	let loading = $state(true);
 	let error = $state('');
 
@@ -70,6 +74,32 @@
 		<a href="/">go home</a>
 	</div>
 {:else if artist}
+	{#if artist}
+		<svelte:head>
+			<title>{artist.display_name} (@{artist.handle}) - relay</title>
+			<meta name="description" content="listen to music by {artist.display_name} on relay" />
+
+			<!-- Open Graph / Facebook -->
+			<meta property="og:type" content="profile" />
+			<meta property="og:title" content="{artist.display_name} (@{artist.handle})" />
+			<meta property="og:description" content="listen to music by {artist.display_name} on relay" />
+			<meta property="og:url" content="https://relay.zzstoatzz.io/u/{artist.handle}" />
+			<meta property="og:site_name" content="relay" />
+			<meta property="profile:username" content="{artist.handle}" />
+			{#if artist.avatar_url}
+				<meta property="og:image" content="{artist.avatar_url}" />
+			{/if}
+
+			<!-- Twitter -->
+			<meta name="twitter:card" content="summary" />
+			<meta name="twitter:title" content="{artist.display_name} (@{artist.handle})" />
+			<meta name="twitter:description" content="listen to music by {artist.display_name} on relay" />
+			{#if artist.avatar_url}
+				<meta name="twitter:image" content="{artist.avatar_url}" />
+			{/if}
+		</svelte:head>
+	{/if}
+
 	<Header user={null} onLogout={() => {}} />
 
 	<main>

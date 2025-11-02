@@ -5,9 +5,13 @@
 	import Header from '$lib/components/Header.svelte';
 	import type { Track, User } from '$lib/types';
 	import { API_URL } from '$lib/config';
+	import type { PageData } from './$types';
+
+	// receive server-loaded data
+	let { data }: { data: PageData } = $props();
 
 	let tracks = $state<Track[]>([]);
-	let currentTrack = $state<Track | null>(null);
+	let currentTrack = $state<Track | null>(data.track); // initialize with server data
 	let audioElement = $state<HTMLAudioElement | undefined>(undefined);
 	let user = $state<User | null>(null);
 	let loading = $state(true);
@@ -120,6 +124,31 @@
 {#if loading}
 	<div class="loading">loading...</div>
 {:else}
+	<svelte:head>
+		<title>{data.track.title} by {data.track.artist} - relay</title>
+		<meta name="description" content="listen to {data.track.title} by {data.track.artist} on relay" />
+
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content="music.song" />
+		<meta property="og:title" content="{data.track.title} by {data.track.artist}" />
+		<meta property="og:description" content="listen to {data.track.title} by {data.track.artist} on relay" />
+		<meta property="og:url" content="https://relay.zzstoatzz.io/track/{data.track.id}" />
+		<meta property="og:site_name" content="relay" />
+		<meta property="music:musician" content="{data.track.artist_handle}" />
+		{#if data.track.album}
+			<meta property="music:album" content="{data.track.album}" />
+		{/if}
+		{#if data.track.r2_url}
+			<meta property="og:audio" content="{data.track.r2_url}" />
+			<meta property="og:audio:type" content="audio/{data.track.file_type}" />
+		{/if}
+
+		<!-- Twitter -->
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content="{data.track.title} by {data.track.artist}" />
+		<meta name="twitter:description" content="listen to {data.track.title} by {data.track.artist} on relay" />
+	</svelte:head>
+
 	<Header {user} onLogout={logout} />
 
 	<main>

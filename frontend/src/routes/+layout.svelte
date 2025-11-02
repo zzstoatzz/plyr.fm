@@ -25,6 +25,22 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
+
+	<!-- default meta tags for link previews -->
+	<title>relay - decentralized music streaming</title>
+	<meta name="description" content="discover and stream music on the atproto network" />
+
+	<!-- Open Graph / Facebook -->
+	<meta property="og:type" content="website" />
+	<meta property="og:title" content="relay - decentralized music streaming" />
+	<meta property="og:description" content="discover and stream music on the atproto network" />
+	<meta property="og:site_name" content="relay" />
+
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content="relay - decentralized music streaming" />
+	<meta name="twitter:description" content="discover and stream music on the atproto network" />
+
 	<script>
 		// prevent flash by applying saved settings immediately
 		(function() {
