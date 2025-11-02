@@ -22,7 +22,7 @@ class PreferencesUpdate(BaseModel):
     accent_color: str | None = None
 
 
-@router.get("/", response_model=PreferencesResponse)
+@router.get("/")
 async def get_preferences(
     db: DBSession = Depends(get_db),
     session: Session = Depends(require_auth),
@@ -40,7 +40,7 @@ async def get_preferences(
     return PreferencesResponse(accent_color=prefs.accent_color)
 
 
-@router.post("/", response_model=PreferencesResponse)
+@router.post("/")
 async def update_preferences(
     update: PreferencesUpdate,
     db: DBSession = Depends(get_db),

@@ -66,7 +66,7 @@ async def logout(session: Session = Depends(require_auth)) -> dict:
     return {"message": "logged out successfully"}
 
 
-@router.get("/me", response_model=CurrentUserResponse)
+@router.get("/me")
 async def get_current_user(session: Session = Depends(require_auth)) -> CurrentUserResponse:
     """get current authenticated user."""
     return CurrentUserResponse(
