@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel
 
 from relay.auth import (
     Session,
@@ -18,6 +19,13 @@ from relay.auth import (
 from relay.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class CurrentUserResponse(BaseModel):
+    """response model for current user endpoint."""
+
+    did: str
+    handle: str
 
 
 @router.get("/start")
@@ -58,10 +66,10 @@ async def logout(session: Session = Depends(require_auth)) -> dict:
     return {"message": "logged out successfully"}
 
 
-@router.get("/me")
-async def get_current_user(session: Session = Depends(require_auth)) -> dict:
+@router.get("/me", response_model=CurrentUserResponse)
+async def get_current_user(session: Session = Depends(require_auth)) -> CurrentUserResponse:
     """get current authenticated user."""
-    return {
-        "did": session.did,
-        "handle": session.handle,
-    }
+    return CurrentUserResponse(
+        did=session.did,
+        handle=session.handle,
+    )
