@@ -52,7 +52,7 @@ class ArtistResponse(BaseModel):
 async def create_artist(
     request: CreateArtistRequest,
     auth_session: Session = Depends(require_auth),
-) -> Artist:
+) -> ArtistResponse:
     """create artist profile for authenticated user.
 
     this should be called on first login if artist profile doesn't exist.
@@ -84,7 +84,7 @@ async def create_artist(
         logger.info(
             f"created artist profile for {auth_session.did} (@{auth_session.handle})"
         )
-        return artist
+        return ArtistResponse.model_validate(artist)
 
     finally:
         db.close()
@@ -93,7 +93,7 @@ async def create_artist(
 @router.get("/me")
 async def get_my_artist_profile(
     auth_session: Session = Depends(require_auth),
-) -> Artist:
+) -> ArtistResponse:
     """get authenticated user's artist profile."""
     db = next(get_db())
     try:
@@ -103,7 +103,7 @@ async def get_my_artist_profile(
                 status_code=404,
                 detail="artist profile not found - please create one first",
             )
-        return artist
+        return ArtistResponse.model_validate(artist)
     finally:
         db.close()
 
@@ -112,7 +112,7 @@ async def get_my_artist_profile(
 async def update_my_artist_profile(
     request: UpdateArtistRequest,
     auth_session: Session = Depends(require_auth),
-) -> Artist:
+) -> ArtistResponse:
     """update authenticated user's artist profile."""
     db = next(get_db())
     try:
@@ -136,33 +136,33 @@ async def update_my_artist_profile(
         db.refresh(artist)
 
         logger.info(f"updated artist profile for {auth_session.did}")
-        return artist
+        return ArtistResponse.model_validate(artist)
 
     finally:
         db.close()
 
 
 @router.get("/by-handle/{handle}")
-async def get_artist_profile_by_handle(handle: str) -> Artist:
+async def get_artist_profile_by_handle(handle: str) -> ArtistResponse:
     """get artist profile by handle (public endpoint)."""
     db = next(get_db())
     try:
         artist = db.query(Artist).filter(Artist.handle == handle).first()
         if not artist:
             raise HTTPException(status_code=404, detail="artist not found")
-        return artist
+        return ArtistResponse.model_validate(artist)
     finally:
         db.close()
 
 
 @router.get("/{did}")
-async def get_artist_profile_by_did(did: str) -> Artist:
+async def get_artist_profile_by_did(did: str) -> ArtistResponse:
     """get artist profile by DID (public endpoint)."""
     db = next(get_db())
     try:
         artist = db.query(Artist).filter(Artist.did == did).first()
         if not artist:
             raise HTTPException(status_code=404, detail="artist not found")
-        return artist
+        return ArtistResponse.model_validate(artist)
     finally:
         db.close()
