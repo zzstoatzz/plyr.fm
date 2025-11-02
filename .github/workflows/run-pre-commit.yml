@@ -22,6 +22,9 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
+      - name: install bun
+        uses: oven-sh/setup-bun@v2
+
       - name: install dependencies
         run: uv sync
 
