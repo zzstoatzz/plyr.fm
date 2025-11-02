@@ -7,6 +7,13 @@ from relay.config import settings
 
 # use postgres from settings (neon or local)
 engine = create_engine(settings.database_url)
+
+# instrument sqlalchemy with logfire if enabled
+if settings.logfire_enabled:
+    import logfire
+
+    logfire.instrument_sqlalchemy(engine)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
