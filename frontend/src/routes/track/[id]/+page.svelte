@@ -55,7 +55,7 @@
 		tracks = data.tracks;
 
 		// get track id from URL and auto-play
-		const trackId = parseInt($page.params.id);
+		const trackId = parseInt($page.params.id!);
 		const track = tracks.find(t => t.id === trackId);
 
 		if (track) {

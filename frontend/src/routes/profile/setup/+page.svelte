@@ -45,7 +45,7 @@
 			if (response.ok) {
 				user = await response.json();
 				// pre-fill display name with handle
-				displayName = user.handle;
+				displayName = user?.handle || "";
 
 				// try to fetch avatar from bluesky
 				await fetchAvatar();

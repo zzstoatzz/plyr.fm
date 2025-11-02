@@ -32,7 +32,7 @@
 					{/if}
 				</div>
 				<div class="divider"></div>
-				<span class="user-info">@{user.handle}</span>
+				<span class="user-info">@{user?.handle}</span>
 				<button onclick={onLogout} class="btn-secondary">logout</button>
 			{:else}
 				<a href="/login" class="btn-primary">login</a>

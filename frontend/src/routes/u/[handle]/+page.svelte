@@ -101,7 +101,7 @@
 	</div>
 {:else if artist}
 
-	<Header user={null} onLogout={() => {}} />
+	<Header user={null} onLogout={async () => {}} />
 
 	<main>
 		<section class="artist-header">
