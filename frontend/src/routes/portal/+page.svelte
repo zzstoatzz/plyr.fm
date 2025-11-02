@@ -329,8 +329,8 @@
 								<div class="edit-container">
 									<div class="edit-fields">
 										<div class="edit-field-group">
-											<label class="edit-label">track title</label>
-											<input
+											<label for="edit-title" class="edit-label">track title</label>
+											<input id="edit-title"
 												type="text"
 												bind:value={editTitle}
 												placeholder="track title"
@@ -338,8 +338,8 @@
 											/>
 										</div>
 										<div class="edit-field-group">
-											<label class="edit-label">album (optional)</label>
-											<input
+											<label for="edit-album" class="edit-label">album (optional)</label>
+											<input id="edit-album"
 												type="text"
 												bind:value={editAlbum}
 												placeholder="album (optional)"
@@ -347,7 +347,7 @@
 											/>
 										</div>
 										<div class="edit-field-group">
-											<label class="edit-label">featured artists (optional)</label>
+											<div class="edit-label">featured artists (optional)</div>
 											<HandleSearch
 												bind:selected={editFeaturedArtists}
 												onAdd={(artist) => { editFeaturedArtists = [...editFeaturedArtists, artist]; }}

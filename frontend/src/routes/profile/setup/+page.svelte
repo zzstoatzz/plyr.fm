@@ -162,7 +162,7 @@
 						disabled={saving}
 						placeholder="tell us about your music..."
 						rows="4"
-					/>
+					></textarea>
 				</div>
 
 				<div class="form-group">
