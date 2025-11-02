@@ -15,21 +15,20 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.12.1
     hooks:
-      - id: ruff-check
+      - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-      - id: ruff-format
 
   - repo: local
     hooks:
-      - id: ty-check
-        name: ty type checking
+      - id: type-check
+        name: type check
         entry: uv run ty check
         language: system
         types: [python]
         pass_filenames: false
 
       - id: frontend-build
-        name: frontend build check
+        name: frontend build
         entry: bash -c 'cd frontend && bun run build'
         language: system
         files: ^frontend/
