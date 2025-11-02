@@ -140,12 +140,18 @@ async def update_my_artist_profile(
         db.close()
 
 
-@router.get("/{did}", response_model=ArtistResponse)
-async def get_artist_profile(did: str):
-    """get artist profile by DID (public endpoint)."""
+@router.get("/{handle_or_did}", response_model=ArtistResponse)
+async def get_artist_profile(handle_or_did: str):
+    """get artist profile by handle or DID (public endpoint)."""
     db = next(get_db())
     try:
-        artist = db.query(Artist).filter(Artist.did == did).first()
+        # try to find by handle first (more common in URLs)
+        artist = db.query(Artist).filter(Artist.handle == handle_or_did).first()
+
+        # if not found, try DID
+        if not artist:
+            artist = db.query(Artist).filter(Artist.did == handle_or_did).first()
+
         if not artist:
             raise HTTPException(status_code=404, detail="artist not found")
         return artist

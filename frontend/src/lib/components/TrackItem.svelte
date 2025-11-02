@@ -19,17 +19,31 @@
 <div class="track-container" class:playing={isPlaying}>
 	<button
 		class="track"
-		onclick={() => onPlay(track)}
+		onclick={(e) => {
+			// only play if clicking the track itself, not a link inside
+			if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
+				return;
+			}
+			onPlay(track);
+		}}
 	>
 		{#if track.artist_avatar_url}
-			<div class="track-avatar">
+			<a
+				href="/u/{track.artist_handle}"
+				class="track-avatar"
+			>
 				<img src={track.artist_avatar_url} alt={track.artist} />
-			</div>
+			</a>
 		{/if}
 		<div class="track-info">
 			<div class="track-title">{track.title}</div>
 			<div class="track-artist">
-				{track.artist}
+				<a
+					href="/u/{track.artist_handle}"
+					class="artist-link"
+				>
+					{track.artist}
+				</a>
 				{#if track.features && track.features.length > 0}
 					<span class="features">
 						feat. {track.features.map(f => f.display_name).join(', ')}
@@ -40,21 +54,14 @@
 				{/if}
 			</div>
 			<div class="track-meta">
-				<span>@{track.artist_handle}</span>
-				<span class="separator">•</span>
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
-				{#if track.atproto_record_uri}
-					{@const parts = track.atproto_record_uri.split('/')}
-					{@const did = parts[2]}
-					{@const collection = parts[3]}
-					{@const rkey = parts[4]}
+		{#if track.atproto_record_url}
 					<span class="separator">•</span>
 					<a
-						href={`https://pds.zzstoatzz.io/xrpc/com.atproto.repo.getRecord?repo=${did}&collection=${collection}&rkey=${rkey}`}
+						href={track.atproto_record_url}
 						target="_blank"
 						rel="noopener"
 						class="atproto-link"
-						onclick={(e) => e.stopPropagation()}
 					>
 						view record
 					</a>
@@ -109,6 +116,13 @@
 		flex-shrink: 0;
 		width: 40px;
 		height: 40px;
+		display: block;
+		text-decoration: none;
+		transition: transform 0.2s;
+	}
+
+	.track-avatar:hover {
+		transform: scale(1.05);
 	}
 
 	.track-avatar img {
@@ -117,6 +131,11 @@
 		border-radius: 50%;
 		object-fit: cover;
 		border: 2px solid #333;
+		transition: border-color 0.2s;
+	}
+
+	.track-avatar:hover img {
+		border-color: #6a9fff;
 	}
 
 	.track-info {
@@ -140,6 +159,16 @@
 	.track-artist {
 		color: #b0b0b0;
 		margin-bottom: 0.25rem;
+	}
+
+	.artist-link {
+		color: inherit;
+		text-decoration: none;
+		transition: color 0.2s;
+	}
+
+	.artist-link:hover {
+		color: #6a9fff;
 	}
 
 	.features {
