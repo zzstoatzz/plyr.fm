@@ -235,6 +235,55 @@ staging is for:
 
 **when to add**: team of 5+ engineers, formal release process
 
+## known issues
+
+### fly.io release command VM startup timeouts
+
+**status**: active issue as of 2025-11-02
+
+**symptom**: deployment fails with `failed to start VM: deadline_exceeded` during release command
+
+**current workaround**:
+- release command temporarily disabled in `fly.toml`
+- migrations must be run manually when needed
+- see commit e7d4f5e for details
+
+**why this happens**:
+- fly.io can't start the migration VM within 60 seconds
+- happens even when no migrations need to run
+- appears to be a fly.io infrastructure issue, not code issue
+
+**manual migration process** (when needed):
+```bash
+# 1. create migration locally
+uv run alembic revision --autogenerate -m "description"
+
+# 2. test locally
+uv run alembic upgrade head
+
+# 3. commit and push
+git add alembic/versions/
+git commit -m "add migration"
+git push
+
+# 4. run migration on production manually
+flyctl ssh console -a relay-api
+>>> uv run alembic upgrade head
+>>> exit
+```
+
+**long-term fix needed**:
+- investigate fly.io machine startup times
+- consider alternative migration strategies:
+  - run migrations from github actions instead of fly.io release command
+  - use neon branches for schema changes with zero-downtime migrations
+  - pre-build migration containers to reduce startup time
+  - increase VM startup timeout (if fly.io supports it)
+
+**tracking**: github issue needed
+
+---
+
 ## troubleshooting
 
 ### migration fails on deployment
