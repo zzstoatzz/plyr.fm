@@ -6,6 +6,14 @@
 	let formattedCurrentTime = $derived(formatTime(player.currentTime));
 	let formattedDuration = $derived(formatTime(player.duration));
 
+	// volume state indicators
+	let volumeState = $derived.by(() => {
+		if (player.volume === 0) return 'muted';
+		if (player.volume >= 0.99) return 'max';
+		return 'normal';
+	});
+
+
 	function formatTime(seconds: number): string {
 		if (!isFinite(seconds)) return '0:00';
 		const mins = Math.floor(seconds / 60);
@@ -92,7 +100,7 @@
 
 			<div class="player-controls">
 				<button
-					class="control-btn"
+					class="control-btn play-pause"
 					onclick={() => player.togglePlayPause()}
 					title={player.paused ? 'play' : 'pause'}
 				>
@@ -121,13 +129,31 @@
 				</div>
 
 				<div class="volume-control">
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-						<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-						<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-					</svg>
+					<div class="volume-icon" class:muted={volumeState === 'muted'}>
+						{#if volumeState === 'muted'}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+								<line x1="23" y1="9" x2="17" y2="15"></line>
+								<line x1="17" y1="9" x2="23" y2="15"></line>
+							</svg>
+						{:else if volumeState === 'max'}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="max-volume">
+								<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+								<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+								<path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+							</svg>
+						{:else}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+								<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+							</svg>
+						{/if}
+					</div>
 					<input
 						type="range"
 						class="volume-bar"
+						class:muted={volumeState === 'muted'}
+						class:max={volumeState === 'max'}
 						min="0"
 						max="1"
 						step="0.01"
@@ -224,11 +250,16 @@
 		align-items: center;
 		justify-content: center;
 		transition: all 0.2s;
+		border-radius: 50%;
 	}
 
 	.control-btn:hover {
 		color: #6a9fff;
-		transform: scale(1.1);
+		background: rgba(106, 159, 255, 0.1);
+	}
+
+	.control-btn.play-pause:active {
+		transform: scale(0.95);
 	}
 
 	.time-control {
@@ -242,6 +273,7 @@
 		font-size: 0.85rem;
 		color: #909090;
 		min-width: 45px;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.seek-bar,
@@ -255,6 +287,34 @@
 		gap: 0.75rem;
 		color: #909090;
 		min-width: 150px;
+		position: relative;
+	}
+
+	.volume-icon {
+		display: flex;
+		align-items: center;
+		transition: all 0.3s;
+	}
+
+	.volume-icon.muted {
+		color: #ff6b6b;
+		animation: shake 0.5s ease-in-out;
+	}
+
+	.volume-icon .max-volume {
+		color: #6a9fff;
+		animation: pulse 0.5s ease-in-out;
+	}
+
+	@keyframes shake {
+		0%, 100% { transform: translateX(0); }
+		25% { transform: translateX(-3px); }
+		75% { transform: translateX(3px); }
+	}
+
+	@keyframes pulse {
+		0%, 100% { transform: scale(1); }
+		50% { transform: scale(1.15); }
 	}
 
 	input[type="range"] {
@@ -284,6 +344,16 @@
 	input[type="range"]::-webkit-slider-thumb:hover {
 		background: #8ab3ff;
 		transform: scale(1.2);
+		box-shadow: 0 0 0 4px rgba(106, 159, 255, 0.2);
+	}
+
+	input[type="range"].muted::-webkit-slider-thumb {
+		background: #ff6b6b;
+	}
+
+	input[type="range"].max::-webkit-slider-thumb {
+		background: #6a9fff;
+		box-shadow: 0 0 0 4px rgba(106, 159, 255, 0.3);
 	}
 
 	input[type="range"]::-moz-range-track {
@@ -304,6 +374,16 @@
 	input[type="range"]::-moz-range-thumb:hover {
 		background: #8ab3ff;
 		transform: scale(1.2);
+		box-shadow: 0 0 0 4px rgba(106, 159, 255, 0.2);
+	}
+
+	input[type="range"].muted::-moz-range-thumb {
+		background: #ff6b6b;
+	}
+
+	input[type="range"].max::-moz-range-thumb {
+		background: #6a9fff;
+		box-shadow: 0 0 0 4px rgba(106, 159, 255, 0.3);
 	}
 
 	@media (max-width: 768px) {

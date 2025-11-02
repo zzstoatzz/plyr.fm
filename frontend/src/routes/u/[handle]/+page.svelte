@@ -79,7 +79,9 @@
 			{/if}
 			<div class="artist-info">
 				<h1>{artist.display_name}</h1>
-				<p class="handle">@{artist.handle}</p>
+				<a href="https://bsky.app/profile/{artist.handle}" target="_blank" rel="noopener" class="handle">
+					@{artist.handle}
+				</a>
 				{#if artist.bio}
 					<p class="bio">{artist.bio}</p>
 				{/if}
@@ -158,6 +160,13 @@
 		color: #909090;
 		font-size: 1.1rem;
 		margin: 0 0 1rem 0;
+		text-decoration: none;
+		transition: color 0.2s;
+		display: inline-block;
+	}
+
+	.handle:hover {
+		color: #6a9fff;
 	}
 
 	.bio {
