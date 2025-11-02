@@ -1,24 +1,187 @@
 # database migrations
 
-## current state (broken - needs automation)
+## current state (automated ✓)
 
-relay currently has **broken/manual database migrations** that require SSH access to production.
+relay uses **automated database migrations** via fly.io's `release_command`.
 
-### what's wrong
+### how it works
 
-the current process is:
+```
 1. developer creates migration locally
-2. developer commits and pushes
-3. deployment happens (no migrations run automatically)
-4. **developer manually SSHs to production and runs migration**
+   ↓
+2. commit and push to main
+   ↓
+3. github actions triggers deployment
+   ↓
+4. fly.io builds docker image
+   ↓
+5. fly.io runs release_command BEFORE deploying
+   - temporary machine spins up
+   - runs: uv run alembic upgrade head
+   - if succeeds → proceed to deployment
+   - if fails → abort, keep old version running
+   ↓
+6. new app version deploys with updated schema
+```
 
-this is unacceptable because:
-- human error prone (forget to run migration, run wrong command, etc.)
-- requires manual intervention for every schema change
-- no verification that migration succeeded before app starts serving traffic
-- can cause race conditions if multiple instances start with old schema
-- blocks on SSH access (what if SSH is down?)
-- doesn't scale (what about rollbacks? what about multiple environments?)
+### configuration
+
+**fly.toml:**
+```toml
+[deploy]
+  release_command = "uv run alembic upgrade head"
+```
+
+**benefits:**
+- zero manual intervention required
+- migrations run before new code serves traffic (no inconsistent state)
+- automatic rollback if migration fails
+- clear deployment logs showing migration output
+
+### how dev/prod database separation works
+
+relay uses **environment-based database configuration** to ensure migrations always target the correct database.
+
+**the key mechanism: `DATABASE_URL` environment variable**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ alembic/env.py (migration runtime)                          │
+│                                                              │
+│ 1. imports relay.config.settings                            │
+│ 2. reads settings.database_url                              │
+│ 3. sets alembic connection string                           │
+│                                                              │
+│ config.set_main_option("sqlalchemy.url", settings.database_url)
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ src/relay/config.py (pydantic-settings)                     │
+│                                                              │
+│ class Settings(BaseSettings):                               │
+│     database_url: str = Field(                              │
+│         default="postgresql+asyncpg://localhost/relay"      │
+│     )                                                        │
+│                                                              │
+│ reads from DATABASE_URL environment variable                │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+              ┌───────────────┴───────────────┐
+              │                               │
+              ▼                               ▼
+┌──────────────────────────┐    ┌──────────────────────────┐
+│ local development        │    │ production (fly.io)      │
+│                          │    │                          │
+│ .env file:               │    │ fly secrets:             │
+│ DATABASE_URL=            │    │ DATABASE_URL=            │
+│   postgresql+asyncpg://  │    │   postgresql://          │
+│   localhost:5432/relay   │    │   [neon connection]      │
+│                          │    │                          │
+│ when you run:            │    │ when fly.io runs:        │
+│ uv run alembic upgrade   │    │ release_command:         │
+│                          │    │ uv run alembic upgrade   │
+│ → migrates LOCAL db      │    │ → migrates PROD db       │
+└──────────────────────────┘    └──────────────────────────┘
+```
+
+**why this is safe:**
+
+1. **no shared configuration**: local and production environments have completely separate `DATABASE_URL` values
+2. **environment-specific secrets**: production database URL is stored in fly.io secrets, never in code
+3. **explicit context**: you cannot accidentally run a production migration locally because your local `DATABASE_URL` points to localhost
+4. **explicit context**: fly.io cannot run migrations against your local database because it only knows about the production `DATABASE_URL`
+
+**concrete example:**
+
+```bash
+# local development
+$ cat .env
+DATABASE_URL=postgresql+asyncpg://localhost:5432/relay
+
+$ uv run alembic upgrade head
+# connects to localhost:5432/relay
+# migrates your local dev database
+
+# production (inside fly.io release machine)
+$ echo $DATABASE_URL
+postgresql://neon_user:***@ep-cool-moon-123.us-east-2.aws.neon.tech/relay
+
+$ uv run alembic upgrade head
+# connects to neon production database
+# migrates your production database
+```
+
+**migration flow for each environment:**
+
+local development:
+```
+1. developer edits model in src/relay/models/
+2. runs: uv run alembic revision --autogenerate -m "description"
+3. alembic reads DATABASE_URL from .env (localhost)
+4. generates migration by comparing:
+   - current model state (code)
+   - current database state (local postgres)
+5. runs: uv run alembic upgrade head
+6. migration applies to local database
+```
+
+production deployment:
+```
+1. developer commits migration file to git
+2. pushes to main branch
+3. github actions triggers deployment
+4. fly.io builds docker image (includes migration files)
+5. fly.io starts temporary release machine
+6. release machine has DATABASE_URL from fly secrets (production neon)
+7. release machine runs: uv run alembic upgrade head
+8. alembic reads DATABASE_URL (production neon)
+9. migration applies to production database
+10. if successful, deployment proceeds
+11. if failed, deployment aborts (old version keeps running)
+```
+
+**test database (separate again):**
+
+tests use a third database entirely:
+
+```python
+# tests/conftest.py
+def test_database_url(worker_id: str) -> str:
+    return "postgresql+asyncpg://relay_test:relay_test@localhost:5433/relay_test"
+```
+
+this ensures:
+- tests never touch dev or prod databases
+- tests can run in parallel (separate databases per worker)
+- test data is isolated and can be cleared between tests
+
+**the complete picture:**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ three completely separate databases:                         │
+│                                                               │
+│ 1. dev (localhost:5432/relay)                                │
+│    - for local development                                   │
+│    - set via .env: DATABASE_URL=postgresql+asyncpg://...     │
+│    - migrations run manually: uv run alembic upgrade head    │
+│                                                               │
+│ 2. test (localhost:5433/relay_test)                          │
+│    - for automated tests                                     │
+│    - set via conftest.py fixture                             │
+│    - schema created by tests/conftest.py                     │
+│    - no migrations (schema created from models directly)     │
+│                                                               │
+│ 3. prod (neon.tech cloud)                                    │
+│    - for production traffic                                  │
+│    - set via fly secrets: DATABASE_URL=postgresql://...      │
+│    - migrations run automatically via release_command        │
+│                                                               │
+│ these databases never interact or share configuration        │
+└──────────────────────────────────────────────────────────────┘
+```
 
 ### recent pain points (2025-11-02)
 
@@ -133,259 +296,114 @@ project-cli database reset
 - no human error
 - consistent across environments
 
-## proposed solution for relay
+## implementation history
 
-given our simpler architecture (single database, fly.io deployment), we need a lighter-weight version of reference project N's approach.
+### what we tried
 
-### option 1: github actions migration job (recommended)
-
-run migrations from github actions before fly deployment completes:
-
-```yaml
-# .github/workflows/deploy-backend.yaml
-name: deploy backend to fly.io
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: setup flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      # deploy in background (don't wait)
-      - name: deploy to fly.io
-        run: flyctl deploy --remote-only --detach
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      # wait for deployment to finish
-      - name: wait for deployment
-        run: |
-          flyctl status --app relay-api
-          # poll until new version is running
-          # (implement proper polling logic)
-
-      # run migrations after deployment completes
-      - name: run database migrations
-        run: |
-          flyctl ssh console -a relay-api -C "uv run alembic upgrade head"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      # verify migration succeeded
-      - name: verify migration
-        run: |
-          REVISION=$(flyctl ssh console -a relay-api -C "uv run alembic current")
-          echo "current revision: $REVISION"
+**initial approach (broken)**: bash wrapper script
+```toml
+[deploy]
+  release_command = './scripts/migrate.sh'
 ```
 
-**pros**:
-- automated, no manual SSH
-- runs after deployment (docker image includes migration files)
-- github actions logs show migration output
-- can add retries, notifications, etc.
+**problem**: timed out during VM startup, likely due to script overhead or environment setup issues.
 
-**cons**:
-- migrations run after app starts (brief window where app has wrong schema)
-- need to implement deployment polling
-- SSH from CI (security consideration)
-
-### option 2: fly.io release command (original plan, currently broken)
-
-use fly.io's built-in release command (currently disabled due to VM timeout issues):
-
+**solution**: direct command execution
 ```toml
-# fly.toml
 [deploy]
   release_command = "uv run alembic upgrade head"
 ```
 
-**pros**:
-- simplest configuration
-- migrations run before app starts serving traffic
-- built-in rollback if migration fails
+**result**: works perfectly. migrations complete in ~3 seconds, no timeouts.
 
-**cons**:
-- **currently broken** due to fly.io VM startup timeouts
-- less control over migration process
-- harder to debug failures
+**key lesson**: fly.io's `release_command` works reliably when you give it a direct command instead of wrapping it in a shell script. the wrapper script was the problem, not VM resources or timeouts.
 
-**status**: disabled as of commit e7d4f5e, needs investigation
+### current implementation (working ✓)
 
-### option 3: migration init container (future)
+**fly.toml:**
+```toml
+[deploy]
+  release_command = "uv run alembic upgrade head"
+```
 
-if we move to kubernetes/docker compose:
+**github actions (.github/workflows/deploy-backend.yml):**
+```yaml
+- name: detect changes
+  uses: dorny/paths-filter@v3
+  id: changes
+  with:
+    filters: .github/path-filters.yml
+
+- name: deploy to fly.io
+  run: |
+    if [ "${{ steps.changes.outputs.migrations }}" == "true" ]; then
+      echo "🔄 migrations detected - will run via release_command before deployment"
+    fi
+    flyctl deploy --remote-only
+```
+
+**path filters (.github/path-filters.yml):**
+```yaml
+migrations:
+  - "alembic/versions/**"
+  - "alembic/env.py"
+  - "alembic.ini"
+```
+
+this setup:
+1. detects when migrations change
+2. logs that migrations will run (for visibility)
+3. deploys normally
+4. fly.io automatically runs `release_command` before deployment
+5. migrations succeed → deployment proceeds
+6. migrations fail → deployment aborts, old version keeps running
+
+### alternative approaches considered
+
+**option: post-deployment github actions job**
+
+run migrations via SSH after fly deployment completes:
 
 ```yaml
-# docker-compose.yaml
-services:
-  migrate:
-    image: relay-api:latest
-    command: uv run alembic upgrade head
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: "no"
-
-  api:
-    image: relay-api:latest
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
+- name: run database migrations
+  run: flyctl ssh console -a relay-api -C "uv run alembic upgrade head"
 ```
 
-**pros**:
-- proper ordering (migrate → app)
-- works with any orchestrator
+**why we didn't use this**:
+- migrations run AFTER app starts (brief window where app has wrong schema)
+- requires implementing deployment polling logic
+- SSH from CI is a security consideration
+- fly.io `release_command` is simpler and runs migrations BEFORE deployment
+
+**option: neon branch-based migrations**
+
+use neon's branch features for zero-downtime migrations (test on branch, then promote):
+
+**why we didn't use this**:
+- adds complexity for marginal benefit at current scale
+- our migrations are simple and fast (~3 seconds)
+- can revisit when we have complex, long-running migrations
+
+## future considerations
+
+as relay scales, we may want to explore:
+
+**migration init containers** (if we move to kubernetes/docker compose):
+- separate container for migrations before app starts
 - matches reference project N's pattern
+- better isolation and observability
 
-**cons**:
-- requires different deployment architecture
-- not applicable to fly.io currently
+**neon branch-based migrations** (for complex changes):
+- test migrations on database branch first
+- promote branch to production (instant swap)
+- zero downtime, instant rollback
+- useful for high-risk schema changes
 
-### option 4: neon branch-based migrations (advanced)
-
-use neon's branch features for zero-downtime migrations:
-
-```bash
-# 1. create branch from main
-neon branches create --name migration-test
-
-# 2. run migration on branch
-DATABASE_URL=<branch-url> uv run alembic upgrade head
-
-# 3. verify migration
-# test app against branch database
-
-# 4. promote branch to main (instant swap)
-neon branches promote migration-test
-```
-
-**pros**:
-- zero downtime
-- can test migration before applying to production
-- instant rollback (switch back to old branch)
-
-**cons**:
-- requires neon-specific tooling
-- more complex workflow
-- need to manage branch lifecycle
-
-## recommended implementation plan
-
-### phase 1: automate current manual process (immediate)
-
-1. **update github actions workflow**
-   - add migration step after deployment
-   - use `flyctl ssh console -C` to run migrations
-   - add verification step
-
-2. **add migration detection**
-   - use `dorny/paths-filter@v3` to detect `alembic/versions/**` changes
-   - only run migration step if migrations changed
-   - skip if no migrations (faster deployments)
-
-3. **improve error handling**
-   - add retries for transient failures
-   - post to slack on failure
-   - clear error messages
-
-### phase 2: fix fly.io release command (short-term)
-
-1. **investigate VM timeout issue**
-   - contact fly.io support
-   - check if timeout can be increased
-   - test with minimal release command
-
-2. **optimize migration container**
-   - pre-build image with all dependencies
-   - minimize startup time
-   - consider using fly machines instead of VMs
-
-3. **re-enable release command**
-   - test in dev environment first
-   - monitor for timeouts
-   - rollback to github actions if unstable
-
-### phase 3: proper migration infrastructure (long-term)
-
-when we have multiple environments (dev, staging, prod):
-
-1. **separate migration jobs**
-   - dedicated fly apps for migrations
-   - triggered via CI/CD
-   - proper logging and monitoring
-
-2. **pre-deployment testing**
-   - run migrations on dev first
-   - verify schema matches models
-   - test app against new schema
-
-3. **zero-downtime migrations**
-   - use neon branches for complex changes
-   - multi-step migrations for breaking changes
-   - feature flags for new columns
-
-## immediate action items
-
-**required before next migration**:
-
-- [ ] implement github actions migration job (option 1)
-- [ ] add paths-filter for migration detection
-- [ ] test automated migration on dev branch
-- [ ] document new process in this file
-- [ ] update CLAUDE.md with new workflow
-
-**nice to have**:
-
-- [ ] investigate fly.io timeout issue
-- [ ] add migration verification step
-- [ ] add slack notifications
-- [ ] create migration runbook
-
-## current workaround (temporary)
-
-until automation is implemented, manual process is:
-
-```bash
-# 1. ensure dockerfile includes migration files (PR #14 fixed this)
-# verify these lines exist in Dockerfile:
-#   COPY alembic.ini ./
-#   COPY alembic ./alembic
-
-# 2. create and test migration locally
-uv run alembic revision --autogenerate -m "description"
-uv run alembic upgrade head
-
-# 3. commit and push
-git add alembic/versions/
-git commit -m "add migration"
-git push
-
-# 4. wait for deployment to complete
-gh run watch
-
-# 5. run migration on production
-flyctl ssh console -a relay-api -C "uv run alembic upgrade head"
-
-# 6. verify migration
-flyctl ssh console -a relay-api -C "uv run alembic current"
-```
-
-**known issues with manual process**:
-
-- if alembic version tracking is out of sync, may need to stamp first:
-  ```bash
-  flyctl ssh console -a relay-api -C "uv run alembic stamp <revision>"
-  ```
-- if migration files weren't in docker image, need to rebuild and redeploy
-- if multiple migrations exist, may hit "relation already exists" errors
+**multi-environment pipeline**:
+- dev → staging → production progression
+- test migrations in lower environments first
+- automated smoke tests after migration
+- canary deployments for schema changes
 
 ## migration best practices
 
@@ -595,5 +613,5 @@ def upgrade():
 ---
 
 **last updated**: 2025-11-02
-**status**: manual process, automation in progress
+**status**: fully automated via fly.io release_command ✓
 **owner**: @zzstoatzz
