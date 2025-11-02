@@ -31,6 +31,9 @@ jobs:
       - name: install frontend dependencies
         run: cd frontend && bun install
 
+      - name: create frontend env file
+        run: echo "PUBLIC_API_URL=http://localhost:8001" > frontend/.env
+
       - name: check lockfile is up to date
         run: |
           if ! uv lock --check; then
