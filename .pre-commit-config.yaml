@@ -27,9 +27,9 @@ repos:
         types: [python]
         pass_filenames: false
 
-      - id: frontend-build
-        name: frontend build
-        entry: bash -c 'cd frontend && bun run build'
+      - id: svelte-check
+        name: svelte check
+        entry: bash -c 'cd frontend && bun run check'
         language: system
         files: ^frontend/
         pass_filenames: false
