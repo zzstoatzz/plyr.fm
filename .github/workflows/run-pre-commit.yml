@@ -28,6 +28,9 @@ jobs:
       - name: install dependencies
         run: uv sync
 
+      - name: install frontend dependencies
+        run: cd frontend && bun install
+
       - name: check lockfile is up to date
         run: |
           if ! uv lock --check; then
