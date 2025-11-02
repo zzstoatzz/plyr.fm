@@ -48,6 +48,7 @@ dev = [
     "pytest-xdist>=3.6.1",
     "ruff>=0.12.0",
     "httpx>=0.28.0",
+    "ty>=0.0.1a25",
 ]
 
 [build-system]
@@ -117,3 +118,15 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+
+[tool.ty.src]
+include = ["src", "tests"]
+exclude = ["**/node_modules", "**/__pycache__", ".venv", ".git", "dist", "frontend"]
+
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.rules]
+# start with basic checks, can tighten later
+unknown-argument = "ignore"
+no-matching-overload = "ignore"

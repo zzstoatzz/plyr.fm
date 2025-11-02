@@ -62,7 +62,9 @@ async def fetch_user_profile(did: str) -> dict | None:
 
             if response.status_code == 200:
                 profile_data = response.json()
-                logger.info(f"discovered profile for {did}: {profile_data.get('handle')}")
+                logger.info(
+                    f"discovered profile for {did}: {profile_data.get('handle')}"
+                )
                 return profile_data
             else:
                 logger.warning(

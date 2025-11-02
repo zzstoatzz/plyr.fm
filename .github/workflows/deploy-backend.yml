@@ -5,12 +5,12 @@ on:
     branches:
       - main
     paths:
-      - 'src/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - 'Dockerfile'
-      - 'fly.toml'
-      - '.github/workflows/deploy-backend.yml'
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Dockerfile"
+      - "fly.toml"
+      - ".github/workflows/deploy-backend.yml"
 
 jobs:
   deploy:

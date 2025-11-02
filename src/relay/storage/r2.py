@@ -16,12 +16,14 @@ class R2Storage:
 
     def __init__(self):
         """initialize R2 client."""
-        if not all([
-            settings.r2_bucket,
-            settings.r2_endpoint_url,
-            settings.aws_access_key_id,
-            settings.aws_secret_access_key,
-        ]):
+        if not all(
+            [
+                settings.r2_bucket,
+                settings.r2_endpoint_url,
+                settings.aws_access_key_id,
+                settings.aws_secret_access_key,
+            ]
+        ):
             raise ValueError("R2 credentials not configured in environment")
 
         self.bucket_name = settings.r2_bucket

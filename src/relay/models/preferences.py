@@ -17,9 +17,7 @@ class UserPreferences(Base):
     did: Mapped[str] = mapped_column(String, primary_key=True)
 
     # ui preferences
-    accent_color: Mapped[str] = mapped_column(
-        String, nullable=False, default="#6a9fff"
-    )
+    accent_color: Mapped[str] = mapped_column(String, nullable=False, default="#6a9fff")
 
     # metadata
     created_at: Mapped[datetime] = mapped_column(

@@ -32,7 +32,9 @@ class Settings(BaseSettings):
     )
 
     # storage
-    storage_backend: str = Field(default="filesystem", description="Storage backend (filesystem or r2)")
+    storage_backend: str = Field(
+        default="filesystem", description="Storage backend (filesystem or r2)"
+    )
 
     # cloudflare r2
     aws_access_key_id: str = Field(default="", description="AWS access key ID")

@@ -48,11 +48,11 @@ class ArtistResponse(BaseModel):
 
 
 # endpoints
-@router.post("/", response_model=ArtistResponse)
+@router.post("/")
 async def create_artist(
     request: CreateArtistRequest,
     auth_session: Session = Depends(require_auth),
-):
+) -> Artist:
     """create artist profile for authenticated user.
 
     this should be called on first login if artist profile doesn't exist.
@@ -90,8 +90,10 @@ async def create_artist(
         db.close()
 
 
-@router.get("/me", response_model=ArtistResponse)
-async def get_my_artist_profile(auth_session: Session = Depends(require_auth)):
+@router.get("/me")
+async def get_my_artist_profile(
+    auth_session: Session = Depends(require_auth),
+) -> Artist:
     """get authenticated user's artist profile."""
     db = next(get_db())
     try:
@@ -106,11 +108,11 @@ async def get_my_artist_profile(auth_session: Session = Depends(require_auth)):
         db.close()
 
 
-@router.put("/me", response_model=ArtistResponse)
+@router.put("/me")
 async def update_my_artist_profile(
     request: UpdateArtistRequest,
     auth_session: Session = Depends(require_auth),
-):
+) -> Artist:
     """update authenticated user's artist profile."""
     db = next(get_db())
     try:
@@ -140,8 +142,8 @@ async def update_my_artist_profile(
         db.close()
 
 
-@router.get("/by-handle/{handle}", response_model=ArtistResponse)
-async def get_artist_profile_by_handle(handle: str):
+@router.get("/by-handle/{handle}")
+async def get_artist_profile_by_handle(handle: str) -> Artist:
     """get artist profile by handle (public endpoint)."""
     db = next(get_db())
     try:
@@ -153,8 +155,8 @@ async def get_artist_profile_by_handle(handle: str):
         db.close()
 
 
-@router.get("/{did}", response_model=ArtistResponse)
-async def get_artist_profile_by_did(did: str):
+@router.get("/{did}")
+async def get_artist_profile_by_did(did: str) -> Artist:
     """get artist profile by DID (public endpoint)."""
     db = next(get_db())
     try:

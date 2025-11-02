@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 import httpx
 from sqlalchemy import text
 
-from relay.models import Artist, Track, get_db
+from relay.models import get_db
 
 
 async def fetch_avatar(did: str) -> str | None:
@@ -83,18 +83,18 @@ async def main():
         print("\ncreating artist records...")
         for row in unique_artists:
             did, handle, display_name = row
-            print(f"\nprocessing artist:")
+            print("\nprocessing artist:")
             print(f"  did: {did}")
             print(f"  handle: {handle}")
             print(f"  display_name: {display_name}")
 
             # fetch avatar
-            print(f"  fetching avatar from bluesky...")
+            print("  fetching avatar from bluesky...")
             avatar_url = await fetch_avatar(did)
             if avatar_url:
                 print(f"  ✓ avatar found: {avatar_url}")
             else:
-                print(f"  ✗ no avatar found")
+                print("  ✗ no avatar found")
 
             # create artist record
             from datetime import datetime
@@ -117,7 +117,7 @@ async def main():
                 },
             )
             db.commit()
-            print(f"  ✓ artist record created")
+            print("  ✓ artist record created")
 
         # step 5: add foreign key constraint
         print("\nadding foreign key constraint...")
