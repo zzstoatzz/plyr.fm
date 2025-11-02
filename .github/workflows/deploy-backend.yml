@@ -38,16 +38,41 @@ jobs:
       - name: run database migrations
         if: steps.changes.outputs.migrations == 'true'
         run: |
+          set -e
           echo "migrations detected, running alembic upgrade..."
-          flyctl ssh console -a relay-api -C "uv run alembic upgrade head"
+
+          # run migration and capture output
+          if ! flyctl ssh console -a relay-api -C "uv run alembic upgrade head" 2>&1 | tee migration.log; then
+            echo "❌ migration failed!"
+            cat migration.log
+            exit 1
+          fi
+
+          # check for error indicators in output
+          if grep -qi "error\|failed\|traceback" migration.log; then
+            echo "❌ migration output contains errors!"
+            cat migration.log
+            exit 1
+          fi
+
+          echo "✓ migration completed successfully"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: verify migration
         if: steps.changes.outputs.migrations == 'true'
         run: |
+          set -e
           echo "verifying migration succeeded..."
-          REVISION=$(flyctl ssh console -a relay-api -C "uv run alembic current" 2>&1 | grep -v "Connecting to" | grep -v "INFO")
-          echo "current alembic revision: $REVISION"
+
+          # get current revision
+          REVISION=$(flyctl ssh console -a relay-api -C "uv run alembic current" 2>&1 | grep -v "Connecting to" | grep -v "INFO" | head -n 1)
+
+          if [ -z "$REVISION" ]; then
+            echo "❌ failed to get alembic revision!"
+            exit 1
+          fi
+
+          echo "✓ current alembic revision: $REVISION"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
