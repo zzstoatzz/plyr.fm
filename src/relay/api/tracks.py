@@ -8,10 +8,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from relay._internal import Session as AuthSession
+from relay._internal import require_artist_profile, require_auth
 from relay.atproto import create_track_record
 from relay.atproto.handles import resolve_handle
-from relay.auth import Session as AuthSession
-from relay.auth import require_artist_profile, require_auth
 from relay.config import settings
 from relay.models import Artist, AudioFormat, Track, get_db
 from relay.storage import storage

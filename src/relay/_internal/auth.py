@@ -35,7 +35,7 @@ _session_store = MemorySessionStore()
 oauth_client = OAuthClient(
     client_id=settings.atproto_client_id,
     redirect_uri=settings.atproto_redirect_uri,
-    scope="atproto repo:app.relay.track",
+    scope=settings.atproto_scope,
     state_store=_state_store,
     session_store=_session_store,
 )

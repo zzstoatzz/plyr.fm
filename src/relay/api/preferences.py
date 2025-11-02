@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
 
-from relay.auth import Session, require_auth
+from relay._internal import Session, require_auth
 from relay.models import UserPreferences, get_db
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])

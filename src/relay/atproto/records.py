@@ -7,8 +7,8 @@ from typing import Any
 
 from atproto_oauth.models import OAuthSession
 
-from relay.auth import Session as AuthSession
-from relay.auth import oauth_client, update_session_tokens
+from relay._internal import Session as AuthSession
+from relay._internal import oauth_client, update_session_tokens
 
 logger = logging.getLogger(__name__)
 

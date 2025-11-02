@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from relay._internal import Session, require_auth
 from relay.atproto import fetch_user_avatar
-from relay.auth import Session, require_auth
 from relay.models import Artist, get_db
 
 logger = logging.getLogger(__name__)

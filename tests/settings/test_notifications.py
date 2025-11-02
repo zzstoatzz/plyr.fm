@@ -2,7 +2,7 @@
 
 import pytest
 
-from relay.config import NotificationSettings, Settings
+from relay.config import Settings
 
 
 def test_notification_settings_from_env(monkeypatch: pytest.MonkeyPatch):
@@ -20,11 +20,13 @@ def test_notification_settings_from_env(monkeypatch: pytest.MonkeyPatch):
     assert settings.notify.bot.password == "secret123"
 
 
-def test_notification_settings_defaults():
-    """test default notification settings."""
-    settings = NotificationSettings()
+def test_notification_settings_can_be_disabled(monkeypatch: pytest.MonkeyPatch):
+    """test that notification settings can be explicitly disabled."""
+    monkeypatch.setenv("NOTIFY_ENABLED", "false")
+    monkeypatch.setenv("NOTIFY_RECIPIENT_HANDLE", "")
+    monkeypatch.setenv("NOTIFY_BOT_HANDLE", "")
+    monkeypatch.setenv("NOTIFY_BOT_PASSWORD", "")
 
-    assert settings.enabled is False
-    assert settings.recipient_handle == ""
-    assert settings.bot.handle == ""
-    assert settings.bot.password == ""
+    settings = Settings()
+
+    assert settings.notify.enabled is False

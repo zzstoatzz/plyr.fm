@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from relay.auth import (
+from relay._internal import (
     Session,
     check_artist_profile_exists,
     create_session,

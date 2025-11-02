@@ -98,6 +98,10 @@ class Settings(BaseSettings):
         default="http://localhost:8000/auth/callback",
         description="OAuth redirect URI",
     )
+    atproto_scope: str = Field(
+        default="atproto repo:app.relay.track",
+        description="OAuth scope",
+    )
 
     # observability
     logfire_enabled: bool = Field(default=False, description="Enable Logfire OTEL")

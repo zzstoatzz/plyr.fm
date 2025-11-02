@@ -1,7 +1,7 @@
 """notification service for relay events."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from atproto import Client
 from sqlalchemy import select
@@ -80,7 +80,7 @@ class NotificationService:
             # determine time window for checking
             if self.last_check is None:
                 # first run: check last 5 minutes
-                check_since = datetime.utcnow() - timedelta(minutes=5)
+                check_since = datetime.now(UTC) - timedelta(minutes=5)
             else:
                 check_since = self.last_check
 
@@ -95,7 +95,7 @@ class NotificationService:
             else:
                 logger.debug("no new tracks found")
 
-            self.last_check = datetime.utcnow()
+            self.last_check = datetime.now(UTC)
 
         except Exception as e:
             logger.exception(f"error checking new tracks: {e}")

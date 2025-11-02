@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from relay._internal import notification_service
 from relay.api import (
     artists_router,
     audio_router,
@@ -19,7 +20,6 @@ from relay.api import (
 )
 from relay.config import settings
 from relay.models import init_db
-from relay.notifications import notification_service
 
 logger = logging.getLogger(__name__)
 
