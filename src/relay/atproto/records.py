@@ -2,7 +2,8 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from atproto_oauth.models import OAuthSession
 
@@ -16,17 +17,21 @@ def _reconstruct_oauth_session(oauth_data: dict) -> OAuthSession:
     """reconstruct OAuthSession from serialized data."""
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 
     # deserialize DPoP private key
     dpop_key_pem = oauth_data.get("dpop_private_key_pem")
     if not dpop_key_pem:
         raise ValueError("DPoP private key not found in session")
 
-    dpop_private_key = serialization.load_pem_private_key(
+    private_key = serialization.load_pem_private_key(
         dpop_key_pem.encode("utf-8"),
         password=None,
         backend=default_backend(),
     )
+    if not isinstance(private_key, EllipticCurvePrivateKey):
+        raise ValueError("DPoP private key must be an elliptic curve key")
+    dpop_private_key: EllipticCurvePrivateKey = private_key
 
     return OAuthSession(
         did=oauth_data["did"],
@@ -82,7 +87,9 @@ async def _refresh_session_tokens(
         return refreshed_session
 
     except Exception as e:
-        logger.error(f"failed to refresh token for {auth_session.did}: {e}", exc_info=True)
+        logger.error(
+            f"failed to refresh token for {auth_session.did}: {e}", exc_info=True
+        )
         raise ValueError(f"failed to refresh access token: {e}") from e
 
 
@@ -95,7 +102,7 @@ async def create_track_record(
     album: str | None = None,
     duration: int | None = None,
     features: list[dict] | None = None,
-) -> tuple[str, str]:
+) -> tuple[str, str] | None:
     """create app.relay.track record on user's PDS.
 
     args:
@@ -118,19 +125,21 @@ async def create_track_record(
     # get OAuth session data from database
     oauth_data = auth_session.oauth_session
     if not oauth_data or "access_token" not in oauth_data:
-        raise ValueError(f"OAuth session data missing or invalid for {auth_session.did}")
+        raise ValueError(
+            f"OAuth session data missing or invalid for {auth_session.did}"
+        )
 
     # reconstruct OAuthSession from database
     oauth_session = _reconstruct_oauth_session(oauth_data)
 
     # construct record
-    record = {
+    record: dict[str, Any] = {
         "$type": "app.relay.track",
         "title": title,
         "artist": artist,
         "audioUrl": audio_url,
         "fileType": file_type,
-        "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
 
     # add optional fields
@@ -176,8 +185,12 @@ async def create_track_record(
             try:
                 error_data = response.json()
                 if "exp" in error_data.get("message", ""):
-                    logger.info(f"access token expired for {auth_session.did}, attempting refresh")
-                    oauth_session = await _refresh_session_tokens(auth_session, oauth_session)
+                    logger.info(
+                        f"access token expired for {auth_session.did}, attempting refresh"
+                    )
+                    oauth_session = await _refresh_session_tokens(
+                        auth_session, oauth_session
+                    )
                     continue  # retry with refreshed token
             except (json.JSONDecodeError, KeyError):
                 pass  # not a token expiration error

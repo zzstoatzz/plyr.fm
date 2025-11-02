@@ -19,7 +19,7 @@
 
 		try {
 			// fetch artist info (handle already has @ stripped by SvelteKit)
-			const artistResponse = await fetch(`${API_URL}/artists/${handle}`);
+			const artistResponse = await fetch(`${API_URL}/artists/by-handle/${handle}`);
 			if (!artistResponse.ok) {
 				if (artistResponse.status === 404) {
 					// check if handle is valid via AT Protocol identity resolution
