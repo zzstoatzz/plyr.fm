@@ -10,6 +10,8 @@ on:
       - "uv.lock"
       - "Dockerfile"
       - "fly.toml"
+      - "alembic/**"
+      - "alembic.ini"
       - ".github/workflows/deploy-backend.yml"
 
 jobs:
@@ -20,9 +22,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: detect changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: .github/path-filters.yml
+
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: deploy to fly.io
-        run: flyctl deploy --remote-only
+        run: |
+          if [ "${{ steps.changes.outputs.migrations }}" == "true" ]; then
+            echo "🔄 migrations detected - will run via release_command before deployment"
+          fi
+          flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
