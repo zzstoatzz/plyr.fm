@@ -21,11 +21,18 @@ repos:
 
   - repo: local
     hooks:
-      - id: ty-check
-        name: ty type checking
+      - id: type-check
+        name: type check
         entry: uv run ty check
         language: system
         types: [python]
+        pass_filenames: false
+
+      - id: svelte-check
+        name: svelte check
+        entry: bash -c 'cd frontend && bun run check'
+        language: system
+        files: ^frontend/
         pass_filenames: false
 
   - repo: https://github.com/pre-commit/pre-commit-hooks

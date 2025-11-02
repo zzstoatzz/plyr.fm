@@ -22,8 +22,17 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
+      - name: install bun
+        uses: oven-sh/setup-bun@v2
+
       - name: install dependencies
         run: uv sync
+
+      - name: install frontend dependencies
+        run: cd frontend && bun install
+
+      - name: create frontend env file
+        run: echo "PUBLIC_API_URL=http://localhost:8001" > frontend/.env
 
       - name: check lockfile is up to date
         run: |
@@ -38,3 +47,6 @@ jobs:
         run: uv run pre-commit run --all-files
         env:
           SKIP: no-commit-to-branch
+
+      - name: build frontend
+        run: cd frontend && bun run build

@@ -45,7 +45,7 @@
 			if (response.ok) {
 				user = await response.json();
 				// pre-fill display name with handle
-				displayName = user.handle;
+				displayName = user?.handle || "";
 
 				// try to fetch avatar from bluesky
 				await fetchAvatar();
@@ -162,7 +162,7 @@
 						disabled={saving}
 						placeholder="tell us about your music..."
 						rows="4"
-					/>
+					></textarea>
 				</div>
 
 				<div class="form-group">

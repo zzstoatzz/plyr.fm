@@ -6,10 +6,14 @@
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { player } from '$lib/player.svelte';
+	import type { PageData } from './$types';
+
+	// receive server-loaded data
+	let { data }: { data: PageData } = $props();
 
 	let handle = $derived($page.params.handle);
-	let artist: Artist | null = $state(null);
-	let tracks: Track[] = $state([]);
+	let artist: Artist | null = $state(data.artist); // initialize with server data
+	let tracks: Track[] = $state(data.tracks); // initialize with server data
 	let loading = $state(true);
 	let error = $state('');
 
@@ -62,6 +66,32 @@
 	});
 </script>
 
+<svelte:head>
+	{#if data.artist}
+		<title>{data.artist.display_name} (@{data.artist.handle}) - relay</title>
+		<meta name="description" content="listen to music by {data.artist.display_name} on relay" />
+
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content="profile" />
+		<meta property="og:title" content="{data.artist.display_name} (@{data.artist.handle})" />
+		<meta property="og:description" content="listen to music by {data.artist.display_name} on relay" />
+		<meta property="og:url" content="https://relay.zzstoatzz.io/u/{data.artist.handle}" />
+		<meta property="og:site_name" content="relay" />
+		<meta property="profile:username" content="{data.artist.handle}" />
+		{#if data.artist.avatar_url}
+			<meta property="og:image" content="{data.artist.avatar_url}" />
+		{/if}
+
+		<!-- Twitter -->
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content="{data.artist.display_name} (@{data.artist.handle})" />
+		<meta name="twitter:description" content="listen to music by {data.artist.display_name} on relay" />
+		{#if data.artist.avatar_url}
+			<meta name="twitter:image" content="{data.artist.avatar_url}" />
+		{/if}
+	{/if}
+</svelte:head>
+
 {#if loading}
 	<div class="loading">loading...</div>
 {:else if error}
@@ -70,7 +100,8 @@
 		<a href="/">go home</a>
 	</div>
 {:else if artist}
-	<Header user={null} onLogout={() => {}} />
+
+	<Header user={null} onLogout={async () => {}} />
 
 	<main>
 		<section class="artist-header">
