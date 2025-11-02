@@ -156,9 +156,33 @@ async def upload_track(
 
 
 @router.get("/")
-async def list_tracks(db: Session = Depends(get_db)) -> dict:
-    """list all tracks."""
-    tracks = db.query(Track).join(Artist).order_by(Track.created_at.desc()).all()
+async def list_tracks(
+    artist_did: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    """list all tracks, optionally filtered by artist DID."""
+    from atproto_identity.did.resolver import AsyncDidResolver
+
+    query = db.query(Track).join(Artist)
+
+    # filter by artist if provided
+    if artist_did:
+        query = query.filter(Track.artist_did == artist_did)
+
+    tracks = query.order_by(Track.created_at.desc()).all()
+
+    # resolve PDS URLs for each unique artist DID
+    resolver = AsyncDidResolver()
+    pds_cache = {}
+
+    for track in tracks:
+        if track.artist_did not in pds_cache:
+            try:
+                atproto_data = await resolver.resolve_atproto_data(track.artist_did)
+                pds_cache[track.artist_did] = atproto_data.pds
+            except Exception as e:
+                logger.warning(f"failed to resolve PDS for {track.artist_did}: {e}")
+                pds_cache[track.artist_did] = None
 
     return {
         "tracks": [
@@ -174,6 +198,13 @@ async def list_tracks(db: Session = Depends(get_db)) -> dict:
                 "features": track.features,
                 "r2_url": track.r2_url,
                 "atproto_record_uri": track.atproto_record_uri,
+                "atproto_record_url": (
+                    f"{pds_cache[track.artist_did]}/xrpc/com.atproto.repo.getRecord"
+                    f"?repo={track.artist_did}&collection=app.relay.track"
+                    f"&rkey={track.atproto_record_uri.split('/')[-1]}"
+                    if track.atproto_record_uri and pds_cache.get(track.artist_did)
+                    else None
+                ),
                 "play_count": track.play_count,
                 "created_at": track.created_at.isoformat(),
             }
