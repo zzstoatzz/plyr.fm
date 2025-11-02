@@ -10,6 +10,8 @@ on:
       - "uv.lock"
       - "Dockerfile"
       - "fly.toml"
+      - "alembic/**"
+      - "alembic.ini"
       - ".github/workflows/deploy-backend.yml"
 
 jobs:
@@ -20,9 +22,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: detect changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: .github/path-filters.yml
+
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: deploy to fly.io
         run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: run database migrations
+        if: steps.changes.outputs.migrations == 'true'
+        run: |
+          echo "migrations detected, running alembic upgrade..."
+          flyctl ssh console -a relay-api -C "uv run alembic upgrade head"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: verify migration
+        if: steps.changes.outputs.migrations == 'true'
+        run: |
+          echo "verifying migration succeeded..."
+          REVISION=$(flyctl ssh console -a relay-api -C "uv run alembic current" 2>&1 | grep -v "Connecting to" | grep -v "INFO")
+          echo "current alembic revision: $REVISION"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

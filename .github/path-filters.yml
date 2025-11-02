@@ -1,0 +1,4 @@
+migrations:
+  - "alembic/versions/**"
+  - "alembic/env.py"
+  - "alembic.ini"
