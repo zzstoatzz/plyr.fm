@@ -161,8 +161,6 @@ async def handle_oauth_callback(
         ) from e
 
 
-
-
 def check_artist_profile_exists(did: str) -> bool:
     """check if artist profile exists for a DID."""
     from relay.models import Artist
