@@ -14,9 +14,9 @@ dev:
 
 # run tests with docker-compose
 test:
-    docker compose -f docker-compose.test.yml up -d
+    docker compose -f tests/docker-compose.yml up -d
     uv run pytest tests/
-    docker compose -f docker-compose.test.yml down
+    docker compose -f tests/docker-compose.yml down
 
 # deploy backend to fly.io
 deploy-backend:
