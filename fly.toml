@@ -4,8 +4,7 @@ primary_region = 'iad'
 [build]
 
 [deploy]
-  # temporarily disabled due to VM startup timeouts - migrations are up to date
-  # release_command = './scripts/migrate.sh'
+  release_command = "uv run alembic upgrade head"
 
 [http_service]
   internal_port = 8000
