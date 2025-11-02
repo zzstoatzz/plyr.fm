@@ -66,9 +66,9 @@ def get_session(session_id: str) -> Session | None:
     """retrieve session by id."""
     db = next(get_db())
     try:
-        db_session = db.query(UserSession).filter(
-            UserSession.session_id == session_id
-        ).first()
+        db_session = (
+            db.query(UserSession).filter(UserSession.session_id == session_id).first()
+        )
 
         if not db_session:
             return None
@@ -87,9 +87,9 @@ def update_session_tokens(session_id: str, oauth_session_data: dict) -> None:
     """update OAuth session data for a session (e.g., after token refresh)."""
     db = next(get_db())
     try:
-        db_session = db.query(UserSession).filter(
-            UserSession.session_id == session_id
-        ).first()
+        db_session = (
+            db.query(UserSession).filter(UserSession.session_id == session_id).first()
+        )
 
         if db_session:
             db_session.oauth_session_data = json.dumps(oauth_session_data)
@@ -102,9 +102,7 @@ def delete_session(session_id: str) -> None:
     """delete a session."""
     db = next(get_db())
     try:
-        db.query(UserSession).filter(
-            UserSession.session_id == session_id
-        ).delete()
+        db.query(UserSession).filter(UserSession.session_id == session_id).delete()
         db.commit()
     finally:
         db.close()
@@ -122,7 +120,9 @@ async def start_oauth_flow(handle: str) -> tuple[str, str]:
         ) from e
 
 
-async def handle_oauth_callback(code: str, state: str, iss: str) -> tuple[str, str, dict]:
+async def handle_oauth_callback(
+    code: str, state: str, iss: str
+) -> tuple[str, str, dict]:
     """handle OAuth callback and return (did, handle, oauth_session)."""
     try:
         oauth_session = await oauth_client.handle_callback(
@@ -161,7 +161,7 @@ async def handle_oauth_callback(code: str, state: str, iss: str) -> tuple[str, s
         ) from e
 
 
-from fastapi import Cookie, Header, HTTPException
+from fastapi import Header
 
 
 def check_artist_profile_exists(did: str) -> bool:

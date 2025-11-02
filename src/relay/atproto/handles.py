@@ -1,7 +1,8 @@
 """ATProto handle resolution for featured artists."""
 
-import httpx
 import logging
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,9 @@ async def resolve_handle(handle: str) -> dict | None:
             )
 
             if did_response.status_code != 200:
-                logger.warning(f"failed to resolve handle {handle}: {did_response.status_code}")
+                logger.warning(
+                    f"failed to resolve handle {handle}: {did_response.status_code}"
+                )
                 return None
 
             did = did_response.json()["did"]
@@ -41,7 +44,9 @@ async def resolve_handle(handle: str) -> dict | None:
             )
 
             if profile_response.status_code != 200:
-                logger.warning(f"failed to fetch profile for {did}: {profile_response.status_code}")
+                logger.warning(
+                    f"failed to fetch profile for {did}: {profile_response.status_code}"
+                )
                 # return basic info even if profile fetch fails
                 return {
                     "did": did,
@@ -88,7 +93,9 @@ async def search_handles(query: str, limit: int = 10) -> list[dict]:
             )
 
             if response.status_code != 200:
-                logger.warning(f"search failed for query {query}: {response.status_code}")
+                logger.warning(
+                    f"search failed for query {query}: {response.status_code}"
+                )
                 return []
 
             actors = response.json().get("actors", [])

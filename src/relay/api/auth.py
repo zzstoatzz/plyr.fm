@@ -1,10 +1,9 @@
 """authentication api endpoints."""
 
 from typing import Annotated
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from relay.auth import (
@@ -54,7 +53,7 @@ async def oauth_callback(
     # pass session_id as URL parameter for cross-domain auth
     response = RedirectResponse(
         url=f"{settings.frontend_url}{redirect_path}?session_id={session_id}",
-        status_code=303
+        status_code=303,
     )
     return response
 
@@ -67,7 +66,9 @@ async def logout(session: Session = Depends(require_auth)) -> dict:
 
 
 @router.get("/me")
-async def get_current_user(session: Session = Depends(require_auth)) -> CurrentUserResponse:
+async def get_current_user(
+    session: Session = Depends(require_auth),
+) -> CurrentUserResponse:
     """get current authenticated user."""
     return CurrentUserResponse(
         did=session.did,

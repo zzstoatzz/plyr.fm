@@ -19,10 +19,10 @@ class FilesystemStorage:
         """save audio file and return file id."""
         # read file content
         content = file.read()
-        
+
         # generate file id from content hash
         file_id = hashlib.sha256(content).hexdigest()[:16]
-        
+
         # determine file extension
         ext = Path(filename).suffix.lower()
         audio_format = AudioFormat.from_extension(ext)
@@ -31,11 +31,11 @@ class FilesystemStorage:
                 f"unsupported file type: {ext}. "
                 f"supported: {AudioFormat.supported_extensions_str()}"
             )
-        
+
         # save file
         file_path = self.base_path / f"{file_id}{ext}"
         file_path.write_bytes(content)
-        
+
         return file_id
 
     def get_path(self, file_id: str) -> Path | None:

@@ -5,16 +5,16 @@ from enum import Enum
 
 class AudioFormat(str, Enum):
     """supported audio formats."""
-    
+
     MP3 = "mp3"
     WAV = "wav"
     M4A = "m4a"
-    
+
     @property
     def extension(self) -> str:
         """get file extension with dot."""
         return f".{self.value}"
-    
+
     @property
     def media_type(self) -> str:
         """get http media type."""
@@ -24,7 +24,7 @@ class AudioFormat(str, Enum):
             AudioFormat.M4A: "audio/mp4",
         }
         return media_types[self]
-    
+
     @classmethod
     def from_extension(cls, ext: str) -> "AudioFormat | None":
         """get format from file extension (with or without dot)."""
@@ -33,7 +33,7 @@ class AudioFormat(str, Enum):
             if format.value == ext:
                 return format
         return None
-    
+
     @classmethod
     def all_extensions(cls) -> list[str]:
         """get all supported extensions with dots."""

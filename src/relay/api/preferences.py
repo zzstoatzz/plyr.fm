@@ -1,6 +1,6 @@
 """user preferences api endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
 
@@ -51,7 +51,9 @@ async def update_preferences(
 
     if not prefs:
         # create new preferences
-        prefs = UserPreferences(did=session.did, accent_color=update.accent_color or "#6a9fff")
+        prefs = UserPreferences(
+            did=session.did, accent_color=update.accent_color or "#6a9fff"
+        )
         db.add(prefs)
     else:
         # update existing

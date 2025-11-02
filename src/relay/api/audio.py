@@ -17,6 +17,7 @@ async def stream_audio(file_id: str):
     if settings.storage_backend == "r2":
         # R2: redirect to public URL
         from relay.storage.r2 import R2Storage
+
         if isinstance(storage, R2Storage):
             url = storage.get_url(file_id)
             if not url:

@@ -21,7 +21,7 @@ def test_r2_upload():
 
     # verify we're using R2 storage
     assert isinstance(storage, R2Storage), f"expected R2Storage, got {type(storage)}"
-    print(f"✓ using R2 storage")
+    print("✓ using R2 storage")
 
     # upload file
     with open(test_file, "rb") as f:

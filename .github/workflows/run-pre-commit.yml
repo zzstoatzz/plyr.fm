@@ -1,0 +1,40 @@
+name: pre-commit checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pre_commit:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: install dependencies
+        run: uv sync
+
+      - name: check lockfile is up to date
+        run: |
+          if ! uv lock --check; then
+            echo "❌ lockfile is out of date!"
+            echo "to update the lockfile, run 'uv lock'."
+            exit 1
+          fi
+          echo "✅ lockfile is up to date"
+
+      - name: run pre-commit
+        run: uv run pre-commit run --all-files
+        env:
+          SKIP: no-commit-to-branch
