@@ -7,7 +7,7 @@ from typing import Annotated
 
 from atproto_oauth import OAuthClient
 from atproto_oauth.stores.memory import MemorySessionStore, MemoryStateStore
-from fastapi import Cookie, HTTPException
+from fastapi import Cookie, Header, HTTPException
 
 from relay.config import settings
 from relay.models import UserSession, get_db
@@ -161,7 +161,6 @@ async def handle_oauth_callback(
         ) from e
 
 
-from fastapi import Header
 
 
 def check_artist_profile_exists(did: str) -> bool:
