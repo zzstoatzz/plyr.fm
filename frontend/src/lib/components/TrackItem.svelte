@@ -99,14 +99,14 @@
 
 	.track-container:hover {
 		background: #1a1a1a;
-		border-left-color: #6a9fff;
+		border-left-color: var(--accent);
 		border-color: #333;
 		transform: translateX(2px);
 	}
 
 	.track-container.playing {
 		background: #1a2330;
-		border-left-color: #6a9fff;
+		border-left-color: var(--accent);
 		border-color: #2a3a4a;
 	}
 
@@ -146,7 +146,7 @@
 	}
 
 	.track-avatar:hover img {
-		border-color: #6a9fff;
+		border-color: var(--accent);
 	}
 
 	.track-info {
@@ -195,7 +195,7 @@
 	}
 
 	.artist-link:hover {
-		color: #6a9fff;
+		color: var(--accent);
 	}
 
 	.features {
@@ -245,8 +245,8 @@
 
 	.action-button:hover {
 		background: #1a1a1a;
-		border-color: #6a9fff;
-		color: #6a9fff;
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.action-button svg {

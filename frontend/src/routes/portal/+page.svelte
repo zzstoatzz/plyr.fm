@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import Header from '$lib/components/Header.svelte';
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import type { User, Track, FeaturedArtist} from '$lib/types';
 	import { API_URL } from '$lib/config';
 
@@ -299,8 +300,13 @@
 					{/if}
 				</div>
 
-				<button type="submit" disabled={uploading || !file}>
-					{uploading ? 'uploading...' : 'upload track'}
+				<button type="submit" disabled={uploading || !file} class="upload-btn">
+					{#if uploading}
+						<LoadingSpinner size="sm" />
+						<span>uploading...</span>
+					{:else}
+						<span>upload track</span>
+					{/if}
 				</button>
 			</form>
 		</section>
@@ -309,7 +315,10 @@
 			<h2>your tracks</h2>
 
 			{#if loadingTracks}
-				<p class="empty">loading tracks...</p>
+				<div class="loading-container">
+					<LoadingSpinner size="lg" />
+					<p class="loading-text">loading tracks...</p>
+				</div>
 			{:else if tracks.length === 0}
 				<p class="empty">no tracks uploaded yet</p>
 			{:else}
@@ -684,7 +693,7 @@
 	.edit-btn:hover {
 		background: rgba(106, 159, 255, 0.1);
 		border-color: rgba(106, 159, 255, 0.5);
-		color: #6a9fff;
+		color: var(--accent);
 		transform: none;
 		box-shadow: none;
 	}
@@ -729,6 +738,27 @@
 
 	.edit-input:focus {
 		outline: none;
-		border-color: #6a9fff;
+		border-color: var(--accent);
+	}
+
+	.upload-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+	}
+
+	.loading-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		padding: 3rem 1rem;
+	}
+
+	.loading-text {
+		margin: 0;
+		color: var(--text-secondary);
+		font-size: 0.9rem;
 	}
 </style>

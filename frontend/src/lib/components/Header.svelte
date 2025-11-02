@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import type { User } from '$lib/types';
+	import ColorSettings from './ColorSettings.svelte';
 
 	interface Props {
 		user: User | null;
@@ -20,6 +21,7 @@
 		</a>
 
 		<nav>
+			<ColorSettings />
 			{#if isAuthenticated}
 				<div class="nav-links">
 					{#if $page.url.pathname !== '/portal'}
@@ -63,20 +65,20 @@
 	}
 
 	.brand:hover h1 {
-		color: #6a9fff;
+		color: var(--accent);
 	}
 
 	h1 {
 		font-size: 1.5rem;
 		margin: 0;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		transition: color 0.2s;
 	}
 
 	.brand p {
 		margin: 0;
 		font-size: 0.85rem;
-		color: #909090;
+		color: var(--text-tertiary);
 	}
 
 	nav {
@@ -92,14 +94,14 @@
 	}
 
 	.nav-link {
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		text-decoration: none;
 		font-size: 0.9rem;
 		transition: color 0.2s;
 	}
 
 	.nav-link:hover {
-		color: #e8e8e8;
+		color: var(--text-primary);
 	}
 
 	.divider {
@@ -120,8 +122,8 @@
 
 	.btn-primary {
 		background: transparent;
-		border: 1px solid #6a9fff;
-		color: #6a9fff;
+		border: 1px solid var(--accent);
+		color: var(--accent);
 		padding: 0.5rem 1rem;
 		border-radius: 4px;
 		font-size: 0.9rem;
@@ -131,8 +133,8 @@
 	}
 
 	.btn-primary:hover {
-		background: #6a9fff;
-		color: #0a0a0a;
+		background: var(--accent);
+		color: var(--bg-primary);
 	}
 
 	.btn-secondary {

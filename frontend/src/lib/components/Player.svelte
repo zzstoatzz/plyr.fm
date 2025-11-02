@@ -230,7 +230,7 @@
 	}
 
 	.player-artist-link:hover {
-		color: #6a9fff;
+		color: var(--accent);
 	}
 
 	.player-controls {
@@ -254,7 +254,7 @@
 	}
 
 	.control-btn:hover {
-		color: #6a9fff;
+		color: var(--accent);
 		background: rgba(106, 159, 255, 0.1);
 	}
 
@@ -302,7 +302,7 @@
 	}
 
 	.volume-icon .max-volume {
-		color: #6a9fff;
+		color: var(--accent);
 		animation: pulse 0.5s ease-in-out;
 	}
 
@@ -333,7 +333,7 @@
 	input[type="range"]::-webkit-slider-thumb {
 		-webkit-appearance: none;
 		appearance: none;
-		background: #6a9fff;
+		background: var(--accent);
 		height: 14px;
 		width: 14px;
 		border-radius: 50%;
@@ -352,7 +352,7 @@
 	}
 
 	input[type="range"].max::-webkit-slider-thumb {
-		background: #6a9fff;
+		background: var(--accent);
 		box-shadow: 0 0 0 4px rgba(106, 159, 255, 0.3);
 	}
 
@@ -363,7 +363,7 @@
 	}
 
 	input[type="range"]::-moz-range-thumb {
-		background: #6a9fff;
+		background: var(--accent);
 		height: 14px;
 		width: 14px;
 		border-radius: 50%;
@@ -382,7 +382,7 @@
 	}
 
 	input[type="range"].max::-moz-range-thumb {
-		background: #6a9fff;
+		background: var(--accent);
 		box-shadow: 0 0 0 4px rgba(106, 159, 255, 0.3);
 	}
 

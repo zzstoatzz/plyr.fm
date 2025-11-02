@@ -253,7 +253,7 @@
 	}
 
 	.back-link:hover {
-		color: #6a9fff;
+		color: var(--accent);
 	}
 
 	.tracks h2 {

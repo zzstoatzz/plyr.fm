@@ -119,7 +119,7 @@
 	}
 
 	.error-container a {
-		color: #6a9fff;
+		color: var(--accent);
 		text-decoration: none;
 	}
 
@@ -166,7 +166,7 @@
 	}
 
 	.handle:hover {
-		color: #6a9fff;
+		color: var(--accent);
 	}
 
 	.bio {
