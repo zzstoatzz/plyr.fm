@@ -1,11 +1,15 @@
 """artist model for storing artist profile data."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from relay.models.database import Base
+
+if TYPE_CHECKING:
+    from relay.models.track import Track
 
 
 class Artist(Base):

@@ -59,6 +59,7 @@ async def upload_track(
     r2_url = None
     if settings.storage_backend == "r2":
         from relay.storage.r2 import R2Storage
+
         if isinstance(storage, R2Storage):
             r2_url = storage.get_url(file_id)
 
@@ -76,15 +77,22 @@ async def upload_track(
         try:
             handles_list = json.loads(features)
             if not isinstance(handles_list, list):
-                raise HTTPException(status_code=400, detail="features must be a JSON array of handles")
+                raise HTTPException(
+                    status_code=400, detail="features must be a JSON array of handles"
+                )
 
             if len(handles_list) > MAX_FEATURES:
-                raise HTTPException(status_code=400, detail=f"maximum {MAX_FEATURES} featured artists allowed")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"maximum {MAX_FEATURES} featured artists allowed",
+                )
 
             # resolve each handle
             for handle in handles_list:
                 if not isinstance(handle, str):
-                    raise HTTPException(status_code=400, detail="each feature must be a string handle")
+                    raise HTTPException(
+                        status_code=400, detail="each feature must be a string handle"
+                    )
 
                 # prevent self-featuring
                 if handle.lstrip("@") == artist.handle:
@@ -92,19 +100,23 @@ async def upload_track(
 
                 resolved = await resolve_handle(handle)
                 if not resolved:
-                    raise HTTPException(status_code=400, detail=f"failed to resolve handle: {handle}")
+                    raise HTTPException(
+                        status_code=400, detail=f"failed to resolve handle: {handle}"
+                    )
 
                 featured_artists.append(resolved)
 
         except json.JSONDecodeError as e:
-            raise HTTPException(status_code=400, detail=f"invalid JSON in features: {e}") from e
+            raise HTTPException(
+                status_code=400, detail=f"invalid JSON in features: {e}"
+            ) from e
 
     # create ATProto record (if R2 URL available)
     atproto_uri = None
     atproto_cid = None
     if r2_url:
         try:
-            atproto_uri, atproto_cid = await create_track_record(
+            result = await create_track_record(
                 auth_session=auth_session,
                 title=title,
                 artist=artist.display_name,
@@ -114,6 +126,8 @@ async def upload_track(
                 duration=None,  # TODO: extract from audio file
                 features=featured_artists if featured_artists else None,
             )
+            if result:
+                atproto_uri, atproto_cid = result
         except Exception as e:
             # log but don't fail upload if record creation fails
             logger.warning(f"failed to create ATProto record: {e}", exc_info=True)
@@ -327,15 +341,22 @@ async def update_track_metadata(
         try:
             handles_list = json.loads(features)
             if not isinstance(handles_list, list):
-                raise HTTPException(status_code=400, detail="features must be a JSON array of handles")
+                raise HTTPException(
+                    status_code=400, detail="features must be a JSON array of handles"
+                )
 
             if len(handles_list) > MAX_FEATURES:
-                raise HTTPException(status_code=400, detail=f"maximum {MAX_FEATURES} featured artists allowed")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"maximum {MAX_FEATURES} featured artists allowed",
+                )
 
             # resolve each handle
             for handle in handles_list:
                 if not isinstance(handle, str):
-                    raise HTTPException(status_code=400, detail="each feature must be a string handle")
+                    raise HTTPException(
+                        status_code=400, detail="each feature must be a string handle"
+                    )
 
                 # prevent self-featuring
                 if handle.lstrip("@") == track.artist.handle:
@@ -343,14 +364,18 @@ async def update_track_metadata(
 
                 resolved = await resolve_handle(handle)
                 if not resolved:
-                    raise HTTPException(status_code=400, detail=f"failed to resolve handle: {handle}")
+                    raise HTTPException(
+                        status_code=400, detail=f"failed to resolve handle: {handle}"
+                    )
 
                 featured_artists.append(resolved)
 
             track.features = featured_artists
 
         except json.JSONDecodeError as e:
-            raise HTTPException(status_code=400, detail=f"invalid JSON in features: {e}") from e
+            raise HTTPException(
+                status_code=400, detail=f"invalid JSON in features: {e}"
+            ) from e
 
     db.commit()
     db.refresh(track)

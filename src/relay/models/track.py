@@ -1,12 +1,16 @@
 """track model for storing music metadata."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from relay.models.database import Base
+
+if TYPE_CHECKING:
+    from relay.models.artist import Artist
 
 
 class Track(Base):
@@ -39,7 +43,9 @@ class Track(Base):
     artist: Mapped["Artist"] = relationship("Artist", back_populates="tracks")
 
     # flexible extra fields (album, duration, genre, etc.)
-    extra: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    extra: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
 
     # featured artists (list of {did, handle, display_name})
     features: Mapped[list[dict]] = mapped_column(
@@ -55,7 +61,9 @@ class Track(Base):
     atproto_record_cid: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # engagement metrics
-    play_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    play_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     @property
     def album(self) -> str | None:
