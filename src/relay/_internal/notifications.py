@@ -4,6 +4,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from atproto import Client
+from atproto_client.models.chat.bsky.convo.defs import MessageInput
+from atproto_client.models.chat.bsky.convo.send_message import DataDict
 from sqlalchemy import select
 
 from relay.config import settings
@@ -104,20 +106,25 @@ class NotificationService:
 
     async def _send_track_notification(self, track: Track):
         """send notification about a new track."""
-        if not self.client:
-            logger.warning("bot client not authenticated, skipping notification")
+        if not self.client or not self.recipient_did:
+            logger.warning(
+                "bot client not authenticated or recipient not set, skipping notification"
+            )
             return
 
         try:
             # get or create conversation with the target user
             convo_response = self.client.chat.bsky.convo.get_convo_for_members(
-                {"members": [self.recipient_did]}
+                params={"members": [self.recipient_did]}
             )
+
+            if not convo_response.convo or not convo_response.convo.id:
+                raise ValueError("failed to get conversation ID")
 
             convo_id = convo_response.convo.id
 
             # format the message
-            message = (
+            message_text: str = (
                 f"🎵 new track uploaded!\n\n"
                 f"title: {track.title}\n"
                 f"artist: {track.artist_did}\n"
@@ -126,7 +133,9 @@ class NotificationService:
 
             # send the DM
             self.client.chat.bsky.convo.send_message(
-                {"convo_id": convo_id, "message": {"text": message}}
+                data=DataDict(
+                    convo_id=convo_id, message=MessageInput(text=message_text)
+                )
             )
 
             logger.info(f"sent notification for track {track.id} to {convo_id}")
