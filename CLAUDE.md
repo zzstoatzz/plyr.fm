@@ -21,6 +21,7 @@ music streaming platform on ATProto.
   - no manual intervention required
 - **logs**: `flyctl logs` is BLOCKING - must run in background with `run_in_background=true` then check output with BashOutput
 - **observability**: Logfire for traces/spans - see [docs/logfire-querying.md](docs/logfire-querying.md) for query patterns
+- **type hints**: complete type coverage required - all functions, fixtures, and test parameters must be type hinted
 
 ## testing
 
