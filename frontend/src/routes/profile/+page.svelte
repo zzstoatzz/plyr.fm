@@ -17,9 +17,13 @@
 
 	onMount(async () => {
 		try {
+			const sessionId = localStorage.getItem('session_id');
+
 			// get current user
 			const userResponse = await fetch(`${API_URL}/auth/me`, {
-				credentials: 'include'
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
 			});
 
 			if (!userResponse.ok) {
@@ -31,7 +35,9 @@
 
 			// get artist profile
 			const artistResponse = await fetch(`${API_URL}/artists/me`, {
-				credentials: 'include'
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
 			});
 
 			if (artistResponse.ok) {
@@ -59,12 +65,13 @@
 		success = '';
 
 		try {
+			const sessionId = localStorage.getItem('session_id');
 			const response = await fetch(`${API_URL}/artists/me`, {
 				method: 'PUT',
 				headers: {
-					'Content-Type': 'application/json'
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${sessionId}`
 				},
-				credentials: 'include',
 				body: JSON.stringify({
 					display_name: displayName,
 					bio: bio || null,
@@ -86,9 +93,12 @@
 	}
 
 	async function logout() {
+		const sessionId = localStorage.getItem('session_id');
 		await fetch(`${API_URL}/auth/logout`, {
 			method: 'POST',
-			credentials: 'include'
+			headers: {
+				'Authorization': `Bearer ${sessionId}`
+			}
 		});
 		window.location.href = '/';
 	}

@@ -32,8 +32,11 @@
 	onMount(async () => {
 		// check authentication
 		try {
+			const sessionId = localStorage.getItem('session_id');
 			const authResponse = await fetch(`${API_URL}/auth/me`, {
-				credentials: 'include'
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
 			});
 			if (authResponse.ok) {
 				user = await authResponse.json();
@@ -100,9 +103,12 @@
 	}
 
 	async function logout() {
+		const sessionId = localStorage.getItem('session_id');
 		await fetch(`${API_URL}/auth/logout`, {
 			method: 'POST',
-			credentials: 'include'
+			headers: {
+				'Authorization': `Bearer ${sessionId}`
+			}
 		});
 		user = null;
 	}

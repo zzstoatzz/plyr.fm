@@ -17,8 +17,11 @@
 	onMount(async () => {
 		// try to fetch from backend if authenticated
 		try {
+			const sessionId = localStorage.getItem('session_id');
 			const response = await fetch(`${API_URL}/preferences/`, {
-				credentials: 'include'
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
 			});
 			if (response.ok) {
 				const data = await response.json();
@@ -58,12 +61,13 @@
 
 		// save to backend if authenticated
 		try {
+			const sessionId = localStorage.getItem('session_id');
 			await fetch(`${API_URL}/preferences/`, {
 				method: 'POST',
 				headers: {
-					'Content-Type': 'application/json'
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${sessionId}`
 				},
-				credentials: 'include',
 				body: JSON.stringify({ accent_color: color })
 			});
 		} catch (e) {
