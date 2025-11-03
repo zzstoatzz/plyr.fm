@@ -40,7 +40,9 @@ class Track(Base):
         nullable=False,
         index=True,
     )
-    artist: Mapped["Artist"] = relationship("Artist", back_populates="tracks")
+    artist: Mapped["Artist"] = relationship(
+        "Artist", back_populates="tracks", lazy="raise"
+    )
 
     # flexible extra fields (album, duration, genre, etc.)
     extra: Mapped[dict] = mapped_column(
