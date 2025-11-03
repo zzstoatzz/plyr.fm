@@ -1,22 +1,37 @@
 """tracks api endpoints."""
 
+import asyncio
+import contextlib
 import json
 import logging
+from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+)
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from relay._internal import Session as AuthSession
 from relay._internal import require_artist_profile, require_auth
+from relay._internal.uploads import UploadStatus, upload_tracker
 from relay.atproto import create_track_record
 from relay.atproto.handles import resolve_handle
 from relay.config import settings
 from relay.models import Artist, AudioFormat, Track, get_db
 from relay.storage import storage
+from relay.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tracks", tags=["tracks"])
@@ -25,20 +40,197 @@ router = APIRouter(prefix="/tracks", tags=["tracks"])
 MAX_FEATURES = 5
 
 
+async def _process_upload_background(
+    upload_id: str,
+    file_data: bytes,
+    filename: str,
+    title: str,
+    artist_did: str,
+    album: str | None,
+    features: str | None,
+    auth_session: AuthSession,
+) -> None:
+    """background task to process upload."""
+    try:
+        upload_tracker.update_status(
+            upload_id, UploadStatus.PROCESSING, "processing upload..."
+        )
+
+        # validate file type
+        ext = Path(filename).suffix.lower()
+        audio_format = AudioFormat.from_extension(ext)
+        if not audio_format:
+            upload_tracker.update_status(
+                upload_id,
+                UploadStatus.FAILED,
+                "upload failed",
+                error=f"unsupported file type: {ext}",
+            )
+            return
+
+        # save audio file
+        upload_tracker.update_status(
+            upload_id, UploadStatus.PROCESSING, "saving audio file..."
+        )
+        try:
+            file_obj = BytesIO(file_data)
+            file_id = storage.save(file_obj, filename)
+        except ValueError as e:
+            upload_tracker.update_status(
+                upload_id, UploadStatus.FAILED, "upload failed", error=str(e)
+            )
+            return
+
+        # get R2 URL
+        r2_url = None
+        if settings.storage_backend == "r2":
+            from relay.storage.r2 import R2Storage
+
+            if isinstance(storage, R2Storage):
+                r2_url = storage.get_url(file_id)
+
+        # get artist and resolve features
+        async with db_session() as db:
+            result = await db.execute(select(Artist).where(Artist.did == artist_did))
+            artist = result.scalar_one_or_none()
+            if not artist:
+                upload_tracker.update_status(
+                    upload_id,
+                    UploadStatus.FAILED,
+                    "upload failed",
+                    error="artist profile not found",
+                )
+                return
+
+            # resolve featured artist handles
+            featured_artists = []
+            if features:
+                upload_tracker.update_status(
+                    upload_id, UploadStatus.PROCESSING, "resolving featured artists..."
+                )
+                try:
+                    handles_list = json.loads(features)
+                    if isinstance(handles_list, list):
+                        for handle in handles_list:
+                            if (
+                                isinstance(handle, str)
+                                and handle.lstrip("@") != artist.handle
+                            ):
+                                resolved = await resolve_handle(handle)
+                                if resolved:
+                                    featured_artists.append(resolved)
+                except json.JSONDecodeError:
+                    pass  # ignore malformed features
+
+            # create ATProto record
+            atproto_uri = None
+            atproto_cid = None
+            if r2_url:
+                upload_tracker.update_status(
+                    upload_id, UploadStatus.PROCESSING, "creating atproto record..."
+                )
+                try:
+                    result = await create_track_record(
+                        auth_session=auth_session,
+                        title=title,
+                        artist=artist.display_name,
+                        audio_url=r2_url,
+                        file_type=ext[1:],
+                        album=album,
+                        duration=None,
+                        features=featured_artists if featured_artists else None,
+                    )
+                    if result:
+                        atproto_uri, atproto_cid = result
+                except Exception as e:
+                    logger.warning(
+                        f"failed to create ATProto record: {e}", exc_info=True
+                    )
+
+            # create track record
+            upload_tracker.update_status(
+                upload_id, UploadStatus.PROCESSING, "saving track metadata..."
+            )
+            extra = {}
+            if album:
+                extra["album"] = album
+
+            track = Track(
+                title=title,
+                file_id=file_id,
+                file_type=ext[1:],
+                artist_did=artist_did,
+                extra=extra,
+                features=featured_artists,
+                r2_url=r2_url,
+                atproto_record_uri=atproto_uri,
+                atproto_record_cid=atproto_cid,
+            )
+
+            db.add(track)
+            try:
+                await db.commit()
+                await db.refresh(track)
+
+                # send notification about new track
+                from relay._internal.notifications import notification_service
+
+                try:
+                    # eagerly load artist for notification
+                    await db.refresh(track, ["artist"])
+                    await notification_service.send_track_notification(track)
+                except Exception as e:
+                    logger.warning(
+                        f"failed to send notification for track {track.id}: {e}"
+                    )
+
+                upload_tracker.update_status(
+                    upload_id,
+                    UploadStatus.COMPLETED,
+                    "upload completed successfully",
+                    track_id=track.id,
+                )
+
+            except IntegrityError as e:
+                await db.rollback()
+                error_msg = "this file has already been uploaded"
+                if "tracks_file_id_key" in str(e):
+                    error_msg = (
+                        "duplicate file: this audio file already exists in the database"
+                    )
+                upload_tracker.update_status(
+                    upload_id, UploadStatus.FAILED, "upload failed", error=error_msg
+                )
+                # cleanup: delete uploaded file
+                with contextlib.suppress(Exception):
+                    storage.delete(file_id)
+
+    except Exception as e:
+        logger.exception(f"upload {upload_id} failed with unexpected error")
+        upload_tracker.update_status(
+            upload_id,
+            UploadStatus.FAILED,
+            "upload failed",
+            error=f"unexpected error: {e!s}",
+        )
+
+
 @router.post("/")
 async def upload_track(
     title: Annotated[str, Form()],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
     auth_session: AuthSession = Depends(require_artist_profile),
     album: Annotated[str | None, Form()] = None,
-    features: Annotated[str | None, Form()] = None,  # JSON array of handles
+    features: Annotated[str | None, Form()] = None,
     file: UploadFile = File(...),
 ) -> dict:
     """upload a new track (requires authentication and artist profile).
 
+    returns immediately with upload_id for tracking progress via SSE.
+
     features: optional JSON array of ATProto handles, e.g., ["user1.bsky.social", "user2.bsky.social"]
     """
-    # validate file type
+    # validate file type upfront
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")
 
@@ -51,125 +243,67 @@ async def upload_track(
             f"supported: {AudioFormat.supported_extensions_str()}",
         )
 
-    # save audio file
-    try:
-        file_id = storage.save(file.file, file.filename)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    # read file into memory (so FastAPI can close the upload)
+    file_data = await file.read()
 
-    # get R2 URL
-    r2_url = None
-    if settings.storage_backend == "r2":
-        from relay.storage.r2 import R2Storage
+    # create upload tracking
+    upload_id = upload_tracker.create_upload()
 
-        if isinstance(storage, R2Storage):
-            r2_url = storage.get_url(file_id)
-
-    # get artist profile
-    result = await db.execute(select(Artist).where(Artist.did == auth_session.did))
-    artist = result.scalar_one_or_none()
-    if not artist:
-        raise HTTPException(
-            status_code=500,
-            detail="artist profile not found - this should not happen after require_artist_profile",
+    # spawn background task (fire-and-forget)
+    _task = asyncio.create_task(  # noqa: RUF006
+        _process_upload_background(
+            upload_id=upload_id,
+            file_data=file_data,
+            filename=file.filename,
+            title=title,
+            artist_did=auth_session.did,
+            album=album,
+            features=features,
+            auth_session=auth_session,
         )
-
-    # resolve featured artist handles
-    featured_artists = []
-    if features:
-        try:
-            handles_list = json.loads(features)
-            if not isinstance(handles_list, list):
-                raise HTTPException(
-                    status_code=400, detail="features must be a JSON array of handles"
-                )
-
-            if len(handles_list) > MAX_FEATURES:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"maximum {MAX_FEATURES} featured artists allowed",
-                )
-
-            # resolve each handle
-            for handle in handles_list:
-                if not isinstance(handle, str):
-                    raise HTTPException(
-                        status_code=400, detail="each feature must be a string handle"
-                    )
-
-                # prevent self-featuring
-                if handle.lstrip("@") == artist.handle:
-                    continue  # skip self-feature silently
-
-                resolved = await resolve_handle(handle)
-                if not resolved:
-                    raise HTTPException(
-                        status_code=400, detail=f"failed to resolve handle: {handle}"
-                    )
-
-                featured_artists.append(resolved)
-
-        except json.JSONDecodeError as e:
-            raise HTTPException(
-                status_code=400, detail=f"invalid JSON in features: {e}"
-            ) from e
-
-    # create ATProto record (if R2 URL available)
-    atproto_uri = None
-    atproto_cid = None
-    if r2_url:
-        try:
-            result = await create_track_record(
-                auth_session=auth_session,
-                title=title,
-                artist=artist.display_name,
-                audio_url=r2_url,
-                file_type=ext[1:],  # remove dot
-                album=album,
-                duration=None,  # TODO: extract from audio file
-                features=featured_artists if featured_artists else None,
-            )
-            if result:
-                atproto_uri, atproto_cid = result
-        except Exception as e:
-            # log but don't fail upload if record creation fails
-            logger.warning(f"failed to create ATProto record: {e}", exc_info=True)
-
-    # create track record with artist identity
-    extra = {}
-    if album:
-        extra["album"] = album
-
-    track = Track(
-        title=title,
-        file_id=file_id,
-        file_type=ext[1:],  # remove the dot
-        artist_did=auth_session.did,
-        extra=extra,
-        features=featured_artists,  # list of {did, handle, display_name, avatar_url}
-        r2_url=r2_url,
-        atproto_record_uri=atproto_uri,
-        atproto_record_cid=atproto_cid,
     )
 
-    db.add(track)
-    await db.commit()
-    await db.refresh(track)
-
     return {
-        "id": track.id,
-        "title": track.title,
-        "artist": artist.display_name,
-        "artist_handle": artist.handle,
-        "album": track.album,
-        "file_id": track.file_id,
-        "file_type": track.file_type,
-        "artist_did": track.artist_did,
-        "features": track.features,
-        "r2_url": track.r2_url,
-        "atproto_record_uri": track.atproto_record_uri,
-        "created_at": track.created_at.isoformat(),
+        "upload_id": upload_id,
+        "status": "pending",
+        "message": "upload queued for processing",
     }
+
+
+@router.get("/uploads/{upload_id}/progress")
+async def upload_progress(upload_id: str) -> StreamingResponse:
+    """SSE endpoint for real-time upload progress."""
+
+    async def event_stream():
+        """generate SSE events for upload progress."""
+        queue = await upload_tracker.subscribe(upload_id)
+        try:
+            while True:
+                try:
+                    # wait for next update with timeout
+                    update = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    yield f"data: {json.dumps(update)}\n\n"
+
+                    # if upload completed or failed, close stream
+                    if update["status"] in ("completed", "failed"):
+                        break
+
+                except TimeoutError:
+                    # send keepalive
+                    yield ": keepalive\n\n"
+
+        finally:
+            upload_tracker.unsubscribe(upload_id, queue)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # disable nginx buffering
+        },
+    )
 
 
 @router.get("/")

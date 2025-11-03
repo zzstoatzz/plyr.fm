@@ -5,16 +5,13 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import type { User, Track, FeaturedArtist} from '$lib/types';
 	import { API_URL } from '$lib/config';
+	import { uploader } from '$lib/uploader.svelte';
 
 	let user: User | null = null;
 	let loading = true;
+	let error = '';
 	let tracks: Track[] = [];
 	let loadingTracks = false;
-
-	// form state
-	let uploading = false;
-	let uploadError = '';
-	let uploadSuccess = '';
 
 	// form fields
 	let title = '';
@@ -57,14 +54,19 @@
 			if (response.ok) {
 				user = await response.json();
 				await loadMyTracks();
-			} else {
-				// session invalid, clear and redirect
+			} else if (response.status === 401) {
+				// only clear session on explicit 401 (unauthorized)
 				localStorage.removeItem('session_id');
 				window.location.href = '/login';
+			} else {
+				// other error (500, etc.) - show error but don't clear session
+				console.error('failed to check auth status:', response.status);
+				error = 'server error - please try again later';
 			}
 		} catch (e) {
-			localStorage.removeItem('session_id');
-			window.location.href = '/login';
+			// network error - show error but keep session
+			console.error('network error checking auth:', e);
+			error = 'network error - please check your connection';
 		} finally {
 			loading = false;
 		}
@@ -90,54 +92,32 @@
 		}
 	}
 
-	async function handleUpload(e: SubmitEvent) {
+	function handleUpload(e: SubmitEvent) {
 		e.preventDefault();
 		if (!file) return;
 
-		uploading = true;
-		uploadError = '';
-		uploadSuccess = '';
+		// capture values before clearing form
+		const uploadFile = file;
+		const uploadTitle = title;
+		const uploadAlbum = album;
+		const uploadFeatures = [...featuredArtists];
 
-		const sessionId = localStorage.getItem('session_id');
-		const formData = new FormData();
-		formData.append('file', file);
-		formData.append('title', title);
-		if (album) formData.append('album', album);
-		if (featuredArtists.length > 0) {
-			// send features as JSON array of handles
-			const handles = featuredArtists.map(a => a.handle);
-			formData.append('features', JSON.stringify(handles));
+		// clear form immediately
+		title = '';
+		album = '';
+		file = null;
+		featuredArtists = [];
+
+		// reset file input
+		const fileInput = document.getElementById('file-input') as HTMLInputElement;
+		if (fileInput) {
+			fileInput.value = '';
 		}
 
-		try {
-			const response = await fetch(`${API_URL}/tracks/`, {
-				method: 'POST',
-				body: formData,
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
-			});
-
-			if (response.ok) {
-				uploadSuccess = 'track uploaded successfully!';
-				// reset form
-				title = '';
-				album = '';
-				file = null;
-				featuredArtists = [];
-				// @ts-ignore
-				document.getElementById('file-input').value = '';
-				// reload tracks
-				await loadMyTracks();
-			} else {
-				const error = await response.json();
-				uploadError = error.detail || `upload failed (${response.status} ${response.statusText})`;
-			}
-		} catch (e) {
-			uploadError = `network error: ${e instanceof Error ? e.message : 'unknown error'}`;
-		} finally {
-			uploading = false;
-		}
+		// delegate to global uploader
+		uploader.upload(uploadFile, uploadTitle, uploadAlbum, uploadFeatures, () => {
+			loadMyTracks();
+		});
 	}
 
 	async function deleteTrack(trackId: number, trackTitle: string) {
@@ -233,8 +213,13 @@
 
 {#if loading}
 	<div class="loading">loading...</div>
+{:else if error}
+	<div class="error-container">
+		<h1>{error}</h1>
+		<a href="/">go home</a>
+	</div>
 {:else if user}
-	<Header {user} onLogout={logout} />
+	<Header {user} isAuthenticated={!!user} onLogout={logout} />
 	<main>
 		<div class="portal-header">
 			<h2>artist portal</h2>
@@ -242,14 +227,6 @@
 
 		<section class="upload-section">
 			<h2>upload track</h2>
-
-			{#if uploadSuccess}
-				<div class="message success">{uploadSuccess}</div>
-			{/if}
-
-			{#if uploadError}
-				<div class="message error">{uploadError}</div>
-			{/if}
 
 			<form onsubmit={handleUpload}>
 				<div class="form-group">
@@ -259,7 +236,6 @@
 						type="text"
 						bind:value={title}
 						required
-						disabled={uploading}
 						placeholder="my awesome song"
 					/>
 				</div>
@@ -270,7 +246,6 @@
 						id="album"
 						type="text"
 						bind:value={album}
-						disabled={uploading}
 						placeholder="album name"
 					/>
 				</div>
@@ -281,7 +256,6 @@
 						bind:selected={featuredArtists}
 						onAdd={(artist) => { featuredArtists = [...featuredArtists, artist]; }}
 						onRemove={(did) => { featuredArtists = featuredArtists.filter(a => a.did !== did); }}
-						disabled={uploading}
 					/>
 				</div>
 
@@ -293,20 +267,14 @@
 						accept="audio/*"
 						onchange={handleFileChange}
 						required
-						disabled={uploading}
 					/>
 					{#if file}
 						<p class="file-info">{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</p>
 					{/if}
 				</div>
 
-				<button type="submit" disabled={uploading || !file} class="upload-btn">
-					{#if uploading}
-						<LoadingSpinner size="sm" />
-						<span>uploading...</span>
-					{:else}
-						<span>upload track</span>
-					{/if}
+				<button type="submit" disabled={!file} class="upload-btn">
+					<span>upload track</span>
 				</button>
 			</form>
 		</section>
@@ -417,12 +385,24 @@
 {/if}
 
 <style>
-	.loading {
+	.loading,
+	.error-container {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
 		min-height: 100vh;
 		color: #888;
+		gap: 1rem;
+	}
+
+	.error-container a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.error-container a:hover {
+		text-decoration: underline;
 	}
 
 	main {
@@ -444,24 +424,6 @@
 	.upload-section h2 {
 		font-size: 1.5rem;
 		margin-bottom: 1.5rem;
-	}
-
-	.message {
-		padding: 1rem;
-		border-radius: 4px;
-		margin-bottom: 1.5rem;
-	}
-
-	.message.success {
-		background: rgba(46, 160, 67, 0.1);
-		border: 1px solid rgba(46, 160, 67, 0.3);
-		color: #5ce87b;
-	}
-
-	.message.error {
-		background: rgba(233, 69, 96, 0.1);
-		border: 1px solid rgba(233, 69, 96, 0.3);
-		color: #ff6b6b;
 	}
 
 	form {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
 	import Player from '$lib/components/Player.svelte';
+	import Toast from '$lib/components/Toast.svelte';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
@@ -60,6 +61,7 @@
 
 {@render children?.()}
 <Player />
+<Toast />
 
 <style>
 	:global(*),
