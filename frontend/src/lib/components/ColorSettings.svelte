@@ -16,23 +16,18 @@
 
 	onMount(async () => {
 		// try to fetch from backend if authenticated
-		const sessionId = localStorage.getItem('session_id');
-		if (sessionId) {
-			try {
-				const response = await fetch(`${API_URL}/preferences/`, {
-					headers: {
-						'Authorization': `Bearer ${sessionId}`
-					}
-				});
-				if (response.ok) {
-					const data = await response.json();
-					currentColor = data.accent_color;
-					applyColorLocally(data.accent_color);
-					return;
-				}
-			} catch (e) {
-				console.error('failed to fetch preferences:', e);
+		try {
+			const response = await fetch(`${API_URL}/preferences/`, {
+				credentials: 'include'
+			});
+			if (response.ok) {
+				const data = await response.json();
+				currentColor = data.accent_color;
+				applyColorLocally(data.accent_color);
+				return;
 			}
+		} catch (e) {
+			console.error('failed to fetch preferences:', e);
 		}
 
 		// fallback to localStorage
@@ -62,20 +57,17 @@
 		localStorage.setItem('accentColor', color);
 
 		// save to backend if authenticated
-		const sessionId = localStorage.getItem('session_id');
-		if (sessionId) {
-			try {
-				await fetch(`${API_URL}/preferences/`, {
-					method: 'POST',
-					headers: {
-						'Authorization': `Bearer ${sessionId}`,
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify({ accent_color: color })
-				});
-			} catch (e) {
-				console.error('failed to save preferences:', e);
-			}
+		try {
+			await fetch(`${API_URL}/preferences/`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				credentials: 'include',
+				body: JSON.stringify({ accent_color: color })
+			});
+		} catch (e) {
+			console.error('failed to save preferences:', e);
 		}
 	}
 

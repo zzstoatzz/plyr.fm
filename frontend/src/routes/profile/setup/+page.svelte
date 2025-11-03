@@ -15,31 +15,20 @@
 	let avatarUrl = '';
 
 	onMount(async () => {
-		// check if session_id is in URL (from OAuth callback)
+		// check if exchange_token is in URL (from OAuth callback) and remove it
+		// the HttpOnly cookie is already set by the backend
 		const params = new URLSearchParams(window.location.search);
-		const sessionId = params.get('session_id');
+		const exchangeToken = params.get('exchange_token');
 
-		if (sessionId) {
-			// store session_id in localStorage
-			localStorage.setItem('session_id', sessionId);
-			// remove from URL
+		if (exchangeToken) {
+			// remove exchange_token from URL (cookie is already set)
 			window.history.replaceState({}, '', '/profile/setup');
 		}
 
-		// get session_id from localStorage
-		const storedSessionId = localStorage.getItem('session_id');
-
-		if (!storedSessionId) {
-			window.location.href = '/login';
-			return;
-		}
-
+		// check authentication using HttpOnly cookie
 		try {
-			// get current user
 			const response = await fetch(`${API_URL}/auth/me`, {
-				headers: {
-					'Authorization': `Bearer ${storedSessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (response.ok) {
@@ -49,14 +38,16 @@
 
 				// try to fetch avatar from bluesky
 				await fetchAvatar();
-			} else {
-				// session invalid, clear and redirect
-				localStorage.removeItem('session_id');
+			} else if (response.status === 401) {
+				// not authenticated - redirect to login
 				window.location.href = '/login';
+			} else {
+				// other error (500, etc.) - show error
+				error = 'server error - please try again later';
 			}
 		} catch (e) {
-			localStorage.removeItem('session_id');
-			window.location.href = '/login';
+			// network error - show error
+			error = 'network error - please check your connection';
 		} finally {
 			loading = false;
 		}
@@ -66,14 +57,11 @@
 		if (!user) return;
 
 		fetchingAvatar = true;
-		const sessionId = localStorage.getItem('session_id');
 
 		try {
 			// call our backend which will use the Bluesky API
 			const response = await fetch(`${API_URL}/artists/${user.did}`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			// if artist profile already exists, redirect to portal
@@ -95,15 +83,13 @@
 		saving = true;
 		error = '';
 
-		const sessionId = localStorage.getItem('session_id');
-
 		try {
 			const response = await fetch(`${API_URL}/artists/`, {
 				method: 'POST',
 				headers: {
-					'Authorization': `Bearer ${sessionId}`,
 					'Content-Type': 'application/json'
 				},
+				credentials: 'include',
 				body: JSON.stringify({
 					display_name: displayName,
 					bio: bio || null,

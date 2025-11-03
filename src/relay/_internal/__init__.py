@@ -3,6 +3,8 @@
 from relay._internal.auth import (
     Session,
     check_artist_profile_exists,
+    consume_exchange_token,
+    create_exchange_token,
     create_session,
     delete_session,
     handle_oauth_callback,
@@ -17,6 +19,8 @@ from relay._internal.notifications import notification_service
 __all__ = [
     "Session",
     "check_artist_profile_exists",
+    "consume_exchange_token",
+    "create_exchange_token",
     "create_session",
     "delete_session",
     "handle_oauth_callback",

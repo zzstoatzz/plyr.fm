@@ -6,6 +6,7 @@ music streaming platform on ATProto.
 
 - **issues**: tracked in GitHub, not Linear
 - **pull requests**: always create a PR for review before merging to main - we will have users soon
+- **PR review comments**: to get inline review comments, use `gh api repos/{owner}/{repo}/pulls/{pr}/reviews/{review_id}/comments` (get review_id first with `gh api repos/{owner}/{repo}/pulls/{pr}/reviews -q '.[0].id'`)
 - **testing**: empirical first - run code and prove it works before writing tests
 - **testing async**: NEVER use `@pytest.mark.asyncio` - pytest is configured with `asyncio_mode = "auto"` in pyproject.toml
 - **auth**: OAuth 2.1 implementation from fork (`git+https://github.com/zzstoatzz/atproto@main`)

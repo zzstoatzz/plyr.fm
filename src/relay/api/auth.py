@@ -2,13 +2,15 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from relay._internal import (
     Session,
     check_artist_profile_exists,
+    consume_exchange_token,
+    create_exchange_token,
     create_session,
     delete_session,
     handle_oauth_callback,
@@ -40,9 +42,16 @@ async def oauth_callback(
     state: Annotated[str, Query()],
     iss: Annotated[str, Query()],
 ) -> RedirectResponse:
-    """handle OAuth callback and create session."""
+    """handle OAuth callback and create session with HttpOnly cookie.
+
+    sets secure HttpOnly cookie to prevent XSS attacks. also provides
+    exchange token in URL as fallback for cross-domain scenarios.
+    """
     did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
     session_id = await create_session(did, handle, oauth_session)
+
+    # create one-time exchange token as fallback for cross-domain (expires in 60 seconds)
+    exchange_token = await create_exchange_token(session_id)
 
     # check if artist profile exists
     has_profile = await check_artist_profile_exists(did)
@@ -50,12 +59,54 @@ async def oauth_callback(
     # redirect to profile setup if needed, otherwise to portal
     redirect_path = "/portal" if has_profile else "/profile/setup"
 
-    # pass session_id as URL parameter for cross-domain auth
+    # create response with exchange_token (fallback for cross-domain)
     response = RedirectResponse(
-        url=f"{settings.frontend_url}{redirect_path}?session_id={session_id}",
+        url=f"{settings.frontend_url}{redirect_path}?exchange_token={exchange_token}",
         status_code=303,
     )
+
+    # set HttpOnly cookie (primary auth mechanism for same-domain)
+    response.set_cookie(
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        secure=True,  # only send over HTTPS
+        samesite="lax",  # CSRF protection
+        max_age=1209600,  # 2 weeks (matches session expiration)
+        path="/",
+    )
+
     return response
+
+
+class ExchangeTokenRequest(BaseModel):
+    """request model for exchanging token for session_id."""
+
+    exchange_token: str
+
+
+class ExchangeTokenResponse(BaseModel):
+    """response model for exchange token endpoint."""
+
+    session_id: str
+
+
+@router.post("/exchange")
+async def exchange_token(request: ExchangeTokenRequest) -> ExchangeTokenResponse:
+    """exchange one-time token for session_id.
+
+    frontend calls this immediately after OAuth callback to securely
+    exchange the short-lived token for the actual session_id.
+    """
+    session_id = await consume_exchange_token(request.exchange_token)
+
+    if not session_id:
+        raise HTTPException(
+            status_code=401,
+            detail="invalid, expired, or already used exchange token",
+        )
+
+    return ExchangeTokenResponse(session_id=session_id)
 
 
 @router.post("/logout")

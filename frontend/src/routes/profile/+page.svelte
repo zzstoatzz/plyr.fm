@@ -16,23 +16,13 @@
 	let avatarUrl = '';
 
 	onMount(async () => {
-		const sessionId = localStorage.getItem('session_id');
-
-		if (!sessionId) {
-			window.location.href = '/login';
-			return;
-		}
-
 		try {
 			// get current user
 			const userResponse = await fetch(`${API_URL}/auth/me`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (!userResponse.ok) {
-				localStorage.removeItem('session_id');
 				window.location.href = '/login';
 				return;
 			}
@@ -41,9 +31,7 @@
 
 			// get artist profile
 			const artistResponse = await fetch(`${API_URL}/artists/me`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (artistResponse.ok) {
@@ -70,15 +58,13 @@
 		error = '';
 		success = '';
 
-		const sessionId = localStorage.getItem('session_id');
-
 		try {
 			const response = await fetch(`${API_URL}/artists/me`, {
 				method: 'PUT',
 				headers: {
-					'Authorization': `Bearer ${sessionId}`,
 					'Content-Type': 'application/json'
 				},
+				credentials: 'include',
 				body: JSON.stringify({
 					display_name: displayName,
 					bio: bio || null,
@@ -100,14 +86,10 @@
 	}
 
 	async function logout() {
-		const sessionId = localStorage.getItem('session_id');
 		await fetch(`${API_URL}/auth/logout`, {
 			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${sessionId}`
-			}
+			credentials: 'include'
 		});
-		localStorage.removeItem('session_id');
 		window.location.href = '/';
 	}
 </script>
