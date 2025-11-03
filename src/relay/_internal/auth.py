@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from typing import Annotated, Any
 
 from atproto_oauth import OAuthClient
-from atproto_oauth.stores.memory import MemorySessionStore, MemoryStateStore
+from atproto_oauth.stores.memory import MemorySessionStore
 from fastapi import Cookie, Header, HTTPException
 from sqlalchemy import select
 
 from relay.config import settings
 from relay.models import UserSession
+from relay.stores import PostgresStateStore
 from relay.utilities.database import db_session
 
 
@@ -29,8 +30,10 @@ class Session:
         return self.oauth_session.get("session_id", self.did)
 
 
-# OAuth stores (state store still in-memory for now)
-_state_store = MemoryStateStore()
+# OAuth stores
+# state store: postgres-backed for multi-instance resilience
+# session store: in-memory (not used, we use UserSession table instead)
+_state_store = PostgresStateStore()
 _session_store = MemorySessionStore()
 
 # OAuth client

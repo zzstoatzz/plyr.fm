@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     app_name: str = "relay"
     debug: bool = False
     port: int = Field(default=8001, description="Server port")
+    background_task_interval_seconds: int = Field(
+        default=60, description="Interval for background tasks in seconds"
+    )
 
     # database
     database_url: str = Field(
