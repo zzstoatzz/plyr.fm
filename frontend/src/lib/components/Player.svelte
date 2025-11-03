@@ -6,6 +6,12 @@
 	let formattedCurrentTime = $derived(formatTime(player.currentTime));
 	let formattedDuration = $derived(formatTime(player.duration));
 
+	// compute progress percentage for seek bar styling
+	let progressPercent = $derived.by(() => {
+		if (!player.duration || player.duration === 0) return 0;
+		return (player.currentTime / player.duration) * 100;
+	});
+
 	// volume state indicators
 	let volumeState = $derived.by(() => {
 		if (player.volume === 0) return 'muted';
@@ -93,9 +99,15 @@
 				<div class="player-title" class:scrolling={player.currentTrack.title.length > 30}>
 					<span>{player.currentTrack.title}</span>
 				</div>
-				<a href="/u/{player.currentTrack.artist_handle}" class="player-artist-link">
-					{player.currentTrack.artist}
-				</a>
+				<div class="player-metadata">
+					<a href="/u/{player.currentTrack.artist_handle}" class="player-artist-link">
+						{player.currentTrack.artist}
+					</a>
+					{#if player.currentTrack.album}
+						<span class="metadata-separator">•</span>
+						<span class="player-album">{player.currentTrack.album}</span>
+					{/if}
+				</div>
 			</div>
 
 			<div class="player-controls">
@@ -124,6 +136,7 @@
 						min="0"
 						max={player.duration || 0}
 						bind:value={player.currentTime}
+						style="--progress: {progressPercent}%"
 					/>
 					<span class="time">{formattedDuration}</span>
 				</div>
@@ -218,19 +231,37 @@
 		}
 	}
 
-	.player-artist-link {
+	.player-metadata {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		color: #909090;
 		font-size: 0.9rem;
-		text-decoration: none;
-		display: block;
-		transition: color 0.2s;
 		white-space: nowrap;
 		overflow: hidden;
-		text-overflow: ellipsis;
+	}
+
+	.player-artist-link {
+		color: #909090;
+		text-decoration: none;
+		transition: color 0.2s;
+		flex-shrink: 0;
 	}
 
 	.player-artist-link:hover {
 		color: var(--accent);
+	}
+
+	.metadata-separator {
+		color: #606060;
+		flex-shrink: 0;
+	}
+
+	.player-album {
+		color: #808080;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.player-controls {
@@ -325,7 +356,13 @@
 	}
 
 	input[type="range"]::-webkit-slider-track {
-		background: #333;
+		background: linear-gradient(
+			to right,
+			rgba(106, 159, 255, 0.3) 0%,
+			rgba(106, 159, 255, 0.3) var(--progress, 0%),
+			#2a2a2a var(--progress, 0%),
+			#2a2a2a 100%
+		);
 		height: 4px;
 		border-radius: 2px;
 	}
@@ -357,7 +394,13 @@
 	}
 
 	input[type="range"]::-moz-range-track {
-		background: #333;
+		background: #2a2a2a;
+		height: 4px;
+		border-radius: 2px;
+	}
+
+	input[type="range"]::-moz-range-progress {
+		background: rgba(106, 159, 255, 0.3);
 		height: 4px;
 		border-radius: 2px;
 	}
