@@ -355,13 +355,13 @@
 		cursor: pointer;
 	}
 
-	input[type="range"]::-webkit-slider-track {
+	input[type="range"]::-webkit-slider-runnable-track {
 		background: linear-gradient(
 			to right,
-			rgba(106, 159, 255, 0.3) 0%,
-			rgba(106, 159, 255, 0.3) var(--progress, 0%),
-			#2a2a2a var(--progress, 0%),
-			#2a2a2a 100%
+			color-mix(in srgb, var(--accent) 60%, transparent) 0%,
+			color-mix(in srgb, var(--accent) 60%, transparent) var(--progress, 0%),
+			color-mix(in srgb, var(--accent) 20%, transparent) var(--progress, 0%),
+			color-mix(in srgb, var(--accent) 20%, transparent) 100%
 		);
 		height: 4px;
 		border-radius: 2px;
@@ -379,9 +379,9 @@
 	}
 
 	input[type="range"]::-webkit-slider-thumb:hover {
-		background: #8ab3ff;
+		background: var(--accent-hover);
 		transform: scale(1.2);
-		box-shadow: 0 0 0 4px rgba(106, 159, 255, 0.2);
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
 	}
 
 	input[type="range"].muted::-webkit-slider-thumb {
@@ -390,17 +390,17 @@
 
 	input[type="range"].max::-webkit-slider-thumb {
 		background: var(--accent);
-		box-shadow: 0 0 0 4px rgba(106, 159, 255, 0.3);
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	input[type="range"]::-moz-range-track {
-		background: #2a2a2a;
+		background: color-mix(in srgb, var(--accent) 20%, transparent);
 		height: 4px;
 		border-radius: 2px;
 	}
 
 	input[type="range"]::-moz-range-progress {
-		background: rgba(106, 159, 255, 0.3);
+		background: color-mix(in srgb, var(--accent) 60%, transparent);
 		height: 4px;
 		border-radius: 2px;
 	}
@@ -415,9 +415,9 @@
 	}
 
 	input[type="range"]::-moz-range-thumb:hover {
-		background: #8ab3ff;
+		background: var(--accent-hover);
 		transform: scale(1.2);
-		box-shadow: 0 0 0 4px rgba(106, 159, 255, 0.2);
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
 	}
 
 	input[type="range"].muted::-moz-range-thumb {
@@ -426,7 +426,7 @@
 
 	input[type="range"].max::-moz-range-thumb {
 		background: var(--accent);
-		box-shadow: 0 0 0 4px rgba(106, 159, 255, 0.3);
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	@media (max-width: 768px) {
