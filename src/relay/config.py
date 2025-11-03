@@ -105,6 +105,10 @@ class Settings(BaseSettings):
         default="atproto repo:app.relay.track",
         description="OAuth scope",
     )
+    oauth_encryption_key: str = Field(
+        default="",
+        description="Fernet encryption key for OAuth data at rest (32-byte base64)",
+    )
 
     # observability
     logfire_enabled: bool = Field(default=False, description="Enable Logfire OTEL")

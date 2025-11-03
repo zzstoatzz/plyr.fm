@@ -3,15 +3,17 @@
 import json
 import secrets
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from atproto_oauth import OAuthClient
 from atproto_oauth.stores.memory import MemorySessionStore
+from cryptography.fernet import Fernet
 from fastapi import Cookie, Header, HTTPException
 from sqlalchemy import select
 
 from relay.config import settings
-from relay.models import UserSession
+from relay.models import ExchangeToken, UserSession
 from relay.stores import PostgresStateStore
 from relay.utilities.database import db_session
 
@@ -45,18 +47,43 @@ oauth_client = OAuthClient(
     session_store=_session_store,
 )
 
+# encryption for sensitive OAuth data at rest
+# use environment variable or generate a key (in production, use secrets manager)
+_encryption_key = (
+    settings.oauth_encryption_key.encode()
+    if hasattr(settings, "oauth_encryption_key") and settings.oauth_encryption_key
+    else Fernet.generate_key()
+)
+_fernet = Fernet(_encryption_key)
+
+
+def _encrypt_data(data: str) -> str:
+    """encrypt sensitive data for storage."""
+    return _fernet.encrypt(data.encode()).decode()
+
+
+def _decrypt_data(encrypted: str) -> str:
+    """decrypt sensitive data from storage."""
+    return _fernet.decrypt(encrypted.encode()).decode()
+
 
 async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -> str:
-    """create a new session for authenticated user."""
+    """create a new session for authenticated user with encrypted OAuth data."""
     session_id = secrets.token_urlsafe(32)
 
-    # store in database
+    # encrypt sensitive OAuth session data before storing
+    encrypted_data = _encrypt_data(json.dumps(oauth_session))
+
+    # store in database with expiration (30 days from now)
+    expires_at = datetime.now(UTC) + timedelta(days=30)
+
     async with db_session() as db:
         user_session = UserSession(
             session_id=session_id,
             did=did,
             handle=handle,
-            oauth_session_data=json.dumps(oauth_session),
+            oauth_session_data=encrypted_data,
+            expires_at=expires_at,
         )
         db.add(user_session)
         await db.commit()
@@ -65,7 +92,7 @@ async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -
 
 
 async def get_session(session_id: str) -> Session | None:
-    """retrieve session by id."""
+    """retrieve session by id and decrypt OAuth data."""
     async with db_session() as db:
         result = await db.execute(
             select(UserSession).where(UserSession.session_id == session_id)
@@ -73,11 +100,14 @@ async def get_session(session_id: str) -> Session | None:
         if not (user_session := result.scalar_one_or_none()):
             return None
 
+        # decrypt OAuth session data
+        decrypted_data = _decrypt_data(user_session.oauth_session_data)
+
         return Session(
             session_id=user_session.session_id,
             did=user_session.did,
             handle=user_session.handle,
-            oauth_session=json.loads(user_session.oauth_session_data),
+            oauth_session=json.loads(decrypted_data),
         )
 
 
@@ -90,7 +120,9 @@ async def update_session_tokens(
             select(UserSession).where(UserSession.session_id == session_id)
         )
         if user_session := result.scalar_one_or_none():
-            user_session.oauth_session_data = json.dumps(oauth_session_data)
+            # encrypt updated OAuth session data
+            encrypted_data = _encrypt_data(json.dumps(oauth_session_data))
+            user_session.oauth_session_data = encrypted_data
             await db.commit()
 
 
@@ -168,15 +200,66 @@ async def check_artist_profile_exists(did: str) -> bool:
         return artist is not None
 
 
+async def create_exchange_token(session_id: str) -> str:
+    """create a one-time use exchange token for secure OAuth callback.
+
+    exchange tokens expire after 60 seconds and can only be used once,
+    preventing session_id exposure in browser history/referrers.
+    """
+    token = secrets.token_urlsafe(32)
+
+    async with db_session() as db:
+        exchange_token = ExchangeToken(
+            token=token,
+            session_id=session_id,
+        )
+        db.add(exchange_token)
+        await db.commit()
+
+    return token
+
+
+async def consume_exchange_token(token: str) -> str | None:
+    """consume an exchange token and return the associated session_id.
+
+    returns None if token is invalid, expired, or already used.
+    marks token as used after successful consumption.
+    """
+    async with db_session() as db:
+        result = await db.execute(
+            select(ExchangeToken).where(ExchangeToken.token == token)
+        )
+        exchange_token = result.scalar_one_or_none()
+
+        if not exchange_token:
+            return None
+
+        # check if already used
+        if exchange_token.used:
+            return None
+
+        # check if expired
+        if datetime.now(UTC) > exchange_token.expires_at:
+            return None
+
+        # mark as used
+        exchange_token.used = True
+        await db.commit()
+
+        return exchange_token.session_id
+
+
 async def require_auth(
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
     authorization: Annotated[str | None, Header()] = None,
 ) -> Session:
-    """fastapi dependency to require authentication.
+    """fastapi dependency to require authentication with expiration validation.
 
     Accepts session_id from either:
     - Cookie (for same-domain requests)
     - Authorization header as Bearer token (for cross-domain requests)
+
+    validates session expiration and returns 401 if expired.
     """
     session_id = None
 
@@ -199,6 +282,18 @@ async def require_auth(
             status_code=401,
             detail="invalid or expired session",
         )
+
+    # validate session expiration
+    async with db_session() as db:
+        result = await db.execute(
+            select(UserSession).where(UserSession.session_id == session_id)
+        )
+        if user_session := result.scalar_one_or_none():
+            if user_session.expires_at and datetime.now(UTC) > user_session.expires_at:
+                raise HTTPException(
+                    status_code=401,
+                    detail="session expired - please log in again",
+                )
 
     return session
 
