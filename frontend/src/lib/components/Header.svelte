@@ -20,19 +20,13 @@
 		</a>
 
 		<nav>
-			<ColorSettings />
 			{#if isAuthenticated}
-				<div class="nav-links">
-					{#if $page.url.pathname !== '/portal'}
-						<a href="/portal" class="nav-link">portal</a>
-					{/if}
-					{#if $page.url.pathname !== '/profile'}
-						<a href="/profile" class="nav-link">profile</a>
-					{/if}
-				</div>
-				<div class="divider"></div>
-				<span class="user-info">@{user?.handle}</span>
-				<button onclick={onLogout} class="btn-secondary">logout</button>
+				{#if $page.url.pathname !== '/portal'}
+					<a href="/portal" class="nav-link">portal</a>
+				{/if}
+				<a href="/profile" class="user-handle">@{user?.handle}</a>
+				<ColorSettings />
+				<button onclick={onLogout} class="btn-logout">logout</button>
 			{:else}
 				<a href="/login" class="btn-primary">login</a>
 			{/if}
@@ -53,6 +47,7 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		gap: 1rem;
 	}
 
 	.brand {
@@ -61,6 +56,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
+		flex-shrink: 0;
 	}
 
 	.brand:hover h1 {
@@ -83,13 +79,9 @@
 	nav {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
-	}
-
-	.nav-links {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+		justify-content: flex-end;
 	}
 
 	.nav-link {
@@ -97,26 +89,29 @@
 		text-decoration: none;
 		font-size: 0.9rem;
 		transition: color 0.2s;
+		white-space: nowrap;
 	}
 
 	.nav-link:hover {
 		color: var(--text-primary);
 	}
 
-	.divider {
-		width: 1px;
-		height: 20px;
-		background: #444;
-		margin: 0 0.5rem;
+	.user-handle {
+		color: var(--text-secondary);
+		text-decoration: none;
+		font-size: 0.9rem;
+		padding: 0.4rem 0.75rem;
+		background: #1a1a1a;
+		border-radius: 6px;
+		border: 1px solid #333;
+		transition: all 0.2s;
+		white-space: nowrap;
 	}
 
-	.user-info {
-		color: #666;
-		font-size: 0.85rem;
-		padding: 0.25rem 0.5rem;
-		background: #1a1a1a;
-		border-radius: 4px;
-		border: 1px solid #333;
+	.user-handle:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+		background: #222;
 	}
 
 	.btn-primary {
@@ -124,11 +119,12 @@
 		border: 1px solid var(--accent);
 		color: var(--accent);
 		padding: 0.5rem 1rem;
-		border-radius: 4px;
+		border-radius: 6px;
 		font-size: 0.9rem;
 		text-decoration: none;
 		transition: all 0.2s;
 		cursor: pointer;
+		white-space: nowrap;
 	}
 
 	.btn-primary:hover {
@@ -136,19 +132,46 @@
 		color: var(--bg-primary);
 	}
 
-	.btn-secondary {
+	.btn-logout {
 		background: transparent;
 		border: 1px solid #444;
 		color: #b0b0b0;
-		padding: 0.5rem 1rem;
-		border-radius: 4px;
+		padding: 0.4rem 0.75rem;
+		border-radius: 6px;
 		font-size: 0.9rem;
 		cursor: pointer;
 		transition: all 0.2s;
+		white-space: nowrap;
 	}
 
-	.btn-secondary:hover {
-		border-color: #666;
-		color: #e8e8e8;
+	.btn-logout:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	@media (max-width: 640px) {
+		.header-content {
+			padding: 1rem;
+			gap: 0.5rem;
+		}
+
+		.brand h1 {
+			font-size: 1.25rem;
+		}
+
+		.brand p {
+			font-size: 0.75rem;
+		}
+
+		nav {
+			gap: 0.5rem;
+		}
+
+		.nav-link,
+		.user-handle,
+		.btn-logout {
+			font-size: 0.85rem;
+			padding: 0.35rem 0.6rem;
+		}
 	}
 </style>
