@@ -1,11 +1,15 @@
 """relay fastapi application."""
 
+import asyncio
+import contextlib
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from relay._internal import notification_service
 from relay.api import (
     artists_router,
     audio_router,
@@ -17,14 +21,48 @@ from relay.api import (
 from relay.config import settings
 from relay.models import init_db
 
+logger = logging.getLogger(__name__)
+
+# configure logfire if enabled
+if settings.logfire_enabled:
+    import logfire
+
+    if not settings.logfire_write_token:
+        raise ValueError("LOGFIRE_WRITE_TOKEN must be set when LOGFIRE_ENABLED is true")
+
+    logfire.configure(token=settings.logfire_write_token)
+else:
+    logfire = None
+
+
+async def run_periodic_tasks():
+    """run periodic background tasks."""
+    await notification_service.setup()
+
+    while True:
+        try:
+            await notification_service.check_new_tracks()
+        except Exception:
+            logger.exception("error in periodic task")
+        await asyncio.sleep(60)  # check every minute
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """handle application lifespan events."""
     # startup: initialize database
     init_db()
+
+    # start background task
+    task = asyncio.create_task(run_periodic_tasks())
+
     yield
+
     # shutdown: cleanup resources
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+    await notification_service.shutdown()
 
 
 app = FastAPI(
@@ -32,6 +70,10 @@ app = FastAPI(
     debug=settings.debug,
     lifespan=lifespan,
 )
+
+# instrument fastapi with logfire
+if logfire:
+    logfire.instrument_fastapi(app)
 
 # configure CORS - allow localhost for dev and cloudflare pages for production
 app.add_middleware(

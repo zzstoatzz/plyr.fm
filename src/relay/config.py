@@ -4,6 +4,40 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class NotificationBotSettings(BaseSettings):
+    """settings for the notification bot."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="NOTIFY_BOT_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    handle: str = Field(default="", description="Bluesky handle for bot")
+    password: str = Field(default="", description="App password for bot")
+
+
+class NotificationSettings(BaseSettings):
+    """settings for notifications."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="NOTIFY_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(default=False, description="Enable notifications")
+    recipient_handle: str = Field(
+        default="", description="Bluesky handle to send notifications to"
+    )
+    bot: NotificationBotSettings = Field(
+        default_factory=NotificationBotSettings,
+        description="Bot credentials for sending DMs",
+    )
+
+
 class Settings(BaseSettings):
     """relay application settings."""
 
@@ -63,6 +97,20 @@ class Settings(BaseSettings):
     atproto_redirect_uri: str = Field(
         default="http://localhost:8000/auth/callback",
         description="OAuth redirect URI",
+    )
+    atproto_scope: str = Field(
+        default="atproto repo:app.relay.track",
+        description="OAuth scope",
+    )
+
+    # observability
+    logfire_enabled: bool = Field(default=False, description="Enable Logfire OTEL")
+    logfire_write_token: str = Field(default="", description="Logfire write token")
+
+    # notifications
+    notify: NotificationSettings = Field(
+        default_factory=NotificationSettings,
+        description="Notification settings",
     )
 
 
