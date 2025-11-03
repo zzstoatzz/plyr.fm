@@ -26,15 +26,38 @@
 	let editFeaturedArtists: FeaturedArtist[] = [];
 
 	onMount(async () => {
-		// check if session_id is in URL (from OAuth callback)
+		// check if exchange_token is in URL (from OAuth callback)
 		const params = new URLSearchParams(window.location.search);
-		const sessionId = params.get('session_id');
+		const exchangeToken = params.get('exchange_token');
 
-		if (sessionId) {
-			// store session_id in localStorage
-			localStorage.setItem('session_id', sessionId);
-			// remove from URL
-			window.history.replaceState({}, '', '/portal');
+		if (exchangeToken) {
+			// exchange token for session_id
+			try {
+				const response = await fetch(`${API_URL}/auth/exchange`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({ exchange_token: exchangeToken })
+				});
+
+				if (response.ok) {
+					const data = await response.json();
+					// store session_id in localStorage
+					localStorage.setItem('session_id', data.session_id);
+					// remove exchange_token from URL
+					window.history.replaceState({}, '', '/portal');
+				} else {
+					// exchange token failed (expired, already used, etc.)
+					error = 'authentication failed - please log in again';
+					loading = false;
+					return;
+				}
+			} catch (e) {
+				error = 'network error - please check your connection';
+				loading = false;
+				return;
+			}
 		}
 
 		// get session_id from localStorage
