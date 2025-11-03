@@ -1,6 +1,6 @@
 # relay
 
-decentralized music streaming platform on ATProto.
+music streaming platform on ATProto.
 
 ## critical reminders
 
