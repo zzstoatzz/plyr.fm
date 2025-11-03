@@ -1,5 +1,6 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
+	import logo from '$lib/assets/logo.png';
 	import Player from '$lib/components/Player.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import { onMount } from 'svelte';
@@ -36,11 +37,13 @@
 	<meta property="og:title" content="relay - music streaming on atproto" />
 	<meta property="og:description" content="discover and stream music on the atproto network" />
 	<meta property="og:site_name" content="relay" />
+	<meta property="og:image" content={logo} />
 
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary" />
 	<meta name="twitter:title" content="relay - music streaming on atproto" />
 	<meta name="twitter:description" content="discover and stream music on the atproto network" />
+	<meta name="twitter:image" content={logo} />
 
 	<script>
 		// prevent flash by applying saved settings immediately
