@@ -63,6 +63,28 @@ WHERE kind = 'span' AND span_name LIKE 'GET%'
 ORDER BY start_timestamp DESC
 ```
 
+**Understanding 307 Redirects:**
+
+When querying for audio streaming requests, you'll see HTTP 307 (Temporary Redirect) responses:
+
+```sql
+SELECT
+  span_name,
+  message,
+  (attributes->>'http.status_code')::int as status_code,
+  attributes->>'http.url' as url
+FROM records
+WHERE span_name = 'GET /audio/{file_id}'
+  AND (attributes->>'http.status_code')::int = 307
+ORDER BY start_timestamp DESC
+```
+
+**Why 307 is expected:**
+- The `/audio/{file_id}` endpoint redirects to Cloudflare R2 CDN URLs when using R2 storage
+- 307 preserves the GET method during redirect (unlike 302)
+- This offloads bandwidth to R2's CDN instead of proxying through the app
+- See `src/relay/api/audio.py:25` for implementation
+
 ## Database Query Spans
 
 **Find slow database queries:**
