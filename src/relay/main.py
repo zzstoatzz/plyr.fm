@@ -30,7 +30,10 @@ if settings.logfire_enabled:
     if not settings.logfire_write_token:
         raise ValueError("LOGFIRE_WRITE_TOKEN must be set when LOGFIRE_ENABLED is true")
 
-    logfire.configure(token=settings.logfire_write_token)
+    logfire.configure(
+        token=settings.logfire_write_token,
+        environment=settings.logfire_environment,
+    )
 else:
     logfire = None
 
