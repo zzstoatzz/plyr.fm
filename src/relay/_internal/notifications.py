@@ -3,14 +3,13 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
-from atproto import Client
+from atproto import AsyncClient
 from atproto_client.models.chat.bsky.convo.defs import MessageInput
 from atproto_client.models.chat.bsky.convo.send_message import DataDict
 from sqlalchemy import select
 
 from relay.config import settings
-from relay.models.database import SessionLocal
-from relay.models.track import Track
+from relay.models import Track, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,7 @@ class NotificationService:
 
     def __init__(self):
         self.last_check: datetime | None = None
-        self.client: Client | None = None
+        self.client: AsyncClient | None = None
         self.recipient_did: str | None = None
 
     async def setup(self):
@@ -44,8 +43,8 @@ class NotificationService:
 
         # authenticate the bot
         try:
-            self.client = Client()
-            self.client.login(
+            self.client = AsyncClient()
+            await self.client.login(
                 settings.notify.bot.handle,
                 settings.notify.bot.password,
             )
@@ -54,7 +53,7 @@ class NotificationService:
             )
 
             # resolve recipient handle to DID
-            profile = self.client.app.bsky.actor.get_profile(
+            profile = await self.client.app.bsky.actor.get_profile(
                 {"actor": settings.notify.recipient_handle}
             )
             self.recipient_did = profile.did
@@ -77,32 +76,31 @@ class NotificationService:
         if not self.recipient_did or not self.client:
             return
 
-        db = SessionLocal()
-        try:
-            # determine time window for checking
-            if self.last_check is None:
-                # first run: check last 5 minutes
-                check_since = datetime.now(UTC) - timedelta(minutes=5)
-            else:
-                check_since = self.last_check
+        async with get_db() as db:
+            try:
+                # determine time window for checking
+                if self.last_check is None:
+                    # first run: check last 5 minutes
+                    check_since = datetime.now(UTC) - timedelta(minutes=5)
+                else:
+                    check_since = self.last_check
 
-            # query for new tracks
-            stmt = select(Track).where(Track.created_at > check_since)
-            new_tracks = db.execute(stmt).scalars().all()
+                # query for new tracks
+                stmt = select(Track).where(Track.created_at > check_since)
+                result = await db.execute(stmt)
+                new_tracks = result.scalars().all()
 
-            if new_tracks:
-                logger.info(f"found {len(new_tracks)} new tracks")
-                for track in new_tracks:
-                    await self._send_track_notification(track)
-            else:
-                logger.debug("no new tracks found")
+                if new_tracks:
+                    logger.info(f"found {len(new_tracks)} new tracks")
+                    for track in new_tracks:
+                        await self._send_track_notification(track)
+                else:
+                    logger.debug("no new tracks found")
 
-            self.last_check = datetime.now(UTC)
+                self.last_check = datetime.now(UTC)
 
-        except Exception as e:
-            logger.exception(f"error checking new tracks: {e}")
-        finally:
-            db.close()
+            except Exception as e:
+                logger.exception(f"error checking new tracks: {e}")
 
     async def _send_track_notification(self, track: Track):
         """send notification about a new track."""
@@ -114,7 +112,7 @@ class NotificationService:
 
         try:
             # get or create conversation with the target user
-            convo_response = self.client.chat.bsky.convo.get_convo_for_members(
+            convo_response = await self.client.chat.bsky.convo.get_convo_for_members(
                 params={"members": [self.recipient_did]}
             )
 
@@ -132,7 +130,7 @@ class NotificationService:
             )
 
             # send the DM
-            self.client.chat.bsky.convo.send_message(
+            await self.client.chat.bsky.convo.send_message(
                 data=DataDict(
                     convo_id=convo_id, message=MessageInput(text=message_text)
                 )

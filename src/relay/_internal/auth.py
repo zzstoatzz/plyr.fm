@@ -3,11 +3,12 @@
 import json
 import secrets
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 from atproto_oauth import OAuthClient
 from atproto_oauth.stores.memory import MemorySessionStore, MemoryStateStore
 from fastapi import Cookie, Header, HTTPException
+from sqlalchemy import select
 
 from relay.config import settings
 from relay.models import UserSession, get_db
@@ -41,13 +42,12 @@ oauth_client = OAuthClient(
 )
 
 
-def create_session(did: str, handle: str, oauth_session: dict) -> str:
+async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -> str:
     """create a new session for authenticated user."""
     session_id = secrets.token_urlsafe(32)
 
     # store in database
-    db = next(get_db())
-    try:
+    async with get_db() as db:
         db_session = UserSession(
             session_id=session_id,
             did=did,
@@ -55,20 +55,18 @@ def create_session(did: str, handle: str, oauth_session: dict) -> str:
             oauth_session_data=json.dumps(oauth_session),
         )
         db.add(db_session)
-        db.commit()
-    finally:
-        db.close()
+        await db.commit()
 
     return session_id
 
 
-def get_session(session_id: str) -> Session | None:
+async def get_session(session_id: str) -> Session | None:
     """retrieve session by id."""
-    db = next(get_db())
-    try:
-        db_session = (
-            db.query(UserSession).filter(UserSession.session_id == session_id).first()
+    async with get_db() as db:
+        result = await db.execute(
+            select(UserSession).where(UserSession.session_id == session_id)
         )
+        db_session = result.scalar_one_or_none()
 
         if not db_session:
             return None
@@ -79,33 +77,33 @@ def get_session(session_id: str) -> Session | None:
             handle=db_session.handle,
             oauth_session=json.loads(db_session.oauth_session_data),
         )
-    finally:
-        db.close()
 
 
-def update_session_tokens(session_id: str, oauth_session_data: dict) -> None:
+async def update_session_tokens(
+    session_id: str, oauth_session_data: dict[str, Any]
+) -> None:
     """update OAuth session data for a session (e.g., after token refresh)."""
-    db = next(get_db())
-    try:
-        db_session = (
-            db.query(UserSession).filter(UserSession.session_id == session_id).first()
+    async with get_db() as db:
+        result = await db.execute(
+            select(UserSession).where(UserSession.session_id == session_id)
         )
+        db_session = result.scalar_one_or_none()
 
         if db_session:
             db_session.oauth_session_data = json.dumps(oauth_session_data)
-            db.commit()
-    finally:
-        db.close()
+            await db.commit()
 
 
-def delete_session(session_id: str) -> None:
+async def delete_session(session_id: str) -> None:
     """delete a session."""
-    db = next(get_db())
-    try:
-        db.query(UserSession).filter(UserSession.session_id == session_id).delete()
-        db.commit()
-    finally:
-        db.close()
+    async with get_db() as db:
+        result = await db.execute(
+            select(UserSession).where(UserSession.session_id == session_id)
+        )
+        db_session = result.scalar_one_or_none()
+        if db_session:
+            await db.delete(db_session)
+            await db.commit()
 
 
 async def start_oauth_flow(handle: str) -> tuple[str, str]:
@@ -161,19 +159,17 @@ async def handle_oauth_callback(
         ) from e
 
 
-def check_artist_profile_exists(did: str) -> bool:
+async def check_artist_profile_exists(did: str) -> bool:
     """check if artist profile exists for a DID."""
     from relay.models import Artist
 
-    db = next(get_db())
-    try:
-        artist = db.query(Artist).filter(Artist.did == did).first()
+    async with get_db() as db:
+        result = await db.execute(select(Artist).where(Artist.did == did))
+        artist = result.scalar_one_or_none()
         return artist is not None
-    finally:
-        db.close()
 
 
-def require_auth(
+async def require_auth(
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
     authorization: Annotated[str | None, Header()] = None,
 ) -> Session:
@@ -198,7 +194,7 @@ def require_auth(
             detail="not authenticated - login required",
         )
 
-    session = get_session(session_id)
+    session = await get_session(session_id)
     if not session:
         raise HTTPException(
             status_code=401,
@@ -208,7 +204,7 @@ def require_auth(
     return session
 
 
-def require_artist_profile(
+async def require_artist_profile(
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
     authorization: Annotated[str | None, Header()] = None,
 ) -> Session:
@@ -217,10 +213,10 @@ def require_artist_profile(
     Returns 403 with specific message if artist profile doesn't exist,
     prompting frontend to redirect to profile setup.
     """
-    session = require_auth(session_id_cookie, authorization)
+    session = await require_auth(session_id_cookie, authorization)
 
     # check if artist profile exists
-    if not check_artist_profile_exists(session.did):
+    if not await check_artist_profile_exists(session.did):
         raise HTTPException(
             status_code=403,
             detail="artist_profile_required",

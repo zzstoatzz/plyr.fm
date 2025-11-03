@@ -51,7 +51,7 @@ async def run_periodic_tasks():
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """handle application lifespan events."""
     # startup: initialize database
-    init_db()
+    await init_db()
 
     # start background task
     task = asyncio.create_task(run_periodic_tasks())
