@@ -241,6 +241,7 @@ async def list_my_tracks(
     stmt = (
         select(Track)
         .join(Artist)
+        .options(selectinload(Track.artist))
         .where(Track.artist_did == auth_session.did)
         .order_by(Track.created_at.desc())
     )
@@ -315,7 +316,12 @@ async def update_track_metadata(
 
     features: optional JSON array of ATProto handles, e.g., ["user1.bsky.social", "user2.bsky.social"]
     """
-    result = await db.execute(select(Track).join(Artist).where(Track.id == track_id))
+    result = await db.execute(
+        select(Track)
+        .join(Artist)
+        .options(selectinload(Track.artist))
+        .where(Track.id == track_id)
+    )
     track = result.scalar_one_or_none()
 
     if not track:
@@ -409,7 +415,12 @@ async def get_track(
     track_id: int, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> dict:
     """get a specific track."""
-    result = await db.execute(select(Track).join(Artist).where(Track.id == track_id))
+    result = await db.execute(
+        select(Track)
+        .join(Artist)
+        .options(selectinload(Track.artist))
+        .where(Track.id == track_id)
+    )
     track = result.scalar_one_or_none()
 
     if not track:
