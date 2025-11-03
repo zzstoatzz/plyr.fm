@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from relay._internal import Session as AuthSession
 from relay._internal import require_artist_profile, require_auth
@@ -26,11 +27,11 @@ MAX_FEATURES = 5
 @router.post("/")
 async def upload_track(
     title: Annotated[str, Form()],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_artist_profile),
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,  # JSON array of handles
     file: UploadFile = File(...),
-    auth_session: AuthSession = Depends(require_artist_profile),
-    db: Session = Depends(get_db),
 ) -> dict:
     """upload a new track (requires authentication and artist profile).
 
@@ -64,7 +65,8 @@ async def upload_track(
             r2_url = storage.get_url(file_id)
 
     # get artist profile
-    artist = db.query(Artist).filter(Artist.did == auth_session.did).first()
+    result = await db.execute(select(Artist).where(Artist.did == auth_session.did))
+    artist = result.scalar_one_or_none()
     if not artist:
         raise HTTPException(
             status_code=500,
@@ -150,8 +152,8 @@ async def upload_track(
     )
 
     db.add(track)
-    db.commit()
-    db.refresh(track)
+    await db.commit()
+    await db.refresh(track)
 
     return {
         "id": track.id,
@@ -171,19 +173,21 @@ async def upload_track(
 
 @router.get("/")
 async def list_tracks(
+    db: Annotated[AsyncSession, Depends(get_db)],
     artist_did: str | None = None,
-    db: Session = Depends(get_db),
 ) -> dict:
     """list all tracks, optionally filtered by artist DID."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    query = db.query(Track).join(Artist)
+    stmt = select(Track).join(Artist)
 
     # filter by artist if provided
     if artist_did:
-        query = query.filter(Track.artist_did == artist_did)
+        stmt = stmt.where(Track.artist_did == artist_did)
 
-    tracks = query.order_by(Track.created_at.desc()).all()
+    stmt = stmt.order_by(Track.created_at.desc())
+    result = await db.execute(stmt)
+    tracks = result.scalars().all()
 
     # resolve PDS URLs for each unique artist DID
     resolver = AsyncDidResolver()
@@ -229,17 +233,18 @@ async def list_tracks(
 
 @router.get("/me")
 async def list_my_tracks(
+    db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
-    db: Session = Depends(get_db),
 ) -> dict:
     """list tracks uploaded by authenticated user."""
-    tracks = (
-        db.query(Track)
+    stmt = (
+        select(Track)
         .join(Artist)
-        .filter(Track.artist_did == auth_session.did)
+        .where(Track.artist_did == auth_session.did)
         .order_by(Track.created_at.desc())
-        .all()
     )
+    result = await db.execute(stmt)
+    tracks = result.scalars().all()
 
     return {
         "tracks": [
@@ -265,11 +270,12 @@ async def list_my_tracks(
 @router.delete("/{track_id}")
 async def delete_track(
     track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
-    db: Session = Depends(get_db),
 ) -> dict:
     """delete a track (only by owner)."""
-    track = db.query(Track).filter(Track.id == track_id).first()
+    result = await db.execute(select(Track).where(Track.id == track_id))
+    track = result.scalar_one_or_none()
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
@@ -289,8 +295,8 @@ async def delete_track(
         logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)
 
     # delete track record
-    db.delete(track)
-    db.commit()
+    await db.delete(track)
+    await db.commit()
 
     return {"message": "track deleted successfully"}
 
@@ -298,17 +304,18 @@ async def delete_track(
 @router.patch("/{track_id}")
 async def update_track_metadata(
     track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
     title: Annotated[str | None, Form()] = None,
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,  # JSON array of handles
-    auth_session: AuthSession = Depends(require_auth),
-    db: Session = Depends(get_db),
 ) -> dict:
     """update track metadata (only by owner).
 
     features: optional JSON array of ATProto handles, e.g., ["user1.bsky.social", "user2.bsky.social"]
     """
-    track = db.query(Track).join(Artist).filter(Track.id == track_id).first()
+    result = await db.execute(select(Track).join(Artist).where(Track.id == track_id))
+    track = result.scalar_one_or_none()
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
@@ -377,8 +384,8 @@ async def update_track_metadata(
                 status_code=400, detail=f"invalid JSON in features: {e}"
             ) from e
 
-    db.commit()
-    db.refresh(track)
+    await db.commit()
+    await db.refresh(track)
 
     return {
         "id": track.id,
@@ -397,9 +404,12 @@ async def update_track_metadata(
 
 
 @router.get("/{track_id}")
-async def get_track(track_id: int, db: Session = Depends(get_db)) -> dict:
+async def get_track(
+    track_id: int, db: Annotated[AsyncSession, Depends(get_db)]
+) -> dict:
     """get a specific track."""
-    track = db.query(Track).join(Artist).filter(Track.id == track_id).first()
+    result = await db.execute(select(Track).join(Artist).where(Track.id == track_id))
+    track = result.scalar_one_or_none()
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
@@ -420,16 +430,19 @@ async def get_track(track_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/{track_id}/play")
-async def increment_play_count(track_id: int, db: Session = Depends(get_db)) -> dict:
+async def increment_play_count(
+    track_id: int, db: Annotated[AsyncSession, Depends(get_db)]
+) -> dict:
     """increment play count for a track (called after 30 seconds of playback)."""
-    track = db.query(Track).filter(Track.id == track_id).first()
+    result = await db.execute(select(Track).where(Track.id == track_id))
+    track = result.scalar_one_or_none()
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
 
     # atomic increment using ORM
     track.play_count += 1
-    db.commit()
-    db.refresh(track)
+    await db.commit()
+    await db.refresh(track)
 
     return {"play_count": track.play_count}

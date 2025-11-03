@@ -42,10 +42,10 @@ async def oauth_callback(
 ) -> RedirectResponse:
     """handle OAuth callback and create session."""
     did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
-    session_id = create_session(did, handle, oauth_session)
+    session_id = await create_session(did, handle, oauth_session)
 
     # check if artist profile exists
-    has_profile = check_artist_profile_exists(did)
+    has_profile = await check_artist_profile_exists(did)
 
     # redirect to profile setup if needed, otherwise to portal
     redirect_path = "/portal" if has_profile else "/profile/setup"
@@ -61,7 +61,7 @@ async def oauth_callback(
 @router.post("/logout")
 async def logout(session: Session = Depends(require_auth)) -> dict:
     """logout current user."""
-    delete_session(session.session_id)
+    await delete_session(session.session_id)
     return {"message": "logged out successfully"}
 
 

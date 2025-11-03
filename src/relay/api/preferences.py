@@ -1,8 +1,11 @@
 """user preferences api endpoints."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.orm import Session as DBSession
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from relay._internal import Session, require_auth
 from relay.models import UserPreferences, get_db
@@ -24,18 +27,21 @@ class PreferencesUpdate(BaseModel):
 
 @router.get("/")
 async def get_preferences(
-    db: DBSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> PreferencesResponse:
     """get user preferences (creates default if not exists)."""
-    prefs = db.query(UserPreferences).filter(UserPreferences.did == session.did).first()
+    result = await db.execute(
+        select(UserPreferences).where(UserPreferences.did == session.did)
+    )
+    prefs = result.scalar_one_or_none()
 
     if not prefs:
         # create default preferences
         prefs = UserPreferences(did=session.did, accent_color="#6a9fff")
         db.add(prefs)
-        db.commit()
-        db.refresh(prefs)
+        await db.commit()
+        await db.refresh(prefs)
 
     return PreferencesResponse(accent_color=prefs.accent_color)
 
@@ -43,11 +49,14 @@ async def get_preferences(
 @router.post("/")
 async def update_preferences(
     update: PreferencesUpdate,
-    db: DBSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> PreferencesResponse:
     """update user preferences."""
-    prefs = db.query(UserPreferences).filter(UserPreferences.did == session.did).first()
+    result = await db.execute(
+        select(UserPreferences).where(UserPreferences.did == session.did)
+    )
+    prefs = result.scalar_one_or_none()
 
     if not prefs:
         # create new preferences
@@ -60,7 +69,7 @@ async def update_preferences(
         if update.accent_color is not None:
             prefs.accent_color = update.accent_color
 
-    db.commit()
-    db.refresh(prefs)
+    await db.commit()
+    await db.refresh(prefs)
 
     return PreferencesResponse(accent_color=prefs.accent_color)
