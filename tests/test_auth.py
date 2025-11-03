@@ -19,7 +19,7 @@ from relay._internal.auth import (
 from relay.models import ExchangeToken, UserSession
 
 
-async def test_encryption_roundtrip():
+def test_encryption_roundtrip():
     """verify encryption and decryption work correctly."""
     original_data = "sensitive oauth data"
 
@@ -30,7 +30,7 @@ async def test_encryption_roundtrip():
     assert encrypted != original_data  # ensure it's actually encrypted
 
 
-async def test_encryption_of_json_data():
+def test_encryption_of_json_data():
     """verify encryption works with json-serialized data."""
     oauth_data = {
         "did": "did:plc:test123",
@@ -44,6 +44,7 @@ async def test_encryption_of_json_data():
     encrypted = _encrypt_data(json_str)
     decrypted = _decrypt_data(encrypted)
 
+    assert decrypted is not None
     assert json.loads(decrypted) == oauth_data
 
 

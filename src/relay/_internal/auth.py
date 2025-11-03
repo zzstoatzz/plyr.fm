@@ -48,12 +48,15 @@ oauth_client = OAuthClient(
 )
 
 # encryption for sensitive OAuth data at rest
-# use environment variable or generate a key (in production, use secrets manager)
-_encryption_key = (
-    settings.oauth_encryption_key.encode()
-    if hasattr(settings, "oauth_encryption_key") and settings.oauth_encryption_key
-    else Fernet.generate_key()
-)
+# CRITICAL: encryption key must be configured and stable across restarts
+# otherwise all sessions become undecipherable after restart
+if not settings.oauth_encryption_key:
+    raise RuntimeError(
+        "oauth_encryption_key must be configured in settings. "
+        "generate one with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+    )
+
+_encryption_key = settings.oauth_encryption_key.encode()
 _fernet = Fernet(_encryption_key)
 
 
@@ -62,9 +65,16 @@ def _encrypt_data(data: str) -> str:
     return _fernet.encrypt(data.encode()).decode()
 
 
-def _decrypt_data(encrypted: str) -> str:
-    """decrypt sensitive data from storage."""
-    return _fernet.decrypt(encrypted.encode()).decode()
+def _decrypt_data(encrypted: str) -> str | None:
+    """decrypt sensitive data from storage.
+
+    returns None if decryption fails (e.g., key changed, data corrupted).
+    """
+    try:
+        return _fernet.decrypt(encrypted.encode()).decode()
+    except Exception:
+        # decryption failed - likely key mismatch or corrupted data
+        return None
 
 
 async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -> str:
@@ -74,8 +84,8 @@ async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -
     # encrypt sensitive OAuth session data before storing
     encrypted_data = _encrypt_data(json.dumps(oauth_session))
 
-    # store in database with expiration (30 days from now)
-    expires_at = datetime.now(UTC) + timedelta(days=30)
+    # store in database with expiration (2 weeks from now per OAuth 2.1 requirements)
+    expires_at = datetime.now(UTC) + timedelta(days=14)
 
     async with db_session() as db:
         user_session = UserSession(
@@ -92,7 +102,7 @@ async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -
 
 
 async def get_session(session_id: str) -> Session | None:
-    """retrieve session by id and decrypt OAuth data."""
+    """retrieve session by id, decrypt OAuth data, and validate expiration."""
     async with db_session() as db:
         result = await db.execute(
             select(UserSession).where(UserSession.session_id == session_id)
@@ -100,8 +110,19 @@ async def get_session(session_id: str) -> Session | None:
         if not (user_session := result.scalar_one_or_none()):
             return None
 
+        # check if session is expired
+        if user_session.expires_at and datetime.now(UTC) > user_session.expires_at:
+            # session expired - delete it and return None
+            await delete_session(session_id)
+            return None
+
         # decrypt OAuth session data
         decrypted_data = _decrypt_data(user_session.oauth_session_data)
+        if decrypted_data is None:
+            # decryption failed - session is invalid (key changed or data corrupted)
+            # delete the corrupted session
+            await delete_session(session_id)
+            return None
 
         return Session(
             session_id=user_session.session_id,
@@ -223,9 +244,12 @@ async def consume_exchange_token(token: str) -> str | None:
     """consume an exchange token and return the associated session_id.
 
     returns None if token is invalid, expired, or already used.
-    marks token as used after successful consumption.
+    uses atomic UPDATE to prevent race conditions (token can only be used once).
     """
+    from sqlalchemy import update
+
     async with db_session() as db:
+        # first, check if token exists and is not expired
         result = await db.execute(
             select(ExchangeToken).where(ExchangeToken.token == token)
         )
@@ -234,19 +258,23 @@ async def consume_exchange_token(token: str) -> str | None:
         if not exchange_token:
             return None
 
-        # check if already used
-        if exchange_token.used:
-            return None
-
         # check if expired
         if datetime.now(UTC) > exchange_token.expires_at:
             return None
 
-        # mark as used
-        exchange_token.used = True
+        # atomically mark as used ONLY if not already used
+        # this prevents race conditions where two requests try to use the same token
+        result = await db.execute(
+            update(ExchangeToken)
+            .where(ExchangeToken.token == token, ExchangeToken.used == False)  # noqa: E712
+            .values(used=True)
+            .returning(ExchangeToken.session_id)
+        )
         await db.commit()
 
-        return exchange_token.session_id
+        # if no rows were updated, token was already used
+        session_id = result.scalar_one_or_none()
+        return session_id
 
 
 async def require_auth(
@@ -282,18 +310,6 @@ async def require_auth(
             status_code=401,
             detail="invalid or expired session",
         )
-
-    # validate session expiration
-    async with db_session() as db:
-        result = await db.execute(
-            select(UserSession).where(UserSession.session_id == session_id)
-        )
-        if user_session := result.scalar_one_or_none():
-            if user_session.expires_at and datetime.now(UTC) > user_session.expires_at:
-                raise HTTPException(
-                    status_code=401,
-                    detail="session expired - please log in again",
-                )
 
     return session
 

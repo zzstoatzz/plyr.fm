@@ -7,11 +7,8 @@
 	import { player } from '$lib/player.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
 
-	// optimistically check for session at init to prevent flash of logged-out state
-	const hasSession = typeof window !== 'undefined' && !!localStorage.getItem('session_id');
-
 	let user = $state<User | null>(null);
-	let isAuthenticated = $state(hasSession);
+	let isAuthenticated = $state(false);
 
 	// use cached tracks
 	let tracks = $derived(tracksCache.tracks);
@@ -20,29 +17,17 @@
 
 	onMount(async () => {
 		// check authentication (non-blocking)
-		const sessionId = localStorage.getItem('session_id');
-		if (sessionId) {
-			try {
-				const authResponse = await fetch(`${API_URL}/auth/me`, {
-					headers: {
-						'Authorization': `Bearer ${sessionId}`
-					}
-				});
-				if (authResponse.ok) {
-					user = await authResponse.json();
-					isAuthenticated = true;
-				} else if (authResponse.status === 401) {
-					// only clear session on explicit 401 (unauthorized)
-					localStorage.removeItem('session_id');
-					isAuthenticated = false;
-				}
-				// ignore other errors (network issues, 500s, etc.) - keep optimistic auth state
-			} catch (e) {
-				// network error - don't clear session or change auth state
-				console.warn('failed to check auth status:', e);
+		try {
+			const authResponse = await fetch(`${API_URL}/auth/me`, {
+				credentials: 'include'
+			});
+			if (authResponse.ok) {
+				user = await authResponse.json();
+				isAuthenticated = true;
 			}
-		} else {
-			isAuthenticated = false;
+		} catch (e) {
+			// network error or not authenticated - continue as guest
+			console.warn('failed to check auth status:', e);
 		}
 
 		// fetch tracks from cache (will use cached data if recent)
@@ -50,16 +35,10 @@
 	});
 
 	async function logout() {
-		const sessionId = localStorage.getItem('session_id');
-		if (sessionId) {
-			await fetch(`${API_URL}/auth/logout`, {
-				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
-			});
-		}
-		localStorage.removeItem('session_id');
+		await fetch(`${API_URL}/auth/logout`, {
+			method: 'POST',
+			credentials: 'include'
+		});
 		user = null;
 		isAuthenticated = false;
 	}

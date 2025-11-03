@@ -107,7 +107,7 @@ class Settings(BaseSettings):
     )
     oauth_encryption_key: str = Field(
         default="",
-        description="Fernet encryption key for OAuth data at rest (32-byte base64)",
+        description="Fernet encryption key for OAuth data at rest (base64-encoded 32-byte key, 44 characters including padding)",
     )
 
     # observability

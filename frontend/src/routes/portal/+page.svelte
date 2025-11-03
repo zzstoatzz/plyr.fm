@@ -26,68 +26,34 @@
 	let editFeaturedArtists: FeaturedArtist[] = [];
 
 	onMount(async () => {
-		// check if exchange_token is in URL (from OAuth callback)
+		// check if exchange_token is in URL (from OAuth callback) and remove it
+		// the HttpOnly cookie is already set by the backend
 		const params = new URLSearchParams(window.location.search);
 		const exchangeToken = params.get('exchange_token');
 
 		if (exchangeToken) {
-			// exchange token for session_id
-			try {
-				const response = await fetch(`${API_URL}/auth/exchange`, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify({ exchange_token: exchangeToken })
-				});
-
-				if (response.ok) {
-					const data = await response.json();
-					// store session_id in localStorage
-					localStorage.setItem('session_id', data.session_id);
-					// remove exchange_token from URL
-					window.history.replaceState({}, '', '/portal');
-				} else {
-					// exchange token failed (expired, already used, etc.)
-					error = 'authentication failed - please log in again';
-					loading = false;
-					return;
-				}
-			} catch (e) {
-				error = 'network error - please check your connection';
-				loading = false;
-				return;
-			}
+			// remove exchange_token from URL (cookie is already set)
+			window.history.replaceState({}, '', '/portal');
 		}
 
-		// get session_id from localStorage
-		const storedSessionId = localStorage.getItem('session_id');
-
-		if (!storedSessionId) {
-			window.location.href = '/login';
-			return;
-		}
-
+		// check authentication using HttpOnly cookie
 		try {
 			const response = await fetch(`${API_URL}/auth/me`, {
-				headers: {
-					'Authorization': `Bearer ${storedSessionId}`
-				}
+				credentials: 'include'  // send HttpOnly cookie
 			});
 			if (response.ok) {
 				user = await response.json();
 				await loadMyTracks();
 			} else if (response.status === 401) {
-				// only clear session on explicit 401 (unauthorized)
-				localStorage.removeItem('session_id');
+				// not authenticated - redirect to login
 				window.location.href = '/login';
 			} else {
-				// other error (500, etc.) - show error but don't clear session
+				// other error (500, etc.) - show error
 				console.error('failed to check auth status:', response.status);
 				error = 'server error - please try again later';
 			}
 		} catch (e) {
-			// network error - show error but keep session
+			// network error - show error
 			console.error('network error checking auth:', e);
 			error = 'network error - please check your connection';
 		} finally {
@@ -97,12 +63,9 @@
 
 	async function loadMyTracks() {
 		loadingTracks = true;
-		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/tracks/me`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'  // send HttpOnly cookie
 			});
 			if (response.ok) {
 				const data = await response.json();
@@ -146,13 +109,10 @@
 	async function deleteTrack(trackId: number, trackTitle: string) {
 		if (!confirm(`delete "${trackTitle}"?`)) return;
 
-		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
 				method: 'DELETE',
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (response.ok) {
@@ -181,7 +141,6 @@
 	}
 
 	async function saveTrackEdit(trackId: number) {
-		const sessionId = localStorage.getItem('session_id');
 		const formData = new FormData();
 		formData.append('title', editTitle);
 		formData.append('album', editAlbum);
@@ -197,9 +156,7 @@
 			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
 				method: 'PATCH',
 				body: formData,
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (response.ok) {
@@ -222,14 +179,10 @@
 	}
 
 	async function logout() {
-		const sessionId = localStorage.getItem('session_id');
 		await fetch(`${API_URL}/auth/logout`, {
 			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${sessionId}`
-			}
+			credentials: 'include'
 		});
-		localStorage.removeItem('session_id');
 		window.location.href = '/';
 	}
 </script>

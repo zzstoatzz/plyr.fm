@@ -75,6 +75,7 @@ asyncio_default_fixture_loop_scope = "function"
 timeout = 10
 env = [
     "RELAY_TEST_MODE=1",
+    "OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes=",
 ]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",

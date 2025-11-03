@@ -31,22 +31,15 @@
 
 	onMount(async () => {
 		// check authentication
-		const sessionId = localStorage.getItem('session_id');
-		if (sessionId) {
-			try {
-				const authResponse = await fetch(`${API_URL}/auth/me`, {
-					headers: {
-						'Authorization': `Bearer ${sessionId}`
-					}
-				});
-				if (authResponse.ok) {
-					user = await authResponse.json();
-				} else {
-					localStorage.removeItem('session_id');
-				}
-			} catch (e) {
-				localStorage.removeItem('session_id');
+		try {
+			const authResponse = await fetch(`${API_URL}/auth/me`, {
+				credentials: 'include'
+			});
+			if (authResponse.ok) {
+				user = await authResponse.json();
 			}
+		} catch (e) {
+			// not authenticated or network error - continue as guest
 		}
 
 		// load tracks
@@ -107,16 +100,10 @@
 	}
 
 	async function logout() {
-		const sessionId = localStorage.getItem('session_id');
-		if (sessionId) {
-			await fetch(`${API_URL}/auth/logout`, {
-				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
-			});
-		}
-		localStorage.removeItem('session_id');
+		await fetch(`${API_URL}/auth/logout`, {
+			method: 'POST',
+			credentials: 'include'
+		});
 		user = null;
 	}
 </script>

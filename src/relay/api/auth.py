@@ -42,15 +42,15 @@ async def oauth_callback(
     state: Annotated[str, Query()],
     iss: Annotated[str, Query()],
 ) -> RedirectResponse:
-    """handle OAuth callback and create session with exchange token.
+    """handle OAuth callback and create session with HttpOnly cookie.
 
-    instead of exposing session_id in URL, we create a one-time exchange token
-    that the frontend can use to securely retrieve the session_id.
+    sets secure HttpOnly cookie to prevent XSS attacks. also provides
+    exchange token in URL as fallback for cross-domain scenarios.
     """
     did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
     session_id = await create_session(did, handle, oauth_session)
 
-    # create one-time exchange token (expires in 60 seconds)
+    # create one-time exchange token as fallback for cross-domain (expires in 60 seconds)
     exchange_token = await create_exchange_token(session_id)
 
     # check if artist profile exists
@@ -59,11 +59,23 @@ async def oauth_callback(
     # redirect to profile setup if needed, otherwise to portal
     redirect_path = "/portal" if has_profile else "/profile/setup"
 
-    # pass exchange_token instead of session_id (more secure)
+    # create response with exchange_token (fallback for cross-domain)
     response = RedirectResponse(
         url=f"{settings.frontend_url}{redirect_path}?exchange_token={exchange_token}",
         status_code=303,
     )
+
+    # set HttpOnly cookie (primary auth mechanism for same-domain)
+    response.set_cookie(
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        secure=True,  # only send over HTTPS
+        samesite="lax",  # CSRF protection
+        max_age=1209600,  # 2 weeks (matches session expiration)
+        path="/",
+    )
+
     return response
 
 
