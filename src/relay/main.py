@@ -45,8 +45,6 @@ async def run_periodic_tasks():
 
     while True:
         try:
-            await notification_service.check_new_tracks()
-
             # cleanup expired OAuth states (10 minute TTL)
             if hasattr(_state_store, "cleanup_expired_states"):
                 deleted = await _state_store.cleanup_expired_states()

@@ -5,12 +5,11 @@
 
 	interface Props {
 		user: User | null;
+		isAuthenticated: boolean;
 		onLogout: () => Promise<void>;
 	}
 
-	let { user, onLogout }: Props = $props();
-
-	let isAuthenticated = $derived(user !== null);
+	let { user, isAuthenticated, onLogout }: Props = $props();
 </script>
 
 <header>

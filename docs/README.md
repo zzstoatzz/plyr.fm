@@ -2,6 +2,54 @@
 
 this directory contains all documentation for the relay project.
 
+## architecture
+
+### [`architecture/global-state-management.md`](./architecture/global-state-management.md)
+
+**state management** - how relay manages global state with Svelte 5 runes.
+
+covers:
+- toast notification system
+- tracks cache with event-driven invalidation
+- upload manager with fire-and-forget pattern
+- optimistic UI patterns for auth state
+- localStorage persistence
+
+## design
+
+### [`design/toast-notifications.md`](./design/toast-notifications.md)
+
+**toast notifications** - user feedback system for async operations.
+
+covers:
+- toast state manager with smooth transitions
+- in-place updates for progress changes
+- auto-dismiss with configurable duration
+- type safety with TypeScript
+
+### [`design/streaming-uploads.md`](./design/streaming-uploads.md)
+
+**streaming uploads** - SSE-based progress tracking for file uploads.
+
+covers:
+- fire-and-forget upload pattern
+- Server-Sent Events (SSE) for real-time progress
+- background processing with asyncio
+- upload state management
+
+## observability
+
+### [`logfire-querying.md`](./logfire-querying.md)
+
+**logfire queries** - patterns for querying traces and spans.
+
+covers:
+- SQL query patterns for Logfire DataFusion database
+- finding exceptions and errors
+- analyzing performance bottlenecks
+- filtering by trace context
+- common debugging queries
+
 ## deployment
 
 ### [`deployment/overview.md`](./deployment/overview.md)

@@ -2,20 +2,24 @@
 	import { onMount } from 'svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import type { Track, User } from '$lib/types';
+	import type { User } from '$lib/types';
 	import { API_URL } from '$lib/config';
 	import { player } from '$lib/player.svelte';
+	import { tracksCache } from '$lib/tracks.svelte';
 
-	let tracks = $state<Track[]>([]);
+	// optimistically check for session at init to prevent flash of logged-out state
+	const hasSession = typeof window !== 'undefined' && !!localStorage.getItem('session_id');
+
 	let user = $state<User | null>(null);
-	let loading = $state(true);
+	let isAuthenticated = $state(hasSession);
 
-	// derived values
+	// use cached tracks
+	let tracks = $derived(tracksCache.tracks);
+	let loadingTracks = $derived(tracksCache.loading);
 	let hasTracks = $derived(tracks.length > 0);
-	let isAuthenticated = $derived(user !== null);
 
 	onMount(async () => {
-		// check authentication
+		// check authentication (non-blocking)
 		const sessionId = localStorage.getItem('session_id');
 		if (sessionId) {
 			try {
@@ -26,22 +30,23 @@
 				});
 				if (authResponse.ok) {
 					user = await authResponse.json();
-				} else {
-					// invalid session, clear it
+					isAuthenticated = true;
+				} else if (authResponse.status === 401) {
+					// only clear session on explicit 401 (unauthorized)
 					localStorage.removeItem('session_id');
+					isAuthenticated = false;
 				}
+				// ignore other errors (network issues, 500s, etc.) - keep optimistic auth state
 			} catch (e) {
-				// not authenticated, that's fine
-				localStorage.removeItem('session_id');
+				// network error - don't clear session or change auth state
+				console.warn('failed to check auth status:', e);
 			}
+		} else {
+			isAuthenticated = false;
 		}
 
-		// load tracks
-		const response = await fetch(`${API_URL}/tracks/`);
-		const data = await response.json();
-		tracks = data.tracks;
-
-		loading = false;
+		// fetch tracks from cache (will use cached data if recent)
+		tracksCache.fetch();
 	});
 
 	async function logout() {
@@ -56,19 +61,18 @@
 		}
 		localStorage.removeItem('session_id');
 		user = null;
+		isAuthenticated = false;
 	}
 </script>
 
-{#if loading}
-	<div class="loading">loading...</div>
-{:else}
-	<Header {user} onLogout={logout} />
+<Header {user} {isAuthenticated} onLogout={logout} />
 
-	<main>
-
+<main>
 	<section class="tracks">
 		<h2>latest tracks</h2>
-		{#if !hasTracks}
+		{#if loadingTracks}
+			<p class="loading-text">loading tracks...</p>
+		{:else if !hasTracks}
 			<p class="empty">no tracks yet</p>
 		{:else}
 			<div class="track-list">
@@ -82,17 +86,13 @@
 			</div>
 		{/if}
 	</section>
-
-	</main>
-{/if}
+</main>
 
 <style>
-	.loading {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 100vh;
-		color: #888;
+	.loading-text {
+		color: #808080;
+		padding: 2rem;
+		text-align: center;
 	}
 
 	main {

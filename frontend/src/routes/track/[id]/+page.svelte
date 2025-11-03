@@ -150,7 +150,7 @@
 	<div class="loading">loading...</div>
 {:else}
 
-	<Header {user} onLogout={logout} />
+	<Header {user} isAuthenticated={!!user} onLogout={logout} />
 
 	<main>
 		{#if trackNotFound}

@@ -115,7 +115,7 @@
 {#if loading}
 	<div class="loading">loading...</div>
 {:else if user}
-	<Header {user} onLogout={logout} />
+	<Header {user} isAuthenticated={!!user} onLogout={logout} />
 	<main>
 		<div class="profile-header">
 			<h2>edit profile</h2>
