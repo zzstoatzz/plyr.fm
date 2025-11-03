@@ -15,6 +15,7 @@ music streaming platform on ATProto.
 - **backend**: FastAPI deployed on Fly.io
 - **deployment**: `flyctl deploy` (runs in background per user prefs)
 - **logs**: `flyctl logs` is BLOCKING - must run in background with `run_in_background=true` then check output with BashOutput
+- **observability**: Logfire for traces/spans - see [docs/logfire-querying.md](docs/logfire-querying.md) for query patterns
 
 ## testing
 
