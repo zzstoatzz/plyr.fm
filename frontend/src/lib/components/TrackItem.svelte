@@ -46,8 +46,14 @@
 				</a>
 				{#if track.features && track.features.length > 0}
 					<span class="metadata-separator">•</span>
-					<span class="features">
-						feat. {track.features.map(f => f.display_name).join(', ')}
+					<span class="features-container">
+						<span class="features-label">feat.</span>
+						{#each track.features as feature, i}
+							{#if i > 0}<span class="feature-separator">, </span>{/if}
+							<a href="/u/{feature.handle}" class="feature-link">
+								{feature.display_name}
+							</a>
+						{/each}
 					</span>
 				{/if}
 				{#if track.album}
@@ -198,9 +204,32 @@
 		color: var(--accent);
 	}
 
-	.features {
+	.features-container {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex-wrap: wrap;
+	}
+
+	.features-label {
 		color: #8ab3ff;
 		font-weight: 500;
+	}
+
+	.feature-link {
+		color: #8ab3ff;
+		text-decoration: none;
+		font-weight: 500;
+		transition: color 0.2s;
+	}
+
+	.feature-link:hover {
+		color: var(--accent);
+		text-decoration: underline;
+	}
+
+	.feature-separator {
+		color: #8ab3ff;
 	}
 
 	.album {
