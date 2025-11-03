@@ -145,8 +145,8 @@
 	}
 
 	.btn-logout:hover {
-		border-color: #ff5555;
-		color: #ff5555;
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	@media (max-width: 640px) {
