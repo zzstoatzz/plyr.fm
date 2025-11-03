@@ -1,6 +1,5 @@
 """cloudflare R2 storage for audio files."""
 
-import hashlib
 from pathlib import Path
 from typing import BinaryIO
 
@@ -9,6 +8,7 @@ from botocore.config import Config
 
 from relay.config import settings
 from relay.models import AudioFormat
+from relay.utilities.hashing import hash_file_chunked
 
 
 class R2Storage:
@@ -40,12 +40,13 @@ class R2Storage:
         )
 
     def save(self, file: BinaryIO, filename: str) -> str:
-        """save audio file to R2 and return file id."""
-        # read file content
-        content = file.read()
+        """save audio file to R2 using streaming upload.
 
-        # generate file id from content hash
-        file_id = hashlib.sha256(content).hexdigest()[:16]
+        uses chunked hashing and boto3's upload_fileobj for constant
+        memory usage regardless of file size.
+        """
+        # compute hash in chunks (constant memory)
+        file_id = hash_file_chunked(file)[:16]
 
         # determine file extension
         ext = Path(filename).suffix.lower()
@@ -59,12 +60,13 @@ class R2Storage:
         # construct s3 key
         key = f"audio/{file_id}{ext}"
 
-        # upload to R2
-        self.client.put_object(
+        # stream upload to R2 (constant memory)
+        # file pointer already reset by hash_file_chunked
+        self.client.upload_fileobj(
+            Fileobj=file,
             Bucket=self.bucket_name,
             Key=key,
-            Body=content,
-            ContentType=audio_format.media_type,
+            ExtraArgs={"ContentType": audio_format.media_type},
         )
 
         return file_id

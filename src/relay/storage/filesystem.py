@@ -1,10 +1,11 @@
 """local filesystem storage for audio files."""
 
-import hashlib
+import shutil
 from pathlib import Path
 from typing import BinaryIO
 
 from relay.models import AudioFormat
+from relay.utilities.hashing import CHUNK_SIZE, hash_file_chunked
 
 
 class FilesystemStorage:
@@ -16,12 +17,13 @@ class FilesystemStorage:
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     def save(self, file: BinaryIO, filename: str) -> str:
-        """save audio file and return file id."""
-        # read file content
-        content = file.read()
+        """save audio file using streaming write.
 
-        # generate file id from content hash
-        file_id = hashlib.sha256(content).hexdigest()[:16]
+        uses chunked hashing and shutil.copyfileobj for constant
+        memory usage regardless of file size.
+        """
+        # compute hash in chunks (constant memory)
+        file_id = hash_file_chunked(file)[:16]
 
         # determine file extension
         ext = Path(filename).suffix.lower()
@@ -32,9 +34,11 @@ class FilesystemStorage:
                 f"supported: {AudioFormat.supported_extensions_str()}"
             )
 
-        # save file
+        # stream copy to disk (constant memory)
+        # file pointer already reset by hash_file_chunked
         file_path = self.base_path / f"{file_id}{ext}"
-        file_path.write_bytes(content)
+        with open(file_path, "wb") as dest:
+            shutil.copyfileobj(file, dest, length=CHUNK_SIZE)
 
         return file_id
 
