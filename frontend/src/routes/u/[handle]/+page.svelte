@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
-	import type { Track, Artist } from '$lib/types';
+	import type { Track, Artist, User } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { player } from '$lib/player.svelte';
@@ -16,6 +16,55 @@
 	let tracks: Track[] = $state(data.tracks); // initialize with server data
 	let loading = $state(true);
 	let error = $state('');
+	let user: User | null = $state(null);
+	let isAuthenticated = $state(false);
+
+	async function checkAuth() {
+		const sessionId = localStorage.getItem('session_id');
+		if (!sessionId) {
+			isAuthenticated = false;
+			return;
+		}
+
+		try {
+			const response = await fetch(`${API_URL}/auth/me`, {
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
+			});
+
+			if (response.ok) {
+				user = await response.json();
+				isAuthenticated = true;
+			} else {
+				localStorage.removeItem('session_id');
+				isAuthenticated = false;
+			}
+		} catch (e) {
+			console.error('auth check failed:', e);
+			isAuthenticated = false;
+		}
+	}
+
+	async function handleLogout() {
+		const sessionId = localStorage.getItem('session_id');
+		if (!sessionId) return;
+
+		try {
+			await fetch(`${API_URL}/auth/logout`, {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
+			});
+		} catch (e) {
+			console.error('logout failed:', e);
+		}
+
+		localStorage.removeItem('session_id');
+		user = null;
+		isAuthenticated = false;
+	}
 
 	async function loadArtistAndTracks() {
 		loading = true;
@@ -62,6 +111,7 @@
 	}
 
 	onMount(() => {
+		checkAuth();
 		loadArtistAndTracks();
 	});
 </script>
@@ -101,7 +151,7 @@
 	</div>
 {:else if artist}
 
-	<Header user={null} isAuthenticated={false} onLogout={async () => {}} />
+	<Header {user} {isAuthenticated} onLogout={handleLogout} />
 
 	<main>
 		<section class="artist-header">

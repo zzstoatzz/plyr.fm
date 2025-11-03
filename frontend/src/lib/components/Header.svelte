@@ -136,7 +136,7 @@
 		background: transparent;
 		border: 1px solid #444;
 		color: #b0b0b0;
-		padding: 0.4rem 0.75rem;
+		padding: 0.5rem 1rem;
 		border-radius: 6px;
 		font-size: 0.9rem;
 		cursor: pointer;
