@@ -13,7 +13,12 @@ music streaming platform on ATProto.
 - **database**: Neon PostgreSQL (serverless)
 - **frontend**: SvelteKit with **bun** (not npm/pnpm)
 - **backend**: FastAPI deployed on Fly.io
-- **deployment**: `flyctl deploy` (runs in background per user prefs)
+- **deployment**: automated via GitHub Actions on merge to main - NEVER deploy locally
+- **migrations**: fully automated via fly.io `release_command` - see [docs/deployment/database-migrations.md](docs/deployment/database-migrations.md)
+  - migrations run automatically BEFORE deployment when you merge to main
+  - fly.io runs `uv run alembic upgrade head` via release_command
+  - deployment aborts if migration fails (safe rollback)
+  - no manual intervention required
 - **logs**: `flyctl logs` is BLOCKING - must run in background with `run_in_background=true` then check output with BashOutput
 - **observability**: Logfire for traces/spans - see [docs/logfire-querying.md](docs/logfire-querying.md) for query patterns
 

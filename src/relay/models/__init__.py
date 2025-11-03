@@ -3,6 +3,7 @@
 from relay.models.artist import Artist
 from relay.models.audio import AudioFormat
 from relay.models.database import Base
+from relay.models.oauth_state import OAuthStateModel
 from relay.models.preferences import UserPreferences
 from relay.models.session import UserSession
 from relay.models.track import Track
@@ -12,6 +13,7 @@ __all__ = [
     "Artist",
     "AudioFormat",
     "Base",
+    "OAuthStateModel",
     "Track",
     "UserPreferences",
     "UserSession",
