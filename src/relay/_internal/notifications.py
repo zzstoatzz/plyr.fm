@@ -3,7 +3,7 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
-from atproto import Client
+from atproto import AsyncClient
 from atproto_client.models.chat.bsky.convo.defs import MessageInput
 from atproto_client.models.chat.bsky.convo.send_message import DataDict
 from sqlalchemy import select
@@ -19,7 +19,7 @@ class NotificationService:
 
     def __init__(self):
         self.last_check: datetime | None = None
-        self.client: Client | None = None
+        self.client: AsyncClient | None = None
         self.recipient_did: str | None = None
 
     async def setup(self):
@@ -43,8 +43,8 @@ class NotificationService:
 
         # authenticate the bot
         try:
-            self.client = Client()
-            self.client.login(
+            self.client = AsyncClient()
+            await self.client.login(
                 settings.notify.bot.handle,
                 settings.notify.bot.password,
             )
@@ -53,7 +53,7 @@ class NotificationService:
             )
 
             # resolve recipient handle to DID
-            profile = self.client.app.bsky.actor.get_profile(
+            profile = await self.client.app.bsky.actor.get_profile(
                 {"actor": settings.notify.recipient_handle}
             )
             self.recipient_did = profile.did
@@ -112,7 +112,7 @@ class NotificationService:
 
         try:
             # get or create conversation with the target user
-            convo_response = self.client.chat.bsky.convo.get_convo_for_members(
+            convo_response = await self.client.chat.bsky.convo.get_convo_for_members(
                 params={"members": [self.recipient_did]}
             )
 
@@ -130,7 +130,7 @@ class NotificationService:
             )
 
             # send the DM
-            self.client.chat.bsky.convo.send_message(
+            await self.client.chat.bsky.convo.send_message(
                 data=DataDict(
                     convo_id=convo_id, message=MessageInput(text=message_text)
                 )

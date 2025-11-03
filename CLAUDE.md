@@ -4,6 +4,7 @@ music streaming platform on ATProto.
 
 ## critical reminders
 
+- **issues**: tracked in GitHub, not Linear
 - **pull requests**: always create a PR for review before merging to main - we will have users soon
 - **testing**: empirical first - run code and prove it works before writing tests
 - **testing async**: NEVER use `@pytest.mark.asyncio` - pytest is configured with `asyncio_mode = "auto"` in pyproject.toml
