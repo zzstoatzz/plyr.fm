@@ -13,7 +13,7 @@ from relay._internal import oauth_client, update_session_tokens
 logger = logging.getLogger(__name__)
 
 
-def _reconstruct_oauth_session(oauth_data: dict) -> OAuthSession:
+def _reconstruct_oauth_session(oauth_data: dict[str, Any]) -> OAuthSession:
     """reconstruct OAuthSession from serialized data."""
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives import serialization
@@ -81,7 +81,7 @@ async def _refresh_session_tokens(
         }
 
         # update session in database
-        update_session_tokens(auth_session.session_id, updated_session_data)
+        await update_session_tokens(auth_session.session_id, updated_session_data)
 
         logger.info(f"successfully refreshed access token for {auth_session.did}")
         return refreshed_session

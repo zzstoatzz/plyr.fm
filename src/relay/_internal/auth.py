@@ -3,7 +3,7 @@
 import json
 import secrets
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 from atproto_oauth import OAuthClient
 from atproto_oauth.stores.memory import MemorySessionStore, MemoryStateStore
@@ -42,7 +42,7 @@ oauth_client = OAuthClient(
 )
 
 
-async def create_session(did: str, handle: str, oauth_session: dict) -> str:
+async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -> str:
     """create a new session for authenticated user."""
     session_id = secrets.token_urlsafe(32)
 
@@ -79,7 +79,9 @@ async def get_session(session_id: str) -> Session | None:
         )
 
 
-async def update_session_tokens(session_id: str, oauth_session_data: dict) -> None:
+async def update_session_tokens(
+    session_id: str, oauth_session_data: dict[str, Any]
+) -> None:
     """update OAuth session data for a session (e.g., after token refresh)."""
     async with get_db() as db:
         result = await db.execute(
