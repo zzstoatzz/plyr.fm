@@ -102,7 +102,7 @@ class NotificationService:
                 if new_tracks:
                     logger.info(f"found {len(new_tracks)} new tracks")
                     for track in new_tracks:
-                        await self._send_track_notification(track)
+                        await self.send_track_notification(track)
                 else:
                     logger.debug("no new tracks found")
 
@@ -111,7 +111,7 @@ class NotificationService:
             except Exception as e:
                 logger.exception(f"error checking new tracks: {e}")
 
-    async def _send_track_notification(self, track: Track):
+    async def send_track_notification(self, track: Track):
         """send notification about a new track."""
         if not self.dm_client or not self.recipient_did:
             logger.warning(

@@ -11,6 +11,10 @@ from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
+# maximum number of buffered progress updates per upload listener
+# this prevents memory buildup if a client disconnects without properly closing the SSE connection
+MAX_PROGRESS_QUEUE_SIZE = 10
+
 
 class UploadStatus(str, Enum):
     """upload status enum."""
@@ -106,7 +110,7 @@ class UploadTracker:
         if upload_id not in self._listeners:
             self._listeners[upload_id] = []
 
-        queue: asyncio.Queue = asyncio.Queue(maxsize=10)
+        queue: asyncio.Queue = asyncio.Queue(maxsize=MAX_PROGRESS_QUEUE_SIZE)
         self._listeners[upload_id].append(queue)
 
         # send current status immediately

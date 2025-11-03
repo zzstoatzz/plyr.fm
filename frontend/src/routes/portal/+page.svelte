@@ -9,6 +9,7 @@
 
 	let user: User | null = null;
 	let loading = true;
+	let error = '';
 	let tracks: Track[] = [];
 	let loadingTracks = false;
 
@@ -60,12 +61,12 @@
 			} else {
 				// other error (500, etc.) - show error but don't clear session
 				console.error('failed to check auth status:', response.status);
-				window.location.href = '/';
+				error = 'server error - please try again later';
 			}
 		} catch (e) {
-			// network error - redirect to home but keep session
+			// network error - show error but keep session
 			console.error('network error checking auth:', e);
-			window.location.href = '/';
+			error = 'network error - please check your connection';
 		} finally {
 			loading = false;
 		}
@@ -212,6 +213,11 @@
 
 {#if loading}
 	<div class="loading">loading...</div>
+{:else if error}
+	<div class="error-container">
+		<h1>{error}</h1>
+		<a href="/">go home</a>
+	</div>
 {:else if user}
 	<Header {user} isAuthenticated={!!user} onLogout={logout} />
 	<main>
@@ -379,12 +385,24 @@
 {/if}
 
 <style>
-	.loading {
+	.loading,
+	.error-container {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
 		min-height: 100vh;
 		color: #888;
+		gap: 1rem;
+	}
+
+	.error-container a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.error-container a:hover {
+		text-decoration: underline;
 	}
 
 	main {
