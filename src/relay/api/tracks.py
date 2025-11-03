@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from relay._internal import Session as AuthSession
 from relay._internal import require_artist_profile, require_auth
@@ -179,7 +180,7 @@ async def list_tracks(
     """list all tracks, optionally filtered by artist DID."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    stmt = select(Track).join(Artist)
+    stmt = select(Track).join(Artist).options(selectinload(Track.artist))
 
     # filter by artist if provided
     if artist_did:

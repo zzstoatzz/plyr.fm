@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     # observability
     logfire_enabled: bool = Field(default=False, description="Enable Logfire OTEL")
     logfire_write_token: str = Field(default="", description="Logfire write token")
+    logfire_environment: str = Field(
+        default="local", description="Logfire environment (local/production)"
+    )
 
     # notifications
     notify: NotificationSettings = Field(

@@ -11,7 +11,8 @@ from fastapi import Cookie, Header, HTTPException
 from sqlalchemy import select
 
 from relay.config import settings
-from relay.models import UserSession, get_db
+from relay.models import UserSession
+from relay.utilities.database import db_session
 
 
 @dataclass
@@ -47,14 +48,14 @@ async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -
     session_id = secrets.token_urlsafe(32)
 
     # store in database
-    async with get_db() as db:
-        db_session = UserSession(
+    async with db_session() as db:
+        user_session = UserSession(
             session_id=session_id,
             did=did,
             handle=handle,
             oauth_session_data=json.dumps(oauth_session),
         )
-        db.add(db_session)
+        db.add(user_session)
         await db.commit()
 
     return session_id
@@ -62,20 +63,18 @@ async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -
 
 async def get_session(session_id: str) -> Session | None:
     """retrieve session by id."""
-    async with get_db() as db:
+    async with db_session() as db:
         result = await db.execute(
             select(UserSession).where(UserSession.session_id == session_id)
         )
-        db_session = result.scalar_one_or_none()
-
-        if not db_session:
+        if not (user_session := result.scalar_one_or_none()):
             return None
 
         return Session(
-            session_id=db_session.session_id,
-            did=db_session.did,
-            handle=db_session.handle,
-            oauth_session=json.loads(db_session.oauth_session_data),
+            session_id=user_session.session_id,
+            did=user_session.did,
+            handle=user_session.handle,
+            oauth_session=json.loads(user_session.oauth_session_data),
         )
 
 
@@ -83,26 +82,23 @@ async def update_session_tokens(
     session_id: str, oauth_session_data: dict[str, Any]
 ) -> None:
     """update OAuth session data for a session (e.g., after token refresh)."""
-    async with get_db() as db:
+    async with db_session() as db:
         result = await db.execute(
             select(UserSession).where(UserSession.session_id == session_id)
         )
-        db_session = result.scalar_one_or_none()
-
-        if db_session:
-            db_session.oauth_session_data = json.dumps(oauth_session_data)
+        if user_session := result.scalar_one_or_none():
+            user_session.oauth_session_data = json.dumps(oauth_session_data)
             await db.commit()
 
 
 async def delete_session(session_id: str) -> None:
     """delete a session."""
-    async with get_db() as db:
+    async with db_session() as db:
         result = await db.execute(
             select(UserSession).where(UserSession.session_id == session_id)
         )
-        db_session = result.scalar_one_or_none()
-        if db_session:
-            await db.delete(db_session)
+        if user_session := result.scalar_one_or_none():
+            await db.delete(user_session)
             await db.commit()
 
 
@@ -163,7 +159,7 @@ async def check_artist_profile_exists(did: str) -> bool:
     """check if artist profile exists for a DID."""
     from relay.models import Artist
 
-    async with get_db() as db:
+    async with db_session() as db:
         result = await db.execute(select(Artist).where(Artist.did == did))
         artist = result.scalar_one_or_none()
         return artist is not None
