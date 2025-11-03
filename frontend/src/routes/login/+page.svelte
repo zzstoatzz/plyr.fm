@@ -16,7 +16,7 @@
 <div class="container">
 	<div class="login-card">
 		<h1>relay</h1>
-		<p>decentralized music streaming</p>
+		<p>music streaming on atproto</p>
 
 		<form onsubmit={startOAuth}>
 			<div class="input-group">

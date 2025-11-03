@@ -1,12 +1,12 @@
 # relay
 
-decentralized music streaming on ATProto
+music streaming on ATProto
 
 ## what is relay?
 
 relay is a music streaming platform built on the AT Protocol (ATProto), the same protocol that powers Bluesky. it combines:
 
-- **OAuth 2.1 authentication** via ATProto for secure, decentralized identity
+- **OAuth 2.1 authentication** via ATProto for secure identity
 - **artist profiles** synced with ATProto user profiles (avatar, display name, handle)
 - **track metadata** published as ATProto records (shareable across the network)
 - **audio storage** on cloudflare R2 for fast, scalable streaming
