@@ -26,34 +26,60 @@
 	let editFeaturedArtists: FeaturedArtist[] = [];
 
 	onMount(async () => {
-		// check if exchange_token is in URL (from OAuth callback) and remove it
-		// the HttpOnly cookie is already set by the backend
+		// check if exchange_token is in URL (from OAuth callback)
 		const params = new URLSearchParams(window.location.search);
 		const exchangeToken = params.get('exchange_token');
 
 		if (exchangeToken) {
-			// remove exchange_token from URL (cookie is already set)
+			// exchange token for session_id
+			try {
+				const exchangeResponse = await fetch(`${API_URL}/auth/exchange`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ exchange_token: exchangeToken })
+				});
+
+				if (exchangeResponse.ok) {
+					const data = await exchangeResponse.json();
+					// store session_id in localStorage
+					localStorage.setItem('session_id', data.session_id);
+				}
+			} catch (e) {
+				console.error('failed to exchange token:', e);
+			}
+
+			// remove exchange_token from URL
 			window.history.replaceState({}, '', '/portal');
 		}
 
-		// check authentication using HttpOnly cookie
+		// get session_id from localStorage
+		const storedSessionId = localStorage.getItem('session_id');
+
+		if (!storedSessionId) {
+			window.location.href = '/login';
+			return;
+		}
+
 		try {
 			const response = await fetch(`${API_URL}/auth/me`, {
-				credentials: 'include'  // send HttpOnly cookie
+				headers: {
+					'Authorization': `Bearer ${storedSessionId}`
+				}
 			});
 			if (response.ok) {
 				user = await response.json();
 				await loadMyTracks();
 			} else if (response.status === 401) {
-				// not authenticated - redirect to login
+				// only clear session on explicit 401 (unauthorized)
+				localStorage.removeItem('session_id');
 				window.location.href = '/login';
 			} else {
-				// other error (500, etc.) - show error
+				// other error (500, etc.) - show error but don't clear session
 				console.error('failed to check auth status:', response.status);
 				error = 'server error - please try again later';
 			}
 		} catch (e) {
-			// network error - show error
+			// network error - show error but keep session
 			console.error('network error checking auth:', e);
 			error = 'network error - please check your connection';
 		} finally {
@@ -63,9 +89,12 @@
 
 	async function loadMyTracks() {
 		loadingTracks = true;
+		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/tracks/me`, {
-				credentials: 'include'  // send HttpOnly cookie
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
 			});
 			if (response.ok) {
 				const data = await response.json();
@@ -109,10 +138,13 @@
 	async function deleteTrack(trackId: number, trackTitle: string) {
 		if (!confirm(`delete "${trackTitle}"?`)) return;
 
+		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
 				method: 'DELETE',
-				credentials: 'include'
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
 			});
 
 			if (response.ok) {
@@ -152,11 +184,14 @@
 			formData.append('features', JSON.stringify([]));
 		}
 
+		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
 				method: 'PATCH',
 				body: formData,
-				credentials: 'include'
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
 			});
 
 			if (response.ok) {
@@ -179,10 +214,14 @@
 	}
 
 	async function logout() {
+		const sessionId = localStorage.getItem('session_id');
 		await fetch(`${API_URL}/auth/logout`, {
 			method: 'POST',
-			credentials: 'include'
+			headers: {
+				'Authorization': `Bearer ${sessionId}`
+			}
 		});
+		localStorage.removeItem('session_id');
 		window.location.href = '/';
 	}
 </script>

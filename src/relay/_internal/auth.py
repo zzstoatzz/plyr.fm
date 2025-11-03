@@ -9,7 +9,7 @@ from typing import Annotated, Any
 from atproto_oauth import OAuthClient
 from atproto_oauth.stores.memory import MemorySessionStore
 from cryptography.fernet import Fernet
-from fastapi import Cookie, Header, HTTPException
+from fastapi import Header, HTTPException
 from sqlalchemy import select
 
 from relay.config import settings
@@ -278,31 +278,19 @@ async def consume_exchange_token(token: str) -> str | None:
 
 
 async def require_auth(
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
     authorization: Annotated[str | None, Header()] = None,
 ) -> Session:
     """fastapi dependency to require authentication with expiration validation.
 
-    Accepts session_id from either:
-    - Cookie (for same-domain requests)
-    - Authorization header as Bearer token (for cross-domain requests)
-
-    validates session expiration and returns 401 if expired.
+    requires Authorization header with Bearer token containing session_id.
     """
-    session_id = None
-
-    # try cookie first (for localhost/same-domain)
-    if session_id_cookie:
-        session_id = session_id_cookie
-    # try authorization header (for cross-domain)
-    elif authorization and authorization.startswith("Bearer "):
-        session_id = authorization.removeprefix("Bearer ")
-
-    if not session_id:
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
             detail="not authenticated - login required",
         )
+
+    session_id = authorization.removeprefix("Bearer ")
 
     session = await get_session(session_id)
     if not session:
@@ -315,7 +303,6 @@ async def require_auth(
 
 
 async def require_artist_profile(
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
     authorization: Annotated[str | None, Header()] = None,
 ) -> Session:
     """fastapi dependency to require authentication AND complete artist profile.
@@ -323,7 +310,7 @@ async def require_artist_profile(
     Returns 403 with specific message if artist profile doesn't exist,
     prompting frontend to redirect to profile setup.
     """
-    session = await require_auth(session_id_cookie, authorization)
+    session = await require_auth(authorization)
 
     # check if artist profile exists
     if not await check_artist_profile_exists(session.did):
