@@ -1,0 +1,7 @@
+<!-- Option 3: Angular/tech R with waveform base -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Angular R shape -->
+  <path d="M 20 20 L 20 108 L 32 108 L 32 72 L 65 72 L 65 64 L 32 64 L 32 32 L 65 32 Q 80 32 80 48 Q 80 64 65 64 L 60 64 L 90 108 L 104 108 L 70 60 Q 92 58 92 48 Q 92 20 65 20 Z" fill="#6a9fff"/>
+  <!-- Waveform decoration at bottom -->
+  <path d="M 15 115 L 20 110 L 25 115 L 30 110 L 35 115 L 40 110 L 45 115" stroke="#6a9fff" stroke-width="2" fill="none"/>
+</svg>

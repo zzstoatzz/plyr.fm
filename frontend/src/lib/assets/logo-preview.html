@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>relay logo options</title>
+    <style>
+        body {
+            background: #0a0a0a;
+            color: #e0e0e0;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            padding: 2rem;
+            margin: 0;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 3rem;
+            color: #6a9fff;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .option {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+        }
+        .option h2 {
+            margin-top: 0;
+            color: #6a9fff;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+        .logo-container {
+            background: #0a0a0a;
+            border: 1px solid #222;
+            border-radius: 4px;
+            padding: 2rem;
+            margin-bottom: 1rem;
+        }
+        .logo-container svg {
+            width: 100%;
+            height: auto;
+            max-width: 200px;
+        }
+        .description {
+            font-size: 0.85rem;
+            color: #888;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <h1>relay logo options</h1>
+    <div class="grid">
+        <div class="option">
+            <h2>option 1</h2>
+            <div class="logo-container">
+                <img src="favicon-option-1.svg" alt="option 1" />
+            </div>
+            <p class="description">bold geometric R with signal waves - suggests transmission/broadcast</p>
+        </div>
+
+        <div class="option">
+            <h2>option 2</h2>
+            <div class="logo-container">
+                <img src="favicon-option-2.svg" alt="option 2" />
+            </div>
+            <p class="description">minimal outlined R - clean, modern, versatile</p>
+        </div>
+
+        <div class="option">
+            <h2>option 3</h2>
+            <div class="logo-container">
+                <img src="favicon-option-3.svg" alt="option 3" />
+            </div>
+            <p class="description">angular/tech R with waveform base - suggests audio/music</p>
+        </div>
+
+        <div class="option">
+            <h2>option 4</h2>
+            <div class="logo-container">
+                <img src="favicon-option-4.svg" alt="option 4" />
+            </div>
+            <p class="description">clean monospace-style R - geometric, technical aesthetic</p>
+        </div>
+    </div>
+</body>
+</html>
