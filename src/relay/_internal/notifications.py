@@ -9,7 +9,8 @@ from atproto_client.models.chat.bsky.convo.send_message import DataDict
 from sqlalchemy import select
 
 from relay.config import settings
-from relay.models import Track, get_db
+from relay.models import Track
+from relay.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class NotificationService:
         if not self.recipient_did or not self.client:
             return
 
-        async with get_db() as db:
+        async with db_session() as db:
             try:
                 # determine time window for checking
                 if self.last_check is None:

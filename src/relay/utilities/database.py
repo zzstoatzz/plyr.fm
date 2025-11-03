@@ -61,9 +61,21 @@ def get_engine() -> AsyncEngine:
     return ENGINES[cache_key]
 
 
-@asynccontextmanager
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """get async database session."""
+    """get async database session (for FastAPI dependency injection)."""
+    engine = get_engine()
+    async_session_maker = sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    async with async_session_maker() as session:
+        yield session
+
+
+@asynccontextmanager
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    """get async database session (for manual async with usage)."""
     engine = get_engine()
     async_session_maker = sessionmaker(
         bind=engine,

@@ -6,7 +6,7 @@ from relay.models.database import Base
 from relay.models.preferences import UserPreferences
 from relay.models.session import UserSession
 from relay.models.track import Track
-from relay.utilities.database import get_db, init_db
+from relay.utilities.database import db_session, get_db, init_db
 
 __all__ = [
     "Artist",
@@ -15,6 +15,7 @@ __all__ = [
     "Track",
     "UserPreferences",
     "UserSession",
+    "db_session",
     "get_db",
     "init_db",
 ]
