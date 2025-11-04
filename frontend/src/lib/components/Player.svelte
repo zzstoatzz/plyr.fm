@@ -85,6 +85,8 @@
 
 	// sync queue.currentTrack with player
 	let previousQueueIndex = $state<number>(-1);
+	let shouldAutoPlay = $state(false);
+
 	$effect(() => {
 		if (queue.currentTrack) {
 			const trackChanged = queue.currentTrack.id !== player.currentTrack?.id;
@@ -101,6 +103,14 @@
 		}
 	});
 
+	// auto-play when track finishes loading
+	$effect(() => {
+		if (shouldAutoPlay && !isLoadingTrack) {
+			player.paused = false;
+			shouldAutoPlay = false;
+		}
+	});
+
 	function handleTrackEnded() {
 		if (queue.repeatMode === 'one') {
 			player.currentTime = 0;
@@ -114,8 +124,10 @@
 		}
 
 		if (queue.hasNext) {
+			shouldAutoPlay = true;
 			queue.next();
 		} else if (queue.repeatMode === 'all') {
+			shouldAutoPlay = true;
 			queue.next();
 		} else {
 			player.reset();
