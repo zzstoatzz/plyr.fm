@@ -4,8 +4,11 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from relay._internal import Session, queue_service, require_auth
+from relay.models import UserPreferences, get_db
 
 router = APIRouter(prefix="/queue", tags=["queue"])
 
@@ -27,13 +30,20 @@ class QueueUpdate(BaseModel):
 @router.get("/")
 async def get_queue(
     response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> QueueResponse:
     """get current queue state with ETag for caching."""
     result = await queue_service.get_queue(session.did)
 
     if result is None:
-        # return empty queue
+        # return empty queue with auto_advance from preferences
+        prefs_result = await db.execute(
+            select(UserPreferences).where(UserPreferences.did == session.did)
+        )
+        prefs = prefs_result.scalar_one_or_none()
+        auto_advance = prefs.auto_advance if prefs else True
+
         state = {
             "track_ids": [],
             "current_index": 0,
@@ -41,6 +51,7 @@ async def get_queue(
             "shuffle": False,
             "repeat_mode": "none",
             "original_order_ids": [],
+            "auto_advance": auto_advance,
         }
         revision = 0
         response.headers["ETag"] = f'"{revision}"'
