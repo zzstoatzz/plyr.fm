@@ -161,6 +161,7 @@
 	.clear-btn {
 		padding: 0.25rem 0.75rem;
 		font-size: 0.75rem;
+		font-family: inherit;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		background: transparent;

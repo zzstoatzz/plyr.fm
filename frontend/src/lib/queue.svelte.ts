@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import type { QueueResponse, QueueState, RepeatMode, Track } from './types';
+import type { QueueResponse, QueueState, Track } from './types';
 import { API_URL } from './config';
 
 const SYNC_DEBOUNCE_MS = 250;
@@ -9,7 +9,6 @@ class Queue {
 	tracks = $state<Track[]>([]);
 	currentIndex = $state(0);
 	shuffle = $state(false);
-	repeatMode = $state<RepeatMode>('none');
 	originalOrder = $state<Track[]>([]);
 	autoAdvance = $state(true);
 
@@ -29,14 +28,10 @@ class Queue {
 	}
 
 	get hasNext(): boolean {
-		if (this.repeatMode === 'one') return true;
-		if (this.repeatMode === 'all' && this.tracks.length > 0) return true;
 		return this.currentIndex < this.tracks.length - 1;
 	}
 
 	get hasPrevious(): boolean {
-		if (this.repeatMode === 'one') return true;
-		if (this.repeatMode === 'all' && this.tracks.length > 0) return true;
 		return this.currentIndex > 0;
 	}
 
@@ -209,7 +204,6 @@ class Queue {
 		}
 
 		this.shuffle = state.shuffle;
-		this.repeatMode = state.repeat_mode;
 
 		// sync autoAdvance from server
 		if (state.auto_advance !== undefined) {
@@ -284,7 +278,6 @@ class Queue {
 				current_index: this.currentIndex,
 				current_track_id: this.currentTrack?.file_id ?? null,
 				shuffle: this.shuffle,
-				repeat_mode: this.repeatMode,
 				original_order_ids: this.originalOrder.map((t) => t.file_id)
 			};
 
@@ -389,37 +382,21 @@ class Queue {
 	}
 
 	next() {
-		// when repeat-one is active and track naturally ends, player handles replay
-		// but manual next button should still advance to next track
 		if (this.tracks.length === 0) return;
 
 		if (this.currentIndex < this.tracks.length - 1) {
 			this.currentIndex += 1;
-		} else if (this.repeatMode === 'all') {
-			this.currentIndex = 0;
-		} else if (this.repeatMode === 'none') {
-			// at end of queue with no repeat - stay at last track
-			return;
+			this.schedulePush();
 		}
-
-		this.schedulePush();
 	}
 
 	previous() {
-		// when repeat-one is active and track naturally ends, player handles replay
-		// but manual previous button should still go to previous track
 		if (this.tracks.length === 0) return;
 
 		if (this.currentIndex > 0) {
 			this.currentIndex -= 1;
-		} else if (this.repeatMode === 'all') {
-			this.currentIndex = this.tracks.length - 1;
-		} else if (this.repeatMode === 'none') {
-			// at start of queue with no repeat - stay at first track
-			return;
+			this.schedulePush();
 		}
-
-		this.schedulePush();
 	}
 
 	toggleShuffle() {
@@ -460,18 +437,6 @@ class Queue {
 
 		// current index stays the same (it's in the same position)
 		// no need to update currentIndex
-
-		this.schedulePush();
-	}
-
-	cycleRepeat() {
-		if (this.repeatMode === 'none') {
-			this.repeatMode = 'all';
-		} else if (this.repeatMode === 'all') {
-			this.repeatMode = 'one';
-		} else {
-			this.repeatMode = 'none';
-		}
 
 		this.schedulePush();
 	}

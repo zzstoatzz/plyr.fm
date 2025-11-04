@@ -49,7 +49,6 @@ async def get_queue(
             "current_index": 0,
             "current_track_id": None,
             "shuffle": False,
-            "repeat_mode": "none",
             "original_order_ids": [],
             "auto_advance": auto_advance,
         }

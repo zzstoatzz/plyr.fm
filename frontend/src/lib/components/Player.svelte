@@ -112,21 +112,12 @@
 	});
 
 	function handleTrackEnded() {
-		if (queue.repeatMode === 'one') {
-			player.currentTime = 0;
-			player.paused = false;
-			return;
-		}
-
 		if (!queue.autoAdvance) {
 			player.reset();
 			return;
 		}
 
 		if (queue.hasNext) {
-			shouldAutoPlay = true;
-			queue.next();
-		} else if (queue.repeatMode === 'all') {
 			shouldAutoPlay = true;
 			queue.next();
 		} else {
@@ -217,22 +208,6 @@
 							<polyline points="21 16 21 21 16 21"></polyline>
 							<line x1="15" y1="15" x2="21" y2="21"></line>
 							<line x1="4" y1="4" x2="9" y2="9"></line>
-						</svg>
-					</button>
-
-					<button
-						class="option-btn"
-						class:active={queue.repeatMode !== 'none'}
-						class:repeat-one={queue.repeatMode === 'one'}
-						onclick={() => queue.cycleRepeat()}
-						title={queue.repeatMode === 'none' ? 'repeat off' : queue.repeatMode === 'all' ? 'repeat all' : 'repeat one'}
-					>
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-							{#if queue.repeatMode === 'one'}
-								<path d="M17 2L21 6L17 10V7H7V10H5V5H17V2Z M7 22L3 18L7 14V17H17V14H19V19H7V22Z M13 17H15V13H13V17Z" />
-							{:else}
-								<path d="M17 2L21 6L17 10V7H7V10H5V5H17V2Z M7 22L3 18L7 14V17H17V14H19V19H7V22Z" />
-							{/if}
 						</svg>
 					</button>
 				</div>
@@ -409,15 +384,6 @@
 	.option-btn.active {
 		color: var(--accent);
 		border-color: var(--accent);
-	}
-
-	.option-btn.repeat-one::after {
-		content: '1';
-		position: absolute;
-		font-size: 0.6rem;
-		font-weight: 600;
-		margin-top: 1px;
-		color: currentColor;
 	}
 
 	.control-btn {

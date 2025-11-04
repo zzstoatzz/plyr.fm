@@ -139,6 +139,7 @@
 		padding: 0.5rem 1rem;
 		border-radius: 6px;
 		font-size: 0.9rem;
+		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
 		white-space: nowrap;
