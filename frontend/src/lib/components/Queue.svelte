@@ -40,6 +40,15 @@
 	<div class="queue">
 		<div class="queue-header">
 			<h2>queue</h2>
+			{#if upcoming.length > 0}
+				<button
+					class="clear-btn"
+					onclick={() => queue.clearUpNext()}
+					title="clear upcoming tracks"
+				>
+					clear queue
+				</button>
+			{/if}
 		</div>
 
 		<div class="queue-body">
@@ -165,6 +174,25 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+	}
+
+	.clear-btn {
+		padding: 0.25rem 0.75rem;
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-tertiary);
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.clear-btn:hover {
+		background: var(--bg-secondary);
+		color: var(--text-secondary);
+		border-color: var(--border-medium);
 	}
 
 	.queue-body {

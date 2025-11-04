@@ -166,18 +166,22 @@ class Queue {
 		const { state, tracks } = snapshot;
 		const trackIds = state.track_ids ?? [];
 		const serverTracks = tracks ?? [];
-		const previousTracks = [...this.tracks];
 
+		// build track lookup by file_id from server tracks (deduplicated)
+		const trackByFileId = new Map<string, Track>();
+		for (const track of serverTracks) {
+			if (track) {
+				trackByFileId.set(track.file_id, track);
+			}
+		}
+
+		// build ordered tracks array, using track metadata for each file_id
 		const orderedTracks: Track[] = [];
-		for (let i = 0; i < trackIds.length; i++) {
-			const fileId = trackIds[i];
-			const serverTrack = serverTracks[i];
-			const existingTrack = previousTracks[i];
-			const fallbackTrack = previousTracks.find((track) => track.file_id === fileId);
-			const next = serverTrack ?? existingTrack ?? fallbackTrack;
-
-			if (next) {
-				orderedTracks.push(next);
+		for (const fileId of trackIds) {
+			const track = trackByFileId.get(fileId);
+			if (track) {
+				// always use a copy to ensure each queue position is independent
+				orderedTracks.push({ ...track });
 			}
 		}
 
@@ -185,29 +189,18 @@ class Queue {
 			this.tracks = orderedTracks;
 		}
 
+		// build original order array
 		const originalIds =
 			state.original_order_ids && state.original_order_ids.length > 0
 				? state.original_order_ids
 				: trackIds;
 
-		const pools = new Map<string, Track[]>();
-		for (const track of orderedTracks) {
-			const list = pools.get(track.file_id) ?? [];
-			list.push(track);
-			pools.set(track.file_id, list);
-		}
-
 		const originalTracks: Track[] = [];
 		for (const fileId of originalIds) {
-			const pool = pools.get(fileId);
-			if (pool && pool.length > 0) {
-				originalTracks.push(pool.shift()!);
-				continue;
-			}
-
-			const fallback = orderedTracks.find((track) => track.file_id === fileId);
-			if (fallback) {
-				originalTracks.push(fallback);
+			const track = trackByFileId.get(fileId);
+			if (track) {
+				// always use a copy to ensure independence
+				originalTracks.push({ ...track });
 			}
 		}
 
@@ -391,67 +384,77 @@ class Queue {
 	}
 
 	next() {
-		if (!this.hasNext) return;
-
-		if (this.repeatMode === 'one') {
-			return;
-		}
+		// when repeat-one is active and track naturally ends, player handles replay
+		// but manual next button should still advance to next track
+		if (this.tracks.length === 0) return;
 
 		if (this.currentIndex < this.tracks.length - 1) {
 			this.currentIndex += 1;
 		} else if (this.repeatMode === 'all') {
 			this.currentIndex = 0;
+		} else if (this.repeatMode === 'none') {
+			// at end of queue with no repeat - stay at last track
+			return;
 		}
 
 		this.schedulePush();
 	}
 
 	previous() {
-		if (!this.hasPrevious) return;
-
-		if (this.repeatMode === 'one') {
-			return;
-		}
+		// when repeat-one is active and track naturally ends, player handles replay
+		// but manual previous button should still go to previous track
+		if (this.tracks.length === 0) return;
 
 		if (this.currentIndex > 0) {
 			this.currentIndex -= 1;
 		} else if (this.repeatMode === 'all') {
 			this.currentIndex = this.tracks.length - 1;
+		} else if (this.repeatMode === 'none') {
+			// at start of queue with no repeat - stay at first track
+			return;
 		}
 
 		this.schedulePush();
 	}
 
 	toggleShuffle() {
+		// shuffle is an action, not a mode - shuffle upcoming tracks every time
 		if (this.tracks.length <= 1) {
-			this.shuffle = false;
 			return;
 		}
 
-		const current = this.currentTrack;
+		// keep current track, shuffle everything after it
+		const current = this.tracks[this.currentIndex];
+		const before = this.tracks.slice(0, this.currentIndex);
+		const after = this.tracks.slice(this.currentIndex + 1);
 
-		if (!this.shuffle) {
-			this.originalOrder = [...this.tracks];
-			const shuffled = [...this.tracks];
+		// if only one track in up next, nothing to shuffle
+		if (after.length <= 1) {
+			return;
+		}
 
+		// fisher-yates shuffle, ensuring we get a DIFFERENT permutation
+		let shuffled: typeof after;
+		let attempts = 0;
+		const maxAttempts = 10;
+
+		do {
+			shuffled = [...after];
 			for (let i = shuffled.length - 1; i > 0; i--) {
 				const j = Math.floor(Math.random() * (i + 1));
 				[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
 			}
+			attempts++;
+		} while (
+			attempts < maxAttempts &&
+			shuffled.every((track, i) => track.file_id === after[i].file_id)
+		);
 
-			this.tracks = shuffled;
-			this.shuffle = true;
-		} else {
-			this.tracks = [...this.originalOrder];
-			this.shuffle = false;
-		}
+		// rebuild queue: everything before current + current + shuffled upcoming
+		this.tracks = [...before, current, ...shuffled];
 
-		if (current) {
-			const newIndex = this.tracks.findIndex((track) => track.file_id === current.file_id);
-			this.currentIndex = newIndex === -1 ? this.clampIndex(this.currentIndex) : newIndex;
-		} else {
-			this.currentIndex = this.clampIndex(this.currentIndex);
-		}
+		// current index stays the same (it's in the same position)
+		// no need to update currentIndex
 
 		this.schedulePush();
 	}
@@ -515,6 +518,20 @@ class Queue {
 		} else if (index === this.currentIndex) {
 			this.currentIndex = this.clampIndex(this.currentIndex);
 		}
+
+		this.schedulePush();
+	}
+
+	clearUpNext() {
+		if (this.tracks.length === 0) return;
+
+		// keep only the current track
+		const currentTrack = this.tracks[this.currentIndex];
+		if (!currentTrack) return;
+
+		this.tracks = [currentTrack];
+		this.originalOrder = [currentTrack];
+		this.currentIndex = 0;
 
 		this.schedulePush();
 	}
