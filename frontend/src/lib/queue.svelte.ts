@@ -211,6 +211,11 @@ class Queue {
 		this.shuffle = state.shuffle;
 		this.repeatMode = state.repeat_mode;
 
+		// sync autoAdvance from server
+		if (state.auto_advance !== undefined) {
+			this.autoAdvance = state.auto_advance;
+		}
+
 		this.currentIndex = this.resolveCurrentIndex(
 			state.current_track_id,
 			state.current_index,

@@ -44,6 +44,7 @@ export interface QueueState {
 	shuffle: boolean;
 	repeat_mode: RepeatMode;
 	original_order_ids: string[];
+	auto_advance?: boolean;
 }
 
 export interface QueueResponse {

@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from relay.config import settings
-from relay.models import QueueState, Track
+from relay.models import QueueState, Track, UserPreferences
 from relay.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -111,11 +111,19 @@ class QueueService:
             queue_state = result.scalar_one_or_none()
 
             if queue_state:
+                # fetch auto_advance from user_preferences
+                prefs_stmt = select(UserPreferences).where(UserPreferences.did == did)
+                prefs_result = await db.execute(prefs_stmt)
+                prefs = prefs_result.scalar_one_or_none()
+                auto_advance = prefs.auto_advance if prefs else True
+
                 tracks = await self._hydrate_tracks(
                     db,
                     queue_state.state.get("track_ids", []),
                 )
-                data = (queue_state.state, queue_state.revision, tracks)
+                # include auto_advance in state
+                state = {**queue_state.state, "auto_advance": auto_advance}
+                data = (state, queue_state.revision, tracks)
                 self.cache[did] = data
                 return data
 
@@ -174,6 +182,12 @@ class QueueService:
                 await db.commit()
                 await db.refresh(existing)
 
+                # fetch auto_advance from user_preferences
+                prefs_stmt = select(UserPreferences).where(UserPreferences.did == did)
+                prefs_result = await db.execute(prefs_stmt)
+                prefs = prefs_result.scalar_one_or_none()
+                auto_advance = prefs.auto_advance if prefs else True
+
                 tracks = await self._hydrate_tracks(
                     db,
                     existing.state.get("track_ids", []),
@@ -182,8 +196,9 @@ class QueueService:
                 # notify other instances
                 await self._notify_change(did)
 
-                # update cache
-                result_data = (existing.state, existing.revision, tracks)
+                # update cache - include auto_advance in state
+                state_with_prefs = {**existing.state, "auto_advance": auto_advance}
+                result_data = (state_with_prefs, existing.revision, tracks)
                 self.cache[did] = result_data
 
                 return result_data
