@@ -24,12 +24,12 @@ The queue is a cross-device, server-authoritative data model with optimistic loc
 
 ## UI behavior
 
-- Sidebar layout shows a dedicated “Now Playing” card with prev/next buttons. Shuffle/repeat controls now live in the global player footer so they’re always visible.
-- “Up Next” lists tracks strictly beyond `currentIndex`. Drag-and-drop reorders upcoming entries; removing an item updates both local state and server snapshot.
-- Clicking “play” on any track list item (e.g., latest tracks) invokes `queue.playNow(track)`: the new track is inserted at the head of the queue and becomes now playing without disturbing the existing “up next” order. Duplicate tracks are allowed—each click adds another instance to the queue.
-- User preference “Auto-play next track” controls whether we automatically advance when the current track ends (`queue.autoAdvance`). Toggle lives beside the accent color picker and persists via `/preferences/`.
-- Clicking “play” on any track list item (e.g., latest tracks) invokes `queue.playNow(track)`: the new track is inserted at the head of the queue and becomes now playing without disturbing the existing “up next” order. Duplicate tracks are allowed—each click adds another instance to the queue.
-- The clear (“X”) control was removed—clearing the queue while something is playing is not supported. Instead users remove upcoming tracks individually or replace the queue entirely.
+- Sidebar layout shows a dedicated "Now Playing" card with prev/next buttons. Shuffle/repeat controls now live in the global player footer so they're always visible.
+- "Up Next" lists tracks strictly beyond `currentIndex`. Drag-and-drop reorders upcoming entries; removing an item updates both local state and server snapshot.
+- Clicking "play" on any track list item (e.g., latest tracks) invokes `queue.playNow(track)`: the new track is inserted at the head of the queue and becomes now playing without disturbing the existing "up next" order. Duplicate tracks are allowed—each click adds another instance to the queue.
+- User preference "Auto-play next track" controls whether we automatically advance when the current track ends (`queue.autoAdvance`). Toggle lives in the settings menu (gear icon in header) alongside accent color picker and persists via `/preferences/`. When enabled, playback automatically starts the next track after the `loadeddata` event fires. When disabled, playback stops after the current track ends.
+- The clear ("X") control was removed—clearing the queue while something is playing is not supported. Instead users remove upcoming tracks individually or replace the queue entirely.
+- Queue toggle button (three horizontal lines icon) opens/closes the sidebar. On mobile (≤768px), the button is positioned higher (200px from bottom) to remain visible above the taller stacked player controls. The sidebar takes full screen width on mobile.
 
 ## repeat & shuffle
 
