@@ -3,9 +3,10 @@
 	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
 	import type { Track, Artist, User } from '$lib/types';
-	import TrackItem from '$lib/components/TrackItem.svelte';
+import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import { player } from '$lib/player.svelte';
+import { player } from '$lib/player.svelte';
+import { queue } from '$lib/queue.svelte';
 	import type { PageData } from './$types';
 
 	// receive server-loaded data
@@ -179,7 +180,7 @@
 						<TrackItem
 							{track}
 							isPlaying={player.currentTrack?.id === track.id}
-							onPlay={(t) => player.playTrack(t)}
+							onPlay={(t) => queue.playNow(t)}
 						/>
 					{/each}
 				</div>

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +38,8 @@ class UpdateArtistRequest(BaseModel):
 class ArtistResponse(BaseModel):
     """artist profile response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     did: str
     handle: str
     display_name: str
@@ -45,9 +47,6 @@ class ArtistResponse(BaseModel):
     avatar_url: str | None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # endpoints

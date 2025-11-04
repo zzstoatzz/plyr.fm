@@ -46,18 +46,20 @@
 
 	<script>
 		// prevent flash by applying saved settings immediately
-		(function() {
-			const savedAccent = localStorage.getItem('accentColor');
-			if (savedAccent) {
-				document.documentElement.style.setProperty('--accent', savedAccent);
-				// simple lightening for hover state
-				const r = parseInt(savedAccent.slice(1, 3), 16);
-				const g = parseInt(savedAccent.slice(3, 5), 16);
-				const b = parseInt(savedAccent.slice(5, 7), 16);
-				const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
-				document.documentElement.style.setProperty('--accent-hover', hover);
-			}
-		})();
+		if (typeof window !== 'undefined') {
+			(function() {
+				const savedAccent = localStorage.getItem('accentColor');
+				if (savedAccent) {
+					document.documentElement.style.setProperty('--accent', savedAccent);
+					// simple lightening for hover state
+					const r = parseInt(savedAccent.slice(1, 3), 16);
+					const g = parseInt(savedAccent.slice(3, 5), 16);
+					const b = parseInt(savedAccent.slice(5, 7), 16);
+					const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
+					document.documentElement.style.setProperty('--accent-hover', hover);
+				}
+			})();
+		}
 	</script>
 </svelte:head>
 

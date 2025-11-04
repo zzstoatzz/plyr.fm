@@ -25,6 +25,11 @@ async def stream_audio(file_id: str):
             return RedirectResponse(url=url)
 
     # filesystem: serve file directly
+    from relay.storage.filesystem import FilesystemStorage
+
+    if not isinstance(storage, FilesystemStorage):
+        raise HTTPException(status_code=500, detail="invalid storage backend")
+
     file_path = storage.get_path(file_id)
 
     if not file_path:

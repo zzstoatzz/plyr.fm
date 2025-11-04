@@ -17,12 +17,14 @@ class PreferencesResponse(BaseModel):
     """user preferences response model."""
 
     accent_color: str
+    auto_advance: bool
 
 
 class PreferencesUpdate(BaseModel):
     """user preferences update model."""
 
     accent_color: str | None = None
+    auto_advance: bool | None = None
 
 
 @router.get("/")
@@ -43,7 +45,9 @@ async def get_preferences(
         await db.commit()
         await db.refresh(prefs)
 
-    return PreferencesResponse(accent_color=prefs.accent_color)
+    return PreferencesResponse(
+        accent_color=prefs.accent_color, auto_advance=prefs.auto_advance
+    )
 
 
 @router.post("/")
@@ -61,15 +65,23 @@ async def update_preferences(
     if not prefs:
         # create new preferences
         prefs = UserPreferences(
-            did=session.did, accent_color=update.accent_color or "#6a9fff"
+            did=session.did,
+            accent_color=update.accent_color or "#6a9fff",
+            auto_advance=update.auto_advance
+            if update.auto_advance is not None
+            else True,
         )
         db.add(prefs)
     else:
         # update existing
         if update.accent_color is not None:
             prefs.accent_color = update.accent_color
+        if update.auto_advance is not None:
+            prefs.auto_advance = update.auto_advance
 
     await db.commit()
     await db.refresh(prefs)
 
-    return PreferencesResponse(accent_color=prefs.accent_color)
+    return PreferencesResponse(
+        accent_color=prefs.accent_color, auto_advance=prefs.auto_advance
+    )

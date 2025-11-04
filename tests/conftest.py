@@ -14,12 +14,13 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import sessionmaker
 
+from relay.config import settings
 from relay.models import Base
 
 
 @asynccontextmanager
 async def session_context(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    """create a database session context, matching Nebula's pattern."""
+    """create a database session context."""
     async_session_maker = sessionmaker(
         bind=engine,
         class_=AsyncSession,
@@ -34,10 +35,7 @@ async def _create_clear_database_procedure(
 ) -> None:
     """creates a stored procedure in the test database used for quickly clearing
     the database between tests.
-
-    this follows the pattern used in Nebula - delete only data created after test start.
     """
-    # get all tables in dependency order (reversed for deletion)
     tables = list(reversed(Base.metadata.sorted_tables))
 
     def schema(table: sa.Table) -> str:
@@ -100,9 +98,9 @@ async def _create_clear_database_procedure(
 def test_database_url(worker_id: str) -> str:
     """generate a unique test database URL for each pytest worker.
 
-    uses port 5433 which maps to the test database in tests/docker-compose.yml.
+    reads from settings.database_url and appends worker suffix if needed.
     """
-    base_url = "postgresql+asyncpg://relay_test:relay_test@localhost:5433/relay_test"
+    base_url = settings.database_url
 
     # for parallel test execution, append worker id to database name
     if worker_id == "master":
@@ -124,16 +122,11 @@ async def _setup_database(test_database_url: str) -> None:
 
 
 @pytest.fixture(scope="session")
-def _database_setup(test_database_url: str):
+def _database_setup(test_database_url: str) -> None:
     """create tables and stored procedures once per test session."""
     import asyncio
 
     asyncio.run(_setup_database(test_database_url))
-    try:
-        yield
-    finally:
-        # nothing to tear down; procedure is idempotent and tables persist for session
-        pass
 
 
 @pytest.fixture()
@@ -147,10 +140,7 @@ async def _engine(test_database_url: str, _database_setup: None) -> AsyncEngine:
 
 @pytest.fixture()
 async def _clear_db(_engine: AsyncEngine) -> AsyncGenerator[None, None]:
-    """clear the database after each test.
-
-    this fixture must be yielded before the session fixture to prevent locking.
-    """
+    """clear the database after each test."""
     start_time = datetime.now(UTC)
 
     try:

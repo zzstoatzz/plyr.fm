@@ -34,3 +34,20 @@ export interface Artist {
 	avatar_url?: string;
 	bio?: string;
 }
+
+export type RepeatMode = 'none' | 'all' | 'one';
+
+export interface QueueState {
+	track_ids: string[];
+	current_index: number;
+	current_track_id: string | null;
+	shuffle: boolean;
+	repeat_mode: RepeatMode;
+	original_order_ids: string[];
+}
+
+export interface QueueResponse {
+	state: QueueState;
+	revision: number;
+	tracks: Track[];
+}

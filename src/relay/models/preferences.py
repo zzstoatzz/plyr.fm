@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import Boolean, DateTime, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from relay.models.database import Base
@@ -18,6 +18,9 @@ class UserPreferences(Base):
 
     # ui preferences
     accent_color: Mapped[str] = mapped_column(String, nullable=False, default="#6a9fff")
+    auto_advance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
 
     # metadata
     created_at: Mapped[datetime] = mapped_column(
