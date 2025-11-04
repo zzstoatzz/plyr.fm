@@ -90,24 +90,16 @@ class Queue {
 		this.channel = new BroadcastChannel('relay-queue');
 		this.channel.onmessage = (event) => {
 			if (event.data.type === 'queue-updated') {
-				console.log('[Queue] broadcast received', event.data, {
-					localTabId: this.tabId,
-					currentRevision: this.revision
-				});
-
 				// ignore our own broadcasts (we already have this revision)
 				if (event.data.sourceTabId && event.data.sourceTabId === this.tabId) {
-					console.log('[Queue] ignoring self broadcast');
 					return;
 				}
 
 				if (event.data.revision === this.revision) {
-					console.log('[Queue] ignoring same revision broadcast');
 					return;
 				}
 
 				// another tab updated the queue, refetch to stay in sync
-				console.log('[Queue] applying remote update');
 				this.lastUpdateWasLocal = false;
 				void this.fetchQueue(true);
 			}
@@ -362,7 +354,6 @@ class Queue {
 			// notify other tabs about the queue update
 			const sourceTabId = this.tabId ?? this.createTabId();
 			this.tabId = sourceTabId;
-			console.log('[Queue] broadcasting update', { revision: data.revision, sourceTabId });
 			this.channel?.postMessage({ type: 'queue-updated', revision: data.revision, sourceTabId });
 
 			return true;
@@ -434,10 +425,6 @@ class Queue {
 		if (this.tracks.length === 0) return;
 
 		if (this.currentIndex < this.tracks.length - 1) {
-			console.log('[Queue] next() local advance', {
-				currentIndex: this.currentIndex,
-				nextIndex: this.currentIndex + 1
-			});
 			this.lastUpdateWasLocal = true;
 			this.currentIndex += 1;
 			this.schedulePush();
