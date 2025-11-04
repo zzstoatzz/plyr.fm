@@ -21,6 +21,7 @@ class Queue {
 
 	syncTimer: number | null = null;
 	pendingSync = false;
+	channel: BroadcastChannel | null = null;
 
 	get currentTrack(): Track | null {
 		if (this.tracks.length === 0) return null;
@@ -74,6 +75,15 @@ class Queue {
 		if (savedAutoAdvance !== null) {
 			this.autoAdvance = savedAutoAdvance !== '0';
 		}
+
+		// set up cross-tab synchronization
+		this.channel = new BroadcastChannel('relay-queue');
+		this.channel.onmessage = (event) => {
+			if (event.data.type === 'queue-updated') {
+				// another tab updated the queue, refetch to stay in sync
+				void this.fetchQueue(true);
+			}
+		};
 
 		await this.fetchQueue();
 
@@ -320,6 +330,9 @@ class Queue {
 			this.etag = newEtag;
 
 			this.applySnapshot(data);
+
+			// notify other tabs about the queue update
+			this.channel?.postMessage({ type: 'queue-updated', revision: data.revision });
 
 			return true;
 		} catch (error) {
