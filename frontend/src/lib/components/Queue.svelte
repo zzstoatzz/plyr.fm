@@ -63,24 +63,6 @@
 							</div>
 						</div>
 
-						<div class="now-playing-actions">
-							<button
-								class="queue-action"
-								onclick={() => queue.previous()}
-								title="play previous"
-								disabled={!queue.hasPrevious}
-							>
-								prev
-							</button>
-							<button
-								class="queue-action"
-								onclick={() => queue.next()}
-								title="play next"
-								disabled={!queue.hasNext}
-							>
-								next
-							</button>
-						</div>
 					</div>
 				</section>
 			{/if}
@@ -220,6 +202,7 @@
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
 		gap: 1rem;
+		box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 15%, transparent);
 	}
 
 	.now-playing-card .track-title {
@@ -243,35 +226,6 @@
 		color: var(--accent);
 	}
 
-	.now-playing-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.queue-action {
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-subtle);
-		color: var(--text-secondary);
-		padding: 0.3rem 0.75rem;
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		transition: all 0.2s;
-	}
-
-	.queue-action:hover:not(:disabled) {
-		color: var(--text-primary);
-		border-color: var(--border-default);
-		background: var(--bg-hover);
-	}
-
-	.queue-action:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
 
 	.queue-upcoming {
 		display: flex;
