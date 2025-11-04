@@ -119,6 +119,7 @@ class Queue {
 
 	handleBeforeUnload = () => {
 		void this.flushSync();
+		this.channel?.close();
 	};
 
 	async flushSync() {
@@ -354,6 +355,11 @@ class Queue {
 			// notify other tabs about the queue update
 			const sourceTabId = this.tabId ?? this.createTabId();
 			this.tabId = sourceTabId;
+			try {
+				sessionStorage.setItem('queue_tab_id', sourceTabId);
+			} catch (error) {
+				console.warn('failed to persist queue tab id', error);
+			}
 			this.channel?.postMessage({ type: 'queue-updated', revision: data.revision, sourceTabId });
 
 			return true;
