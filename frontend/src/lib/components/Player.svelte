@@ -73,6 +73,12 @@
 	$effect(() => {
 		if (!player.audioElement || isLoadingTrack) return;
 
+		console.log('[Player] audio sync effect', {
+			playerPaused: player.paused,
+			isLoadingTrack,
+			currentSrc: player.audioElement?.currentSrc
+		});
+
 		if (player.paused) {
 			player.audioElement.pause();
 		} else {
@@ -89,15 +95,39 @@
 
 	$effect(() => {
 		if (queue.currentTrack) {
+			console.log('[Player] queue effect', {
+				trackId: queue.currentTrack.id,
+				previousTrackId: player.currentTrack?.id,
+				queueIndex: queue.currentIndex,
+				previousQueueIndex,
+				lastUpdateWasLocal: queue.lastUpdateWasLocal,
+				shouldAutoPlay
+			});
+
 			const trackChanged = queue.currentTrack.id !== player.currentTrack?.id;
 			const indexChanged = queue.currentIndex !== previousQueueIndex;
 
 			if (trackChanged) {
-				player.playTrack(queue.currentTrack);
+				// always update the current track in player
+				player.currentTrack = queue.currentTrack;
 				previousQueueIndex = queue.currentIndex;
+
+				// only set shouldAutoPlay if this was a local update (not from another tab's broadcast)
+				if (queue.lastUpdateWasLocal) {
+					console.log('[Player] track changed from local update, will auto-play');
+					shouldAutoPlay = true;
+				}
 			} else if (indexChanged) {
+				console.log('[Player] index changed without track change', {
+					lastUpdateWasLocal: queue.lastUpdateWasLocal
+				});
+
 				player.currentTime = 0;
-				player.paused = false;
+				// only auto-play if this was a local update
+				if (queue.lastUpdateWasLocal) {
+					console.log('[Player] index change from local update, unpausing');
+					player.paused = false;
+				}
 				previousQueueIndex = queue.currentIndex;
 			}
 		}
@@ -106,18 +136,29 @@
 	// auto-play when track finishes loading
 	$effect(() => {
 		if (shouldAutoPlay && !isLoadingTrack) {
+			console.log('[Player] auto-play effect firing', {
+				isLoadingTrack,
+				shouldAutoPlay,
+				playerPaused: player.paused
+			});
 			player.paused = false;
 			shouldAutoPlay = false;
 		}
 	});
 
 	function handleTrackEnded() {
+		console.log('[Player] handleTrackEnded fired', {
+			autoAdvance: queue.autoAdvance,
+			hasNext: queue.hasNext
+		});
+
 		if (!queue.autoAdvance) {
 			player.reset();
 			return;
 		}
 
 		if (queue.hasNext) {
+			console.log('[Player] will queue.next() and auto-play');
 			shouldAutoPlay = true;
 			queue.next();
 		} else {
@@ -130,10 +171,21 @@
 	<div class="player">
 		<audio
 			bind:this={player.audioElement}
-			bind:paused={player.paused}
 			bind:currentTime={player.currentTime}
 			bind:duration={player.duration}
 			bind:volume={player.volume}
+			onplay={() => {
+				if (player.paused) {
+					console.log('[Player] audio element fired play event while state paused=true, correcting');
+				}
+				player.paused = false;
+			}}
+			onpause={() => {
+				if (!player.paused) {
+					console.log('[Player] audio element fired pause event while state paused=false, correcting');
+				}
+				player.paused = true;
+			}}
 			onended={handleTrackEnded}
 		></audio>
 
