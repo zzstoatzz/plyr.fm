@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ShareButton from './ShareButton.svelte';
 	import type { Track } from '$lib/types';
+	import { queue } from '$lib/queue.svelte';
 
 	interface Props {
 		track: Track;
@@ -14,6 +15,11 @@
 	const shareUrl = typeof window !== 'undefined'
 		? `${window.location.origin}/track/${track.id}`
 		: '';
+
+	function addToQueue(e: Event) {
+		e.stopPropagation();
+		queue.addTracks([track]);
+	}
 </script>
 
 <div class="track-container" class:playing={isPlaying}>
@@ -73,6 +79,16 @@
 		</div>
 	</button>
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
+		<button
+			class="action-button"
+			onclick={addToQueue}
+			title="add to queue"
+		>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<line x1="12" y1="5" x2="12" y2="19"></line>
+				<line x1="5" y1="12" x2="19" y2="12"></line>
+			</svg>
+		</button>
 		{#if track.atproto_record_url}
 			<a
 				href={track.atproto_record_url}
@@ -127,6 +143,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+		font-family: inherit;
 	}
 
 	.track-avatar {
@@ -171,6 +188,7 @@
 	}
 
 	.track-title {
+		font-family: inherit;
 		font-weight: 600;
 		font-size: 1.05rem;
 		color: #e8e8e8;
@@ -186,6 +204,7 @@
 		flex-wrap: wrap;
 		color: #b0b0b0;
 		font-size: 0.9rem;
+		font-family: inherit;
 	}
 
 	.metadata-separator {
@@ -198,6 +217,7 @@
 		text-decoration: none;
 		transition: color 0.2s;
 		font-weight: 500;
+		font-family: inherit;
 	}
 
 	.artist-link:hover {
@@ -255,6 +275,7 @@
 
 	.plays {
 		color: #999;
+		font-family: inherit;
 	}
 
 	.action-button {

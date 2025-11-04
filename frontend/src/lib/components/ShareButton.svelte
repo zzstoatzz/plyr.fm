@@ -38,11 +38,14 @@
 		background: transparent;
 		border: 1px solid #333;
 		border-radius: 4px;
-		padding: 0.5rem;
+		width: 32px;
+		height: 32px;
+		padding: 0;
 		color: #888;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
+		justify-content: center;
 		gap: 0.5rem;
 		transition: all 0.2s;
 		position: relative;
@@ -77,6 +80,18 @@
 		to {
 			opacity: 1;
 			transform: translateX(-50%) translateY(0);
+		}
+	}
+
+	@media (max-width: 768px) {
+		.share-btn {
+			width: 28px;
+			height: 28px;
+		}
+
+		.share-btn svg {
+			width: 14px;
+			height: 14px;
 		}
 	}
 </style>

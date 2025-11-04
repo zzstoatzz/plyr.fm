@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import type { User } from '$lib/types';
-	import ColorSettings from './ColorSettings.svelte';
+	import SettingsMenu from './SettingsMenu.svelte';
 
 	interface Props {
 		user: User | null;
@@ -25,7 +25,7 @@
 					<a href="/portal" class="nav-link">portal</a>
 				{/if}
 				<a href="/profile" class="user-handle">@{user?.handle}</a>
-				<ColorSettings />
+				<SettingsMenu />
 				<button onclick={onLogout} class="btn-logout">logout</button>
 			{:else}
 				<a href="/login" class="btn-primary">login</a>
@@ -139,6 +139,7 @@
 		padding: 0.5rem 1rem;
 		border-radius: 6px;
 		font-size: 0.9rem;
+		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
 		white-space: nowrap;

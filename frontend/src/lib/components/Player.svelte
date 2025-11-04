@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { player } from '$lib/player.svelte';
+	import { queue } from '$lib/queue.svelte';
 	import { API_URL } from '$lib/config';
 	import { onMount } from 'svelte';
 
@@ -81,6 +82,48 @@
 			});
 		}
 	});
+
+	// sync queue.currentTrack with player
+	let previousQueueIndex = $state<number>(-1);
+	let shouldAutoPlay = $state(false);
+
+	$effect(() => {
+		if (queue.currentTrack) {
+			const trackChanged = queue.currentTrack.id !== player.currentTrack?.id;
+			const indexChanged = queue.currentIndex !== previousQueueIndex;
+
+			if (trackChanged) {
+				player.playTrack(queue.currentTrack);
+				previousQueueIndex = queue.currentIndex;
+			} else if (indexChanged) {
+				player.currentTime = 0;
+				player.paused = false;
+				previousQueueIndex = queue.currentIndex;
+			}
+		}
+	});
+
+	// auto-play when track finishes loading
+	$effect(() => {
+		if (shouldAutoPlay && !isLoadingTrack) {
+			player.paused = false;
+			shouldAutoPlay = false;
+		}
+	});
+
+	function handleTrackEnded() {
+		if (!queue.autoAdvance) {
+			player.reset();
+			return;
+		}
+
+		if (queue.hasNext) {
+			shouldAutoPlay = true;
+			queue.next();
+		} else {
+			player.reset();
+		}
+	}
 </script>
 
 {#if player.currentTrack}
@@ -91,7 +134,7 @@
 			bind:currentTime={player.currentTime}
 			bind:duration={player.duration}
 			bind:volume={player.volume}
-			onended={() => player.reset()}
+			onended={handleTrackEnded}
 		></audio>
 
 		<div class="player-content">
@@ -112,6 +155,18 @@
 
 			<div class="player-controls">
 				<button
+					class="control-btn"
+					class:disabled={!queue.hasPrevious}
+					onclick={() => queue.previous()}
+					title="previous track"
+					disabled={!queue.hasPrevious}
+				>
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z"></path>
+					</svg>
+				</button>
+
+				<button
 					class="control-btn play-pause"
 					onclick={() => player.togglePlayPause()}
 					title={player.paused ? 'play' : 'pause'}
@@ -127,6 +182,35 @@
 						</svg>
 					{/if}
 				</button>
+
+				<button
+					class="control-btn"
+					class:disabled={!queue.hasNext}
+					onclick={() => queue.next()}
+					title="next track"
+					disabled={!queue.hasNext}
+				>
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M16 4h2v16h-2V4zM6 4l10 8-10 8V4z"></path>
+					</svg>
+				</button>
+
+				<div class="playback-options">
+					<button
+						class="option-btn"
+						class:active={queue.shuffle}
+						onclick={() => queue.toggleShuffle()}
+						title={queue.shuffle ? 'disable shuffle' : 'enable shuffle'}
+					>
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="16 3 21 3 21 8"></polyline>
+							<line x1="4" y1="20" x2="21" y2="3"></line>
+							<polyline points="21 16 21 21 16 21"></polyline>
+							<line x1="15" y1="15" x2="21" y2="21"></line>
+							<line x1="4" y1="4" x2="9" y2="9"></line>
+						</svg>
+					</button>
+				</div>
 
 				<div class="time-control">
 					<span class="time">{formattedCurrentTime}</span>
@@ -269,6 +353,37 @@
 		display: flex;
 		align-items: center;
 		gap: 1.5rem;
+	}
+
+	.playback-options {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.option-btn {
+		background: transparent;
+		border: 1px solid var(--border-default);
+		color: var(--text-secondary);
+		cursor: pointer;
+		width: 36px;
+		height: 36px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 6px;
+		transition: all 0.2s;
+		position: relative;
+	}
+
+	.option-btn:hover {
+		color: var(--text-primary);
+		border-color: var(--accent);
+	}
+
+	.option-btn.active {
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 
 	.control-btn {
@@ -445,14 +560,31 @@
 			text-align: center;
 		}
 
+		.player-metadata {
+			justify-content: center;
+		}
+
 		.player-controls {
 			width: 100%;
-			flex-direction: column;
+			flex-wrap: wrap;
+			justify-content: center;
 			gap: 1rem;
+		}
+
+		/* keep playback buttons horizontal */
+		.control-btn {
+			flex-shrink: 0;
+		}
+
+		.playback-options {
+			order: 3;
+			width: 100%;
+			justify-content: center;
 		}
 
 		.time-control {
 			width: 100%;
+			order: 2;
 		}
 
 		/* hide volume control on mobile - use device volume */

@@ -2,9 +2,11 @@
 	import logo from '$lib/assets/logo.png';
 	import Player from '$lib/components/Player.svelte';
 	import Toast from '$lib/components/Toast.svelte';
+	import Queue from '$lib/components/Queue.svelte';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
+	let showQueue = $state(false);
 
 	onMount(() => {
 		// apply saved accent color from localStorage
@@ -12,6 +14,12 @@
 		if (savedAccent) {
 			document.documentElement.style.setProperty('--accent', savedAccent);
 			document.documentElement.style.setProperty('--accent-hover', getHoverColor(savedAccent));
+		}
+
+		// restore queue visibility preference
+		const savedQueueVisibility = localStorage.getItem('showQueue');
+		if (savedQueueVisibility !== null) {
+			showQueue = savedQueueVisibility === 'true';
 		}
 	});
 
@@ -21,6 +29,11 @@
 		const g = parseInt(hex.slice(3, 5), 16);
 		const b = parseInt(hex.slice(5, 7), 16);
 		return `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
+	}
+
+	function toggleQueue() {
+		showQueue = !showQueue;
+		localStorage.setItem('showQueue', showQueue.toString());
 	}
 </script>
 
@@ -46,22 +59,43 @@
 
 	<script>
 		// prevent flash by applying saved settings immediately
-		(function() {
-			const savedAccent = localStorage.getItem('accentColor');
-			if (savedAccent) {
-				document.documentElement.style.setProperty('--accent', savedAccent);
-				// simple lightening for hover state
-				const r = parseInt(savedAccent.slice(1, 3), 16);
-				const g = parseInt(savedAccent.slice(3, 5), 16);
-				const b = parseInt(savedAccent.slice(5, 7), 16);
-				const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
-				document.documentElement.style.setProperty('--accent-hover', hover);
-			}
-		})();
+		if (typeof window !== 'undefined') {
+			(function() {
+				const savedAccent = localStorage.getItem('accentColor');
+				if (savedAccent) {
+					document.documentElement.style.setProperty('--accent', savedAccent);
+					// simple lightening for hover state
+					const r = parseInt(savedAccent.slice(1, 3), 16);
+					const g = parseInt(savedAccent.slice(3, 5), 16);
+					const b = parseInt(savedAccent.slice(5, 7), 16);
+					const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
+					document.documentElement.style.setProperty('--accent-hover', hover);
+				}
+			})();
+		}
 	</script>
 </svelte:head>
 
-{@render children?.()}
+<div class="app-layout">
+	<main class="main-content" class:with-queue={showQueue}>
+		{@render children?.()}
+	</main>
+
+	{#if showQueue}
+		<aside class="queue-sidebar">
+			<Queue />
+		</aside>
+	{/if}
+</div>
+
+<button class="queue-toggle" onclick={toggleQueue} title={showQueue ? 'hide queue' : 'show queue'}>
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+		<line x1="3" y1="6" x2="21" y2="6"></line>
+		<line x1="3" y1="12" x2="21" y2="12"></line>
+		<line x1="3" y1="18" x2="21" y2="18"></line>
+	</svg>
+</button>
+
 <Player />
 <Toast />
 
@@ -108,5 +142,70 @@
 		background: var(--bg-primary);
 		color: var(--text-primary);
 		-webkit-font-smoothing: antialiased;
+	}
+
+	.app-layout {
+		display: flex;
+		min-height: 100vh;
+	}
+
+	.main-content {
+		flex: 1;
+		transition: margin-right 0.3s ease;
+	}
+
+	.main-content.with-queue {
+		margin-right: 360px;
+	}
+
+	.queue-sidebar {
+		position: fixed;
+		top: 0;
+		right: 0;
+		width: 360px;
+		height: 100vh;
+		background: var(--bg-primary);
+		border-left: 1px solid var(--border-subtle);
+		z-index: 50;
+	}
+
+	.queue-toggle {
+		position: fixed;
+		bottom: 120px;
+		right: 20px;
+		width: 48px;
+		height: 48px;
+		border-radius: 50%;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-default);
+		color: var(--text-secondary);
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.2s;
+		z-index: 60;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.queue-toggle:hover {
+		background: var(--bg-hover);
+		color: var(--accent);
+		border-color: var(--accent);
+		transform: scale(1.05);
+	}
+
+	@media (max-width: 768px) {
+		.main-content.with-queue {
+			margin-right: 0;
+		}
+
+		.queue-sidebar {
+			width: 100%;
+		}
+
+		.queue-toggle {
+			bottom: 200px;
+		}
 	}
 </style>

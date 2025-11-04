@@ -4,7 +4,8 @@
 	import Header from '$lib/components/Header.svelte';
 	import type { User } from '$lib/types';
 	import { API_URL } from '$lib/config';
-	import { player } from '$lib/player.svelte';
+import { player } from '$lib/player.svelte';
+import { queue } from '$lib/queue.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
 
 	let user = $state<User | null>(null);
@@ -65,7 +66,7 @@
 					<TrackItem
 						{track}
 						isPlaying={player.currentTrack?.id === track.id}
-						onPlay={(t) => player.playTrack(t)}
+						onPlay={(t) => queue.playNow(t)}
 					/>
 				{/each}
 			</div>

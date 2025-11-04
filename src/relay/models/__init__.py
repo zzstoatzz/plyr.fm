@@ -6,6 +6,7 @@ from relay.models.database import Base
 from relay.models.exchange_token import ExchangeToken
 from relay.models.oauth_state import OAuthStateModel
 from relay.models.preferences import UserPreferences
+from relay.models.queue import QueueState
 from relay.models.session import UserSession
 from relay.models.track import Track
 from relay.utilities.database import db_session, get_db, init_db
@@ -16,6 +17,7 @@ __all__ = [
     "Base",
     "ExchangeToken",
     "OAuthStateModel",
+    "QueueState",
     "Track",
     "UserPreferences",
     "UserSession",

@@ -34,3 +34,18 @@ export interface Artist {
 	avatar_url?: string;
 	bio?: string;
 }
+
+export interface QueueState {
+	track_ids: string[];
+	current_index: number;
+	current_track_id: string | null;
+	shuffle: boolean;
+	original_order_ids: string[];
+	auto_advance?: boolean;
+}
+
+export interface QueueResponse {
+	state: QueueState;
+	revision: number;
+	tracks: Track[];
+}

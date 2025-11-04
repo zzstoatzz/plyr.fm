@@ -15,6 +15,7 @@ from relay._internal.auth import (
     update_session_tokens,
 )
 from relay._internal.notifications import notification_service
+from relay._internal.queue import queue_service
 
 __all__ = [
     "Session",
@@ -26,6 +27,7 @@ __all__ = [
     "handle_oauth_callback",
     "notification_service",
     "oauth_client",
+    "queue_service",
     "require_artist_profile",
     "require_auth",
     "start_oauth_flow",

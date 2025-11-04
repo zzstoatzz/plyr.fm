@@ -9,13 +9,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from relay._internal import notification_service
+from relay._internal import notification_service, queue_service
 from relay._internal.auth import _state_store
 from relay.api import (
     artists_router,
     audio_router,
     auth_router,
     preferences_router,
+    queue_router,
     search_router,
     tracks_router,
 )
@@ -42,6 +43,7 @@ else:
 async def run_periodic_tasks():
     """run periodic background tasks."""
     await notification_service.setup()
+    await queue_service.setup()
 
     while True:
         try:
@@ -71,6 +73,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     with contextlib.suppress(asyncio.CancelledError):
         await task
     await notification_service.shutdown()
+    await queue_service.shutdown()
 
 
 app = FastAPI(
@@ -99,6 +102,7 @@ app.include_router(tracks_router)
 app.include_router(audio_router)
 app.include_router(search_router)
 app.include_router(preferences_router)
+app.include_router(queue_router)
 
 
 @app.get("/health")
