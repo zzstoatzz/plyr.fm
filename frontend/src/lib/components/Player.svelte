@@ -93,11 +93,20 @@
 			const indexChanged = queue.currentIndex !== previousQueueIndex;
 
 			if (trackChanged) {
-				player.playTrack(queue.currentTrack);
+				// always update the current track in player
+				player.currentTrack = queue.currentTrack;
 				previousQueueIndex = queue.currentIndex;
+
+				// only set shouldAutoPlay if this was a local update (not from another tab's broadcast)
+				if (queue.lastUpdateWasLocal) {
+					shouldAutoPlay = true;
+				}
 			} else if (indexChanged) {
 				player.currentTime = 0;
-				player.paused = false;
+				// only auto-play if this was a local update
+				if (queue.lastUpdateWasLocal) {
+					player.paused = false;
+				}
 				previousQueueIndex = queue.currentIndex;
 			}
 		}
@@ -130,10 +139,15 @@
 	<div class="player">
 		<audio
 			bind:this={player.audioElement}
-			bind:paused={player.paused}
 			bind:currentTime={player.currentTime}
 			bind:duration={player.duration}
 			bind:volume={player.volume}
+			onplay={() => {
+				player.paused = false;
+			}}
+			onpause={() => {
+				player.paused = true;
+			}}
 			onended={handleTrackEnded}
 		></audio>
 

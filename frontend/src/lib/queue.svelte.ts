@@ -15,12 +15,15 @@ class Queue {
 	revision = $state<number | null>(null);
 	etag = $state<string | null>(null);
 	syncInProgress = $state(false);
+	lastUpdateWasLocal = $state(true);
 
 	initialized = false;
 	hydrating = false;
 
 	syncTimer: number | null = null;
 	pendingSync = false;
+	channel: BroadcastChannel | null = null;
+	tabId: string | null = null;
 
 	get currentTrack(): Track | null {
 		if (this.tracks.length === 0) return null;
@@ -70,10 +73,37 @@ class Queue {
 		if (!browser || this.initialized) return;
 		this.initialized = true;
 
+		const storedTabId = sessionStorage.getItem('queue_tab_id');
+		if (storedTabId) {
+			this.tabId = storedTabId;
+		} else {
+			this.tabId = this.createTabId();
+			sessionStorage.setItem('queue_tab_id', this.tabId);
+		}
+
 		const savedAutoAdvance = localStorage.getItem('autoAdvance');
 		if (savedAutoAdvance !== null) {
 			this.autoAdvance = savedAutoAdvance !== '0';
 		}
+
+		// set up cross-tab synchronization
+		this.channel = new BroadcastChannel('relay-queue');
+		this.channel.onmessage = (event) => {
+			if (event.data.type === 'queue-updated') {
+				// ignore our own broadcasts (we already have this revision)
+				if (event.data.sourceTabId && event.data.sourceTabId === this.tabId) {
+					return;
+				}
+
+				if (event.data.revision === this.revision) {
+					return;
+				}
+
+				// another tab updated the queue, refetch to stay in sync
+				this.lastUpdateWasLocal = false;
+				void this.fetchQueue(true);
+			}
+		};
 
 		await this.fetchQueue();
 
@@ -89,6 +119,7 @@ class Queue {
 
 	handleBeforeUnload = () => {
 		void this.flushSync();
+		this.channel?.close();
 	};
 
 	async flushSync() {
@@ -322,6 +353,16 @@ class Queue {
 
 			this.applySnapshot(data);
 
+			// notify other tabs about the queue update
+			const sourceTabId = this.tabId ?? this.createTabId();
+			this.tabId = sourceTabId;
+			try {
+				sessionStorage.setItem('queue_tab_id', sourceTabId);
+			} catch (error) {
+				console.warn('failed to persist queue tab id', error);
+			}
+			this.channel?.postMessage({ type: 'queue-updated', revision: data.revision, sourceTabId });
+
 			return true;
 		} catch (error) {
 			console.error('failed to push queue:', error);
@@ -339,6 +380,7 @@ class Queue {
 	addTracks(tracks: Track[], playNow = false) {
 		if (tracks.length === 0) return;
 
+		this.lastUpdateWasLocal = true;
 		this.tracks = [...this.tracks, ...tracks];
 		this.originalOrder = [...this.originalOrder, ...tracks];
 
@@ -355,6 +397,7 @@ class Queue {
 			return;
 		}
 
+		this.lastUpdateWasLocal = true;
 		this.tracks = [...tracks];
 		this.originalOrder = [...tracks];
 		this.currentIndex = this.clampIndex(startIndex);
@@ -362,6 +405,7 @@ class Queue {
 	}
 
 	playNow(track: Track) {
+		this.lastUpdateWasLocal = true;
 		const upNext = this.tracks.slice(this.currentIndex + 1);
 		this.tracks = [track, ...upNext];
 		this.originalOrder = [...this.tracks];
@@ -370,6 +414,7 @@ class Queue {
 	}
 
 	clear() {
+		this.lastUpdateWasLocal = true;
 		this.tracks = [];
 		this.originalOrder = [];
 		this.currentIndex = 0;
@@ -378,6 +423,7 @@ class Queue {
 
 	goTo(index: number) {
 		if (index < 0 || index >= this.tracks.length) return;
+		this.lastUpdateWasLocal = true;
 		this.currentIndex = index;
 		this.schedulePush();
 	}
@@ -386,6 +432,7 @@ class Queue {
 		if (this.tracks.length === 0) return;
 
 		if (this.currentIndex < this.tracks.length - 1) {
+			this.lastUpdateWasLocal = true;
 			this.currentIndex += 1;
 			this.schedulePush();
 		}
@@ -395,6 +442,7 @@ class Queue {
 		if (this.tracks.length === 0) return;
 
 		if (this.currentIndex > 0) {
+			this.lastUpdateWasLocal = true;
 			this.currentIndex -= 1;
 			this.schedulePush();
 		}
@@ -405,6 +453,8 @@ class Queue {
 		if (this.tracks.length <= 1) {
 			return;
 		}
+
+		this.lastUpdateWasLocal = true;
 
 		// keep current track, shuffle everything after it
 		const current = this.tracks[this.currentIndex];
@@ -447,6 +497,7 @@ class Queue {
 		if (fromIndex < 0 || fromIndex >= this.tracks.length) return;
 		if (toIndex < 0 || toIndex >= this.tracks.length) return;
 
+		this.lastUpdateWasLocal = true;
 		const updated = [...this.tracks];
 		const [moved] = updated.splice(fromIndex, 1);
 		updated.splice(toIndex, 0, moved);
@@ -472,6 +523,7 @@ class Queue {
 		if (index < 0 || index >= this.tracks.length) return;
 		if (index === this.currentIndex) return;
 
+		this.lastUpdateWasLocal = true;
 		const updated = [...this.tracks];
 		const [removed] = updated.splice(index, 1);
 
@@ -496,6 +548,8 @@ class Queue {
 	clearUpNext() {
 		if (this.tracks.length === 0) return;
 
+		this.lastUpdateWasLocal = true;
+
 		// keep only the current track
 		const currentTrack = this.tracks[this.currentIndex];
 		if (!currentTrack) return;
@@ -505,6 +559,14 @@ class Queue {
 		this.currentIndex = 0;
 
 		this.schedulePush();
+	}
+
+	private createTabId(): string {
+		if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+			return crypto.randomUUID();
+		}
+
+		return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 	}
 }
 
