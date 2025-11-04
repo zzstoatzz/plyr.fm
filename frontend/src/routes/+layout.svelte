@@ -147,10 +147,14 @@
 	.app-layout {
 		display: flex;
 		min-height: 100vh;
+		width: 100%;
+		overflow-x: hidden;
 	}
 
 	.main-content {
 		flex: 1;
+		min-width: 0;
+		width: 100%;
 		transition: margin-right 0.3s ease;
 	}
 
@@ -162,7 +166,7 @@
 		position: fixed;
 		top: 0;
 		right: 0;
-		width: 360px;
+		width: min(360px, 100%);
 		height: 100vh;
 		background: var(--bg-primary);
 		border-left: 1px solid var(--border-subtle);

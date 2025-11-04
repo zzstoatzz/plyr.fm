@@ -582,23 +582,19 @@
 			width: 100%;
 			flex-wrap: wrap;
 			justify-content: center;
-			gap: 1rem;
-		}
-
-		/* keep playback buttons horizontal */
-		.control-btn {
-			flex-shrink: 0;
+			gap: 0.75rem 1rem;
 		}
 
 		.playback-options {
-			order: 3;
-			width: 100%;
-			justify-content: center;
+			order: 1;
+			display: flex;
+			width: auto;
 		}
 
 		.time-control {
 			width: 100%;
 			order: 2;
+			flex: 1 1 100%;
 		}
 
 		/* hide volume control on mobile - use device volume */
