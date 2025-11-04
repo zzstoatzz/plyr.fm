@@ -278,7 +278,8 @@ class Queue {
 				current_index: this.currentIndex,
 				current_track_id: this.currentTrack?.file_id ?? null,
 				shuffle: this.shuffle,
-				original_order_ids: this.originalOrder.map((t) => t.file_id)
+				original_order_ids: this.originalOrder.map((t) => t.file_id),
+				auto_advance: this.autoAdvance
 			};
 
 			const headers: HeadersInit = {
