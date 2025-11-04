@@ -90,9 +90,9 @@
 
 <button class="queue-toggle" onclick={toggleQueue} title={showQueue ? 'hide queue' : 'show queue'}>
 	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-		<path d="M9 18V5l12-2v13"></path>
-		<circle cx="6" cy="18" r="3"></circle>
-		<circle cx="18" cy="16" r="3"></circle>
+		<line x1="3" y1="6" x2="21" y2="6"></line>
+		<line x1="3" y1="12" x2="21" y2="12"></line>
+		<line x1="3" y1="18" x2="21" y2="18"></line>
 	</svg>
 </button>
 
@@ -205,9 +205,7 @@
 		}
 
 		.queue-toggle {
-			top: 20px;
-			bottom: auto;
-			right: 20px;
+			bottom: 200px;
 		}
 	}
 </style>

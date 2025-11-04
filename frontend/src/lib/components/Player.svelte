@@ -582,6 +582,10 @@
 			text-align: center;
 		}
 
+		.player-metadata {
+			justify-content: center;
+		}
+
 		.player-controls {
 			width: 100%;
 			flex-wrap: wrap;
