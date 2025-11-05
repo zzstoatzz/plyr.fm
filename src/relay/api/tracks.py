@@ -83,7 +83,7 @@ async def _process_upload_background(
 
         # get R2 URL
         r2_url = None
-        if settings.storage_backend == "r2":
+        if settings.storage.backend == "r2":
             from relay.storage.r2 import R2Storage
 
             if isinstance(storage, R2Storage):
@@ -353,7 +353,7 @@ async def list_tracks(
                 "atproto_record_uri": track.atproto_record_uri,
                 "atproto_record_url": (
                     f"{pds_cache[track.artist_did]}/xrpc/com.atproto.repo.getRecord"
-                    f"?repo={track.artist_did}&collection={settings.atproto_track_collection}"
+                    f"?repo={track.artist_did}&collection={settings.atproto.track_collection}"
                     f"&rkey={track.atproto_record_uri.split('/')[-1]}"
                     if track.atproto_record_uri and pds_cache.get(track.artist_did)
                     else None

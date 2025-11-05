@@ -7,19 +7,18 @@ from relay.config import Settings
 def clear_settings_env(monkeypatch):
     env_vars = [
         "PORT",
-        "APP_PORT",
-        "APP__PORT",
         "FRONTEND_URL",
-        "APP_BACKGROUND_TASK_INTERVAL_SECONDS",
-        "APP__BACKGROUND_TASK_INTERVAL_SECONDS",
+        "BACKGROUND_TASK_INTERVAL_SECONDS",
         "DATABASE_URL",
         "STORAGE_BACKEND",
         "R2_BUCKET",
         "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "R2_ENDPOINT_URL",
+        "R2_PUBLIC_BUCKET_URL",
         "ATPROTO_CLIENT_ID",
-        "ATPROTO__CLIENT_ID",
-        "ATPROTO_APP_NAMESPACE",
         "ATPROTO_SCOPE_OVERRIDE",
+        "ATPROTO_REDIRECT_URI",
         "OAUTH_ENCRYPTION_KEY",
         "LOGFIRE_ENABLED",
         "LOGFIRE_WRITE_TOKEN",
@@ -27,8 +26,7 @@ def clear_settings_env(monkeypatch):
         "NOTIFY_RECIPIENT_HANDLE",
         "NOTIFY_BOT_HANDLE",
         "NOTIFY_BOT_PASSWORD",
-        "APP_BROADCAST_CHANNEL_PREFIX",
-        "APP__BROADCAST_CHANNEL_PREFIX",
+        "BROADCAST_CHANNEL_PREFIX",
     ]
 
     for var in env_vars:
@@ -54,17 +52,17 @@ def test_settings_loads_env(monkeypatch):
 
     settings = Settings()
 
-    assert settings.port == 9100
-    assert settings.frontend_url == "https://relay.example.com"
-    assert settings.database_url == "postgresql+psycopg://user:pass@host/db"
-    assert settings.storage_backend == "r2"
-    assert settings.r2_bucket == "media"
-    assert settings.aws_access_key_id == "key123"
-    assert settings.atproto_client_id == "https://client/meta.json"
-    assert settings.atproto_redirect_uri == "https://relay.example.com/callback"
-    assert settings.oauth_encryption_key == "Z2V0LXlvdXItb3duLWRhbS1rZXk="
-    assert settings.logfire_enabled is True
-    assert settings.logfire_write_token == "pylf_token"
+    assert settings.app.port == 9100
+    assert settings.frontend.url == "https://relay.example.com"
+    assert settings.database.url == "postgresql+psycopg://user:pass@host/db"
+    assert settings.storage.backend == "r2"
+    assert settings.storage.r2_bucket == "media"
+    assert settings.storage.aws_access_key_id == "key123"
+    assert settings.atproto.client_id == "https://client/meta.json"
+    assert settings.atproto.redirect_uri == "https://relay.example.com/callback"
+    assert settings.atproto.oauth_encryption_key == "Z2V0LXlvdXItb3duLWRhbS1rZXk="
+    assert settings.observability.enabled is True
+    assert settings.observability.write_token == "pylf_token"
     assert settings.notify.enabled is True
     assert settings.notify.recipient_handle == "relay.example"
     assert settings.notify.bot.handle == "bot.handle"
@@ -72,16 +70,16 @@ def test_settings_loads_env(monkeypatch):
 
 
 def test_settings_supports_nested_env(monkeypatch):
-    monkeypatch.setenv("APP__PORT", "9300")
-    monkeypatch.setenv("APP__BROADCAST_CHANNEL_PREFIX", "newprefix")
-    monkeypatch.setenv("FRONTEND__URL", "https://cdn.example.com")
-    monkeypatch.setenv("ATPROTO__CLIENT_ID", "https://new/meta.json")
-    monkeypatch.setenv("ATPROTO__SCOPE_OVERRIDE", "custom scope")
+    monkeypatch.setenv("PORT", "9300")
+    monkeypatch.setenv("BROADCAST_CHANNEL_PREFIX", "newprefix")
+    monkeypatch.setenv("FRONTEND_URL", "https://cdn.example.com")
+    monkeypatch.setenv("ATPROTO_CLIENT_ID", "https://new/meta.json")
+    monkeypatch.setenv("ATPROTO_SCOPE_OVERRIDE", "custom scope")
 
     settings = Settings()
 
-    assert settings.port == 9300
-    assert settings.broadcast_channel_prefix == "newprefix"
-    assert settings.frontend_url == "https://cdn.example.com"
-    assert settings.atproto_client_id == "https://new/meta.json"
-    assert settings.atproto_scope_override == "custom scope"
+    assert settings.app.port == 9300
+    assert settings.app.broadcast_channel_prefix == "newprefix"
+    assert settings.frontend.url == "https://cdn.example.com"
+    assert settings.atproto.client_id == "https://new/meta.json"
+    assert settings.atproto.scope_override == "custom scope"

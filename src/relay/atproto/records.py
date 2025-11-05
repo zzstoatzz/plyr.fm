@@ -135,7 +135,7 @@ async def create_track_record(
 
     # construct record
     record: dict[str, Any] = {
-        "$type": settings.atproto_track_collection,
+        "$type": settings.atproto.track_collection,
         "title": title,
         "artist": artist,
         "audioUrl": audio_url,
@@ -163,7 +163,7 @@ async def create_track_record(
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
     payload = {
         "repo": auth_session.did,
-        "collection": settings.atproto_track_collection,
+        "collection": settings.atproto.track_collection,
         "record": record,
     }
 

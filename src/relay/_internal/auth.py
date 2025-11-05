@@ -40,9 +40,9 @@ _session_store = MemorySessionStore()
 
 # OAuth client
 oauth_client = OAuthClient(
-    client_id=settings.atproto_client_id,
-    redirect_uri=settings.atproto_redirect_uri,
-    scope=settings.resolved_atproto_scope,
+    client_id=settings.atproto.client_id,
+    redirect_uri=settings.atproto.redirect_uri,
+    scope=settings.atproto.resolved_scope,
     state_store=_state_store,
     session_store=_session_store,
 )
@@ -50,13 +50,13 @@ oauth_client = OAuthClient(
 # encryption for sensitive OAuth data at rest
 # CRITICAL: encryption key must be configured and stable across restarts
 # otherwise all sessions become undecipherable after restart
-if not settings.oauth_encryption_key:
+if not settings.atproto.oauth_encryption_key:
     raise RuntimeError(
         "oauth_encryption_key must be configured in settings. "
         "generate one with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
     )
 
-_encryption_key = settings.oauth_encryption_key.encode()
+_encryption_key = settings.atproto.oauth_encryption_key.encode()
 _fernet = Fernet(_encryption_key)
 
 
