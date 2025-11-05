@@ -14,7 +14,7 @@ router = APIRouter(prefix="/audio", tags=["audio"])
 async def stream_audio(file_id: str):
     """stream audio file."""
 
-    if settings.storage.backend == "r2":
+    if settings.storage_backend == "r2":
         # R2: redirect to public URL
         from relay.storage.r2 import R2Storage
 

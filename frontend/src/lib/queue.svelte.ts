@@ -1,7 +1,6 @@
 import { browser } from '$app/environment';
 import type { QueueResponse, QueueState, Track } from './types';
 import { API_URL } from './config';
-import { APP_BROADCAST_PREFIX } from './branding';
 
 const SYNC_DEBOUNCE_MS = 250;
 
@@ -88,7 +87,7 @@ class Queue {
 		}
 
 		// set up cross-tab synchronization
-		this.channel = new BroadcastChannel(`${APP_BROADCAST_PREFIX}-queue`);
+		this.channel = new BroadcastChannel('relay-queue');
 		this.channel.onmessage = (event) => {
 			if (event.data.type === 'queue-updated') {
 				// ignore our own broadcasts (we already have this revision)

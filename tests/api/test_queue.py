@@ -60,7 +60,7 @@ async def test_get_queue_empty_state(test_app: FastAPI, db_session: AsyncSession
     assert data["state"]["current_index"] == 0
     assert data["state"]["current_track_id"] is None
     assert data["state"]["shuffle"] is False
-    assert data["state"]["auto_advance"] is True
+    assert data["state"]["repeat_mode"] == "none"
     assert data["state"]["original_order_ids"] == []
     assert data["revision"] == 0
     assert data["tracks"] == []
@@ -76,6 +76,7 @@ async def test_put_queue_creates_new_state(test_app: FastAPI, db_session: AsyncS
         "current_index": 1,
         "current_track_id": "track2",
         "shuffle": True,
+        "repeat_mode": "all",
         "original_order_ids": ["track1", "track2", "track3"],
     }
 
@@ -87,13 +88,7 @@ async def test_put_queue_creates_new_state(test_app: FastAPI, db_session: AsyncS
     assert response.status_code == 200
     data = response.json()
 
-    # auto_advance comes from user preferences, not queue state
-    assert data["state"]["track_ids"] == new_state["track_ids"]
-    assert data["state"]["current_index"] == new_state["current_index"]
-    assert data["state"]["current_track_id"] == new_state["current_track_id"]
-    assert data["state"]["shuffle"] == new_state["shuffle"]
-    assert data["state"]["original_order_ids"] == new_state["original_order_ids"]
-    assert "auto_advance" in data["state"]  # present but from preferences
+    assert data["state"] == new_state
     assert data["revision"] == 1  # first update should be revision 1
     assert data["tracks"] == []
 
@@ -108,6 +103,7 @@ async def test_get_queue_returns_updated_state(
         "current_index": 0,
         "current_track_id": "track1",
         "shuffle": False,
+        "repeat_mode": "one",
         "original_order_ids": ["track1", "track2"],
     }
 
@@ -124,13 +120,7 @@ async def test_get_queue_returns_updated_state(
     assert get_response.status_code == 200
     data = get_response.json()
 
-    # verify queue state fields (auto_advance comes from preferences)
-    assert data["state"]["track_ids"] == new_state["track_ids"]
-    assert data["state"]["current_index"] == new_state["current_index"]
-    assert data["state"]["current_track_id"] == new_state["current_track_id"]
-    assert data["state"]["shuffle"] == new_state["shuffle"]
-    assert data["state"]["original_order_ids"] == new_state["original_order_ids"]
-    assert "auto_advance" in data["state"]
+    assert data["state"] == new_state
     assert data["revision"] == put_revision
     assert data["tracks"] == []
 
@@ -148,6 +138,7 @@ async def test_put_queue_with_matching_revision_succeeds(
         "current_index": 0,
         "current_track_id": "track1",
         "shuffle": False,
+        "repeat_mode": "none",
         "original_order_ids": ["track1"],
     }
 
@@ -187,6 +178,7 @@ async def test_put_queue_with_mismatched_revision_fails(
         "current_index": 0,
         "current_track_id": "track1",
         "shuffle": False,
+        "repeat_mode": "none",
         "original_order_ids": ["track1"],
     }
 
@@ -221,6 +213,7 @@ async def test_put_queue_without_if_match_always_succeeds(
         "current_index": 0,
         "current_track_id": "track1",
         "shuffle": False,
+        "repeat_mode": "none",
         "original_order_ids": ["track1"],
     }
 
@@ -258,6 +251,7 @@ async def test_queue_state_isolated_by_did(test_app: FastAPI, db_session: AsyncS
         "current_index": 0,
         "current_track_id": "user1_track1",
         "shuffle": False,
+        "repeat_mode": "none",
         "original_order_ids": ["user1_track1"],
     }
 
@@ -278,6 +272,7 @@ async def test_queue_state_isolated_by_did(test_app: FastAPI, db_session: AsyncS
         "current_index": 0,
         "current_track_id": "user2_track1",
         "shuffle": False,
+        "repeat_mode": "none",
         "original_order_ids": ["user2_track1"],
     }
 

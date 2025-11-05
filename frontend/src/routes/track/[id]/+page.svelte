@@ -5,8 +5,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import type { Track, User } from '$lib/types';
 	import { API_URL } from '$lib/config';
-import type { PageData } from './$types';
-import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
+	import type { PageData } from './$types';
 
 	// receive server-loaded data
 	let { data }: { data: PageData } = $props();
@@ -116,24 +115,15 @@ import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 </script>
 
 <svelte:head>
-	<title>{data.track.title} by {data.track.artist} - {APP_NAME}</title>
-	<meta
-		name="description"
-		content={`listen to ${data.track.title} by ${data.track.artist} on ${APP_NAME}`}
-	/>
+	<title>{data.track.title} by {data.track.artist} - relay</title>
+	<meta name="description" content="listen to {data.track.title} by {data.track.artist} on relay" />
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="music.song" />
 	<meta property="og:title" content="{data.track.title} by {data.track.artist}" />
-	<meta
-		property="og:description"
-		content={`listen to ${data.track.title} by ${data.track.artist} on ${APP_NAME}`}
-	/>
-	<meta
-		property="og:url"
-		content={`${APP_CANONICAL_URL}/track/${data.track.id}`}
-	/>
-	<meta property="og:site_name" content={APP_NAME} />
+	<meta property="og:description" content="listen to {data.track.title} by {data.track.artist} on relay" />
+	<meta property="og:url" content="https://relay.zzstoatzz.io/track/{data.track.id}" />
+	<meta property="og:site_name" content="relay" />
 	<meta property="music:musician" content="{data.track.artist_handle}" />
 	{#if data.track.album}
 		<meta property="music:album" content="{data.track.album}" />
@@ -146,10 +136,7 @@ import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary" />
 	<meta name="twitter:title" content="{data.track.title} by {data.track.artist}" />
-	<meta
-		name="twitter:description"
-		content={`listen to ${data.track.title} by ${data.track.artist} on ${APP_NAME}`}
-	/>
+	<meta name="twitter:description" content="listen to {data.track.title} by {data.track.artist} on relay" />
 </svelte:head>
 
 {#if loading}

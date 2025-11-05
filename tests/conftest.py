@@ -98,9 +98,9 @@ async def _create_clear_database_procedure(
 def test_database_url(worker_id: str) -> str:
     """generate a unique test database URL for each pytest worker.
 
-    reads from settings.database.url and appends worker suffix if needed.
+    reads from settings.database_url and appends worker suffix if needed.
     """
-    base_url = settings.database.url
+    base_url = settings.database_url
 
     # for parallel test execution, append worker id to database name
     if worker_id == "master":
