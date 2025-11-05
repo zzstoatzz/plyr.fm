@@ -13,7 +13,6 @@ dependencies = [
     "sqlalchemy>=2.0.36",
     "alembic>=1.14.0",
     "asyncpg>=0.30.0",
-    "redis[hiredis]>=5.2.0",
     "atproto @ git+https://github.com/zzstoatzz/atproto@main",
     "boto3>=1.37.0",
     "python-multipart>=0.0.20",

@@ -143,16 +143,6 @@ class DatabaseSettings(RelaySettingsSection):
     )
 
 
-class RedisSettings(RelaySettingsSection):
-    """Redis configuration."""
-
-    url: str = Field(
-        default="redis://localhost:6379/0",
-        validation_alias="REDIS_URL",
-        description="Redis connection string",
-    )
-
-
 class StorageSettings(RelaySettingsSection):
     """Asset storage configuration."""
 
@@ -278,7 +268,6 @@ class Settings(RelaySettingsSection):
     app: AppSettings = Field(default_factory=AppSettings)
     frontend: FrontendSettings = Field(default_factory=FrontendSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
-    redis: RedisSettings = Field(default_factory=RedisSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     atproto: AtprotoSettings = Field(default_factory=AtprotoSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)

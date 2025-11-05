@@ -25,9 +25,6 @@ settings.frontend.resolved_cors_origin_regex   # computed: defaults to relay-4i6
 # database settings
 settings.database.url                          # from DATABASE_URL
 
-# redis settings
-settings.redis.url                             # from REDIS_URL
-
 # storage settings (cloudflare r2)
 settings.storage.backend                       # from STORAGE_BACKEND
 settings.storage.r2_bucket                     # from R2_BUCKET
