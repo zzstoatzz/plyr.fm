@@ -1,5 +1,8 @@
+# version control
 .git
 .github
+
+# python
 .venv
 .venv-workers
 __pycache__
@@ -12,9 +15,20 @@ htmlcov
 dist
 build
 *.egg-info
+.ruff_cache
+.mypy_cache
+
+# environment and local data
 .env
 .env.local
 data/
+test-audio/
+
+# development
 sandbox/
 tests/
 docs/
+STATUS.md
+
+# frontend (built separately)
+frontend/
