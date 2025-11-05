@@ -29,6 +29,9 @@ sandbox/
 tests/
 docs/
 STATUS.md
+docker-build-profile-*.log
+*-build-profile.log
+simple-build.log
 
 # frontend (built separately)
 frontend/

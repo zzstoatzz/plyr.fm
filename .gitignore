@@ -46,3 +46,8 @@ Thumbs.db
 frontend/node_modules/
 frontend/.svelte-kit/
 frontend/build/
+
+# docker profiling logs
+docker-build-profile-*.log
+*-build-profile.log
+simple-build.log
