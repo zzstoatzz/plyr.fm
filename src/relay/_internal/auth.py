@@ -42,7 +42,7 @@ _session_store = MemorySessionStore()
 oauth_client = OAuthClient(
     client_id=settings.atproto_client_id,
     redirect_uri=settings.atproto_redirect_uri,
-    scope=settings.atproto_scope,
+    scope=settings.resolved_atproto_scope,
     state_store=_state_store,
     session_store=_session_store,
 )

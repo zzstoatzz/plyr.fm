@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { APP_NAME } from '$lib/branding';
 	import { API_URL } from '$lib/config';
 
 	let handle = '';
@@ -15,7 +16,7 @@
 
 <div class="container">
 	<div class="login-card">
-		<h1>relay</h1>
+		<h1>{APP_NAME}</h1>
 		<p>music streaming on atproto</p>
 
 		<form onsubmit={startOAuth}>

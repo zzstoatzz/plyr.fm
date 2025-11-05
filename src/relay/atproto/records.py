@@ -1,4 +1,4 @@
-"""ATProto record creation for relay tracks."""
+"""ATProto record creation for relay audio items."""
 
 import json
 import logging
@@ -9,6 +9,7 @@ from atproto_oauth.models import OAuthSession
 
 from relay._internal import Session as AuthSession
 from relay._internal import oauth_client, update_session_tokens
+from relay.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ async def create_track_record(
     duration: int | None = None,
     features: list[dict] | None = None,
 ) -> tuple[str, str] | None:
-    """create app.relay.track record on user's PDS.
+    """Create a track record on the user's PDS using the configured collection.
 
     args:
         auth_session: authenticated user session
@@ -134,7 +135,7 @@ async def create_track_record(
 
     # construct record
     record: dict[str, Any] = {
-        "$type": "app.relay.track",
+        "$type": settings.atproto_track_collection,
         "title": title,
         "artist": artist,
         "audioUrl": audio_url,
@@ -162,7 +163,7 @@ async def create_track_record(
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
     payload = {
         "repo": auth_session.did,
-        "collection": "app.relay.track",
+        "collection": settings.atproto_track_collection,
         "record": record,
     }
 
