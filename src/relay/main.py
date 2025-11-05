@@ -89,7 +89,7 @@ if logfire:
 # configure CORS - allow localhost for dev and cloudflare pages for production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.frontend.cors_origins,
+    allow_origin_regex=settings.frontend.resolved_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
