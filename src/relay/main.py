@@ -10,7 +10,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from relay._internal import notification_service, queue_service
-from relay._internal.auth import _state_store
 from relay.api import (
     artists_router,
     audio_router,
@@ -47,10 +46,8 @@ async def run_periodic_tasks():
             # check for new tracks and send notifications
             await notification_service.check_new_tracks()
 
-            # cleanup expired OAuth states (10 minute TTL)
-            deleted = await _state_store.cleanup_expired_states()
-            if deleted > 0:
-                logger.info(f"cleaned up {deleted} expired OAuth states")
+            # NOTE: OAuth state cleanup is handled lazily in PostgresStateStore
+            # (cleanup happens automatically on save_state/get_state during OAuth flows)
         except Exception:
             logger.exception("error in periodic task")
         await asyncio.sleep(settings.app.background_task_interval_seconds)

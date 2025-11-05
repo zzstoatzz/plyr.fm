@@ -17,11 +17,19 @@ class PostgresStateStore(StateStore):
     """Postgres-backed OAuth state store for CSRF protection.
 
     Stores temporary OAuth state during authorization flow.
-    States should be cleaned up after successful callback or after TTL expires (10 minutes).
+    States are cleaned up lazily (on save/get operations) following the atproto SDK pattern.
+    Expired states (>10 minutes old) are automatically removed when new flows start.
     """
 
     async def save_state(self, state: OAuthState) -> None:
-        """Save OAuth state to database."""
+        """Save OAuth state to database.
+
+        Triggers cleanup of expired states before saving, following the pattern
+        from atproto_oauth.stores.memory.MemoryStateStore.
+        """
+        # cleanup expired states before saving new one (lazy cleanup pattern)
+        await self.cleanup_expired_states()
+
         # serialize DPoP private key to PEM
         dpop_key_pem = state.dpop_private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
@@ -47,7 +55,14 @@ class PostgresStateStore(StateStore):
             await db.commit()
 
     async def get_state(self, state_key: str) -> OAuthState | None:
-        """Retrieve OAuth state by key."""
+        """Retrieve OAuth state by key.
+
+        Triggers cleanup of expired states before retrieval, following the pattern
+        from atproto_oauth.stores.memory.MemoryStateStore.
+        """
+        # cleanup expired states before retrieval (lazy cleanup pattern)
+        await self.cleanup_expired_states()
+
         async with db_session() as db:
             result = await db.execute(
                 select(OAuthStateModel).where(OAuthStateModel.state == state_key)
