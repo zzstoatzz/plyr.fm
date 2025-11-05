@@ -18,21 +18,21 @@ class R2Storage:
         """initialize R2 client."""
         if not all(
             [
-                settings.r2_bucket,
-                settings.r2_endpoint_url,
-                settings.aws_access_key_id,
-                settings.aws_secret_access_key,
+                settings.storage.r2_bucket,
+                settings.storage.r2_endpoint_url,
+                settings.storage.aws_access_key_id,
+                settings.storage.aws_secret_access_key,
             ]
         ):
             raise ValueError("R2 credentials not configured in environment")
 
-        self.bucket_name = settings.r2_bucket
-        self.public_bucket_url = settings.r2_public_bucket_url
+        self.bucket_name = settings.storage.r2_bucket
+        self.public_bucket_url = settings.storage.r2_public_bucket_url
         self.client = boto3.client(
             "s3",
-            endpoint_url=settings.r2_endpoint_url,
-            aws_access_key_id=settings.aws_access_key_id,
-            aws_secret_access_key=settings.aws_secret_access_key,
+            endpoint_url=settings.storage.r2_endpoint_url,
+            aws_access_key_id=settings.storage.aws_access_key_id,
+            aws_secret_access_key=settings.storage.aws_secret_access_key,
             config=Config(
                 request_checksum_calculation="WHEN_REQUIRED",
                 response_checksum_validation="WHEN_REQUIRED",

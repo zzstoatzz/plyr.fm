@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import type { User } from '$lib/types';
 	import SettingsMenu from './SettingsMenu.svelte';
+	import { APP_NAME, APP_TAGLINE } from '$lib/branding';
 
 	interface Props {
 		user: User | null;
@@ -15,8 +16,8 @@
 <header>
 	<div class="header-content">
 		<a href="/" class="brand">
-			<h1>relay</h1>
-			<p>music on atproto</p>
+			<h1>{APP_NAME}</h1>
+			<p>{APP_TAGLINE}</p>
 		</a>
 
 		<nav>

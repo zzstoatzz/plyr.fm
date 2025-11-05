@@ -45,7 +45,7 @@ class QueueService:
     async def _connect(self) -> None:
         """establish asyncpg connection for LISTEN/NOTIFY."""
         # parse connection string - asyncpg needs specific format
-        db_url = settings.database_url
+        db_url = settings.database.url
         # convert sqlalchemy URL to asyncpg format if needed
         if db_url.startswith("postgresql+asyncpg://"):
             db_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
