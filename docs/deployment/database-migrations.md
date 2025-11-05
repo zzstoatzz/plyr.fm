@@ -49,10 +49,10 @@ relay uses **environment-based database configuration** to ensure migrations alw
 │ alembic/env.py (migration runtime)                          │
 │                                                              │
 │ 1. imports relay.config.settings                            │
-│ 2. reads settings.database_url                              │
+│ 2. reads settings.database.url                              │
 │ 3. sets alembic connection string                           │
 │                                                              │
-│ config.set_main_option("sqlalchemy.url", settings.database_url)
+│ config.set_main_option("sqlalchemy.url", settings.database.url)
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼

@@ -26,15 +26,15 @@ from relay.models import init_db
 logger = logging.getLogger(__name__)
 
 # configure logfire if enabled
-if settings.logfire_enabled:
+if settings.observability.enabled:
     import logfire
 
-    if not settings.logfire_write_token:
+    if not settings.observability.write_token:
         raise ValueError("LOGFIRE_WRITE_TOKEN must be set when LOGFIRE_ENABLED is true")
 
     logfire.configure(
-        token=settings.logfire_write_token,
-        environment=settings.logfire_environment,
+        token=settings.observability.write_token,
+        environment=settings.observability.environment,
     )
 else:
     logfire = None
@@ -54,7 +54,7 @@ async def run_periodic_tasks():
                     logger.info(f"cleaned up {deleted} expired OAuth states")
         except Exception:
             logger.exception("error in periodic task")
-        await asyncio.sleep(settings.background_task_interval_seconds)
+        await asyncio.sleep(settings.app.background_task_interval_seconds)
 
 
 @asynccontextmanager
@@ -77,8 +77,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title=settings.app_name,
-    debug=settings.debug,
+    title=settings.app.name,
+    debug=settings.app.debug,
     lifespan=lifespan,
 )
 
@@ -89,7 +89,7 @@ if logfire:
 # configure CORS - allow localhost for dev and cloudflare pages for production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.frontend.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -115,14 +115,14 @@ async def health() -> dict[str, str]:
 async def client_metadata() -> dict:
     """serve OAuth client metadata."""
     # Extract base URL from client_id for client_uri
-    client_uri = settings.atproto_client_id.replace("/client-metadata.json", "")
+    client_uri = settings.atproto.client_id.replace("/client-metadata.json", "")
 
     return {
-        "client_id": settings.atproto_client_id,
+        "client_id": settings.atproto.client_id,
         "client_name": "relay",
         "client_uri": client_uri,
-        "redirect_uris": [settings.atproto_redirect_uri],
-        "scope": settings.resolved_atproto_scope,
+        "redirect_uris": [settings.atproto.redirect_uri],
+        "scope": settings.atproto.resolved_scope,
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
         "token_endpoint_auth_method": "none",

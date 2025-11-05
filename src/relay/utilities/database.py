@@ -25,13 +25,13 @@ def get_engine() -> AsyncEngine:
         AsyncEngine: a sqlalchemy engine
     """
     loop = get_running_loop()
-    cache_key = (loop, settings.database_url)
+    cache_key = (loop, settings.database.url)
 
     if cache_key not in ENGINES:
         # asyncpg-specific connection args for statement caching issues
         # only applies when using postgresql+asyncpg:// URL scheme
         kwargs: dict[str, Any] = {}
-        if "asyncpg" in settings.database_url:
+        if "asyncpg" in settings.database.url:
             kwargs["connect_args"] = {
                 # see https://github.com/MagicStack/asyncpg/issues/1058#issuecomment-1913635739
                 "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
@@ -40,8 +40,8 @@ def get_engine() -> AsyncEngine:
             }
 
         engine = create_async_engine(
-            settings.database_url,
-            echo=settings.debug,
+            settings.database.url,
+            echo=settings.app.debug,
             pool_pre_ping=True,  # verify connections before use
             pool_recycle=3600,  # recycle connections after 1 hour
             pool_use_lifo=True,  # reuse recent connections
@@ -51,7 +51,7 @@ def get_engine() -> AsyncEngine:
         )
 
         # instrument sqlalchemy with logfire if enabled
-        if settings.logfire_enabled:
+        if settings.observability.enabled:
             import logfire
 
             logfire.instrument_sqlalchemy(engine.sync_engine)

@@ -2,7 +2,7 @@
 
 from relay.config import settings
 
-if settings.storage_backend == "r2":
+if settings.storage.backend == "r2":
     from relay.storage.r2 import R2Storage
 
     storage = R2Storage()
