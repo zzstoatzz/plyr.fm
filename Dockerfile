@@ -1,13 +1,17 @@
+# syntax=docker/dockerfile:1.4
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-# install git for git dependencies
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# install git for git dependencies (needed for atproto fork)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y git
 
 WORKDIR /app
 
-# install dependencies
+# install dependencies (separate layer for better caching)
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project --compile-bytecode
 
 # copy application code
 COPY src ./src
@@ -16,8 +20,9 @@ COPY src ./src
 COPY alembic.ini ./
 COPY alembic ./alembic
 
-# install the project itself
-RUN uv sync --frozen --no-dev
+# install the project itself with bytecode compilation
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --compile-bytecode
 
 # expose port
 EXPOSE 8000
