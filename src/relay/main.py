@@ -42,16 +42,15 @@ else:
 
 async def run_periodic_tasks():
     """run periodic background tasks."""
-    await notification_service.setup()
-    await queue_service.setup()
-
     while True:
         try:
+            # check for new tracks and send notifications
+            await notification_service.check_new_tracks()
+
             # cleanup expired OAuth states (10 minute TTL)
-            if hasattr(_state_store, "cleanup_expired_states"):
-                deleted = await _state_store.cleanup_expired_states()
-                if deleted > 0:
-                    logger.info(f"cleaned up {deleted} expired OAuth states")
+            deleted = await _state_store.cleanup_expired_states()
+            if deleted > 0:
+                logger.info(f"cleaned up {deleted} expired OAuth states")
         except Exception:
             logger.exception("error in periodic task")
         await asyncio.sleep(settings.app.background_task_interval_seconds)
@@ -61,9 +60,16 @@ async def run_periodic_tasks():
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """handle application lifespan events."""
     # startup: initialize database
+    # NOTE: init_db() is still needed because base tables (artists, tracks, user_sessions)
+    # don't have migrations - they were created before migrations were introduced.
+    # See issue #46 for removing this in favor of a proper initial migration.
     await init_db()
 
-    # start background task
+    # setup services
+    await notification_service.setup()
+    await queue_service.setup()
+
+    # start background task for periodic work
     task = asyncio.create_task(run_periodic_tasks())
 
     yield
