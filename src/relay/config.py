@@ -116,11 +116,21 @@ class FrontendSettings(RelaySettingsSection):
         validation_alias="FRONTEND_URL",
         description="Frontend URL for redirects",
     )
-    cors_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:5173"],
-        validation_alias="FRONTEND_CORS_ORIGINS",
-        description="CORS allowed origins",
+    cors_origin_regex: str | None = Field(
+        default=None,
+        validation_alias="FRONTEND_CORS_ORIGIN_REGEX",
+        description="CORS origin regex pattern (if not set, uses default for relay-4i6.pages.dev)",
     )
+
+    @computed_field
+    @property
+    def resolved_cors_origin_regex(self) -> str:
+        """Resolved CORS origin regex pattern."""
+        if self.cors_origin_regex is not None:
+            return self.cors_origin_regex
+
+        # default: allow localhost for dev + cloudflare pages (including preview deployments)
+        return r"^(https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
 
 
 class DatabaseSettings(RelaySettingsSection):
