@@ -3,9 +3,23 @@
 	import Header from '$lib/components/Header.svelte';
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import type { User, Track, FeaturedArtist} from '$lib/types';
+	import type { User, Track, FeaturedArtist } from '$lib/types';
 	import { API_URL } from '$lib/config';
 	import { uploader } from '$lib/uploader.svelte';
+
+	const ACCEPTED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aif', '.aiff'];
+	const ACCEPTED_AUDIO_MIME_TYPES = ['audio/*', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/aiff'];
+	const FILE_INPUT_ACCEPT = [...ACCEPTED_AUDIO_MIME_TYPES, ...ACCEPTED_AUDIO_EXTENSIONS].join(',');
+
+	function isSupportedAudioFile(name: string): boolean {
+		const dotIndex = name.lastIndexOf('.');
+		if (dotIndex === -1) return false;
+		const ext = name.slice(dotIndex).toLowerCase();
+		if (ext === '.aif') {
+			return true;
+		}
+		return ACCEPTED_AUDIO_EXTENSIONS.includes(ext);
+	}
 
 	let user: User | null = null;
 	let loading = true;
@@ -209,7 +223,14 @@
 	function handleFileChange(e: Event) {
 		const target = e.target as HTMLInputElement;
 		if (target.files && target.files[0]) {
-			file = target.files[0];
+			const selected = target.files[0];
+			if (!isSupportedAudioFile(selected.name)) {
+				alert(`unsupported file type. supported files: ${ACCEPTED_AUDIO_EXTENSIONS.join(', ')}`);
+				target.value = '';
+				file = null;
+				return;
+			}
+			file = selected;
 		}
 	}
 
@@ -279,7 +300,7 @@
 					<input
 						id="file-input"
 						type="file"
-						accept="audio/*"
+						accept={FILE_INPUT_ACCEPT}
 						onchange={handleFileChange}
 						required
 					/>
