@@ -19,7 +19,8 @@ settings.app.canonical_url                     # computed: https://relay.zzstoat
 
 # frontend settings
 settings.frontend.url                          # from FRONTEND_URL
-settings.frontend.cors_origins                 # from FRONTEND_CORS_ORIGINS
+settings.frontend.cors_origin_regex            # from FRONTEND_CORS_ORIGIN_REGEX (optional)
+settings.frontend.resolved_cors_origin_regex   # computed: defaults to relay-4i6.pages.dev pattern
 
 # database settings
 settings.database.url                          # from DATABASE_URL
@@ -109,6 +110,16 @@ automatically determines the protocol based on host:
 - anything else → `https://`
 
 can be overridden with `canonical_url_override` if needed.
+
+### `settings.frontend.resolved_cors_origin_regex`
+
+constructs the CORS origin regex pattern:
+```python
+# default: allows localhost + relay-4i6.pages.dev (including preview deployments)
+r"^(https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
+```
+
+can be overridden with `FRONTEND_CORS_ORIGIN_REGEX` if needed.
 
 ### `settings.atproto.track_collection`
 
