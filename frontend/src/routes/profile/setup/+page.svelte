@@ -1,4 +1,6 @@
+
 <script lang="ts">
+	import { APP_NAME } from '$lib/branding';
 	import { onMount } from 'svelte';
 	import { API_URL } from '$lib/config';
 	import type { User } from '$lib/types';
@@ -147,7 +149,7 @@
 		<div class="setup-container">
 			<h1>set up your artist profile</h1>
 			<p class="subtitle">
-				welcome to relay! please set up your artist profile to start uploading music.
+			welcome to {APP_NAME}! please set up your artist profile to start uploading audio.
 			</p>
 
 			{#if error}

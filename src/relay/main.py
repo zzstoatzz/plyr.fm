@@ -89,7 +89,7 @@ if logfire:
 # configure CORS - allow localhost for dev and cloudflare pages for production
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$",
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -122,7 +122,7 @@ async def client_metadata() -> dict:
         "client_name": "relay",
         "client_uri": client_uri,
         "redirect_uris": [settings.atproto_redirect_uri],
-        "scope": "atproto repo:app.relay.track",
+        "scope": settings.resolved_atproto_scope,
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
         "token_endpoint_auth_method": "none",

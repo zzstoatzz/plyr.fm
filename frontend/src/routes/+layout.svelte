@@ -1,5 +1,10 @@
 <script lang="ts">
 	import logo from '$lib/assets/logo.png';
+	import {
+		APP_NAME,
+		APP_TAGLINE,
+		APP_CANONICAL_URL
+	} from '$lib/branding';
 	import Player from '$lib/components/Player.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import Queue from '$lib/components/Queue.svelte';
@@ -41,20 +46,30 @@
 	<link rel="icon" href={logo} />
 
 	<!-- default meta tags for link previews -->
-	<title>relay - music streaming on atproto</title>
-	<meta name="description" content="discover and stream music on the atproto network" />
+	<title>{APP_NAME} - {APP_TAGLINE}</title>
+	<meta
+		name="description"
+		content={`discover and stream audio on the AT Protocol with ${APP_NAME}`}
+	/>
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="relay - music streaming on atproto" />
-	<meta property="og:description" content="discover and stream music on the atproto network" />
-	<meta property="og:site_name" content="relay" />
+	<meta property="og:title" content="{APP_NAME} - {APP_TAGLINE}" />
+	<meta
+		property="og:description"
+		content={`discover and stream audio on the AT Protocol with ${APP_NAME}`}
+	/>
+	<meta property="og:site_name" content={APP_NAME} />
+	<meta property="og:url" content={APP_CANONICAL_URL} />
 	<meta property="og:image" content={logo} />
 
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary" />
-	<meta name="twitter:title" content="relay - music streaming on atproto" />
-	<meta name="twitter:description" content="discover and stream music on the atproto network" />
+	<meta name="twitter:title" content="{APP_NAME} - {APP_TAGLINE}" />
+	<meta
+		name="twitter:description"
+		content={`discover and stream audio on the AT Protocol with ${APP_NAME}`}
+	/>
 	<meta name="twitter:image" content={logo} />
 
 	<script>

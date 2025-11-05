@@ -353,7 +353,7 @@ async def list_tracks(
                 "atproto_record_uri": track.atproto_record_uri,
                 "atproto_record_url": (
                     f"{pds_cache[track.artist_did]}/xrpc/com.atproto.repo.getRecord"
-                    f"?repo={track.artist_did}&collection=app.relay.track"
+                    f"?repo={track.artist_did}&collection={settings.atproto_track_collection}"
                     f"&rkey={track.atproto_record_uri.split('/')[-1]}"
                     if track.atproto_record_uri and pds_cache.get(track.artist_did)
                     else None
