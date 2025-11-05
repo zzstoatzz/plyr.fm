@@ -60,7 +60,7 @@ async def oauth_callback(
     redirect_path = "/portal" if has_profile else "/profile/setup"
 
     return RedirectResponse(
-        url=f"{settings.frontend.url}{redirect_path}?exchange_token={exchange_token}",
+        url=f"{settings.frontend_url}{redirect_path}?exchange_token={exchange_token}",
         status_code=303,
     )
 

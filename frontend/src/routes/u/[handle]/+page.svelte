@@ -3,11 +3,10 @@
 	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
 	import type { Track, Artist, User } from '$lib/types';
-	import TrackItem from '$lib/components/TrackItem.svelte';
+import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import { player } from '$lib/player.svelte';
-	import { queue } from '$lib/queue.svelte';
-	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
+import { player } from '$lib/player.svelte';
+import { queue } from '$lib/queue.svelte';
 	import type { PageData } from './$types';
 
 	// receive server-loaded data
@@ -82,7 +81,7 @@
 						const identityResponse = await fetch(`https://bsky.social/xrpc/com.atproto.identity.resolveHandle?handle=${handle}`);
 						if (identityResponse.ok) {
 							// valid handle, but no artist record in our database
-							error = `this person hasn't posted any audio on ${APP_NAME} yet`;
+							error = "this person hasn't posted any music on relay yet";
 						} else {
 							// invalid handle
 							error = 'invalid handle';
@@ -120,24 +119,15 @@
 
 <svelte:head>
 	{#if data.artist}
-		<title>{data.artist.display_name} (@{data.artist.handle}) - {APP_NAME}</title>
-		<meta
-			name="description"
-			content={`listen to audio by ${data.artist.display_name} on ${APP_NAME}`}
-		/>
+		<title>{data.artist.display_name} (@{data.artist.handle}) - relay</title>
+		<meta name="description" content="listen to music by {data.artist.display_name} on relay" />
 
 		<!-- Open Graph / Facebook -->
 		<meta property="og:type" content="profile" />
 		<meta property="og:title" content="{data.artist.display_name} (@{data.artist.handle})" />
-		<meta
-			property="og:description"
-			content={`listen to audio by ${data.artist.display_name} on ${APP_NAME}`}
-		/>
-		<meta
-			property="og:url"
-			content={`${APP_CANONICAL_URL}/u/${data.artist.handle}`}
-		/>
-		<meta property="og:site_name" content={APP_NAME} />
+		<meta property="og:description" content="listen to music by {data.artist.display_name} on relay" />
+		<meta property="og:url" content="https://relay.zzstoatzz.io/u/{data.artist.handle}" />
+		<meta property="og:site_name" content="relay" />
 		<meta property="profile:username" content="{data.artist.handle}" />
 		{#if data.artist.avatar_url}
 			<meta property="og:image" content="{data.artist.avatar_url}" />
@@ -146,10 +136,7 @@
 		<!-- Twitter -->
 		<meta name="twitter:card" content="summary" />
 		<meta name="twitter:title" content="{data.artist.display_name} (@{data.artist.handle})" />
-		<meta
-			name="twitter:description"
-			content={`listen to audio by ${data.artist.display_name} on ${APP_NAME}`}
-		/>
+		<meta name="twitter:description" content="listen to music by {data.artist.display_name} on relay" />
 		{#if data.artist.avatar_url}
 			<meta name="twitter:image" content="{data.artist.avatar_url}" />
 		{/if}

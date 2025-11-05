@@ -14,7 +14,7 @@ from relay.models.database import Base
 config = context.config
 
 # override sqlalchemy.url with value from settings
-config.set_main_option("sqlalchemy.url", settings.database.url)
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

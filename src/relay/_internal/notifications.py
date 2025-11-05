@@ -140,13 +140,12 @@ class NotificationService:
 
             # only include link if we have a production URL (not localhost)
             track_url = None
-            canonical = settings.app.canonical_url
-            if canonical and "localhost" not in canonical:
-                track_url = f"{canonical}/track/{track.id}"
+            if settings.frontend_url and "localhost" not in settings.frontend_url:
+                track_url = f"{settings.frontend_url}/track/{track.id}"
 
             if track_url:
                 message_text: str = (
-                    f"🎵 new track on {settings.app.name}!\n\n"
+                    f"🎵 new track on relay!\n\n"
                     f"'{track.title}' by @{artist_handle}\n\n"
                     f"listen: {track_url}\n"
                     f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
@@ -154,7 +153,7 @@ class NotificationService:
             else:
                 # dev environment - no link
                 message_text: str = (
-                    f"🎵 new track on {settings.app.name}!\n\n"
+                    f"🎵 new track on relay!\n\n"
                     f"'{track.title}' by @{artist_handle}\n"
                     f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
                 )
