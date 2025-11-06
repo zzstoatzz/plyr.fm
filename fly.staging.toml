@@ -1,0 +1,38 @@
+# fly.toml app configuration file generated for relay-api-staging on 2025-11-05T21:05:32-06:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'relay-api-staging'
+primary_region = 'iad'
+
+[build]
+
+[deploy]
+  release_command = 'uv run alembic upgrade head'
+
+[env]
+  ATPROTO_PDS_URL = 'https://pds.zzstoatzz.io'
+  PORT = '8000'
+  R2_BUCKET = 'relay-stg'
+  R2_ENDPOINT_URL = 'https://8feb33b5fb57ce2bc093bc6f4141f40a.r2.cloudflarestorage.com'
+  R2_PUBLIC_BUCKET_URL = 'https://pub-3b2a5274e4f4408cb8b5e0653f300116.r2.dev'
+  STORAGE_BACKEND = 'r2'
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 250
+    soft_limit = 200
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
