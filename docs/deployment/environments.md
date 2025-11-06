@@ -58,7 +58,7 @@ connects to `relay-dev` neon database and uses `app.relay-dev` atproto namespace
 **frontend**:
 - cloudflare pages production environment serves `main` branch
 - uses production environment with `PUBLIC_API_URL=https://relay-api.fly.dev`
-- available at `https://relay-4i6.pages.dev`
+- available at `https://plyr.fm` / `https://www.plyr.fm` (custom domain) and `https://relay-4i6.pages.dev`
 
 **creating a release**:
 ```bash
@@ -69,7 +69,7 @@ gh release create v1.0.0 --title "v1.0.0" --notes "release notes here"
 or via github UI: releases → draft new release → create tag → publish
 
 **testing**:
-- frontend: `https://relay-4i6.pages.dev`
+- frontend: `https://plyr.fm` or `https://relay-4i6.pages.dev`
 - backend: `https://relay-api.fly.dev/docs`
 - database: `relay` (neon)
 - storage: `relay` (r2)
@@ -114,6 +114,7 @@ or via github UI: releases → draft new release → create tag → publish
 **production secrets** (already configured):
 - same structure but with production URLs and database
 - `ATPROTO_APP_NAMESPACE` → not set (defaults to `app.relay`)
+- `FRONTEND_CORS_ORIGIN_REGEX` → `^https://(([a-z0-9]+\.)?relay-4i6\.pages\.dev|(www\.)?plyr\.fm)$` (custom domain + cloudflare pages)
 - additional: `NOTIFY_BOT_HANDLE`, `NOTIFY_BOT_PASSWORD`, `NOTIFY_ENABLED`
 
 **local dev (.env)**:
