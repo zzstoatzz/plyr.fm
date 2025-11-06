@@ -230,41 +230,41 @@
 		{#if isOwnProfile}
 			<section class="analytics">
 				<h2>analytics</h2>
-				{#if analyticsLoading}
-					<div class="analytics-grid" transition:fade={{ duration: 200 }}>
-						<div class="stat-card skeleton">
-							<div class="skeleton-bar large"></div>
-							<div class="skeleton-bar small"></div>
-						</div>
-						<div class="stat-card skeleton">
-							<div class="skeleton-bar large"></div>
-							<div class="skeleton-bar small"></div>
-						</div>
-						<div class="stat-card skeleton">
-							<div class="skeleton-bar small"></div>
-							<div class="skeleton-bar medium"></div>
-							<div class="skeleton-bar small"></div>
-						</div>
-					</div>
-				{:else if analytics}
-					<div class="analytics-grid" transition:fade={{ duration: 200 }}>
-						<div class="stat-card">
-							<div class="stat-value">{analytics.total_plays.toLocaleString()}</div>
-							<div class="stat-label">total plays</div>
-						</div>
-						<div class="stat-card">
-							<div class="stat-value">{analytics.total_items}</div>
-							<div class="stat-label">total tracks</div>
-						</div>
-						{#if analytics.top_item}
-							<div class="stat-card top-item">
-								<div class="stat-label">most played</div>
-								<div class="top-item-title">{analytics.top_item.title}</div>
-								<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
+				<div class="analytics-grid">
+					{#key analyticsLoading}
+						{#if analyticsLoading}
+							<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
+								<div class="skeleton-bar large"></div>
+								<div class="skeleton-bar small"></div>
 							</div>
+							<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
+								<div class="skeleton-bar large"></div>
+								<div class="skeleton-bar small"></div>
+							</div>
+							<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
+								<div class="skeleton-bar small"></div>
+								<div class="skeleton-bar medium"></div>
+								<div class="skeleton-bar small"></div>
+							</div>
+						{:else if analytics}
+							<div class="stat-card" transition:fade={{ duration: 200 }}>
+								<div class="stat-value">{analytics.total_plays.toLocaleString()}</div>
+								<div class="stat-label">total plays</div>
+							</div>
+							<div class="stat-card" transition:fade={{ duration: 200 }}>
+								<div class="stat-value">{analytics.total_items}</div>
+								<div class="stat-label">total tracks</div>
+							</div>
+							{#if analytics.top_item}
+								<div class="stat-card top-item" transition:fade={{ duration: 200 }}>
+									<div class="stat-label">most played</div>
+									<div class="top-item-title">{analytics.top_item.title}</div>
+									<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
+								</div>
+							{/if}
 						{/if}
-					</div>
-				{/if}
+					{/key}
+				</div>
 			</section>
 		{/if}
 
@@ -369,6 +369,8 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 		gap: 1.5rem;
+		/* prevent layout shift during transition */
+		min-height: 120px;
 	}
 
 	.stat-card {
@@ -388,12 +390,14 @@
 		font-weight: bold;
 		color: var(--accent);
 		margin-bottom: 0.5rem;
+		line-height: 1;
 	}
 
 	.stat-label {
 		color: #909090;
 		font-size: 0.9rem;
 		text-transform: lowercase;
+		line-height: 1;
 	}
 
 	.stat-card.top-item {
@@ -405,16 +409,20 @@
 		color: #e8e8e8;
 		margin: 0.5rem 0;
 		font-weight: 500;
+		line-height: 1;
 	}
 
 	.top-item-plays {
 		color: var(--accent);
 		font-size: 1rem;
+		line-height: 1;
 	}
 
-	/* skeleton loading styles */
+	/* skeleton loading styles - match exact dimensions of real content */
 	.stat-card.skeleton {
 		pointer-events: none;
+		/* ensure skeleton has same total height as real content */
+		min-height: 96px; /* matches stat-card content height */
 	}
 
 	.skeleton-bar {
@@ -429,21 +437,27 @@
 		border-radius: 4px;
 	}
 
+	/* match .stat-value dimensions: 2.5rem font + 0.5rem margin-bottom */
 	.skeleton-bar.large {
 		height: 2.5rem;
 		width: 60%;
 		margin-bottom: 0.5rem;
+		line-height: 1;
 	}
 
+	/* match .top-item-title dimensions: 1.2rem font + 0.5rem margin top/bottom */
 	.skeleton-bar.medium {
 		height: 1.2rem;
 		width: 80%;
 		margin: 0.5rem 0;
+		line-height: 1;
 	}
 
+	/* match .stat-label dimensions: 0.9rem font */
 	.skeleton-bar.small {
 		height: 0.9rem;
 		width: 40%;
+		line-height: 1;
 	}
 
 	@keyframes shimmer {
