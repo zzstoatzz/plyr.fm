@@ -81,6 +81,7 @@ or via github UI: releases → draft new release → create tag → publish
 - `DATABASE_URL` → neon staging connection string
 - `ATPROTO_CLIENT_ID` → `https://relay-api-staging.fly.dev/client-metadata.json`
 - `ATPROTO_REDIRECT_URI` → `https://relay-api-staging.fly.dev/auth/callback`
+- `ATPROTO_APP_NAMESPACE` → `app.relay-staging` (isolated ATProto collection)
 - `OAUTH_ENCRYPTION_KEY` → unique key for staging
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` → same as production (shared R2)
 - `LOGFIRE_WRITE_TOKEN` → logfire token
@@ -88,6 +89,10 @@ or via github UI: releases → draft new release → create tag → publish
 
 **production secrets** (already configured):
 - same structure but with production URLs and database
+- `ATPROTO_APP_NAMESPACE` → not set (uses default `app.relay`)
+
+**local dev (.env)**:
+- `ATPROTO_APP_NAMESPACE` → `app.relay-dev` (throwaway collection for testing)
 
 ## database migrations
 
