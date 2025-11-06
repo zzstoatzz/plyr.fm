@@ -46,18 +46,18 @@ def main() -> int:
     version = datetime.now(UTC).strftime("%Y.%m%d.%H%M%S")
 
     print(f"🚀 creating release {version}")
-    print("📝 tagging main and pushing to prd-frontend branch")
+    print("📝 tagging main and pushing to production branch")
 
     # create tag on main
     subprocess.run(["git", "tag", version], check=True)
     subprocess.run(["git", "push", "origin", version], check=True)
 
-    # update prd-frontend branch to match main
+    # update production branch to match main
     subprocess.run(["git", "fetch", "origin"], check=True)
-    subprocess.run(["git", "push", "origin", "main:prd-frontend", "--force"], check=True)
+    subprocess.run(["git", "push", "origin", "main:production", "--force"], check=True)
 
     print(f"✅ release {version} tagged")
-    print("🚢 production deployment starting automatically via prd-frontend branch...")
+    print("🚢 production deployment starting automatically via production branch...")
 
     return 0
 

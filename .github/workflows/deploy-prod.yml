@@ -3,7 +3,7 @@ name: deploy prod
 on:
   push:
     branches:
-      - prd-frontend
+      - production
     paths:
       - "src/**"
       - "pyproject.toml"
