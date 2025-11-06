@@ -84,25 +84,16 @@
 			onclick={addToQueue}
 			title="add to queue"
 		>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<line x1="12" y1="5" x2="12" y2="19"></line>
-				<line x1="5" y1="12" x2="19" y2="12"></line>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+				<!-- plus sign -->
+				<line x1="5" y1="15" x2="5" y2="21"></line>
+				<line x1="2" y1="18" x2="8" y2="18"></line>
+				<!-- list lines -->
+				<line x1="9" y1="6" x2="21" y2="6"></line>
+				<line x1="9" y1="12" x2="21" y2="12"></line>
+				<line x1="9" y1="18" x2="21" y2="18"></line>
 			</svg>
 		</button>
-		{#if track.atproto_record_url}
-			<a
-				href={track.atproto_record_url}
-				target="_blank"
-				rel="noopener"
-				class="action-button"
-				title="view atproto record"
-			>
-				<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-					<path d="M8 2C4.69 2 2 4.69 2 8s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10.5c-2.48 0-4.5-2.02-4.5-4.5S5.52 3.5 8 3.5s4.5 2.02 4.5 4.5-2.02 4.5-4.5 4.5z" fill="currentColor"/>
-					<circle cx="8" cy="8" r="2" fill="currentColor"/>
-				</svg>
-			</a>
-		{/if}
 		<ShareButton url={shareUrl} />
 	</div>
 </div>
