@@ -80,11 +80,14 @@
 								class="queue-track"
 								class:drag-over={dragOverIndex === index}
 								draggable="true"
+								role="button"
+								tabindex="0"
 								ondragstart={() => handleDragStart(index)}
 								ondragover={(e) => handleDragOver(e, index)}
 								ondrop={(e) => handleDrop(e, index)}
 								ondragend={handleDragEnd}
 								onclick={() => queue.goTo(index)}
+								onkeydown={(e) => e.key === 'Enter' && queue.goTo(index)}
 							>
 								<div class="track-info">
 									<div class="track-title">{track.title}</div>
@@ -284,17 +287,6 @@
 	.queue-track.drag-over {
 		border-color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 12%, transparent);
-	}
-
-	.queue-track.current {
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 14%, var(--bg-secondary));
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
-	}
-
-	.queue-track.current .track-title {
-		color: var(--accent);
-		font-weight: 600;
 	}
 
 	.track-info {
