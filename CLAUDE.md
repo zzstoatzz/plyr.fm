@@ -1,4 +1,4 @@
-# relay
+# plyr
 
 music streaming platform on ATProto.
 
@@ -14,8 +14,8 @@ music streaming platform on ATProto.
 ## structure
 
 ```
-relay/
-├── src/relay/
+plyr/
+├── src/backend/
 │   ├── api/          # public endpoints (see api/CLAUDE.md)
 │   ├── _internal/    # internal services (see _internal/CLAUDE.md)
 │   ├── models/       # database schemas
