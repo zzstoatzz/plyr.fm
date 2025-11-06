@@ -6,12 +6,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from relay._internal import Session, require_auth
 from relay.atproto import fetch_user_avatar
-from relay.models import Artist, get_db
+from relay.models import Artist, Track, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,22 @@ class ArtistResponse(BaseModel):
     avatar_url: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class TopItemResponse(BaseModel):
+    """top item in analytics."""
+
+    id: int
+    title: str
+    play_count: int
+
+
+class AnalyticsResponse(BaseModel):
+    """analytics data for artist."""
+
+    total_plays: int
+    total_items: int
+    top_item: TopItemResponse | None
 
 
 # endpoints
@@ -158,3 +174,48 @@ async def get_artist_profile_by_did(
     if not artist:
         raise HTTPException(status_code=404, detail="artist not found")
     return ArtistResponse.model_validate(artist)
+
+
+@router.get("/me/analytics")
+async def get_my_analytics(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Session = Depends(require_auth),
+) -> AnalyticsResponse:
+    """get analytics for authenticated artist."""
+    # verify artist exists
+    result = await db.execute(select(Artist).where(Artist.did == auth_session.did))
+    artist = result.scalar_one_or_none()
+    if not artist:
+        raise HTTPException(
+            status_code=404,
+            detail="artist profile not found - please create one first",
+        )
+
+    # get total plays and item count
+    result = await db.execute(
+        select(func.sum(Track.play_count), func.count(Track.id)).where(
+            Track.artist_did == auth_session.did
+        )
+    )
+    total_plays, total_items = result.one()
+    total_plays = total_plays or 0  # handle None when no tracks
+    total_items = total_items or 0
+
+    # get top item
+    result = await db.execute(
+        select(Track)
+        .where(Track.artist_did == auth_session.did)
+        .order_by(Track.play_count.desc())
+        .limit(1)
+    )
+    top_track = result.scalar_one_or_none()
+
+    top_item = None
+    if top_track:
+        top_item = TopItemResponse(
+            id=top_track.id, title=top_track.title, play_count=top_track.play_count
+        )
+
+    return AnalyticsResponse(
+        total_plays=total_plays, total_items=total_items, top_item=top_item
+    )

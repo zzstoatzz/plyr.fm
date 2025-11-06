@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
-	import type { Track, Artist, User } from '$lib/types';
+	import type { Track, Artist, User, Analytics } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { player } from '$lib/player.svelte';
@@ -20,6 +20,12 @@
 	let error = $state('');
 	let user: User | null = $state(null);
 	let isAuthenticated = $state(false);
+	let analytics: Analytics | null = $state(null);
+
+	function checkIsOwnProfile(): boolean {
+		return user !== null && artist !== null && user.did === artist.did;
+	}
+	let isOwnProfile = $derived(checkIsOwnProfile());
 
 	async function checkAuth() {
 		const sessionId = localStorage.getItem('session_id');
@@ -112,9 +118,28 @@
 		}
 	}
 
-	onMount(() => {
-		checkAuth();
-		loadArtistAndTracks();
+	async function loadAnalytics() {
+		const sessionId = localStorage.getItem('session_id');
+		if (!sessionId || !isOwnProfile) return;
+
+		try {
+			const response = await fetch(`${API_URL}/artists/me/analytics`, {
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
+			});
+			if (response.ok) {
+				analytics = await response.json();
+			}
+		} catch (e) {
+			console.error('failed to load analytics:', e);
+		}
+	}
+
+	onMount(async () => {
+		await checkAuth();
+		await loadArtistAndTracks();
+		await loadAnalytics();
 	});
 </script>
 
@@ -182,6 +207,29 @@
 				{/if}
 			</div>
 		</section>
+
+		{#if isOwnProfile && analytics}
+			<section class="analytics">
+				<h2>analytics</h2>
+				<div class="analytics-grid">
+					<div class="stat-card">
+						<div class="stat-value">{analytics.total_plays.toLocaleString()}</div>
+						<div class="stat-label">total plays</div>
+					</div>
+					<div class="stat-card">
+						<div class="stat-value">{analytics.total_items}</div>
+						<div class="stat-label">total tracks</div>
+					</div>
+					{#if analytics.top_item}
+						<div class="stat-card top-item">
+							<div class="stat-label">most played</div>
+							<div class="top-item-title">{analytics.top_item.title}</div>
+							<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
+						</div>
+					{/if}
+				</div>
+			</section>
+		{/if}
 
 		<section class="tracks">
 			<h2>tracks</h2>
@@ -270,6 +318,63 @@
 		margin: 0;
 	}
 
+	.analytics {
+		margin-bottom: 3rem;
+	}
+
+	.analytics h2 {
+		margin-bottom: 1.5rem;
+		color: #e8e8e8;
+		font-size: 1.8rem;
+	}
+
+	.analytics-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 1.5rem;
+	}
+
+	.stat-card {
+		background: #141414;
+		border: 1px solid #282828;
+		border-radius: 8px;
+		padding: 1.5rem;
+		transition: border-color 0.2s;
+	}
+
+	.stat-card:hover {
+		border-color: #404040;
+	}
+
+	.stat-value {
+		font-size: 2.5rem;
+		font-weight: bold;
+		color: var(--accent);
+		margin-bottom: 0.5rem;
+	}
+
+	.stat-label {
+		color: #909090;
+		font-size: 0.9rem;
+		text-transform: lowercase;
+	}
+
+	.stat-card.top-item {
+		grid-column: span 1;
+	}
+
+	.top-item-title {
+		font-size: 1.2rem;
+		color: #e8e8e8;
+		margin: 0.5rem 0;
+		font-weight: 500;
+	}
+
+	.top-item-plays {
+		color: var(--accent);
+		font-size: 1rem;
+	}
+
 	.tracks {
 		margin-top: 2rem;
 	}
@@ -312,6 +417,14 @@
 		}
 
 		.artist-info h1 {
+			font-size: 2rem;
+		}
+
+		.analytics-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.stat-value {
 			font-size: 2rem;
 		}
 	}
