@@ -25,6 +25,14 @@ jobs:
       - name: install bun
         uses: oven-sh/setup-bun@v2
 
+      - name: cache frontend dependencies
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('frontend/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
       - name: install dependencies
         run: uv sync
 
@@ -44,9 +52,8 @@ jobs:
           echo "✅ lockfile is up to date"
 
       - name: run pre-commit
-        run: uv run pre-commit run --all-files
-        env:
-          SKIP: no-commit-to-branch
+        uses: j178/prek-action@v1
 
-      - name: build frontend
-        run: cd frontend && bun run build
+      - name: prune uv cache
+        if: always()
+        run: uv cache prune --ci
