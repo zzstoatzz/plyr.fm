@@ -19,6 +19,7 @@ from backend.api import (
     search_router,
     tracks_router,
 )
+from backend.api.migration import router as migration_router
 from backend.config import settings
 from backend.models import init_db
 
@@ -106,6 +107,7 @@ app.include_router(audio_router)
 app.include_router(search_router)
 app.include_router(preferences_router)
 app.include_router(queue_router)
+app.include_router(migration_router)
 
 
 @app.get("/health")
