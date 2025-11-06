@@ -94,20 +94,6 @@
 				<line x1="9" y1="18" x2="21" y2="18"></line>
 			</svg>
 		</button>
-		{#if track.atproto_record_url}
-			<a
-				href={track.atproto_record_url}
-				target="_blank"
-				rel="noopener"
-				class="action-button"
-				title="view atproto record"
-			>
-				<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-					<path d="M8 2C4.69 2 2 4.69 2 8s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10.5c-2.48 0-4.5-2.02-4.5-4.5S5.52 3.5 8 3.5s4.5 2.02 4.5 4.5-2.02 4.5-4.5 4.5z" fill="currentColor"/>
-					<circle cx="8" cy="8" r="2" fill="currentColor"/>
-				</svg>
-			</a>
-		{/if}
 		<ShareButton url={shareUrl} />
 	</div>
 </div>
