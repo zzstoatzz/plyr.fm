@@ -7,8 +7,8 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from relay._internal import Session, queue_service
-from relay.main import app
+from backend._internal import Session, queue_service
+from backend.main import app
 
 
 # create a mock session object
@@ -24,7 +24,7 @@ class MockSession(Session):
 @pytest.fixture
 def test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
     """create test app with mocked auth."""
-    from relay._internal import require_auth
+    from backend._internal import require_auth
 
     # mock the auth dependency to return a mock session
     async def mock_require_auth() -> Session:
@@ -245,7 +245,7 @@ async def test_put_queue_without_if_match_always_succeeds(
 
 async def test_queue_state_isolated_by_did(test_app: FastAPI, db_session: AsyncSession):
     """test that different users have isolated queue states."""
-    from relay._internal import require_auth
+    from backend._internal import require_auth
 
     # user 1
     async def mock_user1_auth() -> Session:

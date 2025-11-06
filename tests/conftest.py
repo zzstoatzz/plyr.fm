@@ -14,8 +14,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import sessionmaker
 
-from relay.config import settings
-from relay.models import Base
+from backend.config import settings
+from backend.models import Base
 
 
 @asynccontextmanager

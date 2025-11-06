@@ -4,10 +4,10 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-# import relay models for autogenerate support
-from relay.config import settings
-from relay.models import Artist, AudioFormat, Track, UserSession  # noqa: F401
-from relay.models.database import Base
+# import backend models for autogenerate support
+from backend.config import settings
+from backend.models import Artist, AudioFormat, Track, UserSession  # noqa: F401
+from backend.models.database import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

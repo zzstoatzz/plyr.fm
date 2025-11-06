@@ -463,7 +463,7 @@ as relay scales, we may want to explore:
 5. **test with actual app**
    ```bash
    # start backend with new schema
-   uv run uvicorn relay.main:app --reload
+   uv run uvicorn backend.main:app --reload
 
    # verify endpoints work
    curl http://localhost:8001/health

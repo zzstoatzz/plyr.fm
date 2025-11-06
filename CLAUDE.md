@@ -27,6 +27,6 @@ relay/
 
 ## development
 
-backend: `uv run uvicorn relay.main:app --reload`
+backend: `uv run uvicorn backend.main:app --reload`
 frontend: `cd frontend && bun run dev`
 tests: `just test`

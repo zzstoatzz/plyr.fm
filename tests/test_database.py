@@ -3,7 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from relay.models import Artist
+from backend.models import Artist
 
 
 async def test_database_connection(db_session: AsyncSession):

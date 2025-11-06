@@ -1,6 +1,6 @@
 import pytest
 
-from relay.config import Settings
+from backend.config import Settings
 
 
 @pytest.fixture(autouse=True)

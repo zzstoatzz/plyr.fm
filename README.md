@@ -66,7 +66,7 @@ or manually:
 ```bash
 # backend
 uv sync
-uv run uvicorn relay.main:app --reload --port 8001
+uv run uvicorn backend.main:app --reload --port 8001
 
 # frontend (new terminal)
 cd frontend && bun install && bun run dev

@@ -2,7 +2,7 @@
 
 import pytest
 
-from relay.config import Settings
+from backend.config import Settings
 
 
 def test_notification_settings_from_env(monkeypatch: pytest.MonkeyPatch):

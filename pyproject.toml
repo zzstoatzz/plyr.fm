@@ -1,5 +1,5 @@
 [project]
-name = "relay"
+name = "backend"
 dynamic = ["version"]
 description = "decentralized music streaming platform built on ATProto"
 authors = [{ name = "zzstoatzz", email = "thrast36@gmail.com" }]
@@ -109,7 +109,7 @@ extend-select = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "I001"]
 "tests/**/*.py" = ["S101"] # Allow assert in tests
-"src/relay/api/**/*.py" = ["B008"] # Allow Depends() and File() in FastAPI route defaults
+"src/backend/api/**/*.py" = ["B008"] # Allow Depends() and File() in FastAPI route defaults
 
 [tool.coverage.run]
 source = ["src"]

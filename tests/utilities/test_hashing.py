@@ -3,7 +3,7 @@
 import hashlib
 import io
 
-from relay.utilities.hashing import hash_file_chunked
+from backend.utilities.hashing import hash_file_chunked
 
 
 def test_hash_file_chunked_correctness() -> None:
