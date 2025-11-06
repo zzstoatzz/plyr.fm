@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { fade } from 'svelte/transition';
 	import { API_URL } from '$lib/config';
-	import type { Track, Artist, User } from '$lib/types';
+	import type { Track, Artist, User, Analytics } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { player } from '$lib/player.svelte';
@@ -20,6 +21,13 @@
 	let error = $state('');
 	let user: User | null = $state(null);
 	let isAuthenticated = $state(false);
+	let analytics: Analytics | null = $state(null);
+	let analyticsLoading = $state(false);
+
+	function checkIsOwnProfile(): boolean {
+		return user !== null && artist !== null && user.did === artist.did;
+	}
+	let isOwnProfile = $derived(checkIsOwnProfile());
 
 	async function checkAuth() {
 		const sessionId = localStorage.getItem('session_id');
@@ -112,9 +120,45 @@
 		}
 	}
 
-	onMount(() => {
-		checkAuth();
-		loadArtistAndTracks();
+	async function loadAnalytics() {
+		const sessionId = localStorage.getItem('session_id');
+		if (!sessionId || !isOwnProfile) return;
+
+		analyticsLoading = true;
+		const startTime = Date.now();
+		const minDisplayTime = 300; // minimum 300ms to avoid flicker
+
+		try {
+			const response = await fetch(`${API_URL}/artists/me/analytics`, {
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
+			});
+			if (response.ok) {
+				analytics = await response.json();
+			}
+		} catch (e) {
+			console.error('failed to load analytics:', e);
+		} finally {
+			// ensure loading state shows for at least minDisplayTime
+			const elapsed = Date.now() - startTime;
+			const remainingTime = Math.max(0, minDisplayTime - elapsed);
+
+			if (remainingTime > 0) {
+				setTimeout(() => {
+					analyticsLoading = false;
+				}, remainingTime);
+			} else {
+				analyticsLoading = false;
+			}
+		}
+	}
+
+	onMount(async () => {
+		await checkAuth();
+		await loadArtistAndTracks();
+		// load analytics in background without blocking page render
+		loadAnalytics();
 	});
 </script>
 
@@ -182,6 +226,47 @@
 				{/if}
 			</div>
 		</section>
+
+		{#if isOwnProfile}
+			<section class="analytics">
+				<h2>analytics</h2>
+				<div class="analytics-grid">
+					{#key analyticsLoading}
+						{#if analyticsLoading}
+							<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
+								<div class="skeleton-bar large"></div>
+								<div class="skeleton-bar small"></div>
+							</div>
+							<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
+								<div class="skeleton-bar large"></div>
+								<div class="skeleton-bar small"></div>
+							</div>
+							<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
+								<div class="skeleton-bar small"></div>
+								<div class="skeleton-bar medium"></div>
+								<div class="skeleton-bar small"></div>
+							</div>
+						{:else if analytics}
+							<div class="stat-card" transition:fade={{ duration: 200 }}>
+								<div class="stat-value">{analytics.total_plays.toLocaleString()}</div>
+								<div class="stat-label">total plays</div>
+							</div>
+							<div class="stat-card" transition:fade={{ duration: 200 }}>
+								<div class="stat-value">{analytics.total_items}</div>
+								<div class="stat-label">total tracks</div>
+							</div>
+							{#if analytics.top_item}
+								<div class="stat-card top-item" transition:fade={{ duration: 200 }}>
+									<div class="stat-label">most played</div>
+									<div class="top-item-title">{analytics.top_item.title}</div>
+									<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
+								</div>
+							{/if}
+						{/if}
+					{/key}
+				</div>
+			</section>
+		{/if}
 
 		<section class="tracks">
 			<h2>tracks</h2>
@@ -270,6 +355,120 @@
 		margin: 0;
 	}
 
+	.analytics {
+		margin-bottom: 3rem;
+	}
+
+	.analytics h2 {
+		margin-bottom: 1.5rem;
+		color: #e8e8e8;
+		font-size: 1.8rem;
+	}
+
+	.analytics-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 1.5rem;
+		/* prevent layout shift during transition */
+		min-height: 120px;
+	}
+
+	.stat-card {
+		background: #141414;
+		border: 1px solid #282828;
+		border-radius: 8px;
+		padding: 1.5rem;
+		transition: border-color 0.2s;
+	}
+
+	.stat-card:hover {
+		border-color: #404040;
+	}
+
+	.stat-value {
+		font-size: 2.5rem;
+		font-weight: bold;
+		color: var(--accent);
+		margin-bottom: 0.5rem;
+		line-height: 1;
+	}
+
+	.stat-label {
+		color: #909090;
+		font-size: 0.9rem;
+		text-transform: lowercase;
+		line-height: 1;
+	}
+
+	.stat-card.top-item {
+		grid-column: span 1;
+	}
+
+	.top-item-title {
+		font-size: 1.2rem;
+		color: #e8e8e8;
+		margin: 0.5rem 0;
+		font-weight: 500;
+		line-height: 1;
+	}
+
+	.top-item-plays {
+		color: var(--accent);
+		font-size: 1rem;
+		line-height: 1;
+	}
+
+	/* skeleton loading styles - match exact dimensions of real content */
+	.stat-card.skeleton {
+		pointer-events: none;
+		/* ensure skeleton has same total height as real content */
+		min-height: 96px; /* matches stat-card content height */
+	}
+
+	.skeleton-bar {
+		background: linear-gradient(
+			90deg,
+			#1a1a1a 0%,
+			#242424 50%,
+			#1a1a1a 100%
+		);
+		background-size: 200% 100%;
+		animation: shimmer 1.5s ease-in-out infinite;
+		border-radius: 4px;
+	}
+
+	/* match .stat-value dimensions: 2.5rem font + 0.5rem margin-bottom */
+	.skeleton-bar.large {
+		height: 2.5rem;
+		width: 60%;
+		margin-bottom: 0.5rem;
+		line-height: 1;
+	}
+
+	/* match .top-item-title dimensions: 1.2rem font + 0.5rem margin top/bottom */
+	.skeleton-bar.medium {
+		height: 1.2rem;
+		width: 80%;
+		margin: 0.5rem 0;
+		line-height: 1;
+	}
+
+	/* match .stat-label dimensions: 0.9rem font */
+	.skeleton-bar.small {
+		height: 0.9rem;
+		width: 40%;
+		line-height: 1;
+	}
+
+	@keyframes shimmer {
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
+	}
+
 	.tracks {
 		margin-top: 2rem;
 	}
@@ -293,6 +492,13 @@
 		font-style: italic;
 	}
 
+	/* respect reduced motion preference */
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-bar {
+			animation: none;
+		}
+	}
+
 	@media (max-width: 768px) {
 		main {
 			padding: 1rem;
@@ -312,6 +518,14 @@
 		}
 
 		.artist-info h1 {
+			font-size: 2rem;
+		}
+
+		.analytics-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.stat-value {
 			font-size: 2rem;
 		}
 	}

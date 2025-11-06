@@ -6,12 +6,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from relay._internal import Session, require_auth
 from relay.atproto import fetch_user_avatar
-from relay.models import Artist, get_db
+from relay.models import Artist, Track, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,22 @@ class ArtistResponse(BaseModel):
     avatar_url: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class TopItemResponse(BaseModel):
+    """top item in analytics."""
+
+    id: int
+    title: str
+    play_count: int
+
+
+class AnalyticsResponse(BaseModel):
+    """analytics data for artist."""
+
+    total_plays: int
+    total_items: int
+    top_item: TopItemResponse | None
 
 
 # endpoints
@@ -158,3 +174,44 @@ async def get_artist_profile_by_did(
     if not artist:
         raise HTTPException(status_code=404, detail="artist not found")
     return ArtistResponse.model_validate(artist)
+
+
+@router.get("/me/analytics")
+async def get_my_analytics(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Session = Depends(require_auth),
+) -> AnalyticsResponse:
+    """get analytics for authenticated artist.
+
+    returns zeros if artist has no tracks - no need to verify artist exists.
+    """
+    # get total plays and item count in one query
+    result = await db.execute(
+        select(func.sum(Track.play_count), func.count(Track.id)).where(
+            Track.artist_did == auth_session.did
+        )
+    )
+    total_plays, total_items = result.one()
+    total_plays = total_plays or 0  # handle None when no tracks
+    total_items = total_items or 0
+
+    # get top item (only if artist has tracks)
+    top_item = None
+    if total_items > 0:
+        result = await db.execute(
+            select(Track.id, Track.title, Track.play_count)
+            .where(Track.artist_did == auth_session.did)
+            .order_by(Track.play_count.desc())
+            .limit(1)
+        )
+        top_track_row = result.first()
+        if top_track_row:
+            top_item = TopItemResponse(
+                id=top_track_row[0],
+                title=top_track_row[1],
+                play_count=top_track_row[2],
+            )
+
+    return AnalyticsResponse(
+        total_plays=total_plays, total_items=total_items, top_item=top_item
+    )

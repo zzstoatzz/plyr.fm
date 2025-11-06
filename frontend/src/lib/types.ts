@@ -49,3 +49,15 @@ export interface QueueResponse {
 	revision: number;
 	tracks: Track[];
 }
+
+export interface TopItem {
+	id: number;
+	title: string;
+	play_count: number;
+}
+
+export interface Analytics {
+	total_plays: number;
+	total_items: number;
+	top_item: TopItem | null;
+}
