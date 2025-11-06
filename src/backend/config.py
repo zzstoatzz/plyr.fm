@@ -248,7 +248,9 @@ class AtprotoSettings(RelaySettingsSection):
 
         # if we have an old namespace, request access to both collections
         if self.old_app_namespace:
-            return f"atproto transition:generic repo:{self.track_collection} repo:{self.old_track_collection}"
+            return (
+                f"atproto repo:{self.track_collection} repo:{self.old_track_collection}"
+            )
 
         return f"atproto repo:{self.track_collection}"
 
