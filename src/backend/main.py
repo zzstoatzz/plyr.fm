@@ -122,7 +122,7 @@ async def client_metadata() -> dict:
 
     return {
         "client_id": settings.atproto.client_id,
-        "client_name": "relay",
+        "client_name": settings.app.name,
         "client_uri": client_uri,
         "redirect_uris": [settings.atproto.redirect_uri],
         "scope": settings.atproto.resolved_scope,
