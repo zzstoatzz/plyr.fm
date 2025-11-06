@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""create a github release using timestamp-based versioning (nebula strategy).
+"""create a github release using timestamp-based versioning
 
 version format: YYYY.MMDD.HHMMSS (e.g., 2025.1106.134523)
 
@@ -43,7 +43,6 @@ def main() -> int:
         print("❌ working directory has uncommitted changes")
         return 1
 
-    # generate version using nebula strategy
     version = datetime.now(UTC).strftime("%Y.%m%d.%H%M%S")
 
     print(f"🚀 creating release {version}")
