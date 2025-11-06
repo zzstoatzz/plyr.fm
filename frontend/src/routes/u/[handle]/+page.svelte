@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { fade } from 'svelte/transition';
 	import { API_URL } from '$lib/config';
 	import type { Track, Artist, User, Analytics } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
@@ -21,6 +22,7 @@
 	let user: User | null = $state(null);
 	let isAuthenticated = $state(false);
 	let analytics: Analytics | null = $state(null);
+	let analyticsLoading = $state(false);
 
 	function checkIsOwnProfile(): boolean {
 		return user !== null && artist !== null && user.did === artist.did;
@@ -122,6 +124,10 @@
 		const sessionId = localStorage.getItem('session_id');
 		if (!sessionId || !isOwnProfile) return;
 
+		analyticsLoading = true;
+		const startTime = Date.now();
+		const minDisplayTime = 300; // minimum 300ms to avoid flicker
+
 		try {
 			const response = await fetch(`${API_URL}/artists/me/analytics`, {
 				headers: {
@@ -133,13 +139,26 @@
 			}
 		} catch (e) {
 			console.error('failed to load analytics:', e);
+		} finally {
+			// ensure loading state shows for at least minDisplayTime
+			const elapsed = Date.now() - startTime;
+			const remainingTime = Math.max(0, minDisplayTime - elapsed);
+
+			if (remainingTime > 0) {
+				setTimeout(() => {
+					analyticsLoading = false;
+				}, remainingTime);
+			} else {
+				analyticsLoading = false;
+			}
 		}
 	}
 
 	onMount(async () => {
 		await checkAuth();
 		await loadArtistAndTracks();
-		await loadAnalytics();
+		// load analytics in background without blocking page render
+		loadAnalytics();
 	});
 </script>
 
@@ -208,26 +227,44 @@
 			</div>
 		</section>
 
-		{#if isOwnProfile && analytics}
+		{#if isOwnProfile}
 			<section class="analytics">
 				<h2>analytics</h2>
-				<div class="analytics-grid">
-					<div class="stat-card">
-						<div class="stat-value">{analytics.total_plays.toLocaleString()}</div>
-						<div class="stat-label">total plays</div>
-					</div>
-					<div class="stat-card">
-						<div class="stat-value">{analytics.total_items}</div>
-						<div class="stat-label">total tracks</div>
-					</div>
-					{#if analytics.top_item}
-						<div class="stat-card top-item">
-							<div class="stat-label">most played</div>
-							<div class="top-item-title">{analytics.top_item.title}</div>
-							<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
+				{#if analyticsLoading}
+					<div class="analytics-grid" transition:fade={{ duration: 200 }}>
+						<div class="stat-card skeleton">
+							<div class="skeleton-bar large"></div>
+							<div class="skeleton-bar small"></div>
 						</div>
-					{/if}
-				</div>
+						<div class="stat-card skeleton">
+							<div class="skeleton-bar large"></div>
+							<div class="skeleton-bar small"></div>
+						</div>
+						<div class="stat-card skeleton">
+							<div class="skeleton-bar small"></div>
+							<div class="skeleton-bar medium"></div>
+							<div class="skeleton-bar small"></div>
+						</div>
+					</div>
+				{:else if analytics}
+					<div class="analytics-grid" transition:fade={{ duration: 200 }}>
+						<div class="stat-card">
+							<div class="stat-value">{analytics.total_plays.toLocaleString()}</div>
+							<div class="stat-label">total plays</div>
+						</div>
+						<div class="stat-card">
+							<div class="stat-value">{analytics.total_items}</div>
+							<div class="stat-label">total tracks</div>
+						</div>
+						{#if analytics.top_item}
+							<div class="stat-card top-item">
+								<div class="stat-label">most played</div>
+								<div class="top-item-title">{analytics.top_item.title}</div>
+								<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
+							</div>
+						{/if}
+					</div>
+				{/if}
 			</section>
 		{/if}
 
@@ -375,6 +412,49 @@
 		font-size: 1rem;
 	}
 
+	/* skeleton loading styles */
+	.stat-card.skeleton {
+		pointer-events: none;
+	}
+
+	.skeleton-bar {
+		background: linear-gradient(
+			90deg,
+			#1a1a1a 0%,
+			#242424 50%,
+			#1a1a1a 100%
+		);
+		background-size: 200% 100%;
+		animation: shimmer 1.5s ease-in-out infinite;
+		border-radius: 4px;
+	}
+
+	.skeleton-bar.large {
+		height: 2.5rem;
+		width: 60%;
+		margin-bottom: 0.5rem;
+	}
+
+	.skeleton-bar.medium {
+		height: 1.2rem;
+		width: 80%;
+		margin: 0.5rem 0;
+	}
+
+	.skeleton-bar.small {
+		height: 0.9rem;
+		width: 40%;
+	}
+
+	@keyframes shimmer {
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
+	}
+
 	.tracks {
 		margin-top: 2rem;
 	}
@@ -396,6 +476,13 @@
 		padding: 3rem;
 		color: #808080;
 		font-style: italic;
+	}
+
+	/* respect reduced motion preference */
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-bar {
+			animation: none;
+		}
 	}
 
 	@media (max-width: 768px) {

@@ -181,17 +181,11 @@ async def get_my_analytics(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: Session = Depends(require_auth),
 ) -> AnalyticsResponse:
-    """get analytics for authenticated artist."""
-    # verify artist exists
-    result = await db.execute(select(Artist).where(Artist.did == auth_session.did))
-    artist = result.scalar_one_or_none()
-    if not artist:
-        raise HTTPException(
-            status_code=404,
-            detail="artist profile not found - please create one first",
-        )
+    """get analytics for authenticated artist.
 
-    # get total plays and item count
+    returns zeros if artist has no tracks - no need to verify artist exists.
+    """
+    # get total plays and item count in one query
     result = await db.execute(
         select(func.sum(Track.play_count), func.count(Track.id)).where(
             Track.artist_did == auth_session.did
@@ -201,20 +195,22 @@ async def get_my_analytics(
     total_plays = total_plays or 0  # handle None when no tracks
     total_items = total_items or 0
 
-    # get top item
-    result = await db.execute(
-        select(Track)
-        .where(Track.artist_did == auth_session.did)
-        .order_by(Track.play_count.desc())
-        .limit(1)
-    )
-    top_track = result.scalar_one_or_none()
-
+    # get top item (only if artist has tracks)
     top_item = None
-    if top_track:
-        top_item = TopItemResponse(
-            id=top_track.id, title=top_track.title, play_count=top_track.play_count
+    if total_items > 0:
+        result = await db.execute(
+            select(Track.id, Track.title, Track.play_count)
+            .where(Track.artist_did == auth_session.did)
+            .order_by(Track.play_count.desc())
+            .limit(1)
         )
+        top_track_row = result.first()
+        if top_track_row:
+            top_item = TopItemResponse(
+                id=top_track_row[0],
+                title=top_track_row[1],
+                play_count=top_track_row[2],
+            )
 
     return AnalyticsResponse(
         total_plays=total_plays, total_items=total_items, top_item=top_item
