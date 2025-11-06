@@ -25,3 +25,7 @@ deploy-backend:
 # deploy frontend to cloudflare pages
 deploy-frontend:
     cd frontend && bun run build && bun x wrangler pages deploy .svelte-kit/cloudflare
+
+# create a github release (triggers production deployment)
+release:
+    uv run scripts/release.py
