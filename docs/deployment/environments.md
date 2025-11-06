@@ -1,14 +1,14 @@
 # environment separation strategy
 
-relay uses a three-tier deployment strategy: development → staging → production.
+relay uses a simple three-tier deployment strategy: development → staging → production.
 
 ## environments
 
 | environment | trigger | backend app | backend URL | database | frontend | storage |
 |-------------|---------|-------------|-------------|----------|----------|---------|
 | **development** | local | local server | localhost:8000 | relay-dev (neon) | localhost:5173 | relay-dev (r2) |
-| **staging** | push to main (backend) <br> push to staging (frontend) | relay-api-staging | relay-api-staging.fly.dev | relay-staging (neon) | staging.relay-4i6.pages.dev | relay-stg (r2) |
-| **production** | github release (backend) <br> push to production (frontend) | relay-api | relay-api.fly.dev | relay (neon) | relay-4i6.pages.dev | relay (r2) |
+| **staging** | push to main | relay-api-staging | relay-api-staging.fly.dev | relay-staging (neon) | cloudflare pages (main) | relay-stg (r2) |
+| **production** | github release | relay-api | relay-api.fly.dev | relay (neon) | cloudflare pages (main) | relay (r2) |
 
 ## workflow
 
@@ -16,121 +16,117 @@ relay uses a three-tier deployment strategy: development → staging → product
 
 ```bash
 # start backend
-uv run uvicorn backend.main:app --reload --port 8000
+uv run uvicorn relay.main:app --reload --port 8000
 
 # start frontend
 cd frontend && bun run dev
 ```
 
-connects to `relay-dev` neon database.
+connects to `relay-dev` neon database and uses `app.relay-dev` atproto namespace.
 
-### staging deployment
+### staging deployment (automatic)
 
-**backend (automatic on main push)**:
+**trigger**: push to `main` branch
 
-1. push to `main` branch
-2. github actions runs `.github/workflows/deploy-backend.yml`
-3. deploys to `relay-api-staging` fly app using `fly.staging.toml`
-4. runs database migrations via `release_command`
-5. backend available at `https://relay-api-staging.fly.dev`
+**backend**:
+1. github actions runs `.github/workflows/deploy-backend.yml`
+2. deploys to `relay-api-staging` fly app using `fly.staging.toml`
+3. runs `alembic upgrade head` via `release_command`
+4. backend available at `https://relay-api-staging.fly.dev`
 
-**frontend (manual sync)**:
-
-```bash
-# sync staging branch with main
-git checkout staging
-git merge main
-git push
-```
-
-cloudflare pages automatically deploys to `https://staging.relay-4i6.pages.dev`
+**frontend**:
+- cloudflare pages automatically deploys from `main` branch
+- uses preview environment with `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
+- available at cloudflare-generated preview URL
 
 **testing**:
-- frontend: `https://staging.relay-4i6.pages.dev` (static URL)
 - backend: `https://relay-api-staging.fly.dev/docs`
 - database: `relay-staging` (neon)
 - storage: `relay-stg` (r2)
+- atproto namespace: `app.relay-staging`
 
-### production deployment
+### production deployment (manual)
 
-**frontend (manual promotion)**:
+**trigger**: create github release (e.g., `v1.0.0`)
 
+**backend**:
+1. github actions runs `.github/workflows/deploy-production.yml`
+2. deploys to `relay-api` fly app using `fly.toml`
+3. runs `alembic upgrade head` via `release_command`
+4. backend available at `https://relay-api.fly.dev`
+
+**frontend**:
+- cloudflare pages production environment serves `main` branch
+- uses production environment with `PUBLIC_API_URL=https://relay-api.fly.dev`
+- available at `https://relay-4i6.pages.dev`
+
+**creating a release**:
 ```bash
-# after validating staging, promote to production
-git checkout production
-git merge main
-git push
-```
-
-cloudflare pages automatically deploys to `https://relay-4i6.pages.dev`
-
-**backend (github release)**:
-
-```bash
-# create release tag
-gh release create v1.2.3 --title "v1.2.3" --notes "release notes here"
+# after validating changes in staging:
+gh release create v1.0.0 --title "v1.0.0" --notes "release notes here"
 ```
 
 or via github UI: releases → draft new release → create tag → publish
 
-**process**:
-1. github actions detects release publication
-2. runs `.github/workflows/deploy-production.yml`
-3. deploys to `relay-api` fly app using `fly.toml`
-4. runs database migrations via `release_command`
-5. backend available at `https://relay-api.fly.dev`
-
 **testing**:
-- frontend: `https://relay-4i6.pages.dev` (static URL)
+- frontend: `https://relay-4i6.pages.dev`
 - backend: `https://relay-api.fly.dev/docs`
 - database: `relay` (neon)
 - storage: `relay` (r2)
+- atproto namespace: `app.relay`
 
 ## configuration files
 
-### fly.io configurations
+### backend
 
 **fly.staging.toml**:
 - app: `relay-api-staging`
-- database: neon staging connection string
-- OAuth redirect: `https://relay-api-staging.fly.dev/auth/callback`
-- environment: staging
+- release_command: `uv run alembic upgrade head` (runs migrations)
+- environment variables configured in fly.io
 
 **fly.toml**:
 - app: `relay-api`
-- database: neon production connection string
-- OAuth redirect: `https://relay-api.fly.dev/auth/callback`
-- environment: production
+- release_command: `uv run alembic upgrade head` (runs migrations)
+- environment variables configured in fly.io
+
+### frontend
+
+**cloudflare pages**:
+- framework: sveltekit
+- build command: `cd frontend && bun run build`
+- build output: `frontend/build`
+- environment variables:
+  - preview: `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
+  - production: `PUBLIC_API_URL=https://relay-api.fly.dev`
 
 ### secrets management
 
-**staging secrets** (set via `scripts/setup-staging-secrets.sh`):
+**staging secrets** (set via `flyctl secrets set`):
 - `DATABASE_URL` → neon staging connection string
 - `ATPROTO_CLIENT_ID` → `https://relay-api-staging.fly.dev/client-metadata.json`
 - `ATPROTO_REDIRECT_URI` → `https://relay-api-staging.fly.dev/auth/callback`
-- `ATPROTO_APP_NAMESPACE` → `app.relay-staging` (isolated ATProto collection)
-- `OAUTH_ENCRYPTION_KEY` → unique key for staging
-- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` → same as production (shared R2)
-- `LOGFIRE_WRITE_TOKEN` → logfire token
-- `LOGFIRE_ENVIRONMENT` → `staging`
+- `ATPROTO_APP_NAMESPACE` → `app.relay-staging`
+- `OAUTH_ENCRYPTION_KEY` → unique 44-char base64 fernet key
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` → r2 credentials
+- `LOGFIRE_WRITE_TOKEN`, `LOGFIRE_ENABLED`, `LOGFIRE_ENVIRONMENT`
+- `FRONTEND_URL` → cloudflare pages preview URL
 
 **production secrets** (already configured):
 - same structure but with production URLs and database
-- `ATPROTO_APP_NAMESPACE` → not set (uses default `app.relay`)
+- `ATPROTO_APP_NAMESPACE` → not set (defaults to `app.relay`)
+- additional: `NOTIFY_BOT_HANDLE`, `NOTIFY_BOT_PASSWORD`, `NOTIFY_ENABLED`
 
 **local dev (.env)**:
-- `ATPROTO_APP_NAMESPACE` → `app.relay-dev` (throwaway collection for testing)
+- `ATPROTO_APP_NAMESPACE` → `app.relay-dev`
 
 ## database migrations
 
-migrations run automatically on deploy via fly.io `release_command`:
-```toml
-[deploy]
-  release_command = "uv run alembic upgrade head"
-```
+migrations run automatically on deploy via fly.io `release_command`.
 
-**staging**: migrations run on every push to main (low risk)
-**production**: migrations run on release (review migrations before releasing)
+**both environments**:
+- use `alembic upgrade head` to run migrations
+- migrations run before deployment completes
+- alembic tracks applied migrations via `alembic_version` table
 
 ### rollback strategy
 
@@ -139,26 +135,6 @@ if a migration fails:
 2. **production**:
    - revert via alembic: `uv run alembic downgrade -1`
    - or restore database from neon backup
-
-## cloudflare pages
-
-**configuration** (see [cloudflare-pages-setup.md](./cloudflare-pages-setup.md) for detailed instructions):
-
-**branches**:
-- `production` branch → `relay-4i6.pages.dev` (production URL)
-- `staging` branch → `staging.relay-4i6.pages.dev` (staging URL)
-
-**environment variables**:
-- staging (`preview` environment): `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
-- production (`production` environment): `PUBLIC_API_URL=https://relay-api.fly.dev`
-
-**manual configuration required**:
-1. change production branch from `main` to `production` in cloudflare dashboard
-2. add `staging` to custom branch deployments
-3. set environment variables for each environment
-4. trigger initial deployments
-
-see [cloudflare-pages-setup.md](./cloudflare-pages-setup.md) for step-by-step instructions.
 
 ## monitoring
 
@@ -172,9 +148,7 @@ see [cloudflare-pages-setup.md](./cloudflare-pages-setup.md) for step-by-step in
 
 ## costs
 
-**before**: ~$5-6/month (1 fly app, 2 neon databases)
-
-**after**: ~$10-11/month
+**current**: ~$10-11/month
 - fly.io production: $5/month (shared-cpu-1x)
 - fly.io staging: $5/month (shared-cpu-1x)
 - neon dev: free tier
@@ -187,23 +161,16 @@ see [cloudflare-pages-setup.md](./cloudflare-pages-setup.md) for step-by-step in
 
 - **safe testing**: catch bugs in staging before production
 - **migration validation**: test database changes in production-like environment
-- **rollback capability**: releases enable version-based rollbacks
-- **team validation**: team can test changes before user-facing deployment
+- **rollback capability**: releases enable version-based rollbacks via github
 - **clear release process**: explicit versioning via github releases
+- **single branch**: no branch management - just `main` and feature branches
 
 ## deployment history
 
-1. ✅ staging and production branches created
-2. ✅ R2 storage separated by environment (relay-dev, relay-stg, relay)
-3. ✅ staging backend deployed and validated (2025-11-06)
+1. ✅ staging backend deployed and validated (2025-11-06)
    - backend: https://relay-api-staging.fly.dev
    - database: relay-staging (neon)
    - storage: relay-stg (r2)
-4. **next: configure cloudflare pages** (see [cloudflare-pages-setup.md](./cloudflare-pages-setup.md))
-5. sync staging branch with main for first frontend deploy
-6. validate full staging environment:
-   - frontend: https://staging.relay-4i6.pages.dev
-   - backend: https://relay-api-staging.fly.dev
-7. promote to production when ready:
-   - frontend: merge main → production
-   - backend: create github release
+   - atproto namespace: `app.relay-staging`
+2. ✅ production deployment workflow exists (`.github/workflows/deploy-production.yml`)
+3. **next**: create first github release to deploy to production
