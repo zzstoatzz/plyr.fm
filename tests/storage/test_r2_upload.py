@@ -3,8 +3,8 @@
 import shutil
 from pathlib import Path
 
-from relay.storage import storage
-from relay.storage.r2 import R2Storage
+from backend.storage import storage
+from backend.storage.r2 import R2Storage
 
 
 def test_r2_upload():

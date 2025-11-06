@@ -6,7 +6,7 @@ default:
 
 # run backend server
 serve:
-    uv run uvicorn relay.main:app --reload --host 0.0.0.0 --port ${PORT:-8001}
+    uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port ${PORT:-8001}
 
 # run frontend dev server
 dev:

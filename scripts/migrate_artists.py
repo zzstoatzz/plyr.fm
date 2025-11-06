@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 import httpx
 from sqlalchemy import text
 
-from relay.models import get_db
+from backend.models import get_db
 
 
 async def fetch_avatar(did: str) -> str | None:

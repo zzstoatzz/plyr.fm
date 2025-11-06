@@ -28,4 +28,4 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 EXPOSE 8000
 
 # run the application
-CMD ["uv", "run", "uvicorn", "relay.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

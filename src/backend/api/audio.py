@@ -1,0 +1,46 @@
+"""audio streaming endpoints."""
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse, RedirectResponse
+
+from backend.config import settings
+from backend.models import AudioFormat
+from backend.storage import storage
+
+router = APIRouter(prefix="/audio", tags=["audio"])
+
+
+@router.get("/{file_id}")
+async def stream_audio(file_id: str):
+    """stream audio file."""
+
+    if settings.storage.backend == "r2":
+        # R2: redirect to public URL
+        from backend.storage.r2 import R2Storage
+
+        if isinstance(storage, R2Storage):
+            url = storage.get_url(file_id)
+            if not url:
+                raise HTTPException(status_code=404, detail="audio file not found")
+            return RedirectResponse(url=url)
+
+    # filesystem: serve file directly
+    from backend.storage.filesystem import FilesystemStorage
+
+    if not isinstance(storage, FilesystemStorage):
+        raise HTTPException(status_code=500, detail="invalid storage backend")
+
+    file_path = storage.get_path(file_id)
+
+    if not file_path:
+        raise HTTPException(status_code=404, detail="audio file not found")
+
+    # determine media type based on extension
+    audio_format = AudioFormat.from_extension(file_path.suffix)
+    media_type = audio_format.media_type if audio_format else "audio/mpeg"
+
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        filename=file_path.name,
+    )

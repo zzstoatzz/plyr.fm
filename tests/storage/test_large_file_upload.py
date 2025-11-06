@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from relay.storage.filesystem import FilesystemStorage
+from backend.storage.filesystem import FilesystemStorage
 
 
 def create_large_test_file(size_mb: int) -> io.BytesIO:

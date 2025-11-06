@@ -2,7 +2,7 @@
 
 import pytest
 
-from relay.models.audio import AudioFormat
+from backend.models.audio import AudioFormat
 
 
 class TestAudioFormat:

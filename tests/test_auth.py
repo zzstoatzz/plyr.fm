@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from relay._internal.auth import (
+from backend._internal.auth import (
     _decrypt_data,
     _encrypt_data,
     consume_exchange_token,
@@ -16,7 +16,7 @@ from relay._internal.auth import (
     get_session,
     update_session_tokens,
 )
-from relay.models import ExchangeToken, UserSession
+from backend.models import ExchangeToken, UserSession
 
 
 def test_encryption_roundtrip():
@@ -207,7 +207,7 @@ async def test_exchange_token_returns_none_for_invalid_token(db_session: AsyncSe
 async def test_exchange_token_expires(db_session: AsyncSession):
     """verify expired exchange token returns None."""
     # use a separate database session to manually expire the token
-    from relay.utilities.database import db_session as get_db_session
+    from backend.utilities.database import db_session as get_db_session
 
     did = "did:plc:expire123"
     handle = "expire.bsky.social"
