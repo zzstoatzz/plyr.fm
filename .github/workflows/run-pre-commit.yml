@@ -25,6 +25,14 @@ jobs:
       - name: install bun
         uses: oven-sh/setup-bun@v2
 
+      - name: cache frontend dependencies
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('frontend/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
       - name: install dependencies
         run: uv sync
 
@@ -48,5 +56,6 @@ jobs:
         env:
           SKIP: no-commit-to-branch
 
-      - name: build frontend
-        run: cd frontend && bun run build
+      - name: prune uv cache
+        if: always()
+        run: uv cache prune --ci
