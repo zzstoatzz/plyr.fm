@@ -1,8 +1,19 @@
 name: deploy prod
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - prd-frontend
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Dockerfile"
+      - "fly.toml"
+      - "alembic/**"
+      - "alembic.ini"
+      - ".github/workflows/deploy-prod.yml"
+  workflow_dispatch:
 
 jobs:
   deploy:
