@@ -1,7 +1,7 @@
-const DEFAULT_APP_NAME = 'relay';
+const DEFAULT_APP_NAME = 'plyr.fm';
 const DEFAULT_TAGLINE = 'music streaming on atproto';
-const DEFAULT_CANONICAL_HOST = 'relay.zzstoatzz.io';
-const DEFAULT_BROADCAST_PREFIX = 'relay';
+const DEFAULT_CANONICAL_HOST = 'plyr.fm';
+const DEFAULT_BROADCAST_PREFIX = 'plyr';
 
 const APP_NAME = import.meta.env.VITE_APP_NAME ?? DEFAULT_APP_NAME;
 const APP_TAGLINE = import.meta.env.VITE_APP_TAGLINE ?? DEFAULT_TAGLINE;
