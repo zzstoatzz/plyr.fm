@@ -4,11 +4,11 @@ relay uses a three-tier deployment strategy: development → staging → product
 
 ## environments
 
-| environment | trigger | backend app | backend URL | database | frontend |
-|-------------|---------|-------------|-------------|----------|----------|
-| **development** | local | local server | localhost:8000 | relay-dev (neon) | localhost:5173 |
-| **staging** | push to main | relay-api-staging | relay-api-staging.fly.dev | relay-staging (neon) | relay-4i6.pages.dev (preview) |
-| **production** | github release | relay-api | relay-api.fly.dev | relay (neon) | relay-4i6.pages.dev (production) |
+| environment | trigger | backend app | backend URL | database | frontend | storage |
+|-------------|---------|-------------|-------------|----------|----------|---------|
+| **development** | local | local server | localhost:8000 | relay-dev (neon) | localhost:5173 | relay-dev (r2) |
+| **staging** | push to main (backend) <br> push to staging (frontend) | relay-api-staging | relay-api-staging.fly.dev | relay-staging (neon) | staging.relay-4i6.pages.dev | relay-stg (r2) |
+| **production** | github release (backend) <br> push to production (frontend) | relay-api | relay-api.fly.dev | relay (neon) | relay-4i6.pages.dev | relay (r2) |
 
 ## workflow
 
@@ -24,40 +24,67 @@ cd frontend && bun run dev
 
 connects to `relay-dev` neon database.
 
-### staging deployment (automatic)
+### staging deployment
 
-**trigger**: push to `main` branch
+**backend (automatic on main push)**:
 
-**process**:
-1. github actions detects changes in backend files
-2. runs `.github/workflows/deploy-backend.yml`
+1. push to `main` branch
+2. github actions runs `.github/workflows/deploy-backend.yml`
 3. deploys to `relay-api-staging` fly app using `fly.staging.toml`
 4. runs database migrations via `release_command`
-5. app becomes available at `https://relay-api-staging.fly.dev`
+5. backend available at `https://relay-api-staging.fly.dev`
+
+**frontend (manual sync)**:
+
+```bash
+# sync staging branch with main
+git checkout staging
+git merge main
+git push
+```
+
+cloudflare pages automatically deploys to `https://staging.relay-4i6.pages.dev`
 
 **testing**:
-- backend API: `https://relay-api-staging.fly.dev/docs`
-- frontend: cloudflare pages preview deploy
+- frontend: `https://staging.relay-4i6.pages.dev` (static URL)
+- backend: `https://relay-api-staging.fly.dev/docs`
 - database: `relay-staging` (neon)
+- storage: `relay-stg` (r2)
 
-### production deployment (manual)
+### production deployment
 
-**trigger**: create github release (e.g., `v1.2.3`)
+**frontend (manual promotion)**:
+
+```bash
+# after validating staging, promote to production
+git checkout production
+git merge main
+git push
+```
+
+cloudflare pages automatically deploys to `https://relay-4i6.pages.dev`
+
+**backend (github release)**:
+
+```bash
+# create release tag
+gh release create v1.2.3 --title "v1.2.3" --notes "release notes here"
+```
+
+or via github UI: releases → draft new release → create tag → publish
 
 **process**:
 1. github actions detects release publication
 2. runs `.github/workflows/deploy-production.yml`
 3. deploys to `relay-api` fly app using `fly.toml`
 4. runs database migrations via `release_command`
-5. app becomes available at `https://relay-api.fly.dev`
+5. backend available at `https://relay-api.fly.dev`
 
-**creating a release**:
-```bash
-# after validating changes in staging:
-gh release create v1.2.3 --title "v1.2.3" --notes "release notes here"
-```
-
-or via github UI: releases → draft new release → create tag → publish
+**testing**:
+- frontend: `https://relay-4i6.pages.dev` (static URL)
+- backend: `https://relay-api.fly.dev/docs`
+- database: `relay` (neon)
+- storage: `relay` (r2)
 
 ## configuration files
 
@@ -115,12 +142,23 @@ if a migration fails:
 
 ## cloudflare pages
 
-**configuration**:
-- production branch: `production`
-- staging branch: `staging` → staging.relay-4i6.pages.dev
-- environment variables (set via cloudflare UI):
-  - preview: `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
-  - production: `PUBLIC_API_URL=https://relay-api.fly.dev`
+**configuration** (see [cloudflare-pages-setup.md](./cloudflare-pages-setup.md) for detailed instructions):
+
+**branches**:
+- `production` branch → `relay-4i6.pages.dev` (production URL)
+- `staging` branch → `staging.relay-4i6.pages.dev` (staging URL)
+
+**environment variables**:
+- staging (`preview` environment): `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
+- production (`production` environment): `PUBLIC_API_URL=https://relay-api.fly.dev`
+
+**manual configuration required**:
+1. change production branch from `main` to `production` in cloudflare dashboard
+2. add `staging` to custom branch deployments
+3. set environment variables for each environment
+4. trigger initial deployments
+
+see [cloudflare-pages-setup.md](./cloudflare-pages-setup.md) for step-by-step instructions.
 
 ## monitoring
 
@@ -155,11 +193,17 @@ if a migration fails:
 
 ## deployment history
 
-environment separation implemented in PR #72 (2025-11-05):
-- created staging fly.io app (relay-api-staging)
-- created separate neon databases (relay-dev, relay-staging, relay)
-- created separate r2 buckets (relay-dev, relay-stg, relay)
-- configured staging secrets
-- set up cloudflare pages branch deployments
-- staging backend: https://relay-api-staging.fly.dev
-- staging frontend: https://staging.relay-4i6.pages.dev
+1. ✅ staging and production branches created
+2. ✅ R2 storage separated by environment (relay-dev, relay-stg, relay)
+3. ✅ staging backend deployed and validated (2025-11-06)
+   - backend: https://relay-api-staging.fly.dev
+   - database: relay-staging (neon)
+   - storage: relay-stg (r2)
+4. **next: configure cloudflare pages** (see [cloudflare-pages-setup.md](./cloudflare-pages-setup.md))
+5. sync staging branch with main for first frontend deploy
+6. validate full staging environment:
+   - frontend: https://staging.relay-4i6.pages.dev
+   - backend: https://relay-api-staging.fly.dev
+7. promote to production when ready:
+   - frontend: merge main → production
+   - backend: create github release
