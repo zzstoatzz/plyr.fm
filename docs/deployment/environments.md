@@ -110,13 +110,12 @@ if a migration fails:
 
 ## cloudflare pages
 
-**current configuration**:
-- production branch: `main` (currently)
-- all deployments use production backend
-
-**TODO** (requires manual cloudflare configuration):
-- set preview deployments to use staging backend URL
-- configure environment variable: `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
+**configuration**:
+- production branch: `production`
+- staging branch: `staging` → staging.relay-4i6.pages.dev
+- environment variables (set via cloudflare UI):
+  - preview: `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
+  - production: `PUBLIC_API_URL=https://relay-api.fly.dev`
 
 ## monitoring
 
@@ -149,11 +148,13 @@ if a migration fails:
 - **team validation**: team can test changes before user-facing deployment
 - **clear release process**: explicit versioning via github releases
 
-## next steps
+## deployment history
 
-1. run `scripts/setup-staging-secrets.sh` to configure staging secrets
-2. merge environment separation PR
-3. push to main → automatic staging deploy
-4. validate staging deployment
-5. create first production release
-6. configure cloudflare pages preview deployments (manual step via UI)
+environment separation implemented in PR #72 (2025-11-05):
+- created staging fly.io app (relay-api-staging)
+- created separate neon databases (relay-dev, relay-staging, relay)
+- created separate r2 buckets (relay-dev, relay-stg, relay)
+- configured staging secrets
+- set up cloudflare pages branch deployments
+- staging backend: https://relay-api-staging.fly.dev
+- staging frontend: https://staging.relay-4i6.pages.dev
