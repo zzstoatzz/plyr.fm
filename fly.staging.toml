@@ -14,9 +14,9 @@ primary_region = 'iad'
 [env]
   ATPROTO_PDS_URL = 'https://pds.zzstoatzz.io'
   PORT = '8000'
-  R2_BUCKET = 'relay'
+  R2_BUCKET = 'relay-stg'
   R2_ENDPOINT_URL = 'https://8feb33b5fb57ce2bc093bc6f4141f40a.r2.cloudflarestorage.com'
-  R2_PUBLIC_BUCKET_URL = 'https://pub-841ec0f5a7854eaab01292d44aca4820.r2.dev'
+  R2_PUBLIC_BUCKET_URL = 'https://pub-3b2a5274e4f4408cb8b5e0653f300116.r2.dev'
   STORAGE_BACKEND = 'r2'
 
 [http_service]
