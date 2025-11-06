@@ -114,7 +114,7 @@ or via github UI: releases → draft new release → create tag → publish
 **production secrets** (already configured):
 - same structure but with production URLs and database
 - `ATPROTO_APP_NAMESPACE` → not set (defaults to `app.relay`)
-- `FRONTEND_CORS_ORIGIN_REGEX` → allows custom domain `plyr.fm` and cloudflare pages
+- `FRONTEND_CORS_ORIGIN_REGEX` → `^https://(([a-z0-9]+\.)?relay-4i6\.pages\.dev|(www\.)?plyr\.fm)$` (custom domain + cloudflare pages)
 - additional: `NOTIFY_BOT_HANDLE`, `NOTIFY_BOT_PASSWORD`, `NOTIFY_ENABLED`
 
 **local dev (.env)**:
