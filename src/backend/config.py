@@ -202,7 +202,7 @@ class AtprotoSettings(RelaySettingsSection):
         description="OAuth redirect URI",
     )
     app_namespace: str = Field(
-        default="app.plyr",
+        default="fm.plyr",
         validation_alias="ATPROTO_APP_NAMESPACE",
         description="ATProto app namespace used for record collections",
     )

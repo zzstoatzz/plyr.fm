@@ -11,7 +11,7 @@ This command helps a new agent/contributor quickly understand where the project 
 1. **Read STATUS.md** at the root of the repository
    - Understand the long-term, medium-term, and short-term vision
    - Review the current technical state
-   - Note what's working, what's in progress, and known issues
+   - Note what's working, what's in progress, and known issues (via gh cli)
 
 2. **Review Key Files**
    - `README.md` - project overview and quick start
