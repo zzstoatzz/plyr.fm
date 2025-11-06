@@ -1,25 +1,14 @@
-name: deploy backend to staging
+name: deploy prod
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "Dockerfile"
-      - "fly.staging.toml"
-      - "alembic/**"
-      - "alembic.ini"
-      - ".github/workflows/deploy-backend.yml"
-  workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
   deploy:
-    name: deploy backend to staging
+    name: deploy prod
     runs-on: ubuntu-latest
-    concurrency: deploy-backend-staging
+    concurrency: deploy-backend-production
     steps:
       - uses: actions/checkout@v4
 
@@ -31,11 +20,11 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: deploy to fly.io staging
+      - name: deploy to fly.io production
         run: |
           if [ "${{ steps.changes.outputs.migrations }}" == "true" ]; then
             echo "🔄 migrations detected - will run via release_command before deployment"
           fi
-          flyctl deploy --config fly.staging.toml --remote-only
+          flyctl deploy --config fly.toml --remote-only -a relay-api
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
