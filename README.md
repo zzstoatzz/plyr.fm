@@ -1,10 +1,10 @@
-# relay
+# plyr.fm
 
 music streaming on ATProto
 
-## what is relay?
+## what is plyr.fm?
 
-relay is a music streaming platform built on the AT Protocol (ATProto), the same protocol that powers Bluesky. it combines:
+plyr.fm is a music streaming platform built on the AT Protocol (ATProto), the same protocol that powers Bluesky. it combines:
 
 - **OAuth 2.1 authentication** via ATProto for secure identity
 - **artist profiles** synced with ATProto user profiles (avatar, display name, handle)
@@ -119,8 +119,8 @@ see [docs/deployment/overview.md](docs/deployment/overview.md) for details.
 <summary>project structure</summary>
 
 ```
-relay/
-├── src/relay/              # backend (python)
+plyr.fm/
+├── src/backend/            # backend (python)
 │   ├── api/               # fastapi routes
 │   ├── atproto/           # atproto integration
 │   ├── models/            # database models
@@ -149,12 +149,12 @@ relay/
 
 ## links
 
-- **production**: https://relay-4i6.pages.dev
+- **production**: https://plyr.fm
 - **backend API**: https://relay-api.fly.dev
-- **repository**: https://github.com/zzstoatzz/relay
+- **repository**: https://github.com/zzstoatzz/plyr.fm
 
 ## documentation
 
 - [deployment guide](docs/deployment/overview.md)
-- [latest status](sandbox/2025-10-31-status-update.md)
-- [archived docs](sandbox/archive/)
+- [latest status](STATUS.md)
+- [configuration](docs/configuration.md)
