@@ -31,7 +31,7 @@ connects to `relay-dev` neon database and uses `app.relay-dev` atproto namespace
 **backend**:
 1. github actions runs `.github/workflows/deploy-backend.yml`
 2. deploys to `relay-api-staging` fly app using `fly.staging.toml`
-3. runs `alembic stamp head` via `release_command`
+3. runs `alembic upgrade head` via `release_command`
 4. backend available at `https://relay-api-staging.fly.dev`
 
 **frontend**:
@@ -81,7 +81,7 @@ or via github UI: releases → draft new release → create tag → publish
 
 **fly.staging.toml**:
 - app: `relay-api-staging`
-- release_command: `uv run alembic stamp head` (one-time bootstrap)
+- release_command: `uv run alembic upgrade head` (runs migrations)
 - environment variables configured in fly.io
 
 **fly.toml**:
@@ -123,15 +123,10 @@ or via github UI: releases → draft new release → create tag → publish
 
 migrations run automatically on deploy via fly.io `release_command`.
 
-**staging**:
-- uses `alembic stamp head` to mark database as current
-- this is because staging database was created by `init_database()` in fastapi lifespan
-- future deployments will continue using stamp (no actual migrations)
-
-**production**:
-- uses `alembic upgrade head` to run migrations
-- production database already has `alembic_version` table
+**both environments**:
+- use `alembic upgrade head` to run migrations
 - migrations run before deployment completes
+- alembic tracks applied migrations via `alembic_version` table
 
 ### rollback strategy
 
