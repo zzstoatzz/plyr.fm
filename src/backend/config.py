@@ -59,7 +59,7 @@ class AppSettings(RelaySettingsSection):
     """Core application configuration."""
 
     name: str = Field(
-        default="relay",
+        default="plyr.fm",
         description="Public-facing application name",
     )
     tagline: str = Field(
@@ -80,7 +80,7 @@ class AppSettings(RelaySettingsSection):
         description="Interval for background tasks in seconds",
     )
     canonical_host: str = Field(
-        default="relay.zzstoatzz.io",
+        default="plyr.fm",
         description="Canonical host used for metadata and share links",
     )
     canonical_url_override: str | None = Field(
@@ -88,7 +88,7 @@ class AppSettings(RelaySettingsSection):
         description="Override canonical URL if it differs from https://{canonical_host}",
     )
     broadcast_channel_prefix: str = Field(
-        default="relay",
+        default="plyr",
         description="Prefix used for browser BroadcastChannel identifiers",
     )
 
@@ -119,7 +119,7 @@ class FrontendSettings(RelaySettingsSection):
     cors_origin_regex: str | None = Field(
         default=None,
         validation_alias="FRONTEND_CORS_ORIGIN_REGEX",
-        description="CORS origin regex pattern (if not set, uses default for relay-4i6.pages.dev)",
+        description="CORS origin regex pattern (if not set, uses default for plyr.fm and relay-4i6.pages.dev)",
     )
 
     @computed_field
@@ -129,15 +129,15 @@ class FrontendSettings(RelaySettingsSection):
         if self.cors_origin_regex is not None:
             return self.cors_origin_regex
 
-        # default: allow localhost for dev + cloudflare pages (including preview deployments)
-        return r"^(https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
+        # default: allow localhost for dev + plyr.fm + cloudflare pages (including preview deployments)
+        return r"^(https://(www\.)?plyr\.fm|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
 
 
 class DatabaseSettings(RelaySettingsSection):
     """Database configuration."""
 
     url: str = Field(
-        default="postgresql+asyncpg://localhost/relay",
+        default="postgresql+asyncpg://localhost/plyr",
         validation_alias="DATABASE_URL",
         description="PostgreSQL connection string",
     )
@@ -202,9 +202,14 @@ class AtprotoSettings(RelaySettingsSection):
         description="OAuth redirect URI",
     )
     app_namespace: str = Field(
-        default="app.relay",
+        default="app.plyr",
         validation_alias="ATPROTO_APP_NAMESPACE",
         description="ATProto app namespace used for record collections",
+    )
+    old_app_namespace: str | None = Field(
+        default=None,
+        validation_alias="ATPROTO_OLD_APP_NAMESPACE",
+        description="Optional previous ATProto namespace for migration (e.g., 'app.relay'). When set, OAuth scopes will include both old and new namespaces.",
     )
     scope_override: str | None = Field(
         default=None,
@@ -220,17 +225,31 @@ class AtprotoSettings(RelaySettingsSection):
     @computed_field
     @property
     def track_collection(self) -> str:
-        """Collection name for relay audio records."""
+        """Collection name for plyr audio records."""
 
         return f"{self.app_namespace}.track"
 
     @computed_field
     @property
+    def old_track_collection(self) -> str | None:
+        """Collection name for old namespace, if migration is active."""
+
+        if self.old_app_namespace:
+            return f"{self.old_app_namespace}.track"
+        return None
+
+    @computed_field
+    @property
     def resolved_scope(self) -> str:
-        """OAuth scope, falling back to the repo scope for the configured namespace."""
+        """OAuth scope, falling back to the repo scope for the configured namespace(s)."""
 
         if self.scope_override:
             return self.scope_override
+
+        # if we have an old namespace, request access to both collections
+        if self.old_app_namespace:
+            return f"atproto transition:generic repo:{self.track_collection} repo:{self.old_track_collection}"
+
         return f"atproto repo:{self.track_collection}"
 
 
