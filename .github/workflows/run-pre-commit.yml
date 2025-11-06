@@ -52,7 +52,7 @@ jobs:
           echo "✅ lockfile is up to date"
 
       - name: run pre-commit
-        run: uv run pre-commit run --all-files
+        run: uvx pre-commit run --all-files
         env:
           SKIP: no-commit-to-branch
 
