@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.config import settings
 
-# per-event-loop engine cache (following nebula pattern)
+# per-event-loop engine cache
 ENGINES: dict[tuple[Any, ...], AsyncEngine] = {}
 
 

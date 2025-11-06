@@ -28,4 +28,4 @@ deploy-frontend:
 
 # create a github release (triggers production deployment)
 release:
-    uv run scripts/release.py
+    ./scripts/release

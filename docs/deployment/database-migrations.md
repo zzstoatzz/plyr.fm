@@ -209,7 +209,7 @@ detect changed migration files (paths-filter)
 build docker image with migrations included
     ↓
 run migrations via google cloud run jobs
-    ├─ separate job per database (orion, nebula, events)
+    ├─ separate job per database (auth, background, events)
     ├─ jobs execute before app deployment
     ├─ jobs block until migration completes
     └─ deployment fails if migration fails
