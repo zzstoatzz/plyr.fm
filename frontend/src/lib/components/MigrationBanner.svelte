@@ -74,7 +74,7 @@
 					migrated = true;
 					setTimeout(() => {
 						needsMigration = false;
-					}, 3000); // hide banner after 3s
+					}, 5000); // hide banner after 5s
 				} else if (data.failed_count > 0) {
 					error = `migration failed for ${data.failed_count} tracks`;
 				}
@@ -133,7 +133,13 @@
 					<p class="error">{error}</p>
 				{/if}
 				{#if migrated}
-					<p class="success">✓ migration complete! your tracks are now on {newCollection}.</p>
+					<div class="success-message">
+						<div class="success-icon">✓</div>
+						<div>
+							<p class="success-title">migration complete!</p>
+							<p class="success-detail">successfully migrated {oldRecordCount} {oldRecordCount === 1 ? 'track' : 'tracks'} to {newCollection}</p>
+						</div>
+					</div>
 				{/if}
 			</div>
 
@@ -195,8 +201,56 @@
 		color: var(--error-color, #ff6b6b);
 	}
 
-	.success {
+	.success-message {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		background: rgba(81, 207, 102, 0.1);
+		border: 1px solid rgba(81, 207, 102, 0.3);
+		border-radius: 6px;
+		padding: 1rem;
+		animation: slideIn 0.3s ease-out;
+	}
+
+	.success-icon {
+		font-size: 2rem;
 		color: var(--success-color, #51cf66);
+		animation: checkmark 0.5s ease-out;
+	}
+
+	.success-title {
+		font-weight: 600;
+		color: var(--success-color, #51cf66);
+		margin: 0;
+	}
+
+	.success-detail {
+		color: var(--text-secondary, #aaa);
+		margin: 0.25rem 0 0 0;
+		font-size: 0.85em;
+	}
+
+	@keyframes slideIn {
+		from {
+			opacity: 0;
+			transform: translateY(-10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	@keyframes checkmark {
+		0% {
+			transform: scale(0);
+		}
+		50% {
+			transform: scale(1.2);
+		}
+		100% {
+			transform: scale(1);
+		}
 	}
 
 	.collection-name {
