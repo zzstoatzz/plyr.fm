@@ -218,6 +218,10 @@ async def migrate_records(
                 # extract record value
                 record_value = old_record.get("value", {})
 
+                # handle both dict and DotDict objects
+                if hasattr(record_value, "to_dict"):
+                    record_value = record_value.to_dict()
+
                 # create record in new collection
                 payload = {
                     "repo": session.did,
