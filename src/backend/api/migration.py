@@ -37,6 +37,8 @@ async def check_migration_needed(
             "needs_migration": False,
             "old_record_count": 0,
             "old_collection": None,
+            "new_collection": settings.atproto.track_collection,
+            "did": session.did,
         }
 
     old_collection = settings.atproto.old_track_collection
@@ -46,6 +48,8 @@ async def check_migration_needed(
             "needs_migration": False,
             "old_record_count": 0,
             "old_collection": None,
+            "new_collection": settings.atproto.track_collection,
+            "did": session.did,
         }
 
     logger.debug(f"checking for records in old collection: {old_collection}")
