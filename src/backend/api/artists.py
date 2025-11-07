@@ -176,19 +176,19 @@ async def get_artist_profile_by_did(
     return ArtistResponse.model_validate(artist)
 
 
-@router.get("/me/analytics")
-async def get_my_analytics(
+@router.get("/{artist_did}/analytics")
+async def get_artist_analytics(
+    artist_did: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    auth_session: Session = Depends(require_auth),
 ) -> AnalyticsResponse:
-    """get analytics for authenticated artist.
+    """get public analytics for any artist by DID.
 
-    returns zeros if artist has no tracks - no need to verify artist exists.
+    returns zeros if artist has no tracks.
     """
     # get total plays and item count in one query
     result = await db.execute(
         select(func.sum(Track.play_count), func.count(Track.id)).where(
-            Track.artist_did == auth_session.did
+            Track.artist_did == artist_did
         )
     )
     total_plays, total_items = result.one()
@@ -200,7 +200,7 @@ async def get_my_analytics(
     if total_items > 0:
         result = await db.execute(
             select(Track.id, Track.title, Track.play_count)
-            .where(Track.artist_did == auth_session.did)
+            .where(Track.artist_did == artist_did)
             .order_by(Track.play_count.desc())
             .limit(1)
         )
@@ -215,3 +215,15 @@ async def get_my_analytics(
     return AnalyticsResponse(
         total_plays=total_plays, total_items=total_items, top_item=top_item
     )
+
+
+@router.get("/me/analytics")
+async def get_my_analytics(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Session = Depends(require_auth),
+) -> AnalyticsResponse:
+    """get analytics for authenticated artist.
+
+    returns zeros if artist has no tracks - no need to verify artist exists.
+    """
+    return await get_artist_analytics(auth_session.did, db)
