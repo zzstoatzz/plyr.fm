@@ -106,7 +106,10 @@ class Queue {
 			}
 		};
 
-		await this.fetchQueue();
+		// only fetch from server if authenticated
+		if (this.isAuthenticated()) {
+			await this.fetchQueue();
+		}
 
 		document.addEventListener('visibilitychange', this.handleVisibilityChange);
 		window.addEventListener('beforeunload', this.handleBeforeUnload);
@@ -136,8 +139,14 @@ class Queue {
 		}
 	}
 
+	private isAuthenticated(): boolean {
+		if (!browser) return false;
+		return !!localStorage.getItem('session_id');
+	}
+
 	async fetchQueue(force = false) {
 		if (!browser) return;
+		if (!this.isAuthenticated()) return; // skip if not authenticated
 
 		// while we have unsent or in-flight local changes, skip non-forced fetches
 		if (
@@ -289,6 +298,7 @@ class Queue {
 
 	async pushQueue(): Promise<boolean> {
 		if (!browser) return false;
+		if (!this.isAuthenticated()) return false; // skip if not authenticated
 
 		if (this.syncInProgress) {
 			this.pendingSync = true;
