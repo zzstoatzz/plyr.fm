@@ -1,15 +1,15 @@
-# relay dev workflows
+# plyr.fm dev workflows
 
 # show available commands
 default:
     @just --list
 
 # run backend server
-serve:
+run-backend:
     uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port ${PORT:-8001}
 
 # run frontend dev server
-dev:
+run-frontend:
     cd frontend && bun run dev
 
 # run tests with docker-compose
@@ -18,9 +18,6 @@ test:
     uv run pytest tests/
     docker compose -f tests/docker-compose.yml down
 
-# deploy backend to fly.io
-deploy-backend:
-    flyctl deploy
 
 # deploy frontend to cloudflare pages
 deploy-frontend:
