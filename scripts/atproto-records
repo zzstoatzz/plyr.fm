@@ -7,7 +7,7 @@
 #     "rich>=13.0.0",
 # ]
 # ///
-"""crud operations for atproto records."""
+"""general-purpose cli for atproto record operations."""
 
 import argparse
 import asyncio
@@ -41,11 +41,9 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    atproto_app_namespace: str = Field(default="fm.plyr")
-    atproto_old_app_namespace: str | None = Field(default=None)
     atproto_pds_url: str = Field(default="https://bsky.social")
-    notify_bot_handle: str = Field(default="")
-    notify_bot_password: str = Field(default="")
+    atproto_handle: str = Field(default="")
+    atproto_password: str = Field(default="")
 
 
 settings = Settings()
@@ -56,23 +54,14 @@ import logging
 logging.getLogger("httpx").setLevel(logging.CRITICAL)
 
 
-def get_collection(collection: str | None = None, use_old: bool = False) -> str:
-    """get the collection name to use."""
-    if collection:
-        return collection
-    if use_old:
-        if not settings.atproto_old_app_namespace:
-            console.print("[red]error:[/red] no old namespace configured")
-            sys.exit(1)
-        return f"{settings.atproto_old_app_namespace}.track"
-    return f"{settings.atproto_app_namespace}.track"
+async def login(handle: str | None = None, password: str | None = None) -> AsyncClient:
+    """authenticate with atproto."""
+    auth_handle = handle or settings.atproto_handle
+    auth_password = password or settings.atproto_password
 
-
-async def login() -> AsyncClient:
-    """authenticate using bot credentials."""
-    if not settings.notify_bot_handle or not settings.notify_bot_password:
+    if not auth_handle or not auth_password:
         console.print(
-            "[red]error:[/red] NOTIFY_BOT_HANDLE and NOTIFY_BOT_PASSWORD required"
+            "[red]error:[/red] provide --handle/--password or set ATPROTO_HANDLE/ATPROTO_PASSWORD"
         )
         sys.exit(1)
 
@@ -84,27 +73,30 @@ async def login() -> AsyncClient:
     ) as progress:
         progress.add_task("authenticating...", total=None)
         client = AsyncClient(base_url=settings.atproto_pds_url)
-        await client.login(settings.notify_bot_handle, settings.notify_bot_password)
+        await client.login(auth_handle, auth_password)
 
-    console.print(f"[dim]✓ authenticated as[/dim] {settings.notify_bot_handle}\n")
+    console.print(f"[dim]✓ authenticated as[/dim] {auth_handle}\n")
     return client
 
 
-async def cmd_list(client: AsyncClient, collection: str, limit: int) -> None:
+async def cmd_list(
+    client: AsyncClient, collection: str, limit: int, repo: str | None = None
+) -> None:
     """list records in a collection."""
-    if client.me is None:
-        raise ValueError("not authenticated")
+    target_repo = repo or (client.me.did if client.me else None)
+    if not target_repo:
+        raise ValueError("no repo specified and not authenticated")
 
     response = await client.com.atproto.repo.list_records(
         {
-            "repo": client.me.did,
+            "repo": target_repo,
             "collection": collection,
             "limit": limit,
         }
     )
 
     if not response.records:
-        console.print(f"[dim]no records found in {collection}[/dim]")
+        console.print(f"[dim]no records in {collection}[/dim]")
         return
 
     table = Table(
@@ -112,20 +104,54 @@ async def cmd_list(client: AsyncClient, collection: str, limit: int) -> None:
         show_header=True,
         header_style="bold cyan",
     )
-    table.add_column("title", style="white")
-    table.add_column("artist", style="yellow")
-    table.add_column("uri", style="dim", overflow="fold")
+    table.add_column("rkey", style="dim", width=15)
+
+    # dynamically add columns based on first record
+    if response.records:
+        first_value = response.records[0].value
+        if isinstance(first_value, dict):
+            for key in first_value.keys():
+                if key != "$type":
+                    table.add_column(key, style="white")
+        else:
+            # object - try to convert to dict first
+            if hasattr(first_value, "to_dict"):
+                first_value = first_value.to_dict()
+                for key in first_value.keys():
+                    if key != "$type":
+                        table.add_column(key, style="white")
+            else:
+                # fallback to attributes
+                for key in dir(first_value):
+                    if (
+                        not key.startswith("_")
+                        and key not in ["py_type", "model_config"]
+                        and not callable(getattr(first_value, key))
+                    ):
+                        table.add_column(key, style="white")
 
     for record in response.records:
-        value = record.value if hasattr(record, "value") else record["value"]
-        # value could be a dict or an object
+        # extract rkey from uri
+        rkey = record.uri.split("/")[-1]
+
+        value = record.value
         if isinstance(value, dict):
-            title = value.get("title", "")
-            artist = value.get("artist", "")
+            row = [rkey] + [str(value.get(k, "")) for k in value.keys() if k != "$type"]
         else:
-            title = getattr(value, "title", "")
-            artist = getattr(value, "artist", "")
-        table.add_row(title, artist, record.uri)
+            # try to convert to dict
+            if hasattr(value, "to_dict"):
+                value_dict = value.to_dict()
+                row = [rkey] + [str(value_dict.get(k, "")) for k in value_dict.keys() if k != "$type"]
+            else:
+                row = [rkey] + [
+                    str(getattr(value, k, ""))
+                    for k in dir(value)
+                    if not k.startswith("_")
+                    and k not in ["py_type", "model_config"]
+                    and not callable(getattr(value, k))
+                ]
+
+        table.add_row(*row)
 
     console.print(table)
 
@@ -154,40 +180,46 @@ async def cmd_get(client: AsyncClient, uri: str) -> None:
     table.add_row("uri", response.uri)
     table.add_row("cid", response.cid)
 
-    for key, value in response.value.items():
-        if key != "$type":
-            table.add_row(key, str(value))
+    value = response.value
+    if isinstance(value, dict):
+        for key, val in value.items():
+            if key != "$type":
+                table.add_row(key, str(val))
+    else:
+        # try to convert to dict
+        if hasattr(value, "to_dict"):
+            value_dict = value.to_dict()
+            for key, val in value_dict.items():
+                if key != "$type":
+                    table.add_row(key, str(val))
+        else:
+            for key in dir(value):
+                if (
+                    not key.startswith("_")
+                    and key not in ["py_type", "model_config"]
+                    and not callable(getattr(value, key))
+                ):
+                    table.add_row(key, str(getattr(value, key, "")))
 
-    console.print(Panel(table, title="[bold]record details[/bold]", border_style="dim"))
+    console.print(Panel(table, title="[bold]record[/bold]", border_style="dim"))
 
 
 async def cmd_create(
     client: AsyncClient,
     collection: str,
-    title: str,
-    artist: str,
-    audio_url: str,
-    file_type: str,
-    album: str | None = None,
-    duration: int | None = None,
+    record: dict,
 ) -> None:
-    """create a new track record."""
+    """create a new record."""
     if client.me is None:
         raise ValueError("not authenticated")
 
-    record = {
-        "$type": collection,
-        "title": title,
-        "artist": artist,
-        "audioUrl": audio_url,
-        "fileType": file_type,
-        "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-    }
+    # ensure $type is set
+    if "$type" not in record:
+        record["$type"] = collection
 
-    if album:
-        record["album"] = album
-    if duration:
-        record["duration"] = duration
+    # add createdAt if not present
+    if "createdAt" not in record:
+        record["createdAt"] = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
     response = await client.com.atproto.repo.create_record(
         {
@@ -200,13 +232,13 @@ async def cmd_create(
     console.print(
         Panel(
             f"[green]✓[/green] created\n\n[dim]uri:[/dim] {response.uri}\n[dim]cid:[/dim] {response.cid}",
-            title=f"[bold]{title}[/bold]",
+            title=f"[bold]{collection}[/bold]",
             border_style="green",
         )
     )
 
 
-async def cmd_update(client: AsyncClient, uri: str, **updates) -> None:
+async def cmd_update(client: AsyncClient, uri: str, updates: dict) -> None:
     """update an existing record."""
     parts = uri.replace("at://", "").split("/")
     if len(parts) != 3:
@@ -215,7 +247,7 @@ async def cmd_update(client: AsyncClient, uri: str, **updates) -> None:
 
     repo, collection, rkey = parts
 
-    # get current record
+    # get current
     current = await client.com.atproto.repo.get_record(
         {
             "repo": repo,
@@ -224,13 +256,14 @@ async def cmd_update(client: AsyncClient, uri: str, **updates) -> None:
         }
     )
 
-    # merge updates
-    updated_value = dict(current.value)
-    for key, value in updates.items():
-        if value is not None:
-            updated_value[key] = value
+    # merge
+    if isinstance(current.value, dict):
+        updated_value = {**current.value, **updates}
+    else:
+        updated_value = dict(current.value)
+        updated_value.update(updates)
 
-    # put updated record
+    # put
     response = await client.com.atproto.repo.put_record(
         {
             "repo": repo,
@@ -268,44 +301,75 @@ async def cmd_delete(client: AsyncClient, uri: str) -> None:
     console.print(Panel("[green]✓[/green] deleted", border_style="red"))
 
 
+def parse_json_args(args: list[str]) -> dict:
+    """parse key=value arguments into a dict."""
+    result = {}
+    for arg in args:
+        if "=" not in arg:
+            console.print(f"[red]error:[/red] invalid argument format: {arg}")
+            console.print("[dim]use key=value format[/dim]")
+            sys.exit(1)
+        key, value = arg.split("=", 1)
+        # try to parse as json primitives
+        if value.lower() == "true":
+            result[key] = True
+        elif value.lower() == "false":
+            result[key] = False
+        elif value.lower() == "null":
+            result[key] = None
+        elif value.isdigit():
+            result[key] = int(value)
+        else:
+            try:
+                result[key] = float(value)
+            except ValueError:
+                result[key] = value
+    return result
+
+
 async def main() -> int:
     """main entry point."""
-    parser = argparse.ArgumentParser(description="crud operations for atproto records")
+    parser = argparse.ArgumentParser(
+        description="atproto record operations",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
 
-    subparsers = parser.add_subparsers(dest="command", help="command to execute")
+    # global auth options
+    parser.add_argument("--handle", help="atproto handle")
+    parser.add_argument("--password", help="atproto password")
+    parser.add_argument("--pds", help="pds url (default: https://bsky.social)")
+
+    subparsers = parser.add_subparsers(dest="command", help="command")
 
     # list
     list_parser = subparsers.add_parser("list", help="list records")
-    list_parser.add_argument("--collection", help="collection name")
-    list_parser.add_argument("--old", action="store_true", help="use old namespace")
-    list_parser.add_argument("--limit", type=int, default=100, help="max records")
+    list_parser.add_argument("collection", help="collection name (e.g., app.bsky.feed.post)")
+    list_parser.add_argument("--repo", help="repo DID (default: authenticated user)")
+    list_parser.add_argument("--limit", type=int, default=50, help="max records")
 
     # get
     get_parser = subparsers.add_parser("get", help="get record")
-    get_parser.add_argument("--uri", required=True, help="record URI")
+    get_parser.add_argument("uri", help="record AT-URI")
 
     # create
     create_parser = subparsers.add_parser("create", help="create record")
-    create_parser.add_argument("--title", required=True)
-    create_parser.add_argument("--artist", required=True)
-    create_parser.add_argument("--audio-url", required=True)
-    create_parser.add_argument("--file-type", required=True)
-    create_parser.add_argument("--album")
-    create_parser.add_argument("--duration", type=int)
-    create_parser.add_argument("--collection")
-    create_parser.add_argument("--old", action="store_true", help="use old namespace")
+    create_parser.add_argument("collection", help="collection name")
+    create_parser.add_argument(
+        "fields",
+        nargs="+",
+        help="record fields as key=value pairs (e.g., title='My Song' artist='Artist')",
+    )
 
     # update
     update_parser = subparsers.add_parser("update", help="update record")
-    update_parser.add_argument("--uri", required=True)
-    update_parser.add_argument("--title")
-    update_parser.add_argument("--artist")
-    update_parser.add_argument("--album")
-    update_parser.add_argument("--audio-url")
+    update_parser.add_argument("uri", help="record AT-URI")
+    update_parser.add_argument(
+        "fields", nargs="+", help="fields to update as key=value pairs"
+    )
 
     # delete
     delete_parser = subparsers.add_parser("delete", help="delete record")
-    delete_parser.add_argument("--uri", required=True)
+    delete_parser.add_argument("uri", help="record AT-URI")
 
     args = parser.parse_args()
 
@@ -313,41 +377,26 @@ async def main() -> int:
         parser.print_help()
         return 1
 
+    # update pds if provided
+    if args.pds:
+        settings.atproto_pds_url = args.pds
+
     try:
-        client = await login()
+        client = await login(args.handle, args.password)
 
         if args.command == "list":
-            collection = get_collection(args.collection, args.old)
-            await cmd_list(client, collection, args.limit)
+            await cmd_list(client, args.collection, args.limit, args.repo)
 
         elif args.command == "get":
             await cmd_get(client, args.uri)
 
         elif args.command == "create":
-            collection = get_collection(args.collection, args.old)
-            await cmd_create(
-                client,
-                collection,
-                args.title,
-                args.artist,
-                args.audio_url,
-                args.file_type,
-                args.album,
-                args.duration,
-            )
+            record = parse_json_args(args.fields)
+            await cmd_create(client, args.collection, record)
 
         elif args.command == "update":
-            updates = {}
-            if args.title:
-                updates["title"] = args.title
-            if args.artist:
-                updates["artist"] = args.artist
-            if args.album:
-                updates["album"] = args.album
-            if args.audio_url:
-                updates["audioUrl"] = args.audio_url
-
-            await cmd_update(client, args.uri, **updates)
+            updates = parse_json_args(args.fields)
+            await cmd_update(client, args.uri, updates)
 
         elif args.command == "delete":
             await cmd_delete(client, args.uri)
