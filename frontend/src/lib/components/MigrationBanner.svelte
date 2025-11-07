@@ -107,10 +107,16 @@
 		<div class="migration-content">
 			<div class="migration-message">
 				<strong>collection migration available</strong>
-				<p>
-					your tracks are currently stored in the <code class="collection-name">{oldCollection}</code> collection.
-					we've migrated to <code class="collection-name">{newCollection}</code> to follow atproto reverse-DNS conventions.
-				</p>
+				{#if oldCollection && newCollection}
+					<p>
+						your tracks are currently stored in the <code class="collection-name">{oldCollection}</code> collection.
+						we've migrated to <code class="collection-name">{newCollection}</code> to follow atproto reverse-DNS conventions.
+					</p>
+				{:else}
+					<p>
+						we've updated our record namespace to follow atproto reverse-DNS conventions.
+					</p>
+				{/if}
 				{#if oldRecordCount > 0}
 					<p>
 						you have {oldRecordCount} {oldRecordCount === 1 ? 'track' : 'tracks'} to migrate.
