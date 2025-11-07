@@ -190,7 +190,7 @@
 
 	.queue-toggle {
 		position: fixed;
-		bottom: 120px;
+		bottom: calc(var(--player-height, 0px) + 20px + env(safe-area-inset-bottom, 0px));
 		right: 20px;
 		width: 48px;
 		height: 48px;
@@ -224,7 +224,7 @@
 		}
 
 		.queue-toggle {
-			bottom: 200px;
+			bottom: calc(var(--player-height, 0px) + 20px + env(safe-area-inset-bottom, 0px));
 		}
 	}
 </style>
