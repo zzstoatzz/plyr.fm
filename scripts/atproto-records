@@ -1,0 +1,390 @@
+#!/usr/bin/env -S uv run --script --quiet
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "atproto @ git+https://github.com/zzstoatzz/atproto@main",
+#     "pydantic-settings>=2.7.0",
+# ]
+# ///
+"""CRUD operations for ATProto records.
+
+This script allows you to create, read, update, and delete ATProto records
+using your bot credentials. Useful for testing migrations and record management.
+
+Usage:
+    ./scripts/atproto-records list [--collection COLLECTION] [--limit LIMIT]
+    ./scripts/atproto-records create --title TITLE --artist ARTIST --audio-url URL --file-type TYPE [--album ALBUM] [--collection COLLECTION]
+    ./scripts/atproto-records update --uri URI --title TITLE [--artist ARTIST] [--collection COLLECTION]
+    ./scripts/atproto-records delete --uri URI
+    ./scripts/atproto-records get --uri URI
+"""
+
+import argparse
+import asyncio
+import json
+import logging
+import os
+import sys
+import warnings
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+# Silence warnings before importing anything else
+warnings.filterwarnings("ignore")
+
+
+from atproto import AsyncClient  # noqa: E402
+from pydantic import Field  # noqa: E402
+from pydantic_settings import BaseSettings, SettingsConfigDict  # noqa: E402
+
+
+class Settings(BaseSettings):
+    """Settings for ATProto CLI."""
+
+    model_config = SettingsConfigDict(
+        env_file=str(Path(__file__).resolve().parents[1] / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    atproto_app_namespace: str = Field(default="fm.plyr")
+    atproto_old_app_namespace: str | None = Field(default=None)
+    atproto_pds_url: str = Field(default="https://bsky.social")
+    notify_bot_handle: str = Field(default="")
+    notify_bot_password: str = Field(default="")
+
+
+settings = Settings()
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+def get_collection(collection: str | None = None) -> str:
+    """Get the collection name to use."""
+    if collection:
+        return collection
+    return f"{settings.atproto_app_namespace}.track"
+
+
+def get_old_collection() -> str | None:
+    """Get the old collection name for migration testing."""
+    if settings.atproto_old_app_namespace:
+        return f"{settings.atproto_old_app_namespace}.track"
+    return None
+
+
+async def login() -> AsyncClient:
+    """Authenticate using bot credentials from settings."""
+    if not settings.notify_bot_handle or not settings.notify_bot_password:
+        logger.error("NOTIFY_BOT_HANDLE and NOTIFY_BOT_PASSWORD must be set in .env")
+        sys.exit(1)
+
+    client = AsyncClient(base_url=settings.atproto_pds_url)
+    await client.login(settings.notify_bot_handle, settings.notify_bot_password)
+    logger.info(
+        f"authenticated as {settings.notify_bot_handle} (PDS: {settings.atproto_pds_url})"
+    )
+
+    return client
+
+
+async def list_records(
+    client: AsyncClient,
+    collection: str,
+    limit: int = 100,
+) -> list[Any]:
+    """List all records in a collection."""
+    if client.me is None:
+        raise ValueError("user not authenticated")
+
+    response = await client.com.atproto.repo.list_records(
+        {
+            "repo": client.me.did,
+            "collection": collection,
+            "limit": limit,
+        }
+    )
+
+    records = response.records if hasattr(response, "records") else []
+    logger.info(f"found {len(records)} records in {collection}")
+
+    return records
+
+
+async def get_record(
+    client: AsyncClient,
+    uri: str,
+) -> dict:
+    """Get a specific record by URI."""
+    # Parse URI: at://did:plc:xxx/collection.name/rkey
+    parts = uri.replace("at://", "").split("/")
+    if len(parts) != 3:
+        raise ValueError(f"invalid URI format: {uri}")
+
+    repo, collection, rkey = parts
+
+    response = await client.com.atproto.repo.get_record(
+        {
+            "repo": repo,
+            "collection": collection,
+            "rkey": rkey,
+        }
+    )
+
+    return {
+        "uri": response.uri,
+        "cid": response.cid,
+        "value": response.value,
+    }
+
+
+async def create_record(
+    client: AsyncClient,
+    collection: str,
+    title: str,
+    artist: str,
+    audio_url: str,
+    file_type: str,
+    album: str | None = None,
+    duration: int | None = None,
+) -> dict:
+    """Create a new track record."""
+    record: dict[str, Any] = {
+        "$type": collection,
+        "title": title,
+        "artist": artist,
+        "audioUrl": audio_url,
+        "fileType": file_type,
+        "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
+
+    if album:
+        record["album"] = album
+    if duration:
+        record["duration"] = duration
+
+    if client.me is None:
+        raise ValueError("user not authenticated")
+
+    response = await client.com.atproto.repo.create_record(
+        {
+            "repo": client.me.did,
+            "collection": collection,
+            "record": record,
+        }
+    )
+
+    logger.info(f"created record: {response.uri}")
+    return {
+        "uri": response.uri,
+        "cid": response.cid,
+    }
+
+
+async def update_record(
+    client: AsyncClient,
+    uri: str,
+    **updates,
+) -> dict:
+    """Update an existing record."""
+    # First get the current record
+    current = await get_record(client, uri)
+
+    # Parse URI to get components
+    parts = uri.replace("at://", "").split("/")
+    repo, collection, rkey = parts
+
+    # Merge updates into current record
+    updated_value = dict(current["value"])
+    for key, value in updates.items():
+        if value is not None:
+            updated_value[key] = value
+
+    # Put the updated record
+    response = await client.com.atproto.repo.put_record(
+        {
+            "repo": repo,
+            "collection": collection,
+            "rkey": rkey,
+            "record": updated_value,
+        }
+    )
+
+    logger.info(f"updated record: {response.uri}")
+    return {
+        "uri": response.uri,
+        "cid": response.cid,
+    }
+
+
+async def delete_record(
+    client: AsyncClient,
+    uri: str,
+) -> None:
+    """Delete a specific record by URI."""
+    # Parse URI
+    parts = uri.replace("at://", "").split("/")
+    if len(parts) != 3:
+        raise ValueError(f"invalid URI format: {uri}")
+
+    repo, collection, rkey = parts
+
+    await client.com.atproto.repo.delete_record(
+        {
+            "repo": repo,
+            "collection": collection,
+            "rkey": rkey,
+        }
+    )
+
+    logger.info(f"deleted record: {uri}")
+
+
+async def main() -> int:
+    """Main CLI entry point."""
+    # Suppress stderr warnings
+
+    parser = argparse.ArgumentParser(
+        description="CRUD operations for ATProto records",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="command to execute")
+
+    # list command
+    list_parser = subparsers.add_parser("list", help="list records in a collection")
+    list_parser.add_argument(
+        "--collection",
+        help="collection name (default: from ATPROTO_APP_NAMESPACE env var)",
+    )
+    list_parser.add_argument(
+        "--old",
+        action="store_true",
+        help="use old collection from ATPROTO_OLD_APP_NAMESPACE",
+    )
+    list_parser.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="maximum number of records to fetch (default: 100)",
+    )
+
+    # get command
+    get_parser = subparsers.add_parser("get", help="get a specific record by URI")
+    get_parser.add_argument("--uri", required=True, help="AT-URI of the record")
+
+    # create command
+    create_parser = subparsers.add_parser("create", help="create a new track record")
+    create_parser.add_argument("--title", required=True, help="track title")
+    create_parser.add_argument("--artist", required=True, help="artist name")
+    create_parser.add_argument("--audio-url", required=True, help="audio file URL")
+    create_parser.add_argument(
+        "--file-type", required=True, help="file type (mp3, wav, etc)"
+    )
+    create_parser.add_argument("--album", help="album name (optional)")
+    create_parser.add_argument(
+        "--duration", type=int, help="duration in seconds (optional)"
+    )
+    create_parser.add_argument(
+        "--collection",
+        help="collection name (default: from ATPROTO_APP_NAMESPACE env var)",
+    )
+    create_parser.add_argument(
+        "--old",
+        action="store_true",
+        help="use old collection from ATPROTO_OLD_APP_NAMESPACE",
+    )
+
+    # update command
+    update_parser = subparsers.add_parser("update", help="update an existing record")
+    update_parser.add_argument("--uri", required=True, help="AT-URI of the record")
+    update_parser.add_argument("--title", help="new title")
+    update_parser.add_argument("--artist", help="new artist")
+    update_parser.add_argument("--album", help="new album")
+    update_parser.add_argument("--audio-url", help="new audio URL")
+
+    # delete command
+    delete_parser = subparsers.add_parser("delete", help="delete a record")
+    delete_parser.add_argument("--uri", required=True, help="AT-URI of the record")
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return 1
+
+    try:
+        client = await login()
+
+        if args.command == "list":
+            collection = (
+                get_old_collection() if args.old else get_collection(args.collection)
+            )
+            if not collection:
+                logger.error("no old collection configured")
+                return 1
+
+            records = await list_records(client, collection, args.limit)
+            print(json.dumps(records, indent=2, default=str))
+
+        elif args.command == "get":
+            record = await get_record(client, args.uri)
+            print(json.dumps(record, indent=2, default=str))
+
+        elif args.command == "create":
+            collection = (
+                get_old_collection() if args.old else get_collection(args.collection)
+            )
+            if not collection:
+                logger.error("no old collection configured")
+                return 1
+
+            result = await create_record(
+                client,
+                collection,
+                args.title,
+                args.artist,
+                args.audio_url,
+                args.file_type,
+                args.album,
+                args.duration,
+            )
+            print(json.dumps(result, indent=2, default=str))
+
+        elif args.command == "update":
+            updates = {}
+            if args.title:
+                updates["title"] = args.title
+            if args.artist:
+                updates["artist"] = args.artist
+            if args.album:
+                updates["album"] = args.album
+            if args.audio_url:
+                updates["audioUrl"] = args.audio_url
+
+            result = await update_record(client, args.uri, **updates)
+            print(json.dumps(result, indent=2, default=str))
+
+        elif args.command == "delete":
+            await delete_record(client, args.uri)
+            print("✓ deleted")
+
+        return 0
+
+    except Exception as e:
+        logger.error(f"error: {e}")
+        if os.getenv("DEBUG"):
+            raise
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(asyncio.run(main()))
