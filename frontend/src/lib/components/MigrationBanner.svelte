@@ -1,12 +1,21 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { API_URL } from '$lib/config';
 
 	let needsMigration = $state(false);
 	let oldRecordCount = $state(0);
+	let oldCollection = $state<string | null>(null);
+	let newCollection = $state<string | null>(null);
+	let userDid = $state<string | null>(null);
 	let migrating = $state(false);
 	let migrated = $state(false);
 	let error = $state('');
 	let dismissed = $state(false);
+
+	// check migration status on mount
+	onMount(() => {
+		checkMigrationStatus();
+	});
 
 	// check if migration is needed
 	export async function checkMigrationStatus(): Promise<void> {
@@ -31,6 +40,9 @@
 				const data = await response.json();
 				needsMigration = data.needs_migration;
 				oldRecordCount = data.old_record_count;
+				oldCollection = data.old_collection;
+				newCollection = data.new_collection;
+				userDid = data.did;
 			}
 		} catch (e) {
 			console.error('failed to check migration status:', e);
@@ -94,18 +106,28 @@
 	<div class="migration-banner">
 		<div class="migration-content">
 			<div class="migration-message">
-				<strong>namespace update</strong>
+				<strong>collection migration available</strong>
 				<p>
-					we've updated our record namespace to follow atproto conventions.
-					{#if oldRecordCount > 0}
-						you have {oldRecordCount} {oldRecordCount === 1 ? 'track' : 'tracks'} that need to be migrated.
-					{/if}
+					your tracks are currently stored in the <code class="collection-name">{oldCollection}</code> collection.
+					we've migrated to <code class="collection-name">{newCollection}</code> to follow atproto reverse-DNS conventions.
 				</p>
+				{#if oldRecordCount > 0}
+					<p>
+						you have {oldRecordCount} {oldRecordCount === 1 ? 'track' : 'tracks'} to migrate.
+						{#if userDid && oldCollection && newCollection}
+							view your
+							<a href="https://pdsls.dev/at://{userDid}/{oldCollection}" target="_blank" rel="noopener noreferrer" class="collection-link">old collection</a>
+							or
+							<a href="https://pdsls.dev/at://{userDid}/{newCollection}" target="_blank" rel="noopener noreferrer" class="collection-link">new collection</a>
+							on pdsls.dev.
+						{/if}
+					</p>
+				{/if}
 				{#if error}
 					<p class="error">{error}</p>
 				{/if}
 				{#if migrated}
-					<p class="success">✓ migration complete! your tracks are now on the new namespace.</p>
+					<p class="success">✓ migration complete! your tracks are now on {newCollection}.</p>
 				{/if}
 			</div>
 
@@ -171,6 +193,26 @@
 		color: var(--success-color, #51cf66);
 	}
 
+	.collection-name {
+		background: rgba(255, 255, 255, 0.05);
+		padding: 0.15em 0.4em;
+		border-radius: 3px;
+		font-family: monospace;
+		font-size: 0.95em;
+		color: var(--text-primary, #fff);
+	}
+
+	.collection-link {
+		color: var(--accent, #6a9fff);
+		text-decoration: none;
+		border-bottom: 1px solid transparent;
+		transition: border-color 0.2s;
+	}
+
+	.collection-link:hover {
+		border-bottom-color: var(--accent, #6a9fff);
+	}
+
 	.migration-actions {
 		display: flex;
 		gap: 0.75rem;
@@ -182,6 +224,7 @@
 		padding: 0.5rem 1rem;
 		border-radius: 4px;
 		font-size: 0.9em;
+		font-family: inherit;
 		cursor: pointer;
 		border: none;
 		transition: opacity 0.2s;

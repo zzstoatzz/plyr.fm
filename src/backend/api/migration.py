@@ -28,8 +28,11 @@ async def check_migration_needed(
             "old_collection": str | None
         }
     """
+    logger.debug(f"migration check requested for {session.did}")
+
     # only check if old namespace is configured
     if not settings.atproto.old_app_namespace:
+        logger.debug("no old namespace configured, skipping migration check")
         return {
             "needs_migration": False,
             "old_record_count": 0,
@@ -38,11 +41,14 @@ async def check_migration_needed(
 
     old_collection = settings.atproto.old_track_collection
     if not old_collection:
+        logger.debug("no old collection configured, skipping migration check")
         return {
             "needs_migration": False,
             "old_record_count": 0,
             "old_collection": None,
         }
+
+    logger.debug(f"checking for records in old collection: {old_collection}")
 
     try:
         # reconstruct OAuth session
@@ -72,10 +78,15 @@ async def check_migration_needed(
             if response.status_code == 200:
                 result = response.json()
                 records = result.get("records", [])
+                logger.debug(
+                    f"found {len(records)} records in {old_collection} for {session.did}"
+                )
                 return {
                     "needs_migration": len(records) > 0,
                     "old_record_count": len(records),
                     "old_collection": old_collection,
+                    "new_collection": settings.atproto.track_collection,
+                    "did": session.did,
                 }
 
             # token expired - refresh and retry

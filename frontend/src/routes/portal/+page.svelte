@@ -8,8 +8,6 @@
 	import { API_URL } from '$lib/config';
 	import { uploader } from '$lib/uploader.svelte';
 
-	let migrationBanner: MigrationBanner;
-
 	const ACCEPTED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aif', '.aiff'];
 	const ACCEPTED_AUDIO_MIME_TYPES = ['audio/*', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/aiff'];
 	const FILE_INPUT_ACCEPT = [...ACCEPTED_AUDIO_MIME_TYPES, ...ACCEPTED_AUDIO_EXTENSIONS].join(',');
@@ -86,8 +84,6 @@
 			if (response.ok) {
 				user = await response.json();
 				await loadMyTracks();
-				// check if migration is needed (non-blocking)
-				migrationBanner?.checkMigrationStatus();
 			} else if (response.status === 401) {
 				// only clear session on explicit 401 (unauthorized)
 				localStorage.removeItem('session_id');
@@ -262,7 +258,7 @@
 {:else if user}
 	<Header {user} isAuthenticated={!!user} onLogout={logout} />
 	<main>
-		<MigrationBanner bind:this={migrationBanner} />
+		<MigrationBanner />
 
 		<div class="portal-header">
 			<h2>artist portal</h2>
