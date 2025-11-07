@@ -23,6 +23,12 @@ from backend.api.migration import router as migration_router
 from backend.config import settings
 from backend.models import init_db
 
+# configure logging level based on debug mode
+logging.basicConfig(
+    level=logging.DEBUG if settings.app.debug else logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 logger = logging.getLogger(__name__)
 
 # configure logfire if enabled
