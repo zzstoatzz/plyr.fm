@@ -122,7 +122,7 @@
 
 	async function loadAnalytics() {
 		const sessionId = localStorage.getItem('session_id');
-		if (!sessionId || !isOwnProfile) return;
+		if (!sessionId) return;
 
 		analyticsLoading = true;
 		const startTime = Date.now();
