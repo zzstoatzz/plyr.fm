@@ -1,5 +1,6 @@
 """API endpoints for namespace migration."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -135,11 +136,12 @@ async def migrate_records(
     this will:
     1. list all records from old collection
     2. create copies in new collection
-    3. optionally delete old records (not implemented yet for safety)
+    3. delete old records after successful migration
 
     returns:
         {
             "migrated_count": int,
+            "deleted_count": int,
             "failed_count": int,
             "errors": list[str]
         }
@@ -206,14 +208,14 @@ async def migrate_records(
                 "errors": [],
             }
 
-        # migrate each record to new collection
-        migrated_count = 0
-        failed_count = 0
-        errors: list[str] = []
-
+        # migrate each record to new collection concurrently
         create_url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
+        delete_url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.deleteRecord"
 
-        for old_record in old_records:
+        async def migrate_single_record(old_record: dict[str, Any]) -> dict[str, Any]:
+            """migrate a single record and return result."""
+            nonlocal oauth_session
+            result = {"migrated": False, "deleted": False, "error": None}
             try:
                 # extract record value
                 record_value = old_record.get("value", {})
@@ -251,32 +253,122 @@ async def migrate_records(
                     },
                 }
 
-                create_response = await oauth_client.make_authenticated_request(
-                    session=oauth_session,
-                    method="POST",
-                    url=create_url,
-                    json=payload,
-                )
-
-                if create_response.status_code in (200, 201):
-                    migrated_count += 1
-                    logger.info(
-                        f"migrated record {old_record.get('uri')} for {session.did}"
+                # try creating the record, refresh token if expired
+                for create_attempt in range(2):
+                    create_response = await oauth_client.make_authenticated_request(
+                        session=oauth_session,
+                        method="POST",
+                        url=create_url,
+                        json=payload,
                     )
-                else:
-                    failed_count += 1
-                    error_msg = f"failed to create record: {create_response.status_code} {create_response.text}"
-                    errors.append(error_msg)
-                    logger.error(error_msg)
+
+                    if create_response.status_code in (200, 201):
+                        result["migrated"] = True
+                        logger.info(
+                            f"migrated record {old_record.get('uri')} for {session.did}"
+                        )
+
+                        # delete old record after successful migration
+                        old_uri = old_record.get("uri", "")
+                        if old_uri:
+                            # extract rkey from uri
+                            rkey = old_uri.split("/")[-1]
+                            delete_payload = {
+                                "repo": session.did,
+                                "collection": old_collection,
+                                "rkey": rkey,
+                            }
+
+                            # try deleting with token refresh
+                            for delete_attempt in range(2):
+                                delete_response = (
+                                    await oauth_client.make_authenticated_request(
+                                        session=oauth_session,
+                                        method="POST",
+                                        url=delete_url,
+                                        json=delete_payload,
+                                    )
+                                )
+
+                                if delete_response.status_code in (200, 201):
+                                    result["deleted"] = True
+                                    logger.info(
+                                        f"deleted old record {old_uri} for {session.did}"
+                                    )
+                                    break
+
+                                # token expired - refresh and retry
+                                if (
+                                    delete_response.status_code == 401
+                                    and delete_attempt == 0
+                                ):
+                                    try:
+                                        error_data = delete_response.json()
+                                        if "exp" in error_data.get("message", ""):
+                                            oauth_session = (
+                                                await _refresh_session_tokens(
+                                                    session, oauth_session
+                                                )
+                                            )
+                                            continue
+                                    except Exception:
+                                        pass
+
+                                # deletion failed, log but don't fail migration
+                                logger.warning(
+                                    f"failed to delete old record {old_uri}: {delete_response.status_code}"
+                                )
+                                break
+
+                        return result
+
+                    # token expired - refresh and retry
+                    if create_response.status_code == 401 and create_attempt == 0:
+                        try:
+                            error_data = create_response.json()
+                            if "exp" in error_data.get("message", ""):
+                                logger.info(
+                                    f"access token expired during migration for {session.did}, refreshing"
+                                )
+                                oauth_session = await _refresh_session_tokens(
+                                    session, oauth_session
+                                )
+                                continue
+                        except Exception:
+                            pass
+
+                    # other error or retry failed
+                    result["error"] = (
+                        f"failed to create record: {create_response.status_code} {create_response.text}"
+                    )
+                    logger.error(result["error"])
+                    return result
 
             except Exception as e:
-                failed_count += 1
-                error_msg = f"error migrating record {old_record.get('uri')}: {e}"
-                errors.append(error_msg)
-                logger.error(error_msg, exc_info=True)
+                result["error"] = f"error migrating record {old_record.get('uri')}: {e}"
+                logger.error(result["error"], exc_info=True)
+
+            return result
+
+        # run all migrations concurrently
+        results = await asyncio.gather(
+            *[migrate_single_record(record) for record in old_records],
+            return_exceptions=True,
+        )
+
+        # aggregate results
+        migrated_count = sum(
+            1 for r in results if isinstance(r, dict) and r.get("migrated")
+        )
+        deleted_count = sum(
+            1 for r in results if isinstance(r, dict) and r.get("deleted")
+        )
+        failed_count = sum(1 for r in results if isinstance(r, dict) and r.get("error"))
+        errors = [r["error"] for r in results if isinstance(r, dict) and r.get("error")]
 
         return {
             "migrated_count": migrated_count,
+            "deleted_count": deleted_count,
             "failed_count": failed_count,
             "errors": errors,
         }
