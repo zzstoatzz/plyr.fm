@@ -39,6 +39,30 @@
 		if (savedVolume) {
 			player.volume = parseFloat(savedVolume);
 		}
+
+		// update player height css variable for dynamic positioning
+		function updatePlayerHeight() {
+			const playerEl = document.querySelector('.player') as HTMLElement | null;
+			if (playerEl) {
+				const height = playerEl.offsetHeight;
+				document.documentElement.style.setProperty('--player-height', `${height}px`);
+			} else {
+				document.documentElement.style.setProperty('--player-height', '0px');
+			}
+		}
+
+		// update on mount and resize
+		updatePlayerHeight();
+		window.addEventListener('resize', updatePlayerHeight);
+
+		// also update when player visibility changes
+		const observer = new MutationObserver(updatePlayerHeight);
+		observer.observe(document.body, { childList: true, subtree: true });
+
+		return () => {
+			window.removeEventListener('resize', updatePlayerHeight);
+			observer.disconnect();
+		};
 	});
 
 	// save volume to localStorage when it changes
@@ -285,6 +309,7 @@
 		background: #1a1a1a;
 		border-top: 1px solid #333;
 		padding: 1rem 2rem;
+		padding-bottom: max(1rem, env(safe-area-inset-bottom));
 		z-index: 100;
 	}
 
@@ -561,6 +586,7 @@
 	@media (max-width: 768px) {
 		.player {
 			padding: 1rem;
+			padding-bottom: max(1rem, env(safe-area-inset-bottom));
 		}
 
 		.player-content {
