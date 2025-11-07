@@ -121,19 +121,14 @@
 	}
 
 	async function loadAnalytics() {
-		const sessionId = localStorage.getItem('session_id');
-		if (!sessionId || !isOwnProfile) return;
+		if (!artist?.did) return;
 
 		analyticsLoading = true;
 		const startTime = Date.now();
 		const minDisplayTime = 300; // minimum 300ms to avoid flicker
 
 		try {
-			const response = await fetch(`${API_URL}/artists/me/analytics`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
-			});
+			const response = await fetch(`${API_URL}/artists/${artist.did}/analytics`);
 			if (response.ok) {
 				analytics = await response.json();
 			}
@@ -227,46 +222,44 @@
 			</div>
 		</section>
 
-		{#if isOwnProfile}
-			<section class="analytics">
-				<h2>analytics</h2>
-				<div class="analytics-grid">
-					{#key analyticsLoading}
-						{#if analyticsLoading}
-							<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
-								<div class="skeleton-bar large"></div>
-								<div class="skeleton-bar small"></div>
+		<section class="analytics">
+			<h2>analytics</h2>
+			<div class="analytics-grid">
+				{#key analyticsLoading}
+					{#if analyticsLoading}
+						<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
+							<div class="skeleton-bar large"></div>
+							<div class="skeleton-bar small"></div>
+						</div>
+						<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
+							<div class="skeleton-bar large"></div>
+							<div class="skeleton-bar small"></div>
+						</div>
+						<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
+							<div class="skeleton-bar small"></div>
+							<div class="skeleton-bar medium"></div>
+							<div class="skeleton-bar small"></div>
+						</div>
+					{:else if analytics}
+						<div class="stat-card" transition:fade={{ duration: 200 }}>
+							<div class="stat-value">{analytics.total_plays.toLocaleString()}</div>
+							<div class="stat-label">total plays</div>
+						</div>
+						<div class="stat-card" transition:fade={{ duration: 200 }}>
+							<div class="stat-value">{analytics.total_items}</div>
+							<div class="stat-label">total tracks</div>
+						</div>
+						{#if analytics.top_item}
+							<div class="stat-card top-item" transition:fade={{ duration: 200 }}>
+								<div class="stat-label">most played</div>
+								<div class="top-item-title">{analytics.top_item.title}</div>
+								<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
 							</div>
-							<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
-								<div class="skeleton-bar large"></div>
-								<div class="skeleton-bar small"></div>
-							</div>
-							<div class="stat-card skeleton" transition:fade={{ duration: 200 }}>
-								<div class="skeleton-bar small"></div>
-								<div class="skeleton-bar medium"></div>
-								<div class="skeleton-bar small"></div>
-							</div>
-						{:else if analytics}
-							<div class="stat-card" transition:fade={{ duration: 200 }}>
-								<div class="stat-value">{analytics.total_plays.toLocaleString()}</div>
-								<div class="stat-label">total plays</div>
-							</div>
-							<div class="stat-card" transition:fade={{ duration: 200 }}>
-								<div class="stat-value">{analytics.total_items}</div>
-								<div class="stat-label">total tracks</div>
-							</div>
-							{#if analytics.top_item}
-								<div class="stat-card top-item" transition:fade={{ duration: 200 }}>
-									<div class="stat-label">most played</div>
-									<div class="top-item-title">{analytics.top_item.title}</div>
-									<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
-								</div>
-							{/if}
 						{/if}
-					{/key}
-				</div>
-			</section>
-		{/if}
+					{/if}
+				{/key}
+			</div>
+		</section>
 
 		<section class="tracks">
 			<h2>tracks</h2>
