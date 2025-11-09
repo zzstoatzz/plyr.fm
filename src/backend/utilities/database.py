@@ -54,6 +54,10 @@ def get_engine() -> AsyncEngine:
         if settings.observability.enabled:
             import logfire
 
+            logfire.configure(
+                token=settings.observability.write_token,
+                environment=settings.observability.environment,
+            )
             logfire.instrument_sqlalchemy(engine.sync_engine)
 
         ENGINES[cache_key] = engine

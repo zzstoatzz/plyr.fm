@@ -19,6 +19,7 @@ class R2Storage:
         if not all(
             [
                 settings.storage.r2_bucket,
+                settings.storage.r2_image_bucket,
                 settings.storage.r2_endpoint_url,
                 settings.storage.aws_access_key_id,
                 settings.storage.aws_secret_access_key,
@@ -26,8 +27,10 @@ class R2Storage:
         ):
             raise ValueError("R2 credentials not configured in environment")
 
-        self.bucket_name = settings.storage.r2_bucket
-        self.public_bucket_url = settings.storage.r2_public_bucket_url
+        self.audio_bucket_name = settings.storage.r2_bucket
+        self.image_bucket_name = settings.storage.r2_image_bucket
+        self.public_audio_bucket_url = settings.storage.r2_public_bucket_url
+        self.public_image_bucket_url = settings.storage.r2_public_image_bucket_url
         self.client = boto3.client(
             "s3",
             endpoint_url=settings.storage.r2_endpoint_url,
@@ -64,7 +67,7 @@ class R2Storage:
 
             image_format = ImageFormat.from_filename(filename)
             if image_format:
-                key = f"images/{file_id}{ext}"
+                key = f"{file_id}{ext}"
                 media_type = image_format.media_type
             else:
                 raise ValueError(
@@ -75,9 +78,10 @@ class R2Storage:
 
         # stream upload to R2 (constant memory)
         # file pointer already reset by hash_file_chunked
+        bucket = self.image_bucket_name if image_format else self.audio_bucket_name
         self.client.upload_fileobj(
             Fileobj=file,
-            Bucket=self.bucket_name,
+            Bucket=bucket,
             Key=key,
             ExtraArgs={"ContentType": media_type},
         )
@@ -91,8 +95,8 @@ class R2Storage:
             key = f"audio/{file_id}{audio_format.extension}"
 
             try:
-                self.client.head_object(Bucket=self.bucket_name, Key=key)
-                return f"{self.public_bucket_url}/{key}"
+                self.client.head_object(Bucket=self.audio_bucket_name, Key=key)
+                return f"{self.public_audio_bucket_url}/{key}"
             except self.client.exceptions.ClientError:
                 continue
 
@@ -100,11 +104,11 @@ class R2Storage:
         from backend.models.image import ImageFormat
 
         for image_format in ImageFormat:
-            key = f"images/{file_id}.{image_format.value}"
+            key = f"{file_id}.{image_format.value}"
 
             try:
-                self.client.head_object(Bucket=self.bucket_name, Key=key)
-                return f"{self.public_bucket_url}/{key}"
+                self.client.head_object(Bucket=self.image_bucket_name, Key=key)
+                return f"{self.public_image_bucket_url}/{key}"
             except self.client.exceptions.ClientError:
                 continue
 
@@ -117,7 +121,7 @@ class R2Storage:
             key = f"audio/{file_id}{audio_format.extension}"
 
             try:
-                self.client.delete_object(Bucket=self.bucket_name, Key=key)
+                self.client.delete_object(Bucket=self.audio_bucket_name, Key=key)
                 return True
             except self.client.exceptions.ClientError:
                 continue
@@ -126,10 +130,10 @@ class R2Storage:
         from backend.models.image import ImageFormat
 
         for image_format in ImageFormat:
-            key = f"images/{file_id}.{image_format.value}"
+            key = f"{file_id}.{image_format.value}"
 
             try:
-                self.client.delete_object(Bucket=self.bucket_name, Key=key)
+                self.client.delete_object(Bucket=self.image_bucket_name, Key=key)
                 return True
             except self.client.exceptions.ClientError:
                 continue

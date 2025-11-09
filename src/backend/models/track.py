@@ -86,5 +86,8 @@ class Track(Base):
         if not self.image_id:
             return None
         from backend.storage import storage
+        from backend.storage.r2 import R2Storage
 
-        return storage.get_url(self.image_id)
+        if isinstance(storage, R2Storage):
+            return storage.get_url(self.image_id)
+        return None
