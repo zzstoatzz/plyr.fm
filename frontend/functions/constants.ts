@@ -12,4 +12,4 @@ export const CFP_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 /**
  * Paths that don't require authentication.
  */
-export const CFP_ALLOWED_PATHS = [];
+export const CFP_ALLOWED_PATHS: string[] = [];
