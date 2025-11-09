@@ -17,7 +17,7 @@
 			<div
 				class="toast toast-{item.type}"
 				role="alert"
-				transition:fly={{ y: 20, duration: 300 }}
+				transition:fly={{ y: 20, duration: 500, opacity: 0 }}
 			>
 				<span class="toast-icon" aria-hidden="true">
 					{icons[item.type]}
@@ -40,7 +40,7 @@
 <style>
 	.toast-container {
 		position: fixed;
-		bottom: 1rem;
+		bottom: calc(var(--player-height, 0px) + 1rem);
 		left: 1rem;
 		z-index: 9999;
 		display: flex;
@@ -56,10 +56,11 @@
 		min-width: 300px;
 		max-width: 400px;
 		padding: 1rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-default);
-		border-radius: 6px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		background: rgba(20, 20, 20, 0.85);
+		backdrop-filter: blur(8px);
+		border: 1px solid rgba(255, 255, 255, 0.05);
+		border-radius: 8px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 		pointer-events: auto;
 		font-size: 0.9rem;
 	}
@@ -137,7 +138,7 @@
 	/* mobile responsiveness */
 	@media (max-width: 768px) {
 		.toast-container {
-			bottom: 5rem; /* above player */
+			bottom: calc(var(--player-height, 0px) + 0.75rem);
 			left: 0.75rem;
 			right: 0.75rem;
 		}
