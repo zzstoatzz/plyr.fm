@@ -476,10 +476,12 @@ async def update_track_metadata(
     title: Annotated[str | None, Form()] = None,
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,  # JSON array of handles
+    image: UploadFile | None = File(None),
 ) -> dict:
     """update track metadata (only by owner).
 
     features: optional JSON array of ATProto handles, e.g., ["user1.bsky.social", "user2.bsky.social"]
+    image: optional image file for track artwork
     """
     result = await db.execute(
         select(Track)
@@ -555,6 +557,29 @@ async def update_track_metadata(
             raise HTTPException(
                 status_code=400, detail=f"invalid JSON in features: {e}"
             ) from e
+
+    # handle image update
+    if image and image.filename:
+        from backend.models.image import ImageFormat
+
+        image_format = ImageFormat.from_filename(image.filename)
+        if not image_format:
+            raise HTTPException(
+                status_code=400,
+                detail="unsupported image type. supported: jpg, png, webp, gif",
+            )
+
+        # read and save image
+        image_data = await image.read()
+        image_obj = BytesIO(image_data)
+        image_id = storage.save(image_obj, f"images/{image.filename}")
+
+        # delete old image if exists
+        if track.image_id:
+            with contextlib.suppress(Exception):
+                storage.delete(track.image_id)
+
+        track.image_id = image_id
 
     await db.commit()
     await db.refresh(track)

@@ -153,8 +153,7 @@
 	}
 
 	.track-image,
-	.track-image-placeholder,
-	.track-avatar {
+	.track-image-placeholder {
 		flex-shrink: 0;
 		width: 48px;
 		height: 48px;
@@ -165,6 +164,13 @@
 		overflow: hidden;
 		background: #1a1a1a;
 		border: 1px solid #282828;
+	}
+
+	.track-avatar {
+		flex-shrink: 0;
+		width: 48px;
+		height: 48px;
+		display: block;
 	}
 
 	.track-avatar {

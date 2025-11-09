@@ -40,6 +40,7 @@
 	let editTitle = '';
 	let editAlbum = '';
 	let editFeaturedArtists: FeaturedArtist[] = [];
+	let editImageFile: File | null = null;
 
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
@@ -192,6 +193,7 @@
 		editTitle = '';
 		editAlbum = '';
 		editFeaturedArtists = [];
+		editImageFile = null;
 	}
 
 	async function saveTrackEdit(trackId: number) {
@@ -204,6 +206,9 @@
 		} else {
 			// send empty array to clear features
 			formData.append('features', JSON.stringify([]));
+		}
+		if (editImageFile) {
+			formData.append('image', editImageFile);
 		}
 
 		const sessionId = localStorage.getItem('session_id');
@@ -383,6 +388,22 @@
 												onAdd={(artist) => { editFeaturedArtists = [...editFeaturedArtists, artist]; }}
 												onRemove={(did) => { editFeaturedArtists = editFeaturedArtists.filter(a => a.did !== did); }}
 											/>
+										</div>
+										<div class="edit-field-group">
+											<label for="edit-image" class="edit-label">artwork (optional)</label>
+											<input
+												id="edit-image"
+												type="file"
+												accept="image/jpeg,image/png,image/webp,image/gif"
+												onchange={(e) => {
+													const target = e.target as HTMLInputElement;
+													editImageFile = target.files?.[0] ?? null;
+												}}
+												class="edit-input"
+											/>
+											{#if editImageFile}
+												<p class="file-info">{editImageFile.name}</p>
+											{/if}
 										</div>
 									</div>
 									<div class="edit-actions">
