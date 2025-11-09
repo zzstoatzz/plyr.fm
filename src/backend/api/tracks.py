@@ -567,6 +567,7 @@ async def update_track_metadata(
             ) from e
 
     # handle image update
+    image_url = None
     if image and image.filename:
         from backend.models.image import ImageFormat
 
@@ -582,12 +583,53 @@ async def update_track_metadata(
         image_obj = BytesIO(image_data)
         image_id = storage.save(image_obj, f"images/{image.filename}")
 
+        # get R2 URL for image if using R2 storage
+        if settings.storage.backend == "r2":
+            from backend.storage.r2 import R2Storage
+
+            if isinstance(storage, R2Storage):
+                image_url = storage.get_url(image_id)
+
         # delete old image if exists
         if track.image_id:
             with contextlib.suppress(Exception):
                 storage.delete(track.image_id)
 
         track.image_id = image_id
+
+    # update ATProto record if any fields changed
+    if track.atproto_record_uri and (
+        title is not None or album is not None or features is not None or image_url
+    ):
+        from backend.atproto.records import build_track_record, update_record
+
+        try:
+            # build updated record with all current values
+            updated_record = build_track_record(
+                title=track.title,
+                artist=track.artist.display_name,
+                audio_url=track.r2_url,
+                file_type=track.file_type,
+                album=track.album,
+                duration=None,
+                features=track.features if track.features else None,
+                image_url=image_url or track.image_url,
+            )
+
+            # update the record on the PDS
+            result = await update_record(
+                auth_session=auth_session,
+                record_uri=track.atproto_record_uri,
+                record=updated_record,
+            )
+
+            if result:
+                _, new_cid = result
+                track.atproto_record_cid = new_cid
+
+        except Exception as e:
+            logger.warning(f"failed to update ATProto record: {e}", exc_info=True)
+            # continue even if ATProto update fails - database changes are primary
 
     await db.commit()
     await db.refresh(track)

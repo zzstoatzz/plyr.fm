@@ -94,6 +94,63 @@ async def _refresh_session_tokens(
         raise ValueError(f"failed to refresh access token: {e}") from e
 
 
+def build_track_record(
+    title: str,
+    artist: str,
+    audio_url: str,
+    file_type: str,
+    album: str | None = None,
+    duration: int | None = None,
+    features: list[dict] | None = None,
+    image_url: str | None = None,
+) -> dict[str, Any]:
+    """Build a track record dict for ATProto.
+
+    args:
+        title: track title
+        artist: artist name
+        audio_url: R2 URL for audio file
+        file_type: file extension (mp3, wav, etc)
+        album: optional album name
+        duration: optional duration in seconds
+        features: optional list of featured artists [{did, handle, display_name, avatar_url}]
+        image_url: optional cover art image URL
+
+    returns:
+        record dict ready for ATProto
+    """
+    from backend.config import settings
+
+    record: dict[str, Any] = {
+        "$type": settings.atproto.track_collection,
+        "title": title,
+        "artist": artist,
+        "audioUrl": audio_url,
+        "fileType": file_type,
+        "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
+
+    # add optional fields
+    if album:
+        record["album"] = album
+    if duration:
+        record["duration"] = duration
+    if features:
+        # only include essential fields for ATProto record
+        record["features"] = [
+            {
+                "did": f["did"],
+                "handle": f["handle"],
+                "displayName": f.get("display_name", f["handle"]),
+            }
+            for f in features
+        ]
+    if image_url:
+        record["imageUrl"] = image_url
+
+    return record
+
+
 async def create_track_record(
     auth_session: AuthSession,
     title: str,
@@ -136,32 +193,16 @@ async def create_track_record(
     oauth_session = _reconstruct_oauth_session(oauth_data)
 
     # construct record
-    record: dict[str, Any] = {
-        "$type": settings.atproto.track_collection,
-        "title": title,
-        "artist": artist,
-        "audioUrl": audio_url,
-        "fileType": file_type,
-        "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-    }
-
-    # add optional fields
-    if album:
-        record["album"] = album
-    if duration:
-        record["duration"] = duration
-    if features:
-        # only include essential fields for ATProto record
-        record["features"] = [
-            {
-                "did": f["did"],
-                "handle": f["handle"],
-                "displayName": f.get("display_name", f["handle"]),
-            }
-            for f in features
-        ]
-    if image_url:
-        record["imageUrl"] = image_url
+    record = build_track_record(
+        title=title,
+        artist=artist,
+        audio_url=audio_url,
+        file_type=file_type,
+        album=album,
+        duration=duration,
+        features=features,
+        image_url=image_url,
+    )
 
     # make authenticated request to create record
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
@@ -203,4 +244,88 @@ async def create_track_record(
         # other error or retry failed
         raise Exception(
             f"Failed to create ATProto record: {response.status_code} {response.text}"
+        )
+
+
+async def update_record(
+    auth_session: AuthSession,
+    record_uri: str,
+    record: dict[str, Any],
+) -> tuple[str, str] | None:
+    """Update an existing record on the user's PDS.
+
+    args:
+        auth_session: authenticated user session
+        record_uri: AT URI of the record to update (e.g., at://did:plc:.../fm.plyr.track/...)
+        record: complete record data to update with (must include $type)
+
+    returns:
+        tuple of (record_uri, record_cid)
+
+    raises:
+        ValueError: if session is invalid or URI is malformed
+        Exception: if record update fails
+    """
+    # get OAuth session data from database
+    oauth_data = auth_session.oauth_session
+    if not oauth_data or "access_token" not in oauth_data:
+        raise ValueError(
+            f"OAuth session data missing or invalid for {auth_session.did}"
+        )
+
+    # reconstruct OAuthSession from database
+    oauth_session = _reconstruct_oauth_session(oauth_data)
+
+    # parse the AT URI to get repo and collection
+    # format: at://did:plc:.../collection/rkey
+    if not record_uri.startswith("at://"):
+        raise ValueError(f"Invalid AT URI format: {record_uri}")
+
+    parts = record_uri.replace("at://", "").split("/")
+    if len(parts) != 3:
+        raise ValueError(f"Invalid AT URI structure: {record_uri}")
+
+    repo, collection, rkey = parts
+
+    # make authenticated request to update record
+    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.putRecord"
+    payload = {
+        "repo": repo,
+        "collection": collection,
+        "rkey": rkey,
+        "record": record,
+    }
+
+    # try updating the record, refresh token if expired
+    for attempt in range(2):  # max 2 attempts: initial + 1 retry after refresh
+        response = await oauth_client.make_authenticated_request(
+            session=oauth_session,
+            method="POST",
+            url=url,
+            json=payload,
+        )
+
+        # success
+        if response.status_code in (200, 201):
+            result = response.json()
+            return result["uri"], result["cid"]
+
+        # token expired - refresh and retry
+        if response.status_code == 401 and attempt == 0:
+            try:
+                error_data = response.json()
+                if "exp" in error_data.get("message", ""):
+                    logger.info(
+                        f"access token expired for {auth_session.did}, attempting refresh"
+                    )
+                    oauth_session = await _refresh_session_tokens(
+                        auth_session, oauth_session
+                    )
+                    continue  # retry with refreshed token
+            except (json.JSONDecodeError, KeyError):
+                pass  # not a token expiration error
+
+        # other error or retry failed
+        raise Exception(
+            f"Failed to update ATProto record: {response.status_code} {response.text}"
         )
