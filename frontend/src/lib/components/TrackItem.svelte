@@ -16,9 +16,17 @@
 		? `${window.location.origin}/track/${track.id}`
 		: '';
 
+	let showFeedback = $state(false);
+
 	function addToQueue(e: Event) {
 		e.stopPropagation();
 		queue.addTracks([track]);
+
+		// show ephemeral feedback
+		showFeedback = true;
+		setTimeout(() => {
+			showFeedback = false;
+		}, 1500);
 	}
 </script>
 
@@ -79,21 +87,26 @@
 		</div>
 	</button>
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
-		<button
-			class="action-button"
-			onclick={addToQueue}
-			title="add to queue"
-		>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-				<!-- plus sign -->
-				<line x1="5" y1="15" x2="5" y2="21"></line>
-				<line x1="2" y1="18" x2="8" y2="18"></line>
-				<!-- list lines -->
-				<line x1="9" y1="6" x2="21" y2="6"></line>
-				<line x1="9" y1="12" x2="21" y2="12"></line>
-				<line x1="9" y1="18" x2="21" y2="18"></line>
-			</svg>
-		</button>
+		<div class="queue-button-container">
+			<button
+				class="action-button"
+				onclick={addToQueue}
+				title="add to queue"
+			>
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+					<!-- plus sign -->
+					<line x1="5" y1="15" x2="5" y2="21"></line>
+					<line x1="2" y1="18" x2="8" y2="18"></line>
+					<!-- list lines -->
+					<line x1="9" y1="6" x2="21" y2="6"></line>
+					<line x1="9" y1="12" x2="21" y2="12"></line>
+					<line x1="9" y1="18" x2="21" y2="18"></line>
+				</svg>
+			</button>
+			{#if showFeedback}
+				<div class="queue-feedback">added ✓</div>
+			{/if}
+		</div>
 		<ShareButton url={shareUrl} />
 	</div>
 </div>
@@ -293,6 +306,46 @@
 	.action-button svg {
 		width: 16px;
 		height: 16px;
+	}
+
+	.queue-button-container {
+		position: relative;
+	}
+
+	.queue-feedback {
+		position: absolute;
+		top: -28px;
+		left: 50%;
+		transform: translateX(-50%);
+		background: var(--accent);
+		color: white;
+		padding: 0.35rem 0.65rem;
+		border-radius: 4px;
+		font-size: 0.75rem;
+		font-weight: 600;
+		white-space: nowrap;
+		pointer-events: none;
+		animation: feedback-dissolve 1.5s ease-out forwards;
+		box-shadow: 0 2px 8px rgba(106, 159, 255, 0.3);
+	}
+
+	@keyframes feedback-dissolve {
+		0% {
+			opacity: 0;
+			transform: translateX(-50%) translateY(5px) scale(0.95);
+		}
+		20% {
+			opacity: 1;
+			transform: translateX(-50%) translateY(0) scale(1);
+		}
+		80% {
+			opacity: 1;
+			transform: translateX(-50%) translateY(0) scale(1);
+		}
+		100% {
+			opacity: 0;
+			transform: translateX(-50%) translateY(-5px) scale(0.95);
+		}
 	}
 
 	@media (max-width: 768px) {
