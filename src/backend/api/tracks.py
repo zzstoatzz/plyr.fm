@@ -49,6 +49,8 @@ async def _process_upload_background(
     album: str | None,
     features: str | None,
     auth_session: AuthSession,
+    image_data: bytes | None = None,
+    image_filename: str | None = None,
 ) -> None:
     """background task to process upload."""
     try:
@@ -88,6 +90,26 @@ async def _process_upload_background(
 
             if isinstance(storage, R2Storage):
                 r2_url = storage.get_url(file_id)
+
+        # save image if provided
+        image_id = None
+        if image_data and image_filename:
+            upload_tracker.update_status(
+                upload_id, UploadStatus.PROCESSING, "saving image..."
+            )
+            from backend.models.image import ImageFormat
+
+            image_format = ImageFormat.from_filename(image_filename)
+            if image_format:
+                try:
+                    image_obj = BytesIO(image_data)
+                    # save with images/ prefix to namespace it
+                    image_id = storage.save(image_obj, f"images/{image_filename}")
+                except Exception as e:
+                    logger.warning(f"failed to save image: {e}", exc_info=True)
+                    # continue without image - it's optional
+            else:
+                logger.warning(f"unsupported image format: {image_filename}")
 
         # get artist and resolve features
         async with db_session() as db:
@@ -165,6 +187,7 @@ async def _process_upload_background(
                 r2_url=r2_url,
                 atproto_record_uri=atproto_uri,
                 atproto_record_cid=atproto_cid,
+                image_id=image_id,
             )
 
             db.add(track)
@@ -220,14 +243,16 @@ async def upload_track(
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,
     file: UploadFile = File(...),
+    image: UploadFile | None = File(None),
 ) -> dict:
     """upload a new track (requires authentication and artist profile).
 
     returns immediately with upload_id for tracking progress via SSE.
 
     features: optional JSON array of ATProto handles, e.g., ["user1.bsky.social", "user2.bsky.social"]
+    image: optional image file for track artwork
     """
-    # validate file type upfront
+    # validate audio file type upfront
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")
 
@@ -243,6 +268,13 @@ async def upload_track(
     # read file into memory (so FastAPI can close the upload)
     file_data = await file.read()
 
+    # read image if provided
+    image_data = None
+    image_filename = None
+    if image and image.filename:
+        image_data = await image.read()
+        image_filename = image.filename
+
     # create upload tracking
     upload_id = upload_tracker.create_upload()
 
@@ -257,6 +289,8 @@ async def upload_track(
             album=album,
             features=features,
             auth_session=auth_session,
+            image_data=image_data,
+            image_filename=image_filename,
         )
     )
 

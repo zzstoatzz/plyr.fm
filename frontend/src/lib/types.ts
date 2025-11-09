@@ -20,6 +20,7 @@ export interface Track {
 	play_count: number;
 	features?: FeaturedArtist[];
 	created_at?: string;
+	image_url?: string;
 }
 
 export interface User {

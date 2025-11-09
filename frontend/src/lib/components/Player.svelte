@@ -176,6 +176,11 @@
 		></audio>
 
 		<div class="player-content">
+			{#if player.currentTrack.image_url}
+				<div class="player-artwork">
+					<img src={player.currentTrack.image_url} alt="{player.currentTrack.title} artwork" />
+				</div>
+			{/if}
 			<div class="player-info">
 				<div class="player-title" class:scrolling={player.currentTrack.title.length > 30}>
 					<span>{player.currentTrack.title}</span>
@@ -322,6 +327,22 @@
 		display: flex;
 		align-items: center;
 		gap: 1.5rem;
+	}
+
+	.player-artwork {
+		flex-shrink: 0;
+		width: 56px;
+		height: 56px;
+		border-radius: 4px;
+		overflow: hidden;
+		background: #1a1a1a;
+		border: 1px solid #333;
+	}
+
+	.player-artwork img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 	}
 
 	.player-info {
@@ -606,6 +627,11 @@
 		.player-content {
 			flex-direction: column;
 			gap: 1rem;
+		}
+
+		.player-artwork {
+			width: 80px;
+			height: 80px;
 		}
 
 		.player-info {

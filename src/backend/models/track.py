@@ -67,6 +67,9 @@ class Track(Base):
         Integer, nullable=False, default=0, server_default="0"
     )
 
+    # image reference
+    image_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+
     @property
     def album(self) -> str | None:
         """get album from extra."""
@@ -76,3 +79,12 @@ class Track(Base):
     def duration(self) -> int | None:
         """get duration from extra (in seconds)."""
         return self.extra.get("duration")
+
+    @property
+    def image_url(self) -> str | None:
+        """get image URL if available."""
+        if not self.image_id:
+            return None
+        from backend.storage import storage
+
+        return storage.get_url(self.image_id)

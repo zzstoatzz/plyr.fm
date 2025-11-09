@@ -32,6 +32,7 @@
 	let title = '';
 	let album = '';
 	let file: File | null = null;
+	let imageFile: File | null = null;
 	let featuredArtists: FeaturedArtist[] = [];
 
 	// editing state
@@ -131,21 +132,27 @@
 		const uploadTitle = title;
 		const uploadAlbum = album;
 		const uploadFeatures = [...featuredArtists];
+		const uploadImage = imageFile;
 
 		// clear form immediately
 		title = '';
 		album = '';
 		file = null;
+		imageFile = null;
 		featuredArtists = [];
 
-		// reset file input
+		// reset file inputs
 		const fileInput = document.getElementById('file-input') as HTMLInputElement;
 		if (fileInput) {
 			fileInput.value = '';
 		}
+		const imageInput = document.getElementById('image-input') as HTMLInputElement;
+		if (imageInput) {
+			imageInput.value = '';
+		}
 
 		// delegate to global uploader
-		uploader.upload(uploadFile, uploadTitle, uploadAlbum, uploadFeatures, () => {
+		uploader.upload(uploadFile, uploadTitle, uploadAlbum, uploadFeatures, uploadImage, () => {
 			loadMyTracks();
 		});
 	}
@@ -309,6 +316,22 @@
 					/>
 					{#if file}
 						<p class="file-info">{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</p>
+					{/if}
+				</div>
+
+				<div class="form-group">
+					<label for="image-input">artwork (optional)</label>
+					<input
+						id="image-input"
+						type="file"
+						accept="image/jpeg,image/png,image/webp,image/gif"
+						onchange={(e) => {
+							const target = e.target as HTMLInputElement;
+							imageFile = target.files?.[0] ?? null;
+						}}
+					/>
+					{#if imageFile}
+						<p class="file-info">{imageFile.name} ({(imageFile.size / 1024 / 1024).toFixed(2)} MB)</p>
 					{/if}
 				</div>
 
