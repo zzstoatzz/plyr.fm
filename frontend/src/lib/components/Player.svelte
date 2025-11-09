@@ -303,13 +303,17 @@
 <style>
 	.player {
 		position: fixed;
-		bottom: env(safe-area-inset-bottom, 0);
+		bottom: 0;
 		left: 0;
 		right: 0;
 		background: #1a1a1a;
 		border-top: 1px solid #333;
-		padding: 0.75rem 2rem 0.75rem 2rem;
+		padding: 0.75rem 2rem;
+		padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 		z-index: 100;
+		/* force player to stick to visual viewport bottom on iOS Chrome */
+		transform: translateZ(0);
+		-webkit-transform: translateZ(0);
 	}
 
 	.player-content {
@@ -596,6 +600,7 @@
 	@media (max-width: 768px) {
 		.player {
 			padding: 1rem;
+			padding-bottom: max(1rem, env(safe-area-inset-bottom));
 		}
 
 		.player-content {
