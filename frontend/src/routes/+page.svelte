@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import NotificationZone from '$lib/components/NotificationZone.svelte';
 	import type { User } from '$lib/types';
 	import { API_URL } from '$lib/config';
 import { player } from '$lib/player.svelte';
@@ -57,8 +56,6 @@ import { queue } from '$lib/queue.svelte';
 <Header {user} {isAuthenticated} onLogout={logout} />
 
 <main>
-	<NotificationZone />
-
 	<section class="tracks">
 		<h2>latest tracks</h2>
 		{#if showLoading}

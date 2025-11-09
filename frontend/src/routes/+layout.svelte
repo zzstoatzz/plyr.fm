@@ -9,13 +9,9 @@
 	import Toast from '$lib/components/Toast.svelte';
 	import Queue from '$lib/components/Queue.svelte';
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
 
 	let { children } = $props();
 	let showQueue = $state(false);
-
-	// only show global toast on non-homepage (homepage uses NotificationZone)
-	let showGlobalToast = $derived($page.url.pathname !== '/');
 
 	onMount(() => {
 		// redirect pages.dev domains to plyr.fm unless bypass password is provided
@@ -135,9 +131,7 @@
 </button>
 
 <Player />
-{#if showGlobalToast}
-	<Toast />
-{/if}
+<Toast />
 
 <style>
 	:global(*),
