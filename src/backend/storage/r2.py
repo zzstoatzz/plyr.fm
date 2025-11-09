@@ -85,15 +85,25 @@ class R2Storage:
         return file_id
 
     def get_url(self, file_id: str) -> str | None:
-        """get public URL for audio file."""
-        # try to find file with any supported extension
+        """get public URL for media file (audio or image)."""
+        # try audio formats first
         for audio_format in AudioFormat:
             key = f"audio/{file_id}{audio_format.extension}"
 
-            # check if object exists
             try:
                 self.client.head_object(Bucket=self.bucket_name, Key=key)
-                # object exists, return public URL
+                return f"{self.public_bucket_url}/{key}"
+            except self.client.exceptions.ClientError:
+                continue
+
+        # try image formats
+        from backend.models.image import ImageFormat
+
+        for image_format in ImageFormat:
+            key = f"images/{file_id}.{image_format.value}"
+
+            try:
+                self.client.head_object(Bucket=self.bucket_name, Key=key)
                 return f"{self.public_bucket_url}/{key}"
             except self.client.exceptions.ClientError:
                 continue
@@ -101,9 +111,22 @@ class R2Storage:
         return None
 
     def delete(self, file_id: str) -> bool:
-        """delete audio file from R2."""
+        """delete media file from R2."""
+        # try audio formats
         for audio_format in AudioFormat:
             key = f"audio/{file_id}{audio_format.extension}"
+
+            try:
+                self.client.delete_object(Bucket=self.bucket_name, Key=key)
+                return True
+            except self.client.exceptions.ClientError:
+                continue
+
+        # try image formats
+        from backend.models.image import ImageFormat
+
+        for image_format in ImageFormat:
+            key = f"images/{file_id}.{image_format.value}"
 
             try:
                 self.client.delete_object(Bucket=self.bucket_name, Key=key)
