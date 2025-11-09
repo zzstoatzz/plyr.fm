@@ -193,11 +193,8 @@ async def _process_upload_background(
 
             except IntegrityError as e:
                 await db.rollback()
-                error_msg = "this file has already been uploaded"
-                if "tracks_file_id_key" in str(e):
-                    error_msg = (
-                        "duplicate file: this audio file already exists in the database"
-                    )
+                # integrity errors now only occur for foreign key violations or other constraints
+                error_msg = f"database constraint violation: {e!s}"
                 upload_tracker.update_status(
                     upload_id, UploadStatus.FAILED, "upload failed", error=error_msg
                 )
