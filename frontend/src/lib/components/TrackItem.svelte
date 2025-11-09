@@ -314,33 +314,27 @@
 
 	.queue-feedback {
 		position: absolute;
-		top: 50%;
+		top: -8px;
 		left: 50%;
-		transform: translate(-50%, -50%);
+		transform: translateX(-50%);
 		color: var(--accent);
-		font-size: 1.2rem;
+		font-size: 0.9rem;
 		pointer-events: none;
-		animation: check-pulse 1s ease-out forwards;
+		animation: check-float 1s ease-out forwards;
 	}
 
-	@keyframes check-pulse {
+	@keyframes check-float {
 		0% {
 			opacity: 0;
-			transform: translate(-50%, -50%) scale(0.8);
+			transform: translateX(-50%) translateY(0);
 		}
-		15% {
+		20% {
 			opacity: 1;
-			transform: translate(-50%, -50%) scale(1.1);
-		}
-		30% {
-			transform: translate(-50%, -50%) scale(1);
-		}
-		85% {
-			opacity: 1;
+			transform: translateX(-50%) translateY(-4px);
 		}
 		100% {
 			opacity: 0;
-			transform: translate(-50%, -50%) scale(0.9);
+			transform: translateX(-50%) translateY(-16px);
 		}
 	}
 
