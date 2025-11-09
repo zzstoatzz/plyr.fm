@@ -263,7 +263,7 @@ import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	main {
 		max-width: 800px;
 		margin: 0 auto;
-		padding: 0 1rem 120px;
+		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
 	}
 
 	.not-found {
