@@ -23,6 +23,7 @@ class UploaderState {
 		title: string,
 		album: string,
 		features: FeaturedArtist[],
+		image?: File | null,
 		onSuccess?: () => void
 	): void {
 		const taskId = crypto.randomUUID();
@@ -40,6 +41,9 @@ class UploaderState {
 		if (features.length > 0) {
 			const handles = features.map(a => a.handle);
 			formData.append('features', JSON.stringify(handles));
+		}
+		if (image) {
+			formData.append('image', image);
 		}
 
 		// start upload (returns immediately with upload_id)

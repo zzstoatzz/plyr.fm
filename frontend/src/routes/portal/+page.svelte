@@ -32,6 +32,7 @@
 	let title = '';
 	let album = '';
 	let file: File | null = null;
+	let imageFile: File | null = null;
 	let featuredArtists: FeaturedArtist[] = [];
 
 	// editing state
@@ -39,6 +40,7 @@
 	let editTitle = '';
 	let editAlbum = '';
 	let editFeaturedArtists: FeaturedArtist[] = [];
+	let editImageFile: File | null = null;
 
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
@@ -131,21 +133,27 @@
 		const uploadTitle = title;
 		const uploadAlbum = album;
 		const uploadFeatures = [...featuredArtists];
+		const uploadImage = imageFile;
 
 		// clear form immediately
 		title = '';
 		album = '';
 		file = null;
+		imageFile = null;
 		featuredArtists = [];
 
-		// reset file input
+		// reset file inputs
 		const fileInput = document.getElementById('file-input') as HTMLInputElement;
 		if (fileInput) {
 			fileInput.value = '';
 		}
+		const imageInput = document.getElementById('image-input') as HTMLInputElement;
+		if (imageInput) {
+			imageInput.value = '';
+		}
 
 		// delegate to global uploader
-		uploader.upload(uploadFile, uploadTitle, uploadAlbum, uploadFeatures, () => {
+		uploader.upload(uploadFile, uploadTitle, uploadAlbum, uploadFeatures, uploadImage, () => {
 			loadMyTracks();
 		});
 	}
@@ -185,6 +193,7 @@
 		editTitle = '';
 		editAlbum = '';
 		editFeaturedArtists = [];
+		editImageFile = null;
 	}
 
 	async function saveTrackEdit(trackId: number) {
@@ -197,6 +206,9 @@
 		} else {
 			// send empty array to clear features
 			formData.append('features', JSON.stringify([]));
+		}
+		if (editImageFile) {
+			formData.append('image', editImageFile);
 		}
 
 		const sessionId = localStorage.getItem('session_id');
@@ -312,6 +324,22 @@
 					{/if}
 				</div>
 
+				<div class="form-group">
+					<label for="image-input">artwork (optional)</label>
+					<input
+						id="image-input"
+						type="file"
+						accept="image/jpeg,image/png,image/webp,image/gif"
+						onchange={(e) => {
+							const target = e.target as HTMLInputElement;
+							imageFile = target.files?.[0] ?? null;
+						}}
+					/>
+					{#if imageFile}
+						<p class="file-info">{imageFile.name} ({(imageFile.size / 1024 / 1024).toFixed(2)} MB)</p>
+					{/if}
+				</div>
+
 				<button type="submit" disabled={!file} class="upload-btn">
 					<span>upload track</span>
 				</button>
@@ -361,6 +389,28 @@
 												onRemove={(did) => { editFeaturedArtists = editFeaturedArtists.filter(a => a.did !== did); }}
 											/>
 										</div>
+										<div class="edit-field-group">
+											<label for="edit-image" class="edit-label">artwork (optional)</label>
+											{#if track.image_url && !editImageFile}
+												<div class="current-image-preview">
+													<img src={track.image_url} alt="current artwork" />
+													<span class="current-image-label">current artwork</span>
+												</div>
+											{/if}
+											<input
+												id="edit-image"
+												type="file"
+												accept="image/jpeg,image/png,image/webp,image/gif"
+												onchange={(e) => {
+													const target = e.target as HTMLInputElement;
+													editImageFile = target.files?.[0] ?? null;
+												}}
+												class="edit-input"
+											/>
+											{#if editImageFile}
+												<p class="file-info">{editImageFile.name} (will replace current)</p>
+											{/if}
+										</div>
 									</div>
 									<div class="edit-actions">
 										<button
@@ -380,6 +430,19 @@
 									</div>
 								</div>
 							{:else}
+								<div class="track-artwork">
+									{#if track.image_url}
+										<img src={track.image_url} alt="{track.title} artwork" />
+									{:else}
+										<div class="track-artwork-placeholder">
+											<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+												<path d="M9 18V5l12-2v13"></path>
+												<circle cx="6" cy="18" r="3"></circle>
+												<circle cx="18" cy="16" r="3"></circle>
+											</svg>
+										</div>
+									{/if}
+								</div>
 								<div class="track-info">
 									<div class="track-title">{track.title}</div>
 									<div class="track-meta">
@@ -583,6 +646,7 @@
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
+		gap: 1rem;
 		background: #1a1a1a;
 		border: 1px solid #2a2a2a;
 		border-radius: 6px;
@@ -593,6 +657,31 @@
 	.track-item.editing {
 		flex-direction: column;
 		align-items: stretch;
+	}
+
+	.track-artwork {
+		flex-shrink: 0;
+		width: 48px;
+		height: 48px;
+		border-radius: 4px;
+		overflow: hidden;
+		background: #0f0f0f;
+		border: 1px solid #282828;
+	}
+
+	.track-artwork img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.track-artwork-placeholder {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #555;
 	}
 
 	.track-item:hover {
@@ -735,6 +824,29 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 0.9rem;
+	}
+
+	.current-image-preview {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.5rem;
+		background: #0a0a0a;
+		border: 1px solid #333;
+		border-radius: 4px;
+		margin-bottom: 0.5rem;
+	}
+
+	.current-image-preview img {
+		width: 48px;
+		height: 48px;
+		border-radius: 4px;
+		object-fit: cover;
+	}
+
+	.current-image-label {
+		color: #888;
+		font-size: 0.85rem;
 	}
 
 	.edit-input:focus {

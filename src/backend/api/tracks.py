@@ -28,13 +28,48 @@ from backend._internal import require_artist_profile, require_auth
 from backend._internal.uploads import UploadStatus, upload_tracker
 from backend.atproto import create_track_record
 from backend.atproto.handles import resolve_handle
+from backend.atproto.records import build_track_record, update_record
 from backend.config import settings
 from backend.models import Artist, AudioFormat, Track, get_db
+from backend.models.image import ImageFormat
 from backend.storage import storage
+from backend.storage.r2 import R2Storage
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tracks", tags=["tracks"])
+
+
+class TrackResponse(dict):
+    """track response schema."""
+
+    @classmethod
+    def from_track(cls, track: Track, pds_url: str | None = None) -> "TrackResponse":
+        """build track response from Track model."""
+        return cls(
+            id=track.id,
+            title=track.title,
+            artist=track.artist.display_name,
+            artist_handle=track.artist.handle,
+            artist_avatar_url=track.artist.avatar_url,
+            album=track.album,
+            file_id=track.file_id,
+            file_type=track.file_type,
+            features=track.features,
+            r2_url=track.r2_url,
+            atproto_record_uri=track.atproto_record_uri,
+            atproto_record_url=(
+                f"{pds_url}/xrpc/com.atproto.repo.getRecord"
+                f"?repo={track.artist_did}&collection={settings.atproto.track_collection}"
+                f"&rkey={track.atproto_record_uri.split('/')[-1]}"
+                if track.atproto_record_uri and pds_url
+                else None
+            ),
+            play_count=track.play_count,
+            created_at=track.created_at.isoformat(),
+            image_url=track.image_url,
+        )
+
 
 # max featured artists per track
 MAX_FEATURES = 5
@@ -49,6 +84,8 @@ async def _process_upload_background(
     album: str | None,
     features: str | None,
     auth_session: AuthSession,
+    image_data: bytes | None = None,
+    image_filename: str | None = None,
 ) -> None:
     """background task to process upload."""
     try:
@@ -88,6 +125,30 @@ async def _process_upload_background(
 
             if isinstance(storage, R2Storage):
                 r2_url = storage.get_url(file_id)
+
+        # save image if provided
+        image_id = None
+        image_url = None
+        if image_data and image_filename:
+            upload_tracker.update_status(
+                upload_id, UploadStatus.PROCESSING, "saving image..."
+            )
+            image_format = ImageFormat.from_filename(image_filename)
+            if image_format:
+                try:
+                    image_obj = BytesIO(image_data)
+                    # save with images/ prefix to namespace it
+                    image_id = storage.save(image_obj, f"images/{image_filename}")
+                    # get R2 URL for image if using R2 storage
+                    if settings.storage.backend == "r2" and isinstance(
+                        storage, R2Storage
+                    ):
+                        image_url = storage.get_url(image_id)
+                except Exception as e:
+                    logger.warning(f"failed to save image: {e}", exc_info=True)
+                    # continue without image - it's optional
+            else:
+                logger.warning(f"unsupported image format: {image_filename}")
 
         # get artist and resolve features
         async with db_session() as db:
@@ -139,6 +200,7 @@ async def _process_upload_background(
                         album=album,
                         duration=None,
                         features=featured_artists if featured_artists else None,
+                        image_url=image_url,
                     )
                     if result:
                         atproto_uri, atproto_cid = result
@@ -165,6 +227,7 @@ async def _process_upload_background(
                 r2_url=r2_url,
                 atproto_record_uri=atproto_uri,
                 atproto_record_cid=atproto_cid,
+                image_id=image_id,
             )
 
             db.add(track)
@@ -220,14 +283,16 @@ async def upload_track(
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,
     file: UploadFile = File(...),
+    image: UploadFile | None = File(None),
 ) -> dict:
     """upload a new track (requires authentication and artist profile).
 
     returns immediately with upload_id for tracking progress via SSE.
 
     features: optional JSON array of ATProto handles, e.g., ["user1.bsky.social", "user2.bsky.social"]
+    image: optional image file for track artwork
     """
-    # validate file type upfront
+    # validate audio file type upfront
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")
 
@@ -243,6 +308,13 @@ async def upload_track(
     # read file into memory (so FastAPI can close the upload)
     file_data = await file.read()
 
+    # read image if provided
+    image_data = None
+    image_filename = None
+    if image and image.filename:
+        image_data = await image.read()
+        image_filename = image.filename
+
     # create upload tracking
     upload_id = upload_tracker.create_upload()
 
@@ -257,6 +329,8 @@ async def upload_track(
             album=album,
             features=features,
             auth_session=auth_session,
+            image_data=image_data,
+            image_filename=image_filename,
         )
     )
 
@@ -336,28 +410,7 @@ async def list_tracks(
 
     return {
         "tracks": [
-            {
-                "id": track.id,
-                "title": track.title,
-                "artist": track.artist.display_name,
-                "artist_handle": track.artist.handle,
-                "artist_avatar_url": track.artist.avatar_url,
-                "album": track.album,
-                "file_id": track.file_id,
-                "file_type": track.file_type,
-                "features": track.features,
-                "r2_url": track.r2_url,
-                "atproto_record_uri": track.atproto_record_uri,
-                "atproto_record_url": (
-                    f"{pds_cache[track.artist_did]}/xrpc/com.atproto.repo.getRecord"
-                    f"?repo={track.artist_did}&collection={settings.atproto.track_collection}"
-                    f"&rkey={track.atproto_record_uri.split('/')[-1]}"
-                    if track.atproto_record_uri and pds_cache.get(track.artist_did)
-                    else None
-                ),
-                "play_count": track.play_count,
-                "created_at": track.created_at.isoformat(),
-            }
+            TrackResponse.from_track(track, pds_cache.get(track.artist_did))
             for track in tracks
         ]
     }
@@ -379,25 +432,7 @@ async def list_my_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    return {
-        "tracks": [
-            {
-                "id": track.id,
-                "title": track.title,
-                "artist": track.artist.display_name,
-                "artist_handle": track.artist.handle,
-                "album": track.album,
-                "file_id": track.file_id,
-                "file_type": track.file_type,
-                "features": track.features,
-                "r2_url": track.r2_url,
-                "atproto_record_uri": track.atproto_record_uri,
-                "play_count": track.play_count,
-                "created_at": track.created_at.isoformat(),
-            }
-            for track in tracks
-        ]
-    }
+    return {"tracks": [TrackResponse.from_track(track) for track in tracks]}
 
 
 @router.delete("/{track_id}")
@@ -442,10 +477,12 @@ async def update_track_metadata(
     title: Annotated[str | None, Form()] = None,
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,  # JSON array of handles
+    image: UploadFile | None = File(None),
 ) -> dict:
     """update track metadata (only by owner).
 
     features: optional JSON array of ATProto handles, e.g., ["user1.bsky.social", "user2.bsky.social"]
+    image: optional image file for track artwork
     """
     result = await db.execute(
         select(Track)
@@ -522,23 +559,68 @@ async def update_track_metadata(
                 status_code=400, detail=f"invalid JSON in features: {e}"
             ) from e
 
+    # handle image update
+    image_url = None
+    if image and image.filename:
+        image_format = ImageFormat.from_filename(image.filename)
+        if not image_format:
+            raise HTTPException(
+                status_code=400,
+                detail="unsupported image type. supported: jpg, png, webp, gif",
+            )
+
+        # read and save image
+        image_data = await image.read()
+        image_obj = BytesIO(image_data)
+        image_id = storage.save(image_obj, f"images/{image.filename}")
+
+        # get R2 URL for image if using R2 storage
+        if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
+            image_url = storage.get_url(image_id)
+
+        # delete old image if exists
+        if track.image_id:
+            with contextlib.suppress(Exception):
+                storage.delete(track.image_id)
+
+        track.image_id = image_id
+
+    # update ATProto record if any fields changed
+    if track.atproto_record_uri and (
+        title is not None or album is not None or features is not None or image_url
+    ):
+        try:
+            # build updated record with all current values
+            updated_record = build_track_record(
+                title=track.title,
+                artist=track.artist.display_name,
+                audio_url=track.r2_url,
+                file_type=track.file_type,
+                album=track.album,
+                duration=None,
+                features=track.features if track.features else None,
+                image_url=image_url or track.image_url,
+            )
+
+            # update the record on the PDS
+            result = await update_record(
+                auth_session=auth_session,
+                record_uri=track.atproto_record_uri,
+                record=updated_record,
+            )
+
+            if result:
+                _, new_cid = result
+                track.atproto_record_cid = new_cid
+
+        except Exception as e:
+            logger.warning(f"failed to update ATProto record: {e}", exc_info=True)
+            # continue even if ATProto update fails - database changes are primary
+
     await db.commit()
     await db.refresh(track)
 
-    return {
-        "id": track.id,
-        "title": track.title,
-        "artist": track.artist.display_name,
-        "artist_handle": track.artist.handle,
-        "artist_avatar_url": track.artist.avatar_url,
-        "album": track.album,
-        "file_id": track.file_id,
-        "file_type": track.file_type,
-        "r2_url": track.r2_url,
-        "atproto_record_uri": track.atproto_record_uri,
-        "play_count": track.play_count,
-        "created_at": track.created_at.isoformat(),
-    }
+    return TrackResponse.from_track(track)
 
 
 @router.get("/{track_id}")
@@ -557,19 +639,7 @@ async def get_track(
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
 
-    return {
-        "id": track.id,
-        "title": track.title,
-        "artist": track.artist.display_name,
-        "artist_handle": track.artist.handle,
-        "album": track.album,
-        "file_id": track.file_id,
-        "file_type": track.file_type,
-        "r2_url": track.r2_url,
-        "atproto_record_uri": track.atproto_record_uri,
-        "play_count": track.play_count,
-        "created_at": track.created_at.isoformat(),
-    }
+    return TrackResponse.from_track(track)
 
 
 @router.post("/{track_id}/play")

@@ -36,13 +36,25 @@
 			onPlay(track);
 		}}
 	>
-		{#if track.artist_avatar_url}
+		{#if track.image_url}
+			<div class="track-image">
+				<img src={track.image_url} alt="{track.title} artwork" />
+			</div>
+		{:else if track.artist_avatar_url}
 			<a
 				href="/u/{track.artist_handle}"
 				class="track-avatar"
 			>
 				<img src={track.artist_avatar_url} alt={track.artist} />
 			</a>
+		{:else}
+			<div class="track-image-placeholder">
+				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path d="M9 18V5l12-2v13"></path>
+					<circle cx="6" cy="18" r="3"></circle>
+					<circle cx="18" cy="16" r="3"></circle>
+				</svg>
+			</div>
 		{/if}
 		<div class="track-info">
 			<div class="track-title">{track.title}</div>
@@ -140,11 +152,28 @@
 		font-family: inherit;
 	}
 
+	.track-image,
+	.track-image-placeholder {
+		flex-shrink: 0;
+		width: 48px;
+		height: 48px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+		overflow: hidden;
+		background: #1a1a1a;
+		border: 1px solid #282828;
+	}
+
 	.track-avatar {
 		flex-shrink: 0;
 		width: 48px;
 		height: 48px;
 		display: block;
+	}
+
+	.track-avatar {
 		text-decoration: none;
 		transition: transform 0.2s;
 	}
@@ -153,11 +182,19 @@
 		transform: scale(1.05);
 	}
 
+	.track-image img,
 	.track-avatar img {
 		width: 100%;
 		height: 100%;
-		border-radius: 50%;
 		object-fit: cover;
+	}
+
+	.track-image-placeholder {
+		color: #606060;
+	}
+
+	.track-avatar img {
+		border-radius: 50%;
 		border: 2px solid #333;
 		transition: border-color 0.2s;
 	}
