@@ -2,6 +2,7 @@
 	import ShareButton from './ShareButton.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
+	import { toast } from '$lib/toast.svelte';
 
 	interface Props {
 		track: Track;
@@ -16,17 +17,10 @@
 		? `${window.location.origin}/track/${track.id}`
 		: '';
 
-	let showFeedback = $state(false);
-
 	function addToQueue(e: Event) {
 		e.stopPropagation();
 		queue.addTracks([track]);
-
-		// show ephemeral feedback
-		showFeedback = true;
-		setTimeout(() => {
-			showFeedback = false;
-		}, 1000);
+		toast.success('added to queue', 1500);
 	}
 </script>
 
@@ -87,26 +81,21 @@
 		</div>
 	</button>
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
-		<div class="queue-button-container">
-			<button
-				class="action-button"
-				onclick={addToQueue}
-				title="add to queue"
-			>
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-					<!-- plus sign -->
-					<line x1="5" y1="15" x2="5" y2="21"></line>
-					<line x1="2" y1="18" x2="8" y2="18"></line>
-					<!-- list lines -->
-					<line x1="9" y1="6" x2="21" y2="6"></line>
-					<line x1="9" y1="12" x2="21" y2="12"></line>
-					<line x1="9" y1="18" x2="21" y2="18"></line>
-				</svg>
-			</button>
-			{#if showFeedback}
-				<div class="queue-feedback">✓</div>
-			{/if}
-		</div>
+		<button
+			class="action-button"
+			onclick={addToQueue}
+			title="add to queue"
+		>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+				<!-- plus sign -->
+				<line x1="5" y1="15" x2="5" y2="21"></line>
+				<line x1="2" y1="18" x2="8" y2="18"></line>
+				<!-- list lines -->
+				<line x1="9" y1="6" x2="21" y2="6"></line>
+				<line x1="9" y1="12" x2="21" y2="12"></line>
+				<line x1="9" y1="18" x2="21" y2="18"></line>
+			</svg>
+		</button>
 		<ShareButton url={shareUrl} />
 	</div>
 </div>
@@ -306,36 +295,6 @@
 	.action-button svg {
 		width: 16px;
 		height: 16px;
-	}
-
-	.queue-button-container {
-		position: relative;
-	}
-
-	.queue-feedback {
-		position: absolute;
-		top: -8px;
-		left: 50%;
-		transform: translateX(-50%);
-		color: var(--accent);
-		font-size: 0.9rem;
-		pointer-events: none;
-		animation: check-float 1s ease-out forwards;
-	}
-
-	@keyframes check-float {
-		0% {
-			opacity: 0;
-			transform: translateX(-50%) translateY(0);
-		}
-		20% {
-			opacity: 1;
-			transform: translateX(-50%) translateY(-4px);
-		}
-		100% {
-			opacity: 0;
-			transform: translateX(-50%) translateY(-16px);
-		}
 	}
 
 	@media (max-width: 768px) {
