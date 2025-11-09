@@ -39,6 +39,38 @@ from backend.utilities.database import db_session
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tracks", tags=["tracks"])
 
+
+class TrackResponse(dict):
+    """track response schema."""
+
+    @classmethod
+    def from_track(cls, track: Track, pds_url: str | None = None) -> "TrackResponse":
+        """build track response from Track model."""
+        return cls(
+            id=track.id,
+            title=track.title,
+            artist=track.artist.display_name,
+            artist_handle=track.artist.handle,
+            artist_avatar_url=track.artist.avatar_url,
+            album=track.album,
+            file_id=track.file_id,
+            file_type=track.file_type,
+            features=track.features,
+            r2_url=track.r2_url,
+            atproto_record_uri=track.atproto_record_uri,
+            atproto_record_url=(
+                f"{pds_url}/xrpc/com.atproto.repo.getRecord"
+                f"?repo={track.artist_did}&collection={settings.atproto.track_collection}"
+                f"&rkey={track.atproto_record_uri.split('/')[-1]}"
+                if track.atproto_record_uri and pds_url
+                else None
+            ),
+            play_count=track.play_count,
+            created_at=track.created_at.isoformat(),
+            image_url=track.image_url,
+        )
+
+
 # max featured artists per track
 MAX_FEATURES = 5
 
@@ -378,28 +410,7 @@ async def list_tracks(
 
     return {
         "tracks": [
-            {
-                "id": track.id,
-                "title": track.title,
-                "artist": track.artist.display_name,
-                "artist_handle": track.artist.handle,
-                "artist_avatar_url": track.artist.avatar_url,
-                "album": track.album,
-                "file_id": track.file_id,
-                "file_type": track.file_type,
-                "features": track.features,
-                "r2_url": track.r2_url,
-                "atproto_record_uri": track.atproto_record_uri,
-                "atproto_record_url": (
-                    f"{pds_cache[track.artist_did]}/xrpc/com.atproto.repo.getRecord"
-                    f"?repo={track.artist_did}&collection={settings.atproto.track_collection}"
-                    f"&rkey={track.atproto_record_uri.split('/')[-1]}"
-                    if track.atproto_record_uri and pds_cache.get(track.artist_did)
-                    else None
-                ),
-                "play_count": track.play_count,
-                "created_at": track.created_at.isoformat(),
-            }
+            TrackResponse.from_track(track, pds_cache.get(track.artist_did))
             for track in tracks
         ]
     }
@@ -421,25 +432,7 @@ async def list_my_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    return {
-        "tracks": [
-            {
-                "id": track.id,
-                "title": track.title,
-                "artist": track.artist.display_name,
-                "artist_handle": track.artist.handle,
-                "album": track.album,
-                "file_id": track.file_id,
-                "file_type": track.file_type,
-                "features": track.features,
-                "r2_url": track.r2_url,
-                "atproto_record_uri": track.atproto_record_uri,
-                "play_count": track.play_count,
-                "created_at": track.created_at.isoformat(),
-            }
-            for track in tracks
-        ]
-    }
+    return {"tracks": [TrackResponse.from_track(track) for track in tracks]}
 
 
 @router.delete("/{track_id}")
@@ -627,20 +620,7 @@ async def update_track_metadata(
     await db.commit()
     await db.refresh(track)
 
-    return {
-        "id": track.id,
-        "title": track.title,
-        "artist": track.artist.display_name,
-        "artist_handle": track.artist.handle,
-        "artist_avatar_url": track.artist.avatar_url,
-        "album": track.album,
-        "file_id": track.file_id,
-        "file_type": track.file_type,
-        "r2_url": track.r2_url,
-        "atproto_record_uri": track.atproto_record_uri,
-        "play_count": track.play_count,
-        "created_at": track.created_at.isoformat(),
-    }
+    return TrackResponse.from_track(track)
 
 
 @router.get("/{track_id}")
@@ -659,19 +639,7 @@ async def get_track(
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
 
-    return {
-        "id": track.id,
-        "title": track.title,
-        "artist": track.artist.display_name,
-        "artist_handle": track.artist.handle,
-        "album": track.album,
-        "file_id": track.file_id,
-        "file_type": track.file_type,
-        "r2_url": track.r2_url,
-        "atproto_record_uri": track.atproto_record_uri,
-        "play_count": track.play_count,
-        "created_at": track.created_at.isoformat(),
-    }
+    return TrackResponse.from_track(track)
 
 
 @router.post("/{track_id}/play")
