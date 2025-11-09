@@ -26,7 +26,7 @@
 		showFeedback = true;
 		setTimeout(() => {
 			showFeedback = false;
-		}, 1500);
+		}, 1000);
 	}
 </script>
 
@@ -104,7 +104,7 @@
 				</svg>
 			</button>
 			{#if showFeedback}
-				<div class="queue-feedback">added ✓</div>
+				<div class="queue-feedback">✓</div>
 			{/if}
 		</div>
 		<ShareButton url={shareUrl} />
@@ -314,37 +314,33 @@
 
 	.queue-feedback {
 		position: absolute;
-		top: -28px;
+		top: 50%;
 		left: 50%;
-		transform: translateX(-50%);
-		background: var(--accent);
-		color: white;
-		padding: 0.35rem 0.65rem;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		font-weight: 600;
-		white-space: nowrap;
+		transform: translate(-50%, -50%);
+		color: var(--accent);
+		font-size: 1.2rem;
 		pointer-events: none;
-		animation: feedback-dissolve 1.5s ease-out forwards;
-		box-shadow: 0 2px 8px rgba(106, 159, 255, 0.3);
+		animation: check-pulse 1s ease-out forwards;
 	}
 
-	@keyframes feedback-dissolve {
+	@keyframes check-pulse {
 		0% {
 			opacity: 0;
-			transform: translateX(-50%) translateY(5px) scale(0.95);
+			transform: translate(-50%, -50%) scale(0.8);
 		}
-		20% {
+		15% {
 			opacity: 1;
-			transform: translateX(-50%) translateY(0) scale(1);
+			transform: translate(-50%, -50%) scale(1.1);
 		}
-		80% {
+		30% {
+			transform: translate(-50%, -50%) scale(1);
+		}
+		85% {
 			opacity: 1;
-			transform: translateX(-50%) translateY(0) scale(1);
 		}
 		100% {
 			opacity: 0;
-			transform: translateX(-50%) translateY(-5px) scale(0.95);
+			transform: translate(-50%, -50%) scale(0.9);
 		}
 	}
 
