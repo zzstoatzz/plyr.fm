@@ -14,6 +14,25 @@
 	let showQueue = $state(false);
 
 	onMount(() => {
+		// redirect pages.dev domains to plyr.fm unless bypass password is provided
+		if (window.location.hostname.endsWith('.pages.dev')) {
+			const bypassPassword = sessionStorage.getItem('pages_dev_bypass');
+			const BYPASS_SECRET = 'plyr-staging-2024'; // change this to your preferred password
+
+			if (bypassPassword !== BYPASS_SECRET) {
+				const password = prompt('This is a staging environment. Enter password to continue, or click Cancel to go to production:');
+
+				if (password === BYPASS_SECRET) {
+					sessionStorage.setItem('pages_dev_bypass', password);
+				} else {
+					// redirect to production
+					const currentPath = window.location.pathname + window.location.search + window.location.hash;
+					window.location.href = `https://plyr.fm${currentPath}`;
+					return;
+				}
+			}
+		}
+
 		// apply saved accent color from localStorage
 		const savedAccent = localStorage.getItem('accentColor');
 		if (savedAccent) {
