@@ -177,39 +177,33 @@ uvx pdsx --handle zzstoatzzdevlog.bsky.social --password "$ATPROTO_PASSWORD" ls 
 uvx pdsx --handle zzstoatzzdevlog.bsky.social --password "$ATPROTO_PASSWORD" rm at://did:plc:pmz4rx66ijxzke6ka5o3owmg/fm.plyr.track/3m57zgph47z2w
 ```
 
-## gotchas
+## known limitations
 
-1. **flag order matters**: `-r`, `--handle`, `--password`, `--pds` must come BEFORE the command (ls, cat, etc.)
+1. **custom PDS requires explicit flag for unauthenticated reads** ([#30](https://github.com/zzstoatzz/pdsx/issues/30)):
+   ```bash
+   # currently won't work - defaults to bsky.social
+   uvx pdsx -r zzstoatzz.io ls fm.plyr.track
+
+   # workaround: use explicit --pds flag
+   uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
+   ```
+
+2. **cat command requires full AT-URI format** ([#31](https://github.com/zzstoatzz/pdsx/issues/31)):
+   ```bash
+   # currently required
+   uvx pdsx cat at://did:plc:abc/fm.plyr.track/xyz
+
+   # shorthand not yet supported
+   uvx pdsx cat fm.plyr.track/xyz
+   ```
+
+3. **flag order matters**: `-r`, `--handle`, `--password`, `--pds` must come BEFORE the command (ls, cat, etc.)
    ```bash
    # correct
    uvx pdsx -r zzstoatzz.io ls fm.plyr.track
 
    # wrong
    uvx pdsx ls -r zzstoatzz.io fm.plyr.track
-   ```
-
-2. **custom PDS requires explicit flag for unauthenticated reads**:
-   ```bash
-   # won't work - defaults to bsky.social
-   uvx pdsx -r zzstoatzz.io ls fm.plyr.track
-
-   # correct
-   uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
-   ```
-
-3. **authenticated operations auto-discover PDS** (as of v0.0.1a5):
-   ```bash
-   # this works now - no --pds needed
-   uvx pdsx --handle zzstoatzz.io --password "$PASS" ls fm.plyr.track
-   ```
-
-4. **record URIs need full at:// format for cat command**:
-   ```bash
-   # correct
-   uvx pdsx cat at://did:plc:abc/fm.plyr.track/xyz
-
-   # wrong
-   uvx pdsx cat fm.plyr.track/xyz
    ```
 
 ## troubleshooting
