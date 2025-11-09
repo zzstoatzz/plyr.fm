@@ -45,13 +45,14 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem 1rem;
-		background: transparent;
-		border: 1px solid var(--accent);
-		color: var(--accent);
+		background: rgba(10, 10, 10, 0.3);
+		backdrop-filter: blur(4px);
+		border: 1px solid;
 		border-radius: 4px;
 		pointer-events: none;
 		font-size: 0.85rem;
-		font-weight: 500;
+		font-weight: 400;
+		opacity: 0.9;
 	}
 
 	.toast-icon {
@@ -60,7 +61,10 @@
 	}
 
 	.toast-message {
+		max-width: 300px;
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.toast-success {
