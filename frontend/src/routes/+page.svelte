@@ -86,7 +86,7 @@ import { queue } from '$lib/queue.svelte';
 	main {
 		max-width: 800px;
 		margin: 0 auto;
-		padding: 0 1rem 120px;
+		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
 	}
 
 	.tracks h2 {
