@@ -43,7 +43,7 @@
 
 	.toast {
 		display: inline-flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 0.5rem;
 		padding: 0.4rem 0.9rem;
 		background: transparent;
@@ -51,26 +51,29 @@
 		border-radius: 4px;
 		pointer-events: none;
 		font-size: 0.85rem;
+		max-width: 450px;
 	}
 
 	.toast-icon {
 		font-size: 0.8rem;
 		flex-shrink: 0;
 		opacity: 0.7;
+		margin-top: 0.1rem;
 	}
 
 	.toast-prefix {
 		opacity: 0.5;
 		font-weight: 400;
 		font-size: 0.8rem;
+		flex-shrink: 0;
 	}
 
 	.toast-message {
-		max-width: 250px;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+		max-width: 350px;
 		font-weight: 500;
+		word-wrap: break-word;
+		overflow-wrap: break-word;
+		hyphens: auto;
 	}
 
 	.toast-success .toast-icon {
@@ -141,8 +144,12 @@
 			font-size: 0.75rem;
 		}
 
+		.toast {
+			max-width: 90vw;
+		}
+
 		.toast-message {
-			max-width: 200px;
+			max-width: calc(90vw - 5rem);
 		}
 	}
 
