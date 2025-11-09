@@ -40,25 +40,38 @@ class R2Storage:
         )
 
     def save(self, file: BinaryIO, filename: str) -> str:
-        """save audio file to R2 using streaming upload.
+        """save media file to R2 using streaming upload.
 
         uses chunked hashing and boto3's upload_fileobj for constant
         memory usage regardless of file size.
+
+        supports both audio and image files.
         """
         # compute hash in chunks (constant memory)
         file_id = hash_file_chunked(file)[:16]
 
-        # determine file extension
+        # determine file extension and type
         ext = Path(filename).suffix.lower()
-        audio_format = AudioFormat.from_extension(ext)
-        if not audio_format:
-            raise ValueError(
-                f"unsupported file type: {ext}. "
-                f"supported: {AudioFormat.supported_extensions_str()}"
-            )
 
-        # construct s3 key
-        key = f"audio/{file_id}{ext}"
+        # try audio format first
+        audio_format = AudioFormat.from_extension(ext)
+        if audio_format:
+            key = f"audio/{file_id}{ext}"
+            media_type = audio_format.media_type
+        else:
+            # try image format
+            from backend.models.image import ImageFormat
+
+            image_format = ImageFormat.from_filename(filename)
+            if image_format:
+                key = f"images/{file_id}{ext}"
+                media_type = image_format.media_type
+            else:
+                raise ValueError(
+                    f"unsupported file type: {ext}. "
+                    f"supported audio: {AudioFormat.supported_extensions_str()}, "
+                    f"supported image: jpg, jpeg, png, webp, gif"
+                )
 
         # stream upload to R2 (constant memory)
         # file pointer already reset by hash_file_chunked
@@ -66,7 +79,7 @@ class R2Storage:
             Fileobj=file,
             Bucket=self.bucket_name,
             Key=key,
-            ExtraArgs={"ContentType": audio_format.media_type},
+            ExtraArgs={"ContentType": media_type},
         )
 
         return file_id
