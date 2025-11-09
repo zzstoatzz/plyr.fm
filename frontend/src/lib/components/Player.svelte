@@ -176,11 +176,19 @@
 		></audio>
 
 		<div class="player-content">
-			{#if player.currentTrack.image_url}
-				<div class="player-artwork">
+			<div class="player-artwork">
+				{#if player.currentTrack.image_url}
 					<img src={player.currentTrack.image_url} alt="{player.currentTrack.title} artwork" />
-				</div>
-			{/if}
+				{:else}
+					<div class="player-artwork-placeholder">
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M9 18V5l12-2v13"></path>
+							<circle cx="6" cy="18" r="3"></circle>
+							<circle cx="18" cy="16" r="3"></circle>
+						</svg>
+					</div>
+				{/if}
+			</div>
 			<div class="player-info">
 				<div class="player-title" class:scrolling={player.currentTrack.title.length > 30}>
 					<span>{player.currentTrack.title}</span>
@@ -343,6 +351,15 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+	}
+
+	.player-artwork-placeholder {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #666;
 	}
 
 	.player-info {

@@ -424,6 +424,19 @@
 									</div>
 								</div>
 							{:else}
+								<div class="track-artwork">
+									{#if track.image_url}
+										<img src={track.image_url} alt="{track.title} artwork" />
+									{:else}
+										<div class="track-artwork-placeholder">
+											<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+												<path d="M9 18V5l12-2v13"></path>
+												<circle cx="6" cy="18" r="3"></circle>
+												<circle cx="18" cy="16" r="3"></circle>
+											</svg>
+										</div>
+									{/if}
+								</div>
 								<div class="track-info">
 									<div class="track-title">{track.title}</div>
 									<div class="track-meta">
@@ -627,6 +640,7 @@
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
+		gap: 1rem;
 		background: #1a1a1a;
 		border: 1px solid #2a2a2a;
 		border-radius: 6px;
@@ -637,6 +651,31 @@
 	.track-item.editing {
 		flex-direction: column;
 		align-items: stretch;
+	}
+
+	.track-artwork {
+		flex-shrink: 0;
+		width: 48px;
+		height: 48px;
+		border-radius: 4px;
+		overflow: hidden;
+		background: #0f0f0f;
+		border: 1px solid #282828;
+	}
+
+	.track-artwork img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.track-artwork-placeholder {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #555;
 	}
 
 	.track-item:hover {
