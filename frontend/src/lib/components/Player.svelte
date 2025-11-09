@@ -308,8 +308,8 @@
 		right: 0;
 		background: #1a1a1a;
 		border-top: 1px solid #333;
-		padding: 1rem 2rem;
-		padding-bottom: max(1rem, env(safe-area-inset-bottom));
+		padding: 0.75rem 2rem;
+		padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 		z-index: 100;
 	}
 
@@ -318,7 +318,7 @@
 		margin: 0 auto;
 		display: flex;
 		align-items: center;
-		gap: 2rem;
+		gap: 1.5rem;
 	}
 
 	.player-info {
@@ -330,9 +330,10 @@
 	.player-title {
 		font-weight: 600;
 		color: #e8e8e8;
-		margin-bottom: 0.25rem;
+		margin-bottom: 0.15rem;
 		white-space: nowrap;
 		overflow: hidden;
+		font-size: 0.95rem;
 	}
 
 	.player-title.scrolling {
@@ -359,7 +360,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		color: #909090;
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 		white-space: nowrap;
 		overflow: hidden;
 	}
@@ -391,7 +392,7 @@
 		flex: 1;
 		display: flex;
 		align-items: center;
-		gap: 1.5rem;
+		gap: 1rem;
 	}
 
 	.playback-options {
@@ -405,14 +406,19 @@
 		border: 1px solid var(--border-default);
 		color: var(--text-secondary);
 		cursor: pointer;
-		width: 36px;
-		height: 36px;
+		width: 40px;
+		height: 40px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		border-radius: 6px;
 		transition: all 0.2s;
 		position: relative;
+	}
+
+	.option-btn svg {
+		width: 20px;
+		height: 20px;
 	}
 
 	.option-btn:hover {
@@ -430,12 +436,17 @@
 		border: none;
 		color: #e8e8e8;
 		cursor: pointer;
-		padding: 0.5rem;
+		padding: 0.6rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		transition: all 0.2s;
 		border-radius: 50%;
+	}
+
+	.control-btn svg {
+		width: 24px;
+		height: 24px;
 	}
 
 	.control-btn:hover {
@@ -451,7 +462,7 @@
 		flex: 1;
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.75rem;
 	}
 
 	.time {
@@ -469,9 +480,9 @@
 	.volume-control {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 0.5rem;
 		color: #909090;
-		min-width: 150px;
+		min-width: 140px;
 		position: relative;
 	}
 
