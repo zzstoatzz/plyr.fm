@@ -45,13 +45,16 @@
 		display: inline-flex;
 		align-items: flex-start;
 		gap: 0.5rem;
-		padding: 0.4rem 0.9rem;
-		background: transparent;
-		border: none;
-		border-radius: 4px;
+		padding: 0.5rem 1rem;
+		background: rgba(10, 10, 10, 0.6);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		border-radius: 8px;
 		pointer-events: none;
 		font-size: 0.85rem;
 		max-width: 450px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 	}
 
 	.toast-icon {
