@@ -17,11 +17,12 @@
 			<div
 				class="toast toast-{item.type}"
 				role="alert"
-				transition:fade={{ duration: 400 }}
+				transition:fade={{ duration: 600, easing: (t) => t * t }}
 			>
 				<span class="toast-icon" aria-hidden="true">
 					{icons[item.type]}
 				</span>
+				<span class="toast-prefix">queued</span>
 				<span class="toast-message">{item.message}</span>
 			</div>
 		{/each}
@@ -44,47 +45,80 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.5rem 1rem;
-		background: rgba(10, 10, 10, 0.3);
-		backdrop-filter: blur(4px);
-		border: 1px solid;
+		padding: 0.4rem 0.9rem;
+		background: transparent;
+		border: none;
 		border-radius: 4px;
 		pointer-events: none;
 		font-size: 0.85rem;
-		font-weight: 400;
-		opacity: 0.9;
 	}
 
 	.toast-icon {
-		font-size: 0.85rem;
+		font-size: 0.8rem;
 		flex-shrink: 0;
+		opacity: 0.7;
+	}
+
+	.toast-prefix {
+		opacity: 0.5;
+		font-weight: 400;
+		font-size: 0.8rem;
 	}
 
 	.toast-message {
-		max-width: 300px;
+		max-width: 250px;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		font-weight: 500;
 	}
 
-	.toast-success {
-		border-color: var(--success);
+	.toast-success .toast-icon {
 		color: var(--success);
 	}
 
-	.toast-error {
-		border-color: var(--error);
+	.toast-success .toast-prefix {
+		color: var(--text-tertiary);
+	}
+
+	.toast-success .toast-message {
+		color: var(--text-primary);
+	}
+
+	.toast-error .toast-icon {
 		color: var(--error);
 	}
 
-	.toast-info {
-		border-color: var(--accent);
+	.toast-error .toast-prefix {
+		color: var(--text-tertiary);
+	}
+
+	.toast-error .toast-message {
+		color: var(--text-primary);
+	}
+
+	.toast-info .toast-icon {
 		color: var(--accent);
 	}
 
-	.toast-warning {
-		border-color: var(--warning);
+	.toast-info .toast-prefix {
+		color: var(--text-tertiary);
+	}
+
+	.toast-info .toast-message {
+		color: var(--text-primary);
+	}
+
+	.toast-warning .toast-icon {
 		color: var(--warning);
+	}
+
+	.toast-warning .toast-prefix {
+		color: var(--text-tertiary);
+	}
+
+	.toast-warning .toast-message {
+		color: var(--text-primary);
 	}
 
 	/* mobile responsiveness */
@@ -95,12 +129,20 @@
 		}
 
 		.toast {
-			padding: 0.4rem 0.75rem;
+			padding: 0.35rem 0.7rem;
 			font-size: 0.8rem;
 		}
 
 		.toast-icon {
-			font-size: 0.8rem;
+			font-size: 0.75rem;
+		}
+
+		.toast-prefix {
+			font-size: 0.75rem;
+		}
+
+		.toast-message {
+			max-width: 200px;
 		}
 	}
 
