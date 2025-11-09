@@ -15,6 +15,8 @@ import { queue } from '$lib/queue.svelte';
 	let tracks = $derived(tracksCache.tracks);
 	let loadingTracks = $derived(tracksCache.loading);
 	let hasTracks = $derived(tracks.length > 0);
+	// only show loading if we don't have cached data
+	let showLoading = $derived(loadingTracks && !hasTracks);
 
 	onMount(async () => {
 		// check authentication (non-blocking)
@@ -56,7 +58,7 @@ import { queue } from '$lib/queue.svelte';
 <main>
 	<section class="tracks">
 		<h2>latest tracks</h2>
-		{#if loadingTracks}
+		{#if showLoading}
 			<p class="loading-text">loading tracks...</p>
 		{:else if !hasTracks}
 			<p class="empty">no tracks yet</p>
