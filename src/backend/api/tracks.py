@@ -93,6 +93,7 @@ async def _process_upload_background(
 
         # save image if provided
         image_id = None
+        image_url = None
         if image_data and image_filename:
             upload_tracker.update_status(
                 upload_id, UploadStatus.PROCESSING, "saving image..."
@@ -105,6 +106,12 @@ async def _process_upload_background(
                     image_obj = BytesIO(image_data)
                     # save with images/ prefix to namespace it
                     image_id = storage.save(image_obj, f"images/{image_filename}")
+                    # get R2 URL for image if using R2 storage
+                    if settings.storage.backend == "r2":
+                        from backend.storage.r2 import R2Storage
+
+                        if isinstance(storage, R2Storage):
+                            image_url = storage.get_url(image_id)
                 except Exception as e:
                     logger.warning(f"failed to save image: {e}", exc_info=True)
                     # continue without image - it's optional
@@ -161,6 +168,7 @@ async def _process_upload_background(
                         album=album,
                         duration=None,
                         features=featured_artists if featured_artists else None,
+                        image_url=image_url,
                     )
                     if result:
                         atproto_uri, atproto_cid = result

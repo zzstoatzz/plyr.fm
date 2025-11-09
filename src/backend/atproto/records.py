@@ -103,6 +103,7 @@ async def create_track_record(
     album: str | None = None,
     duration: int | None = None,
     features: list[dict] | None = None,
+    image_url: str | None = None,
 ) -> tuple[str, str] | None:
     """Create a track record on the user's PDS using the configured collection.
 
@@ -115,6 +116,7 @@ async def create_track_record(
         album: optional album name
         duration: optional duration in seconds
         features: optional list of featured artists [{did, handle, display_name, avatar_url}]
+        image_url: optional cover art image URL
 
     returns:
         tuple of (record_uri, record_cid)
@@ -158,6 +160,8 @@ async def create_track_record(
             }
             for f in features
         ]
+    if image_url:
+        record["imageUrl"] = image_url
 
     # make authenticated request to create record
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
