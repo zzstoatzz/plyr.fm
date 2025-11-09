@@ -119,8 +119,6 @@ def build_track_record(
     returns:
         record dict ready for ATProto
     """
-    from backend.config import settings
-
     record: dict[str, Any] = {
         "$type": settings.atproto.track_collection,
         "title": title,

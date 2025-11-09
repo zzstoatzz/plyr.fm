@@ -28,9 +28,12 @@ from backend._internal import require_artist_profile, require_auth
 from backend._internal.uploads import UploadStatus, upload_tracker
 from backend.atproto import create_track_record
 from backend.atproto.handles import resolve_handle
+from backend.atproto.records import build_track_record, update_record
 from backend.config import settings
 from backend.models import Artist, AudioFormat, Track, get_db
+from backend.models.image import ImageFormat
 from backend.storage import storage
+from backend.storage.r2 import R2Storage
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -98,8 +101,6 @@ async def _process_upload_background(
             upload_tracker.update_status(
                 upload_id, UploadStatus.PROCESSING, "saving image..."
             )
-            from backend.models.image import ImageFormat
-
             image_format = ImageFormat.from_filename(image_filename)
             if image_format:
                 try:
@@ -107,11 +108,10 @@ async def _process_upload_background(
                     # save with images/ prefix to namespace it
                     image_id = storage.save(image_obj, f"images/{image_filename}")
                     # get R2 URL for image if using R2 storage
-                    if settings.storage.backend == "r2":
-                        from backend.storage.r2 import R2Storage
-
-                        if isinstance(storage, R2Storage):
-                            image_url = storage.get_url(image_id)
+                    if settings.storage.backend == "r2" and isinstance(
+                        storage, R2Storage
+                    ):
+                        image_url = storage.get_url(image_id)
                 except Exception as e:
                     logger.warning(f"failed to save image: {e}", exc_info=True)
                     # continue without image - it's optional
@@ -569,8 +569,6 @@ async def update_track_metadata(
     # handle image update
     image_url = None
     if image and image.filename:
-        from backend.models.image import ImageFormat
-
         image_format = ImageFormat.from_filename(image.filename)
         if not image_format:
             raise HTTPException(
@@ -584,11 +582,8 @@ async def update_track_metadata(
         image_id = storage.save(image_obj, f"images/{image.filename}")
 
         # get R2 URL for image if using R2 storage
-        if settings.storage.backend == "r2":
-            from backend.storage.r2 import R2Storage
-
-            if isinstance(storage, R2Storage):
-                image_url = storage.get_url(image_id)
+        if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
+            image_url = storage.get_url(image_id)
 
         # delete old image if exists
         if track.image_id:
@@ -601,8 +596,6 @@ async def update_track_metadata(
     if track.atproto_record_uri and (
         title is not None or album is not None or features is not None or image_url
     ):
-        from backend.atproto.records import build_track_record, update_record
-
         try:
             # build updated record with all current values
             updated_record = build_track_record(
