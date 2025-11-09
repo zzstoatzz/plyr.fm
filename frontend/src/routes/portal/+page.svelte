@@ -391,6 +391,12 @@
 										</div>
 										<div class="edit-field-group">
 											<label for="edit-image" class="edit-label">artwork (optional)</label>
+											{#if track.image_url && !editImageFile}
+												<div class="current-image-preview">
+													<img src={track.image_url} alt="current artwork" />
+													<span class="current-image-label">current artwork</span>
+												</div>
+											{/if}
 											<input
 												id="edit-image"
 												type="file"
@@ -402,7 +408,7 @@
 												class="edit-input"
 											/>
 											{#if editImageFile}
-												<p class="file-info">{editImageFile.name}</p>
+												<p class="file-info">{editImageFile.name} (will replace current)</p>
 											{/if}
 										</div>
 									</div>
@@ -818,6 +824,29 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 0.9rem;
+	}
+
+	.current-image-preview {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.5rem;
+		background: #0a0a0a;
+		border: 1px solid #333;
+		border-radius: 4px;
+		margin-bottom: 0.5rem;
+	}
+
+	.current-image-preview img {
+		width: 48px;
+		height: 48px;
+		border-radius: 4px;
+		object-fit: cover;
+	}
+
+	.current-image-label {
+		color: #888;
+		font-size: 0.85rem;
 	}
 
 	.edit-input:focus {
