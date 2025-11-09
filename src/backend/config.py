@@ -164,7 +164,12 @@ class StorageSettings(RelaySettingsSection):
     r2_bucket: str = Field(
         default="",
         validation_alias="R2_BUCKET",
-        description="R2 bucket name",
+        description="R2 bucket name for audio files",
+    )
+    r2_image_bucket: str = Field(
+        default="",
+        validation_alias="R2_IMAGE_BUCKET",
+        description="R2 bucket name for image files",
     )
     r2_endpoint_url: str = Field(
         default="",
@@ -174,7 +179,12 @@ class StorageSettings(RelaySettingsSection):
     r2_public_bucket_url: str = Field(
         default="",
         validation_alias="R2_PUBLIC_BUCKET_URL",
-        description="R2 public bucket URL",
+        description="R2 public bucket URL for audio files",
+    )
+    r2_public_image_bucket_url: str = Field(
+        default="",
+        validation_alias="R2_PUBLIC_IMAGE_BUCKET_URL",
+        description="R2 public bucket URL for image files",
     )
 
 

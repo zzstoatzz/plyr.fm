@@ -6,9 +6,9 @@ relay uses a simple three-tier deployment strategy: development → staging → 
 
 | environment | trigger | backend app | backend URL | database | frontend | storage |
 |-------------|---------|-------------|-------------|----------|----------|---------|
-| **development** | local | local server | localhost:8000 | relay-dev (neon) | localhost:5173 | relay-dev (r2) |
-| **staging** | push to main | relay-api-staging | relay-api-staging.fly.dev | relay-staging (neon) | cloudflare pages (main) | relay-stg (r2) |
-| **production** | github release | relay-api | relay-api.fly.dev | relay (neon) | cloudflare pages (main) | relay (r2) |
+| **development** | local | local server | localhost:8000 | relay-dev (neon) | localhost:5173 | audio-dev, images-dev (r2) |
+| **staging** | push to main | relay-api-staging | relay-api-staging.fly.dev | relay-staging (neon) | cloudflare pages (main) | audio-staging, images-staging (r2) |
+| **production** | github release | relay-api | relay-api.fly.dev | relay (neon) | cloudflare pages (main) | audio-prod, images-prod (r2) |
 
 ## workflow
 
@@ -42,7 +42,7 @@ connects to `relay-dev` neon database and uses `app.relay-dev` atproto namespace
 **testing**:
 - backend: `https://relay-api-staging.fly.dev/docs`
 - database: `relay-staging` (neon)
-- storage: `relay-stg` (r2)
+- storage: `audio-staging`, `images-staging` (r2)
 - atproto namespace: `app.relay-staging`
 
 ### production deployment (manual)
@@ -72,7 +72,7 @@ or via github UI: releases → draft new release → create tag → publish
 - frontend: `https://plyr.fm` or `https://relay-4i6.pages.dev`
 - backend: `https://relay-api.fly.dev/docs`
 - database: `relay` (neon)
-- storage: `relay` (r2)
+- storage: `audio-prod`, `images-prod` (r2)
 - atproto namespace: `app.relay`
 
 ## configuration files
@@ -156,7 +156,7 @@ if a migration fails:
 - neon staging: free tier
 - neon production: free tier
 - cloudflare pages: free
-- cloudflare R2: ~$0.16/month (shared across all environments)
+- cloudflare R2: ~$0.16/month (6 buckets: audio-dev, audio-staging, audio-prod, images-dev, images-staging, images-prod)
 
 ## benefits
 

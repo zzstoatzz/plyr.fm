@@ -27,9 +27,11 @@ settings.database.url                          # from DATABASE_URL
 
 # storage settings (cloudflare r2)
 settings.storage.backend                       # from STORAGE_BACKEND
-settings.storage.r2_bucket                     # from R2_BUCKET
+settings.storage.r2_bucket                     # from R2_BUCKET (audio files)
+settings.storage.r2_image_bucket               # from R2_IMAGE_BUCKET (image files)
 settings.storage.r2_endpoint_url               # from R2_ENDPOINT_URL
-settings.storage.r2_public_bucket_url          # from R2_PUBLIC_BUCKET_URL
+settings.storage.r2_public_bucket_url          # from R2_PUBLIC_BUCKET_URL (audio files)
+settings.storage.r2_public_image_bucket_url    # from R2_PUBLIC_IMAGE_BUCKET_URL (image files)
 settings.storage.aws_access_key_id             # from AWS_ACCESS_KEY_ID
 settings.storage.aws_secret_access_key         # from AWS_SECRET_ACCESS_KEY
 
@@ -71,9 +73,11 @@ OAUTH_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
 
 # storage
 STORAGE_BACKEND=r2  # or "filesystem"
-R2_BUCKET=your-bucket
+R2_BUCKET=your-audio-bucket
+R2_IMAGE_BUCKET=your-image-bucket
 R2_ENDPOINT_URL=https://xxx.r2.cloudflarestorage.com
-R2_PUBLIC_BUCKET_URL=https://pub-xxx.r2.dev
+R2_PUBLIC_BUCKET_URL=https://pub-xxx.r2.dev  # for audio files
+R2_PUBLIC_IMAGE_BUCKET_URL=https://pub-xxx.r2.dev  # for image files
 AWS_ACCESS_KEY_ID=your-r2-access-key
 AWS_SECRET_ACCESS_KEY=your-r2-secret
 ```
