@@ -20,7 +20,7 @@
 	function addToQueue(e: Event) {
 		e.stopPropagation();
 		queue.addTracks([track]);
-		toast.success('added to queue', 1500);
+		toast.success('added', 1500);
 	}
 </script>
 

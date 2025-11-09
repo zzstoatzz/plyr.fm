@@ -17,7 +17,7 @@
 			<div
 				class="toast toast-{item.type}"
 				role="alert"
-				transition:fly={{ y: -20, duration: 300 }}
+				transition:fly={{ y: 20, duration: 300 }}
 			>
 				<span class="toast-icon" aria-hidden="true">
 					{icons[item.type]}
@@ -40,8 +40,8 @@
 <style>
 	.toast-container {
 		position: fixed;
-		top: 1rem;
-		right: 1rem;
+		bottom: 1rem;
+		left: 1rem;
 		z-index: 9999;
 		display: flex;
 		flex-direction: column;
@@ -137,14 +137,29 @@
 	/* mobile responsiveness */
 	@media (max-width: 768px) {
 		.toast-container {
-			top: 4.5rem; /* below header */
-			left: 1rem;
-			right: 1rem;
+			bottom: 5rem; /* above player */
+			left: 0.75rem;
+			right: 0.75rem;
 		}
 
 		.toast {
 			min-width: unset;
 			max-width: unset;
+			padding: 0.75rem;
+			font-size: 0.85rem;
+			gap: 0.5rem;
+		}
+
+		.toast-icon {
+			width: 16px;
+			height: 16px;
+			font-size: 0.9rem;
+		}
+
+		.toast-dismiss {
+			width: 16px;
+			height: 16px;
+			font-size: 1.25rem;
 		}
 	}
 
