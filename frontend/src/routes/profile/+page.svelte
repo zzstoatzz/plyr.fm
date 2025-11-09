@@ -182,7 +182,7 @@
 	main {
 		max-width: 600px;
 		margin: 0 auto;
-		padding: 0 1rem 2rem;
+		padding: 0 1rem calc(var(--player-height, 120px) + 2rem + env(safe-area-inset-bottom, 0px));
 	}
 
 	.profile-header {

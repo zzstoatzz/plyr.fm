@@ -327,6 +327,9 @@
 		font-size: 2.5rem;
 		margin: 0 0 0.5rem 0;
 		color: #e8e8e8;
+		word-wrap: break-word;
+		overflow-wrap: break-word;
+		hyphens: auto;
 	}
 
 	.handle {
@@ -512,6 +515,8 @@
 
 		.artist-info h1 {
 			font-size: 2rem;
+			word-wrap: break-word;
+			overflow-wrap: break-word;
 		}
 
 		.analytics-grid {
