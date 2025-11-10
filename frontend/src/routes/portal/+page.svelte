@@ -340,7 +340,10 @@
 		</div>
 
 		<section class="profile-section">
-			<h2>profile settings</h2>
+			<div class="section-header">
+				<h2>profile settings</h2>
+				<a href="/u/{user.handle}" class="view-profile-link">view public profile</a>
+			</div>
 
 			{#if profileSuccess}
 				<div class="message success">{profileSuccess}</div>
@@ -652,6 +655,35 @@
 	.upload-section h2 {
 		font-size: 1.5rem;
 		margin-bottom: 1.5rem;
+	}
+
+	.section-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1.5rem;
+	}
+
+	.section-header h2 {
+		margin-bottom: 0;
+	}
+
+	.view-profile-link {
+		color: var(--text-secondary);
+		text-decoration: none;
+		font-size: 0.9rem;
+		padding: 0.4rem 0.75rem;
+		background: #1a1a1a;
+		border-radius: 6px;
+		border: 1px solid #333;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+
+	.view-profile-link:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+		background: #222;
 	}
 
 	form {
