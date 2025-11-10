@@ -25,7 +25,7 @@
 				{#if $page.url.pathname !== '/portal'}
 					<a href="/portal" class="nav-link">portal</a>
 				{/if}
-				<a href="/profile" class="user-handle">@{user?.handle}</a>
+				<a href="/u/{user?.handle}" class="user-handle">@{user?.handle}</a>
 				<SettingsMenu />
 				<button onclick={onLogout} class="btn-logout">logout</button>
 			{:else}

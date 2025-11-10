@@ -28,19 +28,27 @@
 	let tracks: Track[] = [];
 	let loadingTracks = false;
 
-	// form fields
+	// upload form fields
 	let title = '';
 	let album = '';
 	let file: File | null = null;
 	let imageFile: File | null = null;
 	let featuredArtists: FeaturedArtist[] = [];
 
-	// editing state
+	// track editing state
 	let editingTrackId: number | null = null;
 	let editTitle = '';
 	let editAlbum = '';
 	let editFeaturedArtists: FeaturedArtist[] = [];
 	let editImageFile: File | null = null;
+
+	// profile editing state
+	let displayName = '';
+	let bio = '';
+	let avatarUrl = '';
+	let savingProfile = false;
+	let profileSuccess = '';
+	let profileError = '';
 
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
@@ -86,6 +94,7 @@
 			if (response.ok) {
 				user = await response.json();
 				await loadMyTracks();
+				await loadArtistProfile();
 			} else if (response.status === 401) {
 				// only clear session on explicit 401 (unauthorized)
 				localStorage.removeItem('session_id');
@@ -121,6 +130,60 @@
 			console.error('failed to load tracks:', e);
 		} finally {
 			loadingTracks = false;
+		}
+	}
+
+	async function loadArtistProfile() {
+		const sessionId = localStorage.getItem('session_id');
+		try {
+			const response = await fetch(`${API_URL}/artists/me`, {
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
+			});
+			if (response.ok) {
+				const artist = await response.json();
+				displayName = artist.display_name;
+				bio = artist.bio || '';
+				avatarUrl = artist.avatar_url || '';
+			}
+		} catch (e) {
+			console.error('failed to load artist profile:', e);
+		}
+	}
+
+	async function saveProfile(e: SubmitEvent) {
+		e.preventDefault();
+		savingProfile = true;
+		profileError = '';
+		profileSuccess = '';
+
+		const sessionId = localStorage.getItem('session_id');
+		try {
+			const response = await fetch(`${API_URL}/artists/me`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${sessionId}`
+				},
+				body: JSON.stringify({
+					display_name: displayName,
+					bio: bio || null,
+					avatar_url: avatarUrl || null
+				})
+			});
+
+			if (response.ok) {
+				profileSuccess = 'profile updated successfully!';
+				setTimeout(() => { profileSuccess = ''; }, 3000);
+			} else {
+				const errorData = await response.json();
+				profileError = errorData.detail || 'failed to update profile';
+			}
+		} catch (e) {
+			profileError = `network error: ${e instanceof Error ? e.message : 'unknown error'}`;
+		} finally {
+			savingProfile = false;
 		}
 	}
 
@@ -275,6 +338,64 @@
 		<div class="portal-header">
 			<h2>artist portal</h2>
 		</div>
+
+		<section class="profile-section">
+			<h2>profile settings</h2>
+
+			{#if profileSuccess}
+				<div class="message success">{profileSuccess}</div>
+			{/if}
+
+			{#if profileError}
+				<div class="message error">{profileError}</div>
+			{/if}
+
+			<form onsubmit={saveProfile}>
+				<div class="form-group">
+					<label for="display-name">artist name *</label>
+					<input
+						id="display-name"
+						type="text"
+						bind:value={displayName}
+						required
+						disabled={savingProfile}
+						placeholder="your artist name"
+					/>
+					<p class="hint">this is shown on all your tracks</p>
+				</div>
+
+				<div class="form-group">
+					<label for="bio">bio (optional)</label>
+					<textarea
+						id="bio"
+						bind:value={bio}
+						disabled={savingProfile}
+						placeholder="tell us about your music..."
+						rows="4"
+					></textarea>
+				</div>
+
+				<div class="form-group">
+					<label for="avatar">avatar url (optional)</label>
+					<input
+						id="avatar"
+						type="url"
+						bind:value={avatarUrl}
+						disabled={savingProfile}
+						placeholder="https://example.com/avatar.jpg"
+					/>
+					{#if avatarUrl}
+						<div class="avatar-preview">
+							<img src={avatarUrl} alt="avatar preview" />
+						</div>
+					{/if}
+				</div>
+
+				<button type="submit" disabled={savingProfile || !displayName}>
+					{savingProfile ? 'saving...' : 'save profile'}
+				</button>
+			</form>
+		</section>
 
 		<section class="upload-section">
 			<h2>upload track</h2>
@@ -522,7 +643,12 @@
 		margin: 0;
 	}
 
+	.profile-section,
+	.upload-section {
+		margin-bottom: 3rem;
+	}
 
+	.profile-section h2,
 	.upload-section h2 {
 		font-size: 1.5rem;
 		margin-bottom: 1.5rem;
@@ -565,6 +691,69 @@
 	input[type='text']:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	textarea {
+		width: 100%;
+		padding: 0.75rem;
+		background: #0a0a0a;
+		border: 1px solid #333;
+		border-radius: 4px;
+		color: white;
+		font-size: 1rem;
+		font-family: inherit;
+		transition: all 0.2s;
+		resize: vertical;
+		min-height: 100px;
+	}
+
+	textarea:focus {
+		outline: none;
+		border-color: #3a7dff;
+	}
+
+	textarea:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.hint {
+		margin-top: 0.5rem;
+		font-size: 0.85rem;
+		color: #666;
+	}
+
+	.message {
+		padding: 1rem;
+		border-radius: 4px;
+		margin-bottom: 1.5rem;
+	}
+
+	.message.success {
+		background: rgba(46, 160, 67, 0.1);
+		border: 1px solid rgba(46, 160, 67, 0.3);
+		color: #5ce87b;
+	}
+
+	.message.error {
+		background: rgba(233, 69, 96, 0.1);
+		border: 1px solid rgba(233, 69, 96, 0.3);
+		color: #ff6b6b;
+	}
+
+	.avatar-preview {
+		margin-top: 1rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.avatar-preview img {
+		width: 64px;
+		height: 64px;
+		border-radius: 50%;
+		object-fit: cover;
+		border: 2px solid #333;
 	}
 
 	input[type='file'] {
