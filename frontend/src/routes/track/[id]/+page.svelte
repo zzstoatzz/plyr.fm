@@ -124,10 +124,10 @@ import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="music.song" />
-	<meta property="og:title" content="{data.track.title} by {data.track.artist}" />
+	<meta property="og:title" content="{data.track.title}" />
 	<meta
 		property="og:description"
-		content={`listen to ${data.track.title} by ${data.track.artist} on ${APP_NAME}`}
+		content="{data.track.artist}{data.track.album ? ` • ${data.track.album}` : ''}"
 	/>
 	<meta
 		property="og:url"
@@ -140,6 +140,8 @@ import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	{/if}
 	{#if data.track.image_url}
 		<meta property="og:image" content="{data.track.image_url}" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="1200" />
 	{/if}
 	{#if data.track.r2_url}
 		<meta property="og:audio" content="{data.track.r2_url}" />
@@ -147,11 +149,11 @@ import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	{/if}
 
 	<!-- Twitter -->
-	<meta name="twitter:card" content="summary" />
-	<meta name="twitter:title" content="{data.track.title} by {data.track.artist}" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="{data.track.title}" />
 	<meta
 		name="twitter:description"
-		content={`listen to ${data.track.title} by ${data.track.artist} on ${APP_NAME}`}
+		content="{data.track.artist}{data.track.album ? ` • ${data.track.album}` : ''}"
 	/>
 	{#if data.track.image_url}
 		<meta name="twitter:image" content="{data.track.image_url}" />
