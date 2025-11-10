@@ -14,8 +14,12 @@
 	let { children } = $props();
 	let showQueue = $state(false);
 
-	// only show default meta tags when not on a track page
-	let isTrackPage = $derived($page.url.pathname.startsWith('/track/'));
+	// only show default meta tags when not on a content page (track/artist/etc)
+	// content pages provide their own specific meta tags
+	let isContentPage = $derived(
+		$page.url.pathname.startsWith('/track/') ||
+		$page.url.pathname.startsWith('/u/')
+	);
 
 	onMount(() => {
 		// redirect pages.dev domains to plyr.fm unless bypass password is provided
@@ -68,8 +72,8 @@
 <svelte:head>
 	<link rel="icon" href={logo} />
 
-	{#if !isTrackPage}
-		<!-- default meta tags for link previews (not on track pages) -->
+	{#if !isContentPage}
+		<!-- default meta tags for link previews (not on content pages) -->
 		<title>{APP_NAME} - {APP_TAGLINE}</title>
 		<meta
 			name="description"
