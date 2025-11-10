@@ -194,12 +194,18 @@
 					<span>{player.currentTrack.title}</span>
 				</div>
 				<div class="player-metadata">
-					<a href="/u/{player.currentTrack.artist_handle}" class="player-artist-link">
-						{player.currentTrack.artist}
+					<a
+						href="/u/{player.currentTrack.artist_handle}"
+						class="player-artist-link"
+						class:scrolling={player.currentTrack.artist.length > 25}
+					>
+						<span>{player.currentTrack.artist}</span>
 					</a>
 					{#if player.currentTrack.album}
 						<span class="metadata-separator">•</span>
-						<span class="player-album">{player.currentTrack.album}</span>
+						<span class="player-album" class:scrolling={player.currentTrack.album.length > 25}>
+							<span>{player.currentTrack.album}</span>
+						</span>
 					{/if}
 				</div>
 			</div>
@@ -366,23 +372,31 @@
 		min-width: 200px;
 		max-width: 300px;
 		overflow: hidden;
+		min-width: 0; /* critical for text overflow in flex/grid */
 	}
 
 	.player-title {
 		font-weight: 600;
 		color: #e8e8e8;
 		margin-bottom: 0.15rem;
-		white-space: nowrap;
-		overflow: hidden;
 		font-size: 0.95rem;
+		overflow: hidden;
+		position: relative;
 	}
 
 	.player-title.scrolling {
-		overflow: visible;
+		/* keep overflow hidden to constrain within grid */
+		overflow: hidden;
+		mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
+		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
+	}
+
+	.player-title span {
+		display: inline-block;
+		white-space: nowrap;
 	}
 
 	.player-title.scrolling span {
-		display: inline-block;
 		padding-right: 2rem;
 		animation: scroll-text 10s linear infinite;
 	}
@@ -402,15 +416,33 @@
 		gap: 0.5rem;
 		color: #909090;
 		font-size: 0.85rem;
-		white-space: nowrap;
 		overflow: hidden;
+		min-width: 0; /* critical for text overflow */
 	}
 
 	.player-artist-link {
 		color: #909090;
 		text-decoration: none;
 		transition: color 0.2s;
-		flex-shrink: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		position: relative;
+	}
+
+	.player-artist-link.scrolling {
+		overflow: hidden;
+		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
+		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
+	}
+
+	.player-artist-link span {
+		display: inline-block;
+		white-space: nowrap;
+	}
+
+	.player-artist-link.scrolling span {
+		padding-right: 1.5rem;
+		animation: scroll-text 8s linear infinite;
 	}
 
 	.player-artist-link:hover {
@@ -424,9 +456,26 @@
 
 	.player-album {
 		color: #808080;
-		overflow: hidden;
-		text-overflow: ellipsis;
 		white-space: nowrap;
+		overflow: hidden;
+		position: relative;
+		min-width: 0;
+	}
+
+	.player-album.scrolling {
+		overflow: hidden;
+		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
+		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
+	}
+
+	.player-album span {
+		display: inline-block;
+		white-space: nowrap;
+	}
+
+	.player-album.scrolling span {
+		padding-right: 1.5rem;
+		animation: scroll-text 8s linear infinite;
 	}
 
 	.player-controls {
@@ -582,6 +631,9 @@
 		border-radius: 50%;
 		margin-top: -5px;
 		transition: all 0.2s;
+		/* increase interaction area without changing visual size */
+		box-shadow: 0 0 0 8px transparent;
+		cursor: pointer;
 	}
 
 	input[type="range"]::-webkit-slider-thumb:hover {
@@ -618,6 +670,9 @@
 		border-radius: 50%;
 		border: none;
 		transition: all 0.2s;
+		/* increase interaction area without changing visual size */
+		box-shadow: 0 0 0 8px transparent;
+		cursor: pointer;
 	}
 
 	input[type="range"]::-moz-range-thumb:hover {
@@ -675,6 +730,14 @@
 		.player-metadata {
 			font-size: 0.8rem;
 			justify-content: flex-start;
+			overflow: hidden;
+			min-width: 0;
+		}
+
+		.player-artist-link,
+		.player-album {
+			overflow: hidden;
+			min-width: 0;
 		}
 
 		/* rearrange controls for compact mobile layout */
@@ -694,6 +757,8 @@
 		.player-info {
 			grid-row: 1;
 			grid-column: 2 / 4;
+			min-width: 0; /* critical for text overflow in grid */
+			overflow: hidden;
 		}
 
 		.control-btn {
