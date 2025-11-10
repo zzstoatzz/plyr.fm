@@ -16,15 +16,15 @@
 </script>
 
 <svelte:head>
-	<title>{data.track.title} by {data.track.artist} - {APP_NAME}</title>
+	<title>{data.track.title} - {data.track.artist}{data.track.album ? ` • ${data.track.album}` : ''}</title>
 	<meta
 		name="description"
-		content={`listen to ${data.track.title} by ${data.track.artist} on ${APP_NAME}`}
+		content="{data.track.title} by {data.track.artist}{data.track.album ? ` from ${data.track.album}` : ''} - listen on {APP_NAME}"
 	/>
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="music.song" />
-	<meta property="og:title" content="{data.track.title}" />
+	<meta property="og:title" content="{data.track.title} - {data.track.artist}" />
 	<meta
 		property="og:description"
 		content="{data.track.artist}{data.track.album ? ` • ${data.track.album}` : ''}"

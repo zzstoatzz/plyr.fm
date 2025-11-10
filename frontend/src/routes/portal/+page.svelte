@@ -329,7 +329,7 @@
 					<input
 						id="image-input"
 						type="file"
-						accept="image/jpeg,image/png,image/webp,image/gif"
+						accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
 						onchange={(e) => {
 							const target = e.target as HTMLInputElement;
 							imageFile = target.files?.[0] ?? null;
@@ -400,7 +400,7 @@
 											<input
 												id="edit-image"
 												type="file"
-												accept="image/jpeg,image/png,image/webp,image/gif"
+												accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
 												onchange={(e) => {
 													const target = e.target as HTMLInputElement;
 													editImageFile = target.files?.[0] ?? null;
