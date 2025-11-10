@@ -637,47 +637,115 @@
 
 	@media (max-width: 768px) {
 		.player {
-			padding: 1rem;
-			padding-bottom: max(1rem, env(safe-area-inset-bottom));
+			padding: 0.5rem 1rem;
+			padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 		}
 
 		.player-content {
 			flex-direction: column;
-			gap: 1rem;
+			gap: 0.75rem;
+		}
+
+		/* top row: artwork + info + prev/play/next */
+		.player-artwork,
+		.player-info,
+		.player-controls {
+			display: contents;
 		}
 
 		.player-artwork {
-			width: 80px;
-			height: 80px;
+			width: 48px;
+			height: 48px;
+			align-self: center;
 		}
 
 		.player-info {
-			min-width: 100%;
-			max-width: 100%;
-			text-align: center;
+			min-width: 0;
+			max-width: none;
+			text-align: left;
+			flex: 1;
+			align-self: center;
+		}
+
+		.player-title {
+			font-size: 0.9rem;
+			margin-bottom: 0.1rem;
 		}
 
 		.player-metadata {
-			justify-content: center;
+			font-size: 0.8rem;
+			justify-content: flex-start;
 		}
 
-		.player-controls {
-			width: 100%;
-			flex-wrap: wrap;
-			justify-content: center;
-			gap: 0.75rem 1rem;
+		/* rearrange controls for compact mobile layout */
+		.player-content {
+			display: grid;
+			grid-template-columns: 48px 1fr auto auto auto auto;
+			grid-template-rows: auto auto;
+			gap: 0.5rem 0.75rem;
+			align-items: center;
+		}
+
+		.player-artwork {
+			grid-row: 1;
+			grid-column: 1;
+		}
+
+		.player-info {
+			grid-row: 1;
+			grid-column: 2 / 4;
+		}
+
+		.control-btn {
+			grid-row: 1;
+			padding: 0.5rem;
+		}
+
+		.control-btn:nth-of-type(1) {
+			grid-column: 4;
+		}
+
+		.control-btn.play-pause {
+			grid-column: 5;
+		}
+
+		.control-btn:nth-of-type(3) {
+			grid-column: 6;
+		}
+
+		.control-btn svg {
+			width: 28px;
+			height: 28px;
+		}
+
+		.control-btn.play-pause svg {
+			width: 32px;
+			height: 32px;
 		}
 
 		.playback-options {
-			order: 1;
-			display: flex;
-			width: auto;
+			grid-row: 2;
+			grid-column: 1;
+		}
+
+		.option-btn {
+			width: 36px;
+			height: 36px;
+		}
+
+		.option-btn svg {
+			width: 18px;
+			height: 18px;
 		}
 
 		.time-control {
-			width: 100%;
-			order: 2;
-			flex: 1 1 100%;
+			grid-row: 2;
+			grid-column: 2 / 7;
+		}
+
+		.time {
+			font-size: 0.75rem;
+			min-width: 38px;
 		}
 
 		/* hide volume control on mobile - use device volume */
