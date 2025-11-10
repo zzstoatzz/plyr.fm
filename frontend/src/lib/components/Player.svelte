@@ -51,9 +51,26 @@
 			}
 		}
 
+		function updateViewportOffset() {
+			const viewport = window.visualViewport;
+			if (!viewport) {
+				document.documentElement.style.setProperty('--visual-viewport-offset', '0px');
+				return;
+			}
+
+			const visualBottom = viewport.height + viewport.offsetTop;
+			const layoutHeight = window.innerHeight;
+			const offset = Math.max(0, visualBottom - layoutHeight);
+			document.documentElement.style.setProperty('--visual-viewport-offset', `${offset}px`);
+		}
+
 		// update on mount and resize
 		updatePlayerHeight();
+		updateViewportOffset();
 		window.addEventListener('resize', updatePlayerHeight);
+		window.addEventListener('resize', updateViewportOffset);
+		window.visualViewport?.addEventListener('resize', updateViewportOffset);
+		window.visualViewport?.addEventListener('scroll', updateViewportOffset);
 
 		// also update when player visibility changes
 		const observer = new MutationObserver(updatePlayerHeight);
@@ -61,7 +78,11 @@
 
 		return () => {
 			window.removeEventListener('resize', updatePlayerHeight);
+			window.removeEventListener('resize', updateViewportOffset);
+			window.visualViewport?.removeEventListener('resize', updateViewportOffset);
+			window.visualViewport?.removeEventListener('scroll', updateViewportOffset);
 			observer.disconnect();
+			document.documentElement.style.setProperty('--visual-viewport-offset', '0px');
 		};
 	});
 
@@ -330,9 +351,10 @@
 		padding: 0.75rem 2rem;
 		padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 		z-index: 100;
-		/* force player to stick to visual viewport bottom on iOS Chrome */
-		transform: translateZ(0);
-		-webkit-transform: translateZ(0);
+		/* stay glued to the live visual viewport (iOS bottom bar hides) */
+		transform: translate3d(0, var(--visual-viewport-offset, 0px), 0);
+		-webkit-transform: translate3d(0, var(--visual-viewport-offset, 0px), 0);
+		will-change: transform;
 	}
 
 	.player-content {

@@ -230,13 +230,15 @@
 		transition: all 0.2s;
 		z-index: 60;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		transform: translate3d(0, var(--visual-viewport-offset, 0px), 0);
+		will-change: transform;
 	}
 
 	.queue-toggle:hover {
 		background: var(--bg-hover);
 		color: var(--accent);
 		border-color: var(--accent);
-		transform: scale(1.05);
+		transform: translate3d(0, var(--visual-viewport-offset, 0px), 0) scale(1.05);
 	}
 
 	@media (max-width: 768px) {
