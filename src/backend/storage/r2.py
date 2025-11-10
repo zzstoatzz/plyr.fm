@@ -57,6 +57,7 @@ class R2Storage:
         ext = Path(filename).suffix.lower()
 
         # try audio format first
+        image_format = None  # initialize to prevent UnboundLocalError
         audio_format = AudioFormat.from_extension(ext)
         if audio_format:
             key = f"audio/{file_id}{ext}"
