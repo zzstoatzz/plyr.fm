@@ -26,6 +26,9 @@ class Artist(Base):
     bio: Mapped[str | None] = mapped_column(String, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # cached PDS URL (for performance)
+    pds_url: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

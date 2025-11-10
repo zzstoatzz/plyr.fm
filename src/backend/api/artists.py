@@ -87,6 +87,17 @@ async def create_artist(
     if not avatar_url:
         avatar_url = await fetch_user_avatar(auth_session.did)
 
+    # resolve and cache PDS URL for performance
+    from atproto_identity.did.resolver import AsyncDidResolver
+
+    resolver = AsyncDidResolver()
+    pds_url = None
+    try:
+        atproto_data = await resolver.resolve_atproto_data(auth_session.did)
+        pds_url = atproto_data.pds
+    except Exception as e:
+        logger.warning(f"failed to resolve PDS for {auth_session.did}: {e}")
+
     # create artist
     artist = Artist(
         did=auth_session.did,
@@ -94,6 +105,7 @@ async def create_artist(
         display_name=request.display_name or auth_session.handle,
         bio=request.bio,
         avatar_url=avatar_url,
+        pds_url=pds_url,
     )
     db.add(artist)
     await db.commit()
