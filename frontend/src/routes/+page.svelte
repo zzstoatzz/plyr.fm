@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import type { User } from '$lib/types';
 	import { API_URL } from '$lib/config';
-import { player } from '$lib/player.svelte';
-import { queue } from '$lib/queue.svelte';
+	import { player } from '$lib/player.svelte';
+	import { queue } from '$lib/queue.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
 
 	let user = $state<User | null>(null);
@@ -37,7 +38,16 @@ import { queue } from '$lib/queue.svelte';
 		}
 
 		// fetch tracks from cache (will use cached data if recent)
-		tracksCache.fetch();
+		await tracksCache.fetch();
+
+		// check for track query param and auto-play
+		const trackId = $page.url.searchParams.get('track');
+		if (trackId) {
+			const track = tracks.find(t => t.id === parseInt(trackId));
+			if (track) {
+				queue.playNow(track);
+			}
+		}
 	});
 
 	async function logout() {
