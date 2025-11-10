@@ -129,6 +129,7 @@ async def _process_upload_background(
         # save image if provided
         image_id = None
         image_url = None
+        image_format = None  # initialize to prevent UnboundLocalError
         if image_data and image_filename:
             upload_tracker.update_status(
                 upload_id, UploadStatus.PROCESSING, "saving image..."

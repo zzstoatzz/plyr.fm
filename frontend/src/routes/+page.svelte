@@ -19,6 +19,9 @@
 	// only show loading if we don't have cached data
 	let showLoading = $derived(loadingTracks && !hasTracks);
 
+	// track which track ID we've already auto-played to prevent infinite loops
+	let autoPlayedTrackId = $state<string | null>(null);
+
 	onMount(async () => {
 		// check authentication (non-blocking)
 		try {
@@ -44,10 +47,12 @@
 	// reactive effect to auto-play track from URL query param
 	$effect(() => {
 		const trackId = $page.url.searchParams.get('track');
-		if (trackId && tracks.length > 0) {
+		// only auto-play if we have a track ID, tracks are loaded, and we haven't already played this track
+		if (trackId && tracks.length > 0 && trackId !== autoPlayedTrackId) {
 			const track = tracks.find(t => t.id === parseInt(trackId));
 			if (track) {
 				queue.playNow(track);
+				autoPlayedTrackId = trackId; // mark as played to prevent re-triggering
 			}
 		}
 	});
