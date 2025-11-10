@@ -138,6 +138,9 @@ import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	{#if data.track.album}
 		<meta property="music:album" content="{data.track.album}" />
 	{/if}
+	{#if data.track.image_url}
+		<meta property="og:image" content="{data.track.image_url}" />
+	{/if}
 	{#if data.track.r2_url}
 		<meta property="og:audio" content="{data.track.r2_url}" />
 		<meta property="og:audio:type" content="audio/{data.track.file_type}" />
@@ -150,6 +153,9 @@ import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 		name="twitter:description"
 		content={`listen to ${data.track.title} by ${data.track.artist} on ${APP_NAME}`}
 	/>
+	{#if data.track.image_url}
+		<meta name="twitter:image" content="{data.track.image_url}" />
+	{/if}
 </svelte:head>
 
 {#if loading}
