@@ -39,10 +39,12 @@
 
 		// fetch tracks from cache (will use cached data if recent)
 		await tracksCache.fetch();
+	});
 
-		// check for track query param and auto-play
+	// reactive effect to auto-play track from URL query param
+	$effect(() => {
 		const trackId = $page.url.searchParams.get('track');
-		if (trackId) {
+		if (trackId && tracks.length > 0) {
 			const track = tracks.find(t => t.id === parseInt(trackId));
 			if (track) {
 				queue.playNow(track);
