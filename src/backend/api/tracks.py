@@ -129,13 +129,12 @@ async def _process_upload_background(
         # save image if provided
         image_id = None
         image_url = None
-        image_format = None  # initialize to prevent UnboundLocalError
         if image_data and image_filename:
             upload_tracker.update_status(
                 upload_id, UploadStatus.PROCESSING, "saving image..."
             )
-            image_format = ImageFormat.from_filename(image_filename)
-            if image_format:
+            image_format, is_valid = ImageFormat.validate_and_extract(image_filename)
+            if is_valid and image_format:
                 try:
                     image_obj = BytesIO(image_data)
                     # save with images/ prefix to namespace it
@@ -562,10 +561,9 @@ async def update_track_metadata(
 
     # handle image update
     image_url = None
-    image_format = None
     if image and image.filename:
-        image_format = ImageFormat.from_filename(image.filename)
-        if not image_format:
+        image_format, is_valid = ImageFormat.validate_and_extract(image.filename)
+        if not is_valid:
             raise HTTPException(
                 status_code=400,
                 detail="unsupported image type. supported: jpg, png, webp, gif",

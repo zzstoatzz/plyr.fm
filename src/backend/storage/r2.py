@@ -57,17 +57,17 @@ class R2Storage:
         ext = Path(filename).suffix.lower()
 
         # try audio format first
-        image_format = None  # initialize to prevent UnboundLocalError
         audio_format = AudioFormat.from_extension(ext)
         if audio_format:
             key = f"audio/{file_id}{ext}"
             media_type = audio_format.media_type
+            image_format = None
         else:
             # try image format
             from backend.models.image import ImageFormat
 
-            image_format = ImageFormat.from_filename(filename)
-            if image_format:
+            image_format, is_valid = ImageFormat.validate_and_extract(filename)
+            if is_valid and image_format:
                 key = f"{file_id}{ext}"
                 media_type = image_format.media_type
             else:
