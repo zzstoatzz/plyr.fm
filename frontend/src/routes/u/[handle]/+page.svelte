@@ -180,8 +180,10 @@
 		<meta property="profile:username" content="{data.artist.handle}" />
 		{#if data.artist.avatar_url}
 			<meta property="og:image" content="{data.artist.avatar_url}" />
+			<meta property="og:image:secure_url" content="{data.artist.avatar_url}" />
 			<meta property="og:image:width" content="400" />
 			<meta property="og:image:height" content="400" />
+			<meta property="og:image:alt" content="{data.artist.display_name}" />
 		{/if}
 
 		<!-- Twitter -->
