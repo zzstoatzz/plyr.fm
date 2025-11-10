@@ -40,8 +40,10 @@
 	{/if}
 	{#if data.track.image_url}
 		<meta property="og:image" content="{data.track.image_url}" />
+		<meta property="og:image:secure_url" content="{data.track.image_url}" />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="1200" />
+		<meta property="og:image:alt" content="{data.track.title} by {data.track.artist}" />
 	{/if}
 	{#if data.track.r2_url}
 		<meta property="og:audio" content="{data.track.r2_url}" />
