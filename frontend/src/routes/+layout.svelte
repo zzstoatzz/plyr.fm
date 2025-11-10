@@ -9,9 +9,17 @@
 	import Toast from '$lib/components/Toast.svelte';
 	import Queue from '$lib/components/Queue.svelte';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 
 	let { children } = $props();
 	let showQueue = $state(false);
+
+	// only show default meta tags when not on a content page (track/artist/etc)
+	// content pages provide their own specific meta tags
+	let isContentPage = $derived(
+		$page.url.pathname.startsWith('/track/') ||
+		$page.url.pathname.startsWith('/u/')
+	);
 
 	onMount(() => {
 		// redirect pages.dev domains to plyr.fm unless bypass password is provided
@@ -64,32 +72,34 @@
 <svelte:head>
 	<link rel="icon" href={logo} />
 
-	<!-- default meta tags for link previews -->
-	<title>{APP_NAME} - {APP_TAGLINE}</title>
-	<meta
-		name="description"
-		content={`discover and stream audio on the AT Protocol with ${APP_NAME}`}
-	/>
+	{#if !isContentPage}
+		<!-- default meta tags for link previews (not on content pages) -->
+		<title>{APP_NAME} - {APP_TAGLINE}</title>
+		<meta
+			name="description"
+			content={`discover and stream audio on the AT Protocol with ${APP_NAME}`}
+		/>
 
-	<!-- Open Graph / Facebook -->
-	<meta property="og:type" content="website" />
-	<meta property="og:title" content="{APP_NAME} - {APP_TAGLINE}" />
-	<meta
-		property="og:description"
-		content={`discover and stream audio on the AT Protocol with ${APP_NAME}`}
-	/>
-	<meta property="og:site_name" content={APP_NAME} />
-	<meta property="og:url" content={APP_CANONICAL_URL} />
-	<meta property="og:image" content={logo} />
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content="{APP_NAME} - {APP_TAGLINE}" />
+		<meta
+			property="og:description"
+			content={`discover and stream audio on the AT Protocol with ${APP_NAME}`}
+		/>
+		<meta property="og:site_name" content={APP_NAME} />
+		<meta property="og:url" content={APP_CANONICAL_URL} />
+		<meta property="og:image" content={logo} />
 
-	<!-- Twitter -->
-	<meta name="twitter:card" content="summary" />
-	<meta name="twitter:title" content="{APP_NAME} - {APP_TAGLINE}" />
-	<meta
-		name="twitter:description"
-		content={`discover and stream audio on the AT Protocol with ${APP_NAME}`}
-	/>
-	<meta name="twitter:image" content={logo} />
+		<!-- Twitter -->
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content="{APP_NAME} - {APP_TAGLINE}" />
+		<meta
+			name="twitter:description"
+			content={`discover and stream audio on the AT Protocol with ${APP_NAME}`}
+		/>
+		<meta name="twitter:image" content={logo} />
+	{/if}
 
 	<script>
 		// prevent flash by applying saved settings immediately
