@@ -40,8 +40,8 @@ def test_large_file_upload_filesystem(tmp_path: Path) -> None:
     assert file_id
     assert len(file_id) == 16  # truncated SHA256 hash
 
-    # verify file exists on disk
-    saved_path = tmp_path / f"{file_id}.mp3"
+    # verify file exists on disk (in audio subdirectory)
+    saved_path = tmp_path / "audio" / f"{file_id}.mp3"
     assert saved_path.exists()
 
     # verify file size is correct
@@ -57,7 +57,7 @@ def test_various_file_sizes(tmp_path: Path, size_mb: int) -> None:
     file_id = storage.save(test_file, f"test_{size_mb}mb.wav")
 
     assert file_id
-    saved_path = tmp_path / f"{file_id}.wav"
+    saved_path = tmp_path / "audio" / f"{file_id}.wav"
     assert saved_path.exists()
     assert saved_path.stat().st_size == size_mb * 1024 * 1024
 
@@ -82,7 +82,7 @@ def test_concurrent_large_uploads(tmp_path: Path) -> None:
     assert len(file_ids) == 3
     assert all(file_ids)
 
-    # all files should exist
+    # all files should exist (in audio subdirectory)
     for file_id in file_ids:
-        saved_path = tmp_path / f"{file_id}.mp3"
+        saved_path = tmp_path / "audio" / f"{file_id}.mp3"
         assert saved_path.exists()
