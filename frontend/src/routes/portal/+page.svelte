@@ -9,8 +9,8 @@
 	import { uploader } from '$lib/uploader.svelte';
 
 	const ACCEPTED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aif', '.aiff'];
-	const ACCEPTED_AUDIO_MIME_TYPES = ['audio/*', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/aiff'];
-	const FILE_INPUT_ACCEPT = [...ACCEPTED_AUDIO_MIME_TYPES, ...ACCEPTED_AUDIO_EXTENSIONS].join(',');
+	const ACCEPTED_AUDIO_MIME_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/aiff', 'audio/x-aiff'];
+	const FILE_INPUT_ACCEPT = [...ACCEPTED_AUDIO_EXTENSIONS, ...ACCEPTED_AUDIO_MIME_TYPES].join(',');
 
 	function isSupportedAudioFile(name: string): boolean {
 		const dotIndex = name.lastIndexOf('.');
