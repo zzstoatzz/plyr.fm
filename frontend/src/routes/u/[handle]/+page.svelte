@@ -167,10 +167,10 @@
 
 		<!-- Open Graph / Facebook -->
 		<meta property="og:type" content="profile" />
-		<meta property="og:title" content="{data.artist.display_name} (@{data.artist.handle})" />
+		<meta property="og:title" content="{data.artist.display_name}" />
 		<meta
 			property="og:description"
-			content={`listen to audio by ${data.artist.display_name} on ${APP_NAME}`}
+			content="@{data.artist.handle} on {APP_NAME}"
 		/>
 		<meta
 			property="og:url"
@@ -180,14 +180,16 @@
 		<meta property="profile:username" content="{data.artist.handle}" />
 		{#if data.artist.avatar_url}
 			<meta property="og:image" content="{data.artist.avatar_url}" />
+			<meta property="og:image:width" content="400" />
+			<meta property="og:image:height" content="400" />
 		{/if}
 
 		<!-- Twitter -->
 		<meta name="twitter:card" content="summary" />
-		<meta name="twitter:title" content="{data.artist.display_name} (@{data.artist.handle})" />
+		<meta name="twitter:title" content="{data.artist.display_name}" />
 		<meta
 			name="twitter:description"
-			content={`listen to audio by ${data.artist.display_name} on ${APP_NAME}`}
+			content="@{data.artist.handle} on {APP_NAME}"
 		/>
 		{#if data.artist.avatar_url}
 			<meta name="twitter:image" content="{data.artist.avatar_url}" />
