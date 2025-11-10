@@ -561,6 +561,7 @@ async def update_track_metadata(
 
     # handle image update
     image_url = None
+    image_format = None
     if image and image.filename:
         image_format = ImageFormat.from_filename(image.filename)
         if not image_format:
