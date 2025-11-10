@@ -395,18 +395,31 @@ async def list_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    # resolve PDS URLs for each unique artist DID
+    # use cached PDS URLs with fallback on failure
     resolver = AsyncDidResolver()
     pds_cache = {}
 
     for track in tracks:
         if track.artist_did not in pds_cache:
-            try:
-                atproto_data = await resolver.resolve_atproto_data(track.artist_did)
-                pds_cache[track.artist_did] = atproto_data.pds
-            except Exception as e:
-                logger.warning(f"failed to resolve PDS for {track.artist_did}: {e}")
-                pds_cache[track.artist_did] = None
+            # try cached PDS URL first
+            if track.artist.pds_url:
+                pds_cache[track.artist_did] = track.artist.pds_url
+            else:
+                # cache miss or not yet populated - resolve and update
+                try:
+                    atproto_data = await resolver.resolve_atproto_data(track.artist_did)
+                    pds_url = atproto_data.pds
+                    pds_cache[track.artist_did] = pds_url
+
+                    # update cached value in database
+                    track.artist.pds_url = pds_url
+                    db.add(track.artist)
+                except Exception as e:
+                    logger.warning(f"failed to resolve PDS for {track.artist_did}: {e}")
+                    pds_cache[track.artist_did] = None
+
+    # commit any PDS URL updates
+    await db.commit()
 
     return {
         "tracks": [
