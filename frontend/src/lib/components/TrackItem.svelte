@@ -12,7 +12,8 @@
 
 	let { track, isPlaying = false, onPlay }: Props = $props();
 
-	// construct shareable URL
+	// construct shareable URL - use /track/[id] for link previews
+	// the track page will redirect to home with query param for actual playback
 	const shareUrl = typeof window !== 'undefined'
 		? `${window.location.origin}/track/${track.id}`
 		: '';
