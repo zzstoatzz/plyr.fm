@@ -401,24 +401,42 @@ async def list_tracks(
     resolver = AsyncDidResolver()
     pds_cache = {}
 
+    # first pass: collect already-cached PDS URLs and artists needing resolution
+    artists_to_resolve = []
     for track in tracks:
         if track.artist_did not in pds_cache:
-            # try cached PDS URL first
             if track.artist.pds_url:
                 pds_cache[track.artist_did] = track.artist.pds_url
             else:
-                # cache miss or not yet populated - resolve and update
-                try:
-                    atproto_data = await resolver.resolve_atproto_data(track.artist_did)
-                    pds_url = atproto_data.pds
-                    pds_cache[track.artist_did] = pds_url
+                # need to resolve this artist
+                if track.artist not in artists_to_resolve:
+                    artists_to_resolve.append(track.artist)
 
-                    # update cached value in database
-                    track.artist.pds_url = pds_url
-                    db.add(track.artist)
-                except Exception as e:
-                    logger.warning(f"failed to resolve PDS for {track.artist_did}: {e}")
-                    pds_cache[track.artist_did] = None
+    # resolve all uncached PDS URLs concurrently
+    if artists_to_resolve:
+
+        async def resolve_artist(artist: Artist) -> tuple[str, str | None]:
+            """resolve PDS URL for an artist, returning (did, pds_url)."""
+            try:
+                atproto_data = await resolver.resolve_atproto_data(artist.did)
+                return (artist.did, atproto_data.pds)
+            except Exception as e:
+                logger.warning(f"failed to resolve PDS for {artist.did}: {e}")
+                return (artist.did, None)
+
+        # resolve all concurrently
+        results = await asyncio.gather(*[resolve_artist(a) for a in artists_to_resolve])
+
+        # update cache and database
+        for did, pds_url in results:
+            pds_cache[did] = pds_url
+            if pds_url:
+                # find artist and update
+                for artist in artists_to_resolve:
+                    if artist.did == did:
+                        artist.pds_url = pds_url
+                        db.add(artist)
+                        break
 
     # commit any PDS URL updates
     await db.commit()
