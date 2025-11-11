@@ -6,7 +6,13 @@ from alembic import context
 
 # import backend models for autogenerate support
 from backend.config import settings
-from backend.models import Artist, AudioFormat, Track, UserSession  # noqa: F401
+from backend.models import (  # noqa: F401
+    Artist,
+    AudioFormat,
+    Track,
+    TrackLike,
+    UserSession,
+)
 from backend.models.database import Base
 
 # this is the Alembic Config object, which provides

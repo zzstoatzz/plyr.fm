@@ -256,13 +256,17 @@ class AtprotoSettings(RelaySettingsSection):
         if self.scope_override:
             return self.scope_override
 
-        # if we have an old namespace, request access to both collections
-        if self.old_app_namespace:
-            return (
-                f"atproto repo:{self.track_collection} repo:{self.old_track_collection}"
-            )
+        # base scopes: our track collection + our like collection
+        scopes = [
+            f"repo:{self.track_collection}",
+            f"repo:{self.app_namespace}.like",
+        ]
 
-        return f"atproto repo:{self.track_collection}"
+        # if we have an old namespace, add old track collection too
+        if self.old_app_namespace:
+            scopes.append(f"repo:{self.old_track_collection}")
+
+        return f"atproto {' '.join(scopes)}"
 
 
 class ObservabilitySettings(RelaySettingsSection):

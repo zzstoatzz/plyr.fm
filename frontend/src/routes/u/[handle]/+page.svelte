@@ -276,6 +276,7 @@
 							{track}
 							isPlaying={player.currentTrack?.id === track.id}
 							onPlay={(t) => queue.playNow(t)}
+							{isAuthenticated}
 						/>
 					{/each}
 				</div>

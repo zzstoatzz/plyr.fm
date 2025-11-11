@@ -9,6 +9,7 @@ from backend.models.preferences import UserPreferences
 from backend.models.queue import QueueState
 from backend.models.session import UserSession
 from backend.models.track import Track
+from backend.models.track_like import TrackLike
 from backend.utilities.database import db_session, get_db, init_db
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "OAuthStateModel",
     "QueueState",
     "Track",
+    "TrackLike",
     "UserPreferences",
     "UserSession",
     "db_session",

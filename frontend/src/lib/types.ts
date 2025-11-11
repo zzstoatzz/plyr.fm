@@ -21,6 +21,7 @@ export interface Track {
 	features?: FeaturedArtist[];
 	created_at?: string;
 	image_url?: string;
+	is_liked?: boolean;
 }
 
 export interface User {

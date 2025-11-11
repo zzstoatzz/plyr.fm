@@ -16,6 +16,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Request,
     UploadFile,
 )
 from fastapi.responses import StreamingResponse
@@ -27,11 +28,15 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile, require_auth
 from backend._internal.uploads import UploadStatus, upload_tracker
-from backend.atproto import create_track_record
+from backend.atproto import (
+    create_like_record,
+    create_track_record,
+    delete_record_by_uri,
+)
 from backend.atproto.handles import resolve_handle
 from backend.atproto.records import build_track_record, update_record
 from backend.config import settings
-from backend.models import Artist, AudioFormat, Track, get_db
+from backend.models import Artist, AudioFormat, Track, TrackLike, get_db
 from backend.models.image import ImageFormat
 from backend.storage import storage
 from backend.storage.r2 import R2Storage
@@ -46,9 +51,21 @@ class TrackResponse(dict):
 
     @classmethod
     async def from_track(
-        cls, track: Track, pds_url: str | None = None
+        cls,
+        track: Track,
+        pds_url: str | None = None,
+        liked_track_ids: set[int] | None = None,
     ) -> "TrackResponse":
-        """build track response from Track model."""
+        """build track response from Track model.
+
+        args:
+            track: Track model instance
+            pds_url: optional PDS URL for atproto_record_url
+            liked_track_ids: optional set of liked track IDs for this user (for efficient batched checks)
+        """
+        # check if user has liked this track (efficient O(1) lookup)
+        is_liked = liked_track_ids is not None and track.id in liked_track_ids
+
         return cls(
             id=track.id,
             title=track.title,
@@ -71,6 +88,7 @@ class TrackResponse(dict):
             play_count=track.play_count,
             created_at=track.created_at.isoformat(),
             image_url=await track.get_image_url(),
+            is_liked=is_liked,
         )
 
 
@@ -412,10 +430,32 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
 @router.get("/")
 async def list_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
+    request: Request,
     artist_did: str | None = None,
 ) -> dict:
     """list all tracks, optionally filtered by artist DID."""
     from atproto_identity.did.resolver import AsyncDidResolver
+
+    # try to get authenticated user (optional)
+    user_did = None
+    try:
+        from backend._internal.auth import get_session
+
+        session_id = request.headers.get("authorization", "").replace("Bearer ", "")
+        if session_id:
+            auth_session = await get_session(session_id)
+            if auth_session:
+                user_did = auth_session.did
+    except Exception:
+        pass  # not authenticated, continue without user_did
+
+    # if user is authenticated, fetch all their liked track IDs in one query
+    liked_track_ids: set[int] | None = None
+    if user_did:
+        liked_result = await db.execute(
+            select(TrackLike.track_id).where(TrackLike.user_did == user_did)
+        )
+        liked_track_ids = set(liked_result.scalars().all())
 
     stmt = select(Track).join(Artist).options(selectinload(Track.artist))
 
@@ -471,10 +511,12 @@ async def list_tracks(
     # commit any PDS URL updates
     await db.commit()
 
-    # fetch all track responses concurrently
+    # fetch all track responses concurrently with like status
     track_responses = await asyncio.gather(
         *[
-            TrackResponse.from_track(track, pds_cache.get(track.artist_did))
+            TrackResponse.from_track(
+                track, pds_cache.get(track.artist_did), liked_track_ids
+            )
             for track in tracks
         ]
     )
@@ -694,6 +736,37 @@ async def update_track_metadata(
     return await TrackResponse.from_track(track)
 
 
+@router.get("/liked")
+async def list_liked_tracks(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> dict:
+    """list tracks liked by authenticated user (queried from local index)."""
+    stmt = (
+        select(Track)
+        .join(TrackLike, TrackLike.track_id == Track.id)
+        .join(Artist)
+        .options(selectinload(Track.artist))
+        .where(TrackLike.user_did == auth_session.did)
+        .order_by(TrackLike.created_at.desc())
+    )
+
+    result = await db.execute(stmt)
+    tracks = result.scalars().all()
+
+    # all tracks in this endpoint are liked by definition - build set of track IDs
+    liked_track_ids = {track.id for track in tracks}
+
+    track_responses = await asyncio.gather(
+        *[
+            TrackResponse.from_track(track, liked_track_ids=liked_track_ids)
+            for track in tracks
+        ]
+    )
+
+    return {"tracks": track_responses}
+
+
 @router.get("/{track_id}")
 async def get_track(
     track_id: int, db: Annotated[AsyncSession, Depends(get_db)]
@@ -730,3 +803,133 @@ async def increment_play_count(
     await db.refresh(track)
 
     return {"play_count": track.play_count}
+
+
+@router.post("/{track_id}/like")
+async def like_track(
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> dict:
+    """like a track - creates ATProto record and indexes it locally."""
+    # verify track exists and has ATProto record
+    result = await db.execute(select(Track).where(Track.id == track_id))
+    track = result.scalar_one_or_none()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="track not found")
+
+    if not track.atproto_record_uri:
+        raise HTTPException(
+            status_code=400, detail="cannot like track without ATProto record"
+        )
+
+    # check if already liked
+    existing = await db.execute(
+        select(TrackLike).where(
+            TrackLike.track_id == track_id, TrackLike.user_did == auth_session.did
+        )
+    )
+    if existing.scalar_one_or_none():
+        return {"liked": True}
+
+    # create ATProto like record on user's PDS
+    like_uri = await create_like_record(
+        auth_session=auth_session,
+        subject_uri=track.atproto_record_uri,
+        subject_cid=track.atproto_record_cid,
+    )
+
+    # index the like in our database
+    like = TrackLike(
+        track_id=track_id,
+        user_did=auth_session.did,
+        atproto_like_uri=like_uri,
+    )
+
+    db.add(like)
+    try:
+        await db.commit()
+    except Exception as e:
+        logger.error(
+            f"failed to commit like to database after creating ATProto record: {e}"
+        )
+        # attempt to clean up orphaned ATProto like record
+        try:
+            await delete_record_by_uri(
+                auth_session=auth_session,
+                record_uri=like_uri,
+            )
+            logger.info(f"cleaned up orphaned ATProto like record: {like_uri}")
+        except Exception as cleanup_exc:
+            logger.error(
+                f"failed to clean up orphaned ATProto like record {like_uri}: {cleanup_exc}"
+            )
+        raise HTTPException(
+            status_code=500, detail="failed to like track - please try again"
+        ) from e
+
+    return {"liked": True, "atproto_uri": like_uri}
+
+
+@router.delete("/{track_id}/like")
+async def unlike_track(
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> dict:
+    """unlike a track - deletes ATProto record and removes from index."""
+    # find existing like
+    result = await db.execute(
+        select(TrackLike).where(
+            TrackLike.track_id == track_id, TrackLike.user_did == auth_session.did
+        )
+    )
+    like = result.scalar_one_or_none()
+
+    if not like:
+        return {"liked": False}
+
+    # get track info in case we need to rollback
+    track_result = await db.execute(select(Track).where(Track.id == track_id))
+    track = track_result.scalar_one_or_none()
+    if not track or not track.atproto_record_uri or not track.atproto_record_cid:
+        raise HTTPException(
+            status_code=500, detail="track data incomplete - cannot unlike"
+        )
+
+    # delete ATProto like record from user's PDS
+    await delete_record_by_uri(
+        auth_session=auth_session,
+        record_uri=like.atproto_like_uri,
+    )
+
+    # remove from our index
+    await db.delete(like)
+    try:
+        await db.commit()
+    except Exception as e:
+        logger.error(
+            f"failed to commit unlike to database after deleting ATProto record: {e}"
+        )
+        # attempt to recreate the ATProto like record to maintain consistency
+        try:
+            recreated_uri = await create_like_record(
+                auth_session=auth_session,
+                subject_uri=track.atproto_record_uri,
+                subject_cid=track.atproto_record_cid,
+            )
+            logger.info(
+                f"rolled back ATProto deletion by recreating like: {recreated_uri}"
+            )
+        except Exception as rollback_exc:
+            logger.critical(
+                f"failed to rollback ATProto deletion for track {track_id}, "
+                f"user {auth_session.did}: {rollback_exc}. "
+                "database and ATProto are now inconsistent"
+            )
+        raise HTTPException(
+            status_code=500, detail="failed to unlike track - please try again"
+        ) from e
+
+    return {"liked": False}

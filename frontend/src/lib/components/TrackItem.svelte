@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ShareButton from './ShareButton.svelte';
+	import LikeButton from './LikeButton.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -8,9 +9,10 @@
 		track: Track;
 		isPlaying?: boolean;
 		onPlay: (track: Track) => void;
+		isAuthenticated?: boolean;
 	}
 
-	let { track, isPlaying = false, onPlay }: Props = $props();
+	let { track, isPlaying = false, onPlay, isAuthenticated = false }: Props = $props();
 
 	// construct shareable URL - use /track/[id] for link previews
 	// the track page will redirect to home with query param for actual playback
@@ -21,8 +23,7 @@
 	function addToQueue(e: Event) {
 		e.stopPropagation();
 		queue.addTracks([track]);
-		// pass track title separately for styled rendering
-		toast.success(track.title, 1800);
+		toast.success(`queued ${track.title}`, 1800);
 	}
 </script>
 
@@ -95,6 +96,9 @@
 		</div>
 	</button>
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
+		{#if isAuthenticated}
+			<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
+		{/if}
 		<button
 			class="action-button"
 			onclick={addToQueue}

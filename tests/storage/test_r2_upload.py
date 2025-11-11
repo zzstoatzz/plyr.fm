@@ -3,12 +3,16 @@
 import shutil
 from pathlib import Path
 
+import logfire
+
 from backend.storage import storage
 from backend.storage.r2 import R2Storage
 
 
 async def test_r2_upload():
     """test uploading a file to R2 and retrieving its URL."""
+    # configure logfire for test to suppress warnings
+    logfire.configure(send_to_logfire=False)
     # copy existing test file
     source = Path("data/audio/f6197e825152d2b5.m4a")
     test_dir = Path("tests/fixtures")
