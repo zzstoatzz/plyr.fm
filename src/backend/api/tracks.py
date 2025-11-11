@@ -4,11 +4,13 @@ import asyncio
 import contextlib
 import json
 import logging
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 
 import logfire
+from atproto import models
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -31,7 +33,7 @@ from backend.atproto import create_track_record
 from backend.atproto.handles import resolve_handle
 from backend.atproto.records import build_track_record, update_record
 from backend.config import settings
-from backend.models import Artist, AudioFormat, Track, get_db
+from backend.models import Artist, AudioFormat, Track, TrackLike, get_db
 from backend.models.image import ImageFormat
 from backend.storage import storage
 from backend.storage.r2 import R2Storage
@@ -694,6 +696,31 @@ async def update_track_metadata(
     return await TrackResponse.from_track(track)
 
 
+@router.get("/liked")
+async def list_liked_tracks(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> dict:
+    """list tracks liked by authenticated user (queried from local index)."""
+    stmt = (
+        select(Track)
+        .join(TrackLike, TrackLike.track_id == Track.id)
+        .join(Artist)
+        .options(selectinload(Track.artist))
+        .where(TrackLike.user_did == auth_session.did)
+        .order_by(TrackLike.created_at.desc())
+    )
+
+    result = await db.execute(stmt)
+    tracks = result.scalars().all()
+
+    track_responses = await asyncio.gather(
+        *[TrackResponse.from_track(track) for track in tracks]
+    )
+
+    return {"tracks": track_responses}
+
+
 @router.get("/{track_id}")
 async def get_track(
     track_id: int, db: Annotated[AsyncSession, Depends(get_db)]
@@ -730,3 +757,97 @@ async def increment_play_count(
     await db.refresh(track)
 
     return {"play_count": track.play_count}
+
+
+@router.post("/{track_id}/like")
+async def like_track(
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> dict:
+    """like a track - creates ATProto record and indexes it locally."""
+    # verify track exists and has ATProto record
+    result = await db.execute(select(Track).where(Track.id == track_id))
+    track = result.scalar_one_or_none()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="track not found")
+
+    if not track.atproto_record_uri:
+        raise HTTPException(
+            status_code=400, detail="cannot like track without ATProto record"
+        )
+
+    # check if already liked
+    existing = await db.execute(
+        select(TrackLike).where(
+            TrackLike.track_id == track_id, TrackLike.user_did == auth_session.did
+        )
+    )
+    if existing.scalar_one_or_none():
+        return {"liked": True}
+
+    # create ATProto like record (fm.plyr.like)
+    like_record = models.AppBskyFeedLike.Record(
+        subject=models.ComAtprotoRepoStrongRef.Main(
+            uri=track.atproto_record_uri,
+            cid=track.atproto_record_cid,
+        ),
+        created_at=datetime.now(UTC).isoformat(),
+    )
+
+    # create record on user's PDS
+    response = await auth_session.client.com.atproto.repo.create_record(
+        models.ComAtprotoRepoCreateRecord.Data(
+            repo=auth_session.did,
+            collection="app.bsky.feed.like",
+            record=like_record,
+        )
+    )
+
+    # index the like in our database
+    like = TrackLike(
+        track_id=track_id,
+        user_did=auth_session.did,
+        atproto_like_uri=response.uri,
+    )
+
+    db.add(like)
+    await db.commit()
+
+    return {"liked": True, "atproto_uri": response.uri}
+
+
+@router.delete("/{track_id}/like")
+async def unlike_track(
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> dict:
+    """unlike a track - deletes ATProto record and removes from index."""
+    # find existing like
+    result = await db.execute(
+        select(TrackLike).where(
+            TrackLike.track_id == track_id, TrackLike.user_did == auth_session.did
+        )
+    )
+    like = result.scalar_one_or_none()
+
+    if not like:
+        return {"liked": False}
+
+    # delete ATProto like record
+    rkey = like.atproto_like_uri.split("/")[-1]
+    await auth_session.client.com.atproto.repo.delete_record(
+        models.ComAtprotoRepoDeleteRecord.Data(
+            repo=auth_session.did,
+            collection="app.bsky.feed.like",
+            rkey=rkey,
+        )
+    )
+
+    # remove from our index
+    await db.delete(like)
+    await db.commit()
+
+    return {"liked": False}
