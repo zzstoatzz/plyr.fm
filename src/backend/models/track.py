@@ -80,8 +80,7 @@ class Track(Base):
         """get duration from extra (in seconds)."""
         return self.extra.get("duration")
 
-    @property
-    def image_url(self) -> str | None:
+    async def get_image_url(self) -> str | None:
         """get image URL if available."""
         if not self.image_id:
             return None
@@ -89,5 +88,5 @@ class Track(Base):
         from backend.storage.r2 import R2Storage
 
         if isinstance(storage, R2Storage):
-            return storage.get_url(self.image_id)
+            return await storage.get_url(self.image_id)
         return None
