@@ -13,7 +13,7 @@ run-backend:
 
 # run frontend dev server
 run-frontend:
-    cd frontend && bun run dev
+    cd frontend && bun run dev --host 0.0.0.0
 
 # run tests with docker-compose
 test *ARGS='tests/':

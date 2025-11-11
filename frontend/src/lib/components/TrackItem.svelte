@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ShareButton from './ShareButton.svelte';
 	import LikeButton from './LikeButton.svelte';
+	import TrackActionsMenu from './TrackActionsMenu.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -22,6 +23,11 @@
 
 	function addToQueue(e: Event) {
 		e.stopPropagation();
+		queue.addTracks([track]);
+		toast.success(`queued ${track.title}`, 1800);
+	}
+
+	function handleQueue() {
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
 	}
@@ -96,25 +102,40 @@
 		</div>
 	</button>
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
-		{#if isAuthenticated}
-			<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
-		{/if}
-		<button
-			class="action-button"
-			onclick={addToQueue}
-			title="add to queue"
-		>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-				<!-- plus sign -->
-				<line x1="5" y1="15" x2="5" y2="21"></line>
-				<line x1="2" y1="18" x2="8" y2="18"></line>
-				<!-- list lines -->
-				<line x1="9" y1="6" x2="21" y2="6"></line>
-				<line x1="9" y1="12" x2="21" y2="12"></line>
-				<line x1="9" y1="18" x2="21" y2="18"></line>
-			</svg>
-		</button>
-		<ShareButton url={shareUrl} />
+		<!-- desktop: show individual buttons -->
+		<div class="desktop-actions">
+			{#if isAuthenticated}
+				<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
+			{/if}
+			<button
+				class="action-button"
+				onclick={addToQueue}
+				title="add to queue"
+			>
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+					<!-- plus sign -->
+					<line x1="5" y1="15" x2="5" y2="21"></line>
+					<line x1="2" y1="18" x2="8" y2="18"></line>
+					<!-- list lines -->
+					<line x1="9" y1="6" x2="21" y2="6"></line>
+					<line x1="9" y1="12" x2="21" y2="12"></line>
+					<line x1="9" y1="18" x2="21" y2="18"></line>
+				</svg>
+			</button>
+			<ShareButton url={shareUrl} />
+		</div>
+
+		<!-- mobile: show three-dot menu -->
+		<div class="mobile-actions">
+			<TrackActionsMenu
+				trackId={track.id}
+				trackTitle={track.title}
+				initialLiked={track.is_liked || false}
+				shareUrl={shareUrl}
+				onQueue={handleQueue}
+				isAuthenticated={isAuthenticated}
+			/>
+		</div>
 	</div>
 </div>
 
@@ -221,6 +242,16 @@
 		gap: 0.5rem;
 		flex-shrink: 0;
 		align-items: center;
+	}
+
+	.desktop-actions {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.mobile-actions {
+		display: none;
 	}
 
 	.track-title {
@@ -341,6 +372,14 @@
 	}
 
 	@media (max-width: 768px) {
+		.desktop-actions {
+			display: none;
+		}
+
+		.mobile-actions {
+			display: flex;
+		}
+
 		.track-container {
 			padding: 0.65rem 0.75rem;
 			gap: 0.5rem;

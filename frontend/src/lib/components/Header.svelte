@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import type { User } from '$lib/types';
 	import SettingsMenu from './SettingsMenu.svelte';
+	import LinksMenu from './LinksMenu.svelte';
 	import { APP_NAME, APP_TAGLINE } from '$lib/branding';
 
 	interface Props {
@@ -16,11 +17,12 @@
 <header>
 	<div class="header-content">
 		<div class="left-section">
+			<!-- desktop: show icons inline -->
 			<a
 				href="https://bsky.app/profile/plyr.fm"
 				target="_blank"
 				rel="noopener noreferrer"
-				class="bluesky-link"
+				class="bluesky-link desktop-only"
 				title="Follow @plyr.fm on Bluesky"
 			>
 				<svg
@@ -39,13 +41,19 @@
 				href="https://status.zzstoatzz.io/@plyr.fm"
 				target="_blank"
 				rel="noopener noreferrer"
-				class="status-link"
+				class="status-link desktop-only"
 				title="View status page"
 			>
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
 				</svg>
 			</a>
+
+			<!-- mobile: show menu button -->
+			<div class="mobile-only">
+				<LinksMenu />
+			</div>
+
 			<a href="/" class="brand">
 				<h1>{APP_NAME}</h1>
 				<p>{APP_TAGLINE}</p>
@@ -104,6 +112,14 @@
 
 	.brand:hover h1 {
 		color: var(--accent);
+	}
+
+	.desktop-only {
+		display: flex;
+	}
+
+	.mobile-only {
+		display: none;
 	}
 
 	.bluesky-link,
@@ -231,7 +247,15 @@
 		color: var(--accent);
 	}
 
-	@media (max-width: 640px) {
+	@media (max-width: 768px) {
+		.desktop-only {
+			display: none !important;
+		}
+
+		.mobile-only {
+			display: flex;
+		}
+
 		.header-content {
 			padding: 0.75rem 0.75rem;
 			gap: 0.75rem;

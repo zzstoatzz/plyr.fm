@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { replaceState } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -73,7 +74,7 @@
 			}
 
 			// remove exchange_token from URL
-			window.history.replaceState({}, '', '/portal');
+			replaceState('/portal', {});
 		}
 
 		// get session_id from localStorage
