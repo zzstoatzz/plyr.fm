@@ -44,7 +44,6 @@ class TracksCache {
 
 			const response = await fetch(`${API_URL}/tracks/`, { headers });
 			const data = await response.json();
-			console.log('tracksCache.fetch: got', data.tracks.length, 'tracks, first track:', data.tracks[0]);
 			this.tracks = data.tracks;
 
 			// persist to localStorage

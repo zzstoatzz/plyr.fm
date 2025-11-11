@@ -13,12 +13,8 @@
 	let liked = $state(initialLiked);
 	let loading = $state(false);
 
-	// DEBUG: log initial state
-	console.log('LikeButton init:', trackTitle, 'initialLiked:', initialLiked, 'liked:', liked);
-
 	// update liked state when initialLiked changes
 	$effect(() => {
-		console.log('LikeButton effect:', trackTitle, 'initialLiked changed to:', initialLiked);
 		liked = initialLiked;
 	});
 

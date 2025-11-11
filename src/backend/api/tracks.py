@@ -54,26 +54,17 @@ class TrackResponse(dict):
         cls,
         track: Track,
         pds_url: str | None = None,
-        user_did: str | None = None,
-        db: AsyncSession | None = None,
+        liked_track_ids: set[int] | None = None,
     ) -> "TrackResponse":
         """build track response from Track model.
 
         args:
             track: Track model instance
             pds_url: optional PDS URL for atproto_record_url
-            user_did: optional user DID to check if track is liked
-            db: optional database session to check like status
+            liked_track_ids: optional set of liked track IDs for this user (for efficient batched checks)
         """
-        # check if user has liked this track
-        is_liked = False
-        if user_did and db:
-            result = await db.execute(
-                select(TrackLike).where(
-                    TrackLike.track_id == track.id, TrackLike.user_did == user_did
-                )
-            )
-            is_liked = result.scalar_one_or_none() is not None
+        # check if user has liked this track (efficient O(1) lookup)
+        is_liked = liked_track_ids is not None and track.id in liked_track_ids
 
         return cls(
             id=track.id,
@@ -458,6 +449,14 @@ async def list_tracks(
     except Exception:
         pass  # not authenticated, continue without user_did
 
+    # if user is authenticated, fetch all their liked track IDs in one query
+    liked_track_ids: set[int] | None = None
+    if user_did:
+        liked_result = await db.execute(
+            select(TrackLike.track_id).where(TrackLike.user_did == user_did)
+        )
+        liked_track_ids = set(liked_result.scalars().all())
+
     stmt = select(Track).join(Artist).options(selectinload(Track.artist))
 
     # filter by artist if provided
@@ -516,7 +515,7 @@ async def list_tracks(
     track_responses = await asyncio.gather(
         *[
             TrackResponse.from_track(
-                track, pds_cache.get(track.artist_did), user_did, db
+                track, pds_cache.get(track.artist_did), liked_track_ids
             )
             for track in tracks
         ]
@@ -755,10 +754,12 @@ async def list_liked_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    # all tracks in this endpoint are liked by definition
+    # all tracks in this endpoint are liked by definition - build set of track IDs
+    liked_track_ids = {track.id for track in tracks}
+
     track_responses = await asyncio.gather(
         *[
-            TrackResponse.from_track(track, user_did=auth_session.did, db=db)
+            TrackResponse.from_track(track, liked_track_ids=liked_track_ids)
             for track in tracks
         ]
     )
