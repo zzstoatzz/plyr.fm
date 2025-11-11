@@ -11,6 +11,7 @@ music streaming platform on ATProto.
 - **migrations**: automated via fly.io release_command
 - **logs**: `flyctl logs` is BLOCKING - use `run_in_background=true`
 - **type hints**: required everywhere
+- **ATProto namespaces**: NEVER use Bluesky lexicons (app.bsky.*). ALWAYS use our namespace (fm.plyr.*) for ALL records
 
 ## structure
 
