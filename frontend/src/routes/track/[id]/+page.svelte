@@ -238,6 +238,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		overflow: hidden;
 	}
 
 	.track-detail {
@@ -246,8 +247,6 @@
 		align-items: center;
 		gap: 2rem;
 		width: 100%;
-		max-height: calc(100vh - 12rem);
-		overflow-y: auto;
 	}
 
 	.cover-art-container {
