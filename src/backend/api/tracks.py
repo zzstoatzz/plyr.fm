@@ -44,7 +44,9 @@ class TrackResponse(dict):
     """track response schema."""
 
     @classmethod
-    def from_track(cls, track: Track, pds_url: str | None = None) -> "TrackResponse":
+    async def from_track(
+        cls, track: Track, pds_url: str | None = None
+    ) -> "TrackResponse":
         """build track response from Track model."""
         return cls(
             id=track.id,
@@ -67,7 +69,7 @@ class TrackResponse(dict):
             ),
             play_count=track.play_count,
             created_at=track.created_at.isoformat(),
-            image_url=track.image_url,
+            image_url=await track.get_image_url(),
         )
 
 
@@ -124,7 +126,7 @@ async def _process_upload_background(
             from backend.storage.r2 import R2Storage
 
             if isinstance(storage, R2Storage):
-                r2_url = storage.get_url(file_id)
+                r2_url = await storage.get_url(file_id)
 
         # save image if provided
         image_id = None
@@ -143,7 +145,7 @@ async def _process_upload_background(
                     if settings.storage.backend == "r2" and isinstance(
                         storage, R2Storage
                     ):
-                        image_url = storage.get_url(image_id)
+                        image_url = await storage.get_url(image_id)
                 except Exception as e:
                     logger.warning(f"failed to save image: {e}", exc_info=True)
                     # continue without image - it's optional
@@ -421,12 +423,15 @@ async def list_tracks(
     # commit any PDS URL updates
     await db.commit()
 
-    return {
-        "tracks": [
+    # fetch all track responses concurrently
+    track_responses = await asyncio.gather(
+        *[
             TrackResponse.from_track(track, pds_cache.get(track.artist_did))
             for track in tracks
         ]
-    }
+    )
+
+    return {"tracks": track_responses}
 
 
 @router.get("/me")
@@ -445,7 +450,12 @@ async def list_my_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    return {"tracks": [TrackResponse.from_track(track) for track in tracks]}
+    # fetch all track responses concurrently
+    track_responses = await asyncio.gather(
+        *[TrackResponse.from_track(track) for track in tracks]
+    )
+
+    return {"tracks": track_responses}
 
 
 @router.delete("/{track_id}")
@@ -589,7 +599,7 @@ async def update_track_metadata(
 
         # get R2 URL for image if using R2 storage
         if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
-            image_url = storage.get_url(image_id)
+            image_url = await storage.get_url(image_id)
 
         # delete old image if exists
         if track.image_id:
@@ -612,7 +622,7 @@ async def update_track_metadata(
                 album=track.album,
                 duration=None,
                 features=track.features if track.features else None,
-                image_url=image_url or track.image_url,
+                image_url=image_url or await track.get_image_url(),
             )
 
             # update the record on the PDS
@@ -633,7 +643,7 @@ async def update_track_metadata(
     await db.commit()
     await db.refresh(track)
 
-    return TrackResponse.from_track(track)
+    return await TrackResponse.from_track(track)
 
 
 @router.get("/{track_id}")
@@ -652,7 +662,7 @@ async def get_track(
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
 
-    return TrackResponse.from_track(track)
+    return await TrackResponse.from_track(track)
 
 
 @router.post("/{track_id}/play")

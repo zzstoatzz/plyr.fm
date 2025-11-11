@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import BinaryIO
 
+import aioboto3
 import boto3
 from botocore.config import Config
 
@@ -31,6 +32,8 @@ class R2Storage:
         self.image_bucket_name = settings.storage.r2_image_bucket
         self.public_audio_bucket_url = settings.storage.r2_public_bucket_url
         self.public_image_bucket_url = settings.storage.r2_public_image_bucket_url
+
+        # sync client for upload (used in background tasks)
         self.client = boto3.client(
             "s3",
             endpoint_url=settings.storage.r2_endpoint_url,
@@ -41,6 +44,12 @@ class R2Storage:
                 response_checksum_validation="WHEN_REQUIRED",
             ),
         )
+
+        # async session for read operations
+        self.async_session = aioboto3.Session()
+        self.endpoint_url = settings.storage.r2_endpoint_url
+        self.aws_access_key_id = settings.storage.aws_access_key_id
+        self.aws_secret_access_key = settings.storage.aws_secret_access_key
 
     def save(self, file: BinaryIO, filename: str) -> str:
         """save media file to R2 using streaming upload.
@@ -89,31 +98,41 @@ class R2Storage:
 
         return file_id
 
-    def get_url(self, file_id: str) -> str | None:
+    async def get_url(self, file_id: str) -> str | None:
         """get public URL for media file (audio or image)."""
-        # try audio formats first
-        for audio_format in AudioFormat:
-            key = f"audio/{file_id}{audio_format.extension}"
+        async with self.async_session.client(
+            "s3",
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.aws_access_key_id,
+            aws_secret_access_key=self.aws_secret_access_key,
+        ) as client:
+            # try audio formats first
+            for audio_format in AudioFormat:
+                key = f"audio/{file_id}{audio_format.extension}"
 
-            try:
-                self.client.head_object(Bucket=self.audio_bucket_name, Key=key)
-                return f"{self.public_audio_bucket_url}/{key}"
-            except self.client.exceptions.ClientError:
-                continue
+                try:
+                    await client.head_object(Bucket=self.audio_bucket_name, Key=key)
+                    return f"{self.public_audio_bucket_url}/{key}"
+                except client.exceptions.NoSuchKey:
+                    continue
+                except Exception:
+                    continue
 
-        # try image formats
-        from backend.models.image import ImageFormat
+            # try image formats
+            from backend.models.image import ImageFormat
 
-        for image_format in ImageFormat:
-            key = f"{file_id}.{image_format.value}"
+            for image_format in ImageFormat:
+                key = f"{file_id}.{image_format.value}"
 
-            try:
-                self.client.head_object(Bucket=self.image_bucket_name, Key=key)
-                return f"{self.public_image_bucket_url}/{key}"
-            except self.client.exceptions.ClientError:
-                continue
+                try:
+                    await client.head_object(Bucket=self.image_bucket_name, Key=key)
+                    return f"{self.public_image_bucket_url}/{key}"
+                except client.exceptions.NoSuchKey:
+                    continue
+                except Exception:
+                    continue
 
-        return None
+            return None
 
     def delete(self, file_id: str) -> bool:
         """delete media file from R2."""

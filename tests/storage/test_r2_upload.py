@@ -7,7 +7,7 @@ from backend.storage import storage
 from backend.storage.r2 import R2Storage
 
 
-def test_r2_upload():
+async def test_r2_upload():
     """test uploading a file to R2 and retrieving its URL."""
     # copy existing test file
     source = Path("data/audio/f6197e825152d2b5.m4a")
@@ -30,7 +30,7 @@ def test_r2_upload():
     print(f"✓ uploaded file with id: {file_id}")
 
     # get URL
-    url = storage.get_url(file_id)
+    url = await storage.get_url(file_id)
     print(f"✓ got public URL: {url}")
 
     # verify URL format
