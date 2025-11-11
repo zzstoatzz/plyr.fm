@@ -848,7 +848,26 @@ async def like_track(
     )
 
     db.add(like)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        logger.error(
+            f"failed to commit like to database after creating ATProto record: {e}"
+        )
+        # attempt to clean up orphaned ATProto like record
+        try:
+            await delete_record_by_uri(
+                auth_session=auth_session,
+                record_uri=like_uri,
+            )
+            logger.info(f"cleaned up orphaned ATProto like record: {like_uri}")
+        except Exception as cleanup_exc:
+            logger.error(
+                f"failed to clean up orphaned ATProto like record {like_uri}: {cleanup_exc}"
+            )
+        raise HTTPException(
+            status_code=500, detail="failed to like track - please try again"
+        ) from e
 
     return {"liked": True, "atproto_uri": like_uri}
 
@@ -871,6 +890,14 @@ async def unlike_track(
     if not like:
         return {"liked": False}
 
+    # get track info in case we need to rollback
+    track_result = await db.execute(select(Track).where(Track.id == track_id))
+    track = track_result.scalar_one_or_none()
+    if not track or not track.atproto_record_uri or not track.atproto_record_cid:
+        raise HTTPException(
+            status_code=500, detail="track data incomplete - cannot unlike"
+        )
+
     # delete ATProto like record from user's PDS
     await delete_record_by_uri(
         auth_session=auth_session,
@@ -879,6 +906,30 @@ async def unlike_track(
 
     # remove from our index
     await db.delete(like)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as e:
+        logger.error(
+            f"failed to commit unlike to database after deleting ATProto record: {e}"
+        )
+        # attempt to recreate the ATProto like record to maintain consistency
+        try:
+            recreated_uri = await create_like_record(
+                auth_session=auth_session,
+                subject_uri=track.atproto_record_uri,
+                subject_cid=track.atproto_record_cid,
+            )
+            logger.info(
+                f"rolled back ATProto deletion by recreating like: {recreated_uri}"
+            )
+        except Exception as rollback_exc:
+            logger.critical(
+                f"failed to rollback ATProto deletion for track {track_id}, "
+                f"user {auth_session.did}: {rollback_exc}. "
+                "database and ATProto are now inconsistent"
+            )
+        raise HTTPException(
+            status_code=500, detail="failed to unlike track - please try again"
+        ) from e
 
     return {"liked": False}

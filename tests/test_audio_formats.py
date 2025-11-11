@@ -76,4 +76,5 @@ class TestAudioFormat:
         assert ".mp3" in ext_str
         assert ".wav" in ext_str
         assert ".m4a" in ext_str
-        assert ".aiff" in ext_str
+        # AIFF removed due to browser compatibility issues (see PR #152)
+        assert ".aiff" not in ext_str

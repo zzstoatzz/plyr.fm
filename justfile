@@ -16,9 +16,9 @@ run-frontend:
     cd frontend && bun run dev
 
 # run tests with docker-compose
-test:
+test *ARGS='tests/':
     docker compose -f tests/docker-compose.yml up -d
-    uv run pytest tests/
+    uv run pytest {{ ARGS }}
     docker compose -f tests/docker-compose.yml down
 
 
