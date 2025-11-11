@@ -91,14 +91,13 @@
 	}
 
 	.like-button.liked {
-		color: #ff6b9d;
-		border-color: #ff6b9d;
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 
 	.like-button.liked:hover {
-		color: #ff4d7d;
-		border-color: #ff4d7d;
-		background: rgba(255, 107, 157, 0.1);
+		color: var(--accent-hover);
+		border-color: var(--accent-hover);
 	}
 
 	.like-button:disabled {
