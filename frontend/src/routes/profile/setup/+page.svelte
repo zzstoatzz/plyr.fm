@@ -2,6 +2,7 @@
 <script lang="ts">
 	import { APP_NAME } from '$lib/branding';
 	import { onMount } from 'svelte';
+	import { replaceState } from '$app/navigation';
 	import { API_URL } from '$lib/config';
 	import type { User } from '$lib/types';
 
@@ -40,7 +41,7 @@
 			}
 
 			// remove exchange_token from URL
-			window.history.replaceState({}, '', '/profile/setup');
+			replaceState('/profile/setup', {});
 		}
 
 		// get session_id from localStorage

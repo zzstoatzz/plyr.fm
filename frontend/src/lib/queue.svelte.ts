@@ -342,6 +342,12 @@ class Queue {
 				body: JSON.stringify({ state })
 			});
 
+			if (response.status === 401) {
+				// session expired or invalid, clear it and stop trying to sync
+				localStorage.removeItem('session_id');
+				return false;
+			}
+
 			if (response.status === 409) {
 				console.warn('queue conflict detected, fetching latest state');
 				await this.fetchQueue(true);
