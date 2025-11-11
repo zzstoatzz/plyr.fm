@@ -15,25 +15,7 @@
 
 <header>
 	<div class="header-content">
-		<a href="/" class="brand">
-			<h1>{APP_NAME}</h1>
-			<p>{APP_TAGLINE}</p>
-		</a>
-
-		<nav>
-			{#if isAuthenticated}
-				<a href="/liked" class="nav-link" class:active={$page.url.pathname === '/liked'}>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-					</svg>
-					<span>liked</span>
-				</a>
-				<a href="/portal" class="user-handle">@{user?.handle}</a>
-				<SettingsMenu />
-				<button onclick={onLogout} class="btn-logout">logout</button>
-			{:else}
-				<a href="/login" class="btn-primary">login</a>
-			{/if}
+		<div class="left-section">
 			<a
 				href="https://bsky.app/profile/plyr.fm"
 				target="_blank"
@@ -53,6 +35,37 @@
 					/>
 				</svg>
 			</a>
+			<a
+				href="https://status.zzstoatzz.io/@plyr.fm"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="status-link"
+				title="View status page"
+			>
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+				</svg>
+			</a>
+			<a href="/" class="brand">
+				<h1>{APP_NAME}</h1>
+				<p>{APP_TAGLINE}</p>
+			</a>
+		</div>
+
+		<nav>
+			{#if isAuthenticated}
+				<a href="/liked" class="nav-link" class:active={$page.url.pathname === '/liked'}>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+					</svg>
+					<span>liked</span>
+				</a>
+				<a href="/portal" class="user-handle">@{user?.handle}</a>
+				<SettingsMenu />
+				<button onclick={onLogout} class="btn-logout">logout</button>
+			{:else}
+				<a href="/login" class="btn-primary">login</a>
+			{/if}
 		</nav>
 	</div>
 </header>
@@ -73,6 +86,12 @@
 		gap: 1rem;
 	}
 
+	.left-section {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
 	.brand {
 		text-decoration: none;
 		color: inherit;
@@ -80,23 +99,30 @@
 		flex-direction: column;
 		gap: 0.25rem;
 		flex-shrink: 0;
+		margin-left: 1.5rem;
 	}
 
 	.brand:hover h1 {
 		color: var(--accent);
 	}
 
-	.bluesky-link {
+	.bluesky-link,
+	.status-link {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		color: var(--text-secondary);
 		transition: color 0.2s;
 		text-decoration: none;
+		flex-shrink: 0;
 	}
 
 	.bluesky-link:hover {
 		color: #1185fe;
+	}
+
+	.status-link:hover {
+		color: var(--accent);
 	}
 
 	h1 {
@@ -207,36 +233,54 @@
 
 	@media (max-width: 640px) {
 		.header-content {
-			padding: 1rem;
+			padding: 0.75rem 0.75rem;
+			gap: 0.75rem;
+		}
+
+		.left-section {
 			gap: 0.5rem;
+		}
+
+		.brand {
+			margin-left: 0;
 		}
 
 		.brand h1 {
-			font-size: 1.25rem;
+			font-size: 1.15rem;
 		}
 
 		.brand p {
-			font-size: 0.75rem;
+			font-size: 0.7rem;
 		}
 
-		.bluesky-link {
-			order: -1;
-		}
-
-		.bluesky-link svg {
-			width: 18px;
-			height: 18px;
+		.bluesky-link svg,
+		.status-link svg {
+			width: 16px;
+			height: 16px;
 		}
 
 		nav {
-			gap: 0.5rem;
+			gap: 0.4rem;
 		}
 
-		.nav-link,
-		.user-handle,
-		.btn-logout {
-			font-size: 0.85rem;
-			padding: 0.35rem 0.6rem;
+		.nav-link {
+			padding: 0.3rem 0.5rem;
+			font-size: 0.8rem;
+		}
+
+		.nav-link span {
+			display: none;
+		}
+
+		.user-handle {
+			font-size: 0.8rem;
+			padding: 0.3rem 0.5rem;
+		}
+
+		.btn-logout,
+		.btn-primary {
+			font-size: 0.8rem;
+			padding: 0.3rem 0.65rem;
 		}
 	}
 </style>

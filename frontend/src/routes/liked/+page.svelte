@@ -6,6 +6,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { fetchLikedTracks } from '$lib/tracks.svelte';
 	import { player } from '$lib/player.svelte';
+	import { queue } from '$lib/queue.svelte';
 	import type { Track, User } from '$lib/types';
 
 	let tracks = $state<Track[]>([]);
@@ -65,6 +66,11 @@
 	function playTrack(track: Track) {
 		player.playTrack(track);
 	}
+
+	function queueAll() {
+		if (tracks.length === 0) return;
+		queue.addTracks(tracks);
+	}
 </script>
 
 <svelte:head>
@@ -75,10 +81,27 @@
 
 <div class="page">
 	<header class="page-header">
-		<h1>liked tracks</h1>
-		{#if !loading && tracks.length > 0}
-			<p class="subtitle">{tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}</p>
-		{/if}
+		<div class="header-top">
+			<div>
+				<h1>liked tracks</h1>
+				{#if !loading && tracks.length > 0}
+					<p class="subtitle">{tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}</p>
+				{/if}
+			</div>
+			{#if !loading && tracks.length > 0}
+				<button class="btn-queue-all" onclick={queueAll} title="queue all liked tracks">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<line x1="8" y1="6" x2="21" y2="6"></line>
+						<line x1="8" y1="12" x2="21" y2="12"></line>
+						<line x1="8" y1="18" x2="21" y2="18"></line>
+						<line x1="3" y1="6" x2="3.01" y2="6"></line>
+						<line x1="3" y1="12" x2="3.01" y2="12"></line>
+						<line x1="3" y1="18" x2="3.01" y2="18"></line>
+					</svg>
+					<span>queue all</span>
+				</button>
+			{/if}
+		</div>
 	</header>
 
 	{#if loading}
@@ -122,6 +145,14 @@
 		margin-bottom: 2rem;
 	}
 
+	.header-top {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
 	.page-header h1 {
 		font-size: 2rem;
 		font-weight: 700;
@@ -133,6 +164,31 @@
 		font-size: 0.95rem;
 		color: #888;
 		margin: 0;
+	}
+
+	.btn-queue-all {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.6rem 1rem;
+		background: transparent;
+		border: 1px solid var(--accent);
+		color: var(--accent);
+		border-radius: 6px;
+		font-size: 0.9rem;
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+
+	.btn-queue-all:hover {
+		background: var(--accent);
+		color: var(--bg-primary);
+	}
+
+	.btn-queue-all svg {
+		flex-shrink: 0;
 	}
 
 	.loading-container {
@@ -179,11 +235,11 @@
 
 	@media (max-width: 768px) {
 		.page {
-			padding: 1.5rem 1rem;
+			padding: 1.25rem 0.75rem;
 		}
 
 		.page-header h1 {
-			font-size: 1.5rem;
+			font-size: 1.35rem;
 		}
 
 		.empty-state {
@@ -192,6 +248,49 @@
 
 		.empty-state h2 {
 			font-size: 1.25rem;
+		}
+
+		.btn-queue-all {
+			padding: 0.5rem 0.75rem;
+			font-size: 0.85rem;
+		}
+
+		.btn-queue-all svg {
+			width: 18px;
+			height: 18px;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.page {
+			padding: 1rem 0.65rem;
+		}
+
+		.page-header {
+			margin-bottom: 1.5rem;
+		}
+
+		.header-top {
+			gap: 0.75rem;
+		}
+
+		.page-header h1 {
+			font-size: 1.2rem;
+			margin: 0 0 0.35rem 0;
+		}
+
+		.subtitle {
+			font-size: 0.85rem;
+		}
+
+		.btn-queue-all {
+			padding: 0.45rem 0.65rem;
+			font-size: 0.8rem;
+		}
+
+		.btn-queue-all svg {
+			width: 16px;
+			height: 16px;
 		}
 	}
 </style>
