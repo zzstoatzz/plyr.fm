@@ -65,7 +65,7 @@
 	}
 
 	function handlePlay() {
-		queue.playNow(data.track);
+		player.playTrack(data.track);
 	}
 
 	function addToQueue() {
@@ -217,11 +217,15 @@
 
 <style>
 	main {
-		min-height: 100vh;
+		height: 100vh;
 		padding: 2rem;
 		padding-bottom: 8rem;
 		max-width: 1200px;
 		margin: 0 auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
 	}
 
 	.track-detail {
@@ -230,6 +234,7 @@
 		align-items: center;
 		gap: 2rem;
 		padding: 2rem;
+		width: 100%;
 	}
 
 	.cover-art-container {
