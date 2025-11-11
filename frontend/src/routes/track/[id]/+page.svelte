@@ -15,7 +15,6 @@
 
 	let user = $state<User | null>(null);
 	let isAuthenticated = $state(false);
-	let hasAutoPlayed = $state(false);
 
 	// reactive check if this track is currently playing
 	let isCurrentlyPlaying = $derived(
@@ -79,12 +78,6 @@
 
 	onMount(async () => {
 		await checkAuth();
-
-		// auto-play on mount
-		if (!hasAutoPlayed) {
-			queue.playNow(data.track);
-			hasAutoPlayed = true;
-		}
 	});
 
 	const shareUrl = typeof window !== 'undefined'
