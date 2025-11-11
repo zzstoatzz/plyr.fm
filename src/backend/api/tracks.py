@@ -402,15 +402,15 @@ async def list_tracks(
     pds_cache = {}
 
     # first pass: collect already-cached PDS URLs and artists needing resolution
-    artists_to_resolve = []
+    artists_to_resolve = {}  # dict for O(1) deduplication by DID
     for track in tracks:
         if track.artist_did not in pds_cache:
             if track.artist.pds_url:
                 pds_cache[track.artist_did] = track.artist.pds_url
             else:
                 # need to resolve this artist
-                if track.artist not in artists_to_resolve:
-                    artists_to_resolve.append(track.artist)
+                if track.artist_did not in artists_to_resolve:
+                    artists_to_resolve[track.artist_did] = track.artist
 
     # resolve all uncached PDS URLs concurrently
     if artists_to_resolve:
@@ -425,18 +425,18 @@ async def list_tracks(
                 return (artist.did, None)
 
         # resolve all concurrently
-        results = await asyncio.gather(*[resolve_artist(a) for a in artists_to_resolve])
+        results = await asyncio.gather(
+            *[resolve_artist(a) for a in artists_to_resolve.values()]
+        )
 
-        # update cache and database
+        # update cache and database with O(1) lookups
         for did, pds_url in results:
             pds_cache[did] = pds_url
             if pds_url:
-                # find artist and update
-                for artist in artists_to_resolve:
-                    if artist.did == did:
-                        artist.pds_url = pds_url
-                        db.add(artist)
-                        break
+                artist = artists_to_resolve.get(did)
+                if artist:
+                    artist.pds_url = pds_url
+                    db.add(artist)
 
     # commit any PDS URL updates
     await db.commit()
