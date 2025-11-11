@@ -61,6 +61,7 @@
 					{track}
 					isPlaying={player.currentTrack?.id === track.id && !player.paused}
 					onPlay={playTrack}
+					isAuthenticated={true}
 				/>
 			{/each}
 		</div>

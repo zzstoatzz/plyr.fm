@@ -9,9 +9,10 @@
 		track: Track;
 		isPlaying?: boolean;
 		onPlay: (track: Track) => void;
+		isAuthenticated?: boolean;
 	}
 
-	let { track, isPlaying = false, onPlay }: Props = $props();
+	let { track, isPlaying = false, onPlay, isAuthenticated = false }: Props = $props();
 
 	// construct shareable URL - use /track/[id] for link previews
 	// the track page will redirect to home with query param for actual playback
@@ -96,7 +97,9 @@
 		</div>
 	</button>
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
-		<LikeButton trackId={track.id} trackTitle={track.title} />
+		{#if isAuthenticated}
+			<LikeButton trackId={track.id} trackTitle={track.title} />
+		{/if}
 		<button
 			class="action-button"
 			onclick={addToQueue}

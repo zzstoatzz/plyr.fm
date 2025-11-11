@@ -4,13 +4,11 @@ import asyncio
 import contextlib
 import json
 import logging
-from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 
 import logfire
-from atproto import models
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -29,7 +27,11 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile, require_auth
 from backend._internal.uploads import UploadStatus, upload_tracker
-from backend.atproto import create_track_record
+from backend.atproto import (
+    create_like_record,
+    create_track_record,
+    delete_record_by_uri,
+)
 from backend.atproto.handles import resolve_handle
 from backend.atproto.records import build_track_record, update_record
 from backend.config import settings
@@ -787,35 +789,24 @@ async def like_track(
     if existing.scalar_one_or_none():
         return {"liked": True}
 
-    # create ATProto like record (fm.plyr.like)
-    like_record = models.AppBskyFeedLike.Record(
-        subject=models.ComAtprotoRepoStrongRef.Main(
-            uri=track.atproto_record_uri,
-            cid=track.atproto_record_cid,
-        ),
-        created_at=datetime.now(UTC).isoformat(),
-    )
-
-    # create record on user's PDS
-    response = await auth_session.client.com.atproto.repo.create_record(
-        models.ComAtprotoRepoCreateRecord.Data(
-            repo=auth_session.did,
-            collection="app.bsky.feed.like",
-            record=like_record,
-        )
+    # create ATProto like record on user's PDS
+    like_uri = await create_like_record(
+        auth_session=auth_session,
+        subject_uri=track.atproto_record_uri,
+        subject_cid=track.atproto_record_cid,
     )
 
     # index the like in our database
     like = TrackLike(
         track_id=track_id,
         user_did=auth_session.did,
-        atproto_like_uri=response.uri,
+        atproto_like_uri=like_uri,
     )
 
     db.add(like)
     await db.commit()
 
-    return {"liked": True, "atproto_uri": response.uri}
+    return {"liked": True, "atproto_uri": like_uri}
 
 
 @router.delete("/{track_id}/like")
@@ -836,14 +827,10 @@ async def unlike_track(
     if not like:
         return {"liked": False}
 
-    # delete ATProto like record
-    rkey = like.atproto_like_uri.split("/")[-1]
-    await auth_session.client.com.atproto.repo.delete_record(
-        models.ComAtprotoRepoDeleteRecord.Data(
-            repo=auth_session.did,
-            collection="app.bsky.feed.like",
-            rkey=rkey,
-        )
+    # delete ATProto like record from user's PDS
+    await delete_record_by_uri(
+        auth_session=auth_session,
+        record_uri=like.atproto_like_uri,
     )
 
     # remove from our index
