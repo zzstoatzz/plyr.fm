@@ -13,6 +13,11 @@
 	let liked = $state(initialLiked);
 	let loading = $state(false);
 
+	// update liked state when initialLiked changes
+	$effect(() => {
+		liked = initialLiked;
+	});
+
 	async function toggleLike(e: Event) {
 		e.stopPropagation();
 
@@ -33,6 +38,13 @@
 				// revert on failure
 				liked = previousState;
 				toast.error('failed to update like');
+			} else {
+				// show success feedback
+				if (liked) {
+					toast.success(`liked ${trackTitle}`);
+				} else {
+					toast.info(`unliked ${trackTitle}`);
+				}
 			}
 		} catch (e) {
 			// revert on error

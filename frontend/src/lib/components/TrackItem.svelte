@@ -23,8 +23,7 @@
 	function addToQueue(e: Event) {
 		e.stopPropagation();
 		queue.addTracks([track]);
-		// pass track title separately for styled rendering
-		toast.success(track.title, 1800);
+		toast.success(`queued ${track.title}`, 1800);
 	}
 </script>
 
@@ -98,7 +97,7 @@
 	</button>
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
 		{#if isAuthenticated}
-			<LikeButton trackId={track.id} trackTitle={track.title} />
+			<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
 		{/if}
 		<button
 			class="action-button"

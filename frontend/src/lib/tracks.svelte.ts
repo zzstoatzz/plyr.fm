@@ -8,6 +8,11 @@ function loadCachedTracks(): Track[] {
 		const cached = localStorage.getItem('tracks_cache');
 		if (cached) {
 			const { tracks } = JSON.parse(cached);
+			// check if cache has the new is_liked field, if not invalidate
+			if (tracks && tracks.length > 0 && !('is_liked' in tracks[0])) {
+				localStorage.removeItem('tracks_cache');
+				return [];
+			}
 			return tracks;
 		}
 	} catch (e) {
@@ -30,7 +35,14 @@ class TracksCache {
 
 		this.loading = true;
 		try {
-			const response = await fetch(`${API_URL}/tracks/`);
+			// include auth header if available to get like status
+			const headers: Record<string, string> = {};
+			const sessionId = localStorage.getItem('session_id');
+			if (sessionId) {
+				headers['Authorization'] = `Bearer ${sessionId}`;
+			}
+
+			const response = await fetch(`${API_URL}/tracks/`, { headers });
 			const data = await response.json();
 			this.tracks = data.tracks;
 
@@ -76,6 +88,9 @@ export async function likeTrack(trackId: number): Promise<boolean> {
 			throw new Error(`failed to like track: ${response.statusText}`);
 		}
 
+		// invalidate cache so next fetch gets updated like status
+		tracksCache.invalidate();
+
 		return true;
 	} catch (e) {
 		console.error('failed to like track:', e);
@@ -96,6 +111,9 @@ export async function unlikeTrack(trackId: number): Promise<boolean> {
 		if (!response.ok) {
 			throw new Error(`failed to unlike track: ${response.statusText}`);
 		}
+
+		// invalidate cache so next fetch gets updated like status
+		tracksCache.invalidate();
 
 		return true;
 	} catch (e) {

@@ -22,7 +22,6 @@
 				<span class="toast-icon" aria-hidden="true">
 					{icons[item.type]}
 				</span>
-				<span class="toast-prefix">queued</span>
 				<span class="toast-message">{item.message}</span>
 			</div>
 		{/each}
@@ -64,13 +63,6 @@
 		margin-top: 0.1rem;
 	}
 
-	.toast-prefix {
-		opacity: 0.5;
-		font-weight: 400;
-		font-size: 0.8rem;
-		flex-shrink: 0;
-	}
-
 	.toast-message {
 		max-width: 350px;
 		font-weight: 500;
@@ -83,20 +75,12 @@
 		color: var(--success);
 	}
 
-	.toast-success .toast-prefix {
-		color: var(--text-tertiary);
-	}
-
 	.toast-success .toast-message {
 		color: var(--text-primary);
 	}
 
 	.toast-error .toast-icon {
 		color: var(--error);
-	}
-
-	.toast-error .toast-prefix {
-		color: var(--text-tertiary);
 	}
 
 	.toast-error .toast-message {
@@ -107,20 +91,12 @@
 		color: var(--accent);
 	}
 
-	.toast-info .toast-prefix {
-		color: var(--text-tertiary);
-	}
-
 	.toast-info .toast-message {
 		color: var(--text-primary);
 	}
 
 	.toast-warning .toast-icon {
 		color: var(--warning);
-	}
-
-	.toast-warning .toast-prefix {
-		color: var(--text-tertiary);
 	}
 
 	.toast-warning .toast-message {
@@ -137,22 +113,15 @@
 		.toast {
 			padding: 0.35rem 0.7rem;
 			font-size: 0.8rem;
+			max-width: 90vw;
 		}
 
 		.toast-icon {
 			font-size: 0.75rem;
 		}
 
-		.toast-prefix {
-			font-size: 0.75rem;
-		}
-
-		.toast {
-			max-width: 90vw;
-		}
-
 		.toast-message {
-			max-width: calc(90vw - 5rem);
+			max-width: calc(90vw - 4rem);
 		}
 	}
 

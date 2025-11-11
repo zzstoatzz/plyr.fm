@@ -1,1 +1,1 @@
-Check the current PR for comments, reviews, and inline review comments via the gh cli.
+Check the current PR for comments, reviews, AND inline review comments via the gh cli.

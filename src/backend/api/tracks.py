@@ -16,6 +16,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Request,
     UploadFile,
 )
 from fastapi.responses import StreamingResponse
@@ -50,9 +51,30 @@ class TrackResponse(dict):
 
     @classmethod
     async def from_track(
-        cls, track: Track, pds_url: str | None = None
+        cls,
+        track: Track,
+        pds_url: str | None = None,
+        user_did: str | None = None,
+        db: AsyncSession | None = None,
     ) -> "TrackResponse":
-        """build track response from Track model."""
+        """build track response from Track model.
+
+        args:
+            track: Track model instance
+            pds_url: optional PDS URL for atproto_record_url
+            user_did: optional user DID to check if track is liked
+            db: optional database session to check like status
+        """
+        # check if user has liked this track
+        is_liked = False
+        if user_did and db:
+            result = await db.execute(
+                select(TrackLike).where(
+                    TrackLike.track_id == track.id, TrackLike.user_did == user_did
+                )
+            )
+            is_liked = result.scalar_one_or_none() is not None
+
         return cls(
             id=track.id,
             title=track.title,
@@ -75,6 +97,7 @@ class TrackResponse(dict):
             play_count=track.play_count,
             created_at=track.created_at.isoformat(),
             image_url=await track.get_image_url(),
+            is_liked=is_liked,
         )
 
 
@@ -416,10 +439,24 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
 @router.get("/")
 async def list_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
+    request: Request,
     artist_did: str | None = None,
 ) -> dict:
     """list all tracks, optionally filtered by artist DID."""
     from atproto_identity.did.resolver import AsyncDidResolver
+
+    # try to get authenticated user (optional)
+    user_did = None
+    try:
+        from backend._internal.auth import get_session
+
+        session_id = request.headers.get("authorization", "").replace("Bearer ", "")
+        if session_id:
+            auth_session = await get_session(session_id)
+            if auth_session:
+                user_did = auth_session.did
+    except Exception:
+        pass  # not authenticated, continue without user_did
 
     stmt = select(Track).join(Artist).options(selectinload(Track.artist))
 
@@ -475,10 +512,12 @@ async def list_tracks(
     # commit any PDS URL updates
     await db.commit()
 
-    # fetch all track responses concurrently
+    # fetch all track responses concurrently with like status
     track_responses = await asyncio.gather(
         *[
-            TrackResponse.from_track(track, pds_cache.get(track.artist_did))
+            TrackResponse.from_track(
+                track, pds_cache.get(track.artist_did), user_did, db
+            )
             for track in tracks
         ]
     )
@@ -716,8 +755,12 @@ async def list_liked_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
+    # all tracks in this endpoint are liked by definition
     track_responses = await asyncio.gather(
-        *[TrackResponse.from_track(track) for track in tracks]
+        *[
+            TrackResponse.from_track(track, user_did=auth_session.did, db=db)
+            for track in tracks
+        ]
     )
 
     return {"tracks": track_responses}
