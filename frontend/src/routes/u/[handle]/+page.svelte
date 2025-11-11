@@ -106,8 +106,14 @@
 			}
 			artist = await artistResponse.json();
 
-			// fetch artist's tracks
-			const tracksResponse = await fetch(`${API_URL}/tracks/?artist_did=${artist?.did}`);
+			// fetch artist's tracks with auth header to get like status
+			const headers: Record<string, string> = {};
+			const sessionId = localStorage.getItem('session_id');
+			if (sessionId) {
+				headers['Authorization'] = `Bearer ${sessionId}`;
+			}
+
+			const tracksResponse = await fetch(`${API_URL}/tracks/?artist_did=${artist?.did}`, { headers });
 			if (tracksResponse.ok) {
 				const data = await tracksResponse.json();
 			tracks = data.tracks;
