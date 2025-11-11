@@ -17,6 +17,11 @@
 	let isAuthenticated = $state(false);
 	let hasAutoPlayed = $state(false);
 
+	// reactive check if this track is currently playing
+	let isCurrentlyPlaying = $derived(
+		player.currentTrack?.id === data.track.id && !player.paused
+	);
+
 	async function checkAuth() {
 		const sessionId = localStorage.getItem('session_id');
 		if (!sessionId) {
@@ -190,11 +195,18 @@
 
 			<!-- actions -->
 			<div class="track-actions">
-				<button class="btn-play" onclick={handlePlay}>
-					<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M8 5v14l11-7z"/>
-					</svg>
-					play
+				<button class="btn-play" class:playing={isCurrentlyPlaying} onclick={handlePlay}>
+					{#if isCurrentlyPlaying}
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+						</svg>
+						pause
+					{:else}
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M8 5v14l11-7z"/>
+						</svg>
+						play
+					{/if}
 				</button>
 				<button class="btn-queue" onclick={addToQueue}>
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -217,7 +229,8 @@
 
 <style>
 	main {
-		height: 100vh;
+		min-height: 100vh;
+		max-height: 100vh;
 		padding: 2rem;
 		padding-bottom: 8rem;
 		max-width: 1200px;
@@ -225,7 +238,6 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		overflow: hidden;
 	}
 
 	.track-detail {
@@ -233,8 +245,9 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 2rem;
-		padding: 2rem;
 		width: 100%;
+		max-height: calc(100vh - 12rem);
+		overflow-y: auto;
 	}
 
 	.cover-art-container {
@@ -380,6 +393,10 @@
 	.btn-play:hover {
 		transform: scale(1.05);
 		box-shadow: 0 4px 16px rgba(138, 179, 255, 0.4);
+	}
+
+	.btn-play.playing {
+		opacity: 0.8;
 	}
 
 	.btn-queue {
