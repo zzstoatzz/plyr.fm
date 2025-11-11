@@ -5,6 +5,7 @@ from typing import BinaryIO
 
 import aioboto3
 import boto3
+import logfire
 from botocore.config import Config
 
 from backend.config import settings
@@ -59,50 +60,67 @@ class R2Storage:
 
         supports both audio and image files.
         """
-        # compute hash in chunks (constant memory)
-        file_id = hash_file_chunked(file)[:16]
+        with logfire.span("R2 save", filename=filename):
+            # compute hash in chunks (constant memory)
+            file_id = hash_file_chunked(file)[:16]
+            logfire.info("computed file hash", file_id=file_id)
 
-        # determine file extension and type
-        ext = Path(filename).suffix.lower()
+            # determine file extension and type
+            ext = Path(filename).suffix.lower()
 
-        # try audio format first
-        audio_format = AudioFormat.from_extension(ext)
-        if audio_format:
-            key = f"audio/{file_id}{ext}"
-            media_type = audio_format.media_type
-            image_format = None
-        else:
-            # try image format
-            from backend.models.image import ImageFormat
-
-            image_format, is_valid = ImageFormat.validate_and_extract(filename)
-            if is_valid and image_format:
-                key = f"{file_id}{ext}"
-                media_type = image_format.media_type
+            # try audio format first
+            audio_format = AudioFormat.from_extension(ext)
+            if audio_format:
+                key = f"audio/{file_id}{ext}"
+                media_type = audio_format.media_type
+                image_format = None
             else:
-                raise ValueError(
-                    f"unsupported file type: {ext}. "
-                    f"supported audio: {AudioFormat.supported_extensions_str()}, "
-                    f"supported image: jpg, jpeg, png, webp, gif"
-                )
+                # try image format
+                from backend.models.image import ImageFormat
 
-        # stream upload to R2 (constant memory, non-blocking)
-        # file pointer already reset by hash_file_chunked
-        bucket = self.image_bucket_name if image_format else self.audio_bucket_name
-        async with self.async_session.client(
-            "s3",
-            endpoint_url=self.endpoint_url,
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-        ) as client:
-            await client.upload_fileobj(
-                Fileobj=file,
-                Bucket=bucket,
-                Key=key,
-                ExtraArgs={"ContentType": media_type},
+                image_format, is_valid = ImageFormat.validate_and_extract(filename)
+                if is_valid and image_format:
+                    key = f"{file_id}{ext}"
+                    media_type = image_format.media_type
+                else:
+                    raise ValueError(
+                        f"unsupported file type: {ext}. "
+                        f"supported audio: {AudioFormat.supported_extensions_str()}, "
+                        f"supported image: jpg, jpeg, png, webp, gif"
+                    )
+
+            # stream upload to R2 (constant memory, non-blocking)
+            # file pointer already reset by hash_file_chunked
+            bucket = self.image_bucket_name if image_format else self.audio_bucket_name
+            logfire.info(
+                "uploading to R2", bucket=bucket, key=key, media_type=media_type
             )
 
-        return file_id
+            try:
+                async with self.async_session.client(
+                    "s3",
+                    endpoint_url=self.endpoint_url,
+                    aws_access_key_id=self.aws_access_key_id,
+                    aws_secret_access_key=self.aws_secret_access_key,
+                ) as client:
+                    await client.upload_fileobj(
+                        Fileobj=file,
+                        Bucket=bucket,
+                        Key=key,
+                        ExtraArgs={"ContentType": media_type},
+                    )
+            except Exception as e:
+                logfire.error(
+                    "R2 upload failed",
+                    error=str(e),
+                    bucket=bucket,
+                    key=key,
+                    exc_info=True,
+                )
+                raise
+
+            logfire.info("R2 upload complete", file_id=file_id, key=key)
+            return file_id
 
     async def get_url(self, file_id: str) -> str | None:
         """get public URL for media file (audio or image)."""

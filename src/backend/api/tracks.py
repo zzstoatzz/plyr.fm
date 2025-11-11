@@ -8,6 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 
+import logfire
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -90,191 +91,220 @@ async def _process_upload_background(
     image_filename: str | None = None,
 ) -> None:
     """background task to process upload."""
-    try:
-        upload_tracker.update_status(
-            upload_id, UploadStatus.PROCESSING, "processing upload..."
-        )
-
-        # validate file type
-        ext = Path(filename).suffix.lower()
-        audio_format = AudioFormat.from_extension(ext)
-        if not audio_format:
-            upload_tracker.update_status(
-                upload_id,
-                UploadStatus.FAILED,
-                "upload failed",
-                error=f"unsupported file type: {ext}",
-            )
-            return
-
-        # save audio file
-        upload_tracker.update_status(
-            upload_id, UploadStatus.PROCESSING, "saving audio file..."
-        )
+    with logfire.span(
+        "process upload background", upload_id=upload_id, filename=filename
+    ):
         try:
-            file_obj = BytesIO(file_data)
-            file_id = await storage.save(file_obj, filename)
-        except ValueError as e:
             upload_tracker.update_status(
-                upload_id, UploadStatus.FAILED, "upload failed", error=str(e)
+                upload_id, UploadStatus.PROCESSING, "processing upload..."
             )
-            return
 
-        # get R2 URL
-        r2_url = None
-        if settings.storage.backend == "r2":
-            from backend.storage.r2 import R2Storage
-
-            if isinstance(storage, R2Storage):
-                r2_url = await storage.get_url(file_id)
-
-        # save image if provided
-        image_id = None
-        image_url = None
-        if image_data and image_filename:
-            upload_tracker.update_status(
-                upload_id, UploadStatus.PROCESSING, "saving image..."
-            )
-            image_format, is_valid = ImageFormat.validate_and_extract(image_filename)
-            if is_valid and image_format:
-                try:
-                    image_obj = BytesIO(image_data)
-                    # save with images/ prefix to namespace it
-                    image_id = await storage.save(image_obj, f"images/{image_filename}")
-                    # get R2 URL for image if using R2 storage
-                    if settings.storage.backend == "r2" and isinstance(
-                        storage, R2Storage
-                    ):
-                        image_url = await storage.get_url(image_id)
-                except Exception as e:
-                    logger.warning(f"failed to save image: {e}", exc_info=True)
-                    # continue without image - it's optional
-            else:
-                logger.warning(f"unsupported image format: {image_filename}")
-
-        # get artist and resolve features
-        async with db_session() as db:
-            result = await db.execute(select(Artist).where(Artist.did == artist_did))
-            artist = result.scalar_one_or_none()
-            if not artist:
+            # validate file type
+            ext = Path(filename).suffix.lower()
+            audio_format = AudioFormat.from_extension(ext)
+            if not audio_format:
                 upload_tracker.update_status(
                     upload_id,
                     UploadStatus.FAILED,
                     "upload failed",
-                    error="artist profile not found",
+                    error=f"unsupported file type: {ext}",
                 )
                 return
 
-            # resolve featured artist handles
-            featured_artists = []
-            if features:
-                upload_tracker.update_status(
-                    upload_id, UploadStatus.PROCESSING, "resolving featured artists..."
-                )
-                try:
-                    handles_list = json.loads(features)
-                    if isinstance(handles_list, list):
-                        for handle in handles_list:
-                            if (
-                                isinstance(handle, str)
-                                and handle.lstrip("@") != artist.handle
-                            ):
-                                resolved = await resolve_handle(handle)
-                                if resolved:
-                                    featured_artists.append(resolved)
-                except json.JSONDecodeError:
-                    pass  # ignore malformed features
-
-            # create ATProto record
-            atproto_uri = None
-            atproto_cid = None
-            if r2_url:
-                upload_tracker.update_status(
-                    upload_id, UploadStatus.PROCESSING, "creating atproto record..."
-                )
-                try:
-                    result = await create_track_record(
-                        auth_session=auth_session,
-                        title=title,
-                        artist=artist.display_name,
-                        audio_url=r2_url,
-                        file_type=ext[1:],
-                        album=album,
-                        duration=None,
-                        features=featured_artists if featured_artists else None,
-                        image_url=image_url,
-                    )
-                    if result:
-                        atproto_uri, atproto_cid = result
-                except Exception as e:
-                    logger.warning(
-                        f"failed to create ATProto record: {e}", exc_info=True
-                    )
-
-            # create track record
+            # save audio file
             upload_tracker.update_status(
-                upload_id, UploadStatus.PROCESSING, "saving track metadata..."
+                upload_id, UploadStatus.PROCESSING, "saving audio file..."
             )
-            extra = {}
-            if album:
-                extra["album"] = album
-
-            track = Track(
-                title=title,
-                file_id=file_id,
-                file_type=ext[1:],
-                artist_did=artist_did,
-                extra=extra,
-                features=featured_artists,
-                r2_url=r2_url,
-                atproto_record_uri=atproto_uri,
-                atproto_record_cid=atproto_cid,
-                image_id=image_id,
-            )
-
-            db.add(track)
             try:
-                await db.commit()
-                await db.refresh(track)
+                logfire.info(
+                    "preparing to save audio file",
+                    filename=filename,
+                    file_data_size=len(file_data),
+                )
+                file_obj = BytesIO(file_data)
+                logfire.info("calling storage.save")
+                file_id = await storage.save(file_obj, filename)
+                logfire.info("storage.save completed", file_id=file_id)
+            except ValueError as e:
+                logfire.error("ValueError during storage.save", error=str(e))
+                upload_tracker.update_status(
+                    upload_id, UploadStatus.FAILED, "upload failed", error=str(e)
+                )
+                return
+            except Exception as e:
+                logfire.error(
+                    "unexpected exception during storage.save",
+                    error=str(e),
+                    exc_info=True,
+                )
+                upload_tracker.update_status(
+                    upload_id, UploadStatus.FAILED, "upload failed", error=str(e)
+                )
+                return
 
-                # send notification about new track
-                from backend._internal.notifications import notification_service
+            # get R2 URL
+            r2_url = None
+            if settings.storage.backend == "r2":
+                from backend.storage.r2 import R2Storage
 
+                if isinstance(storage, R2Storage):
+                    r2_url = await storage.get_url(file_id)
+
+            # save image if provided
+            image_id = None
+            image_url = None
+            if image_data and image_filename:
+                upload_tracker.update_status(
+                    upload_id, UploadStatus.PROCESSING, "saving image..."
+                )
+                image_format, is_valid = ImageFormat.validate_and_extract(
+                    image_filename
+                )
+                if is_valid and image_format:
+                    try:
+                        image_obj = BytesIO(image_data)
+                        # save with images/ prefix to namespace it
+                        image_id = await storage.save(
+                            image_obj, f"images/{image_filename}"
+                        )
+                        # get R2 URL for image if using R2 storage
+                        if settings.storage.backend == "r2" and isinstance(
+                            storage, R2Storage
+                        ):
+                            image_url = await storage.get_url(image_id)
+                    except Exception as e:
+                        logger.warning(f"failed to save image: {e}", exc_info=True)
+                        # continue without image - it's optional
+                else:
+                    logger.warning(f"unsupported image format: {image_filename}")
+
+            # get artist and resolve features
+            async with db_session() as db:
+                result = await db.execute(
+                    select(Artist).where(Artist.did == artist_did)
+                )
+                artist = result.scalar_one_or_none()
+                if not artist:
+                    upload_tracker.update_status(
+                        upload_id,
+                        UploadStatus.FAILED,
+                        "upload failed",
+                        error="artist profile not found",
+                    )
+                    return
+
+                # resolve featured artist handles
+                featured_artists = []
+                if features:
+                    upload_tracker.update_status(
+                        upload_id,
+                        UploadStatus.PROCESSING,
+                        "resolving featured artists...",
+                    )
+                    try:
+                        handles_list = json.loads(features)
+                        if isinstance(handles_list, list):
+                            for handle in handles_list:
+                                if (
+                                    isinstance(handle, str)
+                                    and handle.lstrip("@") != artist.handle
+                                ):
+                                    resolved = await resolve_handle(handle)
+                                    if resolved:
+                                        featured_artists.append(resolved)
+                    except json.JSONDecodeError:
+                        pass  # ignore malformed features
+
+                # create ATProto record
+                atproto_uri = None
+                atproto_cid = None
+                if r2_url:
+                    upload_tracker.update_status(
+                        upload_id, UploadStatus.PROCESSING, "creating atproto record..."
+                    )
+                    try:
+                        result = await create_track_record(
+                            auth_session=auth_session,
+                            title=title,
+                            artist=artist.display_name,
+                            audio_url=r2_url,
+                            file_type=ext[1:],
+                            album=album,
+                            duration=None,
+                            features=featured_artists if featured_artists else None,
+                            image_url=image_url,
+                        )
+                        if result:
+                            atproto_uri, atproto_cid = result
+                    except Exception as e:
+                        logger.warning(
+                            f"failed to create ATProto record: {e}", exc_info=True
+                        )
+
+                # create track record
+                upload_tracker.update_status(
+                    upload_id, UploadStatus.PROCESSING, "saving track metadata..."
+                )
+                extra = {}
+                if album:
+                    extra["album"] = album
+
+                track = Track(
+                    title=title,
+                    file_id=file_id,
+                    file_type=ext[1:],
+                    artist_did=artist_did,
+                    extra=extra,
+                    features=featured_artists,
+                    r2_url=r2_url,
+                    atproto_record_uri=atproto_uri,
+                    atproto_record_cid=atproto_cid,
+                    image_id=image_id,
+                )
+
+                db.add(track)
                 try:
-                    # eagerly load artist for notification
-                    await db.refresh(track, ["artist"])
-                    await notification_service.send_track_notification(track)
-                except Exception as e:
-                    logger.warning(
-                        f"failed to send notification for track {track.id}: {e}"
+                    await db.commit()
+                    await db.refresh(track)
+
+                    # send notification about new track
+                    from backend._internal.notifications import notification_service
+
+                    try:
+                        # eagerly load artist for notification
+                        await db.refresh(track, ["artist"])
+                        await notification_service.send_track_notification(track)
+                    except Exception as e:
+                        logger.warning(
+                            f"failed to send notification for track {track.id}: {e}"
+                        )
+
+                    upload_tracker.update_status(
+                        upload_id,
+                        UploadStatus.COMPLETED,
+                        "upload completed successfully",
+                        track_id=track.id,
                     )
 
-                upload_tracker.update_status(
-                    upload_id,
-                    UploadStatus.COMPLETED,
-                    "upload completed successfully",
-                    track_id=track.id,
-                )
+                except IntegrityError as e:
+                    await db.rollback()
+                    # integrity errors now only occur for foreign key violations or other constraints
+                    error_msg = f"database constraint violation: {e!s}"
+                    upload_tracker.update_status(
+                        upload_id, UploadStatus.FAILED, "upload failed", error=error_msg
+                    )
+                    # cleanup: delete uploaded file
+                    with contextlib.suppress(Exception):
+                        await storage.delete(file_id)
 
-            except IntegrityError as e:
-                await db.rollback()
-                # integrity errors now only occur for foreign key violations or other constraints
-                error_msg = f"database constraint violation: {e!s}"
-                upload_tracker.update_status(
-                    upload_id, UploadStatus.FAILED, "upload failed", error=error_msg
-                )
-                # cleanup: delete uploaded file
-                with contextlib.suppress(Exception):
-                    await storage.delete(file_id)
-
-    except Exception as e:
-        logger.exception(f"upload {upload_id} failed with unexpected error")
-        upload_tracker.update_status(
-            upload_id,
-            UploadStatus.FAILED,
-            "upload failed",
-            error=f"unexpected error: {e!s}",
-        )
+        except Exception as e:
+            logger.exception(f"upload {upload_id} failed with unexpected error")
+            upload_tracker.update_status(
+                upload_id,
+                UploadStatus.FAILED,
+                "upload failed",
+                error=f"unexpected error: {e!s}",
+            )
 
 
 @router.post("/")

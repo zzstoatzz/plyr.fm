@@ -9,8 +9,6 @@ class AudioFormat(str, Enum):
     MP3 = "mp3"
     WAV = "wav"
     M4A = "m4a"
-    AIFF = "aiff"
-    AIF = "aif"
 
     @property
     def extension(self) -> str:
@@ -24,8 +22,6 @@ class AudioFormat(str, Enum):
             AudioFormat.MP3: "audio/mpeg",
             AudioFormat.WAV: "audio/wav",
             AudioFormat.M4A: "audio/mp4",
-            AudioFormat.AIFF: "audio/aiff",
-            AudioFormat.AIF: "audio/aiff",
         }
         return media_types[self]
 
