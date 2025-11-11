@@ -14,6 +14,9 @@
 
 	let { track, isPlaying = false, onPlay, isAuthenticated = false }: Props = $props();
 
+	// DEBUG: log track data
+	console.log('TrackItem:', track.title, 'is_liked:', track.is_liked, 'isAuthenticated:', isAuthenticated);
+
 	// construct shareable URL - use /track/[id] for link previews
 	// the track page will redirect to home with query param for actual playback
 	const shareUrl = typeof window !== 'undefined'
