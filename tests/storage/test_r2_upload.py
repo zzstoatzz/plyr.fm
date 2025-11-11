@@ -25,7 +25,7 @@ async def test_r2_upload():
 
     # upload file
     with open(test_file, "rb") as f:
-        file_id = storage.save(f, "test_audio.m4a")
+        file_id = await storage.save(f, "test_audio.m4a")
 
     print(f"✓ uploaded file with id: {file_id}")
 

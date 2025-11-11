@@ -1,8 +1,10 @@
 """local filesystem storage for media files."""
 
-import shutil
 from pathlib import Path
 from typing import BinaryIO
+
+import anyio
+from anyio import Path as AsyncPath
 
 from backend.models import AudioFormat
 from backend.utilities.hashing import CHUNK_SIZE, hash_file_chunked
@@ -19,10 +21,10 @@ class FilesystemStorage:
         (self.base_path / "audio").mkdir(exist_ok=True)
         (self.base_path / "images").mkdir(exist_ok=True)
 
-    def save(self, file: BinaryIO, filename: str) -> str:
+    async def save(self, file: BinaryIO, filename: str) -> str:
         """save media file using streaming write.
 
-        uses chunked hashing and shutil.copyfileobj for constant
+        uses chunked hashing and async file I/O for constant
         memory usage regardless of file size.
 
         supports both audio and image files.
@@ -51,10 +53,14 @@ class FilesystemStorage:
                     f"supported image: jpg, jpeg, png, webp, gif"
                 )
 
-        # stream copy to disk (constant memory)
+        # write file using async I/O in chunks (constant memory, non-blocking)
         # file pointer already reset by hash_file_chunked
-        with open(file_path, "wb") as dest:
-            shutil.copyfileobj(file, dest, length=CHUNK_SIZE)
+        async with await anyio.open_file(file_path, "wb") as dest:
+            while True:
+                chunk = file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                await dest.write(chunk)
 
         return file_id
 
@@ -76,13 +82,14 @@ class FilesystemStorage:
 
         return None
 
-    def delete(self, file_id: str) -> bool:
-        """delete media file by id."""
+    async def delete(self, file_id: str) -> bool:
+        """delete media file by id using async file operations."""
         # try audio formats
         for audio_format in AudioFormat:
             file_path = self.base_path / "audio" / f"{file_id}{audio_format.extension}"
-            if file_path.exists():
-                file_path.unlink()
+            async_path = AsyncPath(file_path)
+            if await async_path.exists():
+                await async_path.unlink()
                 return True
 
         # try image formats
@@ -90,8 +97,9 @@ class FilesystemStorage:
 
         for image_format in ImageFormat:
             file_path = self.base_path / "images" / f"{file_id}.{image_format.value}"
-            if file_path.exists():
-                file_path.unlink()
+            async_path = AsyncPath(file_path)
+            if await async_path.exists():
+                await async_path.unlink()
                 return True
 
         return False
