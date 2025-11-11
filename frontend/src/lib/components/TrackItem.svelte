@@ -342,7 +342,7 @@
 
 	@media (max-width: 768px) {
 		.track-container {
-			padding: 0.75rem;
+			padding: 0.65rem 0.75rem;
 			gap: 0.5rem;
 		}
 
@@ -350,32 +350,77 @@
 			gap: 0.5rem;
 		}
 
+		.track-image,
+		.track-image-placeholder,
 		.track-avatar {
-			width: 44px;
-			height: 44px;
+			width: 40px;
+			height: 40px;
 		}
 
 		.track-title {
-			font-size: 0.95rem;
+			font-size: 0.9rem;
 		}
 
 		.track-metadata {
-			font-size: 0.85rem;
-			gap: 0.4rem;
+			font-size: 0.8rem;
+			gap: 0.35rem;
 		}
 
 		.track-meta {
-			font-size: 0.75rem;
+			font-size: 0.7rem;
+		}
+
+		.track-actions {
+			gap: 0.35rem;
 		}
 
 		.action-button {
-			width: 28px;
-			height: 28px;
+			width: 32px;
+			height: 32px;
 		}
 
 		.action-button svg {
 			width: 14px;
 			height: 14px;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.track-container {
+			padding: 0.5rem 0.65rem;
+		}
+
+		.track-image,
+		.track-image-placeholder,
+		.track-avatar {
+			width: 36px;
+			height: 36px;
+		}
+
+		.track-title {
+			font-size: 0.85rem;
+		}
+
+		.track-metadata {
+			font-size: 0.75rem;
+		}
+
+		.metadata-separator {
+			font-size: 0.6rem;
+		}
+
+		.track-meta {
+			display: none;
+		}
+
+		.action-button {
+			width: 30px;
+			height: 30px;
+		}
+
+		.action-button svg {
+			width: 13px;
+			height: 13px;
 		}
 	}
 </style>
