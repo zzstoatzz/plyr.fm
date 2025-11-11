@@ -51,10 +51,10 @@ class R2Storage:
         self.aws_access_key_id = settings.storage.aws_access_key_id
         self.aws_secret_access_key = settings.storage.aws_secret_access_key
 
-    def save(self, file: BinaryIO, filename: str) -> str:
+    async def save(self, file: BinaryIO, filename: str) -> str:
         """save media file to R2 using streaming upload.
 
-        uses chunked hashing and boto3's upload_fileobj for constant
+        uses chunked hashing and aioboto3's upload_fileobj for constant
         memory usage regardless of file size.
 
         supports both audio and image files.
@@ -86,15 +86,21 @@ class R2Storage:
                     f"supported image: jpg, jpeg, png, webp, gif"
                 )
 
-        # stream upload to R2 (constant memory)
+        # stream upload to R2 (constant memory, non-blocking)
         # file pointer already reset by hash_file_chunked
         bucket = self.image_bucket_name if image_format else self.audio_bucket_name
-        self.client.upload_fileobj(
-            Fileobj=file,
-            Bucket=bucket,
-            Key=key,
-            ExtraArgs={"ContentType": media_type},
-        )
+        async with self.async_session.client(
+            "s3",
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.aws_access_key_id,
+            aws_secret_access_key=self.aws_secret_access_key,
+        ) as client:
+            await client.upload_fileobj(
+                Fileobj=file,
+                Bucket=bucket,
+                Key=key,
+                ExtraArgs={"ContentType": media_type},
+            )
 
         return file_id
 
@@ -134,28 +140,34 @@ class R2Storage:
 
             return None
 
-    def delete(self, file_id: str) -> bool:
+    async def delete(self, file_id: str) -> bool:
         """delete media file from R2."""
-        # try audio formats
-        for audio_format in AudioFormat:
-            key = f"audio/{file_id}{audio_format.extension}"
+        async with self.async_session.client(
+            "s3",
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.aws_access_key_id,
+            aws_secret_access_key=self.aws_secret_access_key,
+        ) as client:
+            # try audio formats
+            for audio_format in AudioFormat:
+                key = f"audio/{file_id}{audio_format.extension}"
 
-            try:
-                self.client.delete_object(Bucket=self.audio_bucket_name, Key=key)
-                return True
-            except self.client.exceptions.ClientError:
-                continue
+                try:
+                    await client.delete_object(Bucket=self.audio_bucket_name, Key=key)
+                    return True
+                except client.exceptions.ClientError:
+                    continue
 
-        # try image formats
-        from backend.models.image import ImageFormat
+            # try image formats
+            from backend.models.image import ImageFormat
 
-        for image_format in ImageFormat:
-            key = f"{file_id}.{image_format.value}"
+            for image_format in ImageFormat:
+                key = f"{file_id}.{image_format.value}"
 
-            try:
-                self.client.delete_object(Bucket=self.image_bucket_name, Key=key)
-                return True
-            except self.client.exceptions.ClientError:
-                continue
+                try:
+                    await client.delete_object(Bucket=self.image_bucket_name, Key=key)
+                    return True
+                except client.exceptions.ClientError:
+                    continue
 
-        return False
+            return False

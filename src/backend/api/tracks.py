@@ -113,7 +113,7 @@ async def _process_upload_background(
         )
         try:
             file_obj = BytesIO(file_data)
-            file_id = storage.save(file_obj, filename)
+            file_id = await storage.save(file_obj, filename)
         except ValueError as e:
             upload_tracker.update_status(
                 upload_id, UploadStatus.FAILED, "upload failed", error=str(e)
@@ -140,7 +140,7 @@ async def _process_upload_background(
                 try:
                     image_obj = BytesIO(image_data)
                     # save with images/ prefix to namespace it
-                    image_id = storage.save(image_obj, f"images/{image_filename}")
+                    image_id = await storage.save(image_obj, f"images/{image_filename}")
                     # get R2 URL for image if using R2 storage
                     if settings.storage.backend == "r2" and isinstance(
                         storage, R2Storage
@@ -265,7 +265,7 @@ async def _process_upload_background(
                 )
                 # cleanup: delete uploaded file
                 with contextlib.suppress(Exception):
-                    storage.delete(file_id)
+                    await storage.delete(file_id)
 
     except Exception as e:
         logger.exception(f"upload {upload_id} failed with unexpected error")
@@ -498,7 +498,7 @@ async def delete_track(
 
     # delete audio file from storage
     try:
-        storage.delete(track.file_id)
+        await storage.delete(track.file_id)
     except Exception as e:
         # log but don't fail - maybe file was already deleted
         logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)
@@ -613,7 +613,7 @@ async def update_track_metadata(
         # read and save image
         image_data = await image.read()
         image_obj = BytesIO(image_data)
-        image_id = storage.save(image_obj, f"images/{image.filename}")
+        image_id = await storage.save(image_obj, f"images/{image.filename}")
 
         # get R2 URL for image if using R2 storage
         if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
@@ -622,7 +622,7 @@ async def update_track_metadata(
         # delete old image if exists
         if track.image_id:
             with contextlib.suppress(Exception):
-                storage.delete(track.image_id)
+                await storage.delete(track.image_id)
 
         track.image_id = image_id
 

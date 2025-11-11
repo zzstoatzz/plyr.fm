@@ -22,7 +22,7 @@ def create_large_test_file(size_mb: int) -> io.BytesIO:
     return io.BytesIO(data)
 
 
-def test_large_file_upload_filesystem(tmp_path: Path) -> None:
+async def test_large_file_upload_filesystem(tmp_path: Path) -> None:
     """filesystem storage handles 50MB file without OOM.
 
     before streaming: would load entire file into memory (100MB+ peak)
@@ -34,7 +34,7 @@ def test_large_file_upload_filesystem(tmp_path: Path) -> None:
     large_file = create_large_test_file(size_mb=50)
 
     # should succeed with constant memory
-    file_id = storage.save(large_file, "test_large.mp3")
+    file_id = await storage.save(large_file, "test_large.mp3")
 
     # verify file was saved
     assert file_id
@@ -49,12 +49,12 @@ def test_large_file_upload_filesystem(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("size_mb", [10, 30, 50, 100])
-def test_various_file_sizes(tmp_path: Path, size_mb: int) -> None:
+async def test_various_file_sizes(tmp_path: Path, size_mb: int) -> None:
     """verify streaming works for various file sizes."""
     storage = FilesystemStorage(base_path=tmp_path)
 
     test_file = create_large_test_file(size_mb=size_mb)
-    file_id = storage.save(test_file, f"test_{size_mb}mb.wav")
+    file_id = await storage.save(test_file, f"test_{size_mb}mb.wav")
 
     assert file_id
     saved_path = tmp_path / "audio" / f"{file_id}.wav"
@@ -62,7 +62,7 @@ def test_various_file_sizes(tmp_path: Path, size_mb: int) -> None:
     assert saved_path.stat().st_size == size_mb * 1024 * 1024
 
 
-def test_concurrent_large_uploads(tmp_path: Path) -> None:
+async def test_concurrent_large_uploads(tmp_path: Path) -> None:
     """verify multiple concurrent uploads don't cause OOM.
 
     before: 3x 30MB files = ~180MB peak (OOMs on 256MB VM)
@@ -75,7 +75,7 @@ def test_concurrent_large_uploads(tmp_path: Path) -> None:
     file_ids = []
 
     for i, f in enumerate(files):
-        file_id = storage.save(f, f"concurrent_{i}.mp3")
+        file_id = await storage.save(f, f"concurrent_{i}.mp3")
         file_ids.append(file_id)
 
     # all should succeed
