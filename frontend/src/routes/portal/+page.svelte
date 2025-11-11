@@ -8,6 +8,7 @@
 	import type { User, Track, FeaturedArtist } from '$lib/types';
 	import { API_URL } from '$lib/config';
 	import { uploader } from '$lib/uploader.svelte';
+	import { toast } from '$lib/toast.svelte';
 
 	// browser-compatible audio formats only
 	// note: aiff/aif not supported in most browsers (safari only)
@@ -287,9 +288,10 @@
 			if (response.ok) {
 				await loadMyTracks();
 				cancelEdit();
+				toast.success('track updated successfully');
 			} else {
 				const error = await response.json();
-				alert(error.detail || 'failed to update track');
+				toast.error(error.detail || 'failed to update track');
 			}
 		} catch (e) {
 			alert(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);

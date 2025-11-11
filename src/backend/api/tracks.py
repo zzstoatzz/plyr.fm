@@ -23,7 +23,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import attributes, selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile, require_auth
@@ -625,10 +625,13 @@ async def update_track_metadata(
             if track.extra is None:
                 track.extra = {}
             track.extra["album"] = album
+            # flag the JSONB field as modified so SQLAlchemy detects the change
+            attributes.flag_modified(track, "extra")
         else:
             # remove album if empty string
             if track.extra and "album" in track.extra:
                 del track.extra["album"]
+                attributes.flag_modified(track, "extra")
 
     if features is not None:
         # resolve featured artist handles
