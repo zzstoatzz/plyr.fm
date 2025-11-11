@@ -22,6 +22,12 @@
 
 		<nav>
 			{#if isAuthenticated}
+				<a href="/liked" class="nav-link" class:active={$page.url.pathname === '/liked'}>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+					</svg>
+					<span>liked</span>
+				</a>
 				<a href="/portal" class="user-handle">@{user?.handle}</a>
 				<SettingsMenu />
 				<button onclick={onLogout} class="btn-logout">logout</button>
@@ -118,12 +124,31 @@
 		color: var(--text-secondary);
 		text-decoration: none;
 		font-size: 0.9rem;
-		transition: color 0.2s;
+		transition: all 0.2s;
 		white-space: nowrap;
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.4rem 0.75rem;
+		border-radius: 6px;
+		border: 1px solid transparent;
 	}
 
 	.nav-link:hover {
 		color: var(--text-primary);
+		background: #1a1a1a;
+		border-color: #333;
+	}
+
+	.nav-link.active {
+		color: var(--accent);
+		background: rgba(114, 137, 218, 0.1);
+		border-color: var(--accent);
+	}
+
+	.nav-link svg {
+		width: 16px;
+		height: 16px;
 	}
 
 	.user-handle {

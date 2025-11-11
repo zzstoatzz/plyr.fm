@@ -60,3 +60,58 @@ class TracksCache {
 }
 
 export const tracksCache = new TracksCache();
+
+// like/unlike track functions
+export async function likeTrack(trackId: number): Promise<boolean> {
+	try {
+		const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
+			method: 'POST',
+			credentials: 'include'
+		});
+
+		if (!response.ok) {
+			throw new Error(`failed to like track: ${response.statusText}`);
+		}
+
+		return true;
+	} catch (e) {
+		console.error('failed to like track:', e);
+		return false;
+	}
+}
+
+export async function unlikeTrack(trackId: number): Promise<boolean> {
+	try {
+		const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
+			method: 'DELETE',
+			credentials: 'include'
+		});
+
+		if (!response.ok) {
+			throw new Error(`failed to unlike track: ${response.statusText}`);
+		}
+
+		return true;
+	} catch (e) {
+		console.error('failed to unlike track:', e);
+		return false;
+	}
+}
+
+export async function fetchLikedTracks(): Promise<Track[]> {
+	try {
+		const response = await fetch(`${API_URL}/tracks/liked`, {
+			credentials: 'include'
+		});
+
+		if (!response.ok) {
+			throw new Error(`failed to fetch liked tracks: ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		return data.tracks;
+	} catch (e) {
+		console.error('failed to fetch liked tracks:', e);
+		return [];
+	}
+}

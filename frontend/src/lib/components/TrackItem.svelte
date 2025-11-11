@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ShareButton from './ShareButton.svelte';
+	import LikeButton from './LikeButton.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -95,6 +96,7 @@
 		</div>
 	</button>
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
+		<LikeButton trackId={track.id} trackTitle={track.title} />
 		<button
 			class="action-button"
 			onclick={addToQueue}
