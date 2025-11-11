@@ -256,10 +256,10 @@ class AtprotoSettings(RelaySettingsSection):
         if self.scope_override:
             return self.scope_override
 
-        # base scopes: our track collection + bsky likes
+        # base scopes: our track collection + our like collection
         scopes = [
             f"repo:{self.track_collection}",
-            "repo:app.bsky.feed.like",
+            f"repo:{self.app_namespace}.like",
         ]
 
         # if we have an old namespace, add old track collection too
