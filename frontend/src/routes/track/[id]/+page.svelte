@@ -228,13 +228,13 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 3rem;
+		gap: 2rem;
 		padding: 2rem;
 	}
 
 	.cover-art-container {
 		width: 100%;
-		max-width: 500px;
+		max-width: 300px;
 		aspect-ratio: 1;
 		border-radius: 8px;
 		overflow: hidden;
@@ -263,12 +263,12 @@
 		max-width: 500px;
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: 1rem;
 		text-align: center;
 	}
 
 	.track-title {
-		font-size: 3rem;
+		font-size: 2rem;
 		font-weight: 700;
 		color: #e8e8e8;
 		margin: 0;
@@ -349,23 +349,25 @@
 
 	.track-actions {
 		display: flex;
-		gap: 1rem;
+		gap: 0.75rem;
 		justify-content: center;
+		align-items: center;
 		flex-wrap: wrap;
-		margin-top: 1rem;
+		margin-top: 0.5rem;
 	}
 
 	.btn-play {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 1rem 2rem;
+		padding: 0.75rem 1.5rem;
 		background: var(--accent);
 		color: #000;
 		border: none;
 		border-radius: 24px;
-		font-size: 1.1rem;
+		font-size: 0.95rem;
 		font-weight: 600;
+		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
 	}
@@ -379,13 +381,14 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 1rem 2rem;
+		padding: 0.75rem 1.5rem;
 		background: transparent;
 		color: #e8e8e8;
 		border: 1px solid #404040;
 		border-radius: 24px;
-		font-size: 1rem;
+		font-size: 0.95rem;
 		font-weight: 500;
+		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
 	}
