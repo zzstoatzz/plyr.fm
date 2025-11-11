@@ -2,7 +2,7 @@
 
 ## current state (automated ✓)
 
-relay uses **automated database migrations** via fly.io's `release_command`.
+plyr.fm uses **automated database migrations** via fly.io's `release_command`.
 
 ### how it works
 
@@ -40,7 +40,7 @@ relay uses **automated database migrations** via fly.io's `release_command`.
 
 ### how dev/prod database separation works
 
-relay uses **environment-based database configuration** to ensure migrations always target the correct database.
+plyr.fm uses **environment-based database configuration** to ensure migrations always target the correct database.
 
 **the key mechanism: `DATABASE_URL` environment variable**
 
@@ -48,7 +48,7 @@ relay uses **environment-based database configuration** to ensure migrations alw
 ┌─────────────────────────────────────────────────────────────┐
 │ alembic/env.py (migration runtime)                          │
 │                                                              │
-│ 1. imports relay.config.settings                            │
+│ 1. imports backend.config.settings                          │
 │ 2. reads settings.database.url                              │
 │ 3. sets alembic connection string                           │
 │                                                              │
@@ -57,11 +57,11 @@ relay uses **environment-based database configuration** to ensure migrations alw
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ src/relay/config.py (pydantic-settings)                     │
+│ src/backend/config.py (pydantic-settings)                   │
 │                                                              │
 │ class Settings(BaseSettings):                               │
 │     database_url: str = Field(                              │
-│         default="postgresql+asyncpg://localhost/relay"      │
+│         default="postgresql+asyncpg://localhost/plyr"       │
 │     )                                                        │
 │                                                              │
 │ reads from DATABASE_URL environment variable                │
@@ -77,7 +77,7 @@ relay uses **environment-based database configuration** to ensure migrations alw
 │ .env file:               │    │ fly secrets:             │
 │ DATABASE_URL=            │    │ DATABASE_URL=            │
 │   postgresql+asyncpg://  │    │   postgresql://          │
-│   localhost:5432/relay   │    │   [neon connection]      │
+│   localhost:5432/plyr    │    │   [neon connection]      │
 │                          │    │                          │
 │ when you run:            │    │ when fly.io runs:        │
 │ uv run alembic upgrade   │    │ release_command:         │
@@ -98,15 +98,15 @@ relay uses **environment-based database configuration** to ensure migrations alw
 ```bash
 # local development
 $ cat .env
-DATABASE_URL=postgresql+asyncpg://localhost:5432/relay
+DATABASE_URL=postgresql+asyncpg://localhost:5432/plyr
 
 $ uv run alembic upgrade head
-# connects to localhost:5432/relay
+# connects to localhost:5432/plyr
 # migrates your local dev database
 
 # production (inside fly.io release machine)
 $ echo $DATABASE_URL
-postgresql://neon_user:***@ep-cool-moon-123.us-east-2.aws.neon.tech/relay
+postgresql://neon_user:***@ep-cool-moon-123.us-east-2.aws.neon.tech/plyr-prod
 
 $ uv run alembic upgrade head
 # connects to neon production database
@@ -117,7 +117,7 @@ $ uv run alembic upgrade head
 
 local development:
 ```
-1. developer edits model in src/relay/models/
+1. developer edits model in src/backend/models/
 2. runs: uv run alembic revision --autogenerate -m "description"
 3. alembic reads DATABASE_URL from .env (localhost)
 4. generates migration by comparing:
@@ -149,7 +149,7 @@ tests use a third database entirely:
 ```python
 # tests/conftest.py
 def test_database_url(worker_id: str) -> str:
-    return "postgresql+asyncpg://relay_test:relay_test@localhost:5433/relay_test"
+    return "postgresql+asyncpg://plyr_test:plyr_test@localhost:5433/plyr_test"
 ```
 
 this ensures:
@@ -163,12 +163,12 @@ this ensures:
 ┌──────────────────────────────────────────────────────────────┐
 │ three completely separate databases:                         │
 │                                                               │
-│ 1. dev (localhost:5432/relay)                                │
+│ 1. dev (localhost:5432/plyr)                                 │
 │    - for local development                                   │
 │    - set via .env: DATABASE_URL=postgresql+asyncpg://...     │
 │    - migrations run manually: uv run alembic upgrade head    │
 │                                                               │
-│ 2. test (localhost:5433/relay_test)                          │
+│ 2. test (localhost:5433/plyr_test)                           │
 │    - for automated tests                                     │
 │    - set via conftest.py fixture                             │
 │    - schema created by tests/conftest.py                     │
@@ -189,8 +189,8 @@ when deploying timezone support migration `31e69ba0c570`:
 
 1. **dockerfile didn't include migration files** - had to create PR #14 to add `COPY alembic.ini` and `COPY alembic ./alembic`
 2. **alembic version tracking out of sync** - production database had `user_preferences` table but alembic thought version was older, causing "relation already exists" errors
-3. **manual stamp needed** - had to run `flyctl ssh console -a relay-api -C "uv run alembic stamp 9e8c7aa5b945"` to fix version tracking
-4. **manual migration execution** - had to run `flyctl ssh console -a relay-api -C "uv run alembic upgrade head"` after deployment
+3. **manual stamp needed** - had to run `flyctl ssh console -a plyr-api -C "uv run alembic stamp 9e8c7aa5b945"` to fix version tracking
+4. **manual migration execution** - had to run `flyctl ssh console -a plyr-api -C "uv run alembic upgrade head"` after deployment
 5. **blocked deployment** - couldn't deploy until all manual steps completed
 
 this took ~30 minutes of manual intervention for what should be automatic.
@@ -366,7 +366,7 @@ run migrations via SSH after fly deployment completes:
 
 ```yaml
 - name: run database migrations
-  run: flyctl ssh console -a relay-api -C "uv run alembic upgrade head"
+  run: flyctl ssh console -a plyr-api -C "uv run alembic upgrade head"
 ```
 
 **why we didn't use this**:
@@ -386,7 +386,7 @@ use neon's branch features for zero-downtime migrations (test on branch, then pr
 
 ## future considerations
 
-as relay scales, we may want to explore:
+as plyr.fm scales, we may want to explore:
 
 **migration init containers** (if we move to kubernetes/docker compose):
 - separate container for migrations before app starts
@@ -415,7 +415,7 @@ as relay scales, we may want to explore:
    uv run alembic current
 
    # production
-   flyctl ssh console -a relay-api -C "uv run alembic current"
+   flyctl ssh console -a plyr-api -C "uv run alembic current"
    ```
 
 2. **ensure schemas are in sync**
@@ -433,7 +433,7 @@ as relay scales, we may want to explore:
 ### creating migration
 
 1. **make model changes**
-   - edit files in `src/relay/models/`
+   - edit files in `src/backend/models/`
    - keep changes focused (one logical change per migration)
 
 2. **generate migration**
@@ -453,7 +453,7 @@ as relay scales, we may want to explore:
    uv run alembic upgrade head
 
    # verify schema
-   uv run python -c "from relay.models import Track; print(Track.__table__.columns)"
+   uv run python -c "from backend.models import Track; print(Track.__table__.columns)"
 
    # test downgrade
    uv run alembic downgrade -1
@@ -522,7 +522,7 @@ as relay scales, we may want to explore:
 
    a. **downgrade and fix**:
    ```bash
-   flyctl ssh console -a relay-api -C "uv run alembic downgrade -1"
+   flyctl ssh console -a plyr-api -C "uv run alembic downgrade -1"
    # fix migration file locally
    # commit and redeploy
    ```
@@ -537,7 +537,7 @@ as relay scales, we may want to explore:
 
    c. **manual SQL fix**:
    ```bash
-   flyctl ssh console -a relay-api
+   flyctl ssh console -a plyr-api
    # connect to database
    # run manual SQL to fix state
    # stamp to correct revision
@@ -594,11 +594,11 @@ def upgrade():
 ## references
 
 ### internal
-- relay dockerfile: `Dockerfile`
-- relay fly config: `fly.toml`
+- plyr.fm dockerfile: `Dockerfile`
+- plyr.fm fly config: `fly.toml`
 - alembic config: `alembic.ini`
 - alembic env: `alembic/env.py`
-- models: `src/relay/models/`
+- models: `src/backend/models/`
 
 ### external
 - alembic documentation: https://alembic.sqlalchemy.org/

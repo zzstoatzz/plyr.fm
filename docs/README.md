@@ -1,17 +1,20 @@
-# relay documentation
+# plyr.fm documentation
 
-this directory contains all documentation for the relay project.
+this directory contains all documentation for the plyr.fm project.
 
 ## architecture
 
 ### [`architecture/global-state-management.md`](./architecture/global-state-management.md)
 
-**state management** - how relay manages global state with Svelte 5 runes.
+**state management** - how plyr.fm manages global state with Svelte 5 runes.
 
 covers:
 - toast notification system
 - tracks cache with event-driven invalidation
 - upload manager with fire-and-forget pattern
+- queue management with server sync
+- liked tracks cache
+- preferences state
 - optimistic UI patterns for auth state
 - localStorage persistence
 
@@ -54,11 +57,11 @@ covers:
 
 ### [`deployment/overview.md`](./deployment/overview.md)
 
-**deployment guide** - how relay deploys to production.
+**deployment guide** - how plyr.fm deploys to production.
 
 covers:
 - cloudflare pages (frontend)
-- fly.io (backend)
+- fly.io (backend and transcoder)
 - automated deployments via github
 - preview deployments and CORS
 - environment variables and secrets
@@ -76,87 +79,83 @@ covers:
 - future improvements for multi-environment setup
 - migration safety and rollback procedures
 
+## features
+
+### [`features/liked-tracks.md`](./features/liked-tracks.md)
+
+**liked tracks** - ATProto-backed track likes with error handling.
+
+covers:
+- fm.plyr.like record creation and deletion
+- database and ATProto consistency guarantees
+- cleanup and rollback logic for failed operations
+- batch like status queries
+- frontend like button component
+- idempotent like/unlike operations
+
+## services
+
+### [`services/transcoder.md`](./services/transcoder.md)
+
+**audio transcoder** - rust-based HTTP service for audio format conversion.
+
+covers:
+- ffmpeg integration for format conversion
+- authentication and security
+- fly.io deployment
+- API endpoints and usage
+- integration with main backend
+- supported formats and codecs
+
 ## ATProto integration
 
-### [`atproto-integration-plan.md`](./atproto-integration-plan.md)
+plyr.fm uses a hybrid storage model:
+- audio files stored in cloudflare R2 (scalable, CDN-backed)
+- metadata stored as ATProto records on user's PDS (decentralized, user-owned)
+- local database indexes for fast queries
 
-**overview document** - read this first to understand the overall architecture and approach.
-
-covers:
-- hybrid storage model (R2 + ATProto records)
-- lexicon design for `app.relay.track`
-- implementation phases
-- data flow diagrams
-- open questions and decisions
-
-### [`phase1-r2-implementation.md`](./phase1-r2-implementation.md)
-
-**R2 storage migration** - practical guide to moving from filesystem to cloudflare R2.
-
-covers:
-- R2 bucket setup and configuration
-- implementation of `R2Storage` class
-- migration strategies
-- testing procedures
-- cost estimates (~$0.16/month for 1000 tracks)
-
-### [`phase2-atproto-records.md`](./phase2-atproto-records.md)
-
-**ATProto record creation** - guide to writing track metadata to user's PDS.
-
-covers:
-- database schema updates
-- `create_track_record()` implementation
-- upload endpoint modifications
-- error handling strategies
-- frontend integration
+key namespaces:
+- `fm.plyr.track` - track metadata (title, artist, album, features, image, audio file reference)
+- `fm.plyr.like` - user likes on tracks (subject references track URI)
 
 ## quick start
 
-### current state (MVP)
+### current state
 
-relay is working with:
+plyr.fm is fully functional with:
 - ✅ OAuth 2.1 authentication (ATProto)
-- ✅ filesystem storage for audio files
-- ✅ track upload and playback
-- ✅ basic music player
+- ✅ R2 storage for audio files (cloudflare CDN)
+- ✅ track upload with streaming (prevents OOM)
+- ✅ ATProto record creation (fm.plyr.track namespace)
+- ✅ music player with queue management
+- ✅ liked tracks (fm.plyr.like namespace)
+- ✅ artist pages and track discovery
+- ✅ image uploads for track artwork
+- ✅ audio transcoding service (rust + ffmpeg)
+- ✅ server-sent events for upload progress
+- ✅ toast notifications
+- ✅ user preferences (accent color, auto-play)
 
-### next steps
+### local development
 
-#### immediate (phase 1)
+```bash
+# backend
+uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8001
 
-migrate audio storage to R2:
+# frontend
+cd frontend && bun run dev
 
-1. set up R2 bucket in cloudflare
-2. add credentials to `.env`
-3. implement `R2Storage` class (see phase1 doc)
-4. set `STORAGE_BACKEND=r2`
-5. test upload and playback
+# transcoder (optional)
+cd transcoder && just run
+```
 
-**estimated effort**: 2-3 hours
+### deployment
 
-#### near-term (phase 2)
-
-add ATProto record creation:
-
-1. update Track model with ATProto fields
-2. create `atproto/records.py` module
-3. modify upload endpoint to create records
-4. test record creation on personal PDS
-5. update frontend to show "published to ATProto" badge
-
-**estimated effort**: 3-4 hours
-
-#### future (phase 3)
-
-implement discovery via firehose:
-
-1. set up jetstream consumer
-2. listen for `app.relay.track` commits
-3. index discovered tracks
-4. add discovery feed to frontend
-
-**estimated effort**: 8-12 hours (deferred)
+see [`deployment/overview.md`](./deployment/overview.md) for details on:
+- staging vs production environments
+- automated deployment via github actions
+- database migrations
+- environment variables and secrets
 
 ## architecture decisions
 
@@ -173,12 +172,16 @@ R2 provides:
 - simple HTTP URLs
 - cost-effective (~$0.015/GB/month)
 
-### why unofficial lexicon?
+### why fm.plyr namespace?
 
-relay uses `app.relay.track` as an unofficial lexicon (similar to `app.at-me.visit`) because:
-- faster iteration during development
-- no formal governance needed for MVP
-- can migrate to official lexicon later if needed
+plyr.fm uses `fm.plyr.*` as the ATProto namespace:
+- `fm.plyr.track` for track metadata
+- `fm.plyr.like` for user likes
+
+this is a domain-specific lexicon that allows:
+- clear ownership and governance
+- faster iteration without formal approval
+- alignment with the plyr.fm brand
 
 ### why hybrid storage?
 
@@ -188,42 +191,40 @@ storing metadata on ATProto provides:
 - portability (users can move to another client)
 
 storing audio on R2 provides:
-- performance (fast streaming)
+- performance (fast streaming via CDN)
 - scalability (handles growth)
 - cost efficiency (cheaper than PDS blobs)
 
-## testing strategy
+### why separate transcoder service?
 
-### phase 1 testing
+the transcoder runs as a separate rust service because:
+- ffmpeg operations are CPU-intensive and can block event loop
+- rust provides better performance for media processing
+- isolation prevents transcoding from affecting API latency
+- can scale independently from main backend
 
-```bash
-# 1. upload test file
-curl -X POST http://localhost:8001/tracks/ \
-  -H "Cookie: session_id=..." \
-  -F "file=@test.mp3" \
-  -F "title=test" \
-  -F "artist=test"
+## testing
 
-# 2. verify R2 storage
-# check cloudflare dashboard for file
-
-# 3. test playback
-# open frontend and play track
-```
-
-### phase 2 testing
+plyr.fm uses pytest for backend testing:
 
 ```bash
-# 1. upload and check record
-curl -X POST http://localhost:8001/tracks/ ...
-# response should include atproto_record_uri
+# run all tests
+just test
 
-# 2. verify on PDS
-# use at-me or similar tool to view records
+# run specific test file
+just test tests/api/test_track_likes.py
 
-# 3. check record content
-python scripts/check_record.py <record_uri>
+# run with verbose output
+just test -v
 ```
+
+test categories:
+- API endpoints (`tests/api/`)
+- storage backends (`tests/storage/`)
+- ATProto integration (`tests/test_atproto.py`)
+- audio format validation (`tests/test_audio_formats.py`)
+
+see [`tests/CLAUDE.md`](../tests/CLAUDE.md) for testing guidelines.
 
 ## troubleshooting
 
@@ -322,30 +323,19 @@ logger.info(
 - 10 uploads per hour per user
 - 100MB total per hour per user
 
-## cost projections
+## cost estimates
 
-### 1000 tracks (typical small catalog)
+current monthly costs (~$15-20/month):
+- fly.io backend: $5-10/month (shared-cpu-1x, 256MB RAM)
+- fly.io transcoder: $5-10/month (shared-cpu-1x, 256MB RAM)
+- neon postgres: free tier (0.5GB storage, 3GB data transfer)
+- cloudflare R2: ~$0.16/month (6 buckets: audio-dev, audio-stg, audio-prod, images-dev, images-stg, images-prod)
+- cloudflare pages: free (frontend hosting)
 
-- storage: 10GB @ $0.015/GB = $0.15/month
-- uploads: 1000 operations @ $4.50/million = $0.005
-- streams: 10k plays @ $0.36/million = $0.004
-- **total: ~$0.16/month**
-
-### 10,000 tracks (medium platform)
-
-- storage: 100GB @ $0.015/GB = $1.50/month
-- uploads: 10k operations = $0.045
-- streams: 100k plays = $0.036
-- **total: ~$1.58/month**
-
-### 100,000 tracks (large platform)
-
-- storage: 1TB @ $0.015/GB = $15/month
-- uploads: 100k operations = $0.45
-- streams: 1M plays = $0.36
-- **total: ~$15.81/month**
-
-**note**: these are R2 costs only. add compute, database, etc.
+R2 storage scaling (audio + images):
+- 1,000 tracks: ~$0.16/month
+- 10,000 tracks: ~$1.58/month
+- 100,000 tracks: ~$15.81/month
 
 ## references
 
@@ -362,22 +352,25 @@ logger.info(
 - [R2 pricing](https://developers.cloudflare.com/r2/pricing/)
 - [S3 compatibility](https://developers.cloudflare.com/r2/api/s3/)
 
-### relay project files
+### plyr.fm project files
 
-- current status: `sandbox/status-2025-10-28.md`
 - project instructions: `CLAUDE.md`
-- atproto fork: `sandbox/atproto-fork/`
-- example projects: `sandbox/at-me/`, `sandbox/status/`
+- main readme: `README.md`
+- justfile: `justfile` (task runner)
+- backend: `src/backend/`
+- frontend: `frontend/`
+- transcoder: `transcoder/`
 
 ## contributing
 
-when implementing these plans:
+when working on plyr.fm:
 
 1. **test empirically first** - run code and prove it works
-2. **reference existing docs** - check sandbox directory before researching
+2. **reference existing docs** - check docs directory before researching
 3. **keep it simple** - MVP over perfection
-4. **use lowercase** - respect relay's aesthetic
+4. **use lowercase** - respect plyr.fm's aesthetic
 5. **no sprawl** - avoid creating multiple versions of files
+6. **document decisions** - update docs as you work
 
 ## questions?
 

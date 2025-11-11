@@ -1,14 +1,14 @@
 # environment separation strategy
 
-relay uses a simple three-tier deployment strategy: development → staging → production.
+plyr.fm uses a simple three-tier deployment strategy: development → staging → production.
 
 ## environments
 
 | environment | trigger | backend app | backend URL | database | frontend | storage |
 |-------------|---------|-------------|-------------|----------|----------|---------|
-| **development** | local | local server | localhost:8000 | relay-dev (neon) | localhost:5173 | audio-dev, images-dev (r2) |
-| **staging** | push to main | relay-api-staging | relay-api-staging.fly.dev | relay-staging (neon) | cloudflare pages (main) | audio-staging, images-staging (r2) |
-| **production** | github release | relay-api | relay-api.fly.dev | relay (neon) | cloudflare pages (main) | audio-prod, images-prod (r2) |
+| **development** | local | local server | localhost:8001 | plyr-dev (neon) | localhost:5173 | audio-dev, images-dev (r2) |
+| **staging** | push to main | plyr-api-staging | plyr-api-staging.fly.dev | plyr-staging (neon) | cloudflare pages preview | audio-staging, images-staging (r2) |
+| **production** | github release | plyr-api | plyr-api.fly.dev | plyr-prod (neon) | plyr.fm (cloudflare pages) | audio-prod, images-prod (r2) |
 
 ## workflow
 
@@ -16,13 +16,16 @@ relay uses a simple three-tier deployment strategy: development → staging → 
 
 ```bash
 # start backend
-uv run uvicorn relay.main:app --reload --port 8000
+uv run uvicorn backend.main:app --reload --port 8001
 
 # start frontend
 cd frontend && bun run dev
+
+# start transcoder (optional)
+cd transcoder && just run
 ```
 
-connects to `relay-dev` neon database and uses `app.relay-dev` atproto namespace.
+connects to `plyr-dev` neon database and uses `fm.plyr` atproto namespace.
 
 ### staging deployment (automatic)
 
@@ -30,20 +33,20 @@ connects to `relay-dev` neon database and uses `app.relay-dev` atproto namespace
 
 **backend**:
 1. github actions runs `.github/workflows/deploy-backend.yml`
-2. deploys to `relay-api-staging` fly app using `fly.staging.toml`
+2. deploys to `plyr-api-staging` fly app using `fly.staging.toml`
 3. runs `alembic upgrade head` via `release_command`
-4. backend available at `https://relay-api-staging.fly.dev`
+4. backend available at `https://plyr-api-staging.fly.dev`
 
 **frontend**:
 - cloudflare pages automatically deploys from `main` branch
-- uses preview environment with `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
+- uses preview environment with `PUBLIC_API_URL=https://plyr-api-staging.fly.dev`
 - available at cloudflare-generated preview URL
 
 **testing**:
-- backend: `https://relay-api-staging.fly.dev/docs`
-- database: `relay-staging` (neon)
+- backend: `https://plyr-api-staging.fly.dev/docs`
+- database: `plyr-staging` (neon)
 - storage: `audio-staging`, `images-staging` (r2)
-- atproto namespace: `app.relay-staging`
+- atproto namespace: `fm.plyr`
 
 ### production deployment (manual)
 
@@ -51,42 +54,50 @@ connects to `relay-dev` neon database and uses `app.relay-dev` atproto namespace
 
 **backend**:
 1. github actions runs `.github/workflows/deploy-production.yml`
-2. deploys to `relay-api` fly app using `fly.toml`
+2. deploys to `plyr-api` fly app using `fly.toml`
 3. runs `alembic upgrade head` via `release_command`
-4. backend available at `https://relay-api.fly.dev`
+4. backend available at `https://plyr-api.fly.dev`
 
 **frontend**:
 - cloudflare pages production environment serves `main` branch
-- uses production environment with `PUBLIC_API_URL=https://relay-api.fly.dev`
-- available at `https://plyr.fm` / `https://www.plyr.fm` (custom domain) and `https://relay-4i6.pages.dev`
+- uses production environment with `PUBLIC_API_URL=https://plyr-api.fly.dev`
+- available at `https://plyr.fm` (custom domain)
 
 **creating a release**:
 ```bash
 # after validating changes in staging:
+just release
+
+# or manually via gh cli:
 gh release create v1.0.0 --title "v1.0.0" --notes "release notes here"
 ```
 
 or via github UI: releases → draft new release → create tag → publish
 
 **testing**:
-- frontend: `https://plyr.fm` or `https://relay-4i6.pages.dev`
-- backend: `https://relay-api.fly.dev/docs`
-- database: `relay` (neon)
+- frontend: `https://plyr.fm`
+- backend: `https://plyr-api.fly.dev/docs`
+- database: `plyr-prod` (neon)
 - storage: `audio-prod`, `images-prod` (r2)
-- atproto namespace: `app.relay`
+- atproto namespace: `fm.plyr`
 
 ## configuration files
 
 ### backend
 
 **fly.staging.toml**:
-- app: `relay-api-staging`
+- app: `plyr-api-staging`
 - release_command: `uv run alembic upgrade head` (runs migrations)
 - environment variables configured in fly.io
 
 **fly.toml**:
-- app: `relay-api`
+- app: `plyr-api`
 - release_command: `uv run alembic upgrade head` (runs migrations)
+- environment variables configured in fly.io
+
+**transcoder/fly.toml**:
+- app: `plyr-transcoder`
+- auto-scaling enabled (stops when idle)
 - environment variables configured in fly.io
 
 ### frontend
@@ -96,29 +107,34 @@ or via github UI: releases → draft new release → create tag → publish
 - build command: `cd frontend && bun run build`
 - build output: `frontend/build`
 - environment variables:
-  - preview: `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
-  - production: `PUBLIC_API_URL=https://relay-api.fly.dev`
+  - preview: `PUBLIC_API_URL=https://plyr-api-staging.fly.dev`
+  - production: `PUBLIC_API_URL=https://plyr-api.fly.dev`
 
 ### secrets management
 
 **staging secrets** (set via `flyctl secrets set`):
 - `DATABASE_URL` → neon staging connection string
-- `ATPROTO_CLIENT_ID` → `https://relay-api-staging.fly.dev/client-metadata.json`
-- `ATPROTO_REDIRECT_URI` → `https://relay-api-staging.fly.dev/auth/callback`
-- `ATPROTO_APP_NAMESPACE` → `app.relay-staging`
+- `ATPROTO_CLIENT_ID` → `https://plyr-api-staging.fly.dev/client-metadata.json`
+- `ATPROTO_REDIRECT_URI` → `https://plyr-api-staging.fly.dev/auth/callback`
+- `ATPROTO_APP_NAMESPACE` → `fm.plyr`
 - `OAUTH_ENCRYPTION_KEY` → unique 44-char base64 fernet key
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` → r2 credentials
 - `LOGFIRE_WRITE_TOKEN`, `LOGFIRE_ENABLED`, `LOGFIRE_ENVIRONMENT`
 - `FRONTEND_URL` → cloudflare pages preview URL
+- `TRANSCODER_URL` → `https://plyr-transcoder.fly.dev`
+- `TRANSCODER_AUTH_TOKEN` → shared secret for transcoder auth
 
 **production secrets** (already configured):
 - same structure but with production URLs and database
-- `ATPROTO_APP_NAMESPACE` → not set (defaults to `app.relay`)
-- `FRONTEND_CORS_ORIGIN_REGEX` → `^https://(([a-z0-9]+\.)?relay-4i6\.pages\.dev|(www\.)?plyr\.fm)$` (custom domain + cloudflare pages)
+- `ATPROTO_APP_NAMESPACE` → `fm.plyr`
+- `FRONTEND_CORS_ORIGIN_REGEX` → `^https://(www\.)?plyr\.fm$`
 - additional: `NOTIFY_BOT_HANDLE`, `NOTIFY_BOT_PASSWORD`, `NOTIFY_ENABLED`
 
+**transcoder secrets**:
+- `TRANSCODER_AUTH_TOKEN` → shared with backend for authentication
+
 **local dev (.env)**:
-- `ATPROTO_APP_NAMESPACE` → `app.relay-dev`
+- `ATPROTO_APP_NAMESPACE` → `fm.plyr`
 
 ## database migrations
 
@@ -141,21 +157,24 @@ if a migration fails:
 
 **staging**:
 - logfire: environment filter `LOGFIRE_ENVIRONMENT=staging`
-- fly.io logs: `flyctl logs -a relay-api-staging`
+- backend logs: `flyctl logs -a plyr-api-staging`
+- transcoder logs: `flyctl logs -a plyr-transcoder`
 
 **production**:
 - logfire: environment filter `LOGFIRE_ENVIRONMENT=production`
-- fly.io logs: `flyctl logs -a relay-api`
+- backend logs: `flyctl logs -a plyr-api`
+- transcoder logs: `flyctl logs -a plyr-transcoder`
 
 ## costs
 
-**current**: ~$10-11/month
-- fly.io production: $5/month (shared-cpu-1x)
-- fly.io staging: $5/month (shared-cpu-1x)
-- neon dev: free tier
-- neon staging: free tier
-- neon production: free tier
-- cloudflare pages: free
+**current**: ~$15-20/month
+- fly.io backend (production): $5-10/month (shared-cpu-1x, 256MB RAM)
+- fly.io backend (staging): $5-10/month (shared-cpu-1x, 256MB RAM)
+- fly.io transcoder: $0-5/month (auto-scales to zero when idle, 1GB RAM)
+- neon dev: free tier (0.5GB storage)
+- neon staging: free tier (0.5GB storage)
+- neon production: free tier (0.5GB storage, 3GB data transfer)
+- cloudflare pages: free (frontend hosting)
 - cloudflare R2: ~$0.16/month (6 buckets: audio-dev, audio-staging, audio-prod, images-dev, images-staging, images-prod)
 
 ## benefits
@@ -168,10 +187,9 @@ if a migration fails:
 
 ## deployment history
 
-1. ✅ staging backend deployed and validated (2025-11-06)
-   - backend: https://relay-api-staging.fly.dev
-   - database: relay-staging (neon)
-   - storage: relay-stg (r2)
-   - atproto namespace: `app.relay-staging`
-2. ✅ production deployment workflow exists (`.github/workflows/deploy-production.yml`)
-3. **next**: create first github release to deploy to production
+1. ✅ production backend deployed (plyr-api.fly.dev)
+2. ✅ production frontend deployed (plyr.fm)
+3. ✅ transcoder service deployed (plyr-transcoder.fly.dev)
+4. ✅ staging environment configured (plyr-api-staging.fly.dev)
+5. ✅ automated deployments via github actions
+6. ✅ database migrations automated via fly.io release_command
