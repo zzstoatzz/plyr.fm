@@ -1,21 +1,21 @@
 # configuration
 
-relay uses nested pydantic settings for configuration management, following a pattern similar to prefect.
+plyr.fm uses nested pydantic settings for configuration management, following a pattern similar to prefect.
 
 ## settings structure
 
 settings are organized into logical sections:
 
 ```python
-from relay.config import settings
+from backend.config import settings
 
 # application settings
-settings.app.name                              # "relay"
+settings.app.name                              # "plyr"
 settings.app.port                              # 8001 (from PORT)
 settings.app.debug                             # false
-settings.app.broadcast_channel_prefix          # "relay"
-settings.app.canonical_host                    # "relay.zzstoatzz.io"
-settings.app.canonical_url                     # computed: https://relay.zzstoatzz.io
+settings.app.broadcast_channel_prefix          # "plyr"
+settings.app.canonical_host                    # "plyr.fm"
+settings.app.canonical_url                     # computed: https://plyr.fm
 
 # frontend settings
 settings.frontend.url                          # from FRONTEND_URL
@@ -127,7 +127,7 @@ can be overridden with `FRONTEND_CORS_ORIGIN_REGEX` if needed.
 constructs the atproto collection name from the namespace:
 ```python
 f"{settings.atproto.app_namespace}.track"
-# default: "app.relay.track"
+# default: "fm.plyr.track"
 ```
 
 ### `settings.atproto.resolved_scope`
@@ -135,27 +135,28 @@ f"{settings.atproto.app_namespace}.track"
 constructs the oauth scope from the collection:
 ```python
 f"atproto repo:{settings.atproto.track_collection}"
-# default: "atproto repo:app.relay.track"
+# default: "atproto repo:fm.plyr.track"
 ```
 
 can be overridden with `ATPROTO_SCOPE_OVERRIDE` if needed.
 
-## changing atproto namespace
+## atproto namespace
 
-to migrate to a relay-owned lexicon (issue #55), set:
+plyr.fm uses `fm.plyr` as the ATProto namespace:
 
 ```bash
-ATPROTO_APP_NAMESPACE=io.zzstoatzz.relay
+ATPROTO_APP_NAMESPACE=fm.plyr  # default
 ```
 
-this automatically updates:
-- `track_collection` → `"io.zzstoatzz.relay.track"`
-- `resolved_scope` → `"atproto repo:io.zzstoatzz.relay.track"`
+this defines the collections:
+- `track_collection` → `"fm.plyr.track"`
+- `like_collection` → `"fm.plyr.like"`
+- `resolved_scope` → `"atproto repo:fm.plyr.track"`
 
 ## usage in code
 
 ```python
-from relay.config import settings
+from backend.config import settings
 
 # access nested settings
 database_url = settings.database.url
@@ -205,10 +206,10 @@ all code has been updated to use the nested structure.
 ## design
 
 the settings design follows the prefect pattern:
-- each section extends `RelaySettingsSection` (a `BaseSettings` subclass)
+- each section extends `BaseSettings` subclass
 - sections are composed in the root `Settings` class
 - environment variables map directly to field names
 - computed fields derive values from other settings
 - type hints ensure correct types at runtime
 
-see `src/relay/config.py` for implementation details.
+see `src/backend/config.py` for implementation details.
