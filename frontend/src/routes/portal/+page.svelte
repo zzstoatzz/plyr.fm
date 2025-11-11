@@ -8,17 +8,16 @@
 	import { API_URL } from '$lib/config';
 	import { uploader } from '$lib/uploader.svelte';
 
-	const ACCEPTED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aif', '.aiff'];
-	const ACCEPTED_AUDIO_MIME_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/aiff', 'audio/x-aiff'];
+	// browser-compatible audio formats only
+	// note: aiff/aif not supported in most browsers (safari only)
+	const ACCEPTED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a'];
+	const ACCEPTED_AUDIO_MIME_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4'];
 	const FILE_INPUT_ACCEPT = [...ACCEPTED_AUDIO_EXTENSIONS, ...ACCEPTED_AUDIO_MIME_TYPES].join(',');
 
 	function isSupportedAudioFile(name: string): boolean {
 		const dotIndex = name.lastIndexOf('.');
 		if (dotIndex === -1) return false;
 		const ext = name.slice(dotIndex).toLowerCase();
-		if (ext === '.aif') {
-			return true;
-		}
 		return ACCEPTED_AUDIO_EXTENSIONS.includes(ext);
 	}
 
@@ -443,6 +442,7 @@
 						onchange={handleFileChange}
 						required
 					/>
+					<p class="format-hint">supported: mp3, wav, m4a</p>
 					{#if file}
 						<p class="file-info">{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</p>
 					{/if}
@@ -459,6 +459,7 @@
 							imageFile = target.files?.[0] ?? null;
 						}}
 					/>
+					<p class="format-hint">supported: jpg, png, webp, gif</p>
 					{#if imageFile}
 						<p class="file-info">{imageFile.name} ({(imageFile.size / 1024 / 1024).toFixed(2)} MB)</p>
 					{/if}
@@ -802,6 +803,12 @@
 	input[type='file']:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.format-hint {
+		margin-top: 0.25rem;
+		font-size: 0.8rem;
+		color: #888;
 	}
 
 	.file-info {

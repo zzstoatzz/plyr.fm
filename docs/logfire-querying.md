@@ -100,6 +100,86 @@ WHERE span_name LIKE 'SELECT%'
 ORDER BY duration DESC
 ```
 
+## Background Task and Storage Queries
+
+**Search by message content:**
+```sql
+SELECT
+  span_name,
+  message,
+  start_timestamp,
+  attributes
+FROM records
+WHERE message LIKE '%R2%' OR message LIKE '%upload%'
+ORDER BY start_timestamp DESC
+LIMIT 10
+```
+
+**Get full trace for a background task:**
+```sql
+-- First, find the trace_id for your background task
+SELECT trace_id, message, start_timestamp
+FROM records
+WHERE span_name = 'process upload background'
+ORDER BY start_timestamp DESC
+LIMIT 1;
+
+-- Then get all spans in that trace
+SELECT
+  span_name,
+  message,
+  start_timestamp,
+  duration * 1000 as duration_ms
+FROM records
+WHERE trace_id = '<trace-id-from-above>'
+ORDER BY start_timestamp ASC;
+```
+
+**Extract nested attributes from JSONB:**
+```sql
+-- Get bucket and key from R2 upload logs
+SELECT
+  message,
+  attributes->>'bucket' as bucket,
+  attributes->>'key' as key,
+  attributes->>'file_id' as file_id,
+  start_timestamp
+FROM records
+WHERE message = 'uploading to R2'
+ORDER BY start_timestamp DESC
+LIMIT 5;
+```
+
+**Find spans within a time range:**
+```sql
+SELECT
+  span_name,
+  message,
+  start_timestamp,
+  duration * 1000 as duration_ms
+FROM records
+WHERE start_timestamp > '2025-11-11T04:56:50Z'
+  AND start_timestamp < '2025-11-11T04:57:10Z'
+  AND (span_name LIKE '%R2%' OR message LIKE '%save%')
+ORDER BY start_timestamp ASC;
+```
+
+**Common mistake: Not all log levels create spans**
+
+When using `logfire.info()`, these create log events, not spans. To find them:
+- Search by `message` field, not `span_name`
+- Use LIKE with wildcards: `message LIKE '%preparing%'`
+- Filter by `kind = 'event'` if you only want logs (not spans)
+
+Example:
+```sql
+-- WRONG: This won't find logfire.info() calls
+SELECT * FROM records WHERE span_name = 'preparing to save audio file';
+
+-- RIGHT: Search by message instead
+SELECT * FROM records WHERE message LIKE '%preparing%';
+```
+
 ## Known Issues
 
 ### `/tracks/` 500 Error on First Load
