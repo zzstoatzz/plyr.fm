@@ -10,6 +10,7 @@ class AudioFormat(str, Enum):
     WAV = "wav"
     M4A = "m4a"
     AIFF = "aiff"
+    AIF = "aif"
 
     @property
     def extension(self) -> str:
@@ -24,6 +25,7 @@ class AudioFormat(str, Enum):
             AudioFormat.WAV: "audio/wav",
             AudioFormat.M4A: "audio/mp4",
             AudioFormat.AIFF: "audio/aiff",
+            AudioFormat.AIF: "audio/aiff",
         }
         return media_types[self]
 
@@ -31,9 +33,6 @@ class AudioFormat(str, Enum):
     def from_extension(cls, ext: str) -> "AudioFormat | None":
         """get format from file extension (with or without dot)."""
         ext = ext.lower().lstrip(".")
-        # handle .aif as alias for .aiff
-        if ext == "aif":
-            ext = "aiff"
         for format in cls:
             if format.value == ext:
                 return format
