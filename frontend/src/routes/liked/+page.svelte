@@ -1,16 +1,42 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { API_URL } from '$lib/config';
+	import Header from '$lib/components/Header.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { fetchLikedTracks } from '$lib/tracks.svelte';
 	import { player } from '$lib/player.svelte';
-	import type { Track } from '$lib/types';
+	import type { Track, User } from '$lib/types';
 
 	let tracks = $state<Track[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let user = $state<User | null>(null);
+	let isAuthenticated = $state(false);
 
 	onMount(async () => {
+		// check auth status
+		const sessionId = localStorage.getItem('session_id');
+		if (sessionId) {
+			try {
+				const response = await fetch(`${API_URL}/auth/me`, {
+					headers: {
+						'Authorization': `Bearer ${sessionId}`
+					}
+				});
+
+				if (response.ok) {
+					user = await response.json();
+					isAuthenticated = true;
+				} else {
+					isAuthenticated = false;
+				}
+			} catch (e) {
+				isAuthenticated = false;
+			}
+		}
+
+		// fetch liked tracks
 		try {
 			tracks = await fetchLikedTracks();
 		} catch (e) {
@@ -21,6 +47,21 @@
 		}
 	});
 
+	async function handleLogout() {
+		const sessionId = localStorage.getItem('session_id');
+		if (sessionId) {
+			await fetch(`${API_URL}/auth/logout`, {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
+			});
+		}
+		localStorage.removeItem('session_id');
+		isAuthenticated = false;
+		window.location.href = '/';
+	}
+
 	function playTrack(track: Track) {
 		player.playTrack(track);
 	}
@@ -29,6 +70,8 @@
 <svelte:head>
 	<title>liked tracks • plyr</title>
 </svelte:head>
+
+<Header {user} {isAuthenticated} onLogout={handleLogout} />
 
 <div class="page">
 	<header class="page-header">
