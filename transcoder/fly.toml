@@ -1,0 +1,27 @@
+app = "plyr-transcoder"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 50
+    soft_limit = 25
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"
+
+[env]
+  TRANSCODER_HOST = "0.0.0.0"
+  TRANSCODER_PORT = "8080"
+  TRANSCODER_MAX_UPLOAD_BYTES = "1073741824"  # 1GB for large files

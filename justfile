@@ -1,8 +1,11 @@
 # plyr.fm dev workflows
+mod transcoder
+
 
 # show available commands
 default:
     @just --list
+
 
 # run backend server
 run-backend:
