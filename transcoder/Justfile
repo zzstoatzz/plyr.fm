@@ -1,0 +1,32 @@
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+default := "run"
+
+alias r := run
+alias b := build
+
+run:
+    cd {{justfile_directory()}}/transcoder && \
+    TRANSCODER_HOST="${TRANSCODER_HOST:-127.0.0.1}" \
+    TRANSCODER_PORT="${TRANSCODER_PORT:-8082}" \
+    cargo run
+
+build:
+    cd {{justfile_directory()}}/transcoder && cargo build --release
+
+check:
+    cd {{justfile_directory()}}/transcoder && cargo check
+
+fmt:
+    cd {{justfile_directory()}}/transcoder && cargo fmt
+
+clippy:
+    cd {{justfile_directory()}}/transcoder && cargo clippy --all-targets --all-features
+
+image tag="plyr-transcoder:local":
+    cd {{justfile_directory()}}/transcoder && docker build -t {{tag}} .
+
+docker-run TAG="plyr-transcoder:local" PORT="8082":
+    docker run --rm -p {{PORT}}:8080 {{TAG}}
+
+fly ARGS="":
+    cd {{justfile_directory()}}/transcoder && fly deploy --config fly.toml {{ARGS}}

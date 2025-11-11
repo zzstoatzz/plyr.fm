@@ -48,6 +48,9 @@ frontend/node_modules/
 frontend/.svelte-kit/
 frontend/build/
 
+# Rust build artifacts
+transcoder/target/
+
 # docker profiling logs
 docker-build-profile-*.log
 *-build-profile.log
