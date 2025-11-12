@@ -205,6 +205,10 @@
 
 				<div class="track-stats">
 					<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
+					{#if track.like_count && track.like_count > 0}
+						<span class="separator">•</span>
+						<span class="likes">{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}</span>
+					{/if}
 				</div>
 
 				<!-- actions -->
@@ -388,6 +392,14 @@
 	.track-stats {
 		color: #808080;
 		font-size: 0.95rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		justify-content: center;
+	}
+
+	.track-stats .separator {
+		font-size: 0.7rem;
 	}
 
 	.track-actions {
