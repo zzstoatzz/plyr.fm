@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.database import Base
@@ -50,4 +50,6 @@ class TrackLike(Base):
     __table_args__ = (
         # one like per user per track
         UniqueConstraint("track_id", "user_did", name="uq_track_user_like"),
+        # composite index for efficient user likes queries with sorting
+        Index("ix_track_likes_user_did_created_at", "user_did", created_at.desc()),
     )

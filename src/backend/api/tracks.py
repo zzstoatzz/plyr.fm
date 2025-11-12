@@ -82,6 +82,11 @@ class TrackResponse(dict):
         # get like count (defaults to 0 if not in dict)
         like_count = like_counts.get(track.id, 0) if like_counts else 0
 
+        # use stored image_url if available, fallback to computing it for legacy records
+        image_url = track.image_url
+        if not image_url and track.image_id:
+            image_url = await track.get_image_url()
+
         return cls(
             id=track.id,
             title=track.title,
@@ -103,7 +108,7 @@ class TrackResponse(dict):
             ),
             play_count=track.play_count,
             created_at=track.created_at.isoformat(),
-            image_url=await track.get_image_url(),
+            image_url=image_url,
             is_liked=is_liked,
             like_count=like_count,
         )
@@ -235,14 +240,24 @@ async def _process_upload_background(
                     try:
                         handles_list = json.loads(features)
                         if isinstance(handles_list, list):
-                            for handle in handles_list:
-                                if (
-                                    isinstance(handle, str)
-                                    and handle.lstrip("@") != artist.handle
-                                ):
-                                    resolved = await resolve_handle(handle)
-                                    if resolved:
-                                        featured_artists.append(resolved)
+                            # filter valid handles and batch resolve concurrently
+                            valid_handles = [
+                                handle
+                                for handle in handles_list
+                                if isinstance(handle, str)
+                                and handle.lstrip("@") != artist.handle
+                            ]
+                            if valid_handles:
+                                resolved_artists = await asyncio.gather(
+                                    *[resolve_handle(h) for h in valid_handles],
+                                    return_exceptions=True,
+                                )
+                                # filter out exceptions and None values
+                                featured_artists = [
+                                    r
+                                    for r in resolved_artists
+                                    if isinstance(r, dict) and r is not None
+                                ]
                     except json.JSONDecodeError:
                         pass  # ignore malformed features
 
@@ -291,6 +306,7 @@ async def _process_upload_background(
                     atproto_record_uri=atproto_uri,
                     atproto_record_cid=atproto_cid,
                     image_id=image_id,
+                    image_url=image_url,
                 )
 
                 db.add(track)
@@ -721,7 +737,8 @@ async def update_track_metadata(
                     detail=f"maximum {MAX_FEATURES} featured artists allowed",
                 )
 
-            # resolve each handle
+            # validate all handles first
+            valid_handles = []
             for handle in handles_list:
                 if not isinstance(handle, str):
                     raise HTTPException(
@@ -732,13 +749,25 @@ async def update_track_metadata(
                 if handle.lstrip("@") == track.artist.handle:
                     continue  # skip self-feature silently
 
-                resolved = await resolve_handle(handle)
-                if not resolved:
-                    raise HTTPException(
-                        status_code=400, detail=f"failed to resolve handle: {handle}"
-                    )
+                valid_handles.append(handle)
 
-                featured_artists.append(resolved)
+            # batch resolve all handles concurrently
+            if valid_handles:
+                resolved_artists = await asyncio.gather(
+                    *[resolve_handle(h) for h in valid_handles],
+                    return_exceptions=True,
+                )
+
+                # check for any failed resolutions
+                for handle, resolved in zip(
+                    valid_handles, resolved_artists, strict=False
+                ):
+                    if isinstance(resolved, Exception) or not resolved:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"failed to resolve handle: {handle}",
+                        )
+                    featured_artists.append(resolved)
 
             track.features = featured_artists
 
@@ -763,6 +792,7 @@ async def update_track_metadata(
         image_id = await storage.save(image_obj, f"images/{image.filename}")
 
         # get R2 URL for image if using R2 storage
+        image_url = None
         if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
             image_url = await storage.get_url(image_id)
 
@@ -772,6 +802,7 @@ async def update_track_metadata(
                 await storage.delete(track.image_id)
 
         track.image_id = image_id
+        track.image_url = image_url
 
     # update ATProto record if any fields changed
     if track.atproto_record_uri and (

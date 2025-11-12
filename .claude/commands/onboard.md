@@ -1,10 +1,4 @@
-# Onboard
-
-Read the current project status and propose the next best step to continue development.
-
-## Purpose
-
-This command helps a new agent/contributor quickly understand where the project is and what to work on next. Use this when starting a new session or when context has been cleared.
+this is meant to help you quickly understand what/where the project is and what to work on next.
 
 ## Instructions
 
@@ -12,6 +6,7 @@ This command helps a new agent/contributor quickly understand where the project 
    - Understand the long-term, medium-term, and short-term vision
    - Review the current technical state
    - Note what's working, what's in progress, and known issues (via gh cli)
+   - THIS FILE MAY BE OUTDATED - CHECK GIT STATUS AND COMMITS FOR TRUTH
 
 2. **Review Key Files**
    - `README.md` - project overview and quick start
@@ -47,8 +42,6 @@ This command helps a new agent/contributor quickly understand where the project 
 
 
 ## Tone
-
 - Action-oriented and specific
-- Helpful for someone getting their bearings
-- Respectful of existing decisions and trade-offs
+- Concisely curious about existing decisions and trade-offs
 
