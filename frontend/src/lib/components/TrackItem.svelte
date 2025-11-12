@@ -98,6 +98,10 @@
 			</div>
 			<div class="track-meta">
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
+				{#if track.like_count && track.like_count > 0}
+					<span class="meta-separator">•</span>
+					<span class="likes">{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}</span>
+				{/if}
 			</div>
 		</div>
 	</button>
@@ -341,6 +345,16 @@
 	}
 
 	.plays {
+		color: #999;
+		font-family: inherit;
+	}
+
+	.meta-separator {
+		color: #555;
+		font-size: 0.7rem;
+	}
+
+	.likes {
 		color: #999;
 		font-family: inherit;
 	}

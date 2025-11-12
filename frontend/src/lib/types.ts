@@ -18,6 +18,7 @@ export interface Track {
 	atproto_record_uri?: string;
 	atproto_record_url?: string;
 	play_count: number;
+	like_count?: number;
 	features?: FeaturedArtist[];
 	created_at?: string;
 	image_url?: string;
@@ -62,4 +63,5 @@ export interface Analytics {
 	total_plays: number;
 	total_items: number;
 	top_item: TopItem | null;
+	top_liked: TopItem | null;
 }

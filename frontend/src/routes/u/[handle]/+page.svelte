@@ -266,6 +266,13 @@
 								<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
 							</div>
 						{/if}
+						{#if analytics.top_liked}
+							<div class="stat-card top-item" transition:fade={{ duration: 200 }}>
+								<div class="stat-label">most liked</div>
+								<div class="top-item-title">{analytics.top_liked.title}</div>
+								<div class="top-item-plays">{analytics.top_liked.play_count.toLocaleString()} {analytics.top_liked.play_count === 1 ? 'like' : 'likes'}</div>
+							</div>
+						{/if}
 					{/if}
 				{/key}
 			</div>
