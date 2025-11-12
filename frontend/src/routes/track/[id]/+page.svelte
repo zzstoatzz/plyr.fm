@@ -464,37 +464,62 @@
 
 	@media (max-width: 768px) {
 		main {
-			padding: 1rem;
+			padding: 0.75rem;
 			padding-bottom: calc(var(--player-height, 10rem) + env(safe-area-inset-bottom, 0px));
+			align-items: flex-start;
+			justify-content: flex-start;
 		}
 
 		.track-detail {
-			padding: 1rem;
-			gap: 2rem;
-		}
-
-		.cover-art-container {
+			padding: 0;
+			gap: 1rem;
 			max-width: 100%;
 		}
 
+		.cover-art-container {
+			max-width: 60%;
+			margin: 0 auto;
+		}
+
+		.track-info {
+			gap: 0.75rem;
+		}
+
 		.track-title {
-			font-size: 2rem;
+			font-size: 1.5rem;
 		}
 
 		.track-metadata {
-			font-size: 1rem;
+			font-size: 0.9rem;
 			gap: 0.5rem;
 		}
 
-		.track-actions {
-			flex-direction: column;
-			width: 100%;
+		.track-stats {
+			font-size: 0.85rem;
 		}
 
-		.btn-play,
-		.btn-queue {
+		.track-actions {
+			flex-direction: row;
+			flex-wrap: wrap;
+			width: 100%;
+			gap: 0.5rem;
+			margin-top: 0.25rem;
+			justify-content: center;
+		}
+
+		.btn-play {
 			width: 100%;
 			justify-content: center;
+			padding: 0.65rem 1rem;
+			font-size: 0.9rem;
+		}
+
+		.btn-queue {
+			flex: 1;
+			min-width: calc(50% - 0.25rem);
+			justify-content: center;
+			padding: 0.65rem 1rem;
+			font-size: 0.9rem;
 		}
 	}
 </style>
