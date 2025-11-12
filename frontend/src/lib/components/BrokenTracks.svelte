@@ -220,6 +220,7 @@
 		border: 1px solid rgba(255, 152, 0, 0.4);
 		border-radius: 4px;
 		color: #ff9800;
+		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 500;
 		cursor: pointer;
