@@ -21,7 +21,18 @@
 
 		<form onsubmit={startOAuth}>
 			<div class="input-group">
-				<label for="handle">atproto handle</label>
+				<div class="label-row">
+					<label for="handle">atproto handle</label>
+					<a
+						href="https://atproto.com/specs/account"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="help-link"
+						title="learn about ATProto handles and identity"
+					>
+						what's this?
+					</a>
+				</div>
 				<input
 					id="handle"
 					type="text"
@@ -30,6 +41,11 @@
 					disabled={loading}
 					required
 				/>
+				<p class="input-help">
+					don't have one?
+					<a href="https://bsky.app" target="_blank" rel="noopener noreferrer">create a free Bluesky account</a>
+					to get your ATProto identity
+				</p>
 			</div>
 
 			<button type="submit" disabled={loading || !handle.trim()}>
@@ -76,11 +92,28 @@
 		margin-bottom: 1.5rem;
 	}
 
-	label {
-		display: block;
-		color: #aaa;
+	.label-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
 		margin-bottom: 0.5rem;
+	}
+
+	label {
+		color: #aaa;
 		font-size: 0.9rem;
+	}
+
+	.help-link {
+		color: var(--accent);
+		text-decoration: none;
+		font-size: 0.85rem;
+		transition: color 0.2s;
+	}
+
+	.help-link:hover {
+		color: var(--accent-hover);
+		text-decoration: underline;
 	}
 
 	input {
@@ -91,6 +124,7 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 1rem;
+		font-family: inherit;
 		transition: all 0.2s;
 		box-sizing: border-box;
 	}
@@ -109,6 +143,23 @@
 		color: #666;
 	}
 
+	.input-help {
+		margin: 0.5rem 0 0 0;
+		font-size: 0.85rem;
+		color: #888;
+	}
+
+	.input-help a {
+		color: var(--accent);
+		text-decoration: none;
+		transition: color 0.2s;
+	}
+
+	.input-help a:hover {
+		color: var(--accent-hover);
+		text-decoration: underline;
+	}
+
 	button {
 		width: 100%;
 		padding: 0.75rem;
@@ -118,6 +169,7 @@
 		border-radius: 4px;
 		font-size: 1rem;
 		font-weight: 600;
+		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
 	}
