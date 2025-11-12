@@ -8,17 +8,18 @@
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
-	import type { User } from '$lib/types';
+	import type { User, Track } from '$lib/types';
 
 	// receive server-loaded data
 	let { data }: { data: PageData } = $props();
 
 	let user = $state<User | null>(null);
 	let isAuthenticated = $state(false);
+	let track = $state<Track>(data.track);
 
 	// reactive check if this track is currently playing
 	let isCurrentlyPlaying = $derived(
-		player.currentTrack?.id === data.track.id && !player.paused
+		player.currentTrack?.id === track.id && !player.paused
 	);
 
 	async function checkAuth() {
@@ -48,6 +49,25 @@
 		}
 	}
 
+	async function loadTrackWithLikedState() {
+		const sessionId = localStorage.getItem('session_id');
+		if (!sessionId) return;
+
+		try {
+			const response = await fetch(`${API_URL}/tracks/${track.id}`, {
+				headers: {
+					'Authorization': `Bearer ${sessionId}`
+				}
+			});
+
+			if (response.ok) {
+				track = await response.json();
+			}
+		} catch (e) {
+			console.error('failed to load track with liked state:', e);
+		}
+	}
+
 	async function handleLogout() {
 		const sessionId = localStorage.getItem('session_id');
 		if (!sessionId) return;
@@ -69,168 +89,184 @@
 	}
 
 	function handlePlay() {
-		player.playTrack(data.track);
+		player.playTrack(track);
 	}
 
 	function addToQueue() {
-		queue.addTracks([data.track]);
+		queue.addTracks([track]);
 	}
 
 	onMount(async () => {
 		await checkAuth();
+		if (isAuthenticated) {
+			await loadTrackWithLikedState();
+		}
 	});
 
 	const shareUrl = typeof window !== 'undefined'
-		? `${window.location.origin}/track/${data.track.id}`
+		? `${window.location.origin}/track/${track.id}`
 		: '';
 </script>
 
 <svelte:head>
-	<title>{data.track.title} - {data.track.artist}{data.track.album ? ` • ${data.track.album}` : ''}</title>
+	<title>{track.title} - {track.artist}{track.album ? ` • ${track.album}` : ''}</title>
 	<meta
 		name="description"
-		content="{data.track.title} by {data.track.artist}{data.track.album ? ` from ${data.track.album}` : ''} - listen on {APP_NAME}"
+		content="{track.title} by {track.artist}{track.album ? ` from ${track.album}` : ''} - listen on {APP_NAME}"
 	/>
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="music.song" />
-	<meta property="og:title" content="{data.track.title} - {data.track.artist}" />
+	<meta property="og:title" content="{track.title} - {track.artist}" />
 	<meta
 		property="og:description"
-		content="{data.track.artist}{data.track.album ? ` • ${data.track.album}` : ''}"
+		content="{track.artist}{track.album ? ` • ${track.album}` : ''}"
 	/>
 	<meta
 		property="og:url"
-		content={`${APP_CANONICAL_URL}/track/${data.track.id}`}
+		content={`${APP_CANONICAL_URL}/track/${track.id}`}
 	/>
 	<meta property="og:site_name" content={APP_NAME} />
-	<meta property="music:musician" content="{data.track.artist_handle}" />
-	{#if data.track.album}
-		<meta property="music:album" content="{data.track.album}" />
+	<meta property="music:musician" content="{track.artist_handle}" />
+	{#if track.album}
+		<meta property="music:album" content="{track.album}" />
 	{/if}
-	{#if data.track.image_url}
-		<meta property="og:image" content="{data.track.image_url}" />
-		<meta property="og:image:secure_url" content="{data.track.image_url}" />
+	{#if track.image_url}
+		<meta property="og:image" content="{track.image_url}" />
+		<meta property="og:image:secure_url" content="{track.image_url}" />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="1200" />
-		<meta property="og:image:alt" content="{data.track.title} by {data.track.artist}" />
+		<meta property="og:image:alt" content="{track.title} by {track.artist}" />
 	{/if}
-	{#if data.track.r2_url}
-		<meta property="og:audio" content="{data.track.r2_url}" />
-		<meta property="og:audio:type" content="audio/{data.track.file_type}" />
+	{#if track.r2_url}
+		<meta property="og:audio" content="{track.r2_url}" />
+		<meta property="og:audio:type" content="audio/{track.file_type}" />
 	{/if}
 
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="{data.track.title}" />
+	<meta name="twitter:title" content="{track.title}" />
 	<meta
 		name="twitter:description"
-		content="{data.track.artist}{data.track.album ? ` • ${data.track.album}` : ''}"
+		content="{track.artist}{track.album ? ` • ${track.album}` : ''}"
 	/>
-	{#if data.track.image_url}
-		<meta name="twitter:image" content="{data.track.image_url}" />
+	{#if track.image_url}
+		<meta name="twitter:image" content="{track.image_url}" />
 	{/if}
 </svelte:head>
 
-<Header {user} {isAuthenticated} onLogout={handleLogout} />
+<div class="page-container">
+	<Header {user} {isAuthenticated} onLogout={handleLogout} />
 
-<main>
-	<div class="track-detail">
-		<!-- cover art -->
-		<div class="cover-art-container">
-			{#if data.track.image_url}
-				<img src={data.track.image_url} alt="{data.track.title} artwork" class="cover-art" />
-			{:else}
-				<div class="cover-art-placeholder">
-					<svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-						<path d="M9 18V5l12-2v13"></path>
-						<circle cx="6" cy="18" r="3"></circle>
-						<circle cx="18" cy="16" r="3"></circle>
-					</svg>
-				</div>
-			{/if}
-		</div>
-
-		<!-- track info -->
-		<div class="track-info">
-			<h1 class="track-title">{data.track.title}</h1>
-			<div class="track-metadata">
-				<a href="/u/{data.track.artist_handle}" class="artist-link">
-					{data.track.artist}
-				</a>
-				{#if data.track.features && data.track.features.length > 0}
-					<span class="separator">•</span>
-					<span class="features">
-						<span class="features-label">feat.</span>
-						{#each data.track.features as feature, i}
-							{#if i > 0}<span class="feature-separator">, </span>{/if}
-							<a href="/u/{feature.handle}" class="feature-link">
-								{feature.display_name}
-							</a>
-						{/each}
-					</span>
-				{/if}
-				{#if data.track.album}
-					<span class="separator">•</span>
-					<span class="album">
-						<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-							<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
-							<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
+	<main>
+		<div class="track-detail">
+			<!-- cover art -->
+			<div class="cover-art-container">
+				{#if track.image_url}
+					<img src={track.image_url} alt="{track.title} artwork" class="cover-art" />
+				{:else}
+					<div class="cover-art-placeholder">
+						<svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+							<path d="M9 18V5l12-2v13"></path>
+							<circle cx="6" cy="18" r="3"></circle>
+							<circle cx="18" cy="16" r="3"></circle>
 						</svg>
-						{data.track.album}
-					</span>
+					</div>
 				{/if}
 			</div>
 
-			<div class="track-stats">
-				<span class="plays">{data.track.play_count} {data.track.play_count === 1 ? 'play' : 'plays'}</span>
-			</div>
-
-			<!-- actions -->
-			<div class="track-actions">
-				<button class="btn-play" class:playing={isCurrentlyPlaying} onclick={handlePlay}>
-					{#if isCurrentlyPlaying}
-						<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
-						</svg>
-						pause
-					{:else}
-						<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M8 5v14l11-7z"/>
-						</svg>
-						play
+			<!-- track info -->
+			<div class="track-info">
+				<h1 class="track-title">{track.title}</h1>
+				<div class="track-metadata">
+					<a href="/u/{track.artist_handle}" class="artist-link">
+						{track.artist}
+					</a>
+					{#if track.features && track.features.length > 0}
+						<span class="separator">•</span>
+						<span class="features">
+							<span class="features-label">feat.</span>
+							{#each track.features as feature, i}
+								{#if i > 0}<span class="feature-separator">, </span>{/if}
+								<a href="/u/{feature.handle}" class="feature-link">
+									{feature.display_name}
+								</a>
+							{/each}
+						</span>
 					{/if}
-				</button>
-				<button class="btn-queue" onclick={addToQueue}>
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<line x1="5" y1="15" x2="5" y2="21"></line>
-						<line x1="2" y1="18" x2="8" y2="18"></line>
-						<line x1="9" y1="6" x2="21" y2="6"></line>
-						<line x1="9" y1="12" x2="21" y2="12"></line>
-						<line x1="9" y1="18" x2="21" y2="18"></line>
-					</svg>
-					add to queue
-				</button>
-				{#if isAuthenticated}
-					<LikeButton trackId={data.track.id} trackTitle={data.track.title} initialLiked={data.track.is_liked || false} />
-				{/if}
-				<ShareButton url={shareUrl} />
+					{#if track.album}
+						<span class="separator">•</span>
+						<span class="album">
+							<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
+								<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
+							</svg>
+							{track.album}
+						</span>
+					{/if}
+				</div>
+
+				<div class="track-stats">
+					<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
+				</div>
+
+				<!-- actions -->
+				<div class="track-actions">
+					<button class="btn-play" class:playing={isCurrentlyPlaying} onclick={handlePlay}>
+						{#if isCurrentlyPlaying}
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+							</svg>
+							pause
+						{:else}
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M8 5v14l11-7z"/>
+							</svg>
+							play
+						{/if}
+					</button>
+					<button class="btn-queue" onclick={addToQueue}>
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<line x1="5" y1="15" x2="5" y2="21"></line>
+							<line x1="2" y1="18" x2="8" y2="18"></line>
+							<line x1="9" y1="6" x2="21" y2="6"></line>
+							<line x1="9" y1="12" x2="21" y2="12"></line>
+							<line x1="9" y1="18" x2="21" y2="18"></line>
+						</svg>
+						add to queue
+					</button>
+					{#if isAuthenticated}
+						<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
+					{/if}
+					<ShareButton url={shareUrl} />
+				</div>
 			</div>
 		</div>
-	</div>
-</main>
+	</main>
+</div>
 
 <style>
+	.page-container {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+	}
+
 	main {
-		min-height: 100vh;
-		max-height: 100vh;
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		padding: 2rem;
 		padding-bottom: 8rem;
 		max-width: 1200px;
 		margin: 0 auto;
-		display: flex;
-		align-items: center;
-		justify-content: center;
+		width: 100%;
 		overflow: hidden;
 	}
 
