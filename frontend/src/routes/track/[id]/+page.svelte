@@ -250,6 +250,10 @@
 						</svg>
 						add to queue
 					</button>
+					{#if isAuthenticated}
+						<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
+					{/if}
+					<ShareButton url={shareUrl} />
 				</div>
 			</div>
 		</div>
@@ -347,7 +351,6 @@
 		color: #e8e8e8;
 		margin: 0;
 		line-height: 1.2;
-		flex: 1;
 		text-align: center;
 	}
 
@@ -517,24 +520,31 @@
 
 		.title-row {
 			gap: 0.5rem;
+			justify-content: center;
+			align-items: center;
 		}
 
 		.title-button-left {
 			display: flex;
 			align-items: center;
-			justify-content: flex-start;
+			justify-content: center;
+			flex-shrink: 0;
+			order: 1;
 		}
 
 		.title-button-right {
 			display: flex;
 			align-items: center;
-			justify-content: flex-end;
+			justify-content: center;
+			flex-shrink: 0;
+			order: 3;
 		}
 
 		.track-title {
 			font-size: 1.5rem;
-			flex: 1;
 			text-align: center;
+			order: 2;
+			margin: 0;
 		}
 
 		.track-metadata {
