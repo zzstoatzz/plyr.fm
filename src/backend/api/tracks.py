@@ -436,24 +436,15 @@ async def list_tracks(
     """list all tracks, optionally filtered by artist DID."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    # try to get authenticated user (optional)
-    user_did = None
-    try:
-        from backend._internal.auth import get_session
+    from backend._internal.auth import get_session
 
-        session_id = request.headers.get("authorization", "").replace("Bearer ", "")
-        if session_id:
-            auth_session = await get_session(session_id)
-            if auth_session:
-                user_did = auth_session.did
-    except Exception:
-        pass  # not authenticated, continue without user_did
-
-    # if user is authenticated, fetch all their liked track IDs in one query
+    # get authenticated user if auth header present
     liked_track_ids: set[int] | None = None
-    if user_did:
+    if (
+        session_id := request.headers.get("authorization", "").replace("Bearer ", "")
+    ) and (auth_session := await get_session(session_id)):
         liked_result = await db.execute(
-            select(TrackLike.track_id).where(TrackLike.user_did == user_did)
+            select(TrackLike.track_id).where(TrackLike.user_did == auth_session.did)
         )
         liked_track_ids = set(liked_result.scalars().all())
 
