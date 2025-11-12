@@ -5,6 +5,7 @@
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
+	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
 	import type { User, Track, FeaturedArtist } from '$lib/types';
 	import { API_URL } from '$lib/config';
 	import { uploader } from '$lib/uploader.svelte';
@@ -336,6 +337,7 @@
 	<Header {user} isAuthenticated={!!user} onLogout={logout} />
 	<main>
 		<MigrationBanner />
+		<BrokenTracks />
 
 		<div class="portal-header">
 			<h2>artist portal</h2>

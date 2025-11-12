@@ -9,9 +9,10 @@
 		shareUrl: string;
 		onQueue: () => void;
 		isAuthenticated: boolean;
+		likeDisabled?: boolean;
 	}
 
-	let { trackId, trackTitle, initialLiked, shareUrl, onQueue, isAuthenticated }: Props = $props();
+	let { trackId, trackTitle, initialLiked, shareUrl, onQueue, isAuthenticated, likeDisabled = false }: Props = $props();
 
 	let showMenu = $state(false);
 	let liked = $state(initialLiked);
@@ -53,7 +54,12 @@
 	async function handleLike(e: Event) {
 		e.stopPropagation();
 
-		if (loading) return;
+		if (loading || likeDisabled) {
+			if (likeDisabled) {
+				toast.error("track's record is unavailable");
+			}
+			return;
+		}
 
 		loading = true;
 		const previousState = liked;
@@ -104,11 +110,11 @@
 		<div class="menu-backdrop" onclick={closeMenu}></div>
 		<div class="menu-panel">
 			{#if isAuthenticated}
-				<button class="menu-item" onclick={handleLike} disabled={loading}>
+				<button class="menu-item" onclick={handleLike} disabled={loading || likeDisabled} class:disabled={likeDisabled}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
 					</svg>
-					<span>{liked ? 'unlike' : 'like'}</span>
+					<span>{liked ? 'unlike' : 'like'}{likeDisabled ? ' (unavailable)' : ''}</span>
 				</button>
 			{/if}
 			<button class="menu-item" onclick={handleQueue}>
