@@ -463,7 +463,12 @@
 		}
 
 		.track-meta {
-			display: none;
+			font-size: 0.65rem;
+			gap: 0.35rem;
+		}
+
+		.meta-separator {
+			font-size: 0.6rem;
 		}
 
 		.action-button {
