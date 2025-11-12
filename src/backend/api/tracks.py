@@ -27,6 +27,7 @@ from sqlalchemy.orm import attributes, selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile, require_auth
+from backend._internal.auth import get_session
 from backend._internal.uploads import UploadStatus, upload_tracker
 from backend.atproto import (
     create_like_record,
@@ -436,8 +437,6 @@ async def list_tracks(
     """list all tracks, optionally filtered by artist DID."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    from backend._internal.auth import get_session
-
     # get authenticated user if auth header present
     liked_track_ids: set[int] | None = None
     if (
@@ -766,8 +765,6 @@ async def get_track(
     track_id: int, db: Annotated[AsyncSession, Depends(get_db)], request: Request
 ) -> dict:
     """get a specific track."""
-    from backend._internal.auth import get_session
-
     # get authenticated user if auth header present
     liked_track_ids: set[int] | None = None
     if (
