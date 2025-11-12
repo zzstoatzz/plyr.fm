@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -186,6 +187,41 @@ class StorageSettings(RelaySettingsSection):
         validation_alias="R2_PUBLIC_IMAGE_BUCKET_URL",
         description="R2 public bucket URL for image files",
     )
+
+    @computed_field
+    @property
+    def allowed_image_origins(self) -> set[str]:
+        """Origins allowed for imageUrl validation."""
+        origins = set()
+        if self.r2_public_image_bucket_url:
+            parsed = urlparse(self.r2_public_image_bucket_url)
+            origins.add(f"{parsed.scheme}://{parsed.netloc}")
+        return origins
+
+    def validate_image_url(self, url: str | None) -> bool:
+        """Validate that imageUrl comes from allowed origin.
+
+        args:
+            url: image URL to validate
+
+        returns:
+            True if valid or None, raises ValueError if invalid
+
+        raises:
+            ValueError: if URL is from untrusted origin
+        """
+        if not url:
+            return True
+
+        parsed = urlparse(url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+
+        if origin not in self.allowed_image_origins:
+            raise ValueError(
+                f"image must be hosted on allowed origins: {self.allowed_image_origins}"
+            )
+
+        return True
 
 
 class AtprotoSettings(RelaySettingsSection):

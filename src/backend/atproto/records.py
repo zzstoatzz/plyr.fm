@@ -144,6 +144,8 @@ def build_track_record(
             for f in features
         ]
     if image_url:
+        # validate image URL comes from allowed origin
+        settings.storage.validate_image_url(image_url)
         record["imageUrl"] = image_url
 
     return record
