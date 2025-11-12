@@ -1,5 +1,6 @@
 """ATProto record creation for relay audio items."""
 
+import asyncio
 import json
 import logging
 from datetime import UTC, datetime
@@ -8,10 +9,13 @@ from typing import Any
 from atproto_oauth.models import OAuthSession
 
 from backend._internal import Session as AuthSession
-from backend._internal import oauth_client, update_session_tokens
+from backend._internal import get_session, oauth_client, update_session_tokens
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
+
+# per-session locks for token refresh to prevent concurrent refresh races
+_refresh_locks: dict[str, asyncio.Lock] = {}
 
 
 def _reconstruct_oauth_session(oauth_data: dict[str, Any]) -> OAuthSession:
@@ -52,46 +56,98 @@ async def _refresh_session_tokens(
     auth_session: AuthSession,
     oauth_session: OAuthSession,
 ) -> OAuthSession:
-    """refresh expired access token using refresh token."""
-    logger.info(f"refreshing access token for {auth_session.did}")
+    """refresh expired access token using refresh token.
 
-    try:
-        # use OAuth client to refresh tokens
-        refreshed_session = await oauth_client.refresh_session(oauth_session)
+    uses per-session locking to prevent concurrent refresh attempts for the same session.
+    if another coroutine already refreshed the token, reloads from DB instead of making
+    a redundant network call.
+    """
+    session_id = auth_session.session_id
 
-        # serialize updated tokens back to database
-        from cryptography.hazmat.primitives import serialization
+    # get or create lock for this session
+    if session_id not in _refresh_locks:
+        _refresh_locks[session_id] = asyncio.Lock()
 
-        dpop_key_pem = refreshed_session.dpop_private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
-        ).decode("utf-8")
+    lock = _refresh_locks[session_id]
 
-        updated_session_data = {
-            "did": refreshed_session.did,
-            "handle": refreshed_session.handle,
-            "pds_url": refreshed_session.pds_url,
-            "authserver_iss": refreshed_session.authserver_iss,
-            "scope": refreshed_session.scope,
-            "access_token": refreshed_session.access_token,
-            "refresh_token": refreshed_session.refresh_token,
-            "dpop_private_key_pem": dpop_key_pem,
-            "dpop_authserver_nonce": refreshed_session.dpop_authserver_nonce,
-            "dpop_pds_nonce": refreshed_session.dpop_pds_nonce or "",
-        }
+    async with lock:
+        # check if another coroutine already refreshed while we were waiting
+        # reload session from DB to get potentially updated tokens
+        updated_auth_session = await get_session(session_id)
+        if not updated_auth_session:
+            raise ValueError(f"session {session_id} no longer exists")
 
-        # update session in database
-        await update_session_tokens(auth_session.session_id, updated_session_data)
+        # reconstruct oauth session from potentially updated data
+        updated_oauth_data = updated_auth_session.oauth_session
+        if not updated_oauth_data or "access_token" not in updated_oauth_data:
+            raise ValueError(f"OAuth session data missing for {auth_session.did}")
 
-        logger.info(f"successfully refreshed access token for {auth_session.did}")
-        return refreshed_session
+        current_oauth_session = _reconstruct_oauth_session(updated_oauth_data)
 
-    except Exception as e:
-        logger.error(
-            f"failed to refresh token for {auth_session.did}: {e}", exc_info=True
-        )
-        raise ValueError(f"failed to refresh access token: {e}") from e
+        # if tokens are different from what we had, another coroutine already refreshed
+        if current_oauth_session.access_token != oauth_session.access_token:
+            logger.info(
+                f"tokens already refreshed by another request for {auth_session.did}"
+            )
+            return current_oauth_session
+
+        # we need to refresh - no one else did it yet
+        logger.info(f"refreshing access token for {auth_session.did}")
+
+        try:
+            # use OAuth client to refresh tokens
+            refreshed_session = await oauth_client.refresh_session(
+                current_oauth_session
+            )
+
+            # serialize updated tokens back to database
+            from cryptography.hazmat.primitives import serialization
+
+            dpop_key_pem = refreshed_session.dpop_private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption(),
+            ).decode("utf-8")
+
+            updated_session_data = {
+                "did": refreshed_session.did,
+                "handle": refreshed_session.handle,
+                "pds_url": refreshed_session.pds_url,
+                "authserver_iss": refreshed_session.authserver_iss,
+                "scope": refreshed_session.scope,
+                "access_token": refreshed_session.access_token,
+                "refresh_token": refreshed_session.refresh_token,
+                "dpop_private_key_pem": dpop_key_pem,
+                "dpop_authserver_nonce": refreshed_session.dpop_authserver_nonce,
+                "dpop_pds_nonce": refreshed_session.dpop_pds_nonce or "",
+            }
+
+            # update session in database
+            await update_session_tokens(session_id, updated_session_data)
+
+            logger.info(f"successfully refreshed access token for {auth_session.did}")
+            return refreshed_session
+
+        except Exception as e:
+            logger.error(
+                f"failed to refresh token for {auth_session.did}: {e}", exc_info=True
+            )
+
+            # on failure, try reloading session one more time in case another
+            # coroutine succeeded while we were failing
+            await asyncio.sleep(0.1)  # brief pause
+            retry_session = await get_session(session_id)
+            if retry_session and retry_session.oauth_session:
+                retry_oauth_session = _reconstruct_oauth_session(
+                    retry_session.oauth_session
+                )
+                if retry_oauth_session.access_token != oauth_session.access_token:
+                    logger.info(
+                        f"using tokens refreshed by parallel request for {auth_session.did}"
+                    )
+                    return retry_oauth_session
+
+            raise ValueError(f"failed to refresh access token: {e}") from e
 
 
 def build_track_record(
