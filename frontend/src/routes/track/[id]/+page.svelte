@@ -176,83 +176,88 @@
 				{/if}
 			</div>
 
-			<!-- track info -->
-			<div class="track-info">
-				<div class="title-row">
-					{#if isAuthenticated}
-						<div class="title-button-left">
-							<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
-						</div>
-					{/if}
-					<h1 class="track-title">{track.title}</h1>
-					<div class="title-button-right">
-						<ShareButton url={shareUrl} />
-					</div>
-				</div>
-				<div class="track-metadata">
-					<a href="/u/{track.artist_handle}" class="artist-link">
-						{track.artist}
-					</a>
-					{#if track.features && track.features.length > 0}
-						<span class="separator">•</span>
-						<span class="features">
-							<span class="features-label">feat.</span>
-							{#each track.features as feature, i}
-								{#if i > 0}<span class="feature-separator">, </span>{/if}
-								<a href="/u/{feature.handle}" class="feature-link">
-									{feature.display_name}
-								</a>
-							{/each}
-						</span>
-					{/if}
-					{#if track.album}
-						<span class="separator">•</span>
-						<span class="album">
-							<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
-								<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
-							</svg>
-							{track.album}
-						</span>
-					{/if}
-				</div>
-
-				<div class="track-stats">
-					<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
-					{#if track.like_count && track.like_count > 0}
-						<span class="separator">•</span>
-						<span class="likes">{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}</span>
-					{/if}
-				</div>
-
-				<!-- actions -->
-				<div class="track-actions">
-					<button class="btn-play" class:playing={isCurrentlyPlaying} onclick={handlePlay}>
-						{#if isCurrentlyPlaying}
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-								<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
-							</svg>
-							pause
-						{:else}
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-								<path d="M8 5v14l11-7z"/>
-							</svg>
-							play
-						{/if}
-					</button>
-					<button class="btn-queue" onclick={addToQueue}>
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<line x1="5" y1="15" x2="5" y2="21"></line>
-							<line x1="2" y1="18" x2="8" y2="18"></line>
-							<line x1="9" y1="6" x2="21" y2="6"></line>
-							<line x1="9" y1="12" x2="21" y2="12"></line>
-							<line x1="9" y1="18" x2="21" y2="18"></line>
-						</svg>
-						add to queue
-					</button>
+			<!-- track info wrapper -->
+			<div class="track-info-wrapper">
+				<div class="side-button-left">
 					{#if isAuthenticated}
 						<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
 					{/if}
+				</div>
+
+				<div class="track-info">
+					<h1 class="track-title">{track.title}</h1>
+					<div class="track-metadata">
+						<a href="/u/{track.artist_handle}" class="artist-link">
+							{track.artist}
+						</a>
+						{#if track.features && track.features.length > 0}
+							<span class="separator">•</span>
+							<span class="features">
+								<span class="features-label">feat.</span>
+								{#each track.features as feature, i}
+									{#if i > 0}<span class="feature-separator">, </span>{/if}
+									<a href="/u/{feature.handle}" class="feature-link">
+										{feature.display_name}
+									</a>
+								{/each}
+							</span>
+						{/if}
+						{#if track.album}
+							<span class="separator">•</span>
+							<span class="album">
+								<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
+									<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
+								</svg>
+								{track.album}
+							</span>
+						{/if}
+					</div>
+
+					<div class="track-stats">
+						<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
+						{#if track.like_count && track.like_count > 0}
+							<span class="separator">•</span>
+							<span class="likes">{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}</span>
+						{/if}
+					</div>
+
+					<div class="mobile-side-buttons">
+						{#if isAuthenticated}
+							<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
+						{/if}
+						<ShareButton url={shareUrl} />
+					</div>
+
+					<!-- actions -->
+					<div class="track-actions">
+						<button class="btn-play" class:playing={isCurrentlyPlaying} onclick={handlePlay}>
+							{#if isCurrentlyPlaying}
+								<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+									<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+								</svg>
+								pause
+							{:else}
+								<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+									<path d="M8 5v14l11-7z"/>
+								</svg>
+								play
+							{/if}
+						</button>
+						<button class="btn-queue" onclick={addToQueue}>
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="5" y1="15" x2="5" y2="21"></line>
+								<line x1="2" y1="18" x2="8" y2="18"></line>
+								<line x1="9" y1="6" x2="21" y2="6"></line>
+								<line x1="9" y1="12" x2="21" y2="12"></line>
+								<line x1="9" y1="18" x2="21" y2="18"></line>
+							</svg>
+							add to queue
+						</button>
+					</div>
+				</div>
+
+				<div class="side-button-right">
 					<ShareButton url={shareUrl} />
 				</div>
 			</div>
@@ -319,30 +324,31 @@
 		color: #606060;
 	}
 
-	.track-info {
+	.track-info-wrapper {
 		width: 100%;
-		max-width: 500px;
+		max-width: 600px;
+		display: flex;
+		align-items: flex-start;
+		gap: 1rem;
+		justify-content: center;
+	}
+
+	.side-button-left,
+	.side-button-right {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding-top: 0.5rem;
+	}
+
+	.track-info {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
 		text-align: center;
-	}
-
-	.title-row {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.75rem;
-		width: 100%;
-		position: relative;
-	}
-
-	.title-button-left,
-	.title-button-right {
-		display: none;
-		flex-shrink: 0;
-		width: 32px;
-		height: 32px;
 	}
 
 	.track-title {
@@ -434,6 +440,13 @@
 		font-size: 0.7rem;
 	}
 
+	.mobile-side-buttons {
+		display: none;
+		gap: 0.75rem;
+		justify-content: center;
+		align-items: center;
+	}
+
 	.track-actions {
 		display: flex;
 		gap: 0.75rem;
@@ -441,11 +454,6 @@
 		align-items: center;
 		flex-wrap: wrap;
 		margin-top: 0.5rem;
-	}
-
-	.track-actions :global(.like-button),
-	.track-actions :global(.share-btn) {
-		display: flex;
 	}
 
 	.btn-play {
@@ -514,37 +522,28 @@
 			margin: 0 auto;
 		}
 
-		.track-info {
+		.track-info-wrapper {
+			flex-direction: column;
+			align-items: center;
 			gap: 0.75rem;
 		}
 
-		.title-row {
-			gap: 0.5rem;
-			justify-content: center;
-			align-items: center;
+		.side-button-left,
+		.side-button-right {
+			display: none;
 		}
 
-		.title-button-left {
+		.mobile-side-buttons {
 			display: flex;
-			align-items: center;
-			justify-content: center;
-			flex-shrink: 0;
-			order: 1;
 		}
 
-		.title-button-right {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			flex-shrink: 0;
-			order: 3;
+		.track-info {
+			gap: 0.75rem;
+			width: 100%;
 		}
 
 		.track-title {
 			font-size: 1.5rem;
-			text-align: center;
-			order: 2;
-			margin: 0;
 		}
 
 		.track-metadata {
@@ -565,35 +564,30 @@
 			justify-content: center;
 		}
 
-		.track-actions :global(.like-button),
-		.track-actions :global(.share-btn) {
-			display: none;
-		}
-
 		.btn-play {
 			flex: 1;
 			min-width: calc(50% - 0.25rem);
 			justify-content: center;
-			padding: 0.5rem 0.75rem;
-			font-size: 0.85rem;
+			padding: 0.6rem 1rem;
+			font-size: 0.9rem;
 		}
 
 		.btn-play svg {
-			width: 18px;
-			height: 18px;
+			width: 20px;
+			height: 20px;
 		}
 
 		.btn-queue {
 			flex: 1;
 			min-width: calc(50% - 0.25rem);
 			justify-content: center;
-			padding: 0.5rem 0.75rem;
-			font-size: 0.85rem;
+			padding: 0.6rem 1rem;
+			font-size: 0.9rem;
 		}
 
 		.btn-queue svg {
-			width: 16px;
-			height: 16px;
+			width: 18px;
+			height: 18px;
 		}
 	}
 </style>
