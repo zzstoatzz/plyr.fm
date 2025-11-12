@@ -23,6 +23,7 @@ class Queue {
 
 	syncTimer: number | null = null;
 	pendingSync = false;
+	syncAbortController: AbortController | null = null;
 	channel: BroadcastChannel | null = null;
 	tabId: string | null = null;
 
@@ -286,8 +287,15 @@ class Queue {
 	schedulePush() {
 		if (!browser) return;
 
+		// cancel any pending timer
 		if (this.syncTimer !== null) {
 			window.clearTimeout(this.syncTimer);
+		}
+
+		// abort any in-flight sync request
+		if (this.syncAbortController) {
+			this.syncAbortController.abort();
+			this.syncAbortController = null;
 		}
 
 		this.syncTimer = window.setTimeout(() => {
@@ -312,6 +320,10 @@ class Queue {
 
 		this.syncInProgress = true;
 		this.pendingSync = false;
+
+		// create a new abort controller for this sync
+		this.syncAbortController = new AbortController();
+		const currentController = this.syncAbortController;
 
 		try {
 			const sessionId = localStorage.getItem('session_id');
@@ -339,7 +351,8 @@ class Queue {
 			const response = await fetch(`${API_URL}/queue/`, {
 				method: 'PUT',
 				headers,
-				body: JSON.stringify({ state })
+				body: JSON.stringify({ state }),
+				signal: currentController.signal
 			});
 
 			if (response.status === 401) {
@@ -360,6 +373,11 @@ class Queue {
 
 			const data: QueueResponse = await response.json();
 			const newEtag = response.headers.get('etag');
+
+			// check if this request was aborted before processing the response
+			if (currentController.signal.aborted) {
+				return false;
+			}
 
 			if (this.revision !== null && data.revision < this.revision) {
 				return true;
@@ -382,10 +400,18 @@ class Queue {
 
 			return true;
 		} catch (error) {
+			// ignore abort errors
+			if ((error as Error).name === 'AbortError') {
+				return false;
+			}
 			console.error('failed to push queue:', error);
 			return false;
 		} finally {
-			this.syncInProgress = false;
+			// only clear sync state if this controller is still active
+			if (this.syncAbortController === currentController) {
+				this.syncInProgress = false;
+				this.syncAbortController = null;
+			}
 
 			if (this.pendingSync) {
 				this.pendingSync = false;
