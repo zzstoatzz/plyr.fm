@@ -109,7 +109,13 @@
 		<!-- desktop: show individual buttons -->
 		<div class="desktop-actions">
 			{#if isAuthenticated}
-				<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
+				<LikeButton
+					trackId={track.id}
+					trackTitle={track.title}
+					initialLiked={track.is_liked || false}
+					disabled={!track.atproto_record_uri}
+					disabledReason={!track.atproto_record_uri ? "track's record is unavailable and cannot be liked" : undefined}
+				/>
 			{/if}
 			<button
 				class="action-button"
@@ -138,6 +144,7 @@
 				shareUrl={shareUrl}
 				onQueue={handleQueue}
 				isAuthenticated={isAuthenticated}
+				likeDisabled={!track.atproto_record_uri}
 			/>
 		</div>
 	</div>

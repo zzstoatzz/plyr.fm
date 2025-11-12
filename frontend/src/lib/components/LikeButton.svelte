@@ -6,9 +6,11 @@
 		trackId: number;
 		trackTitle: string;
 		initialLiked?: boolean;
+		disabled?: boolean;
+		disabledReason?: string;
 	}
 
-	let { trackId, trackTitle, initialLiked = false }: Props = $props();
+	let { trackId, trackTitle, initialLiked = false, disabled = false, disabledReason }: Props = $props();
 
 	let liked = $state(initialLiked);
 	let loading = $state(false);
@@ -21,7 +23,7 @@
 	async function toggleLike(e: Event) {
 		e.stopPropagation();
 
-		if (loading) return;
+		if (loading || disabled) return;
 
 		loading = true;
 		const previousState = liked;
@@ -60,9 +62,10 @@
 	class="like-button"
 	class:liked
 	class:loading
+	class:disabled-state={disabled}
 	onclick={toggleLike}
-	title={liked ? 'unlike' : 'like'}
-	disabled={loading}
+	title={disabled && disabledReason ? disabledReason : (liked ? 'unlike' : 'like')}
+	disabled={loading || disabled}
 >
 	<svg width="16" height="16" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 		<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
@@ -103,6 +106,18 @@
 	.like-button:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.like-button.disabled-state {
+		opacity: 0.4;
+		border-color: #555;
+		color: #666;
+	}
+
+	.like-button.disabled-state:hover {
+		background: transparent;
+		border-color: #555;
+		color: #666;
 	}
 
 	.like-button.loading {

@@ -849,7 +849,11 @@ async def like_track(
 
     if not track.atproto_record_uri:
         raise HTTPException(
-            status_code=400, detail="cannot like track without ATProto record"
+            status_code=422,
+            detail={
+                "error": "missing_atproto_record",
+                "message": "this track cannot be liked because its ATProto record is missing",
+            },
         )
 
     # check if already liked
@@ -921,9 +925,16 @@ async def unlike_track(
     # get track info in case we need to rollback
     track_result = await db.execute(select(Track).where(Track.id == track_id))
     track = track_result.scalar_one_or_none()
-    if not track or not track.atproto_record_uri or not track.atproto_record_cid:
+    if not track:
+        raise HTTPException(status_code=404, detail="track not found")
+
+    if not track.atproto_record_uri or not track.atproto_record_cid:
         raise HTTPException(
-            status_code=500, detail="track data incomplete - cannot unlike"
+            status_code=422,
+            detail={
+                "error": "missing_atproto_record",
+                "message": "this track cannot be unliked because its ATProto record is missing",
+            },
         )
 
     # delete ATProto like record from user's PDS
