@@ -260,18 +260,18 @@
 							<div class="stat-label">total tracks</div>
 						</div>
 						{#if analytics.top_item}
-							<div class="stat-card top-item" transition:fade={{ duration: 200 }}>
+							<a href="/track/{analytics.top_item.id}" class="stat-card top-item" transition:fade={{ duration: 200 }}>
 								<div class="stat-label">most played</div>
 								<div class="top-item-title">{analytics.top_item.title}</div>
 								<div class="top-item-plays">{analytics.top_item.play_count.toLocaleString()} plays</div>
-							</div>
+							</a>
 						{/if}
 						{#if analytics.top_liked}
-							<div class="stat-card top-item" transition:fade={{ duration: 200 }}>
+							<a href="/track/{analytics.top_liked.id}" class="stat-card top-item" transition:fade={{ duration: 200 }}>
 								<div class="stat-label">most liked</div>
 								<div class="top-item-title">{analytics.top_liked.title}</div>
 								<div class="top-item-plays">{analytics.top_liked.play_count.toLocaleString()} {analytics.top_liked.play_count === 1 ? 'like' : 'likes'}</div>
-							</div>
+							</a>
 						{/if}
 					{/if}
 				{/key}
@@ -416,6 +416,15 @@
 
 	.stat-card.top-item {
 		grid-column: span 1;
+		text-decoration: none;
+		display: block;
+		cursor: pointer;
+	}
+
+	.stat-card.top-item:hover {
+		border-color: var(--accent);
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(138, 179, 255, 0.2);
 	}
 
 	.top-item-title {
