@@ -6,7 +6,7 @@ import json
 import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import logfire
 from fastapi import (
@@ -559,7 +559,7 @@ async def list_my_tracks(
 class BrokenTracksResponse(BaseModel):
     """response for broken tracks endpoint."""
 
-    tracks: list[TrackResponse]
+    tracks: list[dict[str, Any]]
     count: int
 
 
@@ -787,7 +787,7 @@ class RestoreRecordResponse(BaseModel):
     """response for restore record endpoint."""
 
     success: bool
-    track: TrackResponse
+    track: dict[str, Any]
     restored_uri: str
 
 
