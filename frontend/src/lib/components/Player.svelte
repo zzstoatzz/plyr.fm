@@ -100,23 +100,44 @@
 	// handle track changes - load new audio when track changes
 	let previousTrackId = $state<number | null>(null);
 	let isLoadingTrack = $state(false);
+	let loadingAbortController = $state<AbortController | null>(null);
 
 	$effect(() => {
 		if (!player.currentTrack || !player.audioElement) return;
 
 		// only load new track if it actually changed
 		if (player.currentTrack.id !== previousTrackId) {
+			// abort any pending load from previous track
+			if (loadingAbortController) {
+				loadingAbortController.abort();
+			}
+			loadingAbortController = new AbortController();
+
 			previousTrackId = player.currentTrack.id;
 			player.playCountedForTrack = null;
 			isLoadingTrack = true;
 
+			// clear any pending audio state from previous track
+			player.audioElement.pause();
+			player.audioElement.removeAttribute('src');
+			player.audioElement.load();
+
+			// set new source
 			player.audioElement.src = `${API_URL}/audio/${player.currentTrack.file_id}`;
 			player.audioElement.load();
 
 			// wait for audio to be ready before allowing playback
-			player.audioElement.addEventListener('loadeddata', () => {
-				isLoadingTrack = false;
-			}, { once: true });
+			// use the abort controller's signal to automatically remove stale listeners
+			const handleLoaded = () => {
+				if (!loadingAbortController?.signal.aborted) {
+					isLoadingTrack = false;
+				}
+			};
+
+			player.audioElement.addEventListener('loadeddata', handleLoaded, {
+				once: true,
+				signal: loadingAbortController.signal
+			});
 		}
 	});
 
@@ -136,28 +157,26 @@
 
 	// sync queue.currentTrack with player
 	let previousQueueIndex = $state<number>(-1);
+	let previousTrackFileId = $state<string | null>(null);
 	let shouldAutoPlay = $state(false);
 
 	$effect(() => {
 		if (queue.currentTrack) {
-			const trackChanged = queue.currentTrack.id !== player.currentTrack?.id;
+			const trackFileIdChanged = queue.currentTrack.file_id !== previousTrackFileId;
 			const indexChanged = queue.currentIndex !== previousQueueIndex;
 
-			if (trackChanged) {
-				// always update the current track in player
+			if (trackFileIdChanged) {
+				// always update the current track in player when file_id changes
 				player.currentTrack = queue.currentTrack;
 				previousQueueIndex = queue.currentIndex;
+				previousTrackFileId = queue.currentTrack.file_id;
 
 				// only set shouldAutoPlay if this was a local update (not from another tab's broadcast)
 				if (queue.lastUpdateWasLocal) {
 					shouldAutoPlay = true;
 				}
 			} else if (indexChanged) {
-				player.currentTime = 0;
-				// only auto-play if this was a local update
-				if (queue.lastUpdateWasLocal) {
-					player.paused = false;
-				}
+				// index changed but track is the same - just update position tracking
 				previousQueueIndex = queue.currentIndex;
 			}
 		}
