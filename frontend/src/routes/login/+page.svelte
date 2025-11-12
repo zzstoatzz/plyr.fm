@@ -24,11 +24,11 @@
 				<div class="label-row">
 					<label for="handle">atproto handle</label>
 					<a
-						href="https://atproto.com/specs/account"
+						href="https://atproto.com/specs/handle"
 						target="_blank"
 						rel="noopener noreferrer"
 						class="help-link"
-						title="learn about ATProto handles and identity"
+						title="learn about ATProto handles"
 					>
 						what's this?
 					</a>
