@@ -99,7 +99,20 @@
 						}
 					}).then(async response => {
 						if (!response.ok) {
-							throw new Error(`failed to restore ${track.title}`);
+							let errorMsg = `failed to restore ${track.title}`;
+							try {
+								const errorData = await response.json();
+								if (errorData.detail?.error === 'migration_needed') {
+									errorMsg = `${track.title} needs migration`;
+								} else if (errorData.detail?.error === 'already_has_record') {
+									errorMsg = `${track.title} already has a record`;
+								} else if (errorData.detail) {
+									errorMsg = `${track.title}: ${errorData.detail}`;
+								}
+							} catch {
+								// use default errorMsg if JSON parsing fails
+							}
+							throw new Error(errorMsg);
 						}
 						return track;
 					})
