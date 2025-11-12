@@ -549,6 +549,35 @@ async def list_my_tracks(
     return {"tracks": track_responses}
 
 
+@router.get("/me/broken")
+async def list_broken_tracks(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> dict:
+    """list tracks owned by authenticated user that have missing ATProto records.
+
+    returns tracks with null atproto_record_uri, indicating they need recovery.
+    these tracks cannot be liked and may need migration or recreation.
+    """
+    stmt = (
+        select(Track)
+        .join(Artist)
+        .options(selectinload(Track.artist))
+        .where(Track.artist_did == auth_session.did)
+        .where((Track.atproto_record_uri.is_(None)) | (Track.atproto_record_uri == ""))
+        .order_by(Track.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    tracks = result.scalars().all()
+
+    # fetch all track responses concurrently
+    track_responses = await asyncio.gather(
+        *[TrackResponse.from_track(track) for track in tracks]
+    )
+
+    return {"tracks": track_responses, "count": len(track_responses)}
+
+
 @router.delete("/{track_id}")
 async def delete_track(
     track_id: int,
