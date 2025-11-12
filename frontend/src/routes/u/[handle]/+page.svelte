@@ -6,6 +6,7 @@
 	import type { Track, Artist, User, Analytics } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
@@ -206,7 +207,9 @@
 </svelte:head>
 
 {#if loading}
-	<div class="loading">loading...</div>
+	<div class="loading">
+		<LoadingSpinner />
+	</div>
 {:else if error}
 	<div class="error-container">
 		<h1>{error}</h1>

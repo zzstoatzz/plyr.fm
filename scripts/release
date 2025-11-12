@@ -43,6 +43,18 @@ def main() -> int:
         print("❌ working directory has uncommitted changes")
         return 1
 
+    # ensure we're up to date with remote
+    subprocess.run(["git", "fetch"], capture_output=True, check=True)
+    result = subprocess.run(
+        ["git", "rev-list", "HEAD..@{u}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if result.stdout.strip():
+        print("❌ local branch is behind remote - please pull first")
+        return 1
+
     # check if there are backend changes since last release
     result = subprocess.run(
         ["gh", "release", "list", "--limit", "1"],

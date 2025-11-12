@@ -3,9 +3,15 @@
 	import { queue } from '$lib/queue.svelte';
 	import { API_URL } from '$lib/config';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 
 	let formattedCurrentTime = $derived(formatTime(player.currentTime));
 	let formattedDuration = $derived(formatTime(player.duration));
+
+	// check if we're on the current track's detail page
+	let isOnTrackDetailPage = $derived(
+		player.currentTrack && $page.url.pathname === `/track/${player.currentTrack.id}`
+	);
 
 	// compute progress percentage for seek bar styling
 	let progressPercent = $derived.by(() => {
@@ -211,9 +217,19 @@
 				{/if}
 			</div>
 			<div class="player-info">
-				<div class="player-title" class:scrolling={player.currentTrack.title.length > 30}>
-					<span>{player.currentTrack.title}</span>
-				</div>
+				{#if isOnTrackDetailPage}
+					<div class="player-title" class:scrolling={player.currentTrack.title.length > 30}>
+						<span>{player.currentTrack.title}</span>
+					</div>
+				{:else}
+					<a
+						href="/track/{player.currentTrack.id}"
+						class="player-title-link"
+						class:scrolling={player.currentTrack.title.length > 30}
+					>
+						<span>{player.currentTrack.title}</span>
+					</a>
+				{/if}
 				<div class="player-metadata">
 					<a
 						href="/u/{player.currentTrack.artist_handle}"
@@ -419,6 +435,38 @@
 	}
 
 	.player-title.scrolling span {
+		padding-right: 2rem;
+		animation: scroll-text 10s linear infinite;
+	}
+
+	.player-title-link {
+		font-weight: 600;
+		color: #e8e8e8;
+		margin-bottom: 0.15rem;
+		font-size: 0.95rem;
+		overflow: hidden;
+		position: relative;
+		text-decoration: none;
+		transition: color 0.2s;
+		display: block;
+	}
+
+	.player-title-link:hover {
+		color: var(--accent);
+	}
+
+	.player-title-link.scrolling {
+		overflow: hidden;
+		mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
+		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
+	}
+
+	.player-title-link span {
+		display: inline-block;
+		white-space: nowrap;
+	}
+
+	.player-title-link.scrolling span {
 		padding-right: 2rem;
 		animation: scroll-text 10s linear infinite;
 	}
