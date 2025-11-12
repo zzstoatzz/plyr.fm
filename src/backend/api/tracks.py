@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes, selectinload
 
 from backend._internal import Session as AuthSession
-from backend._internal import require_artist_profile, require_auth
+from backend._internal import oauth_client, require_artist_profile, require_auth
 from backend._internal.auth import get_session
 from backend._internal.uploads import UploadStatus, upload_tracker
 from backend.atproto import (
@@ -35,7 +35,13 @@ from backend.atproto import (
     delete_record_by_uri,
 )
 from backend.atproto.handles import resolve_handle
-from backend.atproto.records import build_track_record, update_record
+from backend.atproto.records import (
+    _reconstruct_oauth_session,
+    _refresh_session_tokens,
+    build_track_record,
+    update_record,
+)
+from backend.atproto.tid import datetime_to_tid
 from backend.config import settings
 from backend.models import Artist, AudioFormat, Track, TrackLike, get_db
 from backend.models.image import ImageFormat
@@ -767,6 +773,220 @@ async def update_track_metadata(
     await db.refresh(track)
 
     return await TrackResponse.from_track(track)
+
+
+@router.post("/{track_id}/restore-record")
+async def restore_track_record(
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> dict:
+    """restore ATProto record for track with missing record.
+
+    this endpoint handles two cases:
+    1. track has record in old namespace → delegates to migration
+    2. track has no record anywhere → recreates with TID from created_at
+
+    returns updated track data.
+    """
+    # fetch track
+    result = await db.execute(
+        select(Track)
+        .join(Artist)
+        .options(selectinload(Track.artist))
+        .where(Track.id == track_id)
+    )
+    track = result.scalar_one_or_none()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="track not found")
+
+    # verify ownership
+    if track.artist_did != auth_session.did:
+        raise HTTPException(
+            status_code=403,
+            detail="you can only restore your own tracks",
+        )
+
+    # check if already has record
+    if track.atproto_record_uri:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "already_has_record",
+                "message": "track already has an ATProto record",
+                "uri": track.atproto_record_uri,
+            },
+        )
+
+    # check if old namespace record exists
+    if settings.atproto.old_app_namespace:
+        old_collection = settings.atproto.old_track_collection
+        if old_collection:
+            try:
+                # reconstruct OAuth session
+                oauth_data = auth_session.oauth_session
+                if not oauth_data or "access_token" not in oauth_data:
+                    raise HTTPException(status_code=401, detail="invalid session")
+
+                oauth_session = _reconstruct_oauth_session(oauth_data)
+
+                # check for records in old collection
+                url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.listRecords"
+                params = {
+                    "repo": auth_session.did,
+                    "collection": old_collection,
+                    "limit": 100,
+                }
+
+                # try request, refresh token if expired
+                for attempt in range(2):
+                    response = await oauth_client.make_authenticated_request(
+                        session=oauth_session,
+                        method="GET",
+                        url=url,
+                        params=params,
+                    )
+
+                    if response.status_code == 200:
+                        result = response.json()
+                        records = result.get("records", [])
+
+                        # if old namespace records exist, user should migrate instead
+                        if records:
+                            raise HTTPException(
+                                status_code=409,
+                                detail={
+                                    "error": "migration_needed",
+                                    "message": "track has record in old namespace - use migration instead",
+                                    "old_collection": old_collection,
+                                    "record_count": len(records),
+                                },
+                            )
+                        break
+
+                    # token expired - refresh and retry
+                    if response.status_code == 401 and attempt == 0:
+                        try:
+                            error_data = response.json()
+                            if "exp" in error_data.get("message", ""):
+                                oauth_session = await _refresh_session_tokens(
+                                    auth_session, oauth_session
+                                )
+                                continue
+                        except Exception:
+                            pass
+
+                    # other errors - log but continue with recreation
+                    logger.warning(
+                        f"failed to check old namespace for track {track_id}: {response.status_code}"
+                    )
+                    break
+
+            except HTTPException:
+                raise
+            except Exception as e:
+                # log error but continue - we'll try to recreate anyway
+                logger.warning(
+                    f"error checking old namespace for track {track_id}: {e}",
+                    exc_info=True,
+                )
+
+    # no old namespace record - recreate with TID from created_at
+    try:
+        # generate TID from original timestamp
+        rkey = datetime_to_tid(track.created_at)
+
+        # build track record
+        track_record = build_track_record(
+            title=track.title,
+            artist=track.artist.display_name,
+            audio_url=track.r2_url,
+            file_type=track.file_type,
+            album=track.album,
+            duration=None,
+            features=track.features if track.features else None,
+            image_url=await track.get_image_url(),
+        )
+
+        # add createdAt from original timestamp
+        track_record["createdAt"] = track.created_at.isoformat()
+
+        # create record on PDS
+        oauth_data = auth_session.oauth_session
+        if not oauth_data or "access_token" not in oauth_data:
+            raise HTTPException(status_code=401, detail="invalid session")
+
+        oauth_session = _reconstruct_oauth_session(oauth_data)
+
+        create_url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
+        payload = {
+            "repo": auth_session.did,
+            "collection": settings.atproto.track_collection,
+            "rkey": rkey,
+            "record": track_record,
+        }
+
+        # try create, refresh token if expired
+        for attempt in range(2):
+            response = await oauth_client.make_authenticated_request(
+                session=oauth_session,
+                method="POST",
+                url=create_url,
+                json=payload,
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                new_uri = result.get("uri")
+                new_cid = result.get("cid")
+
+                # update database
+                track.atproto_record_uri = new_uri
+                track.atproto_record_cid = new_cid
+
+                await db.commit()
+                await db.refresh(track)
+
+                logger.info(f"restored ATProto record for track {track_id}: {new_uri}")
+
+                return {
+                    "success": True,
+                    "track": await TrackResponse.from_track(track),
+                    "restored_uri": new_uri,
+                }
+
+            # token expired - refresh and retry
+            if response.status_code == 401 and attempt == 0:
+                try:
+                    error_data = response.json()
+                    if "exp" in error_data.get("message", ""):
+                        oauth_session = await _refresh_session_tokens(
+                            auth_session, oauth_session
+                        )
+                        continue
+                except Exception:
+                    pass
+
+            # creation failed
+            error_text = response.text
+            logger.error(
+                f"failed to create ATProto record for track {track_id}: {response.status_code} {error_text}"
+            )
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"failed to create ATProto record: {error_text}",
+            )
+
+        raise HTTPException(
+            status_code=500, detail="failed to restore record after retries"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"error restoring record for track {track_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/liked")
