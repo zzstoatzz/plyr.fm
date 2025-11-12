@@ -775,29 +775,20 @@ async def get_track(
     track_id: int, db: Annotated[AsyncSession, Depends(get_db)], request: Request
 ) -> dict:
     """get a specific track."""
-    # try to get authenticated user (optional)
-    user_did = None
-    try:
-        from backend._internal.auth import get_session
+    from backend._internal.auth import get_session
 
-        session_id = request.headers.get("authorization", "").replace("Bearer ", "")
-        if session_id:
-            auth_session = await get_session(session_id)
-            if auth_session:
-                user_did = auth_session.did
-    except Exception:
-        pass  # not authenticated, continue without user_did
-
-    # if user is authenticated, check if they liked this track
+    # get authenticated user if auth header present
     liked_track_ids: set[int] | None = None
-    if user_did:
-        liked_result = await db.execute(
+    if (
+        (session_id := request.headers.get("authorization", "").replace("Bearer ", ""))
+        and (auth_session := await get_session(session_id))
+        and await db.scalar(
             select(TrackLike.track_id).where(
-                TrackLike.user_did == user_did, TrackLike.track_id == track_id
+                TrackLike.user_did == auth_session.did, TrackLike.track_id == track_id
             )
         )
-        if liked_result.scalar_one_or_none():
-            liked_track_ids = {track_id}
+    ):
+        liked_track_ids = {track_id}
 
     result = await db.execute(
         select(Track)

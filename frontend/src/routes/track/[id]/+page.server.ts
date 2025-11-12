@@ -5,8 +5,6 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, fetch }) => {
 	try {
-		// fetch track data server-side for SEO/link previews
-		// note: liked state will be loaded client-side since session is in localStorage
 		const response = await fetch(`${API_URL}/tracks/${params.id}`);
 
 		if (!response.ok) {
