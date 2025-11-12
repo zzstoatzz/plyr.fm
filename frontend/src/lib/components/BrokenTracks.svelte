@@ -173,7 +173,7 @@
 					<button
 						class="restore-btn"
 						onclick={() => restoreRecord(track.id, track.title)}
-						disabled={restoringTrackId === track.id}
+						disabled={restoringTrackId === track.id || restoringAll}
 					>
 						{restoringTrackId === track.id ? 'restoring...' : 'restore record'}
 					</button>
