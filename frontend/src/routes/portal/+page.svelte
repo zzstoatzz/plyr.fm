@@ -193,34 +193,46 @@
 		e.preventDefault();
 		if (!file) return;
 
-		// capture values before clearing form
 		const uploadFile = file;
 		const uploadTitle = title;
 		const uploadAlbum = album;
 		const uploadFeatures = [...featuredArtists];
 		const uploadImage = imageFile;
 
-		// clear form immediately
-		title = '';
-		album = '';
-		file = null;
-		imageFile = null;
-		featuredArtists = [];
+		const clearForm = () => {
+			title = '';
+			album = '';
+			file = null;
+			imageFile = null;
+			featuredArtists = [];
 
-		// reset file inputs
-		const fileInput = document.getElementById('file-input') as HTMLInputElement;
-		if (fileInput) {
-			fileInput.value = '';
-		}
-		const imageInput = document.getElementById('image-input') as HTMLInputElement;
-		if (imageInput) {
-			imageInput.value = '';
-		}
+			const fileInput = document.getElementById('file-input') as HTMLInputElement;
+			if (fileInput) {
+				fileInput.value = '';
+			}
+			const imageInput = document.getElementById('image-input') as HTMLInputElement;
+			if (imageInput) {
+				imageInput.value = '';
+			}
+		};
 
-		// delegate to global uploader
-		uploader.upload(uploadFile, uploadTitle, uploadAlbum, uploadFeatures, uploadImage, () => {
-			loadMyTracks();
-		});
+		uploader.upload(
+			uploadFile,
+			uploadTitle,
+			uploadAlbum,
+			uploadFeatures,
+			uploadImage,
+			() => {
+				loadMyTracks();
+			},
+			{
+				onSuccess: () => {
+					clearForm();
+				},
+				onError: () => {
+				}
+			}
+		);
 	}
 
 	async function deleteTrack(trackId: number, trackTitle: string) {
