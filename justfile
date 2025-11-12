@@ -30,6 +30,10 @@ lint:
 deploy-frontend:
     cd frontend && bun run build && bun x wrangler pages deploy .svelte-kit/cloudflare
 
+# show commits since last release
+changelog:
+    @git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:'%C(yellow)%h%Creset %C(blue)%ad%Creset %C(green)%s%Creset %C(dim)- %an%Creset' --date=relative
+
 # create a github release (triggers production deployment)
 release:
     ./scripts/release
