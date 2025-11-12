@@ -41,6 +41,7 @@ from backend.models import Artist, AudioFormat, Track, TrackLike, get_db
 from backend.models.image import ImageFormat
 from backend.storage import storage
 from backend.storage.r2 import R2Storage
+from backend.utilities.aggregations import get_like_counts
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -443,8 +444,6 @@ async def list_tracks(
     """list all tracks, optionally filtered by artist DID."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    from backend.utilities.aggregations import get_like_counts
-
     # get authenticated user if auth header present
     liked_track_ids: set[int] | None = None
     if (
@@ -747,8 +746,6 @@ async def list_liked_tracks(
     auth_session: AuthSession = Depends(require_auth),
 ) -> dict:
     """list tracks liked by authenticated user (queried from local index)."""
-    from backend.utilities.aggregations import get_like_counts
-
     stmt = (
         select(Track)
         .join(TrackLike, TrackLike.track_id == Track.id)
@@ -785,8 +782,6 @@ async def get_track(
     track_id: int, db: Annotated[AsyncSession, Depends(get_db)], request: Request
 ) -> dict:
     """get a specific track."""
-    from backend.utilities.aggregations import get_like_counts
-
     # get authenticated user if auth header present
     liked_track_ids: set[int] | None = None
     if (

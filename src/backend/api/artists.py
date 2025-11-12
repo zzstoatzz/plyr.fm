@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend.atproto import fetch_user_avatar
-from backend.models import Artist, Track, get_db
+from backend.models import Artist, Track, TrackLike, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -198,8 +198,6 @@ async def get_artist_analytics(
 
     returns zeros if artist has no tracks.
     """
-    from backend.models import TrackLike
-
     # get total plays and item count in one query
     result = await db.execute(
         select(func.sum(Track.play_count), func.count(Track.id)).where(
