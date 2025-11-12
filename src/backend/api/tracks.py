@@ -6,7 +6,7 @@ import json
 import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Annotated, TypedDict
+from typing import Annotated
 
 import logfire
 from fastapi import (
@@ -20,6 +20,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -555,7 +556,7 @@ async def list_my_tracks(
     return {"tracks": track_responses}
 
 
-class BrokenTracksResponse(TypedDict):
+class BrokenTracksResponse(BaseModel):
     """response for broken tracks endpoint."""
 
     tracks: list[TrackResponse]
@@ -588,7 +589,7 @@ async def list_broken_tracks(
         *[TrackResponse.from_track(track) for track in tracks]
     )
 
-    return {"tracks": track_responses, "count": len(track_responses)}
+    return BrokenTracksResponse(tracks=track_responses, count=len(track_responses))
 
 
 @router.delete("/{track_id}")
@@ -782,7 +783,7 @@ async def update_track_metadata(
     return await TrackResponse.from_track(track)
 
 
-class RestoreRecordResponse(TypedDict):
+class RestoreRecordResponse(BaseModel):
     """response for restore record endpoint."""
 
     success: bool
@@ -1036,11 +1037,11 @@ async def restore_track_record(
 
     logger.info(f"restored ATProto record for track {track_id}: {new_uri}")
 
-    return {
-        "success": True,
-        "track": await TrackResponse.from_track(track),
-        "restored_uri": new_uri,
-    }
+    return RestoreRecordResponse(
+        success=True,
+        track=await TrackResponse.from_track(track),
+        restored_uri=new_uri,
+    )
 
 
 @router.get("/liked")
