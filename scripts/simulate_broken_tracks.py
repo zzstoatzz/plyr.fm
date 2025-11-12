@@ -32,7 +32,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 async def break_track(track_id: int) -> None:
-    """nullify ATProto record fields for a track."""
+    """nullify ATProto record fields for a track and delete from PDS."""
+    import subprocess
+
+    from dotenv import load_dotenv
     from sqlalchemy import select
 
     from backend.models import Track
@@ -57,6 +60,39 @@ async def break_track(track_id: int) -> None:
         print(f"  artist: {track.artist_did}")
         print(f"  current uri: {track.atproto_record_uri}")
         print(f"  current cid: {track.atproto_record_cid}")
+
+        # delete from PDS first
+        load_dotenv()
+        import os
+
+        handle = os.getenv("ATPROTO_MAIN_HANDLE")
+        password = os.getenv("ATPROTO_MAIN_PASSWORD")
+
+        if handle and password:
+            print("  deleting from PDS...")
+            result = subprocess.run(
+                [
+                    "uvx",
+                    "pdsx",
+                    "--pds",
+                    "https://pds.zzstoatzz.io",
+                    "--handle",
+                    handle,
+                    "--password",
+                    password,
+                    "rm",
+                    track.atproto_record_uri,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                print("  ✓ deleted from PDS")
+            else:
+                print(f"  ⚠️  PDS deletion failed: {result.stderr}")
+                print("  continuing with DB nullification...")
+        else:
+            print("  ⚠️  ATPROTO_MAIN_HANDLE/PASSWORD not set, skipping PDS deletion")
 
         # store original values in extra field for potential restoration
         if track.extra is None:

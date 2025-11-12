@@ -8,6 +8,7 @@
 	let brokenTracks = $state<Track[]>([]);
 	let loading = $state(true);
 	let restoringTrackId = $state<number | null>(null);
+	let restoringAll = $state(false);
 
 	onMount(async () => {
 		await loadBrokenTracks();
@@ -78,6 +79,50 @@
 			restoringTrackId = null;
 		}
 	}
+
+	async function restoreAll() {
+		if (!confirm(`restore all ${brokenTracks.length} tracks?\n\nthis will create new records on your PDS with the original timestamps.`)) {
+			return;
+		}
+
+		restoringAll = true;
+		const sessionId = localStorage.getItem('session_id');
+		const trackCount = brokenTracks.length;
+
+		try {
+			const results = await Promise.allSettled(
+				brokenTracks.map(track =>
+					fetch(`${API_URL}/tracks/${track.id}/restore-record`, {
+						method: 'POST',
+						headers: {
+							'Authorization': `Bearer ${sessionId}`
+						}
+					}).then(async response => {
+						if (!response.ok) {
+							throw new Error(`failed to restore ${track.title}`);
+						}
+						return track;
+					})
+				)
+			);
+
+			const successful = results.filter(r => r.status === 'fulfilled').length;
+			const failed = results.filter(r => r.status === 'rejected').length;
+
+			if (successful > 0) {
+				toast.success(`restored ${successful} of ${trackCount} tracks`);
+				// reload to refresh state
+				await loadBrokenTracks();
+			}
+			if (failed > 0) {
+				toast.error(`failed to restore ${failed} tracks`);
+			}
+		} catch (e) {
+			toast.error(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
+		} finally {
+			restoringAll = false;
+		}
+	}
 </script>
 
 {#if loading}
@@ -87,8 +132,17 @@
 {:else if brokenTracks.length > 0}
 	<section class="broken-tracks-section">
 		<div class="section-header">
-			<h2>tracks needing attention</h2>
-			<span class="count-badge">{brokenTracks.length}</span>
+			<div class="header-left">
+				<h2>tracks needing attention</h2>
+				<span class="count-badge">{brokenTracks.length}</span>
+			</div>
+			<button
+				class="restore-all-btn"
+				onclick={restoreAll}
+				disabled={restoringAll}
+			>
+				{restoringAll ? 'restoring all...' : 'restore all'}
+			</button>
 		</div>
 		<div class="broken-tracks-list">
 			{#each brokenTracks as track}
@@ -141,14 +195,47 @@
 	.section-header {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		justify-content: space-between;
+		gap: 1rem;
 		margin-bottom: 1.5rem;
+	}
+
+	.header-left {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
 	}
 
 	.section-header h2 {
 		font-size: 1.5rem;
 		margin: 0;
 		color: #ff9800;
+	}
+
+	.restore-all-btn {
+		padding: 0.5rem 1rem;
+		background: rgba(255, 152, 0, 0.2);
+		border: 1px solid rgba(255, 152, 0, 0.5);
+		border-radius: 4px;
+		color: #ff9800;
+		font-family: inherit;
+		font-size: 0.9rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+
+	.restore-all-btn:hover:not(:disabled) {
+		background: rgba(255, 152, 0, 0.3);
+		border-color: #ff9800;
+		transform: translateY(-1px);
+	}
+
+	.restore-all-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+		transform: none;
 	}
 
 	.count-badge {
@@ -262,6 +349,19 @@
 	}
 
 	@media (max-width: 768px) {
+		.section-header {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.header-left {
+			justify-content: space-between;
+		}
+
+		.restore-all-btn {
+			width: 100%;
+		}
+
 		.broken-track-item {
 			flex-direction: column;
 			align-items: stretch;
