@@ -69,6 +69,7 @@ class Track(Base):
 
     # image reference
     image_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    image_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
     @property
     def album(self) -> str | None:

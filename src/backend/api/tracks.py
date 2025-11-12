@@ -82,6 +82,11 @@ class TrackResponse(dict):
         # get like count (defaults to 0 if not in dict)
         like_count = like_counts.get(track.id, 0) if like_counts else 0
 
+        # use stored image_url if available, fallback to computing it for legacy records
+        image_url = track.image_url
+        if not image_url and track.image_id:
+            image_url = await track.get_image_url()
+
         return cls(
             id=track.id,
             title=track.title,
@@ -103,7 +108,7 @@ class TrackResponse(dict):
             ),
             play_count=track.play_count,
             created_at=track.created_at.isoformat(),
-            image_url=await track.get_image_url(),
+            image_url=image_url,
             is_liked=is_liked,
             like_count=like_count,
         )
@@ -291,6 +296,7 @@ async def _process_upload_background(
                     atproto_record_uri=atproto_uri,
                     atproto_record_cid=atproto_cid,
                     image_id=image_id,
+                    image_url=image_url,
                 )
 
                 db.add(track)
@@ -763,6 +769,7 @@ async def update_track_metadata(
         image_id = await storage.save(image_obj, f"images/{image.filename}")
 
         # get R2 URL for image if using R2 storage
+        image_url = None
         if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
             image_url = await storage.get_url(image_id)
 
@@ -772,6 +779,7 @@ async def update_track_metadata(
                 await storage.delete(track.image_id)
 
         track.image_id = image_id
+        track.image_url = image_url
 
     # update ATProto record if any fields changed
     if track.atproto_record_uri and (

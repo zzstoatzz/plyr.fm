@@ -260,11 +260,22 @@ class QueueService:
         tracks = result.scalars().all()
         track_by_file_id = {track.file_id: track for track in tracks}
 
+        # collect tracks in order and build serialized response
         serialized: list[dict[str, Any]] = []
         for file_id in track_ids:
             track = track_by_file_id.get(file_id)
             if not track:
                 continue
+
+            # use stored image_url if available, fallback to computing it for legacy records
+            image_url = track.image_url
+            if not image_url and track.image_id:
+                # lazy backfill for legacy records without image_url
+                image_url = await track.get_image_url()
+                if image_url:
+                    # opportunistically update the record for next time
+                    track.image_url = image_url
+                    db.add(track)
 
             serialized.append(
                 {
@@ -287,8 +298,13 @@ class QueueService:
                     "atproto_record_uri": track.atproto_record_uri,
                     "play_count": track.play_count,
                     "created_at": track.created_at.isoformat(),
+                    "image_url": image_url,
                 }
             )
+
+        # commit any lazy backfills
+        if serialized:
+            await db.commit()
 
         return serialized
 
