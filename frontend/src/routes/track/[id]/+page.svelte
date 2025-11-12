@@ -178,7 +178,17 @@
 
 			<!-- track info -->
 			<div class="track-info">
-				<h1 class="track-title">{track.title}</h1>
+				<div class="title-row">
+					{#if isAuthenticated}
+						<div class="title-button-left">
+							<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
+						</div>
+					{/if}
+					<h1 class="track-title">{track.title}</h1>
+					<div class="title-button-right">
+						<ShareButton url={shareUrl} />
+					</div>
+				</div>
 				<div class="track-metadata">
 					<a href="/u/{track.artist_handle}" class="artist-link">
 						{track.artist}
@@ -240,10 +250,6 @@
 						</svg>
 						add to queue
 					</button>
-					{#if isAuthenticated}
-						<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
-					{/if}
-					<ShareButton url={shareUrl} />
 				</div>
 			</div>
 		</div>
@@ -318,12 +324,31 @@
 		text-align: center;
 	}
 
+	.title-row {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.75rem;
+		width: 100%;
+		position: relative;
+	}
+
+	.title-button-left,
+	.title-button-right {
+		display: none;
+		flex-shrink: 0;
+		width: 32px;
+		height: 32px;
+	}
+
 	.track-title {
 		font-size: 2rem;
 		font-weight: 700;
 		color: #e8e8e8;
 		margin: 0;
 		line-height: 1.2;
+		flex: 1;
+		text-align: center;
 	}
 
 	.track-metadata {
@@ -415,6 +440,11 @@
 		margin-top: 0.5rem;
 	}
 
+	.track-actions :global(.like-button),
+	.track-actions :global(.share-btn) {
+		display: flex;
+	}
+
 	.btn-play {
 		display: flex;
 		align-items: center;
@@ -485,8 +515,26 @@
 			gap: 0.75rem;
 		}
 
+		.title-row {
+			gap: 0.5rem;
+		}
+
+		.title-button-left {
+			display: flex;
+			align-items: center;
+			justify-content: flex-start;
+		}
+
+		.title-button-right {
+			display: flex;
+			align-items: center;
+			justify-content: flex-end;
+		}
+
 		.track-title {
 			font-size: 1.5rem;
+			flex: 1;
+			text-align: center;
 		}
 
 		.track-metadata {
@@ -507,19 +555,35 @@
 			justify-content: center;
 		}
 
+		.track-actions :global(.like-button),
+		.track-actions :global(.share-btn) {
+			display: none;
+		}
+
 		.btn-play {
-			width: 100%;
+			flex: 1;
+			min-width: calc(50% - 0.25rem);
 			justify-content: center;
-			padding: 0.65rem 1rem;
-			font-size: 0.9rem;
+			padding: 0.5rem 0.75rem;
+			font-size: 0.85rem;
+		}
+
+		.btn-play svg {
+			width: 18px;
+			height: 18px;
 		}
 
 		.btn-queue {
 			flex: 1;
 			min-width: calc(50% - 0.25rem);
 			justify-content: center;
-			padding: 0.65rem 1rem;
-			font-size: 0.9rem;
+			padding: 0.5rem 0.75rem;
+			font-size: 0.85rem;
+		}
+
+		.btn-queue svg {
+			width: 16px;
+			height: 16px;
 		}
 	}
 </style>
