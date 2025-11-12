@@ -123,12 +123,14 @@
 			const failed = results.filter(r => r.status === 'rejected').length;
 
 			if (successful > 0) {
-				toast.success(`restored ${successful} of ${trackCount} tracks`);
+				const trackWord = trackCount === 1 ? 'track' : 'tracks';
+			toast.success(`restored ${successful} of ${trackCount} ${trackWord}`);
 				// reload to refresh state
 				await loadBrokenTracks();
 			}
 			if (failed > 0) {
-				toast.error(`failed to restore ${failed} tracks`);
+				const failedWord = failed === 1 ? 'track' : 'tracks';
+			toast.error(`failed to restore ${failed} ${failedWord}`);
 			}
 		} catch (e) {
 			toast.error(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
