@@ -91,10 +91,12 @@ class NotificationService:
                     check_since = self.last_check
 
                 # query for new tracks with artist eagerly loaded
+                # filter out tracks that have already been notified
                 stmt = (
                     select(Track)
                     .options(selectinload(Track.artist))
                     .where(Track.created_at > check_since)
+                    .where(Track.notification_sent == False)  # noqa: E712
                 )
                 result = await db.execute(stmt)
                 new_tracks = result.scalars().all()
@@ -103,6 +105,8 @@ class NotificationService:
                     logger.info(f"found {len(new_tracks)} new tracks")
                     for track in new_tracks:
                         await self.send_track_notification(track)
+                        track.notification_sent = True
+                    await db.commit()
                 else:
                     logger.debug("no new tracks found")
 

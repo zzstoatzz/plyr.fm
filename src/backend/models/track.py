@@ -72,6 +72,11 @@ class Track(Base):
     image_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # notification tracking
+    notification_sent: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default="false"
+    )
+
     @property
     def album(self) -> str | None:
         """get album from extra."""

@@ -321,6 +321,8 @@ async def _process_upload_background(
                         # eagerly load artist for notification
                         await db.refresh(track, ["artist"])
                         await notification_service.send_track_notification(track)
+                        track.notification_sent = True
+                        await db.commit()
                     except Exception as e:
                         logger.warning(
                             f"failed to send notification for track {track.id}: {e}"

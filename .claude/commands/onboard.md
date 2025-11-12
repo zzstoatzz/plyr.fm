@@ -1,4 +1,4 @@
-this is meant to help you quickly understand what/where the project is and what to work on next.
+this is meant to help you quickly understand what/where the project is and what to work on next (i.e. onboard yourself).
 
 ## Instructions
 
