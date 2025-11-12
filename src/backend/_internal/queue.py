@@ -260,36 +260,40 @@ class QueueService:
         tracks = result.scalars().all()
         track_by_file_id = {track.file_id: track for track in tracks}
 
-        # collect tracks in order and build serialized response
-        serialized: list[dict[str, Any]] = []
+        # collect tracks in order
+        tracks_in_order = []
         for file_id in track_ids:
             track = track_by_file_id.get(file_id)
-            if not track:
-                continue
+            if track:
+                tracks_in_order.append(track)
 
-            # use stored image_url if available, fallback to computing it for legacy records
-            image_url = track.image_url
-            if not image_url and track.image_id:
-                # lazy backfill for legacy records without image_url
-                image_url = await track.get_image_url()
-                if image_url:
-                    # opportunistically update the record for next time
-                    track.image_url = image_url
+        # batch backfill image URLs for legacy records
+        tracks_needing_backfill = [
+            track for track in tracks_in_order if not track.image_url and track.image_id
+        ]
+
+        if tracks_needing_backfill:
+            # fetch URLs concurrently
+            image_urls = await asyncio.gather(
+                *[track.get_image_url() for track in tracks_needing_backfill]
+            )
+            # update tracks with fetched URLs
+            for track, url in zip(tracks_needing_backfill, image_urls, strict=False):
+                if url:
+                    track.image_url = url
                     db.add(track)
 
+        # build serialized response
+        serialized: list[dict[str, Any]] = []
+        for track in tracks_in_order:
+            artist = track.artist
             serialized.append(
                 {
                     "id": track.id,
                     "title": track.title,
-                    "artist": track.artist.display_name
-                    if track.artist
-                    else track.artist_did,
-                    "artist_handle": track.artist.handle
-                    if track.artist
-                    else track.artist_did,
-                    "artist_avatar_url": track.artist.avatar_url
-                    if track.artist
-                    else None,
+                    "artist": artist.display_name if artist else track.artist_did,
+                    "artist_handle": artist.handle if artist else track.artist_did,
+                    "artist_avatar_url": artist.avatar_url if artist else None,
                     "album": track.album,
                     "file_id": track.file_id,
                     "file_type": track.file_type,
@@ -298,12 +302,12 @@ class QueueService:
                     "atproto_record_uri": track.atproto_record_uri,
                     "play_count": track.play_count,
                     "created_at": track.created_at.isoformat(),
-                    "image_url": image_url,
+                    "image_url": track.image_url,
                 }
             )
 
         # commit any lazy backfills
-        if serialized:
+        if tracks_needing_backfill:
             await db.commit()
 
         return serialized

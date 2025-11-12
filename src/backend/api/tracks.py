@@ -240,14 +240,24 @@ async def _process_upload_background(
                     try:
                         handles_list = json.loads(features)
                         if isinstance(handles_list, list):
-                            for handle in handles_list:
-                                if (
-                                    isinstance(handle, str)
-                                    and handle.lstrip("@") != artist.handle
-                                ):
-                                    resolved = await resolve_handle(handle)
-                                    if resolved:
-                                        featured_artists.append(resolved)
+                            # filter valid handles and batch resolve concurrently
+                            valid_handles = [
+                                handle
+                                for handle in handles_list
+                                if isinstance(handle, str)
+                                and handle.lstrip("@") != artist.handle
+                            ]
+                            if valid_handles:
+                                resolved_artists = await asyncio.gather(
+                                    *[resolve_handle(h) for h in valid_handles],
+                                    return_exceptions=True,
+                                )
+                                # filter out exceptions and None values
+                                featured_artists = [
+                                    r
+                                    for r in resolved_artists
+                                    if isinstance(r, dict) and r is not None
+                                ]
                     except json.JSONDecodeError:
                         pass  # ignore malformed features
 
@@ -727,7 +737,8 @@ async def update_track_metadata(
                     detail=f"maximum {MAX_FEATURES} featured artists allowed",
                 )
 
-            # resolve each handle
+            # validate all handles first
+            valid_handles = []
             for handle in handles_list:
                 if not isinstance(handle, str):
                     raise HTTPException(
@@ -738,13 +749,25 @@ async def update_track_metadata(
                 if handle.lstrip("@") == track.artist.handle:
                     continue  # skip self-feature silently
 
-                resolved = await resolve_handle(handle)
-                if not resolved:
-                    raise HTTPException(
-                        status_code=400, detail=f"failed to resolve handle: {handle}"
-                    )
+                valid_handles.append(handle)
 
-                featured_artists.append(resolved)
+            # batch resolve all handles concurrently
+            if valid_handles:
+                resolved_artists = await asyncio.gather(
+                    *[resolve_handle(h) for h in valid_handles],
+                    return_exceptions=True,
+                )
+
+                # check for any failed resolutions
+                for handle, resolved in zip(
+                    valid_handles, resolved_artists, strict=False
+                ):
+                    if isinstance(resolved, Exception) or not resolved:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"failed to resolve handle: {handle}",
+                        )
+                    featured_artists.append(resolved)
 
             track.features = featured_artists
 
