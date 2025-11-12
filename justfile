@@ -21,6 +21,10 @@ test *ARGS='tests/':
     uv run pytest {{ ARGS }}
     docker compose -f tests/docker-compose.yml down
 
+# run type checking
+lint:
+    uv run ty check
+
 
 # deploy frontend to cloudflare pages
 deploy-frontend:
