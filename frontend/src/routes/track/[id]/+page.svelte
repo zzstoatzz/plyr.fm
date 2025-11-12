@@ -89,7 +89,11 @@
 	}
 
 	function handlePlay() {
-		player.playTrack(track);
+		if (isCurrentlyPlaying) {
+			player.togglePlayPause();
+		} else {
+			queue.playNow(track);
+		}
 	}
 
 	function addToQueue() {
