@@ -27,6 +27,7 @@ from sqlalchemy.orm import attributes, selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile, require_auth
+from backend._internal.auth import get_session
 from backend._internal.uploads import UploadStatus, upload_tracker
 from backend.atproto import (
     create_like_record,
@@ -436,24 +437,13 @@ async def list_tracks(
     """list all tracks, optionally filtered by artist DID."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    # try to get authenticated user (optional)
-    user_did = None
-    try:
-        from backend._internal.auth import get_session
-
-        session_id = request.headers.get("authorization", "").replace("Bearer ", "")
-        if session_id:
-            auth_session = await get_session(session_id)
-            if auth_session:
-                user_did = auth_session.did
-    except Exception:
-        pass  # not authenticated, continue without user_did
-
-    # if user is authenticated, fetch all their liked track IDs in one query
+    # get authenticated user if auth header present
     liked_track_ids: set[int] | None = None
-    if user_did:
+    if (
+        session_id := request.headers.get("authorization", "").replace("Bearer ", "")
+    ) and (auth_session := await get_session(session_id)):
         liked_result = await db.execute(
-            select(TrackLike.track_id).where(TrackLike.user_did == user_did)
+            select(TrackLike.track_id).where(TrackLike.user_did == auth_session.did)
         )
         liked_track_ids = set(liked_result.scalars().all())
 
@@ -772,9 +762,22 @@ async def list_liked_tracks(
 
 @router.get("/{track_id}")
 async def get_track(
-    track_id: int, db: Annotated[AsyncSession, Depends(get_db)]
+    track_id: int, db: Annotated[AsyncSession, Depends(get_db)], request: Request
 ) -> dict:
     """get a specific track."""
+    # get authenticated user if auth header present
+    liked_track_ids: set[int] | None = None
+    if (
+        (session_id := request.headers.get("authorization", "").replace("Bearer ", ""))
+        and (auth_session := await get_session(session_id))
+        and await db.scalar(
+            select(TrackLike.track_id).where(
+                TrackLike.user_did == auth_session.did, TrackLike.track_id == track_id
+            )
+        )
+    ):
+        liked_track_ids = {track_id}
+
     result = await db.execute(
         select(Track)
         .join(Artist)
@@ -786,7 +789,7 @@ async def get_track(
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
 
-    return await TrackResponse.from_track(track)
+    return await TrackResponse.from_track(track, liked_track_ids=liked_track_ids)
 
 
 @router.post("/{track_id}/play")
