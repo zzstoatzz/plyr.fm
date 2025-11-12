@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import tempfile
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Any
@@ -50,6 +51,7 @@ from backend.storage import storage
 from backend.storage.r2 import R2Storage
 from backend.utilities.aggregations import get_like_counts
 from backend.utilities.database import db_session
+from backend.utilities.hashing import CHUNK_SIZE
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tracks", tags=["tracks"])
@@ -113,14 +115,14 @@ MAX_FEATURES = 5
 
 async def _process_upload_background(
     upload_id: str,
-    file_data: bytes,
+    file_path: str,
     filename: str,
     title: str,
     artist_did: str,
     album: str | None,
     features: str | None,
     auth_session: AuthSession,
-    image_data: bytes | None = None,
+    image_path: str | None = None,
     image_filename: str | None = None,
 ) -> None:
     """background task to process upload."""
@@ -149,15 +151,11 @@ async def _process_upload_background(
                 upload_id, UploadStatus.PROCESSING, "saving audio file..."
             )
             try:
-                logfire.info(
-                    "preparing to save audio file",
-                    filename=filename,
-                    file_data_size=len(file_data),
-                )
-                file_obj = BytesIO(file_data)
-                logfire.info("calling storage.save")
-                file_id = await storage.save(file_obj, filename)
-                logfire.info("storage.save completed", file_id=file_id)
+                logfire.info("preparing to save audio file", filename=filename)
+                with open(file_path, "rb") as file_obj:
+                    logfire.info("calling storage.save")
+                    file_id = await storage.save(file_obj, filename)
+                    logfire.info("storage.save completed", file_id=file_id)
             except ValueError as e:
                 logfire.error("ValueError during storage.save", error=str(e))
                 upload_tracker.update_status(
@@ -186,7 +184,7 @@ async def _process_upload_background(
             # save image if provided
             image_id = None
             image_url = None
-            if image_data and image_filename:
+            if image_path and image_filename:
                 upload_tracker.update_status(
                     upload_id, UploadStatus.PROCESSING, "saving image..."
                 )
@@ -195,16 +193,16 @@ async def _process_upload_background(
                 )
                 if is_valid and image_format:
                     try:
-                        image_obj = BytesIO(image_data)
-                        # save with images/ prefix to namespace it
-                        image_id = await storage.save(
-                            image_obj, f"images/{image_filename}"
-                        )
-                        # get R2 URL for image if using R2 storage
-                        if settings.storage.backend == "r2" and isinstance(
-                            storage, R2Storage
-                        ):
-                            image_url = await storage.get_url(image_id)
+                        with open(image_path, "rb") as image_obj:
+                            # save with images/ prefix to namespace it
+                            image_id = await storage.save(
+                                image_obj, f"images/{image_filename}"
+                            )
+                            # get R2 URL for image if using R2 storage
+                            if settings.storage.backend == "r2" and isinstance(
+                                storage, R2Storage
+                            ):
+                                image_url = await storage.get_url(image_id)
                     except Exception as e:
                         logger.warning(f"failed to save image: {e}", exc_info=True)
                         # continue without image - it's optional
@@ -338,6 +336,13 @@ async def _process_upload_background(
                 "upload failed",
                 error=f"unexpected error: {e!s}",
             )
+        finally:
+            # cleanup temp files
+            with contextlib.suppress(Exception):
+                Path(file_path).unlink(missing_ok=True)
+            if image_path:
+                with contextlib.suppress(Exception):
+                    Path(image_path).unlink(missing_ok=True)
 
 
 @router.post("/")
@@ -370,34 +375,57 @@ async def upload_track(
             f"supported: {AudioFormat.supported_extensions_str()}",
         )
 
-    # read file into memory (so FastAPI can close the upload)
-    file_data = await file.read()
+    # stream file to temp file (constant memory)
+    file_path = None
+    image_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=Path(file.filename).suffix
+        ) as tmp_file:
+            file_path = tmp_file.name
+            # stream upload file to temp file in chunks
+            while chunk := await file.read(CHUNK_SIZE):
+                tmp_file.write(chunk)
 
-    # read image if provided
-    image_data = None
-    image_filename = None
-    if image and image.filename:
-        image_data = await image.read()
-        image_filename = image.filename
+        # stream image to temp file if provided
+        image_filename = None
+        if image and image.filename:
+            image_filename = image.filename
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=Path(image.filename).suffix
+            ) as tmp_image:
+                image_path = tmp_image.name
+                # stream image file to temp file in chunks
+                while chunk := await image.read(CHUNK_SIZE):
+                    tmp_image.write(chunk)
 
-    # create upload tracking
-    upload_id = upload_tracker.create_upload()
+        # create upload tracking
+        upload_id = upload_tracker.create_upload()
 
-    # spawn background task (fire-and-forget)
-    _task = asyncio.create_task(  # noqa: RUF006
-        _process_upload_background(
-            upload_id=upload_id,
-            file_data=file_data,
-            filename=file.filename,
-            title=title,
-            artist_did=auth_session.did,
-            album=album,
-            features=features,
-            auth_session=auth_session,
-            image_data=image_data,
-            image_filename=image_filename,
+        # spawn background task (fire-and-forget)
+        _task = asyncio.create_task(  # noqa: RUF006
+            _process_upload_background(
+                upload_id=upload_id,
+                file_path=file_path,
+                filename=file.filename,
+                title=title,
+                artist_did=auth_session.did,
+                album=album,
+                features=features,
+                auth_session=auth_session,
+                image_path=image_path,
+                image_filename=image_filename,
+            )
         )
-    )
+    except Exception:
+        # cleanup temp files on error
+        if file_path:
+            with contextlib.suppress(Exception):
+                Path(file_path).unlink(missing_ok=True)
+        if image_path:
+            with contextlib.suppress(Exception):
+                Path(image_path).unlink(missing_ok=True)
+        raise
 
     return {
         "upload_id": upload_id,
