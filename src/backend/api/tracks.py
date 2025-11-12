@@ -56,6 +56,7 @@ class TrackResponse(dict):
         track: Track,
         pds_url: str | None = None,
         liked_track_ids: set[int] | None = None,
+        like_counts: dict[int, int] | None = None,
     ) -> "TrackResponse":
         """build track response from Track model.
 
@@ -63,9 +64,13 @@ class TrackResponse(dict):
             track: Track model instance
             pds_url: optional PDS URL for atproto_record_url
             liked_track_ids: optional set of liked track IDs for this user (for efficient batched checks)
+            like_counts: optional dict of track_id -> like_count (from batch aggregation)
         """
         # check if user has liked this track (efficient O(1) lookup)
         is_liked = liked_track_ids is not None and track.id in liked_track_ids
+
+        # get like count (defaults to 0 if not in dict)
+        like_count = like_counts.get(track.id, 0) if like_counts else 0
 
         return cls(
             id=track.id,
@@ -90,6 +95,7 @@ class TrackResponse(dict):
             created_at=track.created_at.isoformat(),
             image_url=await track.get_image_url(),
             is_liked=is_liked,
+            like_count=like_count,
         )
 
 
@@ -437,6 +443,8 @@ async def list_tracks(
     """list all tracks, optionally filtered by artist DID."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
+    from backend.utilities.aggregations import get_like_counts
+
     # get authenticated user if auth header present
     liked_track_ids: set[int] | None = None
     if (
@@ -456,6 +464,10 @@ async def list_tracks(
     stmt = stmt.order_by(Track.created_at.desc())
     result = await db.execute(stmt)
     tracks = result.scalars().all()
+
+    # batch fetch like counts for all tracks
+    track_ids = [track.id for track in tracks]
+    like_counts = await get_like_counts(db, track_ids)
 
     # use cached PDS URLs with fallback on failure
     resolver = AsyncDidResolver()
@@ -501,11 +513,11 @@ async def list_tracks(
     # commit any PDS URL updates
     await db.commit()
 
-    # fetch all track responses concurrently with like status
+    # fetch all track responses concurrently with like status and counts
     track_responses = await asyncio.gather(
         *[
             TrackResponse.from_track(
-                track, pds_cache.get(track.artist_did), liked_track_ids
+                track, pds_cache.get(track.artist_did), liked_track_ids, like_counts
             )
             for track in tracks
         ]
@@ -735,6 +747,8 @@ async def list_liked_tracks(
     auth_session: AuthSession = Depends(require_auth),
 ) -> dict:
     """list tracks liked by authenticated user (queried from local index)."""
+    from backend.utilities.aggregations import get_like_counts
+
     stmt = (
         select(Track)
         .join(TrackLike, TrackLike.track_id == Track.id)
@@ -750,9 +764,15 @@ async def list_liked_tracks(
     # all tracks in this endpoint are liked by definition - build set of track IDs
     liked_track_ids = {track.id for track in tracks}
 
+    # batch fetch like counts for all tracks
+    track_ids = [track.id for track in tracks]
+    like_counts = await get_like_counts(db, track_ids)
+
     track_responses = await asyncio.gather(
         *[
-            TrackResponse.from_track(track, liked_track_ids=liked_track_ids)
+            TrackResponse.from_track(
+                track, liked_track_ids=liked_track_ids, like_counts=like_counts
+            )
             for track in tracks
         ]
     )
@@ -765,6 +785,8 @@ async def get_track(
     track_id: int, db: Annotated[AsyncSession, Depends(get_db)], request: Request
 ) -> dict:
     """get a specific track."""
+    from backend.utilities.aggregations import get_like_counts
+
     # get authenticated user if auth header present
     liked_track_ids: set[int] | None = None
     if (
@@ -789,7 +811,12 @@ async def get_track(
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
 
-    return await TrackResponse.from_track(track, liked_track_ids=liked_track_ids)
+    # get like count for this track
+    like_counts = await get_like_counts(db, [track_id])
+
+    return await TrackResponse.from_track(
+        track, liked_track_ids=liked_track_ids, like_counts=like_counts
+    )
 
 
 @router.post("/{track_id}/play")

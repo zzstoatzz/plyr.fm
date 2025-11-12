@@ -63,6 +63,7 @@ class AnalyticsResponse(BaseModel):
     total_plays: int
     total_items: int
     top_item: TopItemResponse | None
+    top_liked: TopItemResponse | None
 
 
 # endpoints
@@ -197,6 +198,8 @@ async def get_artist_analytics(
 
     returns zeros if artist has no tracks.
     """
+    from backend.models import TrackLike
+
     # get total plays and item count in one query
     result = await db.execute(
         select(func.sum(Track.play_count), func.count(Track.id)).where(
@@ -207,7 +210,7 @@ async def get_artist_analytics(
     total_plays = total_plays or 0  # handle None when no tracks
     total_items = total_items or 0
 
-    # get top item (only if artist has tracks)
+    # get top item by plays (only if artist has tracks)
     top_item = None
     if total_items > 0:
         result = await db.execute(
@@ -224,8 +227,30 @@ async def get_artist_analytics(
                 play_count=top_track_row[2],
             )
 
+    # get top liked track (only if artist has tracks)
+    top_liked = None
+    if total_items > 0:
+        result = await db.execute(
+            select(Track.id, Track.title, func.count(TrackLike.id).label("like_count"))
+            .join(TrackLike, TrackLike.track_id == Track.id)
+            .where(Track.artist_did == artist_did)
+            .group_by(Track.id, Track.title)
+            .order_by(func.count(TrackLike.id).desc())
+            .limit(1)
+        )
+        top_liked_row = result.first()
+        if top_liked_row:
+            top_liked = TopItemResponse(
+                id=top_liked_row[0],
+                title=top_liked_row[1],
+                play_count=top_liked_row[2],  # reuse play_count field for like count
+            )
+
     return AnalyticsResponse(
-        total_plays=total_plays, total_items=total_items, top_item=top_item
+        total_plays=total_plays,
+        total_items=total_items,
+        top_item=top_item,
+        top_liked=top_liked,
     )
 
 
