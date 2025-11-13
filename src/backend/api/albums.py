@@ -1,17 +1,25 @@
 """albums api endpoints."""
 
 import asyncio
+from io import BytesIO
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend._internal import Session as AuthSession
+from backend._internal import require_artist_profile
 from backend._internal.auth import get_session
 from backend.api.tracks import TrackResponse, get_like_counts
+from backend.config import settings
 from backend.models import Album, Artist, Track, TrackLike, get_db
+from backend.storage import storage
+from backend.storage.r2 import R2Storage
+from backend.utilities.hashing import CHUNK_SIZE
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
@@ -299,3 +307,68 @@ async def get_album(
     metadata = await _album_metadata(album, artist, len(tracks), total_plays)
 
     return AlbumResponse(metadata=metadata, tracks=track_responses)
+
+
+@router.post("/{album_id}/cover")
+async def upload_album_cover(
+    album_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Annotated[AuthSession, Depends(require_artist_profile)],
+    image: UploadFile = File(...),
+) -> dict[str, str | None]:
+    """upload cover art for an album (requires authentication)."""
+    # verify album exists and belongs to the authenticated artist
+    result = await db.execute(select(Album).where(Album.id == album_id))
+    album = result.scalar_one_or_none()
+    if not album:
+        raise HTTPException(status_code=404, detail="album not found")
+    if album.artist_did != auth_session.did:
+        raise HTTPException(
+            status_code=403, detail="you can only upload cover art for your own albums"
+        )
+
+    if not image.filename:
+        raise HTTPException(status_code=400, detail="no filename provided")
+
+    # validate it's an image by extension (basic check)
+    ext = Path(image.filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported image type: {ext}. supported: .jpg, .jpeg, .png, .webp",
+        )
+
+    # read image data (enforcing size limit)
+    try:
+        max_image_size = 20 * 1024 * 1024  # 20MB max
+        image_data = bytearray()
+
+        while chunk := await image.read(CHUNK_SIZE):
+            if len(image_data) + len(chunk) > max_image_size:
+                raise HTTPException(
+                    status_code=413,
+                    detail="image too large (max 20MB)",
+                )
+            image_data.extend(chunk)
+
+        image_obj = BytesIO(image_data)
+        image_id = await storage.save(image_obj, f"images/{image.filename}")
+
+        # get R2 URL for image if using R2 storage
+        image_url = None
+        if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
+            image_url = await storage.get_url(image_id)
+
+        # update album with new image
+        album.image_id = image_id
+        album.image_url = image_url
+        await db.commit()
+
+        return {"image_url": image_url, "image_id": image_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"failed to upload image: {e!s}"
+        ) from e
