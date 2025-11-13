@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script --quiet
 """migrate images from audio-* buckets to images-* buckets."""
 
 from pathlib import Path

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script --quiet
 """One-time migration script to copy audio files from old 'relay' bucket to new 'audio-prod' bucket.
 
 This script:
