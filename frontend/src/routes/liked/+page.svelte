@@ -142,19 +142,6 @@
 		flex-shrink: 0;
 	}
 
-	.loading-container {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		min-height: 400px;
-	}
-
-	.error-message {
-		text-align: center;
-		padding: 3rem 1rem;
-		color: #ff6b6b;
-	}
-
 	.empty-state {
 		text-align: center;
 		padding: 4rem 1rem;
