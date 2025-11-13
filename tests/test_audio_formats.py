@@ -2,7 +2,7 @@
 
 import pytest
 
-from backend.models.audio import AudioFormat
+from backend._internal.audio import AudioFormat
 
 
 class TestAudioFormat:

@@ -29,24 +29,25 @@ from sqlalchemy.orm import attributes, selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import oauth_client, require_artist_profile, require_auth
-from backend._internal.auth import get_session
-from backend._internal.uploads import UploadStatus, upload_tracker
-from backend.atproto import (
+from backend._internal.atproto import (
     create_like_record,
     create_track_record,
     delete_record_by_uri,
 )
-from backend.atproto.handles import resolve_handle
-from backend.atproto.records import (
+from backend._internal.atproto.handles import resolve_handle
+from backend._internal.atproto.records import (
     _reconstruct_oauth_session,
     _refresh_session_tokens,
     build_track_record,
     update_record,
 )
-from backend.atproto.tid import datetime_to_tid
+from backend._internal.atproto.tid import datetime_to_tid
+from backend._internal.audio import AudioFormat
+from backend._internal.auth import get_session
+from backend._internal.image import ImageFormat
+from backend._internal.uploads import UploadStatus, upload_tracker
 from backend.config import settings
-from backend.models import Artist, AudioFormat, Track, TrackLike, get_db
-from backend.models.image import ImageFormat
+from backend.models import Artist, Track, TrackLike, get_db
 from backend.storage import storage
 from backend.storage.r2 import R2Storage
 from backend.utilities.aggregations import get_like_counts
@@ -684,7 +685,7 @@ async def delete_track(
 
     # delete ATProto record if it exists
     if track.atproto_record_uri:
-        from backend.atproto.records import delete_record_by_uri
+        from backend._internal.atproto.records import delete_record_by_uri
 
         try:
             await delete_record_by_uri(auth_session, track.atproto_record_uri)
@@ -836,7 +837,7 @@ async def update_track_metadata(
     # handle image update
     image_url = None
     if image and image.filename:
-        image_format, is_valid = ImageFormat.validate_and_extract(image.filename)
+        _image_format, is_valid = ImageFormat.validate_and_extract(image.filename)
         if not is_valid:
             raise HTTPException(
                 status_code=400,
