@@ -11,3 +11,4 @@ gotchas:
 - toast positioning: bottom-left above player footer (not top-right)
 - queue sync: uses BroadcastChannel for cross-tab, not SSE
 - preferences: managed in SettingsMenu component, not dedicated state file
+- keyboard shortcuts: handled in root layout (+layout.svelte), with context-aware filtering
