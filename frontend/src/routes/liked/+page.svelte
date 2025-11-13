@@ -64,7 +64,7 @@
 	}
 
 	function playTrack(track: Track) {
-		player.playTrack(track);
+		queue.playNow(track);
 	}
 
 	function queueAll() {
