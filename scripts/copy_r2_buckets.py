@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run --script --quiet
 """Copy R2 bucket data from old buckets to new buckets."""
 
 from pathlib import Path

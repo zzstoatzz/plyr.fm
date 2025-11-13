@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script --quiet
 """admin script to simulate broken ATProto records for local testing.
 
 usage:

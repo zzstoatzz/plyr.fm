@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script --quiet
 """backfill ATProto records for tracks that lost them during migration.
 
 This script creates ATProto records in fm.plyr.track for tracks that:

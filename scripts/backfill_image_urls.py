@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script --quiet
 """backfill image_url for tracks with image_id but missing image_url.
 
 ## Context

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script --quiet
 """run a specific migration against production database."""
 
 import os
