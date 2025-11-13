@@ -51,7 +51,7 @@ class Album(Base):
     )
 
     artist = relationship("Artist", back_populates="albums")
-    tracks = relationship("Track", back_populates="album")
+    tracks = relationship("Track", back_populates="album_rel")
 
     async def get_image_url(self) -> str | None:
         """resolve image URL."""
