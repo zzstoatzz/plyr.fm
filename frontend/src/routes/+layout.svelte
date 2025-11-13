@@ -196,6 +196,12 @@
 		--text-tertiary: #808080;
 		--text-muted: #666666;
 
+		/* typography scale */
+		--text-page-heading: 1.5rem;
+		--text-section-heading: 1.2rem;
+		--text-body: 1rem;
+		--text-small: 0.9rem;
+
 		/* semantic */
 		--success: #4ade80;
 		--warning: #fbbf24;

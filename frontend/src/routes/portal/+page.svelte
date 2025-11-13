@@ -661,7 +661,7 @@
 	}
 
 	.portal-header h2 {
-		font-size: 1.5rem;
+		font-size: var(--text-page-heading);
 		margin: 0;
 	}
 
@@ -672,7 +672,7 @@
 
 	.profile-section h2,
 	.upload-section h2 {
-		font-size: 1.5rem;
+		font-size: var(--text-page-heading);
 		margin-bottom: 1.5rem;
 	}
 
@@ -869,7 +869,7 @@
 	}
 
 	.tracks-section h2 {
-		font-size: 1.5rem;
+		font-size: var(--text-page-heading);
 		margin-bottom: 1.5rem;
 	}
 

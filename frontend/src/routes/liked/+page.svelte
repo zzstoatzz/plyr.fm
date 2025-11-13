@@ -88,12 +88,12 @@
 	.page {
 		max-width: 800px;
 		margin: 0 auto;
-		padding: 2rem 1.5rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
+		padding: 0 1rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
 		min-height: 100vh;
 	}
 
 	.page-header {
-		margin-bottom: 2rem;
+		margin-bottom: 1.5rem;
 	}
 
 	.header-top {
@@ -105,9 +105,9 @@
 	}
 
 	.page-header h1 {
-		font-size: 2rem;
+		font-size: var(--text-page-heading);
 		font-weight: 700;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin: 0 0 0.5rem 0;
 	}
 
