@@ -12,9 +12,9 @@ from cryptography.fernet import Fernet
 from fastapi import Header, HTTPException
 from sqlalchemy import select
 
+from backend._internal.oauth_stores import PostgresStateStore
 from backend.config import settings
 from backend.models import ExchangeToken, UserSession
-from backend.stores import PostgresStateStore
 from backend.utilities.database import db_session
 
 
