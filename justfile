@@ -25,6 +25,18 @@ test *ARGS='tests/':
 lint:
     uv run ty check
 
+# create a new database migration
+migrate MESSAGE:
+    uv run alembic revision --autogenerate -m "{{ MESSAGE }}"
+
+# upgrade database to latest migration
+migrate-up:
+    uv run alembic upgrade head
+
+# show current migration status
+migrate-status:
+    uv run alembic current
+
 
 # deploy frontend to cloudflare pages
 deploy-frontend:
