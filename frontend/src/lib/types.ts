@@ -41,6 +41,14 @@ export interface AlbumResponse {
 	tracks: Track[];
 }
 
+export interface ArtistAlbumSummary {
+	name: string;
+	slug: string;
+	track_count: number;
+	total_plays: number;
+	image_url?: string;
+}
+
 export interface User {
 	did: string;
 	handle: string;

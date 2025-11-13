@@ -1,6 +1,7 @@
 """albums api endpoints."""
 
 import asyncio
+from collections import defaultdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -43,6 +44,16 @@ class AlbumListItem(BaseModel):
     track_count: int
 
 
+class ArtistAlbumListItem(BaseModel):
+    """album info for a specific artist (used on artist pages)."""
+
+    name: str
+    slug: str
+    track_count: int
+    total_plays: int
+    image_url: str | None
+
+
 @router.get("/")
 async def list_albums(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -72,6 +83,56 @@ async def list_albums(
     ]
 
     return {"albums": albums}
+
+
+@router.get("/{handle}")
+async def list_artist_albums(
+    handle: str, db: Annotated[AsyncSession, Depends(get_db)]
+) -> dict[str, list[ArtistAlbumListItem]]:
+    """list albums for a specific artist."""
+    artist_result = await db.execute(select(Artist).where(Artist.handle == handle))
+    artist = artist_result.scalar_one_or_none()
+    if not artist:
+        raise HTTPException(status_code=404, detail="artist not found")
+
+    stmt = (
+        select(Track)
+        .options(selectinload(Track.artist))
+        .where(Track.artist_did == artist.did, Track.album_slug.isnot(None))
+        .order_by(Track.album_slug, Track.created_at.asc())
+    )
+    result = await db.execute(stmt)
+    tracks = result.scalars().all()
+
+    if not tracks:
+        return {"albums": []}
+
+    grouped: dict[str, list[Track]] = defaultdict(list)
+    for track in tracks:
+        if track.album_slug:
+            grouped[track.album_slug].append(track)
+
+    album_items: list[ArtistAlbumListItem] = []
+    for slug, slug_tracks in grouped.items():
+        first_track = slug_tracks[0]
+        image_url = first_track.image_url
+        if not image_url and first_track.image_id:
+            image_url = await first_track.get_image_url()
+        if not image_url:
+            image_url = first_track.artist.avatar_url
+
+        album_items.append(
+            ArtistAlbumListItem(
+                name=first_track.album or "Unknown Album",
+                slug=slug,
+                track_count=len(slug_tracks),
+                total_plays=sum(t.play_count for t in slug_tracks),
+                image_url=image_url,
+            )
+        )
+
+    album_items.sort(key=lambda album: album.name.lower())
+    return {"albums": album_items}
 
 
 @router.get("/{handle}/{slug}")

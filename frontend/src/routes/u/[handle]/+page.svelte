@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { fade } from 'svelte/transition';
 	import { API_URL } from '$lib/config';
-	import type { Track, Artist, Analytics } from '$lib/types';
+import type { Track, Artist, Analytics, ArtistAlbumSummary } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -18,7 +18,8 @@
 
 	let handle = $derived($page.params.handle);
 	let artist: Artist | null = $state(data.artist); // initialize with server data
-	let tracks: Track[] = $state(data.tracks); // initialize with server data
+let tracks: Track[] = $state(data.tracks); // initialize with server data
+let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 	let loading = $state(true);
 	let error = $state('');
 	let analytics: Analytics | null = $state(null);
@@ -74,7 +75,15 @@
 			const tracksResponse = await fetch(`${API_URL}/tracks/?artist_did=${artist?.did}`, { headers });
 			if (tracksResponse.ok) {
 				const data = await tracksResponse.json();
-			tracks = data.tracks;
+				tracks = data.tracks;
+			}
+
+			const albumsResponse = await fetch(`${API_URL}/albums/${handle}`);
+			if (albumsResponse.ok) {
+				const albumData = await albumsResponse.json();
+				albums = albumData.albums ?? [];
+			} else {
+				albums = [];
 			}
 		} catch (e) {
 			error = 'failed to load artist';
@@ -237,6 +246,41 @@
 			</div>
 		</section>
 
+		{#if albums.length > 0}
+			<section class="discography">
+				<div class="section-header">
+					<h2>discography</h2>
+					<span>{albums.length} {albums.length === 1 ? 'album' : 'albums'}</span>
+				</div>
+				<div class="album-grid">
+					{#each albums as album}
+						<a class="album-card" href="/u/{artist.handle}/album/{album.slug}">
+							<div class="album-cover-wrapper">
+								{#if album.image_url}
+									<img src={album.image_url} alt="{album.name} artwork" />
+								{:else}
+									<div class="album-cover-placeholder">
+										<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+											<rect x="3" y="3" width="18" height="18" stroke="currentColor" stroke-width="1.5" fill="none" />
+											<circle cx="12" cy="12" r="4" fill="currentColor" />
+										</svg>
+									</div>
+								{/if}
+							</div>
+							<div class="album-card-meta">
+								<h3>{album.name}</h3>
+								<p>
+									{album.track_count} {album.track_count === 1 ? 'track' : 'tracks'}
+									<span class="dot">•</span>
+									{album.total_plays.toLocaleString()} {album.total_plays === 1 ? 'play' : 'plays'}
+								</p>
+							</div>
+						</a>
+					{/each}
+				</div>
+			</section>
+		{/if}
+
 		<section class="tracks">
 			<h2>tracks</h2>
 			{#if tracks.length === 0}
@@ -349,6 +393,104 @@
 		gap: 1.5rem;
 		/* prevent layout shift during transition */
 		min-height: 120px;
+	}
+
+	.discography {
+		margin: 3rem 0;
+	}
+
+	.section-header {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.section-header span {
+		color: #808080;
+		font-size: 0.9rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+	}
+
+	.album-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		gap: 1rem;
+	}
+
+	.album-card {
+		display: flex;
+		gap: 1rem;
+		align-items: center;
+		padding: 1rem;
+		background: #141414;
+		border: 1px solid #282828;
+		border-radius: 10px;
+		color: inherit;
+		text-decoration: none;
+		transition: transform 0.15s ease, border-color 0.15s ease;
+	}
+
+	.album-card:hover {
+		transform: translateY(-2px);
+		border-color: var(--accent);
+	}
+
+	.album-cover-wrapper {
+		width: 64px;
+		height: 64px;
+		border-radius: 6px;
+		overflow: hidden;
+		flex-shrink: 0;
+		background: #1a1a1a;
+		border: 1px solid #333;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.album-cover-wrapper img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+
+	.album-cover-placeholder {
+		color: #666;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+	}
+
+	.album-card-meta h3 {
+		margin: 0 0 0.25rem 0;
+		font-size: 1rem;
+		color: #e8e8e8;
+		text-transform: lowercase;
+	}
+
+	.album-card-meta {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.album-card-meta p {
+		margin: 0;
+		color: #9a9a9a;
+		font-size: 0.9rem;
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.album-card-meta .dot {
+		font-size: 0.65rem;
+		color: #555;
 	}
 
 	.stat-card {
@@ -516,6 +658,10 @@
 
 		.stat-value {
 			font-size: 2rem;
+		}
+
+		.album-grid {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>
