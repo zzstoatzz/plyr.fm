@@ -80,9 +80,9 @@
 	}
 
 	.tracks h2 {
-		font-size: 1.5rem;
+		font-size: var(--text-page-heading);
 		margin-bottom: 1.5rem;
-		color: #e8e8e8;
+		color: var(--text-primary);
 	}
 
 	.empty {
