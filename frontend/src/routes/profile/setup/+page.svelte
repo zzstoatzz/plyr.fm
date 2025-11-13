@@ -4,9 +4,8 @@
 	import { onMount } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import { API_URL } from '$lib/config';
-	import type { User } from '$lib/types';
+	import { auth } from '$lib/auth.svelte';
 
-	let user: User | null = null;
 	let loading = true;
 	let saving = false;
 	let error = '';
@@ -33,8 +32,8 @@
 
 				if (exchangeResponse.ok) {
 					const data = await exchangeResponse.json();
-					// store session_id in localStorage
-					localStorage.setItem('session_id', data.session_id);
+					auth.setSessionId(data.session_id);
+					await auth.initialize();
 				}
 			} catch (e) {
 				console.error('failed to exchange token:', e);
@@ -44,36 +43,19 @@
 			replaceState('/profile/setup', {});
 		}
 
-		// get session_id from localStorage
-		const storedSessionId = localStorage.getItem('session_id');
-
-		if (!storedSessionId) {
+		if (!auth.isAuthenticated) {
 			window.location.href = '/login';
 			return;
 		}
 
 		try {
-			// get current user
-			const response = await fetch(`${API_URL}/auth/me`, {
-				headers: {
-					'Authorization': `Bearer ${storedSessionId}`
-				}
-			});
+			// pre-fill display name with handle
+			displayName = auth.user?.handle || "";
 
-			if (response.ok) {
-				user = await response.json();
-				// pre-fill display name with handle
-				displayName = user?.handle || "";
-
-				// try to fetch avatar from bluesky
-				await fetchAvatar();
-			} else {
-				// session invalid, clear and redirect
-				localStorage.removeItem('session_id');
-				window.location.href = '/login';
-			}
+			// try to fetch avatar from bluesky
+			await fetchAvatar();
 		} catch (e) {
-			localStorage.removeItem('session_id');
+			auth.clearSession();
 			window.location.href = '/login';
 		} finally {
 			loading = false;
@@ -81,17 +63,14 @@
 	});
 
 	async function fetchAvatar() {
-		if (!user) return;
+		if (!auth.user) return;
 
 		fetchingAvatar = true;
-		const sessionId = localStorage.getItem('session_id');
 
 		try {
 			// call our backend which will use the Bluesky API
-			const response = await fetch(`${API_URL}/artists/${user.did}`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+			const response = await fetch(`${API_URL}/artists/${auth.user.did}`, {
+				headers: auth.getAuthHeaders()
 			});
 
 			// if artist profile already exists, redirect to portal
@@ -108,18 +87,17 @@
 
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
-		if (!user) return;
+		if (!auth.user) return;
 
 		saving = true;
 		error = '';
 
-		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/artists/`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${sessionId}`
+					...auth.getAuthHeaders()
 				},
 				body: JSON.stringify({
 					display_name: displayName,
@@ -145,7 +123,7 @@
 
 {#if loading}
 	<div class="loading">loading...</div>
-{:else if user}
+{:else if auth.user}
 	<main>
 		<div class="setup-container">
 			<h1>set up your artist profile</h1>

@@ -1,3 +1,4 @@
+import { browser } from '$app/environment';
 import { API_URL } from './config';
 import { toast } from './toast.svelte';
 import { tracksCache } from './tracks.svelte';
@@ -41,6 +42,7 @@ class UploaderState {
 			: 'uploading track...';
 		const toastId = toast.info(uploadMessage, 30000);
 
+		if (!browser) return;
 		const sessionId = localStorage.getItem('session_id');
 		const formData = new FormData();
 		formData.append('file', file);
