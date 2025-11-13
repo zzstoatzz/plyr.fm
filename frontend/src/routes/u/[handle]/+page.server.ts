@@ -1,5 +1,5 @@
 import { API_URL } from '$lib/config';
-import type { Artist, Track } from '$lib/types';
+import type { Artist, Track, ArtistAlbumSummary } from '$lib/types';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -23,9 +23,18 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 			tracks = data.tracks || [];
 		}
 
+		const albumsResponse = await fetch(`${API_URL}/albums/${params.handle}`);
+		let albums: ArtistAlbumSummary[] = [];
+
+		if (albumsResponse.ok) {
+			const albumData = await albumsResponse.json();
+			albums = albumData.albums ?? [];
+		}
+
 		return {
 			artist,
-			tracks
+			tracks,
+			albums
 		};
 	} catch (e) {
 		console.error('failed to load artist:', e);
