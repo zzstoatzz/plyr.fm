@@ -58,8 +58,10 @@ class UploaderState {
 		xhr.open('POST', `${API_URL}/tracks/`);
 		xhr.setRequestHeader('Authorization', `Bearer ${sessionId}`);
 
+		let uploadComplete = false;
+
 		xhr.upload.addEventListener('progress', (e) => {
-			if (e.lengthComputable) {
+			if (e.lengthComputable && !uploadComplete) {
 				const percent = Math.round((e.loaded / e.total) * 100);
 				const progressMsg = `uploading track... ${percent}%`;
 				toast.update(toastId, progressMsg);
@@ -72,6 +74,7 @@ class UploaderState {
 		xhr.addEventListener('load', () => {
 			if (xhr.status >= 200 && xhr.status < 300) {
 				try {
+					uploadComplete = true;
 					const result = JSON.parse(xhr.responseText);
 					const upload_id = result.upload_id;
 
@@ -98,6 +101,7 @@ class UploaderState {
 					eventSource.onmessage = (event) => {
 						const update = JSON.parse(event.data);
 
+						// always show backend processing messages (no percentage)
 						if (update.message && update.status === 'processing') {
 							toast.update(task.toastId, update.message);
 						}
