@@ -422,24 +422,52 @@ async def upload_track(
     file_path = None
     image_path = None
     try:
+        # enforce max upload size
+        max_size = settings.storage.max_upload_size_mb * 1024 * 1024
+        bytes_read = 0
+
         with tempfile.NamedTemporaryFile(
             delete=False, suffix=Path(file.filename).suffix
         ) as tmp_file:
             file_path = tmp_file.name
             # stream upload file to temp file in chunks
             while chunk := await file.read(CHUNK_SIZE):
+                bytes_read += len(chunk)
+                if bytes_read > max_size:
+                    # cleanup temp file before raising
+                    tmp_file.close()
+                    Path(file_path).unlink(missing_ok=True)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"file too large (max {settings.storage.max_upload_size_mb}MB)",
+                    )
                 tmp_file.write(chunk)
 
         # stream image to temp file if provided
         image_filename = None
         if image and image.filename:
             image_filename = image.filename
+            # images have much smaller limit (20MB is generous for cover art)
+            max_image_size = 20 * 1024 * 1024
+            image_bytes_read = 0
+
             with tempfile.NamedTemporaryFile(
                 delete=False, suffix=Path(image.filename).suffix
             ) as tmp_image:
                 image_path = tmp_image.name
                 # stream image file to temp file in chunks
                 while chunk := await image.read(CHUNK_SIZE):
+                    image_bytes_read += len(chunk)
+                    if image_bytes_read > max_image_size:
+                        # cleanup temp files before raising
+                        tmp_image.close()
+                        Path(image_path).unlink(missing_ok=True)
+                        if file_path:
+                            Path(file_path).unlink(missing_ok=True)
+                        raise HTTPException(
+                            status_code=413,
+                            detail="image too large (max 20MB)",
+                        )
                     tmp_image.write(chunk)
 
         # create upload tracking
@@ -844,8 +872,14 @@ async def update_track_metadata(
                 detail="unsupported image type. supported: jpg, png, webp, gif",
             )
 
-        # read and save image
+        # read and validate image size
         image_data = await image.read()
+        max_image_size = 20 * 1024 * 1024  # 20MB
+        if len(image_data) > max_image_size:
+            raise HTTPException(
+                status_code=413,
+                detail="image too large (max 20MB)",
+            )
         image_obj = BytesIO(image_data)
         image_id = await storage.save(image_obj, f"images/{image.filename}")
 

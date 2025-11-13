@@ -152,6 +152,11 @@ class StorageSettings(RelaySettingsSection):
         validation_alias="STORAGE_BACKEND",
         description="Storage backend (filesystem or r2)",
     )
+    max_upload_size_mb: int = Field(
+        default=1536,  # 1.5GB - supports 2-hour WAV (worst case) with headroom
+        validation_alias="MAX_UPLOAD_SIZE_MB",
+        description="Maximum file upload size in megabytes",
+    )
     aws_access_key_id: str = Field(
         default="",
         validation_alias="AWS_ACCESS_KEY_ID",
