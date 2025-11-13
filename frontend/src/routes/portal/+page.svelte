@@ -6,10 +6,11 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
-	import type { User, Track, FeaturedArtist } from '$lib/types';
+	import type { Track, FeaturedArtist } from '$lib/types';
 	import { API_URL, getServerConfig } from '$lib/config';
 	import { uploader } from '$lib/uploader.svelte';
 	import { toast } from '$lib/toast.svelte';
+	import { auth } from '$lib/auth.svelte';
 
 	// browser-compatible audio formats only
 	// note: aiff/aif not supported in most browsers (safari only)
@@ -24,7 +25,6 @@
 		return ACCEPTED_AUDIO_EXTENSIONS.includes(ext);
 	}
 
-	let user: User | null = null;
 	let loading = true;
 	let error = '';
 	let tracks: Track[] = [];
@@ -68,8 +68,8 @@
 
 				if (exchangeResponse.ok) {
 					const data = await exchangeResponse.json();
-					// store session_id in localStorage
-					localStorage.setItem('session_id', data.session_id);
+					auth.setSessionId(data.session_id);
+					await auth.initialize();
 				}
 			} catch (e) {
 				console.error('failed to exchange token:', e);
@@ -79,37 +79,17 @@
 			replaceState('/portal', {});
 		}
 
-		// get session_id from localStorage
-		const storedSessionId = localStorage.getItem('session_id');
-
-		if (!storedSessionId) {
+		if (!auth.isAuthenticated) {
 			window.location.href = '/login';
 			return;
 		}
 
 		try {
-			const response = await fetch(`${API_URL}/auth/me`, {
-				headers: {
-					'Authorization': `Bearer ${storedSessionId}`
-				}
-			});
-			if (response.ok) {
-				user = await response.json();
-				await loadMyTracks();
-				await loadArtistProfile();
-			} else if (response.status === 401) {
-				// only clear session on explicit 401 (unauthorized)
-				localStorage.removeItem('session_id');
-				window.location.href = '/login';
-			} else {
-				// other error (500, etc.) - show error but don't clear session
-				console.error('failed to check auth status:', response.status);
-				error = 'server error - please try again later';
-			}
+			await loadMyTracks();
+			await loadArtistProfile();
 		} catch (e) {
-			// network error - show error but keep session
-			console.error('network error checking auth:', e);
-			error = 'network error - please check your connection';
+			console.error('error loading portal data:', e);
+			error = 'failed to load portal data';
 		} finally {
 			loading = false;
 		}
@@ -117,12 +97,9 @@
 
 	async function loadMyTracks() {
 		loadingTracks = true;
-		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/tracks/me`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				headers: auth.getAuthHeaders()
 			});
 			if (response.ok) {
 				const data = await response.json();
@@ -136,12 +113,9 @@
 	}
 
 	async function loadArtistProfile() {
-		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/artists/me`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				headers: auth.getAuthHeaders()
 			});
 			if (response.ok) {
 				const artist = await response.json();
@@ -160,13 +134,12 @@
 		profileError = '';
 		profileSuccess = '';
 
-		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/artists/me`, {
 				method: 'PUT',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${sessionId}`
+					...auth.getAuthHeaders()
 				},
 				body: JSON.stringify({
 					display_name: displayName,
@@ -238,13 +211,10 @@
 	async function deleteTrack(trackId: number, trackTitle: string) {
 		if (!confirm(`delete "${trackTitle}"?`)) return;
 
-		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
 				method: 'DELETE',
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				headers: auth.getAuthHeaders()
 			});
 
 			if (response.ok) {
@@ -288,14 +258,11 @@
 			formData.append('image', editImageFile);
 		}
 
-		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
 				method: 'PATCH',
 				body: formData,
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				headers: auth.getAuthHeaders()
 			});
 
 			if (response.ok) {
@@ -370,14 +337,7 @@
 	}
 
 	async function logout() {
-		const sessionId = localStorage.getItem('session_id');
-		await fetch(`${API_URL}/auth/logout`, {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${sessionId}`
-			}
-		});
-		localStorage.removeItem('session_id');
+		await auth.logout();
 		window.location.href = '/';
 	}
 </script>
@@ -389,8 +349,8 @@
 		<h1>{error}</h1>
 		<a href="/">go home</a>
 	</div>
-{:else if user}
-	<Header {user} isAuthenticated={!!user} onLogout={logout} />
+{:else if auth.user}
+	<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 	<main>
 		<MigrationBanner />
 		<BrokenTracks />
@@ -402,7 +362,7 @@
 		<section class="profile-section">
 			<div class="section-header">
 				<h2>profile settings</h2>
-				<a href="/u/{user.handle}" class="view-profile-link">view public profile</a>
+				<a href="/u/{auth.user.handle}" class="view-profile-link">view public profile</a>
 			</div>
 
 			{#if profileSuccess}

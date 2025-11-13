@@ -3,12 +3,13 @@
 	import { page } from '$app/stores';
 	import { fade } from 'svelte/transition';
 	import { API_URL } from '$lib/config';
-	import type { Track, Artist, User, Analytics } from '$lib/types';
+	import type { Track, Artist, Analytics } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import { auth } from '$lib/auth.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
@@ -20,61 +21,17 @@
 	let tracks: Track[] = $state(data.tracks); // initialize with server data
 	let loading = $state(true);
 	let error = $state('');
-	let user: User | null = $state(null);
-	let isAuthenticated = $state(false);
 	let analytics: Analytics | null = $state(null);
 	let analyticsLoading = $state(false);
 
 	function checkIsOwnProfile(): boolean {
-		return user !== null && artist !== null && user.did === artist.did;
+		return auth.user !== null && artist !== null && auth.user.did === artist.did;
 	}
 	let isOwnProfile = $derived(checkIsOwnProfile());
 
-	async function checkAuth() {
-		const sessionId = localStorage.getItem('session_id');
-		if (!sessionId) {
-			isAuthenticated = false;
-			return;
-		}
-
-		try {
-			const response = await fetch(`${API_URL}/auth/me`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
-			});
-
-			if (response.ok) {
-				user = await response.json();
-				isAuthenticated = true;
-			} else {
-				localStorage.removeItem('session_id');
-				isAuthenticated = false;
-			}
-		} catch (e) {
-			console.error('auth check failed:', e);
-			isAuthenticated = false;
-		}
-	}
-
 	async function handleLogout() {
-		const sessionId = localStorage.getItem('session_id');
-		if (!sessionId) return;
-
-		try {
-			await fetch(`${API_URL}/auth/logout`, {
-				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
-			});
-		} catch (e) {
-			console.error('logout failed:', e);
-		}
-
-		localStorage.removeItem('session_id');
-		user = null;
-		isAuthenticated = false;
+		await auth.logout();
+		window.location.href = '/';
 	}
 
 	async function loadArtistAndTracks() {
@@ -157,7 +114,6 @@
 	}
 
 	onMount(async () => {
-		await checkAuth();
 		await loadArtistAndTracks();
 		// load analytics in background without blocking page render
 		loadAnalytics();
@@ -217,7 +173,7 @@
 	</div>
 {:else if artist}
 
-	<Header {user} {isAuthenticated} onLogout={handleLogout} />
+	<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 	<main>
 		<section class="artist-header">
@@ -292,7 +248,7 @@
 							{track}
 							isPlaying={player.currentTrack?.id === track.id}
 							onPlay={(t) => queue.playNow(t)}
-							{isAuthenticated}
+							isAuthenticated={auth.isAuthenticated}
 						/>
 					{/each}
 				</div>

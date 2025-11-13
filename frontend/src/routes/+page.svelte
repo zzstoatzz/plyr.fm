@@ -3,14 +3,10 @@
 	import { page } from '$app/stores';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import type { User } from '$lib/types';
-	import { API_URL } from '$lib/config';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
-
-	let user = $state<User | null>(null);
-	let isAuthenticated = $state(false);
+	import { auth } from '$lib/auth.svelte';
 
 	// use cached tracks
 	let tracks = $derived(tracksCache.tracks);
@@ -23,23 +19,6 @@
 	let autoPlayedTrackId = $state<string | null>(null);
 
 	onMount(async () => {
-		// check authentication (non-blocking)
-		try {
-			const sessionId = localStorage.getItem('session_id');
-			const authResponse = await fetch(`${API_URL}/auth/me`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
-			});
-			if (authResponse.ok) {
-				user = await authResponse.json();
-				isAuthenticated = true;
-			}
-		} catch (e) {
-			// network error or not authenticated - continue as guest
-			console.warn('failed to check auth status:', e);
-		}
-
 		// fetch tracks from cache (will use cached data if recent)
 		await tracksCache.fetch();
 	});
@@ -58,19 +37,12 @@
 	});
 
 	async function logout() {
-		const sessionId = localStorage.getItem('session_id');
-		await fetch(`${API_URL}/auth/logout`, {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${sessionId}`
-			}
-		});
-		user = null;
-		isAuthenticated = false;
+		await auth.logout();
+		window.location.href = '/';
 	}
 </script>
 
-<Header {user} {isAuthenticated} onLogout={logout} />
+<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 
 <main>
 	<section class="tracks">
@@ -86,7 +58,7 @@
 						{track}
 						isPlaying={player.currentTrack?.id === track.id}
 						onPlay={(t) => queue.playNow(t)}
-						{isAuthenticated}
+						isAuthenticated={auth.isAuthenticated}
 					/>
 				{/each}
 			</div>
