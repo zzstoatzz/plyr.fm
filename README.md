@@ -139,22 +139,24 @@ plyr.fm/
 <details>
 <summary>costs</summary>
 
-~$5-6/month for MVP:
-- cloudflare pages: free
-- cloudflare r2: ~$0.16
-- fly.io: $5
-- neon: free
+~$25-30/month:
+- fly.io backend (production): ~$10/month (shared-cpu-1x, 256MB RAM)
+- fly.io backend (staging): ~$10/month (shared-cpu-1x, 256MB RAM)
+- fly.io transcoder: ~$0-5/month (auto-scales to zero when idle)
+- neon postgres: $5/month (starter plan)
+- cloudflare pages: free (frontend hosting)
+- cloudflare r2: ~$0.16/month (6 buckets across dev/staging/prod)
 
 </details>
 
 ## links
 
 - **production**: https://plyr.fm
-- **backend API**: https://relay-api.fly.dev
+- **backend API**: https://api.plyr.fm
 - **repository**: https://github.com/zzstoatzz/plyr.fm
 
 ## documentation
 
-- [deployment guide](docs/deployment/overview.md)
-- [latest status](STATUS.md)
+- [deployment guide](docs/deployment/environments.md)
 - [configuration](docs/configuration.md)
+- [full documentation](docs/README.md)
