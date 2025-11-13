@@ -6,7 +6,7 @@ from typing import BinaryIO
 import anyio
 from anyio import Path as AsyncPath
 
-from backend.models import AudioFormat
+from backend._internal.audio import AudioFormat
 from backend.utilities.hashing import CHUNK_SIZE, hash_file_chunked
 
 
@@ -41,7 +41,7 @@ class FilesystemStorage:
             file_path = self.base_path / "audio" / f"{file_id}{ext}"
         else:
             # try image format
-            from backend.models.image import ImageFormat
+            from backend._internal.image import ImageFormat
 
             image_format = ImageFormat.from_filename(filename)
             if image_format:
@@ -73,7 +73,7 @@ class FilesystemStorage:
                 return file_path
 
         # check for all supported image formats
-        from backend.models.image import ImageFormat
+        from backend._internal.image import ImageFormat
 
         for image_format in ImageFormat:
             file_path = self.base_path / "images" / f"{file_id}.{image_format.value}"
@@ -113,7 +113,7 @@ class FilesystemStorage:
                 return True
 
         # try image formats
-        from backend.models.image import ImageFormat
+        from backend._internal.image import ImageFormat
 
         for image_format in ImageFormat:
             file_path = self.base_path / "images" / f"{file_id}.{image_format.value}"

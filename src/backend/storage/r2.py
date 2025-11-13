@@ -9,8 +9,8 @@ import logfire
 from botocore.config import Config
 from sqlalchemy import func, select
 
+from backend._internal.audio import AudioFormat
 from backend.config import settings
-from backend.models import AudioFormat
 from backend.utilities.database import db_session
 from backend.utilities.hashing import hash_file_chunked
 
@@ -78,7 +78,7 @@ class R2Storage:
                 image_format = None
             else:
                 # try image format
-                from backend.models.image import ImageFormat
+                from backend._internal.image import ImageFormat
 
                 image_format, is_valid = ImageFormat.validate_and_extract(filename)
                 if is_valid and image_format:
@@ -145,7 +145,7 @@ class R2Storage:
                     continue
 
             # try image formats
-            from backend.models.image import ImageFormat
+            from backend._internal.image import ImageFormat
 
             for image_format in ImageFormat:
                 key = f"{file_id}.{image_format.value}"
@@ -266,7 +266,7 @@ class R2Storage:
                     continue
 
             # try image formats
-            from backend.models.image import ImageFormat
+            from backend._internal.image import ImageFormat
 
             for image_format in ImageFormat:
                 key = f"{file_id}.{image_format.value}"

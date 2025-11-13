@@ -2,7 +2,7 @@
 
 import pytest
 
-from backend.models.image import ImageFormat
+from backend._internal.image import ImageFormat
 
 
 class TestImageFormat:

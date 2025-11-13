@@ -65,8 +65,8 @@ def get_engine() -> AsyncEngine:
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """get async database session."""
     engine = get_engine()
-    async_session_maker = sessionmaker(
-        bind=engine,
+    async_session_maker = sessionmaker(  # type: ignore
+        bind=engine,  # type: ignore
         class_=AsyncSession,
         expire_on_commit=False,
     )

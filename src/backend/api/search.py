@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Query
 
-from backend.atproto.handles import search_handles
+from backend._internal.atproto.handles import search_handles
 
 router = APIRouter(prefix="/search", tags=["search"])
 

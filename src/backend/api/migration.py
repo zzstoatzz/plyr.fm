@@ -8,7 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from backend._internal import Session as AuthSession
 from backend._internal import oauth_client, require_auth
-from backend.atproto.records import _reconstruct_oauth_session, _refresh_session_tokens
+from backend._internal.atproto.records import (
+    _reconstruct_oauth_session,
+    _refresh_session_tokens,
+)
 from backend.config import settings
 
 logger = logging.getLogger(__name__)

@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
-from backend.atproto import fetch_user_avatar
+from backend._internal.atproto import fetch_user_avatar
 from backend.models import Artist, Track, TrackLike, get_db
 
 logger = logging.getLogger(__name__)

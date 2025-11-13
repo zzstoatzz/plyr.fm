@@ -3,9 +3,9 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
+from backend._internal.audio import AudioFormat
+from backend._internal.image import ImageFormat
 from backend.config import settings
-from backend.models import AudioFormat
-from backend.models.image import ImageFormat
 from backend.storage import storage
 
 router = APIRouter(prefix="/audio", tags=["audio"])

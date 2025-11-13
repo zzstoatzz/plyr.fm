@@ -7,7 +7,7 @@ import pytest
 from atproto_oauth.models import OAuthSession
 
 from backend._internal import Session as AuthSession
-from backend.atproto.records import _refresh_session_tokens
+from backend._internal.atproto.records import _refresh_session_tokens
 
 
 @pytest.fixture
