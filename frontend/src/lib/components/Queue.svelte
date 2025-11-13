@@ -98,54 +98,20 @@
 									</div>
 								</div>
 
-								<div class="track-actions">
-									<button
-										class="action-btn move-btn"
-										onclick={(e) => {
-											e.stopPropagation();
-											if (index > queue.currentIndex + 1) {
-												queue.moveTrack(index, index - 1);
-											}
-										}}
-										disabled={index === queue.currentIndex + 1}
-										aria-label="move track up"
-										title="move up"
-									>
-										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<polyline points="18 15 12 9 6 15"></polyline>
-										</svg>
-									</button>
-									<button
-										class="action-btn move-btn"
-										onclick={(e) => {
-											e.stopPropagation();
-											if (index < queue.tracks.length - 1) {
-												queue.moveTrack(index, index + 1);
-											}
-										}}
-										disabled={index === queue.tracks.length - 1}
-										aria-label="move track down"
-										title="move down"
-									>
-										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<polyline points="6 9 12 15 18 9"></polyline>
-										</svg>
-									</button>
-									<button
-										class="action-btn remove-btn"
-										onclick={(e) => {
-											e.stopPropagation();
-											queue.removeTrack(index);
-										}}
-										aria-label="remove from queue"
-										title="remove from queue"
-									>
-										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<line x1="18" y1="6" x2="6" y2="18"></line>
-											<line x1="6" y1="6" x2="18" y2="18"></line>
-										</svg>
-									</button>
-								</div>
+								<button
+									class="remove-btn"
+									onclick={(e) => {
+										e.stopPropagation();
+										queue.removeTrack(index);
+									}}
+									aria-label="remove from queue"
+									title="remove from queue"
+								>
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<line x1="18" y1="6" x2="6" y2="18"></line>
+										<line x1="6" y1="6" x2="18" y2="18"></line>
+									</svg>
+								</button>
 							</div>
 						{/each}
 					</div>
@@ -356,43 +322,25 @@
 		color: var(--text-secondary);
 	}
 
-	.track-actions {
-		display: flex;
-		gap: 0.25rem;
-		align-items: center;
-		opacity: 0;
-		transition: opacity 0.2s;
-	}
-
-	.queue-track:hover .track-actions {
-		opacity: 1;
-	}
-
-	.action-btn {
+	.remove-btn {
 		background: transparent;
 		border: none;
 		color: var(--text-tertiary);
 		cursor: pointer;
-		padding: 0.4rem;
+		padding: 0.5rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		transition: all 0.2s;
 		border-radius: 4px;
-		flex-shrink: 0;
+		opacity: 0;
 	}
 
-	.action-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
+	.queue-track:hover .remove-btn {
+		opacity: 1;
 	}
 
-	.move-btn:hover:not(:disabled) {
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
-	}
-
-	.remove-btn:hover:not(:disabled) {
+	.remove-btn:hover {
 		color: var(--error);
 		background: color-mix(in srgb, var(--error) 12%, transparent);
 	}
