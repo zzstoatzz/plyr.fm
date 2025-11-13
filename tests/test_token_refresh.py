@@ -111,15 +111,15 @@ class TestConcurrentTokenRefresh:
 
         with (
             patch(
-                "backend.atproto.records.oauth_client.refresh_session",
+                "backend._internal.atproto.records.oauth_client.refresh_session",
                 side_effect=mock_refresh_session,
             ),
             patch(
-                "backend.atproto.records.get_session",
+                "backend._internal.atproto.records.get_session",
                 side_effect=mock_get_session,
             ),
             patch(
-                "backend.atproto.records.update_session_tokens",
+                "backend._internal.atproto.records.update_session_tokens",
                 side_effect=mock_update_session_tokens,
             ),
         ):
@@ -172,15 +172,15 @@ class TestConcurrentTokenRefresh:
 
         with (
             patch(
-                "backend.atproto.records.oauth_client.refresh_session",
+                "backend._internal.atproto.records.oauth_client.refresh_session",
                 side_effect=mock_refresh_session_fails,
             ),
             patch(
-                "backend.atproto.records.get_session",
+                "backend._internal.atproto.records.get_session",
                 side_effect=mock_get_session,
             ),
             patch(
-                "backend.atproto.records.update_session_tokens",
+                "backend._internal.atproto.records.update_session_tokens",
                 side_effect=mock_update_session_tokens,
             ),
         ):
@@ -232,15 +232,15 @@ class TestConcurrentTokenRefresh:
 
         with (
             patch(
-                "backend.atproto.records.oauth_client.refresh_session",
+                "backend._internal.atproto.records.oauth_client.refresh_session",
                 side_effect=mock_refresh_session,
             ),
             patch(
-                "backend.atproto.records.get_session",
+                "backend._internal.atproto.records.get_session",
                 side_effect=mock_get_session,
             ),
             patch(
-                "backend.atproto.records.update_session_tokens",
+                "backend._internal.atproto.records.update_session_tokens",
                 side_effect=mock_update_session_tokens,
             ),
         ):

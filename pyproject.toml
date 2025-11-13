@@ -72,6 +72,7 @@ timeout = 10
 env = [
     "RELAY_TEST_MODE=1",
     "OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes=",
+    "LOGFIRE_IGNORE_NO_CONFIG=1",
 ]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",

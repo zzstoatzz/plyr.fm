@@ -4,11 +4,15 @@ import shutil
 from pathlib import Path
 
 import logfire
+import pytest
 
 from backend.storage import storage
 from backend.storage.r2 import R2Storage
 
 
+@pytest.mark.skip(
+    reason="requires R2 credentials and data directory - manual test only"
+)
 async def test_r2_upload():
     """test uploading a file to R2 and retrieving its URL."""
     # configure logfire for test to suppress warnings
