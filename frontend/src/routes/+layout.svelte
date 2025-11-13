@@ -8,7 +8,7 @@
 	import Player from '$lib/components/Player.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import Queue from '$lib/components/Queue.svelte';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/auth.svelte';
 	import { browser } from '$app/environment';
@@ -24,6 +24,29 @@
 		void auth.initialize();
 	}
 
+	function handleQueueShortcut(event: KeyboardEvent) {
+		// ignore modifier keys
+		if (event.metaKey || event.ctrlKey || event.altKey) {
+			return;
+		}
+
+		// ignore if inside input/textarea/contenteditable
+		const target = event.target as HTMLElement;
+		if (
+			target.tagName === 'INPUT' ||
+			target.tagName === 'TEXTAREA' ||
+			target.isContentEditable
+		) {
+			return;
+		}
+
+		// toggle queue on 'q' key
+		if (event.key.toLowerCase() === 'q') {
+			event.preventDefault();
+			toggleQueue();
+		}
+	}
+
 	onMount(() => {
 		// apply saved accent color from localStorage
 		const savedAccent = localStorage.getItem('accentColor');
@@ -36,6 +59,16 @@
 		const savedQueueVisibility = localStorage.getItem('showQueue');
 		if (savedQueueVisibility !== null) {
 			showQueue = savedQueueVisibility === 'true';
+		}
+
+		// add keyboard listener for queue toggle
+		window.addEventListener('keydown', handleQueueShortcut);
+	});
+
+	onDestroy(() => {
+		// cleanup keyboard listener
+		if (browser) {
+			window.removeEventListener('keydown', handleQueueShortcut);
 		}
 	});
 
@@ -116,7 +149,13 @@
 	{/if}
 </div>
 
-<button class="queue-toggle" onclick={toggleQueue} title={showQueue ? 'hide queue' : 'show queue'}>
+<button
+	class="queue-toggle"
+	onclick={toggleQueue}
+	aria-pressed={showQueue}
+	aria-label="toggle queue (Q)"
+	title={showQueue ? 'hide queue (Q)' : 'show queue (Q)'}
+>
 	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 		<line x1="3" y1="6" x2="21" y2="6"></line>
 		<line x1="3" y1="12" x2="21" y2="12"></line>

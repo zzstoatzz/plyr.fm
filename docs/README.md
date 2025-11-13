@@ -8,6 +8,7 @@ this directory contains all documentation for the plyr.fm project.
 - **[state-management.md](./frontend/state-management.md)** - global state management with Svelte 5 runes (toast notifications, tracks cache, upload manager, queue management, liked tracks, preferences, localStorage persistence)
 - **[toast-notifications.md](./frontend/toast-notifications.md)** - user feedback system for async operations with smooth transitions and auto-dismiss
 - **[queue.md](./frontend/queue.md)** - music queue management with server sync
+- **[keyboard-shortcuts.md](./frontend/keyboard-shortcuts.md)** - global keyboard shortcuts with context-aware filtering (Q for queue toggle, patterns for adding new shortcuts)
 
 ### backend
 - **[configuration.md](./backend/configuration.md)** - backend configuration and environment setup
@@ -55,6 +56,7 @@ plyr.fm is fully functional with:
 - ✅ server-sent events for upload progress
 - ✅ toast notifications
 - ✅ user preferences (accent color, auto-play)
+- ✅ keyboard shortcuts (Q for queue toggle)
 
 ### local development
 

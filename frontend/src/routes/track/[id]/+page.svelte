@@ -226,12 +226,7 @@
 
 <style>
 	.page-container {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		overflow: hidden;
+		min-height: 100vh;
 		display: flex;
 		flex-direction: column;
 	}
@@ -243,10 +238,7 @@
 		justify-content: center;
 		padding: 2rem;
 		padding-bottom: 8rem;
-		max-width: 1200px;
-		margin: 0 auto;
 		width: 100%;
-		overflow: hidden;
 	}
 
 	.track-detail {
@@ -255,6 +247,7 @@
 		align-items: center;
 		gap: 2rem;
 		width: 100%;
+		max-width: 1200px;
 	}
 
 	.cover-art-container {
