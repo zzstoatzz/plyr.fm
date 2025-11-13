@@ -189,37 +189,9 @@
 		}
 	}
 
-	async function handleUpload(e: SubmitEvent) {
+	function handleUpload(e: SubmitEvent) {
 		e.preventDefault();
 		if (!file) return;
-
-		// validate file sizes client-side before attempting upload
-		try {
-			const config = await getServerConfig();
-
-			// check audio file size
-			const audioSizeMB = file.size / (1024 * 1024);
-			if (audioSizeMB > config.max_upload_size_mb) {
-				toast.error(
-					`audio file too large (${audioSizeMB.toFixed(1)}MB). max size: ${config.max_upload_size_mb}MB`
-				);
-				return;
-			}
-
-			// check image file size if present
-			if (imageFile) {
-				const imageSizeMB = imageFile.size / (1024 * 1024);
-				if (imageSizeMB > config.max_image_size_mb) {
-					toast.error(
-						`image too large (${imageSizeMB.toFixed(1)}MB). max size: ${config.max_image_size_mb}MB`
-					);
-					return;
-				}
-			}
-		} catch (e) {
-			console.error('failed to validate file sizes:', e);
-			// continue with upload anyway - server will validate
-		}
 
 		const uploadFile = file;
 		const uploadTitle = title;
@@ -339,17 +311,61 @@
 		}
 	}
 
-	function handleFileChange(e: Event) {
+	async function handleFileChange(e: Event) {
 		const target = e.target as HTMLInputElement;
 		if (target.files && target.files[0]) {
 			const selected = target.files[0];
 			if (!isSupportedAudioFile(selected.name)) {
-				alert(`unsupported file type. supported files: ${ACCEPTED_AUDIO_EXTENSIONS.join(', ')}`);
+				toast.error(`unsupported file type. supported: ${ACCEPTED_AUDIO_EXTENSIONS.join(', ')}`);
 				target.value = '';
 				file = null;
 				return;
 			}
+
+			// validate file size
+			try {
+				const config = await getServerConfig();
+				const sizeMB = selected.size / (1024 * 1024);
+				if (sizeMB > config.max_upload_size_mb) {
+					toast.error(
+						`audio file too large (${sizeMB.toFixed(1)}MB). max: ${config.max_upload_size_mb}MB`
+					);
+					target.value = '';
+					file = null;
+					return;
+				}
+			} catch (e) {
+				console.error('failed to validate file size:', e);
+				// continue anyway - server will validate
+			}
+
 			file = selected;
+		}
+	}
+
+	async function handleImageChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		if (target.files && target.files[0]) {
+			const selected = target.files[0];
+
+			// validate image size
+			try {
+				const config = await getServerConfig();
+				const sizeMB = selected.size / (1024 * 1024);
+				if (sizeMB > config.max_image_size_mb) {
+					toast.error(
+						`image too large (${sizeMB.toFixed(1)}MB). max: ${config.max_image_size_mb}MB`
+					);
+					target.value = '';
+					imageFile = null;
+					return;
+				}
+			} catch (e) {
+				console.error('failed to validate image size:', e);
+				// continue anyway - server will validate
+			}
+
+			imageFile = selected;
 		}
 	}
 
@@ -499,10 +515,7 @@
 						id="image-input"
 						type="file"
 						accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
-						onchange={(e) => {
-							const target = e.target as HTMLInputElement;
-							imageFile = target.files?.[0] ?? null;
-						}}
+						onchange={handleImageChange}
 					/>
 					<p class="format-hint">supported: jpg, png, webp, gif</p>
 					{#if imageFile}
