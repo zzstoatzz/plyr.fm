@@ -139,6 +139,15 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/config")
+async def get_public_config() -> dict[str, int]:
+    """expose public configuration to frontend."""
+    return {
+        "max_upload_size_mb": settings.storage.max_upload_size_mb,
+        "max_image_size_mb": 20,  # hardcoded limit for cover art
+    }
+
+
 @app.get("/client-metadata.json")
 async def client_metadata() -> dict:
     """serve OAuth client metadata."""

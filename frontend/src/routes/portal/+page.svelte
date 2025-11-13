@@ -7,7 +7,7 @@
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
 	import type { User, Track, FeaturedArtist } from '$lib/types';
-	import { API_URL } from '$lib/config';
+	import { API_URL, getServerConfig } from '$lib/config';
 	import { uploader } from '$lib/uploader.svelte';
 	import { toast } from '$lib/toast.svelte';
 
@@ -189,9 +189,37 @@
 		}
 	}
 
-	function handleUpload(e: SubmitEvent) {
+	async function handleUpload(e: SubmitEvent) {
 		e.preventDefault();
 		if (!file) return;
+
+		// validate file sizes client-side before attempting upload
+		try {
+			const config = await getServerConfig();
+
+			// check audio file size
+			const audioSizeMB = file.size / (1024 * 1024);
+			if (audioSizeMB > config.max_upload_size_mb) {
+				toast.error(
+					`audio file too large (${audioSizeMB.toFixed(1)}MB). max size: ${config.max_upload_size_mb}MB`
+				);
+				return;
+			}
+
+			// check image file size if present
+			if (imageFile) {
+				const imageSizeMB = imageFile.size / (1024 * 1024);
+				if (imageSizeMB > config.max_image_size_mb) {
+					toast.error(
+						`image too large (${imageSizeMB.toFixed(1)}MB). max size: ${config.max_image_size_mb}MB`
+					);
+					return;
+				}
+			}
+		} catch (e) {
+			console.error('failed to validate file sizes:', e);
+			// continue with upload anyway - server will validate
+		}
 
 		const uploadFile = file;
 		const uploadTitle = title;
