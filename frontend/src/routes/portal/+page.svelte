@@ -726,7 +726,11 @@
 										{/if}
 									</div>
 									<div class="album-edit-actions">
+										<label for="album-cover-input" class="file-input-label">
+											select album artwork
+										</label>
 										<input
+											id="album-cover-input"
 											type="file"
 											accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
 											onchange={(e) => {
@@ -1424,6 +1428,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
+	}
+
+	.file-input-label {
+		font-size: 0.85rem;
+		color: #b0b0b0;
+		font-weight: 500;
+		margin-bottom: 0.25rem;
 	}
 
 	.album-edit-actions .file-input {

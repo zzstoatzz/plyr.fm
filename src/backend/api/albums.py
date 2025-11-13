@@ -352,12 +352,14 @@ async def upload_album_cover(
             image_data.extend(chunk)
 
         image_obj = BytesIO(image_data)
-        image_id = await storage.save(image_obj, f"images/{image.filename}")
+        # save returns the file_id (hash)
+        image_id = await storage.save(image_obj, image.filename)
 
-        # get R2 URL for image if using R2 storage
+        # construct R2 URL directly if using R2 storage
+        # storage.save uses just {file_id}{ext} for images (no subdirectory)
         image_url = None
         if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
-            image_url = await storage.get_url(image_id)
+            image_url = f"{storage.public_image_bucket_url}/{image_id}{ext}"
 
         # update album with new image
         album.image_id = image_id
