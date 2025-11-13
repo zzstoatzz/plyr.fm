@@ -53,6 +53,7 @@ from backend.storage.r2 import R2Storage
 from backend.utilities.aggregations import get_like_counts
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
+from backend.utilities.slugs import slugify
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tracks", tags=["tracks"])
@@ -95,6 +96,7 @@ class TrackResponse(dict):
             artist_handle=track.artist.handle,
             artist_avatar_url=track.artist.avatar_url,
             album=track.album,
+            album_slug=track.album_slug,
             file_id=track.file_id,
             file_type=track.file_type,
             features=track.features,
@@ -320,12 +322,16 @@ async def _process_upload_background(
                 if album:
                     extra["album"] = album
 
+                # compute album slug
+                album_slug = slugify(album) if album else None
+
                 track = Track(
                     title=title,
                     file_id=file_id,
                     file_type=ext[1:],
                     artist_did=artist_did,
                     extra=extra,
+                    album_slug=album_slug,
                     features=featured_artists,
                     r2_url=r2_url,
                     atproto_record_uri=atproto_uri,
@@ -799,6 +805,7 @@ async def update_track_metadata(
             if track.extra is None:
                 track.extra = {}
             track.extra["album"] = album
+            track.album_slug = slugify(album)
             # flag the JSONB field as modified so SQLAlchemy detects the change
             attributes.flag_modified(track, "extra")
         else:
@@ -806,6 +813,7 @@ async def update_track_metadata(
             if track.extra and "album" in track.extra:
                 del track.extra["album"]
                 attributes.flag_modified(track, "extra")
+            track.album_slug = None
 
     if features is not None:
         # resolve featured artist handles

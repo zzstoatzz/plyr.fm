@@ -87,13 +87,23 @@
 				{/if}
 				{#if track.album}
 					<span class="metadata-separator">•</span>
-					<span class="album">
-						<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-							<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
-							<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
-						</svg>
-						{track.album}
-					</span>
+					{#if track.album_slug}
+						<a href="/album/{track.album_slug}" class="album album-link">
+							<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
+								<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
+							</svg>
+							{track.album}
+						</a>
+					{:else}
+						<span class="album">
+							<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
+								<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
+							</svg>
+							{track.album}
+						</span>
+					{/if}
 				{/if}
 			</div>
 			<div class="track-meta">
@@ -335,6 +345,15 @@
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
+	}
+
+	.album-link {
+		text-decoration: none;
+		transition: color 0.2s;
+	}
+
+	.album-link:hover {
+		color: var(--accent);
 	}
 
 	.album-icon {

@@ -50,6 +50,9 @@ class Track(Base):
         JSONB, nullable=False, default=dict, server_default="{}"
     )
 
+    # album slug for URL-safe album pages
+    album_slug: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+
     # featured artists (list of {did, handle, display_name})
     features: Mapped[list[dict]] = mapped_column(
         JSONB,
