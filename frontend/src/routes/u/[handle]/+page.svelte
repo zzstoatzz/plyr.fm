@@ -246,10 +246,28 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 			</div>
 		</section>
 
+		<section class="tracks">
+			<h2>tracks</h2>
+			{#if tracks.length === 0}
+				<p class="empty">no tracks yet</p>
+			{:else}
+				<div class="track-list">
+					{#each tracks as track}
+						<TrackItem
+							{track}
+							isPlaying={player.currentTrack?.id === track.id}
+							onPlay={(t) => queue.playNow(t)}
+							isAuthenticated={auth.isAuthenticated}
+						/>
+					{/each}
+				</div>
+			{/if}
+		</section>
+
 		{#if albums.length > 0}
-			<section class="discography">
+			<section class="albums">
 				<div class="section-header">
-					<h2>discography</h2>
+					<h2>albums</h2>
 					<span>{albums.length} {albums.length === 1 ? 'album' : 'albums'}</span>
 				</div>
 				<div class="album-grid">
@@ -280,24 +298,6 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 				</div>
 			</section>
 		{/if}
-
-		<section class="tracks">
-			<h2>tracks</h2>
-			{#if tracks.length === 0}
-				<p class="empty">no tracks yet</p>
-			{:else}
-				<div class="track-list">
-					{#each tracks as track}
-						<TrackItem
-							{track}
-							isPlaying={player.currentTrack?.id === track.id}
-							onPlay={(t) => queue.playNow(t)}
-							isAuthenticated={auth.isAuthenticated}
-						/>
-					{/each}
-				</div>
-			{/if}
-		</section>
 	</main>
 {/if}
 
