@@ -3,11 +3,20 @@
 import asyncio
 import contextlib
 import logging
+import warnings
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# filter pydantic warning from atproto library
+warnings.filterwarnings(
+    "ignore",
+    message="The 'default' attribute with value None was provided to the `Field\\(\\)` function",
+    category=UserWarning,
+    module="pydantic._internal._generate_schema",
+)
 
 from backend._internal import notification_service, queue_service
 from backend.api import (
@@ -23,14 +32,6 @@ from backend.api.migration import router as migration_router
 from backend.config import settings
 from backend.models import init_db
 
-# configure logging level based on debug mode
-logging.basicConfig(
-    level=logging.DEBUG if settings.app.debug else logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-
-logger = logging.getLogger(__name__)
-
 # configure logfire if enabled
 if settings.observability.enabled:
     import logfire
@@ -42,8 +43,24 @@ if settings.observability.enabled:
         token=settings.observability.write_token,
         environment=settings.observability.environment,
     )
+
+    # configure logging with logfire handler
+    logging.basicConfig(
+        level=logging.DEBUG if settings.app.debug else logging.INFO,
+        handlers=[logfire.LogfireLoggingHandler()],
+    )
 else:
     logfire = None
+    # fallback to basic logging when logfire is disabled
+    logging.basicConfig(
+        level=logging.DEBUG if settings.app.debug else logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+# # reduce noise from verbose loggers
+# logging.getLogger("httpx").setLevel(logging.WARNING)
+
+logger = logging.getLogger(__name__)
 
 
 async def run_periodic_tasks():

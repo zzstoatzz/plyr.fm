@@ -61,7 +61,7 @@ class NotificationService:
                 {"actor": settings.notify.recipient_handle}
             )
             self.recipient_did = profile.did
-            logger.info(
+            logger.debug(
                 f"resolved {settings.notify.recipient_handle} to {self.recipient_did}"
             )
 

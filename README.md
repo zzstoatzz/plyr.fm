@@ -57,25 +57,11 @@ just frontend install
 # run backend (hot reloads)
 just run-backend
 
-# run frontend (hot reloads, new terminal)
+# run frontend (hot reloads)
 just frontend dev
 
-# run transcoder (hot reloads, new terminal, optional)
+# run transcoder (hot reloads)
 just transcoder run
-```
-
-or manually:
-
-```bash
-# backend
-uv sync
-uv run uvicorn backend.main:app --reload --port 8001
-
-# frontend (new terminal)
-cd frontend && bun install && bun run dev
-
-# transcoder (new terminal, optional)
-cd transcoder && cargo run
 ```
 
 visit http://localhost:5173
