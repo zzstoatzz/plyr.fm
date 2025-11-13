@@ -32,7 +32,8 @@
 
 	// upload form fields
 	let title = '';
-	let album = '';
+	let albumId: string | null = null;
+	let albumTitle = '';
 	let file: File | null = null;
 	let imageFile: File | null = null;
 	let featuredArtists: FeaturedArtist[] = [];
@@ -168,13 +169,13 @@
 
 		const uploadFile = file;
 		const uploadTitle = title;
-		const uploadAlbum = album;
+		const uploadAlbum = albumTitle;
 		const uploadFeatures = [...featuredArtists];
 		const uploadImage = imageFile;
 
 		const clearForm = () => {
 			title = '';
-			album = '';
+			albumTitle = '';
 			file = null;
 			imageFile = null;
 			featuredArtists = [];
@@ -231,7 +232,7 @@
 	function startEditTrack(track: typeof tracks[0]) {
 		editingTrackId = track.id;
 		editTitle = track.title;
-		editAlbum = track.album || '';
+		editAlbum = track.album?.title || '';
 		editFeaturedArtists = track.features || [];
 	}
 
@@ -440,7 +441,7 @@
 					<input
 						id="album"
 						type="text"
-						bind:value={album}
+						bind:value={albumTitle}
 						placeholder="album name"
 					/>
 				</div>

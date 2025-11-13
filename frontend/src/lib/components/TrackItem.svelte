@@ -87,23 +87,13 @@
 				{/if}
 				{#if track.album}
 					<span class="metadata-separator">•</span>
-					{#if track.album_slug}
-						<a href="/u/{track.artist_handle}/album/{track.album_slug}" class="album album-link">
-							<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
-								<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
-							</svg>
-							{track.album}
-						</a>
-					{:else}
-						<span class="album">
-							<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
-								<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
-							</svg>
-							{track.album}
-						</span>
-					{/if}
+					<a href="/u/{track.artist_handle}/album/{track.album.slug}" class="album album-link">
+						<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
+							<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
+						</svg>
+						{track.album.title}
+					</a>
 				{/if}
 			</div>
 			<div class="track-meta">

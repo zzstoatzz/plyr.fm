@@ -5,12 +5,31 @@ export interface FeaturedArtist {
 	avatar_url?: string;
 }
 
+export interface AlbumSummary {
+	id: string;
+	title: string;
+	slug: string;
+	track_count: number;
+	total_plays: number;
+	image_url?: string;
+}
+
+export interface AlbumMetadata extends AlbumSummary {
+	description?: string | null;
+	artist: string;
+	artist_handle: string;
+}
+
+export interface AlbumResponse {
+	metadata: AlbumMetadata;
+	tracks: Track[];
+}
+
 export interface Track {
 	id: number;
 	title: string;
 	artist: string;
-	album?: string;
-	album_slug?: string;
+	album?: AlbumSummary | null;
 	file_id: string;
 	file_type: string;
 	artist_handle: string;
@@ -24,29 +43,6 @@ export interface Track {
 	created_at?: string;
 	image_url?: string;
 	is_liked?: boolean;
-}
-
-export interface AlbumMetadata {
-	name: string;
-	slug: string;
-	artist: string;
-	artist_handle: string;
-	track_count: number;
-	total_plays: number;
-	image_url?: string;
-}
-
-export interface AlbumResponse {
-	metadata: AlbumMetadata;
-	tracks: Track[];
-}
-
-export interface ArtistAlbumSummary {
-	name: string;
-	slug: string;
-	track_count: number;
-	total_plays: number;
-	image_url?: string;
 }
 
 export interface User {
@@ -89,3 +85,6 @@ export interface Analytics {
 	top_item: TopItem | null;
 	top_liked: TopItem | null;
 }
+
+export interface ArtistAlbumSummary extends AlbumSummary {}
+

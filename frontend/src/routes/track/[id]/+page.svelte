@@ -73,10 +73,10 @@ $effect(() => {
 </script>
 
 <svelte:head>
-	<title>{track.title} - {track.artist}{track.album ? ` • ${track.album}` : ''}</title>
+	<title>{track.title} - {track.artist}{track.album ? ` • ${track.album.title}` : ''}</title>
 	<meta
 		name="description"
-		content="{track.title} by {track.artist}{track.album ? ` from ${track.album}` : ''} - listen on {APP_NAME}"
+		content="{track.title} by {track.artist}{track.album ? ` from ${track.album.title}` : ''} - listen on {APP_NAME}"
 	/>
 
 	<!-- Open Graph / Facebook -->
@@ -84,7 +84,7 @@ $effect(() => {
 	<meta property="og:title" content="{track.title} - {track.artist}" />
 	<meta
 		property="og:description"
-		content="{track.artist}{track.album ? ` • ${track.album}` : ''}"
+		content="{track.artist}{track.album ? ` • ${track.album.title}` : ''}"
 	/>
 	<meta
 		property="og:url"
@@ -93,7 +93,7 @@ $effect(() => {
 	<meta property="og:site_name" content={APP_NAME} />
 	<meta property="music:musician" content="{track.artist_handle}" />
 	{#if track.album}
-		<meta property="music:album" content="{track.album}" />
+		<meta property="music:album" content="{track.album.title}" />
 	{/if}
 	{#if track.image_url}
 		<meta property="og:image" content="{track.image_url}" />
@@ -112,7 +112,7 @@ $effect(() => {
 	<meta name="twitter:title" content="{track.title}" />
 	<meta
 		name="twitter:description"
-		content="{track.artist}{track.album ? ` • ${track.album}` : ''}"
+		content="{track.artist}{track.album ? ` • ${track.album.title}` : ''}"
 	/>
 	{#if track.image_url}
 		<meta name="twitter:image" content="{track.image_url}" />
@@ -172,7 +172,7 @@ $effect(() => {
 									<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
 									<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
 								</svg>
-								{track.album}
+								{track.album.title}
 							</span>
 						{/if}
 					</div>

@@ -21,25 +21,25 @@
 		if (album.tracks.length > 0) {
 			queue.setQueue(album.tracks);
 			queue.playNow(album.tracks[0]);
-			toast.success(`playing ${album.metadata.name}`, 1800);
+			toast.success(`playing ${album.metadata.title}`, 1800);
 		}
 	}
 
 	function addToQueue() {
 		if (album.tracks.length > 0) {
 			queue.addTracks(album.tracks);
-			toast.success(`added ${album.metadata.name} to queue`, 1800);
+			toast.success(`added ${album.metadata.title} to queue`, 1800);
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>{album.metadata.name} by {album.metadata.artist} - plyr.fm</title>
+	<title>{album.metadata.title} by {album.metadata.artist} - plyr.fm</title>
 	<meta name="description" content="{album.metadata.track_count} tracks by {album.metadata.artist}" />
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="music.album" />
-	<meta property="og:title" content="{album.metadata.name} by {album.metadata.artist}" />
+	<meta property="og:title" content="{album.metadata.title} by {album.metadata.artist}" />
 	<meta property="og:description" content="{album.metadata.track_count} tracks • {album.metadata.total_plays} plays" />
 	{#if album.metadata.image_url}
 		<meta property="og:image" content={album.metadata.image_url} />
@@ -47,7 +47,7 @@
 
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary" />
-	<meta name="twitter:title" content="{album.metadata.name} by {album.metadata.artist}" />
+	<meta name="twitter:title" content="{album.metadata.title} by {album.metadata.artist}" />
 	<meta name="twitter:description" content="{album.metadata.track_count} tracks • {album.metadata.total_plays} plays" />
 	{#if album.metadata.image_url}
 		<meta name="twitter:image" content={album.metadata.image_url} />
@@ -59,7 +59,7 @@
 	<main>
 		<div class="album-hero">
 			{#if album.metadata.image_url}
-				<img src={album.metadata.image_url} alt="{album.metadata.name} artwork" class="album-art" />
+				<img src={album.metadata.image_url} alt="{album.metadata.title} artwork" class="album-art" />
 			{:else}
 				<div class="album-art-placeholder">
 					<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -70,7 +70,7 @@
 			{/if}
 			<div class="album-info">
 				<p class="album-type">album</p>
-				<h1 class="album-title">{album.metadata.name}</h1>
+				<h1 class="album-title">{album.metadata.title}</h1>
 				<div class="album-meta">
 					<a href="/u/{album.metadata.artist_handle}" class="artist-link">
 						{album.metadata.artist}

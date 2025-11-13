@@ -257,7 +257,7 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 						<a class="album-card" href="/u/{artist.handle}/album/{album.slug}">
 							<div class="album-cover-wrapper">
 								{#if album.image_url}
-									<img src={album.image_url} alt="{album.name} artwork" />
+									<img src={album.image_url} alt="{album.title} artwork" />
 								{:else}
 									<div class="album-cover-placeholder">
 										<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -268,7 +268,7 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 								{/if}
 							</div>
 							<div class="album-card-meta">
-								<h3>{album.name}</h3>
+								<h3>{album.title}</h3>
 								<p>
 									{album.track_count} {album.track_count === 1 ? 'track' : 'tracks'}
 									<span class="dot">•</span>
