@@ -35,17 +35,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: install uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: install just
-        uses: extractions/setup-just@v2
-
       - name: install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: run tests
         env:
