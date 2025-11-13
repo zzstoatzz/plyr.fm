@@ -88,12 +88,12 @@
 	.page {
 		max-width: 800px;
 		margin: 0 auto;
-		padding: 2rem 1.5rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
+		padding: 0 1rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
 		min-height: 100vh;
 	}
 
 	.page-header {
-		margin-bottom: 2rem;
+		margin-bottom: 1.5rem;
 	}
 
 	.header-top {
