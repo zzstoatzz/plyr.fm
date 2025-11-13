@@ -74,21 +74,30 @@ async def list_albums(
     return {"albums": albums}
 
 
-@router.get("/{slug}")
+@router.get("/{handle}/{slug}")
 async def get_album(
+    handle: str,
     slug: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     request: Request,
 ) -> AlbumResponse:
-    """get album details with all tracks."""
+    """get album details with all tracks for a specific artist."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    # fetch all tracks for this album
+    # resolve handle to DID and prepare resolver for PDS URLs
+    resolver = AsyncDidResolver()
+    try:
+        atproto_data = await resolver.resolve_atproto_data(handle)
+        artist_did = atproto_data.did
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="artist not found") from e
+
+    # fetch all tracks for this artist's album
     stmt = (
         select(Track)
         .join(Artist)
         .options(selectinload(Track.artist))
-        .where(Track.album_slug == slug)
+        .where(Track.artist_did == artist_did, Track.album_slug == slug)
         .order_by(Track.created_at.asc())  # chronological order for album tracks
     )
 
@@ -115,8 +124,7 @@ async def get_album(
         )
         liked_track_ids = set(liked_result.scalars().all())
 
-    # resolve PDS URLs
-    resolver = AsyncDidResolver()
+    # resolve PDS URLs (reuse resolver from handle lookup)
     pds_cache = {}
     artists_to_resolve = {}
 

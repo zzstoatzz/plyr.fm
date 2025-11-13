@@ -242,7 +242,7 @@
 						<span class="metadata-separator">•</span>
 						{#if player.currentTrack.album_slug}
 							<a
-								href="/album/{player.currentTrack.album_slug}"
+								href="/u/{player.currentTrack.artist_handle}/album/{player.currentTrack.album_slug}"
 								class="player-album-link"
 								class:scrolling={player.currentTrack.album.length > 25}
 							>

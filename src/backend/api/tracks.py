@@ -322,10 +322,8 @@ async def _process_upload_background(
                 if album:
                     extra["album"] = album
 
-                # compute album slug (scoped by artist handle)
-                album_slug = (
-                    f"{auth_session.handle}-{slugify(album)}" if album else None
-                )
+                # compute album slug
+                album_slug = slugify(album) if album else None
 
                 track = Track(
                     title=title,
@@ -807,8 +805,8 @@ async def update_track_metadata(
             if track.extra is None:
                 track.extra = {}
             track.extra["album"] = album
-            # compute album slug (scoped by artist handle)
-            track.album_slug = f"{auth_session.handle}-{slugify(album)}"
+            # compute album slug
+            track.album_slug = slugify(album)
             # flag the JSONB field as modified so SQLAlchemy detects the change
             attributes.flag_modified(track, "extra")
         else:

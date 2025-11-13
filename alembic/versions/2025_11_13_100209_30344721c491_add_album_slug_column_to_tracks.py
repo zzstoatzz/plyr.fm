@@ -24,11 +24,11 @@ def upgrade() -> None:
     # add column (nullable initially for backfill)
     op.add_column("tracks", sa.Column("album_slug", sa.String(), nullable=True))
 
-    # backfill album_slug from extra->album (scoped by artist handle)
-    # using raw SQL to access JSONB and join with artists for handle
+    # backfill album_slug from extra->album
+    # using raw SQL to access JSONB and replicate slugify logic
     op.execute("""
         UPDATE tracks
-        SET album_slug = artists.handle || '-' || lower(
+        SET album_slug = lower(
             regexp_replace(
                 regexp_replace(
                     regexp_replace(tracks.extra->>'album', '[^a-zA-Z0-9\\s-]', '', 'g'),
@@ -37,9 +37,7 @@ def upgrade() -> None:
                 '-+', '-', 'g'
             )
         )
-        FROM artists
-        WHERE tracks.artist_did = artists.did
-        AND tracks.extra->>'album' IS NOT NULL
+        WHERE tracks.extra->>'album' IS NOT NULL
         AND tracks.extra->>'album' != ''
     """)
 
