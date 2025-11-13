@@ -2,5 +2,12 @@
 
 SvelteKit with bun (not npm/pnpm).
 
-- uses Svelte 5 runes for state management
-- `cd frontend && bun run dev` to start dev server
+key patterns:
+- **state**: global managers in `lib/*.svelte.ts` using `$state` runes (player, queue, uploader, tracks cache)
+- **components**: reusable ui in `lib/components/` (LikeButton, Toast, Player, etc)
+- **routes**: pages in `routes/` with `+page.svelte` and `+page.ts` for data loading
+
+gotchas:
+- toast positioning: bottom-left above player footer (not top-right)
+- queue sync: uses BroadcastChannel for cross-tab, not SSE
+- preferences: managed in SettingsMenu component, not dedicated state file

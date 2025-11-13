@@ -8,7 +8,6 @@ from alembic import context
 from backend.config import settings
 from backend.models import (  # noqa: F401
     Artist,
-    AudioFormat,
     Track,
     TrackLike,
     UserSession,

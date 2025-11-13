@@ -24,20 +24,39 @@ The queue is a cross-device, server-authoritative data model with optimistic loc
 
 ## UI behavior
 
-- Sidebar layout shows a dedicated "Now Playing" card with prev/next buttons. Shuffle/repeat controls now live in the global player footer so they're always visible.
-- "Up Next" lists tracks strictly beyond `currentIndex`. Drag-and-drop reorders upcoming entries; removing an item updates both local state and server snapshot.
-- Clicking "play" on any track list item (e.g., latest tracks) invokes `queue.playNow(track)`: the new track is inserted at the head of the queue and becomes now playing without disturbing the existing "up next" order. Duplicate tracks are allowed—each click adds another instance to the queue.
-- User preference "Auto-play next track" controls whether we automatically advance when the current track ends (`queue.autoAdvance`). Toggle lives in the settings menu (gear icon in header) alongside accent color picker and persists via `/preferences/`. When enabled, playback automatically starts the next track after the `loadeddata` event fires. When disabled, playback stops after the current track ends.
-- The clear ("X") control was removed—clearing the queue while something is playing is not supported. Instead users remove upcoming tracks individually or replace the queue entirely.
-- Queue toggle button (three horizontal lines icon) opens/closes the sidebar. On mobile (≤768px), the button is positioned higher (200px from bottom) to remain visible above the taller stacked player controls. The sidebar takes full screen width on mobile.
+- sidebar shows "now playing" card with prev/next buttons
+- shuffle control in player footer (always visible)
+- "up next" lists tracks beyond `currentIndex`
+- drag-and-drop reordering supported for upcoming tracks
+- removing a track updates local state and syncs to server
+- `queue.playNow(track)` inserts track at position 0, preserves existing up-next order
+- duplicate tracks allowed - same track can appear multiple times in queue
+- auto-play preference controls automatic advancement to next track
+- persisted via `/preferences/` API and localStorage
+- queue toggle button opens/closes sidebar
+- responsive positioning for mobile viewports
+- cannot remove currently playing track (index 0)
 
-## repeat & shuffle
+## shuffle
 
-- Repeat modes (`none`, `all`, `one`) are persisted server-side and applied client-side when advancing tracks.
-- Shuffle saves the pre-shuffled order in `original_order_ids` so we can toggle back. Shuffling maintains the currently playing track by re-positioning it within the shuffled array.
+- shuffle is an action, not a toggle mode
+- each shuffle operation randomly reorders upcoming tracks (after current track)
+- preserves everything before and including the current track
+- uses fisher-yates algorithm with retry logic to ensure different permutation
+- original order preserved in `original_order_ids` for server persistence
 
-## open questions / future work
+## cross-tab synchronization
 
-- Realtime push: with hydrated responses in place we can broadcast queue changes over SSE/WebSocket so secondary devices update instantly.
-- Cache sizing: TTLCache defaults are conservative; monitor production usage to decide whether to expose knobs.
-- Multi-device conflict UX: today conflicts simply cause the losing client to refetch and replay UI changes. We may want UI affordances for “queue updated on another device”.
+- uses BroadcastChannel API for same-browser tab sync
+- each tab has unique `tabId` stored in sessionStorage
+- queue updates broadcast to other tabs via `queue-updated` message
+- tabs ignore their own broadcasts and duplicate revisions
+- receiving tabs fetch latest state from server
+- `lastUpdateWasLocal` flag tracks update origin
+
+## future work
+
+- realtime push via SSE/WebSocket for instant cross-device updates
+- UI affordances for "queue updated on another device" notifications
+- repeat modes (currently not implemented)
+- clear up-next functionality exposed in UI

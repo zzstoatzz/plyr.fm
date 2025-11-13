@@ -2,110 +2,30 @@
 
 this directory contains all documentation for the plyr.fm project.
 
-## architecture
+## documentation index
 
-### [`architecture/global-state-management.md`](./architecture/global-state-management.md)
+### frontend
+- **[state-management.md](./frontend/state-management.md)** - global state management with Svelte 5 runes (toast notifications, tracks cache, upload manager, queue management, liked tracks, preferences, localStorage persistence)
+- **[toast-notifications.md](./frontend/toast-notifications.md)** - user feedback system for async operations with smooth transitions and auto-dismiss
+- **[queue.md](./frontend/queue.md)** - music queue management with server sync
 
-**state management** - how plyr.fm manages global state with Svelte 5 runes.
+### backend
+- **[configuration.md](./backend/configuration.md)** - backend configuration and environment setup
+- **[liked-tracks.md](./backend/liked-tracks.md)** - ATProto-backed track likes with error handling and consistency guarantees
+- **[streaming-uploads.md](./backend/streaming-uploads.md)** - SSE-based progress tracking for file uploads with fire-and-forget pattern
+- **[transcoder.md](./backend/transcoder.md)** - rust-based HTTP service for audio format conversion (ffmpeg integration, authentication, fly.io deployment)
 
-covers:
-- toast notification system
-- tracks cache with event-driven invalidation
-- upload manager with fire-and-forget pattern
-- queue management with server sync
-- liked tracks cache
-- preferences state
-- optimistic UI patterns for auth state
-- localStorage persistence
+### deployment
+- **[environments.md](./deployment/environments.md)** - staging vs production environments, automated deployment via GitHub Actions, CORS, secrets management
+- **[database-migrations.md](./deployment/database-migrations.md)** - automated migration workflow via fly.io release commands, alembic usage, safety procedures
 
-## design
+### tools
+- **[logfire.md](./tools/logfire.md)** - SQL query patterns for Logfire DataFusion database, finding exceptions, analyzing performance bottlenecks
+- **[neon.md](./tools/neon.md)** - Neon Postgres database management and best practices
+- **[pdsx.md](./tools/pdsx.md)** - ATProto PDS explorer and debugging tools
 
-### [`design/toast-notifications.md`](./design/toast-notifications.md)
-
-**toast notifications** - user feedback system for async operations.
-
-covers:
-- toast state manager with smooth transitions
-- in-place updates for progress changes
-- auto-dismiss with configurable duration
-- type safety with TypeScript
-
-### [`design/streaming-uploads.md`](./design/streaming-uploads.md)
-
-**streaming uploads** - SSE-based progress tracking for file uploads.
-
-covers:
-- fire-and-forget upload pattern
-- Server-Sent Events (SSE) for real-time progress
-- background processing with asyncio
-- upload state management
-
-## observability
-
-### [`logfire-querying.md`](./logfire-querying.md)
-
-**logfire queries** - patterns for querying traces and spans.
-
-covers:
-- SQL query patterns for Logfire DataFusion database
-- finding exceptions and errors
-- analyzing performance bottlenecks
-- filtering by trace context
-- common debugging queries
-
-## deployment
-
-### [`deployment/overview.md`](./deployment/overview.md)
-
-**deployment guide** - how plyr.fm deploys to production.
-
-covers:
-- cloudflare pages (frontend)
-- fly.io (backend and transcoder)
-- automated deployments via github
-- preview deployments and CORS
-- environment variables and secrets
-- troubleshooting common deployment issues
-
-### [`deployment/database-migrations.md`](./deployment/database-migrations.md)
-
-**database migrations** - how database schema changes are managed.
-
-covers:
-- automated migration workflow via fly.io release commands
-- database environment architecture (dev vs prod)
-- creating and testing migrations with alembic
-- how database connection resolution works
-- future improvements for multi-environment setup
-- migration safety and rollback procedures
-
-## features
-
-### [`features/liked-tracks.md`](./features/liked-tracks.md)
-
-**liked tracks** - ATProto-backed track likes with error handling.
-
-covers:
-- fm.plyr.like record creation and deletion
-- database and ATProto consistency guarantees
-- cleanup and rollback logic for failed operations
-- batch like status queries
-- frontend like button component
-- idempotent like/unlike operations
-
-## services
-
-### [`services/transcoder.md`](./services/transcoder.md)
-
-**audio transcoder** - rust-based HTTP service for audio format conversion.
-
-covers:
-- ffmpeg integration for format conversion
-- authentication and security
-- fly.io deployment
-- API endpoints and usage
-- integration with main backend
-- supported formats and codecs
+### local development
+- **[setup.md](./local-development/setup.md)** - complete local development setup guide
 
 ## ATProto integration
 
@@ -138,6 +58,9 @@ plyr.fm is fully functional with:
 
 ### local development
 
+see **[local-development/setup.md](./local-development/setup.md)** for complete setup instructions.
+
+quick start:
 ```bash
 # backend
 uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8001
@@ -151,11 +74,14 @@ cd transcoder && just run
 
 ### deployment
 
-see [`deployment/overview.md`](./deployment/overview.md) for details on:
+see **[deployment/environments.md](./deployment/environments.md)** for details on:
 - staging vs production environments
-- automated deployment via github actions
-- database migrations
+- automated deployment via GitHub Actions
 - environment variables and secrets
+
+see **[deployment/database-migrations.md](./deployment/database-migrations.md)** for:
+- migration workflow and safety procedures
+- alembic usage and testing
 
 ## architecture decisions
 

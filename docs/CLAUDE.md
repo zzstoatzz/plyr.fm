@@ -1,8 +1,12 @@
 # docs
 
-living repository of design decisions, learned lessons, and implementation details.
+organized knowledge base - check here before researching.
 
-- document **how** things work and **why** decisions were made
-- as much detail as possible - this is the knowledge base
-- keep up to date as you work (will be automated via cron eventually)
-- when you solve a problem or make a design choice, document it here
+structure:
+- **frontend/** - svelte 5 state patterns, ui components
+- **backend/** - config system, features, transcoder service
+- **deployment/** - environments, migrations, fly.io
+- **tools/** - logfire queries, neon mcp, pdsx cli
+- **local-development/** - setup guide for new contributors
+
+when you solve a problem or make a design choice, document it here with as much detail as needed

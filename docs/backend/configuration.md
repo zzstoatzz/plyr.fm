@@ -38,11 +38,14 @@ settings.storage.aws_secret_access_key         # from AWS_SECRET_ACCESS_KEY
 # atproto settings
 settings.atproto.pds_url                       # from ATPROTO_PDS_URL
 settings.atproto.client_id                     # from ATPROTO_CLIENT_ID
+settings.atproto.client_secret                 # from ATPROTO_CLIENT_SECRET
 settings.atproto.redirect_uri                  # from ATPROTO_REDIRECT_URI
 settings.atproto.app_namespace                 # from ATPROTO_APP_NAMESPACE
+settings.atproto.old_app_namespace             # from ATPROTO_OLD_APP_NAMESPACE (optional)
 settings.atproto.oauth_encryption_key          # from OAUTH_ENCRYPTION_KEY
 settings.atproto.track_collection              # computed: "{namespace}.track"
-settings.atproto.resolved_scope                # computed: "atproto repo:{collection}"
+settings.atproto.old_track_collection          # computed: "{old_namespace}.track" (if set)
+settings.atproto.resolved_scope                # computed: "atproto repo:{collections}"
 
 # observability settings (pydantic logfire)
 settings.observability.enabled                 # from LOGFIRE_ENABLED
@@ -68,6 +71,7 @@ DATABASE_URL=postgresql+psycopg://user:pass@host/db
 
 # oauth (register at https://oauthclientregistry.bsky.app/)
 ATPROTO_CLIENT_ID=https://your-domain.com/client-metadata.json
+ATPROTO_CLIENT_SECRET=<optional-client-secret>
 ATPROTO_REDIRECT_URI=https://your-domain.com/auth/callback
 OAUTH_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
 
@@ -132,10 +136,20 @@ f"{settings.atproto.app_namespace}.track"
 
 ### `settings.atproto.resolved_scope`
 
-constructs the oauth scope from the collection:
+constructs the oauth scope from the collection(s):
 ```python
-f"atproto repo:{settings.atproto.track_collection}"
-# default: "atproto repo:fm.plyr.track"
+# base scopes: our track collection + our like collection
+scopes = [
+    f"repo:{settings.atproto.track_collection}",
+    f"repo:{settings.atproto.app_namespace}.like",
+]
+
+# if we have an old namespace, add old track collection too
+if settings.atproto.old_app_namespace:
+    scopes.append(f"repo:{settings.atproto.old_track_collection}")
+
+return f"atproto {' '.join(scopes)}"
+# default: "atproto repo:fm.plyr.track repo:fm.plyr.like"
 ```
 
 can be overridden with `ATPROTO_SCOPE_OVERRIDE` if needed.
@@ -150,8 +164,20 @@ ATPROTO_APP_NAMESPACE=fm.plyr  # default
 
 this defines the collections:
 - `track_collection` → `"fm.plyr.track"`
-- `like_collection` → `"fm.plyr.like"`
-- `resolved_scope` → `"atproto repo:fm.plyr.track"`
+- `like_collection` → `"fm.plyr.like"` (implicit)
+- `resolved_scope` → `"atproto repo:fm.plyr.track repo:fm.plyr.like"`
+
+### namespace migration
+
+optionally supports migration from an old namespace:
+
+```bash
+ATPROTO_OLD_APP_NAMESPACE=app.relay  # optional, for migration
+```
+
+when set, OAuth scopes will include both old and new namespaces:
+- `old_track_collection` → `"app.relay.track"`
+- `resolved_scope` → `"atproto repo:fm.plyr.track repo:fm.plyr.like repo:app.relay.track"`
 
 ## usage in code
 
@@ -181,6 +207,8 @@ os.environ.setdefault("NOTIFY_ENABLED", "false")
 individual tests can override settings using pytest fixtures:
 
 ```python
+from backend.config import Settings
+
 def test_something(monkeypatch):
     monkeypatch.setenv("PORT", "9100")
     monkeypatch.setenv("ATPROTO_APP_NAMESPACE", "com.example.test")
@@ -199,7 +227,7 @@ the refactor maintains backward compatibility with all existing environment vari
 | `settings.port`         | `settings.app.port`             | `PORT`            |
 | `settings.database_url` | `settings.database.url`         | `DATABASE_URL`    |
 | `settings.r2_bucket`    | `settings.storage.r2_bucket`    | `R2_BUCKET`       |
-| `settings.atproto_scope`| `settings.atproto.resolved_scope`| (computed)       |
+| `settings.atproto_scope`| `settings.atproto.resolved_scope`| (computed)        |
 
 all code has been updated to use the nested structure.
 

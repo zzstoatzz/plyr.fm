@@ -20,11 +20,11 @@ plyr.fm uses global state managers following the Svelte 5 runes pattern for cros
 - server-sent events for real-time progress
 
 ### tracks cache (`frontend/src/lib/tracks.svelte.ts`)
-- caches track list globally
-- 30-second cache window to reduce API calls
+- caches track list globally in localStorage
 - provides instant navigation by serving cached data
 - invalidates on new uploads
-- includes like status for each track
+- includes like status for each track (when authenticated)
+- simple invalidation model - no time-based expiry
 
 ### queue (`frontend/src/lib/queue.svelte.ts`)
 - manages playback queue with server sync
@@ -33,18 +33,19 @@ plyr.fm uses global state managers following the Svelte 5 runes pattern for cros
 - conflict resolution for multi-device scenarios
 - see [`docs/queue-design.md`](../queue-design.md) for details
 
-### liked tracks cache (`frontend/src/lib/tracks.svelte.ts`)
-- caches user's liked tracks
-- updated optimistically on like/unlike
-- batch queries for efficient loading
-- integrates with track list displays
+### liked tracks (`frontend/src/lib/tracks.svelte.ts`)
+- like/unlike functions exported from tracks module
+- invalidates cache on like/unlike
+- fetch liked tracks via `/tracks/liked` endpoint
+- integrates with main tracks cache for like status
 
-### preferences (`frontend/src/lib/preferences.svelte.ts`)
-- user preferences state
+### preferences
+- user preferences managed through `SettingsMenu.svelte`
 - accent color customization
 - auto-play next track setting
 - persisted to backend via `/preferences/` API
 - localStorage fallback for offline access
+- no dedicated state file - integrated into settings component
 
 ### toast (`frontend/src/lib/toast.svelte.ts`)
 - global notification system
@@ -92,14 +93,12 @@ this avoids HTTP/1.1 connection pooling issues by using cached data instead of b
 ### like flow
 
 1. user clicks like button on track
-2. UI updates immediately (optimistic)
-3. `POST /tracks/{id}/like` sent in background
-4. ATProto record created on user's PDS
-5. database updated
-6. if error occurs:
-   - UI reverts to previous state
-   - error toast shown
-   - user can retry
+2. `POST /tracks/{id}/like` sent to backend
+3. ATProto record created on user's PDS
+4. database updated
+5. tracks cache invalidated
+6. UI reflects updated like status on next cache fetch
+7. if error occurs, error logged to console
 
 ### queue flow
 

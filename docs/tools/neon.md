@@ -28,9 +28,9 @@ returns all neon projects in your account with details like:
 - storage size
 
 **plyr.fm projects:**
-- `relay` (cold-butterfly-11920742) - production (us-east-1)
-- `relay-dev` (muddy-flower-98795112) - development (us-east-2)
-- `relay-staging` (frosty-math-37367092) - staging (us-west-2)
+- `plyr` (cold-butterfly-11920742) - production (us-east-1)
+- `plyr-dev` (muddy-flower-98795112) - development (us-east-2)
+- `plyr-staging` (frosty-math-37367092) - staging (us-west-2)
 
 ### get project details
 
@@ -140,7 +140,8 @@ FROM tracks;
 SELECT
   COUNT(*) FILTER (WHERE atproto_record_uri IS NOT NULL) as synced_tracks,
   COUNT(*) FILTER (WHERE atproto_record_uri IS NULL) as unsynced_tracks,
-  COUNT(*) FILTER (WHERE image_id IS NOT NULL) as tracks_with_images
+  COUNT(*) FILTER (WHERE image_id IS NOT NULL) as tracks_with_images,
+  COUNT(*) FILTER (WHERE image_id IS NULL) as tracks_without_images
 FROM tracks;
 
 -- engagement metrics
@@ -149,6 +150,15 @@ SELECT
   COUNT(DISTINCT user_did) as unique_likers,
   COUNT(DISTINCT track_id) as liked_tracks
 FROM track_likes;
+
+-- storage stats by file type
+SELECT
+  file_type,
+  COUNT(*) as count,
+  COUNT(*) FILTER (WHERE image_id IS NOT NULL) as with_artwork
+FROM tracks
+GROUP BY file_type
+ORDER BY count DESC;
 ```
 
 #### artist analytics
@@ -246,21 +256,35 @@ SELECT
   t.title,
   t.artist_did,
   a.handle,
+  a.pds_url,
   t.created_at
 FROM tracks t
 JOIN artists a ON t.artist_did = a.did
 WHERE t.atproto_record_uri IS NULL
-ORDER BY t.created_at DESC;
+ORDER BY t.created_at DESC
+LIMIT 20;
 
 -- verify atproto record URIs format
 SELECT
   id,
   title,
   atproto_record_uri,
-  atproto_record_cid
+  atproto_record_cid,
+  created_at
 FROM tracks
 WHERE atproto_record_uri IS NOT NULL
-LIMIT 5;
+ORDER BY created_at DESC
+LIMIT 10;
+
+-- check for uri/cid mismatches (uri present but cid missing or vice versa)
+SELECT
+  id,
+  title,
+  atproto_record_uri IS NOT NULL as has_uri,
+  atproto_record_cid IS NOT NULL as has_cid
+FROM tracks
+WHERE (atproto_record_uri IS NULL) != (atproto_record_cid IS NULL)
+LIMIT 20;
 ```
 
 #### jsonb field queries
@@ -314,12 +338,12 @@ plyr.fm uses different neon projects for each environment:
 
 | environment | project name | project ID | region | endpoint |
 |------------|--------------|-----------|---------|----------|
-| dev | relay-dev | muddy-flower-98795112 | us-east-2 | ep-flat-haze-aefjvcba |
-| staging | relay-staging | frosty-math-37367092 | us-west-2 | (varies) |
-| prod | relay | cold-butterfly-11920742 | us-east-1 | ep-young-poetry-a4ueyq14 |
+| dev | plyr-dev | muddy-flower-98795112 | us-east-2 | ep-flat-haze-aefjvcba |
+| staging | plyr-staging | frosty-math-37367092 | us-west-2 | (varies) |
+| prod | plyr | cold-butterfly-11920742 | us-east-1 | ep-young-poetry-a4ueyq14 |
 
 **in .env:**
-- default `DATABASE_URL` points to dev (relay-dev)
+- default `DATABASE_URL` points to dev (plyr-dev)
 - prod connection string is commented out
 - admin scripts use `ADMIN_DATABASE_URL` for prod operations
 
@@ -482,7 +506,7 @@ prod: cold-butterfly-11920742
 
 ## related tools
 
-- **pdsx**: for inspecting ATProto records on PDS (see docs/pdsx-guide.md)
+- **pdsx**: for inspecting ATProto records on PDS (see docs/tools/pdsx.md)
 - **psql**: for interactive postgres sessions using connection strings
 - **alembic**: for database migrations (see alembic/versions/)
 - **neon console**: web UI at https://console.neon.tech
@@ -491,5 +515,5 @@ prod: cold-butterfly-11920742
 
 - neon mcp server: https://github.com/neondatabase/mcp-server-neon
 - plyr.fm database models: src/backend/models/
-- ATProto integration: src/backend/atproto/records.py
+- ATProto integration: src/backend/_internal/atproto/records.py
 - migration scripts: scripts/backfill_atproto_records.py

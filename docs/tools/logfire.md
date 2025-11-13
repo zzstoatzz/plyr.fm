@@ -20,24 +20,32 @@ Logfire uses PostgreSQL-flavored SQL to query trace data. All data is stored in 
 
 ## Querying for Exceptions
 
-**Find all exception spans:**
+**Find recent exception spans:**
 ```sql
-SELECT message, start_timestamp, attributes
+SELECT
+  message,
+  start_timestamp,
+  otel_status_message,
+  attributes->>'exception.type' as exc_type
 FROM records
 WHERE is_exception = true
 ORDER BY start_timestamp DESC
 LIMIT 10
 ```
 
-**Get exception details from attributes:**
+**Get exception details with context:**
 ```sql
 SELECT
   message,
+  otel_status_message as error_summary,
   attributes->>'exception.type' as exc_type,
   attributes->>'exception.message' as exc_msg,
-  attributes->>'exception.stacktrace' as stacktrace
+  attributes->>'exception.stacktrace' as stacktrace,
+  start_timestamp
 FROM records
 WHERE is_exception = true
+ORDER BY start_timestamp DESC
+LIMIT 5
 ```
 
 **Find all spans in a trace:**
@@ -57,10 +65,28 @@ SELECT
   start_timestamp,
   duration * 1000 as duration_ms,
   (attributes->>'http.status_code')::int as status_code,
-  attributes->>'http.route' as route
+  attributes->>'http.route' as route,
+  otel_status_code
 FROM records
 WHERE kind = 'span' AND span_name LIKE 'GET%'
 ORDER BY start_timestamp DESC
+LIMIT 20
+```
+
+**Find slow or failed HTTP requests:**
+```sql
+SELECT
+  span_name,
+  start_timestamp,
+  duration * 1000 as duration_ms,
+  (attributes->>'http.status_code')::int as status_code,
+  otel_status_message
+FROM records
+WHERE kind = 'span'
+  AND span_name LIKE 'GET%'
+  AND (duration > 1.0 OR otel_status_code = 'ERROR')
+ORDER BY duration DESC
+LIMIT 20
 ```
 
 **Understanding 307 Redirects:**
@@ -83,7 +109,7 @@ ORDER BY start_timestamp DESC
 - The `/audio/{file_id}` endpoint redirects to Cloudflare R2 CDN URLs when using R2 storage
 - 307 preserves the GET method during redirect (unlike 302)
 - This offloads bandwidth to R2's CDN instead of proxying through the app
-- See `src/relay/api/audio.py:25` for implementation
+- See `src/backend/api/audio.py` for implementation
 
 ## Database Query Spans
 
@@ -93,11 +119,33 @@ SELECT
   span_name,
   start_timestamp,
   duration * 1000 as duration_ms,
-  attributes->>'db.statement' as query
+  attributes->>'db.statement' as query,
+  trace_id
 FROM records
 WHERE span_name LIKE 'SELECT%'
   AND duration > 0.1
 ORDER BY duration DESC
+LIMIT 10
+```
+
+**Database query patterns:**
+```sql
+-- group queries by type
+SELECT
+  CASE
+    WHEN span_name LIKE 'SELECT%' THEN 'SELECT'
+    WHEN span_name LIKE 'INSERT%' THEN 'INSERT'
+    WHEN span_name LIKE 'UPDATE%' THEN 'UPDATE'
+    WHEN span_name LIKE 'DELETE%' THEN 'DELETE'
+    ELSE 'OTHER'
+  END as query_type,
+  COUNT(*) as count,
+  AVG(duration * 1000) as avg_duration_ms,
+  MAX(duration * 1000) as max_duration_ms
+FROM records
+WHERE span_name LIKE '%FROM%' OR span_name LIKE '%INTO%'
+GROUP BY query_type
+ORDER BY count DESC
 ```
 
 ## Background Task and Storage Queries
@@ -180,6 +228,33 @@ SELECT * FROM records WHERE span_name = 'preparing to save audio file';
 SELECT * FROM records WHERE message LIKE '%preparing%';
 ```
 
+**Aggregate errors by type:**
+```sql
+SELECT
+  attributes->>'exception.type' as error_type,
+  COUNT(*) as occurrences,
+  MAX(start_timestamp) as last_seen,
+  COUNT(DISTINCT trace_id) as unique_traces
+FROM records
+WHERE is_exception = true
+  AND start_timestamp > NOW() - INTERVAL '24 hours'
+GROUP BY error_type
+ORDER BY occurrences DESC
+```
+
+**Find errors by endpoint:**
+```sql
+SELECT
+  attributes->>'http.route' as endpoint,
+  COUNT(*) as error_count,
+  COUNT(DISTINCT attributes->>'exception.type') as unique_error_types
+FROM records
+WHERE otel_status_code = 'ERROR'
+  AND attributes->>'http.route' IS NOT NULL
+GROUP BY endpoint
+ORDER BY error_count DESC
+```
+
 ## Known Issues
 
 ### `/tracks/` 500 Error on First Load
@@ -217,4 +292,4 @@ consuming input failed: SSL connection has been closed unexpectedly
 
 - [Logfire SQL Explorer Documentation](https://logfire.pydantic.dev/docs/guides/web-ui/explore/)
 - [Logfire Concepts](https://logfire.pydantic.dev/docs/concepts/)
-- Logfire UI: https://logfire-us.pydantic.dev/zzstoatzz/relay
+- Logfire UI: https://logfire.pydantic.dev/zzstoatzz/plyr (project name configured in logfire.configure)
