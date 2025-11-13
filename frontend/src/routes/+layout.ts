@@ -7,8 +7,6 @@ export interface LayoutData {
 	isAuthenticated: boolean;
 }
 
-export const ssr = false; // disable SSR for now since we rely on localStorage
-
 export async function load(): Promise<LayoutData> {
 	if (!browser) {
 		return {

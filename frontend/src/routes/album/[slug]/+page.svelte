@@ -36,6 +36,22 @@
 <svelte:head>
 	<title>{album.metadata.name} by {album.metadata.artist} - plyr.fm</title>
 	<meta name="description" content="{album.metadata.track_count} tracks by {album.metadata.artist}" />
+
+	<!-- Open Graph / Facebook -->
+	<meta property="og:type" content="music.album" />
+	<meta property="og:title" content="{album.metadata.name} by {album.metadata.artist}" />
+	<meta property="og:description" content="{album.metadata.track_count} tracks • {album.metadata.total_plays} plays" />
+	{#if album.metadata.image_url}
+		<meta property="og:image" content={album.metadata.image_url} />
+	{/if}
+
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content="{album.metadata.name} by {album.metadata.artist}" />
+	<meta name="twitter:description" content="{album.metadata.track_count} tracks • {album.metadata.total_plays} plays" />
+	{#if album.metadata.image_url}
+		<meta name="twitter:image" content={album.metadata.image_url} />
+	{/if}
 </svelte:head>
 
 <div class="container">
