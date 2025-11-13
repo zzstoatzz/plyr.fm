@@ -10,6 +10,7 @@ export interface Track {
 	title: string;
 	artist: string;
 	album?: string;
+	album_slug?: string;
 	file_id: string;
 	file_type: string;
 	artist_handle: string;
@@ -23,6 +24,21 @@ export interface Track {
 	created_at?: string;
 	image_url?: string;
 	is_liked?: boolean;
+}
+
+export interface AlbumMetadata {
+	name: string;
+	slug: string;
+	artist: string;
+	artist_handle: string;
+	track_count: number;
+	total_plays: number;
+	image_url?: string;
+}
+
+export interface AlbumResponse {
+	metadata: AlbumMetadata;
+	tracks: Track[];
 }
 
 export interface User {

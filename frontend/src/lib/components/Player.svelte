@@ -240,9 +240,19 @@
 					</a>
 					{#if player.currentTrack.album}
 						<span class="metadata-separator">•</span>
-						<span class="player-album" class:scrolling={player.currentTrack.album.length > 25}>
-							<span>{player.currentTrack.album}</span>
-						</span>
+						{#if player.currentTrack.album_slug}
+							<a
+								href="/u/{player.currentTrack.artist_handle}/album/{player.currentTrack.album_slug}"
+								class="player-album-link"
+								class:scrolling={player.currentTrack.album.length > 25}
+							>
+								<span>{player.currentTrack.album}</span>
+							</a>
+						{:else}
+							<span class="player-album" class:scrolling={player.currentTrack.album.length > 25}>
+								<span>{player.currentTrack.album}</span>
+							</span>
+						{/if}
 					{/if}
 				</div>
 			</div>
@@ -548,6 +558,37 @@
 		animation: scroll-text 8s linear infinite;
 	}
 
+	.player-album-link {
+		color: #808080;
+		text-decoration: none;
+		transition: color 0.2s;
+		white-space: nowrap;
+		overflow: hidden;
+		position: relative;
+		min-width: 0;
+		display: block;
+	}
+
+	.player-album-link:hover {
+		color: var(--accent);
+	}
+
+	.player-album-link.scrolling {
+		overflow: hidden;
+		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
+		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
+	}
+
+	.player-album-link span {
+		display: inline-block;
+		white-space: nowrap;
+	}
+
+	.player-album-link.scrolling span {
+		padding-right: 1.5rem;
+		animation: scroll-text 8s linear infinite;
+	}
+
 	.player-controls {
 		flex: 1;
 		display: flex;
@@ -805,7 +846,8 @@
 		}
 
 		.player-artist-link,
-		.player-album {
+		.player-album,
+		.player-album-link {
 			overflow: hidden;
 			min-width: 0;
 		}
