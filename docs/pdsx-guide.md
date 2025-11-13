@@ -26,6 +26,8 @@ uvx pdsx -r zzstoatzzdevlog.bsky.social ls fm.plyr.track
 uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
 ```
 
+**NOTE** pds.zzstoatzz.io is JUST AN EXAMPLE of a custom PDS for the specific case of zzstoatzz.io. each user has their own PDS URL, whether bsky.social or custom.
+
 **important**: unauthenticated reads assume bsky.social PDS by default. for custom PDS instances (like zzstoatzz.io), you **must** provide `--pds` explicitly.
 
 ### authenticated operations (write access)

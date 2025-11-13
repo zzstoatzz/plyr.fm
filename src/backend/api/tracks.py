@@ -366,7 +366,7 @@ async def _process_upload_background(
                     )
                     # cleanup: delete uploaded file
                     with contextlib.suppress(Exception):
-                        await storage.delete(file_id)
+                        await storage.delete(file_id, audio_format.value)
 
         except Exception as e:
             logger.exception(f"upload {upload_id} failed with unexpected error")
@@ -713,7 +713,7 @@ async def delete_track(
 
     # delete audio file from storage
     try:
-        await storage.delete(track.file_id)
+        await storage.delete(track.file_id, track.file_type)
     except Exception as e:
         # log but don't fail - maybe file was already deleted
         logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)

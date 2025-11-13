@@ -160,11 +160,17 @@ class R2Storage:
 
             return None
 
-    async def delete(self, file_id: str) -> bool:
+    async def delete(self, file_id: str, file_type: str | None = None) -> bool:
         """delete media file from R2.
 
         only deletes if no other tracks reference this file_id.
         this prevents deleting shared files when duplicates exist.
+
+        args:
+            file_id: the file identifier
+            file_type: optional file extension (without dot) to delete exact key.
+                      if provided, deletes audio/{file_id}.{file_type} directly.
+                      if None, falls back to trying all formats (legacy/images).
         """
         # check refcount before deleting
         from backend.models.track import Track
@@ -191,20 +197,72 @@ class R2Storage:
                 )
 
         # safe to delete - only one or zero references
+        logfire.info(
+            "attempting R2 delete",
+            file_id=file_id,
+            refcount=refcount,
+            file_type=file_type,
+        )
+
         async with self.async_session.client(
             "s3",
             endpoint_url=self.endpoint_url,
             aws_access_key_id=self.aws_access_key_id,
             aws_secret_access_key=self.aws_secret_access_key,
         ) as client:
-            # try audio formats
+            # if file_type is provided, delete the exact key
+            if file_type:
+                audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
+                if audio_format:
+                    key = f"audio/{file_id}{audio_format.extension}"
+                    try:
+                        # check if object exists first
+                        await client.head_object(Bucket=self.audio_bucket_name, Key=key)
+                        # object exists, delete it
+                        await client.delete_object(
+                            Bucket=self.audio_bucket_name, Key=key
+                        )
+                        logfire.info(
+                            "R2 file deleted",
+                            file_id=file_id,
+                            key=key,
+                            bucket=self.audio_bucket_name,
+                        )
+                        return True
+                    except client.exceptions.ClientError as e:
+                        logfire.error(
+                            "R2 delete failed for known file_type",
+                            file_id=file_id,
+                            key=key,
+                            file_type=file_type,
+                            error=str(e),
+                        )
+                        return False
+
+            # fallback: try audio formats (for legacy rows or when file_type is None)
             for audio_format in AudioFormat:
                 key = f"audio/{file_id}{audio_format.extension}"
 
                 try:
+                    # check if object exists first
+                    await client.head_object(Bucket=self.audio_bucket_name, Key=key)
+                    # object exists, delete it
                     await client.delete_object(Bucket=self.audio_bucket_name, Key=key)
+                    logfire.info(
+                        "R2 file deleted",
+                        file_id=file_id,
+                        key=key,
+                        bucket=self.audio_bucket_name,
+                    )
                     return True
-                except client.exceptions.ClientError:
+                except client.exceptions.ClientError as e:
+                    # object doesn't exist or delete failed, try next format
+                    logfire.debug(
+                        "R2 delete failed for format",
+                        file_id=file_id,
+                        key=key,
+                        error=str(e),
+                    )
                     continue
 
             # try image formats
@@ -214,9 +272,31 @@ class R2Storage:
                 key = f"{file_id}.{image_format.value}"
 
                 try:
+                    # check if object exists first
+                    await client.head_object(Bucket=self.image_bucket_name, Key=key)
+                    # object exists, delete it
                     await client.delete_object(Bucket=self.image_bucket_name, Key=key)
+                    logfire.info(
+                        "R2 image deleted",
+                        file_id=file_id,
+                        key=key,
+                        bucket=self.image_bucket_name,
+                    )
                     return True
-                except client.exceptions.ClientError:
+                except client.exceptions.ClientError as e:
+                    # object doesn't exist or delete failed, try next format
+                    logfire.debug(
+                        "R2 delete failed for image format",
+                        file_id=file_id,
+                        key=key,
+                        error=str(e),
+                    )
                     continue
 
+            logfire.warning(
+                "R2 delete failed - no matching file found",
+                file_id=file_id,
+                audio_bucket=self.audio_bucket_name,
+                image_bucket=self.image_bucket_name,
+            )
             return False
