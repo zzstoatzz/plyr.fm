@@ -1,32 +1,32 @@
-# plyr.fm
+# [plyr.fm](https://plyr.fm)
 
-music streaming on ATProto
+music on ATProto
 
 ## what is plyr.fm?
 
-plyr.fm is a music streaming platform built on the AT Protocol (ATProto), the same protocol that powers Bluesky. it combines:
+plyr.fm is a music streaming platform built on [atproto](https://atproto.com), the same protocol that powers [bluesky](https://bsky.app). it combines:
 
-- **OAuth 2.1 authentication** via ATProto for secure identity
-- **artist profiles** synced with ATProto user profiles (avatar, display name, handle)
-- **track metadata** published as ATProto records (shareable across the network)
+- **OAuth 2.1 authentication** via atproto for secure identity
+- **artist profiles** synced with atproto user profiles (avatar, display name, handle)
+- **track metadata** published as atproto records (shareable across the network)
 - **audio storage** on cloudflare R2 for fast, scalable streaming
 - **track editing** for artists to manage their catalog
-- **play count tracking** to measure engagement
+- **play count tracking** to measure engagement with atproto
 
 <details>
 <summary>tech stack</summary>
 
 ### backend
-- **framework**: FastAPI (Python)
-- **database**: Neon PostgreSQL (serverless)
-- **storage**: Cloudflare R2 (S3-compatible)
-- **hosting**: Fly.io (2x shared-cpu VMs)
-- **auth**: ATProto OAuth 2.1 (forked SDK)
+- **framework**: [FastAPI](https://fastapi.tiangolo.com) (Python)
+- **database**: [Neon PostgreSQL](https://neon.com) (serverless)
+- **storage**: [Cloudflare R2](https://developers.cloudflare.com/r2/) (S3-compatible)
+- **hosting**: [Fly.io](https://fly.io) (2x shared-cpu VMs)
+- **auth**: [atproto OAuth 2.1](https://atproto.com/specs/oauth) ([forked SDK](https://github.com/zzstoatzz/atproto))
 
 ### frontend
-- **framework**: SvelteKit (TypeScript)
-- **runtime**: Bun
-- **hosting**: Cloudflare Pages
+- **framework**: [SvelteKit](https://kit.svelte.dev) (TypeScript)
+- **runtime**: [Bun](https://bun.sh)
+- **hosting**: [Cloudflare Pages](https://pages.cloudflare.com)
 - **styling**: vanilla CSS (lowercase aesthetic)
 
 ### deployment
@@ -74,36 +74,31 @@ visit http://localhost:5173
 ### for listeners
 - ✅ browse latest tracks
 - ✅ stream audio with controls
-- ✅ mobile-optimized player
+- ✅ mobile-friendly player
 - ✅ share tracks via URL
+- ✅ view play counts
+- ✅ like tracks
+- ✅ queue tracks
+- ✅ view liked tracks
 
 ### for artists
 - ✅ OAuth login with ATProto
-- ✅ upload tracks (audio + metadata)
+- ✅ upload tracks with metadata and artwork
 - ✅ edit track metadata
 - ✅ delete tracks
-- ✅ view play counts
-- ✅ publish to ATProto
 
 </details>
 
 <details>
 <summary>deployment</summary>
 
-fully automatic via GitHub:
+automatic via GitHub Actions:
 
 ```bash
 git push origin main  # deploys both frontend and backend
 ```
 
-or using just:
-
-```bash
-just deploy-backend   # deploy backend to fly.io
-just deploy-frontend  # deploy frontend to cloudflare pages
-```
-
-see [docs/deployment/overview.md](docs/deployment/overview.md) for details.
+see [docs/deployment/environments.md](docs/deployment/environments.md) for details.
 
 </details>
 
@@ -114,7 +109,6 @@ see [docs/deployment/overview.md](docs/deployment/overview.md) for details.
 plyr.fm/
 ├── src/backend/            # backend (python)
 │   ├── api/               # fastapi routes
-│   ├── atproto/           # atproto integration
 │   ├── models/            # database models
 │   └── storage/           # r2 storage
 ├── frontend/              # frontend (svelte)
@@ -134,7 +128,7 @@ plyr.fm/
 ~$25-30/month:
 - fly.io backend (production): ~$10/month (shared-cpu-1x, 256MB RAM)
 - fly.io backend (staging): ~$10/month (shared-cpu-1x, 256MB RAM)
-- fly.io transcoder: ~$0-5/month (auto-scales to zero when idle)
+- fly.io transcoder: TBD (not in use yet)
 - neon postgres: $5/month (starter plan)
 - cloudflare pages: free (frontend hosting)
 - cloudflare r2: ~$0.16/month (6 buckets across dev/staging/prod)
