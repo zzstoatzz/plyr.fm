@@ -7,9 +7,11 @@ import aioboto3
 import boto3
 import logfire
 from botocore.config import Config
+from sqlalchemy import func, select
 
 from backend.config import settings
 from backend.models import AudioFormat
+from backend.utilities.database import db_session
 from backend.utilities.hashing import hash_file_chunked
 
 
@@ -159,7 +161,36 @@ class R2Storage:
             return None
 
     async def delete(self, file_id: str) -> bool:
-        """delete media file from R2."""
+        """delete media file from R2.
+
+        only deletes if no other tracks reference this file_id.
+        this prevents deleting shared files when duplicates exist.
+        """
+        # check refcount before deleting
+        from backend.models.track import Track
+
+        async with db_session() as db:
+            stmt = (
+                select(func.count()).select_from(Track).where(Track.file_id == file_id)
+            )
+            result = await db.execute(stmt)
+            refcount = result.scalar_one()
+
+            if refcount > 1:
+                logfire.info(
+                    "skipping R2 delete, file still referenced",
+                    file_id=file_id,
+                    refcount=refcount,
+                )
+                return False
+
+            if refcount == 0:
+                logfire.warning(
+                    "deleting R2 file with no database references",
+                    file_id=file_id,
+                )
+
+        # safe to delete - only one or zero references
         async with self.async_session.client(
             "s3",
             endpoint_url=self.endpoint_url,
