@@ -243,8 +243,6 @@
 		justify-content: center;
 		padding: 2rem;
 		padding-bottom: 8rem;
-		max-width: 1200px;
-		margin: 0 auto;
 		width: 100%;
 		overflow: hidden;
 	}
@@ -255,6 +253,7 @@
 		align-items: center;
 		gap: 2rem;
 		width: 100%;
+		max-width: 1200px;
 	}
 
 	.cover-art-container {

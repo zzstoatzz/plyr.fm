@@ -277,8 +277,13 @@
 		min-height: 100vh;
 		padding: 2rem;
 		padding-bottom: 8rem;
+		width: 100%;
+	}
+
+	main > * {
 		max-width: 1200px;
-		margin: 0 auto;
+		margin-left: auto;
+		margin-right: auto;
 	}
 
 	.artist-header {
