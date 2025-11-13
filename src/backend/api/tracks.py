@@ -616,7 +616,7 @@ async def list_tracks(
     stmt = (
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist), selectinload(Track.album))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
     )
 
     # filter by artist if provided
@@ -697,7 +697,7 @@ async def list_my_tracks(
     stmt = (
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist), selectinload(Track.album))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.artist_did == auth_session.did)
         .order_by(Track.created_at.desc())
     )
@@ -732,7 +732,7 @@ async def list_broken_tracks(
     stmt = (
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist), selectinload(Track.album))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.artist_did == auth_session.did)
         .where((Track.atproto_record_uri.is_(None)) | (Track.atproto_record_uri == ""))
         .order_by(Track.created_at.desc())
@@ -831,7 +831,7 @@ async def update_track_metadata(
     result = await db.execute(
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist), selectinload(Track.album))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.id == track_id)
     )
     track = result.scalar_one_or_none()
@@ -1179,7 +1179,7 @@ async def restore_track_record(
     result = await db.execute(
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist), selectinload(Track.album))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.id == track_id)
     )
     track = result.scalar_one_or_none()
@@ -1268,7 +1268,7 @@ async def list_liked_tracks(
         select(Track)
         .join(TrackLike, TrackLike.track_id == Track.id)
         .join(Artist)
-        .options(selectinload(Track.artist), selectinload(Track.album))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(TrackLike.user_did == auth_session.did)
         .order_by(TrackLike.created_at.desc())
     )
@@ -1316,7 +1316,7 @@ async def get_track(
     result = await db.execute(
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist), selectinload(Track.album))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.id == track_id)
     )
     track = result.scalar_one_or_none()
