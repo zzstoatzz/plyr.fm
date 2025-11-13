@@ -103,7 +103,17 @@ def main() -> int:
     )
 
     print(f"\n✓ release {version} created")
-    print("✓ production deployment starting...")
+    print("✓ production backend deployment starting...")
+
+    # merge main -> production-fe to trigger frontend deployment
+    print("\n🔄 updating production-fe branch...")
+    subprocess.run(["git", "fetch", "origin"], check=True)
+    subprocess.run(["git", "checkout", "production-fe"], check=True)
+    subprocess.run(["git", "merge", "main", "--ff-only"], check=True)
+    subprocess.run(["git", "push", "origin", "production-fe"], check=True)
+    subprocess.run(["git", "checkout", "main"], check=True)
+
+    print("✓ production frontend deployment starting...")
 
     return 0
 
