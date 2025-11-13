@@ -1,0 +1,59 @@
+name: backend tests
+
+on:
+  pull_request:
+    paths:
+      - "src/backend/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/test-backend.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_USER: relay_test
+          POSTGRES_PASSWORD: relay_test
+          POSTGRES_DB: relay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: install dependencies
+        run: uv sync --locked
+
+      - name: run tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://relay_test:relay_test@localhost:5432/relay_test
+        run: uv run pytest tests/
+
+      - name: prune uv cache
+        if: always()
+        run: uv cache prune --ci
