@@ -84,13 +84,14 @@ async def get_album(
     """get album details with all tracks for a specific artist."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    # resolve handle to DID and prepare resolver for PDS URLs
     resolver = AsyncDidResolver()
-    try:
-        atproto_data = await resolver.resolve_atproto_data(handle)
-        artist_did = atproto_data.did
-    except Exception as e:
-        raise HTTPException(status_code=404, detail="artist not found") from e
+
+    # look up artist by handle (should exist if tracks exist)
+    artist_result = await db.execute(select(Artist).where(Artist.handle == handle))
+    artist_row = artist_result.scalar_one_or_none()
+    if not artist_row:
+        raise HTTPException(status_code=404, detail="artist not found")
+    artist_did = artist_row.did
 
     # fetch all tracks for this artist's album
     stmt = (
