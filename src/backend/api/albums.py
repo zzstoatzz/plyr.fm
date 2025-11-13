@@ -83,16 +83,6 @@ async def get_album(
     """get album details with all tracks."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    # get authenticated user if auth header present
-    liked_track_ids: set[int] | None = None
-    if (
-        session_id := request.headers.get("authorization", "").replace("Bearer ", "")
-    ) and (auth_session := await get_session(session_id)):
-        liked_result = await db.execute(
-            select(TrackLike.track_id).where(TrackLike.user_did == auth_session.did)
-        )
-        liked_track_ids = set(liked_result.scalars().all())
-
     # fetch all tracks for this album
     stmt = (
         select(Track)
@@ -111,6 +101,19 @@ async def get_album(
     # batch fetch like counts
     track_ids = [track.id for track in tracks]
     like_counts = await get_like_counts(db, track_ids)
+
+    # get authenticated user's likes for this album's tracks only
+    liked_track_ids: set[int] | None = None
+    if (
+        session_id := request.headers.get("authorization", "").replace("Bearer ", "")
+    ) and (auth_session := await get_session(session_id)):
+        liked_result = await db.execute(
+            select(TrackLike.track_id).where(
+                TrackLike.user_did == auth_session.did,
+                TrackLike.track_id.in_(track_ids),
+            )
+        )
+        liked_track_ids = set(liked_result.scalars().all())
 
     # resolve PDS URLs
     resolver = AsyncDidResolver()
