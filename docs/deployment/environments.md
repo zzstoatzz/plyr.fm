@@ -19,9 +19,9 @@ plyr.fm uses a simple three-tier deployment strategy: development â†’ staging â†
 just run-backend
 
 # start frontend (hot reloads)
-just run-frontend
+just frontend dev
 
-# start transcoder
+# start transcoder (hot reloads)
 just transcoder run
 ```
 

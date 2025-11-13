@@ -1,4 +1,5 @@
 # plyr.fm dev workflows
+mod frontend
 mod transcoder
 
 
@@ -7,13 +8,9 @@ default:
     @just --list
 
 
-# run backend server
+# run backend server (hot reloads)
 run-backend:
     uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port ${PORT:-8001}
-
-# run frontend dev server
-run-frontend:
-    cd frontend && bun run dev --host 0.0.0.0
 
 # run tests with docker-compose
 test *ARGS='tests/':
@@ -37,10 +34,6 @@ migrate-up:
 migrate-status:
     uv run alembic current
 
-
-# deploy frontend to cloudflare pages
-deploy-frontend:
-    cd frontend && bun run build && bun x wrangler pages deploy .svelte-kit/cloudflare
 
 # show commits since last release
 changelog:

@@ -1,0 +1,25 @@
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+default := "dev"
+
+alias d := dev
+alias b := build
+
+# run frontend dev server (hot reloads)
+dev:
+    cd {{justfile_directory()}}/frontend && bun run dev --host 0.0.0.0
+
+# build frontend for production
+build:
+    cd {{justfile_directory()}}/frontend && bun run build
+
+# preview production build
+preview:
+    cd {{justfile_directory()}}/frontend && bun run preview
+
+# check svelte types
+check:
+    cd {{justfile_directory()}}/frontend && bun run check
+
+# install dependencies
+install:
+    cd {{justfile_directory()}}/frontend && bun install

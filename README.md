@@ -52,13 +52,16 @@ using [just](https://github.com/casey/just):
 ```bash
 # install dependencies
 uv sync
-cd frontend && bun install
+just frontend install
 
-# run backend
-just serve
+# run backend (hot reloads)
+just run-backend
 
-# run frontend (new terminal)
-just dev
+# run frontend (hot reloads, new terminal)
+just frontend dev
+
+# run transcoder (hot reloads, new terminal, optional)
+just transcoder run
 ```
 
 or manually:
@@ -70,6 +73,9 @@ uv run uvicorn backend.main:app --reload --port 8001
 
 # frontend (new terminal)
 cd frontend && bun install && bun run dev
+
+# transcoder (new terminal, optional)
+cd transcoder && cargo run
 ```
 
 visit http://localhost:5173
