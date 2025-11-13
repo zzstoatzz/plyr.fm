@@ -21,10 +21,11 @@ plyr/
 │   ├── api/          # public endpoints (see api/CLAUDE.md)
 │   ├── _internal/    # internal services (see _internal/CLAUDE.md)
 │   ├── models/       # database schemas
-│   ├── atproto/      # protocol integration
-│   └── storage/      # R2 and filesystem
+│   ├── storage/      # R2 and filesystem
+│   └── utilities/    # helpers, config, hashing
 ├── frontend/         # SvelteKit (see frontend/CLAUDE.md)
-└── tests/            # test suite (see tests/CLAUDE.md)
+├── tests/            # test suite (see tests/CLAUDE.md)
+└── docs/             # organized guides (see docs/CLAUDE.md)
 ```
 
 ## development

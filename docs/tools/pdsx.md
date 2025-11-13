@@ -42,7 +42,7 @@ uvx pdsx --handle you.bsky.social --password xxxx-xxxx ls fm.plyr.track
 uvx pdsx --handle you.bsky.social --password xxxx-xxxx create fm.plyr.track title='test'
 ```
 
-**new in v0.0.1a5**: authenticated operations auto-discover PDS from handle, so you don't need `--pds` flag anymore.
+**note**: authenticated operations auto-discover PDS from handle, so you don't need `--pds` flag when using `--handle` and `--password`.
 
 ## common operations
 
@@ -113,15 +113,11 @@ uvx pdsx --pds https://pds.zzstoatzz.io cat at://did:plc:xbtmt2zjwlrfegqvch7fboe
 # mismatches indicate failed updates
 ```
 
-## database environment mapping
+## atproto namespace
 
-plyr.fm has three database environments:
+all plyr.fm records use the unified `fm.plyr.track` namespace across all environments (dev, staging, prod). there are no environment-specific namespaces.
 
-- **dev**: ep-flat-haze-aefjvcba (us-east-2) - default in .env
-- **staging**: TBD
-- **prod**: ep-young-poetry-a4ueyq14 (us-east-1) - commented in .env
-
-all environments write to the unified `fm.plyr.track` namespace (no more environment-specific namespaces).
+**critical**: never use bluesky lexicons (app.bsky.*) for plyr.fm records. always use fm.plyr.* namespace.
 
 ## credential management
 
@@ -177,6 +173,22 @@ uvx pdsx --handle zzstoatzzdevlog.bsky.social --password "$ATPROTO_PASSWORD" ls 
 
 # delete by URI
 uvx pdsx --handle zzstoatzzdevlog.bsky.social --password "$ATPROTO_PASSWORD" rm at://did:plc:pmz4rx66ijxzke6ka5o3owmg/fm.plyr.track/3m57zgph47z2w
+```
+
+### compare database vs atproto records
+
+when debugging sync issues, you need to compare both sources:
+
+```bash
+# 1. get record count from PDS
+uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | head -1
+# output: "found 15 records"
+
+# 2. get record count from database (use neon MCP)
+# SELECT COUNT(*) FROM tracks WHERE artist_did = 'did:plc:xbtmt2zjwlrfegqvch7fboei'
+
+# 3. if counts don't match, list all records to find missing ones
+uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | grep -E "rkey|title"
 ```
 
 ## known limitations
@@ -238,4 +250,4 @@ check:
 
 - pdsx releases: https://github.com/zzstoatzz/pdsx/releases
 - ATProto specs: https://atproto.com
-- plyr.fm track schema: `src/backend/atproto/records.py:build_track_record`
+- plyr.fm track schema: `src/backend/_internal/atproto/records.py:build_track_record`

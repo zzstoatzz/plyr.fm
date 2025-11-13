@@ -38,7 +38,8 @@ convert audio file to target format.
 ```bash
 curl -X POST https://plyr-transcoder.fly.dev/transcode?target=mp3 \
   -H "X-Transcoder-Key: $TRANSCODER_AUTH_TOKEN" \
-  -F "file=@input.wav"
+  -F "file=@input.wav" \
+  --output output.mp3
 ```
 
 **response**: transcoded audio file (binary)
@@ -186,13 +187,10 @@ primary_region = "iad"
 # deploy from transcoder directory
 cd transcoder && fly deploy
 
-# or use justfile from project root
-just transcoder fly
-
 # check status
 fly status -a plyr-transcoder
 
-# view logs
+# view logs (blocking - use ctrl+c to exit)
 fly logs -a plyr-transcoder
 
 # scale up (for high traffic)
@@ -201,6 +199,8 @@ fly scale count 2 -a plyr-transcoder
 # scale down (back to auto-scale)
 fly scale count 1 -a plyr-transcoder
 ```
+
+**note**: deployment is done manually from the transcoder directory, not via main backend CI/CD.
 
 ### secrets management
 
@@ -219,16 +219,18 @@ fly secrets unset TRANSCODER_AUTH_TOKEN -a plyr-transcoder
 
 ### backend configuration
 
-the main backend should be configured with:
+**note**: the main backend does not currently use the transcoder service. this is available for future use when transcoding features are needed (e.g., format conversion for browser compatibility).
+
+if needed in the future, add to `src/backend/config.py`:
 
 ```python
-# src/backend/config.py
-class TranscoderSettings(BaseSettings):
+class TranscoderSettings(RelaySettingsSection):
     url: str = Field(
         default="https://plyr-transcoder.fly.dev",
         validation_alias="TRANSCODER_URL"
     )
     auth_token: str = Field(
+        default="",
         validation_alias="TRANSCODER_AUTH_TOKEN"
     )
 ```
@@ -284,10 +286,7 @@ except httpx.TimeoutException:
 ### running locally
 
 ```bash
-# from project root using justfile
-just transcoder run
-
-# or directly from transcoder directory
+# from transcoder directory
 cd transcoder && cargo run
 
 # with custom port
@@ -296,6 +295,8 @@ TRANSCODER_PORT=9000 cargo run
 # with debug logging
 RUST_LOG=debug cargo run
 ```
+
+**note**: the transcoder runs on port 8080 by default (configured in fly.toml).
 
 ### testing locally
 
