@@ -397,6 +397,10 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 
 	.discography {
 		margin: 3rem 0;
+		padding: 2rem;
+		background: #141414;
+		border: 1px solid #282828;
+		border-radius: 10px;
 	}
 
 	.section-header {
@@ -416,8 +420,8 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 
 	.album-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-		gap: 1rem;
+		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+		gap: 1.25rem;
 	}
 
 	.album-card {
@@ -425,8 +429,8 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 		gap: 1rem;
 		align-items: center;
 		padding: 1rem;
-		background: #141414;
-		border: 1px solid #282828;
+		background: #0f0f0f;
+		border: 1px solid #222;
 		border-radius: 10px;
 		color: inherit;
 		text-decoration: none;
@@ -439,8 +443,8 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 	}
 
 	.album-cover-wrapper {
-		width: 64px;
-		height: 64px;
+		width: 72px;
+		height: 72px;
 		border-radius: 6px;
 		overflow: hidden;
 		flex-shrink: 0;
@@ -468,10 +472,15 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 	}
 
 	.album-card-meta h3 {
-		margin: 0 0 0.25rem 0;
-		font-size: 1rem;
-		color: #e8e8e8;
+		margin: 0 0 0.35rem 0;
+		font-size: 1.05rem;
+		color: #fafafa;
 		text-transform: lowercase;
+	}
+
+	.album-card-meta {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.album-card-meta {
