@@ -52,24 +52,16 @@ using [just](https://github.com/casey/just):
 ```bash
 # install dependencies
 uv sync
-cd frontend && bun install
+just frontend install
 
-# run backend
-just serve
+# run backend (hot reloads)
+just run-backend
 
-# run frontend (new terminal)
-just dev
-```
+# run frontend (hot reloads)
+just frontend dev
 
-or manually:
-
-```bash
-# backend
-uv sync
-uv run uvicorn backend.main:app --reload --port 8001
-
-# frontend (new terminal)
-cd frontend && bun install && bun run dev
+# run transcoder (hot reloads)
+just transcoder run
 ```
 
 visit http://localhost:5173
@@ -139,22 +131,24 @@ plyr.fm/
 <details>
 <summary>costs</summary>
 
-~$5-6/month for MVP:
-- cloudflare pages: free
-- cloudflare r2: ~$0.16
-- fly.io: $5
-- neon: free
+~$25-30/month:
+- fly.io backend (production): ~$10/month (shared-cpu-1x, 256MB RAM)
+- fly.io backend (staging): ~$10/month (shared-cpu-1x, 256MB RAM)
+- fly.io transcoder: ~$0-5/month (auto-scales to zero when idle)
+- neon postgres: $5/month (starter plan)
+- cloudflare pages: free (frontend hosting)
+- cloudflare r2: ~$0.16/month (6 buckets across dev/staging/prod)
 
 </details>
 
 ## links
 
 - **production**: https://plyr.fm
-- **backend API**: https://relay-api.fly.dev
+- **backend API**: https://api.plyr.fm
 - **repository**: https://github.com/zzstoatzz/plyr.fm
 
 ## documentation
 
-- [deployment guide](docs/deployment/overview.md)
-- [latest status](STATUS.md)
+- [deployment guide](docs/deployment/environments.md)
 - [configuration](docs/configuration.md)
+- [full documentation](docs/README.md)

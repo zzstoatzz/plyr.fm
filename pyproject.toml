@@ -30,13 +30,7 @@ requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
 
-keywords = [
-    "music",
-    "streaming",
-    "atproto",
-    "bluesky",
-    "decentralized",
-]
+keywords = ["music", "streaming", "atproto", "bluesky", "decentralized"]
 
 [dependency-groups]
 dev = [
@@ -87,31 +81,32 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-filterwarnings = [
-    "ignore::pydantic.warnings.UnsupportedFieldAttributeWarning",
-]
+filterwarnings = ["ignore::pydantic.warnings.UnsupportedFieldAttributeWarning"]
 
 [tool.ruff.lint]
 fixable = ["ALL"]
 ignore = [
     "COM812",
     "PLR0913", # Too many arguments
-    "SIM102", # Dont require combining if statements
+    "SIM102",  # Dont require combining if statements
 ]
 extend-select = [
-    "B", # flake8-bugbear
-    "C4", # flake8-comprehensions
-    "I", # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "I",   # isort
     "PIE", # flake8-pie
     "RUF", # Ruff-specific
     "SIM", # flake8-simplify
-    "UP", # pyupgrade
+    "UP",  # pyupgrade
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "I001"]
 "tests/**/*.py" = ["S101"] # Allow assert in tests
-"src/backend/api/**/*.py" = ["B008"] # Allow Depends() and File() in FastAPI route defaults
+"src/backend/api/**/*.py" = [
+    "B008",
+] # Allow Depends() and File() in FastAPI route defaults
+"src/backend/main.py" = ["E402"] # Need warnings filter before imports
 
 [tool.coverage.run]
 source = ["src"]
@@ -129,7 +124,14 @@ exclude_lines = [
 
 [tool.ty.src]
 include = ["src", "tests"]
-exclude = ["**/node_modules", "**/__pycache__", ".venv", ".git", "dist", "frontend"]
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    ".venv",
+    ".git",
+    "dist",
+    "frontend",
+]
 
 [tool.ty.environment]
 python-version = "3.11"
