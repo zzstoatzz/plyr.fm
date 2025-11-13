@@ -8,13 +8,12 @@
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
-	import type { User, Track } from '$lib/types';
+	import { auth } from '$lib/auth.svelte';
+	import type { Track } from '$lib/types';
 
 	// receive server-loaded data
 	let { data }: { data: PageData } = $props();
 
-	let user = $state<User | null>(null);
-	let isAuthenticated = $state(false);
 	let track = $state<Track>(data.track);
 
 	// reactive check if this track is currently playing
@@ -22,37 +21,10 @@
 		player.currentTrack?.id === track.id && !player.paused
 	);
 
-	async function checkAuth() {
-		const sessionId = localStorage.getItem('session_id');
-		if (!sessionId) {
-			isAuthenticated = false;
-			return;
-		}
+	async function loadLikedState() {
+		const sessionId = auth.getSessionId();
+		if (!sessionId) return;
 
-		try {
-			const response = await fetch(`${API_URL}/auth/me`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
-			});
-
-			if (response.ok) {
-				user = await response.json();
-				isAuthenticated = true;
-
-				// refetch track with auth to get liked state
-				await loadLikedState(sessionId);
-			} else {
-				localStorage.removeItem('session_id');
-				isAuthenticated = false;
-			}
-		} catch (e) {
-			console.error('auth check failed:', e);
-			isAuthenticated = false;
-		}
-	}
-
-	async function loadLikedState(sessionId: string) {
 		try {
 			const response = await fetch(`${API_URL}/tracks/${track.id}`, {
 				headers: {
@@ -69,23 +41,8 @@
 	}
 
 	async function handleLogout() {
-		const sessionId = localStorage.getItem('session_id');
-		if (!sessionId) return;
-
-		try {
-			await fetch(`${API_URL}/auth/logout`, {
-				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
-			});
-		} catch (e) {
-			console.error('logout failed:', e);
-		}
-
-		localStorage.removeItem('session_id');
-		user = null;
-		isAuthenticated = false;
+		await auth.logout();
+		window.location.href = '/';
 	}
 
 	function handlePlay() {
@@ -101,7 +58,9 @@
 	}
 
 	onMount(async () => {
-		await checkAuth();
+		if (auth.isAuthenticated) {
+			await loadLikedState();
+		}
 	});
 
 	const shareUrl = typeof window !== 'undefined'
@@ -157,7 +116,7 @@
 </svelte:head>
 
 <div class="page-container">
-	<Header {user} {isAuthenticated} onLogout={handleLogout} />
+	<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 	<main>
 		<div class="track-detail">
@@ -179,7 +138,7 @@
 			<!-- track info wrapper -->
 			<div class="track-info-wrapper">
 				<div class="side-button-left">
-					{#if isAuthenticated}
+					{#if auth.isAuthenticated}
 						<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
 					{/if}
 				</div>
@@ -223,7 +182,7 @@
 					</div>
 
 					<div class="mobile-side-buttons">
-						{#if isAuthenticated}
+						{#if auth.isAuthenticated}
 							<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
 						{/if}
 						<ShareButton url={shareUrl} />

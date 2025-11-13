@@ -10,12 +10,19 @@
 	import Queue from '$lib/components/Queue.svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { auth } from '$lib/auth.svelte';
+	import { browser } from '$app/environment';
 
 	let { children } = $props();
 	let showQueue = $state(false);
 
 	// only show default meta tags when not on a track page
 	let isTrackPage = $derived($page.url.pathname.startsWith('/track/'));
+
+	// initialize auth on mount
+	if (browser) {
+		void auth.initialize();
+	}
 
 	onMount(() => {
 		// apply saved accent color from localStorage
