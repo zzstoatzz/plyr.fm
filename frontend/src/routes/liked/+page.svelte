@@ -105,7 +105,7 @@
 	}
 
 	.page-header h1 {
-		font-size: 2rem;
+		font-size: 1.5rem;
 		font-weight: 700;
 		color: #e8e8e8;
 		margin: 0 0 0.5rem 0;
