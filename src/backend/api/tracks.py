@@ -178,6 +178,30 @@ async def _process_upload_background(
                 )
                 return
 
+            # check for duplicate uploads (same file_id + artist_did)
+            async with db_session() as db:
+                stmt = select(Track).where(
+                    Track.file_id == file_id,
+                    Track.artist_did == artist_did,
+                )
+                result = await db.execute(stmt)
+                existing_track = result.scalar_one_or_none()
+
+                if existing_track:
+                    logfire.info(
+                        "duplicate upload detected, returning existing track",
+                        file_id=file_id,
+                        existing_track_id=existing_track.id,
+                        artist_did=artist_did,
+                    )
+                    upload_tracker.update_status(
+                        upload_id,
+                        UploadStatus.FAILED,
+                        "upload failed",
+                        error=f"duplicate upload: track already exists (id: {existing_track.id})",
+                    )
+                    return
+
             # get R2 URL
             r2_url = None
             if settings.storage.backend == "r2":
@@ -344,7 +368,7 @@ async def _process_upload_background(
                     )
                     # cleanup: delete uploaded file
                     with contextlib.suppress(Exception):
-                        await storage.delete(file_id)
+                        await storage.delete(file_id, audio_format.value)
 
         except Exception as e:
             logger.exception(f"upload {upload_id} failed with unexpected error")
@@ -658,9 +682,40 @@ async def delete_track(
             detail="you can only delete your own tracks",
         )
 
+    # delete ATProto record if it exists
+    if track.atproto_record_uri:
+        from backend.atproto.records import delete_record_by_uri
+
+        try:
+            await delete_record_by_uri(auth_session, track.atproto_record_uri)
+            logfire.info(
+                "deleted ATProto record",
+                track_id=track_id,
+                record_uri=track.atproto_record_uri,
+            )
+        except Exception as e:
+            # check if it's a 404 (record already gone)
+            error_str = str(e).lower()
+            if "404" in error_str or "not found" in error_str:
+                logfire.info(
+                    "ATProto record already deleted",
+                    track_id=track_id,
+                    record_uri=track.atproto_record_uri,
+                )
+            else:
+                # other errors should bubble up
+                logger.error(
+                    f"failed to delete ATProto record {track.atproto_record_uri}: {e}",
+                    exc_info=True,
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"failed to delete ATProto record: {e}",
+                ) from e
+
     # delete audio file from storage
     try:
-        await storage.delete(track.file_id)
+        await storage.delete(track.file_id, track.file_type)
     except Exception as e:
         # log but don't fail - maybe file was already deleted
         logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)

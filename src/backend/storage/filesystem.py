@@ -82,9 +82,29 @@ class FilesystemStorage:
 
         return None
 
-    async def delete(self, file_id: str) -> bool:
-        """delete media file by id using async file operations."""
-        # try audio formats
+    async def delete(self, file_id: str, file_type: str | None = None) -> bool:
+        """delete media file by id using async file operations.
+
+        args:
+            file_id: the file identifier
+            file_type: optional file extension (without dot) to delete exact file.
+                      if provided, deletes audio/{file_id}.{file_type} directly.
+                      if None, falls back to trying all formats (legacy/images).
+        """
+        # if file_type is provided, delete the exact file
+        if file_type:
+            audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
+            if audio_format:
+                file_path = (
+                    self.base_path / "audio" / f"{file_id}{audio_format.extension}"
+                )
+                async_path = AsyncPath(file_path)
+                if await async_path.exists():
+                    await async_path.unlink()
+                    return True
+                return False
+
+        # fallback: try audio formats (for legacy rows or when file_type is None)
         for audio_format in AudioFormat:
             file_path = self.base_path / "audio" / f"{file_id}{audio_format.extension}"
             async_path = AsyncPath(file_path)
