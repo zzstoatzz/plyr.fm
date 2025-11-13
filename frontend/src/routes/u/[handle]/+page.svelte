@@ -397,10 +397,6 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 
 	.discography {
 		margin: 3rem 0;
-		padding: 2rem;
-		background: #141414;
-		border: 1px solid #282828;
-		border-radius: 10px;
 	}
 
 	.section-header {
@@ -429,8 +425,8 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 		gap: 1rem;
 		align-items: center;
 		padding: 1rem;
-		background: #0f0f0f;
-		border: 1px solid #222;
+		background: #141414;
+		border: 1px solid #282828;
 		border-radius: 10px;
 		color: inherit;
 		text-decoration: none;
