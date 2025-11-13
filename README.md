@@ -1,17 +1,6 @@
 # [plyr.fm](https://plyr.fm)
 
-music on ATProto
-
-## what is plyr.fm?
-
-plyr.fm is a music streaming platform built on [atproto](https://atproto.com), the same protocol that powers [bluesky](https://bsky.app). it combines:
-
-- **OAuth 2.1 authentication** via atproto for secure identity
-- **artist profiles** synced with atproto user profiles (avatar, display name, handle)
-- **track metadata** published as atproto records (shareable across the network)
-- **audio storage** on cloudflare R2 for fast, scalable streaming
-- **track editing** for artists to manage their catalog
-- **play count tracking** to measure engagement with atproto
+music on [atproto](https://atproto.com)
 
 <details>
 <summary>tech stack</summary>
@@ -31,8 +20,8 @@ plyr.fm is a music streaming platform built on [atproto](https://atproto.com), t
 
 ### deployment
 - **ci/cd**: GitHub Actions
-- **backend**: automatic on backend file changes
-- **frontend**: automatic on every push to main
+- **backend**: deploy to stg on merge to `main`, deploy to prod on release
+- **frontend**: preview deploy on merge to `main`, production deploy on release
 
 </details>
 
@@ -54,17 +43,15 @@ using [just](https://github.com/casey/just):
 uv sync
 just frontend install
 
-# run backend (hot reloads)
+# run backend (hot reloads at http://localhost:8001)
 just run-backend
 
-# run frontend (hot reloads)
+# run frontend (hot reloads at http://localhost:5173)
 just frontend dev
 
-# run transcoder (hot reloads)
+# run transcoder (hot reloads at http://localhost:8082)
 just transcoder run
 ```
-
-visit http://localhost:5173
 
 </details>
 
