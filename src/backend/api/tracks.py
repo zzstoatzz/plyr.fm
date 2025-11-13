@@ -142,6 +142,8 @@ async def get_or_create_album(
     image_url: str | None,
 ) -> Album:
     """fetch or create album for an artist."""
+    from sqlalchemy.exc import IntegrityError
+
     slug = slugify(title)
     result = await db.execute(
         select(Album).where(Album.artist_did == artist.did, Album.slug == slug)
@@ -159,8 +161,19 @@ async def get_or_create_album(
         image_url=image_url,
     )
     db.add(album)
-    await db.flush()
-    return album
+    try:
+        await db.flush()
+        return album
+    except IntegrityError:
+        # another request created this album concurrently
+        await db.rollback()
+        result = await db.execute(
+            select(Album).where(Album.artist_did == artist.did, Album.slug == slug)
+        )
+        album = result.scalar_one_or_none()
+        if not album:
+            raise
+        return album
 
 
 async def _process_upload_background(

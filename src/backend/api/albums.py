@@ -253,7 +253,7 @@ async def get_album(
     # batch fetch like counts
     track_stmt = (
         select(Track)
-        .options(selectinload(Track.artist))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.album_id == album.id)
         .order_by(Track.created_at.asc())
     )

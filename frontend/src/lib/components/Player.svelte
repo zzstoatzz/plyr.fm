@@ -243,7 +243,7 @@
 						<a
 							href="/u/{player.currentTrack.artist_handle}/album/{player.currentTrack.album.slug}"
 							class="player-album-link"
-							class:scrolling={player.currentTrack.album.title.length > 25}
+							class:scrolling={(player.currentTrack.album.title?.length ?? 0) > 25}
 						>
 							<span>{player.currentTrack.album.title}</span>
 						</a>

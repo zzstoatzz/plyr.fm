@@ -3,7 +3,7 @@
 import pytest
 
 from backend.api.albums import list_artist_albums
-from backend.models import Artist, Track
+from backend.models import Album, Artist, Track
 
 
 @pytest.mark.asyncio
@@ -19,36 +19,50 @@ async def test_list_artist_albums_groups_tracks(db_session):
     db_session.add(artist)
     await db_session.commit()
 
+    # create albums first
+    album_a = Album(
+        artist_did=artist.did,
+        slug="album-a",
+        title="Album A",
+        image_url="https://example.com/a.jpg",
+    )
+    album_b = Album(
+        artist_did=artist.did,
+        slug="album-b",
+        title="Album B",
+        image_url="https://example.com/b.jpg",
+    )
+    db_session.add_all([album_a, album_b])
+    await db_session.flush()
+
+    # create tracks linked to albums
     album_tracks = [
         Track(
             title="Song A1",
             file_id="file-a1",
             file_type="mp3",
             artist_did=artist.did,
+            album_id=album_a.id,
             extra={"album": "Album A"},
-            album_slug="album-a",
             play_count=5,
-            image_url="https://example.com/a.jpg",
         ),
         Track(
             title="Song A2",
             file_id="file-a2",
             file_type="mp3",
             artist_did=artist.did,
+            album_id=album_a.id,
             extra={"album": "Album A"},
-            album_slug="album-a",
             play_count=3,
-            image_url="https://example.com/a.jpg",
         ),
         Track(
             title="Song B1",
             file_id="file-b1",
             file_type="mp3",
             artist_did=artist.did,
+            album_id=album_b.id,
             extra={"album": "Album B"},
-            album_slug="album-b",
             play_count=2,
-            image_url="https://example.com/b.jpg",
         ),
     ]
 
