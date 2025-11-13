@@ -42,3 +42,8 @@ changelog:
 # create a github release (triggers production deployment)
 release:
     ./scripts/release
+
+# deploy frontend only (promote remote main to production-fe branch)
+release-frontend-only:
+    git fetch origin main
+    git push origin origin/main:production-fe
