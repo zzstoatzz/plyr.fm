@@ -1503,3 +1503,44 @@ async def unlike_track(
         ) from e
 
     return {"liked": False}
+
+
+@router.get("/{track_id}/likes")
+async def get_track_likes(
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """get users who liked a track.
+
+    returns a list of users with their display info (handle, display_name, avatar_url).
+    this endpoint is public - no auth required to see who liked a track.
+    """
+    # verify track exists
+    track_exists = await db.scalar(select(Track.id).where(Track.id == track_id))
+    if not track_exists:
+        raise HTTPException(status_code=404, detail="track not found")
+
+    # fetch likes with artist info (for display names/avatars)
+    stmt = (
+        select(TrackLike, Artist)
+        .join(Artist, Artist.did == TrackLike.user_did)
+        .where(TrackLike.track_id == track_id)
+        .order_by(TrackLike.created_at.desc())
+    )
+
+    result = await db.execute(stmt)
+    likes_with_artists = result.all()
+
+    # build response with user display info
+    users = [
+        {
+            "did": artist.did,
+            "handle": artist.handle,
+            "display_name": artist.display_name,
+            "avatar_url": artist.avatar_url,
+            "liked_at": like.created_at.isoformat(),
+        }
+        for like, artist in likes_with_artists
+    ]
+
+    return {"users": users, "count": len(users)}

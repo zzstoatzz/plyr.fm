@@ -2,6 +2,7 @@
 	import ShareButton from './ShareButton.svelte';
 	import LikeButton from './LikeButton.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
+	import LikersTooltip from './LikersTooltip.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -15,6 +16,14 @@
 	}
 
 	let { track, isPlaying = false, onPlay, isAuthenticated = false, hideAlbum = false }: Props = $props();
+
+	let showLikersTooltip = $state(false);
+	let likeCount = $state(track.like_count || 0);
+
+	// sync likeCount when track changes
+	$effect(() => {
+		likeCount = track.like_count || 0;
+	});
 
 	// construct shareable URL - use /track/[id] for link previews
 	// the track page will redirect to home with query param for actual playback
@@ -31,6 +40,22 @@
 	function handleQueue() {
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
+	}
+
+	function handleLikesMouseEnter() {
+		// show tooltip immediately, fetch will handle its own delay
+		showLikersTooltip = true;
+	}
+
+	function handleLikesMouseLeave() {
+		showLikersTooltip = false;
+	}
+
+	function handleLikeChange(liked: boolean) {
+		// update like count immediately
+		likeCount = liked ? likeCount + 1 : likeCount - 1;
+		// also update the track object itself
+		track.like_count = likeCount;
 	}
 </script>
 
@@ -99,9 +124,18 @@
 			</div>
 			<div class="track-meta">
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
-				{#if track.like_count && track.like_count > 0}
+				{#if likeCount > 0}
 					<span class="meta-separator">•</span>
-					<span class="likes">{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}</span>
+					<span
+						class="likes"
+						onmouseenter={handleLikesMouseEnter}
+						onmouseleave={handleLikesMouseLeave}
+					>
+						{likeCount} {likeCount === 1 ? 'like' : 'likes'}
+						{#if showLikersTooltip}
+							<LikersTooltip trackId={track.id} likeCount={likeCount} />
+						{/if}
+					</span>
 				{/if}
 			</div>
 		</div>
@@ -116,6 +150,7 @@
 					initialLiked={track.is_liked || false}
 					disabled={!track.atproto_record_uri}
 					disabledReason={!track.atproto_record_uri ? "track's record is unavailable and cannot be liked" : undefined}
+					onLikeChange={handleLikeChange}
 				/>
 			{/if}
 			<button
@@ -380,6 +415,13 @@
 	.likes {
 		color: #999;
 		font-family: inherit;
+		position: relative;
+		cursor: help;
+		transition: color 0.2s;
+	}
+
+	.likes:hover {
+		color: var(--accent);
 	}
 
 	.action-button {
