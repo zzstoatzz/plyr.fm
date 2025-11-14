@@ -46,26 +46,6 @@
 			player.volume = parseFloat(savedVolume);
 		}
 
-		// restore playback position if available
-		const savedPlaybackState = localStorage.getItem('player_playback_state');
-		if (savedPlaybackState && player.currentTrack) {
-			try {
-				const { file_id, position, timestamp } = JSON.parse(savedPlaybackState);
-				const isStale = Date.now() - timestamp > 1000 * 60 * 60; // 1 hour
-
-				if (!isStale && file_id === player.currentTrack.file_id && position > 0) {
-					// wait for audio to load before seeking
-					if (player.audioElement) {
-						player.audioElement.addEventListener('loadedmetadata', () => {
-							player.currentTime = position;
-						}, { once: true });
-					}
-				}
-			} catch (error) {
-				console.warn('failed to restore playback state:', error);
-			}
-		}
-
 		// update player height css variable for dynamic positioning
 		function updatePlayerHeight() {
 			const playerEl = document.querySelector('.player') as HTMLElement | null;
@@ -134,6 +114,10 @@
 	// handle track changes - load new audio when track changes
 	let previousTrackId = $state<number | null>(null);
 	let isLoadingTrack = $state(false);
+	let playbackRestoredRevision = $state<number | null>(null);
+	let pendingLocalRestore = $state(true);
+	let lastQueueSyncedPosition = $state(0);
+	let lastQueuePausedValue = $state(player.paused);
 
 	$effect(() => {
 		if (!player.currentTrack || !player.audioElement) return;
@@ -181,6 +165,8 @@
 				// always update the current track in player
 				player.currentTrack = queue.currentTrack;
 				previousQueueIndex = queue.currentIndex;
+				lastQueueSyncedPosition = 0;
+				playbackRestoredRevision = null;
 
 				// only set shouldAutoPlay if this was a local update (not from another tab's broadcast)
 				if (queue.lastUpdateWasLocal) {
@@ -195,6 +181,91 @@
 				previousQueueIndex = queue.currentIndex;
 			}
 		}
+	});
+
+	// apply server-provided playback metadata when queue updates remotely
+	$effect(() => {
+		if (!player.currentTrack || !queue.currentTrack) return;
+		const audioEl = player.audioElement;
+		if (!audioEl) return;
+		if (queue.currentTrack.id !== player.currentTrack.id) return;
+		if (queue.revision === null) return;
+		if (queue.lastUpdateWasLocal) return;
+		if (playbackRestoredRevision === queue.revision) return;
+
+		const targetPosition = queue.playbackPosition ?? 0;
+		const pausedState = queue.isPaused;
+
+		const applyState = () => {
+			if (targetPosition > 0) {
+				audioEl.currentTime = targetPosition;
+				player.currentTime = targetPosition;
+			}
+			player.paused = pausedState;
+		};
+
+		if (audioEl.readyState >= 1) {
+			applyState();
+		} else {
+			audioEl.addEventListener('loadedmetadata', applyState, { once: true });
+		}
+
+		playbackRestoredRevision = queue.revision;
+		pendingLocalRestore = false;
+	});
+
+	// fallback: restore from localStorage if no server snapshot is available
+	$effect(() => {
+		if (!pendingLocalRestore) return;
+		if (!player.currentTrack || !player.audioElement) return;
+		if (queue.revision !== null && !queue.lastUpdateWasLocal) return;
+
+		const savedPlaybackState = localStorage.getItem('player_playback_state');
+		if (!savedPlaybackState) {
+			pendingLocalRestore = false;
+			return;
+		}
+
+		try {
+			const { file_id, position, timestamp } = JSON.parse(savedPlaybackState);
+			const isStale = Date.now() - timestamp > 1000 * 60 * 60; // 1 hour
+
+			if (!isStale && file_id === player.currentTrack.file_id && position > 0) {
+				const audioEl = player.audioElement;
+				const seek = () => {
+					if (!audioEl) return;
+					audioEl.currentTime = position;
+					player.currentTime = position;
+				};
+				if (audioEl && audioEl.readyState >= 1) {
+					seek();
+				} else if (audioEl) {
+					audioEl.addEventListener('loadedmetadata', seek, { once: true });
+				}
+			}
+		} catch (error) {
+			console.warn('failed to restore playback state:', error);
+		}
+
+		pendingLocalRestore = false;
+	});
+
+	// push playback position to queue (server persistence) at ~5s granularity
+	$effect(() => {
+		if (!player.currentTrack || !queue.currentTrack) return;
+		if (queue.currentTrack.id !== player.currentTrack.id) return;
+		if (Math.abs(player.currentTime - lastQueueSyncedPosition) < 5) return;
+		lastQueueSyncedPosition = player.currentTime;
+		queue.updatePlaybackPosition(player.currentTime);
+	});
+
+	// push paused state changes to queue
+	$effect(() => {
+		if (!player.currentTrack || !queue.currentTrack) return;
+		if (queue.currentTrack.id !== player.currentTrack.id) return;
+		if (player.paused === lastQueuePausedValue) return;
+		lastQueuePausedValue = player.paused;
+		queue.setPlaybackPaused(player.paused);
 	});
 
 	// auto-play when track finishes loading
@@ -585,30 +656,6 @@
 		flex-shrink: 0;
 	}
 
-	.player-album {
-		color: #808080;
-		white-space: nowrap;
-		overflow: hidden;
-		position: relative;
-		min-width: 0;
-	}
-
-	.player-album.scrolling {
-		overflow: hidden;
-		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
-		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
-	}
-
-	.player-album span {
-		display: inline-block;
-		white-space: nowrap;
-	}
-
-	.player-album.scrolling span {
-		padding-right: 1.5rem;
-		animation: scroll-text 8s linear infinite;
-	}
-
 	.player-album-link {
 		color: #808080;
 		text-decoration: none;
@@ -897,7 +944,6 @@
 		}
 
 		.player-artist-link,
-		.player-album,
 		.player-album-link {
 			overflow: hidden;
 			min-width: 0;

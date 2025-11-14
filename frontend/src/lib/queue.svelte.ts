@@ -12,6 +12,8 @@ class Queue {
 	shuffle = $state(false);
 	originalOrder = $state<Track[]>([]);
 	autoAdvance = $state(true);
+	playbackPosition = $state(0);
+	isPaused = $state(true);
 
 	revision = $state<number | null>(null);
 	etag = $state<string | null>(null);
@@ -108,6 +110,7 @@ class Queue {
 
 		// only fetch from server if authenticated
 		if (this.isAuthenticated()) {
+			this.lastUpdateWasLocal = false;
 			await this.fetchQueue();
 		}
 
@@ -251,6 +254,9 @@ class Queue {
 			this.autoAdvance = state.auto_advance;
 		}
 
+		this.playbackPosition = typeof state.playback_position === 'number' ? state.playback_position : 0;
+		this.isPaused = state.is_paused ?? true;
+
 		this.currentIndex = this.resolveCurrentIndex(
 			state.current_track_id,
 			state.current_index,
@@ -321,7 +327,9 @@ class Queue {
 				current_track_id: this.currentTrack?.file_id ?? null,
 				shuffle: this.shuffle,
 				original_order_ids: this.originalOrder.map((t) => t.file_id),
-				auto_advance: this.autoAdvance
+				auto_advance: this.autoAdvance,
+				playback_position: this.playbackPosition,
+				is_paused: this.isPaused
 			};
 
 			const headers: HeadersInit = {
@@ -394,6 +402,25 @@ class Queue {
 		}
 	}
 
+	updatePlaybackPosition(position: number) {
+		this.playbackPosition = position;
+		if (this.isAuthenticated()) {
+			this.lastUpdateWasLocal = true;
+			this.schedulePush();
+		}
+	}
+
+	setPlaybackPaused(paused: boolean) {
+		if (this.isPaused === paused) {
+			return;
+		}
+		this.isPaused = paused;
+		if (this.isAuthenticated()) {
+			this.lastUpdateWasLocal = true;
+			this.schedulePush();
+		}
+	}
+
 	addTracks(tracks: Track[], playNow = false) {
 		if (tracks.length === 0) return;
 
@@ -435,6 +462,8 @@ class Queue {
 		this.tracks = [];
 		this.originalOrder = [];
 		this.currentIndex = 0;
+		this.playbackPosition = 0;
+		this.isPaused = true;
 		this.schedulePush();
 	}
 

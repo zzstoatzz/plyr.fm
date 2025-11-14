@@ -63,13 +63,9 @@ onMount(async () => {
 	}
 });
 
-let shareUrl = '';
-
-$effect(() => {
-	if (typeof window !== 'undefined') {
-		shareUrl = `${window.location.origin}/track/${track.id}`;
-	}
-});
+let shareUrl = $derived(
+	typeof window !== 'undefined' ? `${window.location.origin}/track/${track.id}` : ''
+);
 </script>
 
 <svelte:head>

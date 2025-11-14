@@ -51,12 +51,16 @@ async def get_queue(
             "shuffle": False,
             "original_order_ids": [],
             "auto_advance": auto_advance,
+            "playback_position": 0.0,
+            "is_paused": True,
         }
         revision = 0
         response.headers["ETag"] = f'"{revision}"'
         return QueueResponse(state=state, revision=revision, tracks=[])
 
     state, revision, tracks = result
+    state.setdefault("playback_position", 0.0)
+    state.setdefault("is_paused", True)
     # set ETag header for client caching
     response.headers["ETag"] = f'"{revision}"'
 

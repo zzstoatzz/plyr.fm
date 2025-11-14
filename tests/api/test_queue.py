@@ -62,6 +62,8 @@ async def test_get_queue_empty_state(test_app: FastAPI, db_session: AsyncSession
     assert data["state"]["shuffle"] is False
     assert data["state"]["auto_advance"] is True
     assert data["state"]["original_order_ids"] == []
+    assert data["state"]["playback_position"] == 0
+    assert data["state"]["is_paused"] is True
     assert data["revision"] == 0
     assert data["tracks"] == []
 
@@ -94,6 +96,8 @@ async def test_put_queue_creates_new_state(test_app: FastAPI, db_session: AsyncS
     assert data["state"]["shuffle"] == new_state["shuffle"]
     assert data["state"]["original_order_ids"] == new_state["original_order_ids"]
     assert "auto_advance" in data["state"]  # present but from preferences
+    assert data["state"].get("playback_position", 0) == 0
+    assert data["state"].get("is_paused", True) is True
     assert data["revision"] == 1  # first update should be revision 1
     assert data["tracks"] == []
 
@@ -131,6 +135,8 @@ async def test_get_queue_returns_updated_state(
     assert data["state"]["shuffle"] == new_state["shuffle"]
     assert data["state"]["original_order_ids"] == new_state["original_order_ids"]
     assert "auto_advance" in data["state"]
+    assert data["state"].get("playback_position", 0) == 0
+    assert data["state"].get("is_paused", True) is True
     assert data["revision"] == put_revision
     assert data["tracks"] == []
 
@@ -241,6 +247,34 @@ async def test_put_queue_without_if_match_always_succeeds(
     assert response2.status_code == 200
     data = response2.json()
     assert data["state"]["track_ids"] == ["track1", "track2", "track3"]
+
+
+async def test_queue_persists_playback_metadata(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """queue state should round-trip playback position and paused flag."""
+    new_state = {
+        "track_ids": ["track1"],
+        "current_index": 0,
+        "current_track_id": "track1",
+        "shuffle": False,
+        "original_order_ids": ["track1"],
+        "playback_position": 42.5,
+        "is_paused": False,
+    }
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        put_response = await client.put("/queue/", json={"state": new_state})
+        assert put_response.status_code == 200
+
+        get_response = await client.get("/queue/")
+
+    assert get_response.status_code == 200
+    data = get_response.json()
+    assert data["state"]["playback_position"] == pytest.approx(42.5)
+    assert data["state"]["is_paused"] is False
 
 
 async def test_queue_state_isolated_by_did(test_app: FastAPI, db_session: AsyncSession):

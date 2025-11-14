@@ -65,6 +65,8 @@ export interface QueueState {
 	shuffle: boolean;
 	original_order_ids: string[];
 	auto_advance?: boolean;
+	playback_position?: number;
+	is_paused?: boolean;
 }
 
 export interface QueueResponse {
@@ -87,4 +89,3 @@ export interface Analytics {
 }
 
 export interface ArtistAlbumSummary extends AlbumSummary {}
-

@@ -308,10 +308,6 @@
 		min-height: 120px;
 	}
 
-	.discography {
-		margin: 3rem 0;
-	}
-
 	.section-header {
 		display: flex;
 		align-items: baseline;

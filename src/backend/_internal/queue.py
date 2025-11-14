@@ -20,6 +20,12 @@ from backend.utilities.database import db_session
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_PLAYBACK_STATE = {
+    "playback_position": 0.0,
+    "is_paused": True,
+}
+
+
 class QueueService:
     """service for managing queue state with cross-instance sync via LISTEN/NOTIFY."""
 
@@ -122,7 +128,8 @@ class QueueService:
                     queue_state.state.get("track_ids", []),
                 )
                 # include auto_advance in state
-                state = {**queue_state.state, "auto_advance": auto_advance}
+                normalized_state = self._apply_playback_defaults(queue_state.state)
+                state = {**normalized_state, "auto_advance": auto_advance}
                 data = (state, queue_state.revision, tracks)
                 self.cache[did] = data
                 return data
@@ -197,7 +204,8 @@ class QueueService:
                 await self._notify_change(did)
 
                 # update cache - include auto_advance in state
-                state_with_prefs = {**existing.state, "auto_advance": auto_advance}
+                normalized_state = self._apply_playback_defaults(existing.state)
+                state_with_prefs = {**normalized_state, "auto_advance": auto_advance}
                 result_data = (state_with_prefs, existing.revision, tracks)
                 self.cache[did] = result_data
 
@@ -311,6 +319,13 @@ class QueueService:
             await db.commit()
 
         return serialized
+
+    def _apply_playback_defaults(self, state: dict[str, Any]) -> dict[str, Any]:
+        """ensure playback metadata exists on queue state."""
+        normalized = dict(state)
+        for key, value in DEFAULT_PLAYBACK_STATE.items():
+            normalized.setdefault(key, value)
+        return normalized
 
 
 # global instance
