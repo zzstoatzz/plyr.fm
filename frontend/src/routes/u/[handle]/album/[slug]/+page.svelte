@@ -111,6 +111,7 @@
 						isPlaying={player.currentTrack?.id === track.id}
 						onPlay={playTrack}
 						{isAuthenticated}
+						hideAlbum={true}
 					/>
 				{/each}
 			</div>

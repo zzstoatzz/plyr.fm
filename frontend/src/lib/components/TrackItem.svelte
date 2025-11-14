@@ -11,9 +11,10 @@
 		isPlaying?: boolean;
 		onPlay: (track: Track) => void;
 		isAuthenticated?: boolean;
+		hideAlbum?: boolean;
 	}
 
-	let { track, isPlaying = false, onPlay, isAuthenticated = false }: Props = $props();
+	let { track, isPlaying = false, onPlay, isAuthenticated = false, hideAlbum = false }: Props = $props();
 
 	// construct shareable URL - use /track/[id] for link previews
 	// the track page will redirect to home with query param for actual playback
@@ -85,7 +86,7 @@
 						{/each}
 					</span>
 				{/if}
-				{#if track.album}
+				{#if track.album && !hideAlbum}
 					<span class="metadata-separator">•</span>
 					<a href="/u/{track.artist_handle}/album/{track.album.slug}" class="album album-link">
 						<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">

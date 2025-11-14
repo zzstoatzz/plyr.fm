@@ -46,6 +46,26 @@
 			player.volume = parseFloat(savedVolume);
 		}
 
+		// restore playback position if available
+		const savedPlaybackState = localStorage.getItem('player_playback_state');
+		if (savedPlaybackState && player.currentTrack) {
+			try {
+				const { file_id, position, timestamp } = JSON.parse(savedPlaybackState);
+				const isStale = Date.now() - timestamp > 1000 * 60 * 60; // 1 hour
+
+				if (!isStale && file_id === player.currentTrack.file_id && position > 0) {
+					// wait for audio to load before seeking
+					if (player.audioElement) {
+						player.audioElement.addEventListener('loadedmetadata', () => {
+							player.currentTime = position;
+						}, { once: true });
+					}
+				}
+			} catch (error) {
+				console.warn('failed to restore playback state:', error);
+			}
+		}
+
 		// update player height css variable for dynamic positioning
 		function updatePlayerHeight() {
 			const playerEl = document.querySelector('.player') as HTMLElement | null;
@@ -95,6 +115,20 @@
 	// save volume to localStorage when it changes
 	$effect(() => {
 		localStorage.setItem('player_volume', player.volume.toString());
+	});
+
+	// save playback position to localStorage periodically
+	let lastSavedPosition = $state(0);
+	$effect(() => {
+		// only save if we're playing and position has changed significantly
+		if (player.currentTrack && Math.abs(player.currentTime - lastSavedPosition) > 5) {
+			lastSavedPosition = player.currentTime;
+			localStorage.setItem('player_playback_state', JSON.stringify({
+				file_id: player.currentTrack.file_id,
+				position: player.currentTime,
+				timestamp: Date.now()
+			}));
+		}
 	});
 
 	// handle track changes - load new audio when track changes
@@ -184,6 +218,31 @@
 			player.reset();
 		}
 	}
+
+	function handlePrevious() {
+		// smart back button logic:
+		// - if we're more than 1 second into the song, restart it
+		// - if we're within the first 1 second and there's a previous track, go to previous track
+		// - otherwise restart the current song
+		const RESTART_THRESHOLD = 1;
+
+		if (player.currentTime > RESTART_THRESHOLD) {
+			// restart current song
+			player.currentTime = 0;
+			if (player.paused) {
+				player.paused = false;
+			}
+		} else if (queue.hasPrevious) {
+			// go to previous track
+			queue.previous();
+		} else {
+			// no previous track - restart current song
+			player.currentTime = 0;
+			if (player.paused) {
+				player.paused = false;
+			}
+		}
+	}
 </script>
 
 {#if player.currentTrack}
@@ -254,10 +313,8 @@
 			<div class="player-controls">
 				<button
 					class="control-btn"
-					class:disabled={!queue.hasPrevious}
-					onclick={() => queue.previous()}
-					title="previous track"
-					disabled={!queue.hasPrevious}
+					onclick={handlePrevious}
+					title="previous track / restart"
 				>
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 						<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z"></path>
