@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { API_URL } from '$lib/config';
 
 	interface Liker {
 		did: string;
@@ -28,7 +28,7 @@
 		error = null;
 
 		try {
-			const url = `/api/tracks/${trackId}/likes`;
+			const url = `${API_URL}/tracks/${trackId}/likes`;
 			console.log('fetching likers from:', url);
 			const response = await fetch(url);
 
