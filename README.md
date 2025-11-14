@@ -6,22 +6,17 @@ music on [atproto](https://atproto.com)
 <summary>tech stack</summary>
 
 ### backend
-- **framework**: [FastAPI](https://fastapi.tiangolo.com) (Python)
-- **database**: [Neon PostgreSQL](https://neon.com) (serverless)
-- **storage**: [Cloudflare R2](https://developers.cloudflare.com/r2/) (S3-compatible)
-- **hosting**: [Fly.io](https://fly.io) (2x shared-cpu VMs)
-- **auth**: [atproto OAuth 2.1](https://atproto.com/specs/oauth) ([forked SDK](https://github.com/zzstoatzz/atproto))
+- **framework**: [FastAPI](https://fastapi.tiangolo.com)
+- **database**: [Neon PostgreSQL](https://neon.com)
+- **storage**: [Cloudflare R2](https://developers.cloudflare.com/r2/)
+- **hosting**: [Fly.io](https://fly.io)
+- **auth**: [atproto OAuth 2.1](https://atproto.com/specs/oauth) ([fork with OAuth implementation](https://github.com/zzstoatzz/atproto))
 
 ### frontend
-- **framework**: [SvelteKit](https://kit.svelte.dev) (TypeScript)
+- **framework**: [SvelteKit](https://kit.svelte.dev)
 - **runtime**: [Bun](https://bun.sh)
 - **hosting**: [Cloudflare Pages](https://pages.cloudflare.com)
 - **styling**: vanilla CSS (lowercase aesthetic)
-
-### deployment
-- **ci/cd**: GitHub Actions
-- **backend**: deploy to stg on merge to `main`, deploy to prod on release
-- **frontend**: preview deploy on merge to `main`, production deploy on release
 
 </details>
 
@@ -58,53 +53,41 @@ just transcoder run
 <details>
 <summary>features</summary>
 
-### for listeners
-- ✅ browse latest tracks
-- ✅ stream audio with controls
-- ✅ mobile-friendly player
-- ✅ share tracks via URL
-- ✅ view play counts
-- ✅ like tracks
-- ✅ queue tracks
-- ✅ view liked tracks
+### listening
+- audio playback with persistent queue across tabs
+- like tracks with counts visible to all listeners
+- browse artist profiles and discographies
+- filter tracks by artist or album
+- share tracks and albums via clean URLs
+- keyboard shortcuts for player control
 
-### for artists
-- ✅ OAuth login with ATProto
-- ✅ upload tracks with metadata and artwork
-- ✅ edit track metadata
-- ✅ delete tracks
-
-</details>
-
-<details>
-<summary>deployment</summary>
-
-automatic via GitHub Actions:
-
-```bash
-git push origin main  # deploys both frontend and backend
-```
-
-see [docs/deployment/environments.md](docs/deployment/environments.md) for details.
+### creating
+- OAuth authentication via ATProto (bluesky accounts)
+- upload tracks with title, artwork, and featured artists
+- organize tracks into albums with cover art
+- edit metadata and replace artwork anytime
+- track play counts and like analytics
+- publish ATProto track and like records to your PDS
 
 </details>
+
 
 <details>
 <summary>project structure</summary>
 
 ```
 plyr.fm/
-├── src/backend/            # backend (python)
-│   ├── api/               # fastapi routes
-│   ├── models/            # database models
-│   └── storage/           # r2 storage
-├── frontend/              # frontend (svelte)
-│   ├── src/lib/          # components, types
+├── src/backend/
+│   ├── api/              # public endpoints
+│   ├── _internal/        # internal services (auth, atproto, uploads)
+│   ├── models/           # database schemas
+│   └── storage/          # r2 and filesystem storage
+├── frontend/
+│   ├── src/lib/          # components, state managers, types
 │   └── src/routes/       # pages
-├── docs/                  # documentation
-├── .github/workflows/     # ci/cd
-├── Justfile               # task runner recipes
-└── README.md
+├── tests/                # pytest suite
+├── docs/                 # organized guides
+└── Justfile              # task runner
 ```
 
 </details>

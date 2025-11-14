@@ -1,13 +1,14 @@
 # plyr
 
-music streaming platform on ATProto.
+we're building a music streaming platform on ATProto.
 
 ## critical reminders
+
+REMEMBER WE HAVE THE @justfile
 
 - **issues**: GitHub, not Linear
 - **PRs**: always create for review before merging to main
 - **deployment**: automated via GitHub Actions on merge - NEVER deploy locally
-- **releases**: ALWAYS use `just release` (never `./scripts/release` directly)
 - **migrations**: automated via fly.io release_command
 - **logs**: `flyctl logs` is BLOCKING - use `run_in_background=true`
 - **type hints**: required everywhere

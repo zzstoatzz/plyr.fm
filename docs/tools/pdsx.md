@@ -224,12 +224,24 @@ uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | grep 
 
 ### "BadJwtSignature" errors
 
-this usually means:
-- using wrong PDS (forgot `--pds` flag)
-- wrong credentials
-- trying to access custom PDS without auth
+this usually means you're querying the wrong PDS for the user's DID.
 
-solution: add `--pds https://pds.zzstoatzz.io` for custom PDS operations.
+**root cause**: each user's ATProto identity (DID) is hosted on a specific PDS. trying to read records from the wrong PDS results in signature errors.
+
+**solution**: resolve the user's PDS URL from their DID using the [PLC directory](https://plc.directory):
+
+```bash
+# resolve PDS for a DID
+curl -s "https://plc.directory/did:plc:xbtmt2zjwlrfegqvch7fboei" | jq -r '.service[] | select(.type == "AtprotoPersonalDataServer") | .serviceEndpoint'
+# output: https://pds.zzstoatzz.io
+
+# then use that PDS with pdsx
+uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
+```
+
+**quick reference**:
+- bluesky users: usually `https://bsky.social` (default, no flag needed)
+- custom PDS users: must resolve via PLC directory and provide `--pds` flag
 
 ### "could not find repo" errors
 
