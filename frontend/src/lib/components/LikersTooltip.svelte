@@ -19,35 +19,40 @@
 	let likers = $state<Liker[]>([]);
 	let loading = $state(true); // start as loading
 	let error = $state<string | null>(null);
-	let hasFetched = $state(false);
 
-	async function fetchLikers() {
-		if (hasFetched || likeCount === 0) return;
-
-		console.log('fetchLikers called for track', trackId);
-
-		try {
-			const url = `${API_URL}/tracks/${trackId}/likes`;
-			console.log('fetching likers from:', url);
-			const response = await fetch(url);
-
-			if (!response.ok) {
-				const text = await response.text();
-				console.error('failed to fetch likers:', response.status, text);
-				throw new Error(`failed to fetch likers: ${response.status}`);
-			}
-
-			const data = await response.json();
-			console.log('received likers data:', data);
-			likers = data.users || [];
-			hasFetched = true;
-		} catch (err) {
-			error = 'failed to load';
-			console.error('error fetching likers:', err);
-		} finally {
+	$effect(() => {
+		if (likeCount === 0) {
 			loading = false;
+			return;
 		}
-	}
+
+		console.log('fetching likers for track', trackId);
+
+		const fetchLikers = async () => {
+			try {
+				const url = `${API_URL}/tracks/${trackId}/likes`;
+				console.log('fetching from:', url);
+				const response = await fetch(url);
+
+				if (!response.ok) {
+					const text = await response.text();
+					console.error('failed to fetch likers:', response.status, text);
+					throw new Error(`failed to fetch likers: ${response.status}`);
+				}
+
+				const data = await response.json();
+				console.log('received likers data:', data);
+				likers = data.users || [];
+			} catch (err) {
+				error = 'failed to load';
+				console.error('error fetching likers:', err);
+			} finally {
+				loading = false;
+			}
+		};
+
+		fetchLikers();
+	});
 
 	// format relative time
 	function formatTime(isoString: string): string {
@@ -67,7 +72,6 @@
 	class="likers-tooltip"
 	role="tooltip"
 >
-	{fetchLikers()}
 	{#if loading}
 		<div class="loading">loading...</div>
 	{:else if error}
