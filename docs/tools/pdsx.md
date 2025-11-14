@@ -228,7 +228,7 @@ this usually means you're querying the wrong PDS for the user's DID.
 
 **root cause**: each user's ATProto identity (DID) is hosted on a specific PDS. trying to read records from the wrong PDS results in signature errors.
 
-**solution**: resolve the user's PDS URL from their DID using the [PLC directory](https://plc.directory):
+**solution**: use the --help flag, and if it doesn't explain that pdsx can resolve the users PDS from their DID, then open an upstream issue but you can resolve the user's PDS URL from their DID using the [PLC directory](../backend/atproto-identity.md).
 
 ```bash
 # resolve PDS for a DID
