@@ -1,12 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
 	import { fade } from 'svelte/transition';
 	import { API_URL } from '$lib/config';
-import type { Track, Artist, Analytics, ArtistAlbumSummary } from '$lib/types';
+	import type { Analytics } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { auth } from '$lib/auth.svelte';
@@ -16,12 +14,11 @@ import type { Track, Artist, Analytics, ArtistAlbumSummary } from '$lib/types';
 	// receive server-loaded data
 	let { data }: { data: PageData } = $props();
 
-	let handle = $derived($page.params.handle);
-	let artist: Artist | null = $state(data.artist); // initialize with server data
-let tracks: Track[] = $state(data.tracks); // initialize with server data
-let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
-	let loading = $state(true);
-	let error = $state('');
+	// use server-loaded data directly
+	const artist = $derived(data.artist);
+	const tracks = $derived(data.tracks);
+	const albums = $derived(data.albums ?? []);
+
 	let analytics: Analytics | null = $state(null);
 	let analyticsLoading = $state(false);
 
@@ -33,64 +30,6 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 	async function handleLogout() {
 		await auth.logout();
 		window.location.href = '/';
-	}
-
-	async function loadArtistAndTracks() {
-		loading = true;
-		error = '';
-
-		try {
-			// fetch artist info (handle already has @ stripped by SvelteKit)
-			const artistResponse = await fetch(`${API_URL}/artists/by-handle/${handle}`);
-			if (!artistResponse.ok) {
-				if (artistResponse.status === 404) {
-					// check if handle is valid via AT Protocol identity resolution
-					try {
-						const identityResponse = await fetch(`https://bsky.social/xrpc/com.atproto.identity.resolveHandle?handle=${handle}`);
-						if (identityResponse.ok) {
-							// valid handle, but no artist record in our database
-							error = `this person hasn't posted any audio on ${APP_NAME} yet`;
-						} else {
-							// invalid handle
-							error = 'invalid handle';
-						}
-					} catch {
-						// if we can't verify, assume invalid
-						error = 'invalid handle';
-					}
-				} else {
-					error = 'failed to load artist';
-				}
-				return;
-			}
-			artist = await artistResponse.json();
-
-			// fetch artist's tracks with auth header to get like status
-			const headers: Record<string, string> = {};
-			const sessionId = localStorage.getItem('session_id');
-			if (sessionId) {
-				headers['Authorization'] = `Bearer ${sessionId}`;
-			}
-
-			const tracksResponse = await fetch(`${API_URL}/tracks/?artist_did=${artist?.did}`, { headers });
-			if (tracksResponse.ok) {
-				const data = await tracksResponse.json();
-				tracks = data.tracks;
-			}
-
-			const albumsResponse = await fetch(`${API_URL}/albums/${handle}`);
-			if (albumsResponse.ok) {
-				const albumData = await albumsResponse.json();
-				albums = albumData.albums ?? [];
-			} else {
-				albums = [];
-			}
-		} catch (e) {
-			error = 'failed to load artist';
-			console.error('failed to load artist:', e);
-		} finally {
-			loading = false;
-		}
 	}
 
 	async function loadAnalytics() {
@@ -122,8 +61,7 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 		}
 	}
 
-	onMount(async () => {
-		await loadArtistAndTracks();
+	onMount(() => {
 		// load analytics in background without blocking page render
 		loadAnalytics();
 	});
@@ -171,17 +109,7 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 	{/if}
 </svelte:head>
 
-{#if loading}
-	<div class="loading">
-		<LoadingSpinner />
-	</div>
-{:else if error}
-	<div class="error-container">
-		<h1>{error}</h1>
-		<a href="/">go home</a>
-	</div>
-{:else if artist}
-
+{#if artist}
 	<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 	<main>
@@ -302,21 +230,6 @@ let albums: ArtistAlbumSummary[] = $state(data.albums ?? []);
 {/if}
 
 <style>
-	.loading,
-	.error-container {
-		min-height: 100vh;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 1rem;
-	}
-
-	.error-container a {
-		color: var(--accent);
-		text-decoration: none;
-	}
-
 	main {
 		min-height: 100vh;
 		padding: 2rem;
