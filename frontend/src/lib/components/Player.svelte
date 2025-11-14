@@ -585,30 +585,6 @@
 		flex-shrink: 0;
 	}
 
-	.player-album {
-		color: #808080;
-		white-space: nowrap;
-		overflow: hidden;
-		position: relative;
-		min-width: 0;
-	}
-
-	.player-album.scrolling {
-		overflow: hidden;
-		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
-		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
-	}
-
-	.player-album span {
-		display: inline-block;
-		white-space: nowrap;
-	}
-
-	.player-album.scrolling span {
-		padding-right: 1.5rem;
-		animation: scroll-text 8s linear infinite;
-	}
-
 	.player-album-link {
 		color: #808080;
 		text-decoration: none;
@@ -897,7 +873,6 @@
 		}
 
 		.player-artist-link,
-		.player-album,
 		.player-album-link {
 			overflow: hidden;
 			min-width: 0;

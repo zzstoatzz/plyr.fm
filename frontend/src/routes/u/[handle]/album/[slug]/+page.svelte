@@ -6,6 +6,7 @@
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -35,14 +36,21 @@
 
 <svelte:head>
 	<title>{album.metadata.title} by {album.metadata.artist} - plyr.fm</title>
-	<meta name="description" content="{album.metadata.track_count} tracks by {album.metadata.artist}" />
+	<meta name="description" content="{album.metadata.title} by {album.metadata.artist} - {album.metadata.track_count} tracks on plyr.fm" />
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="music.album" />
 	<meta property="og:title" content="{album.metadata.title} by {album.metadata.artist}" />
 	<meta property="og:description" content="{album.metadata.track_count} tracks • {album.metadata.total_plays} plays" />
+	<meta property="og:url" content="{APP_CANONICAL_URL}/u/{album.metadata.artist_handle}/album/{album.metadata.slug}" />
+	<meta property="og:site_name" content={APP_NAME} />
+	<meta property="music:musician" content="{album.metadata.artist_handle}" />
 	{#if album.metadata.image_url}
-		<meta property="og:image" content={album.metadata.image_url} />
+		<meta property="og:image" content="{album.metadata.image_url}" />
+		<meta property="og:image:secure_url" content="{album.metadata.image_url}" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="1200" />
+		<meta property="og:image:alt" content="{album.metadata.title} by {album.metadata.artist}" />
 	{/if}
 
 	<!-- Twitter -->
@@ -50,7 +58,7 @@
 	<meta name="twitter:title" content="{album.metadata.title} by {album.metadata.artist}" />
 	<meta name="twitter:description" content="{album.metadata.track_count} tracks • {album.metadata.total_plays} plays" />
 	{#if album.metadata.image_url}
-		<meta name="twitter:image" content={album.metadata.image_url} />
+		<meta name="twitter:image" content="{album.metadata.image_url}" />
 	{/if}
 </svelte:head>
 
