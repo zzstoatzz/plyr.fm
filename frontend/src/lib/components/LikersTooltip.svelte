@@ -28,10 +28,18 @@
 		error = null;
 
 		try {
-			const response = await fetch(`/api/tracks/${trackId}/likes`);
-			if (!response.ok) throw new Error('failed to fetch likers');
+			const url = `/api/tracks/${trackId}/likes`;
+			console.log('fetching likers from:', url);
+			const response = await fetch(url);
+
+			if (!response.ok) {
+				const text = await response.text();
+				console.error('failed to fetch likers:', response.status, text);
+				throw new Error(`failed to fetch likers: ${response.status}`);
+			}
 
 			const data = await response.json();
+			console.log('received likers data:', data);
 			likers = data.users || [];
 			hasFetched = true;
 		} catch (err) {
@@ -90,8 +98,6 @@
 				<div class="more">+{likers.length - 10} more</div>
 			{/if}
 		</div>
-	{:else}
-		<div class="empty">no likes yet</div>
 	{/if}
 </div>
 
