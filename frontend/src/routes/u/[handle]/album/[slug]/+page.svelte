@@ -179,6 +179,9 @@
 		margin: 0;
 		color: #ffffff;
 		line-height: 1.1;
+		word-wrap: break-word;
+		overflow-wrap: break-word;
+		hyphens: auto;
 	}
 
 	.album-meta {

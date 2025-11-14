@@ -385,6 +385,9 @@
 		font-size: 1.05rem;
 		color: #fafafa;
 		text-transform: lowercase;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.album-card-meta {
