@@ -1,13 +1,14 @@
 import { browser } from '$app/environment';
 import { API_URL } from '$lib/config';
 import type { User } from '$lib/types';
+import type { LoadEvent } from '@sveltejs/kit';
 
 export interface LayoutData {
 	user: User | null;
 	isAuthenticated: boolean;
 }
 
-export async function load(): Promise<LayoutData> {
+export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
 	if (!browser) {
 		return {
 			user: null,
