@@ -167,13 +167,13 @@ $effect(() => {
 						{/if}
 						{#if track.album}
 							<span class="separator">•</span>
-							<span class="album">
+							<a href="/u/{track.artist_handle}/album/{track.album.slug}" class="album album-link">
 								<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 									<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
 									<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
 								</svg>
-								{track.album.title}
-							</span>
+								<span class="album-title-text">{track.album.title}</span>
+							</a>
 						{/if}
 					</div>
 
@@ -375,12 +375,36 @@ $effect(() => {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		min-width: 0;
+		max-width: fit-content;
+	}
+
+	.album-link {
+		text-decoration: none;
+		color: #909090;
+		transition: color 0.2s;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+
+	.album-link:hover {
+		color: var(--accent);
+	}
+
+	.album-title-text {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
 	}
 
 	.album-icon {
 		width: 16px;
 		height: 16px;
 		opacity: 0.7;
+		flex-shrink: 0;
 	}
 
 	.track-stats {

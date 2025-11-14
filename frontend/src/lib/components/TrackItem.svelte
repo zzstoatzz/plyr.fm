@@ -336,11 +336,17 @@
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
+		min-width: 0;
+		max-width: fit-content;
 	}
 
 	.album-link {
 		text-decoration: none;
 		transition: color 0.2s;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
 	}
 
 	.album-link:hover {
