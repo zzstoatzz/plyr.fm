@@ -38,17 +38,11 @@
 	}
 
 	function handleLikesMouseEnter() {
-		// delay showing tooltip by 500ms to avoid showing on quick hovers
-		hoverTimeout = setTimeout(() => {
-			showLikersTooltip = true;
-		}, 500);
+		// show tooltip immediately, fetch will handle its own delay
+		showLikersTooltip = true;
 	}
 
 	function handleLikesMouseLeave() {
-		if (hoverTimeout) {
-			clearTimeout(hoverTimeout);
-			hoverTimeout = null;
-		}
 		showLikersTooltip = false;
 	}
 </script>

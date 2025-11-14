@@ -17,15 +17,14 @@
 	let { trackId, likeCount }: Props = $props();
 
 	let likers = $state<Liker[]>([]);
-	let loading = $state(false);
+	let loading = $state(true); // start as loading
 	let error = $state<string | null>(null);
 	let hasFetched = $state(false);
 
 	async function fetchLikers() {
-		if (hasFetched || loading || likeCount === 0) return;
+		if (hasFetched || likeCount === 0) return;
 
-		loading = true;
-		error = null;
+		console.log('fetchLikers called for track', trackId);
 
 		try {
 			const url = `${API_URL}/tracks/${trackId}/likes`;
@@ -66,9 +65,9 @@
 
 <div
 	class="likers-tooltip"
-	onmouseenter={fetchLikers}
 	role="tooltip"
 >
+	{fetchLikers()}
 	{#if loading}
 		<div class="loading">loading...</div>
 	{:else if error}
