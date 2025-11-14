@@ -7,6 +7,7 @@
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
 
 	// use cached tracks
 	let tracks = $derived(tracksCache.tracks);
@@ -41,6 +42,23 @@
 		window.location.href = '/';
 	}
 </script>
+
+<svelte:head>
+	<title>{APP_NAME} - {APP_TAGLINE}</title>
+	<meta name="description" content="discover and stream music on the atproto network" />
+
+	<!-- Open Graph / Facebook -->
+	<meta property="og:type" content="website" />
+	<meta property="og:title" content={APP_NAME} />
+	<meta property="og:description" content={APP_TAGLINE} />
+	<meta property="og:url" content={APP_CANONICAL_URL} />
+	<meta property="og:site_name" content={APP_NAME} />
+
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content={APP_NAME} />
+	<meta name="twitter:description" content={APP_TAGLINE} />
+</svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 

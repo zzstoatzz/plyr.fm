@@ -63,7 +63,7 @@ onMount(async () => {
 	}
 });
 
-let shareUrl = '';
+let shareUrl = $state('');
 
 $effect(() => {
 	if (typeof window !== 'undefined') {
