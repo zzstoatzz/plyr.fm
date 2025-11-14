@@ -240,19 +240,13 @@
 					</a>
 					{#if player.currentTrack.album}
 						<span class="metadata-separator">•</span>
-						{#if player.currentTrack.album_slug}
-							<a
-								href="/u/{player.currentTrack.artist_handle}/album/{player.currentTrack.album_slug}"
-								class="player-album-link"
-								class:scrolling={player.currentTrack.album.length > 25}
-							>
-								<span>{player.currentTrack.album}</span>
-							</a>
-						{:else}
-							<span class="player-album" class:scrolling={player.currentTrack.album.length > 25}>
-								<span>{player.currentTrack.album}</span>
-							</span>
-						{/if}
+						<a
+							href="/u/{player.currentTrack.artist_handle}/album/{player.currentTrack.album.slug}"
+							class="player-album-link"
+							class:scrolling={(player.currentTrack.album.title?.length ?? 0) > 25}
+						>
+							<span>{player.currentTrack.album.title}</span>
+						</a>
 					{/if}
 				</div>
 			</div>

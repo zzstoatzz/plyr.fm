@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.models.database import Base
 
 if TYPE_CHECKING:
+    from backend.models.album import Album
     from backend.models.track import Track
 
 
@@ -44,3 +45,4 @@ class Artist(Base):
 
     # relationship
     tracks: Mapped[list["Track"]] = relationship("Track", back_populates="artist")
+    albums: Mapped[list["Album"]] = relationship("Album", back_populates="artist")

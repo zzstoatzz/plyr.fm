@@ -1,27 +1,38 @@
 """albums api endpoints."""
 
 import asyncio
-from collections import defaultdict
+import contextlib
+from io import BytesIO
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend._internal import Session as AuthSession
+from backend._internal import require_artist_profile
 from backend._internal.auth import get_session
 from backend.api.tracks import TrackResponse, get_like_counts
-from backend.models import Artist, Track, TrackLike, get_db
+from backend.config import settings
+from backend.models import Album, Artist, Track, TrackLike, get_db
+from backend.storage import storage
+from backend.storage.r2 import R2Storage
+from backend.utilities.hashing import CHUNK_SIZE
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
 
+# Pydantic models defined first to avoid forward reference issues
 class AlbumMetadata(BaseModel):
     """album metadata response."""
 
-    name: str
+    id: str
+    title: str
     slug: str
+    description: str | None = None
     artist: str
     artist_handle: str
     track_count: int
@@ -39,19 +50,115 @@ class AlbumResponse(BaseModel):
 class AlbumListItem(BaseModel):
     """minimal album info for listing."""
 
-    name: str
+    id: str
+    title: str
     slug: str
+    artist: str
+    artist_handle: str
     track_count: int
+    total_plays: int
+    image_url: str | None
 
 
 class ArtistAlbumListItem(BaseModel):
     """album info for a specific artist (used on artist pages)."""
 
-    name: str
+    id: str
+    title: str
     slug: str
     track_count: int
     total_plays: int
     image_url: str | None
+
+
+class AlbumCreatePayload(BaseModel):
+    title: str
+    slug: str | None = None
+    description: str | None = None
+
+
+class AlbumUpdatePayload(BaseModel):
+    title: str | None = None
+    slug: str | None = None
+    description: str | None = None
+
+
+# Helper functions
+async def _album_stats(db: AsyncSession, album_id: str) -> tuple[int, int]:
+    result = await db.execute(
+        select(
+            func.count(Track.id),
+            func.coalesce(func.sum(Track.play_count), 0),
+        ).where(Track.album_id == album_id)
+    )
+    track_count, total_plays = result.one()
+    return int(track_count or 0), int(total_plays or 0)
+
+
+async def _album_image_url(album: Album, artist: Artist | None = None) -> str | None:
+    if album.image_url:
+        return album.image_url
+    if album.image_id:
+        return await album.get_image_url()
+    if artist and artist.avatar_url:
+        return artist.avatar_url
+    return None
+
+
+async def _album_list_item(
+    album: Album,
+    artist: Artist,
+    track_count: int,
+    total_plays: int,
+) -> AlbumListItem:
+    image_url = await _album_image_url(album, artist)
+    return AlbumListItem(
+        id=album.id,
+        title=album.title,
+        slug=album.slug,
+        artist=artist.display_name,
+        artist_handle=artist.handle,
+        track_count=track_count,
+        total_plays=total_plays,
+        image_url=image_url,
+    )
+
+
+async def _artist_album_summary(
+    album: Album,
+    artist: Artist,
+    track_count: int,
+    total_plays: int,
+) -> ArtistAlbumListItem:
+    image_url = await _album_image_url(album, artist)
+    return ArtistAlbumListItem(
+        id=album.id,
+        title=album.title,
+        slug=album.slug,
+        track_count=track_count,
+        total_plays=total_plays,
+        image_url=image_url,
+    )
+
+
+async def _album_metadata(
+    album: Album,
+    artist: Artist,
+    track_count: int,
+    total_plays: int,
+) -> AlbumMetadata:
+    image_url = await _album_image_url(album, artist)
+    return AlbumMetadata(
+        id=album.id,
+        title=album.title,
+        slug=album.slug,
+        description=album.description,
+        artist=artist.display_name,
+        artist_handle=artist.handle,
+        track_count=track_count,
+        total_plays=total_plays,
+        image_url=image_url,
+    )
 
 
 @router.get("/")
@@ -59,28 +166,30 @@ async def list_albums(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, list[AlbumListItem]]:
     """list all albums with basic metadata."""
-    # query for albums (grouped by album_slug)
-    album_name_expr = func.jsonb_extract_path_text(Track.extra, "album")
-
-    result = await db.execute(
+    stmt = (
         select(
-            Track.album_slug,
-            album_name_expr.label("album_name"),
+            Album,
+            Artist,
             func.count(Track.id).label("track_count"),
+            func.coalesce(func.sum(Track.play_count), 0).label("total_plays"),
         )
-        .where(Track.album_slug.isnot(None))
-        .group_by(Track.album_slug, album_name_expr)
-        .order_by(func.lower(album_name_expr))
+        .join(Artist, Album.artist_did == Artist.did)
+        .outerjoin(Track, Track.album_id == Album.id)
+        .group_by(Album.id, Artist.did)
+        .order_by(func.lower(Album.title))
     )
 
-    albums = [
-        AlbumListItem(
-            name=row.album_name,
-            slug=row.album_slug,
-            track_count=row.track_count,
+    result = await db.execute(stmt)
+    albums: list[AlbumListItem] = []
+    for album, artist, track_count, total_plays in result:
+        albums.append(
+            await _album_list_item(
+                album,
+                artist,
+                int(track_count or 0),
+                int(total_plays or 0),
+            )
         )
-        for row in result.all()
-    ]
 
     return {"albums": albums}
 
@@ -96,42 +205,29 @@ async def list_artist_albums(
         raise HTTPException(status_code=404, detail="artist not found")
 
     stmt = (
-        select(Track)
-        .options(selectinload(Track.artist))
-        .where(Track.artist_did == artist.did, Track.album_slug.isnot(None))
-        .order_by(Track.album_slug, Track.created_at.asc())
+        select(
+            Album,
+            func.count(Track.id).label("track_count"),
+            func.coalesce(func.sum(Track.play_count), 0).label("total_plays"),
+        )
+        .outerjoin(Track, Track.album_id == Album.id)
+        .where(Album.artist_did == artist.did)
+        .group_by(Album.id)
+        .order_by(func.lower(Album.title))
     )
     result = await db.execute(stmt)
-    tracks = result.scalars().all()
-
-    if not tracks:
-        return {"albums": []}
-
-    grouped: dict[str, list[Track]] = defaultdict(list)
-    for track in tracks:
-        if track.album_slug:
-            grouped[track.album_slug].append(track)
 
     album_items: list[ArtistAlbumListItem] = []
-    for slug, slug_tracks in grouped.items():
-        first_track = slug_tracks[0]
-        image_url = first_track.image_url
-        if not image_url and first_track.image_id:
-            image_url = await first_track.get_image_url()
-        if not image_url:
-            image_url = first_track.artist.avatar_url
-
+    for album, track_count, total_plays in result:
         album_items.append(
-            ArtistAlbumListItem(
-                name=first_track.album or "Unknown Album",
-                slug=slug,
-                track_count=len(slug_tracks),
-                total_plays=sum(t.play_count for t in slug_tracks),
-                image_url=image_url,
+            await _artist_album_summary(
+                album,
+                artist,
+                int(track_count or 0),
+                int(total_plays or 0),
             )
         )
 
-    album_items.sort(key=lambda album: album.name.lower())
     return {"albums": album_items}
 
 
@@ -143,83 +239,60 @@ async def get_album(
     request: Request,
 ) -> AlbumResponse:
     """get album details with all tracks for a specific artist."""
-    from atproto_identity.did.resolver import AsyncDidResolver
-
-    resolver = AsyncDidResolver()
-
-    # look up artist by handle (should exist if tracks exist)
-    artist_result = await db.execute(select(Artist).where(Artist.handle == handle))
-    artist_row = artist_result.scalar_one_or_none()
-    if not artist_row:
-        raise HTTPException(status_code=404, detail="artist not found")
-    artist_did = artist_row.did
-
-    # fetch all tracks for this artist's album
-    stmt = (
-        select(Track)
-        .join(Artist)
-        .options(selectinload(Track.artist))
-        .where(Track.artist_did == artist_did, Track.album_slug == slug)
-        .order_by(Track.created_at.asc())  # chronological order for album tracks
+    # look up artist + album
+    album_result = await db.execute(
+        select(Album, Artist)
+        .join(Artist, Album.artist_did == Artist.did)
+        .where(Artist.handle == handle, Album.slug == slug)
     )
-
-    result = await db.execute(stmt)
-    tracks = result.scalars().all()
-
-    if not tracks:
+    row = album_result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="album not found")
 
+    album, artist = row
+
     # batch fetch like counts
+    track_stmt = (
+        select(Track)
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
+        .where(Track.album_id == album.id)
+        .order_by(Track.created_at.asc())
+    )
+    track_result = await db.execute(track_stmt)
+    tracks = track_result.scalars().all()
     track_ids = [track.id for track in tracks]
-    like_counts = await get_like_counts(db, track_ids)
+    like_counts = await get_like_counts(db, track_ids) if track_ids else {}
 
     # get authenticated user's likes for this album's tracks only
     liked_track_ids: set[int] | None = None
     if (
         session_id := request.headers.get("authorization", "").replace("Bearer ", "")
     ) and (auth_session := await get_session(session_id)):
-        liked_result = await db.execute(
-            select(TrackLike.track_id).where(
-                TrackLike.user_did == auth_session.did,
-                TrackLike.track_id.in_(track_ids),
+        if track_ids:
+            liked_result = await db.execute(
+                select(TrackLike.track_id).where(
+                    TrackLike.user_did == auth_session.did,
+                    TrackLike.track_id.in_(track_ids),
+                )
             )
-        )
-        liked_track_ids = set(liked_result.scalars().all())
+            liked_track_ids = set(liked_result.scalars().all())
 
-    # resolve PDS URLs (reuse resolver from handle lookup)
-    pds_cache = {}
-    artists_to_resolve = {}
+    # ensure PDS URL cached
+    pds_cache: dict[str, str | None] = {}
+    if artist.pds_url:
+        pds_cache[artist.did] = artist.pds_url
+    else:
+        from atproto_identity.did.resolver import AsyncDidResolver
 
-    for track in tracks:
-        if track.artist_did not in pds_cache:
-            if track.artist.pds_url:
-                pds_cache[track.artist_did] = track.artist.pds_url
-            else:
-                if track.artist_did not in artists_to_resolve:
-                    artists_to_resolve[track.artist_did] = track.artist
-
-    if artists_to_resolve:
-
-        async def resolve_artist(artist: Artist) -> tuple[str, str | None]:
-            try:
-                atproto_data = await resolver.resolve_atproto_data(artist.did)
-                return (artist.did, atproto_data.pds)
-            except Exception:
-                return (artist.did, None)
-
-        results = await asyncio.gather(
-            *[resolve_artist(a) for a in artists_to_resolve.values()]
-        )
-
-        for did, pds_url in results:
-            pds_cache[did] = pds_url
-            if pds_url:
-                artist = artists_to_resolve.get(did)
-                if artist:
-                    artist.pds_url = pds_url
-                    db.add(artist)
-
-    await db.commit()
+        resolver = AsyncDidResolver()
+        try:
+            atproto_data = await resolver.resolve_atproto_data(artist.did)
+            pds_cache[artist.did] = atproto_data.pds
+            artist.pds_url = atproto_data.pds
+            db.add(artist)
+            await db.commit()
+        except Exception:
+            pds_cache[artist.did] = None
 
     # build track responses
     track_responses = await asyncio.gather(
@@ -231,25 +304,79 @@ async def get_album(
         ]
     )
 
-    # build album metadata (use first track for artist info)
-    first_track = tracks[0]
     total_plays = sum(t.play_count for t in tracks)
-
-    # use first track's image or artist avatar
-    image_url = first_track.image_url
-    if not image_url and first_track.image_id:
-        image_url = await first_track.get_image_url()
-    if not image_url:
-        image_url = first_track.artist.avatar_url
-
-    metadata = AlbumMetadata(
-        name=first_track.album or "Unknown Album",
-        slug=slug,
-        artist=first_track.artist.display_name,
-        artist_handle=first_track.artist.handle,
-        track_count=len(tracks),
-        total_plays=total_plays,
-        image_url=image_url,
-    )
+    metadata = await _album_metadata(album, artist, len(tracks), total_plays)
 
     return AlbumResponse(metadata=metadata, tracks=track_responses)
+
+
+@router.post("/{album_id}/cover")
+async def upload_album_cover(
+    album_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Annotated[AuthSession, Depends(require_artist_profile)],
+    image: UploadFile = File(...),
+) -> dict[str, str | None]:
+    """upload cover art for an album (requires authentication)."""
+    # verify album exists and belongs to the authenticated artist
+    result = await db.execute(select(Album).where(Album.id == album_id))
+    album = result.scalar_one_or_none()
+    if not album:
+        raise HTTPException(status_code=404, detail="album not found")
+    if album.artist_did != auth_session.did:
+        raise HTTPException(
+            status_code=403, detail="you can only upload cover art for your own albums"
+        )
+
+    if not image.filename:
+        raise HTTPException(status_code=400, detail="no filename provided")
+
+    # validate it's an image by extension (basic check)
+    ext = Path(image.filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported image type: {ext}. supported: .jpg, .jpeg, .png, .webp",
+        )
+
+    # read image data (enforcing size limit)
+    try:
+        max_image_size = 20 * 1024 * 1024  # 20MB max
+        image_data = bytearray()
+
+        while chunk := await image.read(CHUNK_SIZE):
+            if len(image_data) + len(chunk) > max_image_size:
+                raise HTTPException(
+                    status_code=413,
+                    detail="image too large (max 20MB)",
+                )
+            image_data.extend(chunk)
+
+        image_obj = BytesIO(image_data)
+        # save returns the file_id (hash)
+        image_id = await storage.save(image_obj, image.filename)
+
+        # construct R2 URL directly if using R2 storage
+        # storage.save uses just {file_id}{ext} for images (no subdirectory)
+        image_url = None
+        if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
+            image_url = f"{storage.public_image_bucket_url}/{image_id}{ext}"
+
+        # delete old image if exists (prevent R2 object leaks)
+        if album.image_id:
+            with contextlib.suppress(Exception):
+                await storage.delete(album.image_id)
+
+        # update album with new image
+        album.image_id = image_id
+        album.image_url = image_url
+        await db.commit()
+
+        return {"image_url": image_url, "image_id": image_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"failed to upload image: {e!s}"
+        ) from e

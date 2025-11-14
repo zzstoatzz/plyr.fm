@@ -47,7 +47,7 @@ from backend._internal.auth import get_session
 from backend._internal.image import ImageFormat
 from backend._internal.uploads import UploadStatus, upload_tracker
 from backend.config import settings
-from backend.models import Artist, Track, TrackLike, get_db
+from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.storage import storage
 from backend.storage.r2 import R2Storage
 from backend.utilities.aggregations import get_like_counts
@@ -89,14 +89,26 @@ class TrackResponse(dict):
         if not image_url and track.image_id:
             image_url = await track.get_image_url()
 
+        album_data: dict[str, Any] | None = None
+        if track.album_id and track.album_rel:
+            album_image_url = track.album_rel.image_url
+            if not album_image_url and track.album_rel.image_id:
+                album_image_url = await track.album_rel.get_image_url()
+            if not album_image_url and track.artist.avatar_url:
+                album_image_url = track.artist.avatar_url
+            album_data = {
+                "id": track.album_rel.id,
+                "slug": track.album_rel.slug,
+                "title": track.album_rel.title,
+                "image_url": album_image_url,
+            }
+
         return cls(
             id=track.id,
             title=track.title,
             artist=track.artist.display_name,
             artist_handle=track.artist.handle,
             artist_avatar_url=track.artist.avatar_url,
-            album=track.album,
-            album_slug=track.album_slug,
             file_id=track.file_id,
             file_type=track.file_type,
             features=track.features,
@@ -114,11 +126,54 @@ class TrackResponse(dict):
             image_url=image_url,
             is_liked=is_liked,
             like_count=like_count,
+            album=album_data,
         )
 
 
 # max featured artists per track
 MAX_FEATURES = 5
+
+
+async def get_or_create_album(
+    db: AsyncSession,
+    artist: Artist,
+    title: str,
+    image_id: str | None,
+    image_url: str | None,
+) -> Album:
+    """fetch or create album for an artist."""
+    from sqlalchemy.exc import IntegrityError
+
+    slug = slugify(title)
+    result = await db.execute(
+        select(Album).where(Album.artist_did == artist.did, Album.slug == slug)
+    )
+    album = result.scalar_one_or_none()
+    if album:
+        return album
+
+    album = Album(
+        artist_did=artist.did,
+        slug=slug,
+        title=title,
+        description=None,
+        image_id=image_id,
+        image_url=image_url,
+    )
+    db.add(album)
+    try:
+        await db.flush()
+        return album
+    except IntegrityError:
+        # another request created this album concurrently
+        await db.rollback()
+        result = await db.execute(
+            select(Album).where(Album.artist_did == artist.did, Album.slug == slug)
+        )
+        album = result.scalar_one_or_none()
+        if not album:
+            raise
+        return album
 
 
 async def _process_upload_background(
@@ -319,11 +374,16 @@ async def _process_upload_background(
                     upload_id, UploadStatus.PROCESSING, "saving track metadata..."
                 )
                 extra = {}
+                album_record = None
                 if album:
                     extra["album"] = album
-
-                # compute album slug
-                album_slug = slugify(album) if album else None
+                    album_record = await get_or_create_album(
+                        db,
+                        artist,
+                        album,
+                        image_id,
+                        image_url,
+                    )
 
                 track = Track(
                     title=title,
@@ -331,7 +391,7 @@ async def _process_upload_background(
                     file_type=ext[1:],
                     artist_did=artist_did,
                     extra=extra,
-                    album_slug=album_slug,
+                    album_id=album_record.id if album_record else None,
                     features=featured_artists,
                     r2_url=r2_url,
                     atproto_record_uri=atproto_uri,
@@ -566,7 +626,11 @@ async def list_tracks(
         )
         liked_track_ids = set(liked_result.scalars().all())
 
-    stmt = select(Track).join(Artist).options(selectinload(Track.artist))
+    stmt = (
+        select(Track)
+        .join(Artist)
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
+    )
 
     # filter by artist if provided
     if artist_did:
@@ -646,7 +710,7 @@ async def list_my_tracks(
     stmt = (
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.artist_did == auth_session.did)
         .order_by(Track.created_at.desc())
     )
@@ -681,7 +745,7 @@ async def list_broken_tracks(
     stmt = (
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.artist_did == auth_session.did)
         .where((Track.atproto_record_uri.is_(None)) | (Track.atproto_record_uri == ""))
         .order_by(Track.created_at.desc())
@@ -780,7 +844,7 @@ async def update_track_metadata(
     result = await db.execute(
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.id == track_id)
     )
     track = result.scalar_one_or_none()
@@ -801,20 +865,23 @@ async def update_track_metadata(
 
     if album is not None:
         if album:
-            # set or update album
             if track.extra is None:
                 track.extra = {}
             track.extra["album"] = album
-            # compute album slug
-            track.album_slug = slugify(album)
-            # flag the JSONB field as modified so SQLAlchemy detects the change
             attributes.flag_modified(track, "extra")
+            album_record = await get_or_create_album(
+                db,
+                track.artist,
+                album,
+                track.image_id,
+                track.image_url,
+            )
+            track.album_id = album_record.id
         else:
-            # remove album if empty string
             if track.extra and "album" in track.extra:
                 del track.extra["album"]
                 attributes.flag_modified(track, "extra")
-            track.album_slug = None
+            track.album_id = None
 
     if features is not None:
         # resolve featured artist handles
@@ -1125,7 +1192,7 @@ async def restore_track_record(
     result = await db.execute(
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.id == track_id)
     )
     track = result.scalar_one_or_none()
@@ -1214,7 +1281,7 @@ async def list_liked_tracks(
         select(Track)
         .join(TrackLike, TrackLike.track_id == Track.id)
         .join(Artist)
-        .options(selectinload(Track.artist))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(TrackLike.user_did == auth_session.did)
         .order_by(TrackLike.created_at.desc())
     )
@@ -1262,7 +1329,7 @@ async def get_track(
     result = await db.execute(
         select(Track)
         .join(Artist)
-        .options(selectinload(Track.artist))
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.id == track_id)
     )
     track = result.scalar_one_or_none()

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.models.database import Base
 
 if TYPE_CHECKING:
+    from backend.models.album import Album
     from backend.models.artist import Artist
 
 
@@ -50,8 +51,13 @@ class Track(Base):
         JSONB, nullable=False, default=dict, server_default="{}"
     )
 
-    # album slug for URL-safe album pages
-    album_slug: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    # album linkage
+    album_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("albums.id"),
+        nullable=True,
+        index=True,
+    )
 
     # featured artists (list of {did, handle, display_name})
     features: Mapped[list[dict]] = mapped_column(
@@ -82,7 +88,7 @@ class Track(Base):
 
     @property
     def album(self) -> str | None:
-        """get album from extra."""
+        """get album name from extra (for ATProto compatibility)."""
         return self.extra.get("album")
 
     @property
@@ -100,3 +106,6 @@ class Track(Base):
         if isinstance(storage, R2Storage):
             return await storage.get_url(self.image_id)
         return None
+
+    # relationships
+    album_rel: Mapped["Album | None"] = relationship("Album", back_populates="tracks")

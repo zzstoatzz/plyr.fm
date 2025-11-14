@@ -6,7 +6,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
-	import type { Track, FeaturedArtist } from '$lib/types';
+	import type { Track, FeaturedArtist, AlbumSummary } from '$lib/types';
 	import { API_URL, getServerConfig } from '$lib/config';
 	import { uploader } from '$lib/uploader.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -32,7 +32,8 @@
 
 	// upload form fields
 	let title = '';
-	let album = '';
+	let albumId: string | null = null;
+	let albumTitle = '';
 	let file: File | null = null;
 	let imageFile: File | null = null;
 	let featuredArtists: FeaturedArtist[] = [];
@@ -51,6 +52,12 @@
 	let savingProfile = false;
 	let profileSuccess = '';
 	let profileError = '';
+
+	// album management state
+	let albums: AlbumSummary[] = [];
+	let loadingAlbums = false;
+	let editingAlbumId: string | null = null;
+	let editAlbumCoverFile: File | null = null;
 
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
@@ -87,6 +94,7 @@
 		try {
 			await loadMyTracks();
 			await loadArtistProfile();
+			await loadMyAlbums();
 		} catch (e) {
 			console.error('error loading portal data:', e);
 			error = 'failed to load portal data';
@@ -126,6 +134,63 @@
 		} catch (e) {
 			console.error('failed to load artist profile:', e);
 		}
+	}
+
+	async function loadMyAlbums() {
+		if (!auth.user) return;
+		loadingAlbums = true;
+		try {
+			const response = await fetch(`${API_URL}/albums/${auth.user.handle}`);
+			if (response.ok) {
+				const data = await response.json();
+				albums = data.albums;
+			}
+		} catch (e) {
+			console.error('failed to load albums:', e);
+		} finally {
+			loadingAlbums = false;
+		}
+	}
+
+	async function uploadAlbumCover(albumId: string) {
+		if (!editAlbumCoverFile) {
+			toast.error('no cover art selected');
+			return;
+		}
+
+		const formData = new FormData();
+		formData.append('image', editAlbumCoverFile);
+
+		try {
+			const response = await fetch(`${API_URL}/albums/${albumId}/cover`, {
+				method: 'POST',
+				headers: auth.getAuthHeaders(),
+				body: formData
+			});
+
+			if (response.ok) {
+				toast.success('album cover updated');
+				editingAlbumId = null;
+				editAlbumCoverFile = null;
+				await loadMyAlbums();
+			} else {
+				const data = await response.json();
+				toast.error(data.detail || 'failed to upload cover');
+			}
+		} catch (e) {
+			console.error('failed to upload album cover:', e);
+			toast.error('failed to upload cover art');
+		}
+	}
+
+	function startEditingAlbum(albumId: string) {
+		editingAlbumId = albumId;
+		editAlbumCoverFile = null;
+	}
+
+	function cancelEditAlbum() {
+		editingAlbumId = null;
+		editAlbumCoverFile = null;
 	}
 
 	async function saveProfile(e: SubmitEvent) {
@@ -168,13 +233,13 @@
 
 		const uploadFile = file;
 		const uploadTitle = title;
-		const uploadAlbum = album;
+		const uploadAlbum = albumTitle;
 		const uploadFeatures = [...featuredArtists];
 		const uploadImage = imageFile;
 
 		const clearForm = () => {
 			title = '';
-			album = '';
+			albumTitle = '';
 			file = null;
 			imageFile = null;
 			featuredArtists = [];
@@ -195,8 +260,9 @@
 			uploadAlbum,
 			uploadFeatures,
 			uploadImage,
-			() => {
-				loadMyTracks();
+			async () => {
+				await loadMyTracks();
+				await loadMyAlbums();
 			},
 			{
 				onSuccess: () => {
@@ -219,6 +285,7 @@
 
 			if (response.ok) {
 				await loadMyTracks();
+				await loadMyAlbums();
 			} else {
 				const error = await response.json();
 				alert(error.detail || 'failed to delete track');
@@ -231,7 +298,7 @@
 	function startEditTrack(track: typeof tracks[0]) {
 		editingTrackId = track.id;
 		editTitle = track.title;
-		editAlbum = track.album || '';
+		editAlbum = track.album?.title || '';
 		editFeaturedArtists = track.features || [];
 	}
 
@@ -267,6 +334,7 @@
 
 			if (response.ok) {
 				await loadMyTracks();
+				await loadMyAlbums();
 				cancelEdit();
 				toast.success('track updated successfully');
 			} else {
@@ -440,7 +508,7 @@
 					<input
 						id="album"
 						type="text"
-						bind:value={album}
+						bind:value={albumTitle}
 						placeholder="album name"
 					/>
 				</div>
@@ -618,6 +686,111 @@
 										title="delete track"
 									>
 										×
+									</button>
+								</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</section>
+
+		<section class="albums-section">
+			<h2>your albums</h2>
+
+			{#if loadingAlbums}
+				<div class="loading-container">
+					<LoadingSpinner size="lg" />
+					<p class="loading-text">loading albums...</p>
+				</div>
+			{:else if albums.length === 0}
+				<p class="empty">no albums yet - upload tracks with album names to create albums</p>
+			{:else}
+				<div class="albums-grid">
+					{#each albums as album}
+						<div class="album-card" class:editing={editingAlbumId === album.id}>
+							{#if editingAlbumId === album.id}
+								<div class="album-edit-container">
+									<div class="album-edit-preview">
+										{#if album.image_url && !editAlbumCoverFile}
+											<img src={album.image_url} alt="{album.title} cover" class="album-cover" />
+										{:else if editAlbumCoverFile}
+											<div class="album-cover-placeholder">
+												<span class="file-name">{editAlbumCoverFile.name}</span>
+												<span class="file-size">({(editAlbumCoverFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+											</div>
+										{:else}
+											<div class="album-cover-placeholder">
+												<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+													<rect x="3" y="3" width="18" height="18" stroke="currentColor" stroke-width="1.5" fill="none"/>
+													<circle cx="12" cy="12" r="4" fill="currentColor"/>
+												</svg>
+											</div>
+										{/if}
+									</div>
+									<div class="album-edit-actions">
+										<label for="album-cover-input-{album.id}" class="file-input-label">
+											select album artwork
+										</label>
+										<input
+											id="album-cover-input-{album.id}"
+											type="file"
+											accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+											onchange={(e) => {
+												const target = e.target as HTMLInputElement;
+												editAlbumCoverFile = target.files?.[0] ?? null;
+											}}
+											class="file-input"
+										/>
+										<div class="edit-buttons">
+											<button
+												class="action-btn save-btn"
+												onclick={() => uploadAlbumCover(album.id)}
+												title="upload cover"
+												disabled={!editAlbumCoverFile}
+											>
+												✓
+											</button>
+											<button
+												class="action-btn cancel-btn"
+												onclick={cancelEditAlbum}
+												title="cancel"
+											>
+												✕
+											</button>
+										</div>
+									</div>
+								</div>
+							{:else}
+								<div class="album-cover-container">
+									{#if album.image_url}
+										<img src={album.image_url} alt="{album.title} cover" class="album-cover" />
+									{:else}
+										<div class="album-cover-placeholder">
+											<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+												<rect x="3" y="3" width="18" height="18" stroke="currentColor" stroke-width="1.5" fill="none"/>
+												<circle cx="12" cy="12" r="4" fill="currentColor"/>
+											</svg>
+										</div>
+									{/if}
+								</div>
+								<div class="album-info">
+									<h3 class="album-title">{album.title}</h3>
+									<p class="album-stats">
+										{album.track_count} {album.track_count === 1 ? 'track' : 'tracks'} •
+										{album.total_plays} {album.total_plays === 1 ? 'play' : 'plays'}
+									</p>
+								</div>
+								<div class="album-actions">
+									<button
+										class="action-btn edit-cover-btn"
+										onclick={() => startEditingAlbum(album.id)}
+										title="edit cover art"
+									>
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M12 20h9"></path>
+											<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+										</svg>
 									</button>
 								</div>
 							{/if}
@@ -1119,5 +1292,172 @@
 		margin: 0;
 		color: var(--text-secondary);
 		font-size: 0.9rem;
+	}
+
+	.albums-section {
+		margin-top: 3rem;
+	}
+
+	.albums-section h2 {
+		font-size: var(--text-page-heading);
+		margin-bottom: 1.5rem;
+	}
+
+	.albums-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: 1.5rem;
+	}
+
+	.album-card {
+		background: #1a1a1a;
+		border: 1px solid #2a2a2a;
+		border-radius: 8px;
+		padding: 1rem;
+		transition: all 0.2s;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.album-card:hover {
+		border-color: #3a3a3a;
+		transform: translateY(-2px);
+	}
+
+	.album-card.editing {
+		border-color: var(--accent);
+	}
+
+	.album-cover-container {
+		width: 100%;
+		aspect-ratio: 1;
+		border-radius: 6px;
+		overflow: hidden;
+		background: #0f0f0f;
+		border: 1px solid #282828;
+	}
+
+	.album-cover {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.album-cover-placeholder {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		color: #606060;
+		gap: 0.5rem;
+	}
+
+	.album-cover-placeholder .file-name {
+		font-size: 0.85rem;
+		color: #888;
+		text-align: center;
+		word-break: break-word;
+		padding: 0 0.5rem;
+	}
+
+	.album-cover-placeholder .file-size {
+		font-size: 0.75rem;
+		color: #666;
+	}
+
+	.album-info {
+		flex: 1;
+	}
+
+	.album-title {
+		font-size: 1rem;
+		font-weight: 600;
+		color: #e8e8e8;
+		margin: 0 0 0.25rem 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.album-stats {
+		font-size: 0.85rem;
+		color: #888;
+		margin: 0;
+	}
+
+	.album-actions {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
+	}
+
+	.edit-cover-btn {
+		padding: 0.5rem;
+		background: #2a2a2a;
+		border: 1px solid #3a3a3a;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.2s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.edit-cover-btn:hover {
+		background: #3a3a3a;
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.album-edit-container {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.album-edit-preview {
+		width: 100%;
+		aspect-ratio: 1;
+		border-radius: 6px;
+		overflow: hidden;
+		background: #0f0f0f;
+		border: 1px solid #282828;
+	}
+
+	.album-edit-actions {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.file-input-label {
+		font-size: 0.85rem;
+		color: #b0b0b0;
+		font-weight: 500;
+		margin-bottom: 0.25rem;
+	}
+
+	.album-edit-actions .file-input {
+		padding: 0.5rem;
+		background: #2a2a2a;
+		border: 1px solid #3a3a3a;
+		border-radius: 4px;
+		color: #e8e8e8;
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+
+	.album-edit-actions .file-input:hover {
+		background: #3a3a3a;
+		border-color: var(--accent);
+	}
+
+	.edit-buttons {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
 	}
 </style>
