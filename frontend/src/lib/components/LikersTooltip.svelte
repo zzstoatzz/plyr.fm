@@ -78,7 +78,7 @@
 		<div class="error">{error}</div>
 	{:else if likers.length > 0}
 		<div class="likers-list">
-			{#each likers.slice(0, 10) as liker}
+			{#each likers as liker}
 				<a
 					href="/u/{liker.handle}"
 					class="liker"
@@ -97,9 +97,6 @@
 					<div class="liked-time">{formatTime(liker.liked_at)}</div>
 				</a>
 			{/each}
-			{#if likers.length > 10}
-				<div class="more">+{likers.length - 10} more</div>
-			{/if}
 		</div>
 	{/if}
 </div>
@@ -139,8 +136,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		max-height: 300px;
-		overflow-y: auto;
 	}
 
 	.liker {
