@@ -8,9 +8,10 @@
 		initialLiked?: boolean;
 		disabled?: boolean;
 		disabledReason?: string;
+		onLikeChange?: (liked: boolean) => void;
 	}
 
-	let { trackId, trackTitle, initialLiked = false, disabled = false, disabledReason }: Props = $props();
+	let { trackId, trackTitle, initialLiked = false, disabled = false, disabledReason, onLikeChange }: Props = $props();
 
 	let liked = $state(initialLiked);
 	let loading = $state(false);
@@ -41,6 +42,9 @@
 				liked = previousState;
 				toast.error('failed to update like');
 			} else {
+				// notify parent of like change
+				onLikeChange?.(liked);
+
 				// show success feedback
 				if (liked) {
 					toast.success(`liked ${trackTitle}`);
