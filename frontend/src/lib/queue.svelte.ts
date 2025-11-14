@@ -455,14 +455,18 @@ class Queue {
 		}
 	}
 
-	previous() {
+	previous(forceSkip = false) {
 		if (this.tracks.length === 0) return;
 
-		if (this.currentIndex > 0) {
+		if (this.currentIndex > 0 || forceSkip) {
 			this.lastUpdateWasLocal = true;
-			this.currentIndex -= 1;
+			if (this.currentIndex > 0) {
+				this.currentIndex -= 1;
+			}
 			this.schedulePush();
+			return true;
 		}
+		return false;
 	}
 
 	toggleShuffle() {
