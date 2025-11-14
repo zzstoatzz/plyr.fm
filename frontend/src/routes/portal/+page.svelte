@@ -260,8 +260,9 @@
 			uploadAlbum,
 			uploadFeatures,
 			uploadImage,
-			() => {
-				loadMyTracks();
+			async () => {
+				await loadMyTracks();
+				await loadMyAlbums();
 			},
 			{
 				onSuccess: () => {
@@ -284,6 +285,7 @@
 
 			if (response.ok) {
 				await loadMyTracks();
+				await loadMyAlbums();
 			} else {
 				const error = await response.json();
 				alert(error.detail || 'failed to delete track');
@@ -332,6 +334,7 @@
 
 			if (response.ok) {
 				await loadMyTracks();
+				await loadMyAlbums();
 				cancelEdit();
 				toast.success('track updated successfully');
 			} else {
@@ -726,11 +729,11 @@
 										{/if}
 									</div>
 									<div class="album-edit-actions">
-										<label for="album-cover-input" class="file-input-label">
+										<label for="album-cover-input-{album.id}" class="file-input-label">
 											select album artwork
 										</label>
 										<input
-											id="album-cover-input"
+											id="album-cover-input-{album.id}"
 											type="file"
 											accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
 											onchange={(e) => {

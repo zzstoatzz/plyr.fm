@@ -1,6 +1,7 @@
 """albums api endpoints."""
 
 import asyncio
+import contextlib
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated
@@ -360,6 +361,11 @@ async def upload_album_cover(
         image_url = None
         if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
             image_url = f"{storage.public_image_bucket_url}/{image_id}{ext}"
+
+        # delete old image if exists (prevent R2 object leaks)
+        if album.image_id:
+            with contextlib.suppress(Exception):
+                await storage.delete(album.image_id)
 
         # update album with new image
         album.image_id = image_id
