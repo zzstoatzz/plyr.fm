@@ -16,8 +16,12 @@
 	let { children } = $props();
 	let showQueue = $state(false);
 
-	// only show default meta tags when not on a track page
-	let isTrackPage = $derived($page.url.pathname.startsWith('/track/'));
+	// only show default meta tags on pages without their own specific metadata
+	let hasPageMetadata = $derived(
+		$page.url.pathname === '/' || // homepage has its own metadata
+		$page.url.pathname.startsWith('/track/') || // track pages have specific metadata
+		$page.url.pathname.match(/^\/u\/[^/]+\/album\/[^/]+/) // album pages have specific metadata
+	);
 
 	// initialize auth on mount
 	if (browser) {
@@ -89,8 +93,8 @@
 <svelte:head>
 	<link rel="icon" href={logo} />
 
-	{#if !isTrackPage}
-		<!-- default meta tags for link previews (not on track pages) -->
+	{#if !hasPageMetadata}
+		<!-- default meta tags for pages without specific metadata -->
 		<title>{APP_NAME} - {APP_TAGLINE}</title>
 		<meta
 			name="description"
