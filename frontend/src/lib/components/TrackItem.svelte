@@ -2,6 +2,7 @@
 	import ShareButton from './ShareButton.svelte';
 	import LikeButton from './LikeButton.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
+	import LikersTooltip from './LikersTooltip.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -15,6 +16,9 @@
 	}
 
 	let { track, isPlaying = false, onPlay, isAuthenticated = false, hideAlbum = false }: Props = $props();
+
+	let showLikersTooltip = $state(false);
+	let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	// construct shareable URL - use /track/[id] for link previews
 	// the track page will redirect to home with query param for actual playback
@@ -31,6 +35,21 @@
 	function handleQueue() {
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
+	}
+
+	function handleLikesMouseEnter() {
+		// delay showing tooltip by 500ms to avoid showing on quick hovers
+		hoverTimeout = setTimeout(() => {
+			showLikersTooltip = true;
+		}, 500);
+	}
+
+	function handleLikesMouseLeave() {
+		if (hoverTimeout) {
+			clearTimeout(hoverTimeout);
+			hoverTimeout = null;
+		}
+		showLikersTooltip = false;
 	}
 </script>
 
@@ -101,7 +120,16 @@
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
 				{#if track.like_count && track.like_count > 0}
 					<span class="meta-separator">•</span>
-					<span class="likes">{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}</span>
+					<span
+						class="likes"
+						onmouseenter={handleLikesMouseEnter}
+						onmouseleave={handleLikesMouseLeave}
+					>
+						{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}
+						{#if showLikersTooltip}
+							<LikersTooltip trackId={track.id} likeCount={track.like_count} />
+						{/if}
+					</span>
 				{/if}
 			</div>
 		</div>
@@ -380,6 +408,13 @@
 	.likes {
 		color: #999;
 		font-family: inherit;
+		position: relative;
+		cursor: help;
+		transition: color 0.2s;
+	}
+
+	.likes:hover {
+		color: var(--accent);
 	}
 
 	.action-button {
