@@ -17,7 +17,6 @@
 
 	let { track, isPlaying = false, onPlay, isAuthenticated = false, hideAlbum = false }: Props = $props();
 
-	let showLikersTooltip = $state(false);
 	let likeCount = $state(track.like_count || 0);
 
 	// sync likeCount when track changes
@@ -40,15 +39,6 @@
 	function handleQueue() {
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
-	}
-
-	function handleLikesMouseEnter() {
-		// show tooltip immediately, fetch will handle its own delay
-		showLikersTooltip = true;
-	}
-
-	function handleLikesMouseLeave() {
-		showLikersTooltip = false;
 	}
 
 	function handleLikeChange(liked: boolean) {
@@ -126,16 +116,7 @@
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
 				{#if likeCount > 0}
 					<span class="meta-separator">•</span>
-					<span
-						class="likes"
-						onmouseenter={handleLikesMouseEnter}
-						onmouseleave={handleLikesMouseLeave}
-					>
-						{likeCount} {likeCount === 1 ? 'like' : 'likes'}
-						{#if showLikersTooltip}
-							<LikersTooltip trackId={track.id} likeCount={likeCount} />
-						{/if}
-					</span>
+					<LikersTooltip trackId={track.id} likeCount={likeCount} />
 				{/if}
 			</div>
 		</div>
