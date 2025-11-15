@@ -38,7 +38,15 @@ export default [
 				confirm: 'readonly',
 				navigator: 'readonly',
 				location: 'readonly',
-				history: 'readonly'
+				history: 'readonly',
+				crypto: 'readonly',
+				// svelte 5 runes
+				$state: 'readonly',
+				$derived: 'readonly',
+				$effect: 'readonly',
+				$props: 'readonly',
+				$bindable: 'readonly',
+				$inspect: 'readonly'
 			}
 		},
 		plugins: {
