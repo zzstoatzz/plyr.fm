@@ -7,7 +7,7 @@ plyr.fm uses a simple three-tier deployment strategy: development â†’ staging â†
 | environment | trigger | backend URL | database | frontend | storage |
 |-------------|---------|-------------|----------|----------|---------|
 | **development** | local | localhost:8001 | plyr-dev (neon) | localhost:5173 | audio-dev, images-dev (r2) |
-| **staging** | push to main | relay-api-staging.fly.dev | plyr-staging (neon) | cloudflare pages preview (main) | audio-staging, images-staging (r2) |
+| **staging** | push to main | api-stg.plyr.fm | plyr-staging (neon) | stg.plyr.fm (main branch) | audio-staging, images-staging (r2) |
 | **production** | github release | api.plyr.fm | plyr-prod (neon) | plyr.fm (production-fe branch) | audio-prod, images-prod (r2) |
 
 ## workflow
@@ -34,14 +34,16 @@ connects to `plyr-dev` neon database and uses `fm.plyr` atproto namespace.
 **backend**:
 1. github actions runs `.github/workflows/deploy-staging.yml`
 2. runs `alembic upgrade head` via `release_command`
-3. backend available at `https://relay-api-staging.fly.dev`
+3. backend available at `https://api-stg.plyr.fm` (fly app: `relay-api-staging`)
 
 **frontend**:
 - cloudflare pages automatically creates preview builds from `main` branch
-- uses preview environment with `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
+- uses preview environment with `PUBLIC_API_URL=https://api-stg.plyr.fm`
+- accessible at `https://stg.plyr.fm`
 
 **testing**:
-- backend: `https://relay-api-staging.fly.dev/docs`
+- frontend: `https://stg.plyr.fm`
+- backend: `https://api-stg.plyr.fm/docs`
 - database: `plyr-staging` (neon)
 - storage: `audio-staging`, `images-staging` (r2)
 
@@ -92,8 +94,11 @@ this will:
 - build output: `frontend/build`
 - production branch: `production-fe`
 - preview branch: `main`
+- custom domains:
+  - production: `plyr.fm` (points to production branch)
+  - staging: `stg.plyr.fm` (points to main branch via CNAME to `main.relay-4i6.pages.dev`)
 - environment variables:
-  - preview: `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
+  - preview: `PUBLIC_API_URL=https://api-stg.plyr.fm`
   - production: `PUBLIC_API_URL=https://api.plyr.fm`
 
 ### secrets management
@@ -127,10 +132,16 @@ if a migration fails:
 **staging**:
 - logfire: environment filter `LOGFIRE_ENVIRONMENT=staging`
 - backend logs: `flyctl logs -a relay-api-staging`
+- backend URL: `https://api-stg.plyr.fm`
+- frontend URL: `https://stg.plyr.fm`
 
 **production**:
 - logfire: environment filter `LOGFIRE_ENVIRONMENT=production`
 - backend logs: `flyctl logs -a relay-api`
+- backend URL: `https://api.plyr.fm`
+- frontend URL: `https://plyr.fm`
+
+**note**: fly.io app names still use legacy `relay-api` and `relay-api-staging` naming, but public-facing domains use `plyr.fm` branding.
 
 ## costs
 
