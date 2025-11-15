@@ -20,17 +20,9 @@ class AuthManager {
 			return;
 		}
 
-		const sessionId = this.getSessionId();
-		if (!sessionId) {
-			this.loading = false;
-			return;
-		}
-
 		try {
 			const response = await fetch(`${API_URL}/auth/me`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (response.ok) {
@@ -47,47 +39,25 @@ class AuthManager {
 		}
 	}
 
-	getSessionId(): string | null {
-		if (!browser) return null;
-		return localStorage.getItem('session_id');
-	}
-
-	setSessionId(sessionId: string): void {
-		if (!browser) return;
-		localStorage.setItem('session_id', sessionId);
-	}
-
 	clearSession(): void {
 		if (!browser) return;
-		localStorage.removeItem('session_id');
-		localStorage.removeItem('exchange_token');
 		this.user = null;
 		this.isAuthenticated = false;
 	}
 
 	async logout(): Promise<void> {
-		const sessionId = this.getSessionId();
-		if (sessionId) {
-			try {
-				await fetch(`${API_URL}/auth/logout`, {
-					method: 'POST',
-					headers: {
-						'Authorization': `Bearer ${sessionId}`
-					}
-				});
-			} catch (e) {
-				console.error('logout failed:', e);
-			}
+		try {
+			await fetch(`${API_URL}/auth/logout`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+		} catch (e) {
+			console.error('logout failed:', e);
 		}
 		this.clearSession();
 	}
 
-	// helper to get auth headers
 	getAuthHeaders(): Record<string, string> {
-		const sessionId = this.getSessionId();
-		if (sessionId) {
-			return { 'Authorization': `Bearer ${sessionId}` };
-		}
 		return {};
 	}
 }

@@ -28,13 +28,8 @@
 		queue.setAutoAdvance(autoAdvance);
 
 		try {
-			const sessionId = localStorage.getItem('session_id');
-			if (!sessionId) return;
-
 			const response = await fetch(`${API_URL}/preferences/`, {
-				headers: {
-					Authorization: `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (!response.ok) return;
@@ -70,15 +65,12 @@
 
 	async function savePreferences(update: Record<string, unknown>) {
 		try {
-			const sessionId = localStorage.getItem('session_id');
-			if (!sessionId) return;
-
 			await fetch(`${API_URL}/preferences/`, {
 				method: 'POST',
 				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${sessionId}`
+					'Content-Type': 'application/json'
 				},
+				credentials: 'include',
 				body: JSON.stringify(update)
 			});
 		} catch (error) {

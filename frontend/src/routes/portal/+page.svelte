@@ -64,17 +64,16 @@
 		const exchangeToken = params.get('exchange_token');
 
 		if (exchangeToken) {
-			// exchange token for session_id
+			// exchange token for session_id (cookie is set automatically by backend)
 			try {
 				const exchangeResponse = await fetch(`${API_URL}/auth/exchange`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
+					credentials: 'include',
 					body: JSON.stringify({ exchange_token: exchangeToken })
 				});
 
 				if (exchangeResponse.ok) {
-					const data = await exchangeResponse.json();
-					auth.setSessionId(data.session_id);
 					await auth.initialize();
 				}
 			} catch (_e) {
@@ -106,7 +105,7 @@
 		loadingTracks = true;
 		try {
 			const response = await fetch(`${API_URL}/tracks/me`, {
-				headers: auth.getAuthHeaders()
+				credentials: 'include'
 			});
 			if (response.ok) {
 				const data = await response.json();
@@ -122,7 +121,7 @@
 	async function loadArtistProfile() {
 		try {
 			const response = await fetch(`${API_URL}/artists/me`, {
-				headers: auth.getAuthHeaders()
+				credentials: 'include'
 			});
 			if (response.ok) {
 				const artist = await response.json();
@@ -163,7 +162,7 @@
 		try {
 			const response = await fetch(`${API_URL}/albums/${albumId}/cover`, {
 				method: 'POST',
-				headers: auth.getAuthHeaders(),
+				credentials: 'include',
 				body: formData
 			});
 
@@ -202,9 +201,9 @@
 			const response = await fetch(`${API_URL}/artists/me`, {
 				method: 'PUT',
 				headers: {
-					'Content-Type': 'application/json',
-					...auth.getAuthHeaders()
+					'Content-Type': 'application/json'
 				},
+				credentials: 'include',
 				body: JSON.stringify({
 					display_name: displayName,
 					bio: bio || null,
@@ -279,7 +278,7 @@
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
 				method: 'DELETE',
-				headers: auth.getAuthHeaders()
+				credentials: 'include'
 			});
 
 			if (response.ok) {
@@ -328,7 +327,7 @@
 			const response = await fetch(`${API_URL}/tracks/${trackId}`, {
 				method: 'PATCH',
 				body: formData,
-				headers: auth.getAuthHeaders()
+				credentials: 'include'
 			});
 
 			if (response.ok) {

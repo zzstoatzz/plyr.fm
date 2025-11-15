@@ -16,19 +16,9 @@ export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
 		};
 	}
 
-	const sessionId = localStorage.getItem('session_id');
-	if (!sessionId) {
-		return {
-			user: null,
-			isAuthenticated: false
-		};
-	}
-
 	try {
 		const response = await fetch(`${API_URL}/auth/me`, {
-			headers: {
-				'Authorization': `Bearer ${sessionId}`
-			}
+			credentials: 'include'
 		});
 
 		if (response.ok) {

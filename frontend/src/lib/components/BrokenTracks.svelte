@@ -16,12 +16,9 @@
 
 	async function loadBrokenTracks() {
 		loading = true;
-		const sessionId = localStorage.getItem('session_id');
 		try {
 			const response = await fetch(`${API_URL}/tracks/me/broken`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 			if (response.ok) {
 				const data = await response.json();
@@ -42,14 +39,11 @@
 		}
 
 		restoringTrackId = trackId;
-		const sessionId = localStorage.getItem('session_id');
 
 		try {
 			const response = await fetch(`${API_URL}/tracks/${trackId}/restore-record`, {
 				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (response.ok) {
@@ -86,7 +80,6 @@
 		}
 
 		restoringAll = true;
-		const sessionId = localStorage.getItem('session_id');
 		const trackCount = brokenTracks.length;
 
 		try {
@@ -94,9 +87,7 @@
 				brokenTracks.map(track =>
 					fetch(`${API_URL}/tracks/${track.id}/restore-record`, {
 						method: 'POST',
-						headers: {
-							'Authorization': `Bearer ${sessionId}`
-						}
+						credentials: 'include'
 					}).then(async response => {
 						if (!response.ok) {
 							let errorMsg = `failed to restore ${track.title}`;
