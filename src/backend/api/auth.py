@@ -109,7 +109,6 @@ async def exchange_token(
     )
 
     if is_browser:
-        cookie_domain = None
         use_cookies = False
 
         frontend_url = settings.frontend.url
@@ -118,7 +117,6 @@ async def exchange_token(
             frontend_host = parsed.netloc.split(":")[0]
 
             if frontend_host.endswith(".plyr.fm") or frontend_host == "plyr.fm":
-                cookie_domain = ".plyr.fm"
                 use_cookies = True
 
         if use_cookies:
@@ -127,8 +125,7 @@ async def exchange_token(
                 value=session_id,
                 httponly=True,
                 secure=True,
-                samesite="none",
-                domain=cookie_domain,
+                samesite="lax",
                 max_age=14 * 24 * 60 * 60,
             )
 
@@ -153,8 +150,7 @@ async def logout(
                 key="session_id",
                 httponly=True,
                 secure=True,
-                samesite="none",
-                domain=".plyr.fm",
+                samesite="lax",
             )
 
     return response
