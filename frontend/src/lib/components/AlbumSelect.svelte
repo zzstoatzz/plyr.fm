@@ -107,6 +107,7 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 1rem;
+		font-family: inherit;
 		transition: all 0.2s;
 	}
 
@@ -169,6 +170,7 @@
 		border-bottom: 1px solid #2a2a2a;
 		color: white;
 		text-align: left;
+		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.15s;
 		min-width: 0;

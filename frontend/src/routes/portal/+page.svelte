@@ -907,6 +907,7 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 1rem;
+		font-family: inherit;
 		transition: all 0.2s;
 	}
 
@@ -991,6 +992,7 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 0.9rem;
+		font-family: inherit;
 		cursor: pointer;
 	}
 
@@ -1020,6 +1022,7 @@
 		border-radius: 4px;
 		font-size: 1rem;
 		font-weight: 600;
+		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
 	}
@@ -1246,6 +1249,7 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 0.9rem;
+		font-family: inherit;
 	}
 
 	.current-image-preview {
