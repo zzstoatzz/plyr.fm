@@ -46,26 +46,6 @@
 			player.volume = parseFloat(savedVolume);
 		}
 
-		// restore playback position if available
-		const savedPlaybackState = localStorage.getItem('player_playback_state');
-		if (savedPlaybackState && player.currentTrack) {
-			try {
-				const { file_id, position, timestamp } = JSON.parse(savedPlaybackState);
-				const isStale = Date.now() - timestamp > 1000 * 60 * 60; // 1 hour
-
-				if (!isStale && file_id === player.currentTrack.file_id && position > 0) {
-					// wait for audio to load before seeking
-					if (player.audioElement) {
-						player.audioElement.addEventListener('loadedmetadata', () => {
-							player.currentTime = position;
-						}, { once: true });
-					}
-				}
-			} catch (error) {
-				console.warn('failed to restore playback state:', error);
-			}
-		}
-
 		// update player height css variable for dynamic positioning
 		function updatePlayerHeight() {
 			const playerEl = document.querySelector('.player') as HTMLElement | null;
@@ -115,20 +95,6 @@
 	// save volume to localStorage when it changes
 	$effect(() => {
 		localStorage.setItem('player_volume', player.volume.toString());
-	});
-
-	// save playback position to localStorage periodically
-	let lastSavedPosition = $state(0);
-	$effect(() => {
-		// only save if we're playing and position has changed significantly
-		if (player.currentTrack && Math.abs(player.currentTime - lastSavedPosition) > 5) {
-			lastSavedPosition = player.currentTime;
-			localStorage.setItem('player_playback_state', JSON.stringify({
-				file_id: player.currentTrack.file_id,
-				position: player.currentTime,
-				timestamp: Date.now()
-			}));
-		}
 	});
 
 	// handle track changes - load new audio when track changes
