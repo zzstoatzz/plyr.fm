@@ -17,9 +17,9 @@ interface UploadTask {
 }
 
 interface UploadProgressCallback {
-	onProgress?: (loaded: number, total: number) => void;
-	onSuccess?: (uploadId: string) => void;
-	onError?: (error: string) => void;
+	onProgress?: (_loaded: number, _total: number) => void;
+	onSuccess?: (_uploadId: string) => void;
+	onError?: (_error: string) => void;
 }
 
 // global upload manager using Svelte 5 runes
@@ -137,12 +137,11 @@ class UploaderState {
 						this.activeUploads.delete(taskId);
 						toast.error('lost connection to server');
 					};
-				} catch (e) {
+				} catch {
 					toast.dismiss(toastId);
-					const errorMsg = 'failed to parse server response';
-					toast.error(errorMsg);
+					toast.error('failed to parse server response');
 					if (callbacks?.onError) {
-						callbacks.onError(errorMsg);
+						callbacks.onError('failed to parse server response');
 					}
 				}
 			} else {

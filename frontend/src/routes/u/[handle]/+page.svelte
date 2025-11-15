@@ -22,10 +22,6 @@
 	let analytics: Analytics | null = $state(null);
 	let analyticsLoading = $state(false);
 
-	function checkIsOwnProfile(): boolean {
-		return auth.user !== null && artist !== null && auth.user.did === artist.did;
-	}
-	let isOwnProfile = $derived(checkIsOwnProfile());
 
 	async function handleLogout() {
 		await auth.logout();
@@ -44,8 +40,8 @@
 			if (response.ok) {
 				analytics = await response.json();
 			}
-		} catch (e) {
-			console.error('failed to load analytics:', e);
+		} catch (_e) {
+			console.error('failed to load analytics:', _e);
 		} finally {
 			// ensure loading state shows for at least minDisplayTime
 			const elapsed = Date.now() - startTime;

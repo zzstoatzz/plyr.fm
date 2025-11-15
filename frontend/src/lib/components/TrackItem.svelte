@@ -10,7 +10,7 @@
 	interface Props {
 		track: Track;
 		isPlaying?: boolean;
-		onPlay: (track: Track) => void;
+		onPlay: (_track: Track) => void;
 		isAuthenticated?: boolean;
 		hideAlbum?: boolean;
 	}

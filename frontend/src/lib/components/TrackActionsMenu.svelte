@@ -85,7 +85,7 @@
 				}
 			}
 			closeMenu();
-		} catch (e) {
+		} catch {
 			// revert on error
 			liked = previousState;
 			toast.error('failed to update like');

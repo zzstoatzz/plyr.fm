@@ -53,7 +53,7 @@
 			});
 
 			if (response.ok) {
-				const data = await response.json();
+				await response.json();
 				toast.success(`restored record for ${trackTitle}`);
 				// remove from broken tracks list
 				brokenTracks = brokenTracks.filter(t => t.id !== trackId);

@@ -4,8 +4,8 @@
 
 	interface Props {
 		selected: FeaturedArtist[];
-		onAdd: (artist: FeaturedArtist) => void;
-		onRemove: (did: string) => void;
+		onAdd: (_artist: FeaturedArtist) => void;
+		onRemove: (_did: string) => void;
 		maxFeatures?: number;
 		disabled?: boolean;
 	}
@@ -32,8 +32,8 @@
 				results = data.results;
 				showResults = true;
 			}
-		} catch (e) {
-			console.error('search failed:', e);
+		} catch (_e) {
+			console.error('search failed:', _e);
 		} finally {
 			searching = false;
 		}

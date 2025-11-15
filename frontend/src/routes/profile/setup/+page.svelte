@@ -35,8 +35,8 @@
 					auth.setSessionId(data.session_id);
 					await auth.initialize();
 				}
-			} catch (e) {
-				console.error('failed to exchange token:', e);
+			} catch (_e) {
+				console.error('failed to exchange token:', _e);
 			}
 
 			// remove exchange_token from URL
@@ -54,7 +54,7 @@
 
 			// try to fetch avatar from bluesky
 			await fetchAvatar();
-		} catch (e) {
+		} catch {
 			auth.clearSession();
 			window.location.href = '/login';
 		} finally {
@@ -78,7 +78,7 @@
 				window.location.href = '/portal';
 				return;
 			}
-		} catch (e) {
+		} catch {
 			// profile doesn't exist, which is expected
 		} finally {
 			fetchingAvatar = false;

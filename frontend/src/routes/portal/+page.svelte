@@ -32,7 +32,6 @@
 
 	// upload form fields
 	let title = '';
-	let albumId: string | null = null;
 	let albumTitle = '';
 	let file: File | null = null;
 	let imageFile: File | null = null;
@@ -78,8 +77,8 @@
 					auth.setSessionId(data.session_id);
 					await auth.initialize();
 				}
-			} catch (e) {
-				console.error('failed to exchange token:', e);
+			} catch (_e) {
+				console.error('failed to exchange token:', _e);
 			}
 
 			// remove exchange_token from URL
@@ -95,8 +94,8 @@
 			await loadMyTracks();
 			await loadArtistProfile();
 			await loadMyAlbums();
-		} catch (e) {
-			console.error('error loading portal data:', e);
+		} catch (_e) {
+			console.error('error loading portal data:', _e);
 			error = 'failed to load portal data';
 		} finally {
 			loading = false;
@@ -113,8 +112,8 @@
 				const data = await response.json();
 				tracks = data.tracks;
 			}
-		} catch (e) {
-			console.error('failed to load tracks:', e);
+		} catch (_e) {
+			console.error('failed to load tracks:', _e);
 		} finally {
 			loadingTracks = false;
 		}
@@ -131,8 +130,8 @@
 				bio = artist.bio || '';
 				avatarUrl = artist.avatar_url || '';
 			}
-		} catch (e) {
-			console.error('failed to load artist profile:', e);
+		} catch (_e) {
+			console.error('failed to load artist profile:', _e);
 		}
 	}
 
@@ -145,8 +144,8 @@
 				const data = await response.json();
 				albums = data.albums;
 			}
-		} catch (e) {
-			console.error('failed to load albums:', e);
+		} catch (_e) {
+			console.error('failed to load albums:', _e);
 		} finally {
 			loadingAlbums = false;
 		}
@@ -177,8 +176,8 @@
 				const data = await response.json();
 				toast.error(data.detail || 'failed to upload cover');
 			}
-		} catch (e) {
-			console.error('failed to upload album cover:', e);
+		} catch (_e) {
+			console.error('failed to upload album cover:', _e);
 			toast.error('failed to upload cover art');
 		}
 	}
@@ -369,8 +368,8 @@
 					file = null;
 					return;
 				}
-			} catch (e) {
-				console.error('failed to validate file size:', e);
+			} catch (_e) {
+				console.error('failed to validate file size:', _e);
 				// continue anyway - server will validate
 			}
 
@@ -395,8 +394,8 @@
 					imageFile = null;
 					return;
 				}
-			} catch (e) {
-				console.error('failed to validate image size:', e);
+			} catch (_e) {
+				console.error('failed to validate image size:', _e);
 				// continue anyway - server will validate
 			}
 

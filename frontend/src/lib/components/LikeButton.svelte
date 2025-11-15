@@ -8,7 +8,7 @@
 		initialLiked?: boolean;
 		disabled?: boolean;
 		disabledReason?: string;
-		onLikeChange?: (liked: boolean) => void;
+		onLikeChange?: (_liked: boolean) => void;
 	}
 
 	let { trackId, trackTitle, initialLiked = false, disabled = false, disabledReason, onLikeChange }: Props = $props();
@@ -52,7 +52,7 @@
 					toast.info(`unliked ${trackTitle}`);
 				}
 			}
-		} catch (e) {
+		} catch {
 			// revert on error
 			liked = previousState;
 			toast.error('failed to update like');
