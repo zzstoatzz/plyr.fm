@@ -193,6 +193,31 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 	}
 
+	/* custom scrollbar styling */
+	.search-results::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.search-results::-webkit-scrollbar-track {
+		background: #0a0a0a;
+		border-radius: 4px;
+	}
+
+	.search-results::-webkit-scrollbar-thumb {
+		background: #333;
+		border-radius: 4px;
+	}
+
+	.search-results::-webkit-scrollbar-thumb:hover {
+		background: #444;
+	}
+
+	/* firefox scrollbar */
+	.search-results {
+		scrollbar-width: thin;
+		scrollbar-color: #333 #0a0a0a;
+	}
+
 	.search-result-item {
 		width: 100%;
 		display: flex;

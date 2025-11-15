@@ -3,6 +3,7 @@
 	import { replaceState } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
+	import AlbumSelect from '$lib/components/AlbumSelect.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
@@ -503,31 +504,11 @@
 
 				<div class="form-group">
 					<label for="album">album (optional)</label>
-					<input
-						id="album"
-						type="text"
+					<AlbumSelect
+						{albums}
 						bind:value={albumTitle}
-						placeholder="album name"
-						list="albums-list"
-						autocomplete="off"
+						onSelect={(title) => { albumTitle = title; }}
 					/>
-					<datalist id="albums-list">
-						{#each albums as album}
-							<option value={album.title}>{album.title}</option>
-						{/each}
-					</datalist>
-					{#if albumTitle && albums.length > 0}
-						{@const matchingAlbum = albums.find(a => a.title.toLowerCase() === albumTitle.toLowerCase())}
-						{@const similarAlbums = albums.filter(a =>
-							a.title.toLowerCase() !== albumTitle.toLowerCase() &&
-							a.title.toLowerCase().includes(albumTitle.toLowerCase())
-						)}
-						{#if !matchingAlbum && similarAlbums.length > 0}
-							<p class="album-hint">
-								similar: {similarAlbums.map(a => a.title).join(', ')}
-							</p>
-						{/if}
-					{/if}
 				</div>
 
 				<div class="form-group">
@@ -602,26 +583,12 @@
 										</div>
 										<div class="edit-field-group">
 											<label for="edit-album" class="edit-label">album (optional)</label>
-											<input id="edit-album"
-												type="text"
+											<AlbumSelect
+												{albums}
 												bind:value={editAlbum}
+												onSelect={(title) => { editAlbum = title; }}
 												placeholder="album (optional)"
-												class="edit-input"
-												list="albums-list"
-												autocomplete="off"
 											/>
-											{#if editAlbum && albums.length > 0}
-												{@const matchingAlbum = albums.find(a => a.title.toLowerCase() === editAlbum.toLowerCase())}
-												{@const similarAlbums = albums.filter(a =>
-													a.title.toLowerCase() !== editAlbum.toLowerCase() &&
-													a.title.toLowerCase().includes(editAlbum.toLowerCase())
-												)}
-												{#if !matchingAlbum && similarAlbums.length > 0}
-													<p class="album-hint">
-														similar: {similarAlbums.map(a => a.title).join(', ')}
-													</p>
-												{/if}
-											{/if}
 										</div>
 										<div class="edit-field-group">
 											<div class="edit-label">featured artists (optional)</div>
@@ -981,13 +948,6 @@
 		margin-top: 0.5rem;
 		font-size: 0.85rem;
 		color: #666;
-	}
-
-	.album-hint {
-		margin-top: 0.5rem;
-		font-size: 0.85rem;
-		color: #ff9800;
-		font-style: italic;
 	}
 
 	.message {
