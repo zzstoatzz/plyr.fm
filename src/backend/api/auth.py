@@ -1,7 +1,6 @@
 """authentication api endpoints."""
 
 from typing import Annotated
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -108,29 +107,17 @@ async def exchange_token(
         for browser in ["mozilla", "chrome", "safari", "firefox", "edge", "opera"]
     )
 
-    if is_browser:
-        cookie_domain = None
-        use_cookies = False
+    if is_browser and settings.frontend.url:
+        is_localhost = settings.frontend.url.startswith("http://localhost")
 
-        frontend_url = settings.frontend.url
-        if frontend_url and not frontend_url.startswith("http://localhost"):
-            parsed = urlparse(frontend_url)
-            frontend_host = parsed.netloc.split(":")[0]
-
-            if frontend_host.endswith(".plyr.fm") or frontend_host == "plyr.fm":
-                cookie_domain = ".plyr.fm"
-                use_cookies = True
-
-        if use_cookies:
-            response.set_cookie(
-                key="session_id",
-                value=session_id,
-                httponly=True,
-                secure=True,
-                samesite="none",
-                domain=cookie_domain,
-                max_age=14 * 24 * 60 * 60,
-            )
+        response.set_cookie(
+            key="session_id",
+            value=session_id,
+            httponly=True,
+            secure=not is_localhost,  # secure cookies require HTTPS
+            samesite="lax",
+            max_age=14 * 24 * 60 * 60,
+        )
 
     return ExchangeTokenResponse(session_id=session_id)
 
@@ -143,19 +130,15 @@ async def logout(
     await delete_session(session.session_id)
     response = JSONResponse(content={"message": "logged out successfully"})
 
-    frontend_url = settings.frontend.url
-    if frontend_url and not frontend_url.startswith("http://localhost"):
-        parsed = urlparse(frontend_url)
-        frontend_host = parsed.netloc.split(":")[0]
+    if settings.frontend.url:
+        is_localhost = settings.frontend.url.startswith("http://localhost")
 
-        if frontend_host.endswith(".plyr.fm") or frontend_host == "plyr.fm":
-            response.delete_cookie(
-                key="session_id",
-                httponly=True,
-                secure=True,
-                samesite="none",
-                domain=".plyr.fm",
-            )
+        response.delete_cookie(
+            key="session_id",
+            httponly=True,
+            secure=not is_localhost,
+            samesite="lax",
+        )
 
     return response
 

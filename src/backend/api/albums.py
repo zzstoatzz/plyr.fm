@@ -6,7 +6,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Cookie, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -237,6 +237,7 @@ async def get_album(
     slug: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     request: Request,
+    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> AlbumResponse:
     """get album details with all tracks for a specific artist."""
     # look up artist + album
@@ -265,9 +266,10 @@ async def get_album(
 
     # get authenticated user's likes for this album's tracks only
     liked_track_ids: set[int] | None = None
-    if (
-        session_id := request.headers.get("authorization", "").replace("Bearer ", "")
-    ) and (auth_session := await get_session(session_id)):
+    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
+        "Bearer ", ""
+    )
+    if session_id and (auth_session := await get_session(session_id)):
         if track_ids:
             liked_result = await db.execute(
                 select(TrackLike.track_id).where(

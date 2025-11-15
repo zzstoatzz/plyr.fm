@@ -13,6 +13,7 @@ import logfire
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Cookie,
     Depends,
     File,
     Form,
@@ -612,15 +613,17 @@ async def list_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     request: Request,
     artist_did: str | None = None,
+    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> dict:
     """list all tracks, optionally filtered by artist DID."""
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    # get authenticated user if auth header present
+    # get authenticated user if cookie or auth header present
     liked_track_ids: set[int] | None = None
-    if (
-        session_id := request.headers.get("authorization", "").replace("Bearer ", "")
-    ) and (auth_session := await get_session(session_id)):
+    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
+        "Bearer ", ""
+    )
+    if session_id and (auth_session := await get_session(session_id)):
         liked_result = await db.execute(
             select(TrackLike.track_id).where(TrackLike.user_did == auth_session.did)
         )
@@ -1310,13 +1313,19 @@ async def list_liked_tracks(
 
 @router.get("/{track_id}")
 async def get_track(
-    track_id: int, db: Annotated[AsyncSession, Depends(get_db)], request: Request
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    request: Request,
+    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> dict:
     """get a specific track."""
-    # get authenticated user if auth header present
+    # get authenticated user if cookie or auth header present
     liked_track_ids: set[int] | None = None
+    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
+        "Bearer ", ""
+    )
     if (
-        (session_id := request.headers.get("authorization", "").replace("Bearer ", ""))
+        session_id
         and (auth_session := await get_session(session_id))
         and await db.scalar(
             select(TrackLike.track_id).where(

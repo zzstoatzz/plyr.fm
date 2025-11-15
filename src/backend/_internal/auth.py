@@ -279,7 +279,7 @@ async def consume_exchange_token(token: str) -> str | None:
 
 async def require_auth(
     authorization: Annotated[str | None, Header()] = None,
-    session_id_cookie: Annotated[str | None, Cookie()] = None,
+    session_id: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> Session:
     """fastapi dependency to require authentication with expiration validation.
 
@@ -287,20 +287,20 @@ async def require_auth(
     header (for SDK/CLI clients). this enables secure HttpOnly cookies for browsers
     while maintaining bearer token support for API clients.
     """
-    session_id = None
+    session_id_value = None
 
-    if session_id_cookie:
-        session_id = session_id_cookie
+    if session_id:
+        session_id_value = session_id
     elif authorization and authorization.startswith("Bearer "):
-        session_id = authorization.removeprefix("Bearer ")
+        session_id_value = authorization.removeprefix("Bearer ")
 
-    if not session_id:
+    if not session_id_value:
         raise HTTPException(
             status_code=401,
             detail="not authenticated - login required",
         )
 
-    session = await get_session(session_id)
+    session = await get_session(session_id_value)
     if not session:
         raise HTTPException(
             status_code=401,
@@ -312,14 +312,14 @@ async def require_auth(
 
 async def require_artist_profile(
     authorization: Annotated[str | None, Header()] = None,
-    session_id_cookie: Annotated[str | None, Cookie()] = None,
+    session_id: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> Session:
     """fastapi dependency to require authentication AND complete artist profile.
 
     Returns 403 with specific message if artist profile doesn't exist,
     prompting frontend to redirect to profile setup.
     """
-    session = await require_auth(authorization, session_id_cookie)
+    session = await require_auth(authorization, session_id)
 
     # check if artist profile exists
     if not await check_artist_profile_exists(session.did):

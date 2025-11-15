@@ -7,7 +7,7 @@ plyr.fm uses a simple three-tier deployment strategy: development → staging �
 | environment | trigger | backend URL | database | frontend | storage |
 |-------------|---------|-------------|----------|----------|---------|
 | **development** | local | localhost:8001 | plyr-dev (neon) | localhost:5173 | audio-dev, images-dev (r2) |
-| **staging** | push to main | relay-api-staging.fly.dev | plyr-staging (neon) | cloudflare pages preview (main) | audio-staging, images-staging (r2) |
+| **staging** | push to main | api-stg.plyr.fm | plyr-staging (neon) | stg.plyr.fm (main branch) | audio-staging, images-staging (r2) |
 | **production** | github release | api.plyr.fm | plyr-prod (neon) | plyr.fm (production-fe branch) | audio-prod, images-prod (r2) |
 
 ## workflow
@@ -34,14 +34,16 @@ connects to `plyr-dev` neon database and uses `fm.plyr` atproto namespace.
 **backend**:
 1. github actions runs `.github/workflows/deploy-staging.yml`
 2. runs `alembic upgrade head` via `release_command`
-3. backend available at `https://relay-api-staging.fly.dev`
+3. backend available at `https://api-stg.plyr.fm` (custom domain) and `https://relay-api-staging.fly.dev` (fly.dev domain)
 
 **frontend**:
-- cloudflare pages automatically creates preview builds from `main` branch
-- uses preview environment with `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
+- cloudflare pages project `plyr-fm-stg` tracks `main` branch
+- uses production environment with `PUBLIC_API_URL=https://api-stg.plyr.fm`
+- available at `https://stg.plyr.fm` (custom domain)
 
 **testing**:
-- backend: `https://relay-api-staging.fly.dev/docs`
+- frontend: `https://stg.plyr.fm`
+- backend: `https://api-stg.plyr.fm/docs`
 - database: `plyr-staging` (neon)
 - storage: `audio-staging`, `images-staging` (r2)
 
@@ -86,21 +88,32 @@ this will:
 
 ### frontend
 
-**cloudflare pages**:
+**cloudflare pages** (two separate projects):
+
+**plyr-fm** (production):
 - framework: sveltekit
 - build command: `cd frontend && bun run build`
 - build output: `frontend/build`
 - production branch: `production-fe`
-- preview branch: `main`
-- environment variables:
-  - preview: `PUBLIC_API_URL=https://relay-api-staging.fly.dev`
-  - production: `PUBLIC_API_URL=https://api.plyr.fm`
+- production environment: `PUBLIC_API_URL=https://api.plyr.fm`
+- custom domain: `plyr.fm`
+
+**plyr-fm-stg** (staging):
+- framework: sveltekit
+- build command: `cd frontend && bun run build`
+- build output: `frontend/build`
+- production branch: `main`
+- production environment: `PUBLIC_API_URL=https://api-stg.plyr.fm`
+- custom domain: `stg.plyr.fm`
 
 ### secrets management
 
 all secrets configured via `flyctl secrets set`. key environment variables:
 - `DATABASE_URL` → neon connection string (env-specific)
-- `ATPROTO_CLIENT_ID`, `ATPROTO_REDIRECT_URI` → oauth config (env-specific URLs)
+- `FRONTEND_URL` → frontend URL for CORS (production: `https://plyr.fm`, staging: `https://stg.plyr.fm`)
+- `ATPROTO_CLIENT_ID`, `ATPROTO_REDIRECT_URI` → oauth config (env-specific, must use custom domains for cookie-based auth)
+  - production: `https://api.plyr.fm/client-metadata.json` and `https://api.plyr.fm/auth/callback`
+  - staging: `https://api-stg.plyr.fm/client-metadata.json` and `https://api-stg.plyr.fm/auth/callback`
 - `OAUTH_ENCRYPTION_KEY` → unique per environment
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` → r2 credentials
 - `LOGFIRE_WRITE_TOKEN`, `LOGFIRE_ENVIRONMENT` → observability config
@@ -144,7 +157,23 @@ if a migration fails:
 
 ## workflow summary
 
-- **merge PR to main**: deploys staging backend, creates frontend preview
-- **run `just release`**: deploys production backend + production frontend together
+- **merge PR to main**: deploys staging backend + staging frontend to `stg.plyr.fm`
+- **run `just release`**: deploys production backend + production frontend to `plyr.fm`
 - **database migrations**: run automatically before deploy completes
 - **rollback**: revert github release or restore database from neon backup
+
+## custom domain architecture
+
+both environments use custom domains on the same eTLD+1 (`plyr.fm`) to enable secure cookie-based authentication:
+
+**staging**:
+- frontend: `stg.plyr.fm` → cloudflare pages project `plyr-fm-stg`
+- backend: `api-stg.plyr.fm` → fly.io app `relay-api-staging`
+- same eTLD+1 allows HttpOnly cookies with `Domain=.plyr.fm`
+
+**production**:
+- frontend: `plyr.fm` → cloudflare pages project `plyr-fm`
+- backend: `api.plyr.fm` → fly.io app `relay-api`
+- same eTLD+1 allows HttpOnly cookies with `Domain=.plyr.fm`
+
+this architecture prevents XSS attacks by storing session tokens in HttpOnly cookies instead of localStorage.
