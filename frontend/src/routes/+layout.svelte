@@ -92,6 +92,8 @@
 
 <svelte:head>
 	<link rel="icon" href={logo} />
+	<link rel="manifest" href="/manifest.webmanifest" />
+	<meta name="theme-color" content="#0a0a0a" />
 
 	{#if !hasPageMetadata}
 		<!-- default meta tags for pages without specific metadata -->
