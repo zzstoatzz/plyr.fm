@@ -113,9 +113,10 @@
 		<div class="tracks-section">
 			<h2 class="section-heading">tracks</h2>
 			<div class="tracks-list">
-				{#each album.tracks as track}
+				{#each album.tracks as track, i}
 					<TrackItem
 						{track}
+						index={i}
 						isPlaying={player.currentTrack?.id === track.id}
 						onPlay={playTrack}
 						{isAuthenticated}
