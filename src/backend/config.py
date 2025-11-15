@@ -130,8 +130,25 @@ class FrontendSettings(RelaySettingsSection):
         if self.cors_origin_regex is not None:
             return self.cors_origin_regex
 
-        # default: allow localhost for dev + plyr.fm + cloudflare pages (including preview deployments)
-        return r"^(https://(www\.)?plyr\.fm|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
+        # derive allowed origins based on FRONTEND_URL
+        # production: FRONTEND_URL=https://plyr.fm → allow plyr.fm + www.plyr.fm
+        # staging: FRONTEND_URL=https://stg.plyr.fm → allow stg.plyr.fm
+        # always allow localhost for local dev and cloudflare preview deployments
+
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.url)
+        hostname = parsed.hostname or "localhost"
+
+        if hostname == "stg.plyr.fm":
+            # staging: allow stg.plyr.fm
+            return r"^(https://stg\.plyr\.fm|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
+        elif hostname in ("plyr.fm", "www.plyr.fm"):
+            # production: allow plyr.fm and www.plyr.fm
+            return r"^(https://(www\.)?plyr\.fm|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
+        else:
+            # local dev: allow localhost
+            return r"^(http://localhost:5173)$"
 
 
 class DatabaseSettings(RelaySettingsSection):
