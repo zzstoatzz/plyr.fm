@@ -14,6 +14,31 @@ plyr.fm uses secure cookie-based authentication to protect user sessions from XS
 7. backend sets HttpOnly cookie and returns session_id
 8. all subsequent requests automatically include cookie
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User Browser
+    participant FE as Frontend (Svelte)
+    participant API as Backend API
+    participant PDS as User PDS
+    participant DB as Session DB
+
+    U->>FE: Visit /portal (unauthenticated)
+    FE->>API: GET /auth/start?handle=handle
+    API-->>U: 307 redirect to PDS authorize
+    U->>PDS: Approve OAuth request
+    PDS-->>API: /auth/callback (code, state, iss)
+    API->>PDS: POST /oauth/token
+    API->>DB: INSERT session (encrypted tokens)
+    API-->>U: 303 redirect /portal?exchange_token=…
+    FE->>API: POST /auth/exchange {exchange_token}
+    API->>DB: UPDATE exchange token (mark used)
+    API-->>FE: Set-Cookie session_id=… (HttpOnly)
+    FE->>API: Subsequent fetches w/ credentials: include
+    API->>DB: SELECT session via cookie
+    API-->>FE: JSON response (tracks, likes, uploads…)
+```
+
 **key security properties**:
 - session tokens stored in HttpOnly cookies (not accessible to JavaScript)
 - cookies use `Secure` flag (HTTPS only in production)
