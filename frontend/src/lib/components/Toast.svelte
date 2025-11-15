@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toast } from '$lib/toast.svelte';
-	import { fade, scale } from 'svelte/transition';
+	import { fade } from 'svelte/transition';
 
 	// icons for different toast types
 	const icons: Record<string, string> = {
