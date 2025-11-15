@@ -108,7 +108,7 @@ plyr.fm/
 ## links
 
 - **production**: https://plyr.fm
-- **production API**: https://api.plyr.fm
+- **API docs**: https://api.plyr.fm/docs
 - **repository**: https://github.com/zzstoatzz/plyr.fm
 
 ## documentation
