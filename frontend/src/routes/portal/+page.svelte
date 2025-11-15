@@ -3,6 +3,7 @@
 	import { replaceState } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
+	import AlbumSelect from '$lib/components/AlbumSelect.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
@@ -503,11 +504,9 @@
 
 				<div class="form-group">
 					<label for="album">album (optional)</label>
-					<input
-						id="album"
-						type="text"
+					<AlbumSelect
+						{albums}
 						bind:value={albumTitle}
-						placeholder="album name"
 					/>
 				</div>
 
@@ -583,11 +582,10 @@
 										</div>
 										<div class="edit-field-group">
 											<label for="edit-album" class="edit-label">album (optional)</label>
-											<input id="edit-album"
-												type="text"
+											<AlbumSelect
+												{albums}
 												bind:value={editAlbum}
 												placeholder="album (optional)"
-												class="edit-input"
 											/>
 										</div>
 										<div class="edit-field-group">
@@ -907,6 +905,7 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 1rem;
+		font-family: inherit;
 		transition: all 0.2s;
 	}
 
@@ -991,6 +990,7 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 0.9rem;
+		font-family: inherit;
 		cursor: pointer;
 	}
 
@@ -1020,6 +1020,7 @@
 		border-radius: 4px;
 		font-size: 1rem;
 		font-weight: 600;
+		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
 	}
@@ -1246,6 +1247,7 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 0.9rem;
+		font-family: inherit;
 	}
 
 	.current-image-preview {

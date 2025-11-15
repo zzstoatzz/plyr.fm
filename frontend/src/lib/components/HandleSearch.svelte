@@ -158,6 +158,7 @@
 		border-radius: 4px;
 		color: white;
 		font-size: 1rem;
+		font-family: inherit;
 		transition: all 0.2s;
 	}
 
@@ -193,6 +194,31 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 	}
 
+	/* custom scrollbar styling */
+	.search-results::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.search-results::-webkit-scrollbar-track {
+		background: #0a0a0a;
+		border-radius: 4px;
+	}
+
+	.search-results::-webkit-scrollbar-thumb {
+		background: #333;
+		border-radius: 4px;
+	}
+
+	.search-results::-webkit-scrollbar-thumb:hover {
+		background: #444;
+	}
+
+	/* firefox scrollbar */
+	.search-results {
+		scrollbar-width: thin;
+		scrollbar-color: #333 #0a0a0a;
+	}
+
 	.search-result-item {
 		width: 100%;
 		display: flex;
@@ -204,6 +230,7 @@
 		border-bottom: 1px solid #2a2a2a;
 		color: white;
 		text-align: left;
+		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.15s;
 		min-width: 0; /* allow flex child to shrink */
@@ -291,6 +318,7 @@
 		border: none;
 		color: #888;
 		font-size: 1.3rem;
+		font-family: inherit;
 		line-height: 1;
 		cursor: pointer;
 		padding: 0;
