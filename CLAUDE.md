@@ -13,6 +13,7 @@ REMEMBER WE HAVE THE @justfile
 - **logs**: `flyctl logs` is BLOCKING - use `run_in_background=true`
 - **type hints**: required everywhere
 - **ATProto namespaces**: NEVER use Bluesky lexicons (app.bsky.*). ALWAYS use our namespace (fm.plyr.*) for ALL records
+- **communication**: use emojis sparingly and strictly for emphasis (avoid excessive check marks)
 
 ## structure
 

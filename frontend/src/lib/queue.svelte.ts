@@ -16,7 +16,7 @@ class Queue {
 	revision = $state<number | null>(null);
 	etag = $state<string | null>(null);
 	syncInProgress = $state(false);
-	lastUpdateWasLocal = $state(true);
+	lastUpdateWasLocal = $state(false);
 
 	initialized = false;
 	hydrating = false;
