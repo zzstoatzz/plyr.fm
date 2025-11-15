@@ -1,4 +1,6 @@
-export const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8001';
+import { PUBLIC_API_URL } from '$env/static/public';
+
+export const API_URL = PUBLIC_API_URL || 'http://localhost:8001';
 
 interface ServerConfig {
 	max_upload_size_mb: number;
