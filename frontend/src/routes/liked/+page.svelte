@@ -72,9 +72,10 @@
 		</div>
 	{:else}
 		<div class="tracks-list">
-			{#each data.tracks as track (track.id)}
+			{#each data.tracks as track, i (track.id)}
 				<TrackItem
 					{track}
+					index={i}
 					isPlaying={player.currentTrack?.id === track.id && !player.paused}
 					onPlay={playTrack}
 					isAuthenticated={auth.isAuthenticated}

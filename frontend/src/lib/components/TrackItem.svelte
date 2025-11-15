@@ -13,9 +13,14 @@
 		onPlay: (_track: Track) => void;
 		isAuthenticated?: boolean;
 		hideAlbum?: boolean;
+		index?: number;
 	}
 
-	let { track, isPlaying = false, onPlay, isAuthenticated = false, hideAlbum = false }: Props = $props();
+	let { track, isPlaying = false, onPlay, isAuthenticated = false, hideAlbum = false, index = 0 }: Props = $props();
+
+	// optimize image loading: eager for first 3, lazy for rest
+	const imageLoading = index < 3 ? 'eager' : 'lazy';
+	const imageFetchPriority = index < 2 ? 'high' : undefined;
 
 	let showLikersTooltip = $state(false);
 	let likeCount = $state(track.like_count || 0);
@@ -72,14 +77,28 @@
 	>
 		{#if track.image_url}
 			<div class="track-image">
-				<img src={track.image_url} alt="{track.title} artwork" />
+				<img
+					src={track.image_url}
+					alt="{track.title} artwork"
+					width="48"
+					height="48"
+					loading={imageLoading}
+					fetchpriority={imageFetchPriority}
+				/>
 			</div>
 		{:else if track.artist_avatar_url}
 			<a
 				href="/u/{track.artist_handle}"
 				class="track-avatar"
 			>
-				<img src={track.artist_avatar_url} alt={track.artist} />
+				<img
+					src={track.artist_avatar_url}
+					alt={track.artist}
+					width="48"
+					height="48"
+					loading={imageLoading}
+					fetchpriority={imageFetchPriority}
+				/>
 			</a>
 		{:else}
 			<div class="track-image-placeholder">

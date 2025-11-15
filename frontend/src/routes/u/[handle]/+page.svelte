@@ -176,9 +176,10 @@
 				<p class="empty">no tracks yet</p>
 			{:else}
 				<div class="track-list">
-					{#each tracks as track}
+					{#each tracks as track, i}
 						<TrackItem
 							{track}
+							index={i}
 							isPlaying={player.currentTrack?.id === track.id}
 							onPlay={(t) => queue.playNow(t)}
 							isAuthenticated={auth.isAuthenticated}
