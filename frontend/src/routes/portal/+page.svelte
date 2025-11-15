@@ -508,7 +508,26 @@
 						type="text"
 						bind:value={albumTitle}
 						placeholder="album name"
+						list="albums-list"
+						autocomplete="off"
 					/>
+					<datalist id="albums-list">
+						{#each albums as album}
+							<option value={album.title}>{album.title}</option>
+						{/each}
+					</datalist>
+					{#if albumTitle && albums.length > 0}
+						{@const matchingAlbum = albums.find(a => a.title.toLowerCase() === albumTitle.toLowerCase())}
+						{@const similarAlbums = albums.filter(a =>
+							a.title.toLowerCase() !== albumTitle.toLowerCase() &&
+							a.title.toLowerCase().includes(albumTitle.toLowerCase())
+						)}
+						{#if !matchingAlbum && similarAlbums.length > 0}
+							<p class="album-hint">
+								similar: {similarAlbums.map(a => a.title).join(', ')}
+							</p>
+						{/if}
+					{/if}
 				</div>
 
 				<div class="form-group">
@@ -588,7 +607,21 @@
 												bind:value={editAlbum}
 												placeholder="album (optional)"
 												class="edit-input"
+												list="albums-list"
+												autocomplete="off"
 											/>
+											{#if editAlbum && albums.length > 0}
+												{@const matchingAlbum = albums.find(a => a.title.toLowerCase() === editAlbum.toLowerCase())}
+												{@const similarAlbums = albums.filter(a =>
+													a.title.toLowerCase() !== editAlbum.toLowerCase() &&
+													a.title.toLowerCase().includes(editAlbum.toLowerCase())
+												)}
+												{#if !matchingAlbum && similarAlbums.length > 0}
+													<p class="album-hint">
+														similar: {similarAlbums.map(a => a.title).join(', ')}
+													</p>
+												{/if}
+											{/if}
 										</div>
 										<div class="edit-field-group">
 											<div class="edit-label">featured artists (optional)</div>
@@ -948,6 +981,13 @@
 		margin-top: 0.5rem;
 		font-size: 0.85rem;
 		color: #666;
+	}
+
+	.album-hint {
+		margin-top: 0.5rem;
+		font-size: 0.85rem;
+		color: #ff9800;
+		font-style: italic;
 	}
 
 	.message {
