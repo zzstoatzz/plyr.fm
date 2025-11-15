@@ -177,3 +177,46 @@ both environments use custom domains on the same eTLD+1 (`plyr.fm`) to enable se
 - same eTLD+1 allows HttpOnly cookies with `Domain=.plyr.fm`
 
 this architecture prevents XSS attacks by storing session tokens in HttpOnly cookies instead of localStorage.
+
+## cloudflare access (staging only)
+
+staging environments are protected with Cloudflare Access to prevent public access while maintaining accessibility for authorized developers.
+
+### configuration
+
+**protected domains**:
+- `stg.plyr.fm` (frontend) - requires GitHub authentication
+- `api-stg.plyr.fm` (backend API) - requires GitHub authentication
+
+**public bypass paths** (no authentication required):
+- `api-stg.plyr.fm/health` - uptime monitoring
+- `api-stg.plyr.fm/docs` - API documentation
+- `stg.plyr.fm/manifest.webmanifest` - PWA manifest
+- `stg.plyr.fm/icons/*` - PWA icons
+
+### how it works
+
+1. **DNS proxy**: both `stg.plyr.fm` and `api-stg.plyr.fm` are proxied through Cloudflare (orange cloud)
+2. **access policies**: GitHub OAuth or one-time PIN authentication required for all paths except bypassed endpoints
+3. **shared authentication**: both frontend and API share the same eTLD+1 (`plyr.fm`), allowing the `CF_Authorization` cookie to work across both domains
+4. **application ordering**: bypass applications for specific paths (`/health`, `/docs`, etc.) are ordered **above** the wildcard application to take precedence
+
+### requirements for proxied setup
+
+- **Cloudflare SSL/TLS mode**: set to "Full" (encrypts browser → Cloudflare → origin)
+- **Fly.io certificates**: both domains must have valid certificates on Fly.io (`flyctl certs list`)
+- **DNS records**: both domains must be set to "Proxied" (orange cloud) in Cloudflare DNS
+
+### debugging access issues
+
+**if staging is still publicly accessible**:
+1. verify DNS records are proxied (orange cloud) in Cloudflare DNS
+2. check application ordering in Cloudflare Access (specific paths before wildcards)
+3. verify policy action is "Allow" with authentication rules (not "Bypass" with "Everyone")
+4. clear browser cache or use incognito mode to bypass cached responses
+5. wait 1-2 minutes for Access policy changes to propagate
+
+**if legitimate requests are blocked**:
+1. check if path needs a bypass rule (e.g., `/health`, `/docs`)
+2. verify bypass applications are ordered above the main application
+3. ensure bypass policy uses "Bypass" action with "Everyone" selector
