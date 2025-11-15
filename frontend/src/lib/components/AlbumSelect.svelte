@@ -4,12 +4,11 @@
 	interface Props {
 		albums: AlbumSummary[];
 		value: string;
-		onSelect: (_albumTitle: string) => void;
 		placeholder?: string;
 		disabled?: boolean;
 	}
 
-	let { albums = [], value = $bindable(''), onSelect, placeholder = 'album name', disabled = false }: Props = $props();
+	let { albums = [], value = $bindable(''), placeholder = 'album name', disabled = false }: Props = $props();
 
 	let showResults = $state(false);
 	let filteredAlbums = $derived.by(() => {
@@ -35,7 +34,6 @@
 
 	function selectAlbum(albumTitle: string) {
 		value = albumTitle;
-		onSelect(albumTitle);
 		showResults = false;
 	}
 

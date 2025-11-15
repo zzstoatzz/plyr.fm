@@ -507,7 +507,6 @@
 					<AlbumSelect
 						{albums}
 						bind:value={albumTitle}
-						onSelect={(title) => { albumTitle = title; }}
 					/>
 				</div>
 
@@ -586,7 +585,6 @@
 											<AlbumSelect
 												{albums}
 												bind:value={editAlbum}
-												onSelect={(title) => { editAlbum = title; }}
 												placeholder="album (optional)"
 											/>
 										</div>
