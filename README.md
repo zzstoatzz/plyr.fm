@@ -109,8 +109,6 @@ plyr.fm/
 
 - **production**: https://plyr.fm
 - **production API**: https://api.plyr.fm
-- **staging**: https://stg.plyr.fm
-- **staging API**: https://api-stg.plyr.fm
 - **repository**: https://github.com/zzstoatzz/plyr.fm
 
 ## documentation
