@@ -35,14 +35,9 @@ class TracksCache {
 
 		this.loading = true;
 		try {
-			// include auth header if available to get like status
-			const headers: Record<string, string> = {};
-			const sessionId = localStorage.getItem('session_id');
-			if (sessionId) {
-				headers['Authorization'] = `Bearer ${sessionId}`;
-			}
-
-			const response = await fetch(`${API_URL}/tracks/`, { headers });
+			const response = await fetch(`${API_URL}/tracks/`, {
+				credentials: 'include'
+			});
 			const data = await response.json();
 			this.tracks = data.tracks;
 
@@ -76,12 +71,9 @@ export const tracksCache = new TracksCache();
 // like/unlike track functions
 export async function likeTrack(trackId: number): Promise<boolean> {
 	try {
-		const sessionId = localStorage.getItem('session_id');
 		const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
 			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${sessionId}`
-			}
+			credentials: 'include'
 		});
 
 		if (!response.ok) {
@@ -100,12 +92,9 @@ export async function likeTrack(trackId: number): Promise<boolean> {
 
 export async function unlikeTrack(trackId: number): Promise<boolean> {
 	try {
-		const sessionId = localStorage.getItem('session_id');
 		const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
 			method: 'DELETE',
-			headers: {
-				'Authorization': `Bearer ${sessionId}`
-			}
+			credentials: 'include'
 		});
 
 		if (!response.ok) {
@@ -124,11 +113,8 @@ export async function unlikeTrack(trackId: number): Promise<boolean> {
 
 export async function fetchLikedTracks(): Promise<Track[]> {
 	try {
-		const sessionId = localStorage.getItem('session_id');
 		const response = await fetch(`${API_URL}/tracks/liked`, {
-			headers: {
-				'Authorization': `Bearer ${sessionId}`
-			}
+			credentials: 'include'
 		});
 
 		if (!response.ok) {

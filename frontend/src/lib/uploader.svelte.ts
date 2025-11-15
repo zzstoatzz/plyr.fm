@@ -43,7 +43,6 @@ class UploaderState {
 		const toastId = toast.info(uploadMessage, 30000);
 
 		if (!browser) return;
-		const sessionId = localStorage.getItem('session_id');
 		const formData = new FormData();
 		formData.append('file', file);
 		formData.append('title', title);
@@ -58,7 +57,7 @@ class UploaderState {
 
 		const xhr = new XMLHttpRequest();
 		xhr.open('POST', `${API_URL}/tracks/`);
-		xhr.setRequestHeader('Authorization', `Bearer ${sessionId}`);
+		xhr.withCredentials = true;
 
 		let uploadComplete = false;
 

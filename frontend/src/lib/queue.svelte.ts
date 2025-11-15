@@ -159,18 +159,16 @@ class Queue {
 		try {
 			this.hydrating = true;
 
-			const sessionId = localStorage.getItem('session_id');
 			const headers: HeadersInit = {};
-
-			if (sessionId) {
-				headers['Authorization'] = `Bearer ${sessionId}`;
-			}
 
 			if (this.etag && !force) {
 				headers['If-None-Match'] = this.etag;
 			}
 
-			const response = await fetch(`${API_URL}/queue/`, { headers });
+			const response = await fetch(`${API_URL}/queue/`, {
+				headers,
+				credentials: 'include'
+			});
 
 			if (response.status === 304) {
 				return;
@@ -314,7 +312,6 @@ class Queue {
 		this.pendingSync = false;
 
 		try {
-			const sessionId = localStorage.getItem('session_id');
 			const state: QueueState = {
 				track_ids: this.tracks.map((t) => t.file_id),
 				current_index: this.currentIndex,
@@ -328,23 +325,19 @@ class Queue {
 				'Content-Type': 'application/json'
 			};
 
-			if (sessionId) {
-				headers['Authorization'] = `Bearer ${sessionId}`;
-			}
-
 			if (this.revision !== null) {
 				headers['If-Match'] = `"${this.revision}"`;
 			}
 
 			const response = await fetch(`${API_URL}/queue/`, {
+				credentials: 'include',
 				method: 'PUT',
 				headers,
 				body: JSON.stringify({ state })
 			});
 
 			if (response.status === 401) {
-				// session expired or invalid, clear it and stop trying to sync
-				localStorage.removeItem('session_id');
+				// session expired or invalid, stop trying to sync
 				return false;
 			}
 

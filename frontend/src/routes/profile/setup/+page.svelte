@@ -22,17 +22,16 @@
 		const exchangeToken = params.get('exchange_token');
 
 		if (exchangeToken) {
-			// exchange token for session_id
+			// exchange token for session_id (cookie is set automatically by backend)
 			try {
 				const exchangeResponse = await fetch(`${API_URL}/auth/exchange`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
+					credentials: 'include',
 					body: JSON.stringify({ exchange_token: exchangeToken })
 				});
 
 				if (exchangeResponse.ok) {
-					const data = await exchangeResponse.json();
-					auth.setSessionId(data.session_id);
 					await auth.initialize();
 				}
 			} catch (e) {
@@ -70,7 +69,7 @@
 		try {
 			// call our backend which will use the Bluesky API
 			const response = await fetch(`${API_URL}/artists/${auth.user.did}`, {
-				headers: auth.getAuthHeaders()
+				credentials: 'include'
 			});
 
 			// if artist profile already exists, redirect to portal
@@ -96,9 +95,9 @@
 			const response = await fetch(`${API_URL}/artists/`, {
 				method: 'POST',
 				headers: {
-					'Content-Type': 'application/json',
-					...auth.getAuthHeaders()
+					'Content-Type': 'application/json'
 				},
+				credentials: 'include',
 				body: JSON.stringify({
 					display_name: displayName,
 					bio: bio || null,

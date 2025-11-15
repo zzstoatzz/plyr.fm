@@ -1,10 +1,13 @@
 """authentication api endpoints."""
 
 from typing import Annotated
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
+from starlette.requests import Request
+from starlette.responses import Response
 
 from backend._internal import (
     Session,
@@ -78,11 +81,18 @@ class ExchangeTokenResponse(BaseModel):
 
 
 @router.post("/exchange")
-async def exchange_token(request: ExchangeTokenRequest) -> ExchangeTokenResponse:
+async def exchange_token(
+    request: ExchangeTokenRequest,
+    http_request: Request,
+    response: Response,
+) -> ExchangeTokenResponse:
     """exchange one-time token for session_id.
 
     frontend calls this immediately after OAuth callback to securely
     exchange the short-lived token for the actual session_id.
+
+    for browser requests: sets HttpOnly cookie and still returns session_id in response
+    for SDK/CLI clients: only returns session_id in response (no cookie)
     """
     session_id = await consume_exchange_token(request.exchange_token)
 
@@ -92,14 +102,62 @@ async def exchange_token(request: ExchangeTokenRequest) -> ExchangeTokenResponse
             detail="invalid, expired, or already used exchange token",
         )
 
+    user_agent = http_request.headers.get("user-agent", "").lower()
+    is_browser = any(
+        browser in user_agent
+        for browser in ["mozilla", "chrome", "safari", "firefox", "edge", "opera"]
+    )
+
+    if is_browser:
+        cookie_domain = None
+        use_cookies = False
+
+        frontend_url = settings.frontend.url
+        if frontend_url and not frontend_url.startswith("http://localhost"):
+            parsed = urlparse(frontend_url)
+            frontend_host = parsed.netloc.split(":")[0]
+
+            if frontend_host.endswith(".plyr.fm") or frontend_host == "plyr.fm":
+                cookie_domain = ".plyr.fm"
+                use_cookies = True
+
+        if use_cookies:
+            response.set_cookie(
+                key="session_id",
+                value=session_id,
+                httponly=True,
+                secure=True,
+                samesite="none",
+                domain=cookie_domain,
+                max_age=14 * 24 * 60 * 60,
+            )
+
     return ExchangeTokenResponse(session_id=session_id)
 
 
 @router.post("/logout")
-async def logout(session: Session = Depends(require_auth)) -> dict:
+async def logout(
+    session: Session = Depends(require_auth),
+) -> JSONResponse:
     """logout current user."""
     await delete_session(session.session_id)
-    return {"message": "logged out successfully"}
+    response = JSONResponse(content={"message": "logged out successfully"})
+
+    frontend_url = settings.frontend.url
+    if frontend_url and not frontend_url.startswith("http://localhost"):
+        parsed = urlparse(frontend_url)
+        frontend_host = parsed.netloc.split(":")[0]
+
+        if frontend_host.endswith(".plyr.fm") or frontend_host == "plyr.fm":
+            response.delete_cookie(
+                key="session_id",
+                httponly=True,
+                secure=True,
+                samesite="none",
+                domain=".plyr.fm",
+            )
+
+    return response
 
 
 @router.get("/me")

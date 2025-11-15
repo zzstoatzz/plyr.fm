@@ -22,14 +22,9 @@
 	);
 
 	async function loadLikedState() {
-		const sessionId = auth.getSessionId();
-		if (!sessionId) return;
-
 		try {
 			const response = await fetch(`${API_URL}/tracks/${track.id}`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (response.ok) {

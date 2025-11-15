@@ -1,12 +1,10 @@
 import type { PageLoad } from './$types';
 import type { AlbumResponse } from '$lib/types';
 import { API_URL } from '$lib/config';
-import { auth } from '$lib/auth.svelte';
 
 export const load: PageLoad = async ({ params, fetch }) => {
 	const response = await fetch(`${API_URL}/albums/${params.handle}/${params.slug}`, {
-		credentials: 'include',
-		headers: auth.getAuthHeaders()
+		credentials: 'include'
 	});
 
 	if (!response.ok) {

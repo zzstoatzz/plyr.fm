@@ -9,7 +9,7 @@ from typing import Annotated, Any
 from atproto_oauth import OAuthClient
 from atproto_oauth.stores.memory import MemorySessionStore
 from cryptography.fernet import Fernet
-from fastapi import Header, HTTPException
+from fastapi import Cookie, Header, HTTPException
 from sqlalchemy import select
 
 from backend._internal.oauth_stores import PostgresStateStore
@@ -279,18 +279,26 @@ async def consume_exchange_token(token: str) -> str | None:
 
 async def require_auth(
     authorization: Annotated[str | None, Header()] = None,
+    session_id_cookie: Annotated[str | None, Cookie()] = None,
 ) -> Session:
     """fastapi dependency to require authentication with expiration validation.
 
-    requires Authorization header with Bearer token containing session_id.
+    checks cookie first (for browser requests), then falls back to Authorization
+    header (for SDK/CLI clients). this enables secure HttpOnly cookies for browsers
+    while maintaining bearer token support for API clients.
     """
-    if not authorization or not authorization.startswith("Bearer "):
+    session_id = None
+
+    if session_id_cookie:
+        session_id = session_id_cookie
+    elif authorization and authorization.startswith("Bearer "):
+        session_id = authorization.removeprefix("Bearer ")
+
+    if not session_id:
         raise HTTPException(
             status_code=401,
             detail="not authenticated - login required",
         )
-
-    session_id = authorization.removeprefix("Bearer ")
 
     session = await get_session(session_id)
     if not session:
@@ -304,13 +312,14 @@ async def require_auth(
 
 async def require_artist_profile(
     authorization: Annotated[str | None, Header()] = None,
+    session_id_cookie: Annotated[str | None, Cookie()] = None,
 ) -> Session:
     """fastapi dependency to require authentication AND complete artist profile.
 
     Returns 403 with specific message if artist profile doesn't exist,
     prompting frontend to redirect to profile setup.
     """
-    session = await require_auth(authorization)
+    session = await require_auth(authorization, session_id_cookie)
 
     # check if artist profile exists
     if not await check_artist_profile_exists(session.did):

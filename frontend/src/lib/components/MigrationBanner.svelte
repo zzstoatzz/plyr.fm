@@ -19,11 +19,8 @@
 
 	// check if migration is needed
 	export async function checkMigrationStatus(): Promise<void> {
-		const sessionId = localStorage.getItem('session_id');
-		if (!sessionId) return;
-
-		// check if user already dismissed this
-		const dismissedKey = `migration_dismissed_${sessionId}`;
+		// check if user already dismissed this (using a generic key since we don't have session_id)
+		const dismissedKey = 'migration_dismissed';
 		if (localStorage.getItem(dismissedKey) === 'true') {
 			dismissed = true;
 			return;
@@ -31,9 +28,7 @@
 
 		try {
 			const response = await fetch(`${API_URL}/migration/check`, {
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (response.ok) {
@@ -53,19 +48,10 @@
 		migrating = true;
 		error = '';
 
-		const sessionId = localStorage.getItem('session_id');
-		if (!sessionId) {
-			error = 'not authenticated';
-			migrating = false;
-			return;
-		}
-
 		try {
 			const response = await fetch(`${API_URL}/migration/migrate`, {
 				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${sessionId}`
-				}
+				credentials: 'include'
 			});
 
 			if (response.ok) {
@@ -95,10 +81,7 @@
 		needsMigration = false;
 
 		// remember dismissal
-		const sessionId = localStorage.getItem('session_id');
-		if (sessionId) {
-			localStorage.setItem(`migration_dismissed_${sessionId}`, 'true');
-		}
+		localStorage.setItem('migration_dismissed', 'true');
 	}
 </script>
 
