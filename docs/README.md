@@ -4,6 +4,9 @@ this directory contains all documentation for the plyr.fm project.
 
 ## documentation index
 
+### authentication & security
+- **[authentication.md](./authentication.md)** - secure cookie-based authentication, HttpOnly cookies, XSS protection, environment architecture, migration from localStorage
+
 ### frontend
 - **[state-management.md](./frontend/state-management.md)** - global state management with Svelte 5 runes (toast notifications, tracks cache, upload manager, queue management, liked tracks, preferences, localStorage persistence)
 - **[toast-notifications.md](./frontend/toast-notifications.md)** - user feedback system for async operations with smooth transitions and auto-dismiss
@@ -45,6 +48,7 @@ key namespaces:
 
 plyr.fm is fully functional with:
 - ✅ OAuth 2.1 authentication (ATProto)
+- ✅ secure cookie-based sessions (HttpOnly, XSS protection)
 - ✅ R2 storage for audio files (cloudflare CDN)
 - ✅ track upload with streaming (prevents OOM)
 - ✅ ATProto record creation (fm.plyr.track namespace)
