@@ -1,9 +1,10 @@
 <script lang="ts">
 	interface Props {
 		url: string;
+		title?: string;
 	}
 
-	let { url }: Props = $props();
+	let { url, title = 'share' }: Props = $props();
 
 	let showCopied = $state(false);
 
@@ -20,7 +21,7 @@
 	}
 </script>
 
-<button class="share-btn" onclick={copyLink} title="share track">
+<button class="share-btn" onclick={copyLink} {title}>
 	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 		<circle cx="18" cy="5" r="3"></circle>
 		<circle cx="6" cy="12" r="3"></circle>

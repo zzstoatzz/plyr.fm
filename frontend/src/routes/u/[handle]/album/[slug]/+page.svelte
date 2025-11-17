@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
+	import ShareButton from '$lib/components/ShareButton.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -32,6 +33,14 @@
 			toast.success(`added ${album.metadata.title} to queue`, 1800);
 		}
 	}
+
+	let shareUrl = $state('');
+
+	$effect(() => {
+		if (typeof window !== 'undefined') {
+			shareUrl = `${window.location.origin}/u/${album.metadata.artist_handle}/album/${album.metadata.slug}`;
+		}
+	});
 </script>
 
 <svelte:head>
@@ -76,17 +85,23 @@
 					</svg>
 				</div>
 			{/if}
-			<div class="album-info">
-				<p class="album-type">album</p>
-				<h1 class="album-title">{album.metadata.title}</h1>
-				<div class="album-meta">
-					<a href="/u/{album.metadata.artist_handle}" class="artist-link">
-						{album.metadata.artist}
-					</a>
-					<span class="meta-separator">•</span>
-					<span>{album.metadata.track_count} {album.metadata.track_count === 1 ? 'track' : 'tracks'}</span>
-					<span class="meta-separator">•</span>
-					<span>{album.metadata.total_plays} {album.metadata.total_plays === 1 ? 'play' : 'plays'}</span>
+			<div class="album-info-wrapper">
+				<div class="album-info">
+					<p class="album-type">album</p>
+					<h1 class="album-title">{album.metadata.title}</h1>
+					<div class="album-meta">
+						<a href="/u/{album.metadata.artist_handle}" class="artist-link">
+							{album.metadata.artist}
+						</a>
+						<span class="meta-separator">•</span>
+						<span>{album.metadata.track_count} {album.metadata.track_count === 1 ? 'track' : 'tracks'}</span>
+						<span class="meta-separator">•</span>
+						<span>{album.metadata.total_plays} {album.metadata.total_plays === 1 ? 'play' : 'plays'}</span>
+					</div>
+				</div>
+
+				<div class="side-button-right">
+					<ShareButton url={shareUrl} title="share album" />
 				</div>
 			</div>
 		</div>
@@ -108,6 +123,9 @@
 				</svg>
 				add to queue
 			</button>
+			<div class="mobile-share-button">
+				<ShareButton url={shareUrl} title="share album" />
+			</div>
 		</div>
 
 		<div class="tracks-section">
@@ -166,11 +184,30 @@
 		color: #606060;
 	}
 
+	.album-info-wrapper {
+		flex: 1;
+		display: flex;
+		align-items: flex-end;
+		gap: 1rem;
+	}
+
 	.album-info {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+	}
+
+	.side-button-right {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding-bottom: 0.5rem;
+	}
+
+	.mobile-share-button {
+		display: none;
 	}
 
 	.album-type {
@@ -289,6 +326,22 @@
 			height: 160px;
 		}
 
+		.album-info-wrapper {
+			flex-direction: column;
+			align-items: flex-start;
+			width: 100%;
+		}
+
+		.side-button-right {
+			display: none;
+		}
+
+		.mobile-share-button {
+			display: flex;
+			width: 100%;
+			justify-content: center;
+		}
+
 		.album-title {
 			font-size: 2rem;
 		}
@@ -300,6 +353,7 @@
 		.album-actions {
 			flex-direction: column;
 			gap: 0.75rem;
+			width: 100%;
 		}
 
 		.play-button,

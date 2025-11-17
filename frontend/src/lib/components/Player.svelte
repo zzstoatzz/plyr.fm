@@ -26,6 +26,44 @@
 		return 'normal';
 	});
 
+	// overflow detection for text scrolling
+	let titleEl = $state<HTMLElement | null>(null);
+	let artistEl = $state<HTMLElement | null>(null);
+	let albumEl = $state<HTMLElement | null>(null);
+	let titleOverflows = $state(false);
+	let artistOverflows = $state(false);
+	let albumOverflows = $state(false);
+
+	function checkOverflows() {
+		// SSR safety: skip if running on server
+		if (typeof window === 'undefined') return;
+
+		// check if text overflows container (with small delay to ensure layout is complete)
+		window.requestAnimationFrame(() => {
+			if (titleEl) {
+				const span = titleEl.querySelector('span');
+				titleOverflows = span ? span.scrollWidth > titleEl.clientWidth : false;
+			}
+			if (artistEl) {
+				const container = artistEl.querySelector('.text-container');
+				const span = container?.querySelector('span');
+				artistOverflows = span && container ? span.scrollWidth > container.clientWidth : false;
+			}
+			if (albumEl) {
+				const container = albumEl.querySelector('.text-container');
+				const span = container?.querySelector('span');
+				albumOverflows = span && container ? span.scrollWidth > container.clientWidth : false;
+			}
+		});
+	}
+
+	$effect(() => {
+		// re-check on track change
+		if (player.currentTrack) {
+			checkOverflows();
+		}
+	});
+
 
 	function formatTime(seconds: number): string {
 		if (!isFinite(seconds)) return '0:00';
@@ -59,34 +97,64 @@
 
 		function updateViewportOffset() {
 			const viewport = window.visualViewport;
-			if (!viewport) {
-				document.documentElement.style.setProperty('--visual-viewport-offset', '0px');
-				return;
-			}
 
-			const visualBottom = viewport.height + viewport.offsetTop;
-			const layoutHeight = window.innerHeight;
-			const offset = Math.max(0, visualBottom - layoutHeight);
-			document.documentElement.style.setProperty('--visual-viewport-offset', `${offset}px`);
+			if (viewport) {
+				// use visual viewport API when available (Safari, modern Chrome)
+				const visualBottom = viewport.height + viewport.offsetTop;
+				const layoutHeight = window.innerHeight;
+				const offset = Math.max(0, visualBottom - layoutHeight);
+				document.documentElement.style.setProperty('--visual-viewport-offset', `${offset}px`);
+			} else {
+				// fallback for Chrome PWA or browsers without visual viewport API
+				// limited effectiveness: only detects document growth (e.g., dynamic content)
+				// relies on visibilitychange handler for browser chrome changes
+				const layoutHeight = window.innerHeight;
+				const documentHeight = document.documentElement.scrollHeight;
+				const offset = Math.max(0, documentHeight - layoutHeight);
+				document.documentElement.style.setProperty('--visual-viewport-offset', `${offset}px`);
+			}
+		}
+
+		function handleVisibilityChange() {
+			// recalculate when app resumes from background (fixes stale measurements)
+			if (document.visibilityState === 'visible') {
+				updatePlayerHeight();
+				updateViewportOffset();
+				checkOverflows();
+			}
+		}
+
+		function handleResize() {
+			updatePlayerHeight();
+			updateViewportOffset();
+			checkOverflows();
 		}
 
 		// update on mount and resize
 		updatePlayerHeight();
 		updateViewportOffset();
-		window.addEventListener('resize', updatePlayerHeight);
-		window.addEventListener('resize', updateViewportOffset);
+		checkOverflows();
+		window.addEventListener('resize', handleResize);
+
+		// listen to geometrychange for visual viewport (Safari + Chrome)
 		window.visualViewport?.addEventListener('resize', updateViewportOffset);
 		window.visualViewport?.addEventListener('scroll', updateViewportOffset);
+		// geometrychange fires when viewport geometry changes (e.g., mobile keyboard shows/hides)
+		window.visualViewport?.addEventListener('geometrychange', updateViewportOffset);
+
+		// recalculate on app resume (fixes Chrome PWA stale offset)
+		document.addEventListener('visibilitychange', handleVisibilityChange);
 
 		// also update when player visibility changes
 		const observer = new MutationObserver(updatePlayerHeight);
 		observer.observe(document.body, { childList: true, subtree: true });
 
 		return () => {
-			window.removeEventListener('resize', updatePlayerHeight);
-			window.removeEventListener('resize', updateViewportOffset);
+			window.removeEventListener('resize', handleResize);
 			window.visualViewport?.removeEventListener('resize', updateViewportOffset);
 			window.visualViewport?.removeEventListener('scroll', updateViewportOffset);
+			window.visualViewport?.removeEventListener('geometrychange', updateViewportOffset);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
 			observer.disconnect();
 			document.documentElement.style.setProperty('--visual-viewport-offset', '0px');
 		};
@@ -228,7 +296,7 @@
 		></audio>
 
 		<div class="player-content">
-			<div class="player-artwork">
+			<a href="/track/{player.currentTrack.id}" class="player-artwork">
 				{#if player.currentTrack.image_url}
 					<img src={player.currentTrack.image_url} alt="{player.currentTrack.title} artwork" />
 				{:else}
@@ -240,17 +308,18 @@
 						</svg>
 					</div>
 				{/if}
-			</div>
+			</a>
 			<div class="player-info">
 				{#if isOnTrackDetailPage}
-					<div class="player-title" class:scrolling={player.currentTrack.title.length > 30}>
+					<div class="player-title" class:scrolling={titleOverflows} bind:this={titleEl}>
 						<span>{player.currentTrack.title}</span>
 					</div>
 				{:else}
 					<a
 						href="/track/{player.currentTrack.id}"
 						class="player-title-link"
-						class:scrolling={player.currentTrack.title.length > 30}
+						class:scrolling={titleOverflows}
+						bind:this={titleEl}
 					>
 						<span>{player.currentTrack.title}</span>
 					</a>
@@ -259,18 +328,30 @@
 					<a
 						href="/u/{player.currentTrack.artist_handle}"
 						class="player-artist-link"
-						class:scrolling={player.currentTrack.artist.length > 25}
+						bind:this={artistEl}
 					>
-						<span>{player.currentTrack.artist}</span>
+						<svg class="metadata-icon artist-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+							<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none"/>
+							<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+						</svg>
+						<div class="text-container" class:scrolling={artistOverflows}>
+							<span>{player.currentTrack.artist}</span>
+						</div>
 					</a>
 					{#if player.currentTrack.album}
 						<span class="metadata-separator">•</span>
 						<a
 							href="/u/{player.currentTrack.artist_handle}/album/{player.currentTrack.album.slug}"
 							class="player-album-link"
-							class:scrolling={(player.currentTrack.album.title?.length ?? 0) > 25}
+							bind:this={albumEl}
 						>
-							<span>{player.currentTrack.album.title}</span>
+							<svg class="metadata-icon album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+								<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
+								<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
+							</svg>
+							<div class="text-container" class:scrolling={albumOverflows}>
+								<span>{player.currentTrack.album.title}</span>
+							</div>
 						</a>
 					{/if}
 				</div>
@@ -416,6 +497,14 @@
 		overflow: hidden;
 		background: #1a1a1a;
 		border: 1px solid #333;
+		display: block;
+		text-decoration: none;
+		transition: transform 0.2s, border-color 0.2s;
+	}
+
+	.player-artwork:hover {
+		transform: scale(1.05);
+		border-color: var(--accent);
 	}
 
 	.player-artwork img {
@@ -499,87 +588,83 @@
 	}
 
 	@keyframes scroll-text {
-		0% {
-			transform: translateX(0);
+		0%, 15% {
+			transform: translateX(0); /* pause at start */
 		}
-		100% {
-			transform: translateX(-100%);
+		85%, 100% {
+			transform: translateX(-100%); /* pause at end */
 		}
 	}
 
 	.player-metadata {
 		display: flex;
-		align-items: center;
-		gap: 0.5rem;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.15rem;
 		color: #909090;
 		font-size: 0.85rem;
 		overflow: hidden;
 		min-width: 0; /* critical for text overflow */
 	}
 
+	.metadata-icon {
+		width: 12px;
+		height: 12px;
+		opacity: 0.7;
+		flex-shrink: 0;
+		margin-right: 0.35rem;
+	}
+
 	.player-artist-link {
 		color: #909090;
 		text-decoration: none;
 		transition: color 0.2s;
-		white-space: nowrap;
-		overflow: hidden;
-		position: relative;
-	}
-
-	.player-artist-link.scrolling {
-		overflow: hidden;
-		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
-		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
-	}
-
-	.player-artist-link span {
-		display: inline-block;
-		white-space: nowrap;
-	}
-
-	.player-artist-link.scrolling span {
-		padding-right: 1.5rem;
-		animation: scroll-text 8s linear infinite;
+		display: flex;
+		align-items: center;
+		width: 100%;
 	}
 
 	.player-artist-link:hover {
 		color: var(--accent);
 	}
 
+	.text-container {
+		overflow: hidden;
+		position: relative;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.text-container.scrolling {
+		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
+		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
+	}
+
+	.text-container span {
+		display: inline-block;
+		white-space: nowrap;
+	}
+
+	.text-container.scrolling span {
+		padding-right: 3rem;
+		animation: scroll-text 15s linear infinite;
+	}
+
 	.metadata-separator {
-		color: #606060;
-		flex-shrink: 0;
+		display: none; /* hidden in vertical layout */
 	}
 
 	.player-album-link {
 		color: #808080;
 		text-decoration: none;
 		transition: color 0.2s;
-		white-space: nowrap;
-		overflow: hidden;
-		position: relative;
-		min-width: 0;
-		display: block;
+		display: flex;
+		align-items: center;
+		width: 100%;
 	}
 
 	.player-album-link:hover {
 		color: var(--accent);
-	}
-
-	.player-album-link.scrolling {
-		overflow: hidden;
-		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
-		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
-	}
-
-	.player-album-link span {
-		display: inline-block;
-		white-space: nowrap;
-	}
-
-	.player-album-link.scrolling span {
-		padding-right: 1.5rem;
-		animation: scroll-text 8s linear infinite;
 	}
 
 	.player-controls {
@@ -824,24 +909,28 @@
 			text-align: left;
 			flex: 1;
 			align-self: center;
+			display: flex;
+			flex-direction: column;
+			gap: 0.25rem;
 		}
 
-		.player-title {
+		.player-title,
+		.player-title-link {
 			font-size: 0.9rem;
-			margin-bottom: 0.1rem;
+			margin-bottom: 0;
 		}
 
 		.player-metadata {
 			font-size: 0.8rem;
-			justify-content: flex-start;
-			overflow: hidden;
-			min-width: 0;
 		}
 
-		.player-artist-link,
-		.player-album-link {
-			overflow: hidden;
-			min-width: 0;
+		/* enable scrolling animation on mobile */
+		.player-title.scrolling,
+		.player-title-link.scrolling,
+		.player-artist-link.scrolling,
+		.player-album-link.scrolling {
+			mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
+			-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
 		}
 
 		/* rearrange controls for compact mobile layout */

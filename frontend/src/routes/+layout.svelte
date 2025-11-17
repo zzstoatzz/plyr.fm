@@ -225,9 +225,15 @@
 
 	.app-layout {
 		display: flex;
-		min-height: 100vh;
+		min-height: 100vh; /* fallback for browsers without dvh support */
 		width: 100%;
 		overflow-x: hidden;
+	}
+
+	@supports (min-height: 100dvh) {
+		.app-layout {
+			min-height: 100dvh; /* dynamic viewport height (accounts for mobile browser UI) */
+		}
 	}
 
 	.main-content {
@@ -246,10 +252,16 @@
 		top: 0;
 		right: 0;
 		width: min(360px, 100%);
-		height: 100vh;
+		height: 100vh; /* fallback for browsers without dvh support */
 		background: var(--bg-primary);
 		border-left: 1px solid var(--border-subtle);
 		z-index: 50;
+	}
+
+	@supports (height: 100dvh) {
+		.queue-sidebar {
+			height: 100dvh; /* dynamic viewport height (accounts for mobile browser UI) */
+		}
 	}
 
 	.queue-toggle {

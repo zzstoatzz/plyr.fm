@@ -187,7 +187,7 @@
 					<line x1="9" y1="18" x2="21" y2="18"></line>
 				</svg>
 			</button>
-			<ShareButton url={shareUrl} />
+			<ShareButton url={shareUrl} title="share track" />
 		</div>
 
 		<!-- mobile: show three-dot menu -->
@@ -332,16 +332,18 @@
 
 	.track-metadata {
 		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-wrap: wrap;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.15rem;
 		color: #b0b0b0;
 		font-size: 0.9rem;
 		font-family: inherit;
+		min-width: 0;
+		width: 100%;
 	}
 
 	.metadata-separator {
-		color: #555;
+		display: none;
 		font-size: 0.7rem;
 	}
 
@@ -351,6 +353,12 @@
 		transition: color 0.2s;
 		font-weight: 500;
 		font-family: inherit;
+		display: block;
+		width: 100%;
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.artist-link:hover {
@@ -361,7 +369,12 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
+		width: 100%;
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.features-label {
@@ -391,7 +404,7 @@
 		align-items: center;
 		gap: 0.35rem;
 		min-width: 0;
-		max-width: fit-content;
+		width: 100%;
 	}
 
 	.album-link {
@@ -401,6 +414,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		min-width: 0;
+		flex: 1;
 	}
 
 	.album-link:hover {
@@ -411,6 +425,7 @@
 		width: 14px;
 		height: 14px;
 		opacity: 0.7;
+		flex-shrink: 0;
 	}
 
 	.track-meta {
