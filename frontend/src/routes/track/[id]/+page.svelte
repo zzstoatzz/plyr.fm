@@ -184,7 +184,7 @@ $effect(() => {
 						{#if auth.isAuthenticated}
 							<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
 						{/if}
-						<ShareButton url={shareUrl} />
+						<ShareButton url={shareUrl} title="share track" />
 					</div>
 
 					<!-- actions -->
@@ -216,7 +216,7 @@ $effect(() => {
 				</div>
 
 				<div class="side-button-right">
-					<ShareButton url={shareUrl} />
+					<ShareButton url={shareUrl} title="share track" />
 				</div>
 			</div>
 		</div>

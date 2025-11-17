@@ -98,34 +98,33 @@
 						<span class="meta-separator">•</span>
 						<span>{album.metadata.total_plays} {album.metadata.total_plays === 1 ? 'play' : 'plays'}</span>
 					</div>
-
-					<div class="mobile-share-button">
-						<ShareButton url={shareUrl} />
-					</div>
-
-					<div class="album-actions">
-						<button class="play-button" onclick={playNow}>
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-								<path d="M8 5v14l11-7z"/>
-							</svg>
-							play now
-						</button>
-						<button class="queue-button" onclick={addToQueue}>
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-								<line x1="5" y1="15" x2="5" y2="21"></line>
-								<line x1="2" y1="18" x2="8" y2="18"></line>
-								<line x1="9" y1="6" x2="21" y2="6"></line>
-								<line x1="9" y1="12" x2="21" y2="12"></line>
-								<line x1="9" y1="18" x2="21" y2="18"></line>
-							</svg>
-							add to queue
-						</button>
-					</div>
 				</div>
 
 				<div class="side-button-right">
-					<ShareButton url={shareUrl} />
+					<ShareButton url={shareUrl} title="share album" />
 				</div>
+			</div>
+		</div>
+
+		<div class="album-actions">
+			<button class="play-button" onclick={playNow}>
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M8 5v14l11-7z"/>
+				</svg>
+				play now
+			</button>
+			<button class="queue-button" onclick={addToQueue}>
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+					<line x1="5" y1="15" x2="5" y2="21"></line>
+					<line x1="2" y1="18" x2="8" y2="18"></line>
+					<line x1="9" y1="6" x2="21" y2="6"></line>
+					<line x1="9" y1="12" x2="21" y2="12"></line>
+					<line x1="9" y1="18" x2="21" y2="18"></line>
+				</svg>
+				add to queue
+			</button>
+			<div class="mobile-share-button">
+				<ShareButton url={shareUrl} title="share album" />
 			</div>
 		</div>
 
@@ -339,9 +338,8 @@
 
 		.mobile-share-button {
 			display: flex;
-			gap: 0.75rem;
-			justify-content: flex-start;
-			margin-top: 0.5rem;
+			width: 100%;
+			justify-content: center;
 		}
 
 		.album-title {
