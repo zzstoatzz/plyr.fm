@@ -295,7 +295,7 @@ class QueueService:
                 liked_track_ids=None,
                 like_counts=None,
             )
-            serialized.append(track_response.model_dump())
+            serialized.append(track_response.model_dump(mode="json"))
 
         # commit any lazy backfills
         if tracks_needing_backfill:
