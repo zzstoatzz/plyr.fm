@@ -130,16 +130,18 @@
 						{/each}
 					</span>
 				{/if}
-				{#if track.album && !hideAlbum}
-					<span class="metadata-separator">•</span>
-					<a href="/u/{track.artist_handle}/album/{track.album.slug}" class="album album-link">
-						<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-							<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
-							<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
-						</svg>
-						{track.album.title}
-					</a>
-				{/if}
+		{#if track.album && !hideAlbum}
+			<span class="metadata-separator">•</span>
+			<span class="album">
+				<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+					<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
+					<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
+				</svg>
+				<a href="/u/{track.artist_handle}/album/{track.album.slug}" class="album-link">
+					{track.album.title}
+				</a>
+			</span>
+		{/if}
 			</div>
 			<div class="track-meta">
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
@@ -353,8 +355,8 @@
 		transition: color 0.2s;
 		font-weight: 500;
 		font-family: inherit;
-		display: block;
-		width: 100%;
+		display: inline-block;
+		max-width: 100%;
 		min-width: 0;
 		white-space: nowrap;
 		overflow: hidden;
@@ -370,7 +372,7 @@
 		align-items: center;
 		gap: 0.25rem;
 		flex-wrap: nowrap;
-		width: 100%;
+		max-width: 100%;
 		min-width: 0;
 		white-space: nowrap;
 		overflow: hidden;
@@ -400,7 +402,7 @@
 
 	.album {
 		color: #909090;
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		gap: 0.35rem;
 		min-width: 0;
@@ -410,11 +412,12 @@
 	.album-link {
 		text-decoration: none;
 		transition: color 0.2s;
+		display: inline-block;
+		max-width: 100%;
+		min-width: 0;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		min-width: 0;
-		flex: 1;
 	}
 
 	.album-link:hover {
