@@ -44,7 +44,7 @@ class AlbumResponse(BaseModel):
     """album detail response with tracks."""
 
     metadata: AlbumMetadata
-    tracks: list[dict]  # TrackResponse is a dict subclass, not a Pydantic model
+    tracks: list[dict]
 
 
 class AlbumListItem(BaseModel):
@@ -309,7 +309,10 @@ async def get_album(
     total_plays = sum(t.play_count for t in tracks)
     metadata = await _album_metadata(album, artist, len(tracks), total_plays)
 
-    return AlbumResponse(metadata=metadata, tracks=track_responses)
+    return AlbumResponse(
+        metadata=metadata,
+        tracks=[t.model_dump(mode="json") for t in track_responses],
+    )
 
 
 @router.post("/{album_id}/cover")
