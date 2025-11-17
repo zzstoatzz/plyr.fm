@@ -142,11 +142,11 @@ class NotificationService:
             # format the message with rich information
             artist_handle = track.artist.handle
 
-            # only include link if we have a production URL (not localhost)
+            # only include link if we have a non-localhost frontend URL
             track_url = None
-            canonical = settings.app.canonical_url
-            if canonical and "localhost" not in canonical:
-                track_url = f"{canonical}/track/{track.id}"
+            frontend_url = settings.frontend.url
+            if frontend_url and "localhost" not in frontend_url:
+                track_url = f"{frontend_url}/track/{track.id}"
 
             if track_url:
                 message_text: str = (
