@@ -410,6 +410,7 @@
 	}
 
 	.album-link {
+		color: #909090;
 		text-decoration: none;
 		transition: color 0.2s;
 		display: inline-block;
