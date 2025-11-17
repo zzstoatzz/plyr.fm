@@ -332,16 +332,16 @@
 
 	.track-metadata {
 		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-wrap: wrap;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.15rem;
 		color: #b0b0b0;
 		font-size: 0.9rem;
 		font-family: inherit;
 	}
 
 	.metadata-separator {
-		color: #555;
+		display: none;
 		font-size: 0.7rem;
 	}
 
