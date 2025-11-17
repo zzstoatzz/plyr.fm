@@ -418,7 +418,7 @@ async def create_like_record(
 
     # construct like record
     record = {
-        "$type": "fm.plyr.like",
+        "$type": settings.atproto.like_collection,
         "subject": {
             "uri": subject_uri,
             "cid": subject_cid,
@@ -430,7 +430,7 @@ async def create_like_record(
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
     payload = {
         "repo": auth_session.did,
-        "collection": "fm.plyr.like",
+        "collection": settings.atproto.like_collection,
         "record": record,
     }
 
