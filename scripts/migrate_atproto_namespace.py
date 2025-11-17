@@ -1,4 +1,10 @@
 #!/usr/bin/env -S uv run --script --quiet
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "typer>=0.20.0",
+# ]
+# ///
 """migrate ATProto records from production namespace to environment-specific namespace.
 
 This script migrates tracks and likes from the production `fm.plyr.*` namespace
@@ -41,10 +47,10 @@ uvx pdsx --pds <pds-url> -r <handle> ls fm.plyr.stg.like
 
 2. **Migrate likes:**
    - Find likes in DB with URIs in production namespace (`fm.plyr.like`)
-   - Read existing like record from PDS
-   - Look up new track URI from mapping built in step 1
+   - Get current track URI from database (source of truth, handles stale PDS like records)
+   - Read track from PDS to get current CID
    - Create new like record in target namespace with updated subject reference
-   - Update database with new like URI/CID
+   - Update database with new like URI
 
 ## References
 
@@ -211,9 +217,14 @@ async def migrate_likes(
     source_namespace: str,
     target_namespace: str,
     track_uri_mapping: dict[str, str],
+    all_clients: dict[str, AsyncClient],
     dry_run: bool,
 ) -> None:
-    """migrate likes from source to target namespace."""
+    """migrate likes from source to target namespace.
+
+    args:
+        all_clients: mapping of user DIDs to their authenticated clients (for cross-user likes)
+    """
     typer.echo(f"\n{'[DRY RUN] ' if dry_run else ''}Migrating likes...")
     typer.echo(f"  Source: {source_namespace}.like")
     typer.echo(f"  Target: {target_namespace}.like")
@@ -246,16 +257,15 @@ async def migrate_likes(
             )
             continue
 
-        # read existing like record from PDS
-        response = await client.com.atproto.repo.get_record(
+        # read existing like record from PDS to get old subject URI
+        like_response = await client.com.atproto.repo.get_record(
             {
                 "repo": user_did,
                 "collection": f"{source_namespace}.like",
                 "rkey": old_uri.split("/")[-1],
             }
         )
-
-        old_like_record = response.value
+        old_like_record = like_response.value
         old_subject_uri = old_like_record["subject"]["uri"]
 
         # look up new track URI from mapping
@@ -268,11 +278,15 @@ async def migrate_likes(
 
         new_subject_uri = track_uri_mapping[old_subject_uri]
 
+        # extract track owner DID from new URI to use correct client
+        track_owner_did = new_subject_uri.split("/")[2]  # at://did/collection/rkey
+        track_owner_client = all_clients.get(track_owner_did, client)
+
         # get new track CID by reading the new track record
         track_rkey = new_subject_uri.split("/")[-1]
-        track_response = await client.com.atproto.repo.get_record(
+        track_response = await track_owner_client.com.atproto.repo.get_record(
             {
-                "repo": user_did,
+                "repo": track_owner_did,
                 "collection": f"{target_namespace}.track",
                 "rkey": track_rkey,
             }
@@ -403,6 +417,9 @@ def main(
             )
             track_uri_mapping.update(mapping)
 
+        # build DID → client mapping for cross-user likes
+        all_clients = {user["did"]: user["client"] for user in authenticated_users}
+
         # migrate ALL likes (uses complete URI mapping from all users)
         for user in authenticated_users:
             typer.echo(
@@ -414,6 +431,7 @@ def main(
                 source_namespace=source_namespace,
                 target_namespace=target_namespace,
                 track_uri_mapping=track_uri_mapping,
+                all_clients=all_clients,
                 dry_run=dry_run,
             )
 
