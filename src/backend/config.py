@@ -301,7 +301,7 @@ class AtprotoSettings(RelaySettingsSection):
         # base scopes: our track collection + our like collection
         scopes = [
             f"repo:{self.track_collection}",
-            f"repo:{self.app_namespace}.like",
+            f"repo:{self.like_collection}",
         ]
 
         # if we have an old namespace, add old track collection too
