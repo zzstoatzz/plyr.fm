@@ -211,6 +211,7 @@ async def migrate_likes(
     source_namespace: str,
     target_namespace: str,
     track_uri_mapping: dict[str, str],
+    clients_by_did: dict[str, AsyncClient],
     dry_run: bool,
 ) -> None:
     """migrate likes from source to target namespace."""
@@ -241,43 +242,55 @@ async def migrate_likes(
         typer.echo(f"    Old URI: {old_uri}")
 
         if dry_run:
-            typer.echo(
-                f"    [DRY RUN] Would read record, map subject URI, and create in {target_namespace}.like"
-            )
+            typer.echo(f"    [DRY RUN] Would create like in {target_namespace}.like")
             continue
 
-        # read existing like record from PDS
-        response = await client.com.atproto.repo.get_record(
-            {
-                "repo": user_did,
-                "collection": f"{source_namespace}.like",
-                "rkey": old_uri.split("/")[-1],
-            }
-        )
+        # get the track from database to find its current URI
+        async with db_session() as db:
+            stmt = select(Track).where(Track.id == like.track_id)
+            result = await db.execute(stmt)
+            track = result.scalar_one()
 
-        old_like_record = response.value
-        old_subject_uri = old_like_record["subject"]["uri"]
-
-        # look up new track URI from mapping
-        if old_subject_uri not in track_uri_mapping:
-            typer.echo(
-                f"    ✗ ERROR: No mapping found for subject URI: {old_subject_uri}"
-            )
+        new_subject_uri = track.atproto_record_uri
+        if not new_subject_uri:
+            typer.echo(f"    ✗ ERROR: Track #{like.track_id} has no atproto_record_uri")
             typer.echo("    Skipping this like")
             continue
 
-        new_subject_uri = track_uri_mapping[old_subject_uri]
+        # parse the URI to get the DID and collection for fetching CID
+        # format: at://did:plc:.../collection/rkey
+        uri_parts = new_subject_uri.replace("at://", "").split("/")
+        track_did = uri_parts[0]
+        track_collection = "/".join(uri_parts[1:2])
+        track_rkey = uri_parts[2]
 
-        # get new track CID by reading the new track record
-        track_rkey = new_subject_uri.split("/")[-1]
-        track_response = await client.com.atproto.repo.get_record(
+        # need to read from the track owner's client, not the liker's client
+        track_client = clients_by_did.get(track_did, client)
+
+        # get track CID
+        track_response = await track_client.com.atproto.repo.get_record(
             {
-                "repo": user_did,
-                "collection": f"{target_namespace}.track",
+                "repo": track_did,
+                "collection": track_collection,
                 "rkey": track_rkey,
             }
         )
         new_subject_cid = track_response.cid
+
+        # read old like record to preserve createdAt
+        try:
+            response = await client.com.atproto.repo.get_record(
+                {
+                    "repo": user_did,
+                    "collection": f"{source_namespace}.like",
+                    "rkey": old_uri.split("/")[-1],
+                }
+            )
+            old_like_record = response.value
+            created_at = old_like_record.get("createdAt")
+        except Exception:
+            # if we can't read old like, use current time
+            created_at = None
 
         # create new like record with updated subject
         new_like_record = {
@@ -286,9 +299,8 @@ async def migrate_likes(
                 "uri": new_subject_uri,
                 "cid": new_subject_cid,
             },
-            "createdAt": old_like_record.get(
-                "createdAt", datetime.now(UTC).isoformat().replace("+00:00", "Z")
-            ),
+            "createdAt": created_at
+            or datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
 
         create_response = await client.com.atproto.repo.create_record(
@@ -301,7 +313,7 @@ async def migrate_likes(
 
         new_like_uri = create_response.uri
 
-        typer.echo(f"    Subject: {old_subject_uri} → {new_subject_uri}")
+        typer.echo(f"    Subject: {new_subject_uri}")
         typer.echo(f"    New URI: {new_like_uri}")
 
         # update database
@@ -388,6 +400,9 @@ def main(
                 }
             )
 
+        # build DID → client mapping for cross-user record reads
+        clients_by_did = {user["did"]: user["client"] for user in authenticated_users}
+
         # migrate ALL tracks first (builds complete URI mapping)
         track_uri_mapping = {}
         for user in authenticated_users:
@@ -414,6 +429,7 @@ def main(
                 source_namespace=source_namespace,
                 target_namespace=target_namespace,
                 track_uri_mapping=track_uri_mapping,
+                clients_by_did=clients_by_did,
                 dry_run=dry_run,
             )
 
