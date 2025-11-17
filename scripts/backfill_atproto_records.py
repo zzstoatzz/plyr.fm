@@ -76,6 +76,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import select
 
+from backend.config import settings as relay_settings
 from backend.models import Artist, Track, db_session
 
 
@@ -151,7 +152,7 @@ async def main():
 
         # build record
         record = {
-            "$type": "fm.plyr.track",
+            "$type": relay_settings.atproto.track_collection,
             "title": track.title,
             "artist": track.artist.display_name,
             "audioUrl": track.r2_url,
@@ -186,7 +187,7 @@ async def main():
             response = await client.com.atproto.repo.create_record(
                 {
                     "repo": user_did,
-                    "collection": "fm.plyr.track",
+                    "collection": relay_settings.atproto.track_collection,
                     "record": record,
                 }
             )

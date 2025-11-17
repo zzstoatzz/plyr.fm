@@ -276,6 +276,13 @@ class AtprotoSettings(RelaySettingsSection):
 
     @computed_field
     @property
+    def like_collection(self) -> str:
+        """Collection name for like records."""
+
+        return f"{self.app_namespace}.like"
+
+    @computed_field
+    @property
     def old_track_collection(self) -> str | None:
         """Collection name for old namespace, if migration is active."""
 
