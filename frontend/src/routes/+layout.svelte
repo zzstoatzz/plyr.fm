@@ -241,6 +241,7 @@
 		min-width: 0;
 		width: 100%;
 		transition: margin-right 0.3s ease;
+		padding-bottom: calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
 	}
 
 	.main-content.with-queue {
