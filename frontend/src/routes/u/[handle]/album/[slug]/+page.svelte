@@ -139,6 +139,7 @@
 						onPlay={playTrack}
 						{isAuthenticated}
 						hideAlbum={true}
+						hideArtist={true}
 					/>
 				{/each}
 			</div>
@@ -150,7 +151,7 @@
 	.container {
 		max-width: 1200px;
 		margin: 0 auto;
-		padding: 0 1rem 6rem 1rem;
+		padding: 0 1rem calc(var(--player-height, 120px) + 2rem + env(safe-area-inset-bottom, 0px)) 1rem;
 	}
 
 	main {

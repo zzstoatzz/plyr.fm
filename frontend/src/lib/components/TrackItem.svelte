@@ -13,10 +13,19 @@
 		onPlay: (_track: Track) => void;
 		isAuthenticated?: boolean;
 		hideAlbum?: boolean;
+		hideArtist?: boolean;
 		index?: number;
 	}
 
-	let { track, isPlaying = false, onPlay, isAuthenticated = false, hideAlbum = false, index = 0 }: Props = $props();
+	let {
+		track,
+		isPlaying = false,
+		onPlay,
+		isAuthenticated = false,
+		hideAlbum = false,
+		hideArtist = false,
+		index = 0
+	}: Props = $props();
 
 	// optimize image loading: eager for first 3, lazy for rest
 	const imageLoading = index < 3 ? 'eager' : 'lazy';
@@ -112,12 +121,14 @@
 		<div class="track-info">
 			<div class="track-title">{track.title}</div>
 			<div class="track-metadata">
-				<a
-					href="/u/{track.artist_handle}"
-					class="artist-link"
-				>
-					{track.artist}
-				</a>
+				{#if !hideArtist}
+					<a
+						href="/u/{track.artist_handle}"
+						class="artist-link"
+					>
+						{track.artist}
+					</a>
+				{/if}
 				{#if track.features && track.features.length > 0}
 					<span class="metadata-separator">•</span>
 					<span class="features-container">
