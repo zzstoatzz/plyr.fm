@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
+	import ShareButton from '$lib/components/ShareButton.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -32,6 +33,14 @@
 			toast.success(`added ${album.metadata.title} to queue`, 1800);
 		}
 	}
+
+	let shareUrl = $state('');
+
+	$effect(() => {
+		if (typeof window !== 'undefined') {
+			shareUrl = `${window.location.origin}/u/${album.metadata.artist_handle}/album/${album.metadata.slug}`;
+		}
+	});
 </script>
 
 <svelte:head>
@@ -108,6 +117,7 @@
 				</svg>
 				add to queue
 			</button>
+			<ShareButton url={shareUrl} />
 		</div>
 
 		<div class="tracks-section">
