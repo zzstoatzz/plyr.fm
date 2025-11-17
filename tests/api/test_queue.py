@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, queue_service
 from backend.main import app
+from backend.models import Album, Artist, Track
 
 
 # create a mock session object
@@ -299,3 +300,80 @@ async def test_queue_state_isolated_by_did(test_app: FastAPI, db_session: AsyncS
     ) as client:
         get_response = await client.get("/queue/")
         assert get_response.json()["state"]["track_ids"] == ["user1_track1"]
+
+
+async def test_queue_hydrates_track_with_album_data(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test that queue properly serializes tracks with album relationships."""
+    # create artist
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album
+    album = Album(
+        artist_did=artist.did,
+        slug="test-album",
+        title="Test Album",
+        image_url="https://example.com/album.jpg",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create track linked to album
+    track = Track(
+        title="Test Track",
+        file_id="test-file-123",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        play_count=0,
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    # add track to queue
+    queue_state = {
+        "track_ids": [track.file_id],
+        "current_index": 0,
+        "current_track_id": track.file_id,
+        "shuffle": False,
+        "original_order_ids": [track.file_id],
+    }
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        # put track in queue
+        put_response = await client.put("/queue/", json={"state": queue_state})
+        assert put_response.status_code == 200
+
+        # get queue and verify track serialization
+        get_response = await client.get("/queue/")
+        assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data["tracks"]) == 1
+
+    track_data = data["tracks"][0]
+    assert track_data["id"] == track.id
+    assert track_data["title"] == "Test Track"
+    assert track_data["artist"] == "Test Artist"
+    assert track_data["artist_handle"] == "test.artist"
+    assert track_data["file_id"] == "test-file-123"
+
+    # verify album data is properly serialized
+    assert track_data["album"] is not None
+    assert track_data["album"]["id"] == album.id
+    assert track_data["album"]["slug"] == "test-album"
+    assert track_data["album"]["title"] == "Test Album"
+    assert track_data["album"]["image_url"] == "https://example.com/album.jpg"
+
+    # verify like status defaults (queue doesn't include these)
+    assert track_data["is_liked"] is False
+    assert track_data["like_count"] == 0
