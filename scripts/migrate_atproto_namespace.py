@@ -77,8 +77,10 @@ class MigrationSettings(BaseSettings):
         extra="ignore",
     )
 
-    handle: str = Field(validation_alias="ATPROTO_MAIN_HANDLE")
-    password: str = Field(validation_alias="ATPROTO_MAIN_PASSWORD")
+    main_handle: str = Field(validation_alias="ATPROTO_MAIN_HANDLE")
+    main_password: str = Field(validation_alias="ATPROTO_MAIN_PASSWORD")
+    devlog_handle: str = Field(validation_alias="NOTIFY_BOT_HANDLE")
+    devlog_password: str = Field(validation_alias="NOTIFY_BOT_PASSWORD")
 
 
 async def resolve_pds_url(handle: str) -> tuple[str, str]:
@@ -221,7 +223,7 @@ async def migrate_likes(
         stmt = (
             select(TrackLike)
             .where(TrackLike.user_did == user_did)
-            .where(TrackLike.atproto_record_uri.like(f"%{source_namespace}.like%"))
+            .where(TrackLike.atproto_like_uri.like(f"%{source_namespace}.like%"))
             .order_by(TrackLike.id)
         )
         result = await db.execute(stmt)
@@ -233,7 +235,7 @@ async def migrate_likes(
         return
 
     for like in likes:
-        old_uri = like.atproto_record_uri
+        old_uri = like.atproto_like_uri
 
         typer.echo(f"\n  Like #{like.id} for track #{like.track_id}")
         typer.echo(f"    Old URI: {old_uri}")
@@ -308,7 +310,7 @@ async def migrate_likes(
             result = await db.execute(stmt)
             db_like = result.scalar_one()
 
-            db_like.atproto_record_uri = new_like_uri
+            db_like.atproto_like_uri = new_like_uri
 
             await db.commit()
 
@@ -350,34 +352,70 @@ def main(
             typer.echo("=" * 60)
             typer.confirm("Are you sure you want to proceed?", abort=True)
 
-        typer.echo(f"\nResolving PDS for {settings.handle}...")
-        user_did, pds_url = await resolve_pds_url(settings.handle)
-        typer.echo(f"  DID: {user_did}")
-        typer.echo(f"  PDS: {pds_url}")
+        # set up both users
+        users = [
+            {
+                "handle": settings.main_handle,
+                "password": settings.main_password,
+                "name": "main",
+            },
+            {
+                "handle": settings.devlog_handle,
+                "password": settings.devlog_password,
+                "name": "devlog",
+            },
+        ]
 
-        # authenticate
-        client = AsyncClient(base_url=pds_url)
-        await client.login(settings.handle, settings.password)
-        typer.echo("  ✓ Authenticated")
+        # resolve and authenticate both users
+        authenticated_users = []
+        for user in users:
+            typer.echo(f"\nResolving PDS for {user['handle']} ({user['name']})...")
+            user_did, pds_url = await resolve_pds_url(user["handle"])
+            typer.echo(f"  DID: {user_did}")
+            typer.echo(f"  PDS: {pds_url}")
 
-        # migrate tracks first (builds URI mapping)
-        track_uri_mapping = await migrate_tracks(
-            client=client,
-            user_did=user_did,
-            source_namespace=source_namespace,
-            target_namespace=target_namespace,
-            dry_run=dry_run,
-        )
+            # authenticate
+            client = AsyncClient(base_url=pds_url)
+            await client.login(user["handle"], user["password"])
+            typer.echo("  ✓ Authenticated")
 
-        # migrate likes (uses URI mapping)
-        await migrate_likes(
-            client=client,
-            user_did=user_did,
-            source_namespace=source_namespace,
-            target_namespace=target_namespace,
-            track_uri_mapping=track_uri_mapping,
-            dry_run=dry_run,
-        )
+            authenticated_users.append(
+                {
+                    **user,
+                    "did": user_did,
+                    "pds_url": pds_url,
+                    "client": client,
+                }
+            )
+
+        # migrate ALL tracks first (builds complete URI mapping)
+        track_uri_mapping = {}
+        for user in authenticated_users:
+            typer.echo(
+                f"\n{'=' * 60}\nProcessing tracks for {user['handle']} ({user['name']})\n{'=' * 60}"
+            )
+            mapping = await migrate_tracks(
+                client=user["client"],
+                user_did=user["did"],
+                source_namespace=source_namespace,
+                target_namespace=target_namespace,
+                dry_run=dry_run,
+            )
+            track_uri_mapping.update(mapping)
+
+        # migrate ALL likes (uses complete URI mapping from all users)
+        for user in authenticated_users:
+            typer.echo(
+                f"\n{'=' * 60}\nProcessing likes for {user['handle']} ({user['name']})\n{'=' * 60}"
+            )
+            await migrate_likes(
+                client=user["client"],
+                user_did=user["did"],
+                source_namespace=source_namespace,
+                target_namespace=target_namespace,
+                track_uri_mapping=track_uri_mapping,
+                dry_run=dry_run,
+            )
 
         typer.echo("\n" + "=" * 60)
         if dry_run:
@@ -386,8 +424,7 @@ def main(
         else:
             typer.echo("MIGRATION COMPLETE")
             typer.echo("\nIMPORTANT: Old records still exist in production namespace.")
-            typer.echo("After verifying migration, manually delete old records:")
-            typer.echo(f"  uvx pdsx --handle {settings.handle} rm at://...")
+            typer.echo("After verifying migration, manually delete old records.")
         typer.echo("=" * 60)
 
     asyncio.run(run_migration())
