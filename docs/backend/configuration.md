@@ -69,7 +69,7 @@ all settings can be configured via environment variables. the variable names mat
 # database
 DATABASE_URL=postgresql+psycopg://user:pass@host/db
 
-# oauth (register at https://oauthclientregistry.bsky.app/)
+# oauth (uses client metadata discovery - no registration required)
 ATPROTO_CLIENT_ID=https://your-domain.com/client-metadata.json
 ATPROTO_CLIENT_SECRET=<optional-client-secret>
 ATPROTO_REDIRECT_URI=https://your-domain.com/auth/callback
