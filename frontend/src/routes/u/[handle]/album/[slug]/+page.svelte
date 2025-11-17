@@ -85,39 +85,48 @@
 					</svg>
 				</div>
 			{/if}
-			<div class="album-info">
-				<p class="album-type">album</p>
-				<h1 class="album-title">{album.metadata.title}</h1>
-				<div class="album-meta">
-					<a href="/u/{album.metadata.artist_handle}" class="artist-link">
-						{album.metadata.artist}
-					</a>
-					<span class="meta-separator">•</span>
-					<span>{album.metadata.track_count} {album.metadata.track_count === 1 ? 'track' : 'tracks'}</span>
-					<span class="meta-separator">•</span>
-					<span>{album.metadata.total_plays} {album.metadata.total_plays === 1 ? 'play' : 'plays'}</span>
+			<div class="album-info-wrapper">
+				<div class="album-info">
+					<p class="album-type">album</p>
+					<h1 class="album-title">{album.metadata.title}</h1>
+					<div class="album-meta">
+						<a href="/u/{album.metadata.artist_handle}" class="artist-link">
+							{album.metadata.artist}
+						</a>
+						<span class="meta-separator">•</span>
+						<span>{album.metadata.track_count} {album.metadata.track_count === 1 ? 'track' : 'tracks'}</span>
+						<span class="meta-separator">•</span>
+						<span>{album.metadata.total_plays} {album.metadata.total_plays === 1 ? 'play' : 'plays'}</span>
+					</div>
+
+					<div class="mobile-share-button">
+						<ShareButton url={shareUrl} />
+					</div>
+
+					<div class="album-actions">
+						<button class="play-button" onclick={playNow}>
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M8 5v14l11-7z"/>
+							</svg>
+							play now
+						</button>
+						<button class="queue-button" onclick={addToQueue}>
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+								<line x1="5" y1="15" x2="5" y2="21"></line>
+								<line x1="2" y1="18" x2="8" y2="18"></line>
+								<line x1="9" y1="6" x2="21" y2="6"></line>
+								<line x1="9" y1="12" x2="21" y2="12"></line>
+								<line x1="9" y1="18" x2="21" y2="18"></line>
+							</svg>
+							add to queue
+						</button>
+					</div>
+				</div>
+
+				<div class="side-button-right">
+					<ShareButton url={shareUrl} />
 				</div>
 			</div>
-		</div>
-
-		<div class="album-actions">
-			<button class="play-button" onclick={playNow}>
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-					<path d="M8 5v14l11-7z"/>
-				</svg>
-				play now
-			</button>
-			<button class="queue-button" onclick={addToQueue}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-					<line x1="5" y1="15" x2="5" y2="21"></line>
-					<line x1="2" y1="18" x2="8" y2="18"></line>
-					<line x1="9" y1="6" x2="21" y2="6"></line>
-					<line x1="9" y1="12" x2="21" y2="12"></line>
-					<line x1="9" y1="18" x2="21" y2="18"></line>
-				</svg>
-				add to queue
-			</button>
-			<ShareButton url={shareUrl} />
 		</div>
 
 		<div class="tracks-section">
@@ -176,11 +185,30 @@
 		color: #606060;
 	}
 
+	.album-info-wrapper {
+		flex: 1;
+		display: flex;
+		align-items: flex-end;
+		gap: 1rem;
+	}
+
 	.album-info {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+	}
+
+	.side-button-right {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding-bottom: 0.5rem;
+	}
+
+	.mobile-share-button {
+		display: none;
 	}
 
 	.album-type {
@@ -299,6 +327,23 @@
 			height: 160px;
 		}
 
+		.album-info-wrapper {
+			flex-direction: column;
+			align-items: flex-start;
+			width: 100%;
+		}
+
+		.side-button-right {
+			display: none;
+		}
+
+		.mobile-share-button {
+			display: flex;
+			gap: 0.75rem;
+			justify-content: flex-start;
+			margin-top: 0.5rem;
+		}
+
 		.album-title {
 			font-size: 2rem;
 		}
@@ -310,6 +355,7 @@
 		.album-actions {
 			flex-direction: column;
 			gap: 0.75rem;
+			width: 100%;
 		}
 
 		.play-button,
