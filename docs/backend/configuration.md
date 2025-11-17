@@ -167,6 +167,41 @@ this defines the collections:
 - `like_collection` → `"fm.plyr.like"` (implicit)
 - `resolved_scope` → `"atproto repo:fm.plyr.track repo:fm.plyr.like"`
 
+### environment-specific namespaces
+
+each environment uses a separate namespace to prevent test data from polluting production collections:
+
+**development (local):**
+```bash
+ATPROTO_APP_NAMESPACE=fm.plyr.dev
+```
+- `track_collection` → `"fm.plyr.dev.track"`
+- `like_collection` → `"fm.plyr.dev.like"`
+- records written to dev-specific collections on user's PDS
+
+**staging:**
+```bash
+ATPROTO_APP_NAMESPACE=fm.plyr.stg
+```
+- `track_collection` → `"fm.plyr.stg.track"`
+- `like_collection` → `"fm.plyr.stg.like"`
+- records written to staging-specific collections on user's PDS
+
+**production:**
+```bash
+ATPROTO_APP_NAMESPACE=fm.plyr
+```
+- `track_collection` → `"fm.plyr.track"`
+- `like_collection` → `"fm.plyr.like"`
+- records written to production collections on user's PDS
+
+this separation ensures that:
+- test tracks/likes created in dev/staging don't pollute production collections
+- OAuth scopes are environment-specific
+- database and ATProto records stay aligned within each environment
+
+see `docs/deployment/environments.md` for more details on environment configuration.
+
 ### namespace migration
 
 optionally supports migration from an old namespace:

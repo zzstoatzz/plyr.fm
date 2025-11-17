@@ -25,7 +25,7 @@ just frontend dev
 just transcoder run
 ```
 
-connects to `plyr-dev` neon database and uses `fm.plyr` atproto namespace.
+connects to `plyr-dev` neon database and uses `fm.plyr.dev` atproto namespace.
 
 ### staging deployment (automatic)
 
@@ -111,6 +111,10 @@ this will:
 all secrets configured via `flyctl secrets set`. key environment variables:
 - `DATABASE_URL` → neon connection string (env-specific)
 - `FRONTEND_URL` → frontend URL for CORS (production: `https://plyr.fm`, staging: `https://stg.plyr.fm`)
+- `ATPROTO_APP_NAMESPACE` → atproto namespace (environment-specific, separates records by environment)
+  - development: `fm.plyr.dev` (local `.env`)
+  - staging: `fm.plyr.stg`
+  - production: `fm.plyr`
 - `ATPROTO_CLIENT_ID`, `ATPROTO_REDIRECT_URI` → oauth config (env-specific, must use custom domains for cookie-based auth)
   - production: `https://api.plyr.fm/client-metadata.json` and `https://api.plyr.fm/auth/callback`
   - staging: `https://api-stg.plyr.fm/client-metadata.json` and `https://api-stg.plyr.fm/auth/callback`
