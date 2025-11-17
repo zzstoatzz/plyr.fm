@@ -546,6 +546,7 @@
 	@media (max-width: 768px) {
 		main {
 			padding: 1rem;
+			padding-bottom: calc(var(--player-height, 10rem) + env(safe-area-inset-bottom, 0px));
 		}
 
 		.artist-header {

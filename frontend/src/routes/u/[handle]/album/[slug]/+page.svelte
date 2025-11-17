@@ -299,6 +299,7 @@
 
 	.tracks-section {
 		margin-top: 2rem;
+		padding-bottom: calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
 	}
 
 	.section-heading {

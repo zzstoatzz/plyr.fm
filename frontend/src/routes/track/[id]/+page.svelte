@@ -481,6 +481,7 @@ $effect(() => {
 	@media (max-width: 768px) {
 		main {
 			padding: 0.75rem;
+			padding-bottom: calc(var(--player-height, 10rem) + env(safe-area-inset-bottom, 0px));
 			align-items: flex-start;
 			justify-content: flex-start;
 		}
