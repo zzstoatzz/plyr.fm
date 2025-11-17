@@ -1,70 +1,51 @@
 #!/usr/bin/env -S uv run --script --quiet
-"""backfill ATProto records for tracks that lost them during migration.
+"""backfill ATProto records for tracks missing atproto_record_uri.
 
-This script creates ATProto records in fm.plyr.track for tracks that:
+Creates ATProto records on user's PDS for tracks that:
 1. Exist in the database
-2. Have no atproto_record_uri (were orphaned during migration)
-3. Belong to a specific user
+2. Have no atproto_record_uri (orphaned/never synced)
+3. Belong to the configured user (ATPROTO_MAIN_HANDLE)
 
-## Context
+The script uses the app's namespace configuration (settings.atproto.track_collection)
+to create records in the correct namespace for the current environment.
 
-During namespace migration (app.relay.track → fm.plyr.track), some tracks
-had their ATProto records migrated but the database's atproto_record_uri
-field was never updated to point to the new collection. This caused:
+## Prerequisites
 
-1. Track edits to fail silently when trying to update non-existent old URIs
-2. Orphaned tracks with no ATProto records at all
-
-## Detecting Issues
-
-### Check ATProto records for a DID
+Set credentials in .env:
 ```bash
-# requires custom PDS URL for non-Bluesky users
-uvx pdsx --pds https://pds.zzstoatzz.io -r <did> ls fm.plyr.track
+ATPROTO_MAIN_HANDLE=your.handle
+ATPROTO_MAIN_PASSWORD=your-app-password
+DATABASE_URL=postgresql://...  # target database
 ```
 
-### Check database for orphaned tracks
-```sql
--- production database
-SELECT id, title, atproto_record_uri
-FROM tracks
-WHERE artist_did = '<did>'
-ORDER BY id;
+## Usage
+
+```bash
+uv run scripts/backfill_atproto_records.py
 ```
 
-### Check for stale URIs pointing to old namespace
-```sql
-SELECT id, title, atproto_record_uri
-FROM tracks
-WHERE atproto_record_uri LIKE '%app.relay%';
+The script will:
+1. Resolve user's PDS URL from handle/DID
+2. Query database for tracks without atproto_record_uri
+3. Create ATProto records on PDS using configured namespace
+4. Update database with new URIs and CIDs
+
+## Verification
+
+After running, verify success:
+```bash
+# check ATProto records on PDS (see docs/tools/pdsx.md)
+uvx pdsx --pds <pds-url> -r <handle> ls <namespace>
+
+# check database (see docs/tools/neon.md)
+SELECT COUNT(*) FROM tracks WHERE atproto_record_uri IS NOT NULL;
 ```
 
-## Database Environment Notes
+## References
 
-We have three database environments:
-- dev: ep-flat-haze-aefjvcba (us-east-2) - default in .env
-- staging: (location TBD)
-- prod: ep-young-poetry-a4ueyq14 (us-east-1) - commented in .env
-
-All environments now write to the unified `fm.plyr.track` namespace.
-
-IMPORTANT: This script uses DATABASE_URL from .env. To run against production,
-temporarily uncomment the prod DATABASE_URL, run the script, then revert.
-Never commit .env changes.
-
-## Custom PDS Resolution
-
-Non-Bluesky users (like zzstoatzz.io) require:
-1. Handle → DID resolution via AsyncIdResolver
-2. DID → PDS URL lookup from DID document
-3. AsyncClient initialization with custom base_url
-
-The atproto Client/AsyncClient defaults to bsky.social and will fail with
-BadJwtSignature errors if you don't provide the correct PDS URL.
-
-Usage:
-    # ensure ATPROTO_MAIN_HANDLE and ATPROTO_MAIN_PASSWORD are in .env
-    uv run scripts/backfill_atproto_records.py
+- Database queries: docs/tools/neon.md
+- PDS inspection: docs/tools/pdsx.md
+- ATProto records: src/backend/_internal/atproto/records.py
 """
 
 import asyncio
