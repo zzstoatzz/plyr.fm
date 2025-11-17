@@ -104,10 +104,11 @@
 				document.documentElement.style.setProperty('--visual-viewport-offset', `${offset}px`);
 			} else {
 				// fallback for Chrome PWA or browsers without visual viewport API
-				// use scrollHeight to detect keyboard presence (scrollHeight > innerHeight when keyboard is visible)
+				// limited effectiveness: only detects document growth (e.g., dynamic content)
+				// relies on visibilitychange handler for browser chrome changes
 				const layoutHeight = window.innerHeight;
 				const documentHeight = document.documentElement.scrollHeight;
-				const offset = Math.max(0, layoutHeight - documentHeight);
+				const offset = Math.max(0, documentHeight - layoutHeight);
 				document.documentElement.style.setProperty('--visual-viewport-offset', `${offset}px`);
 			}
 		}
