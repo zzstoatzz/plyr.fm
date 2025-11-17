@@ -653,7 +653,6 @@
 				<div class="track-info">
 					<div class="track-title">{track.title}</div>
 					<div class="track-meta">
-						<div class="meta-artist" title={track.artist}>{track.artist}</div>
 						{#if track.features && track.features.length > 0}
 							<div class="meta-features" title={`feat. ${track.features.map(f => f.display_name).join(', ')}`}>
 								<span class="features-label">feat.</span>
@@ -666,7 +665,9 @@
 									<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none" />
 									<circle cx="8" cy="8" r="2.5" fill="currentColor" />
 								</svg>
-								<span class="album-title">{track.album.title}</span>
+								<a href="/u/{track.artist_handle}/album/{track.album.slug}" class="album-link">
+									{track.album.title}
+								</a>
 							</div>
 						{/if}
 					</div>
@@ -1173,7 +1174,6 @@
 		min-width: 0;
 	}
 
-	.meta-artist,
 	.meta-features,
 	.meta-album {
 		display: inline-flex;
@@ -1184,11 +1184,6 @@
 		text-overflow: ellipsis;
 		width: 100%;
 		min-width: 0;
-	}
-
-	.meta-artist {
-		font-weight: 500;
-		color: #e0e0e0;
 	}
 
 	.features-label {
@@ -1207,10 +1202,17 @@
 		color: #909090;
 	}
 
-	.album-title {
+	.album-link {
+		color: #909090;
+		text-decoration: none;
+		transition: color 0.2s;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.album-link:hover {
+		color: var(--accent);
 	}
 
 	.album-icon {
