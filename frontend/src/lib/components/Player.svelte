@@ -35,6 +35,9 @@
 	let albumOverflows = $state(false);
 
 	function checkOverflows() {
+		// SSR safety: skip if running on server
+		if (typeof window === 'undefined') return;
+
 		// check if text overflows container (with small delay to ensure layout is complete)
 		window.requestAnimationFrame(() => {
 			if (titleEl) {
@@ -101,10 +104,10 @@
 				document.documentElement.style.setProperty('--visual-viewport-offset', `${offset}px`);
 			} else {
 				// fallback for Chrome PWA or browsers without visual viewport API
-				// infer offset from difference between window.innerHeight and document height
+				// use scrollHeight to detect keyboard presence (scrollHeight > innerHeight when keyboard is visible)
 				const layoutHeight = window.innerHeight;
-				const documentHeight = document.documentElement.clientHeight;
-				const offset = Math.max(0, documentHeight - layoutHeight);
+				const documentHeight = document.documentElement.scrollHeight;
+				const offset = Math.max(0, layoutHeight - documentHeight);
 				document.documentElement.style.setProperty('--visual-viewport-offset', `${offset}px`);
 			}
 		}
@@ -133,9 +136,8 @@
 		// listen to geometrychange for visual viewport (Safari + Chrome)
 		window.visualViewport?.addEventListener('resize', updateViewportOffset);
 		window.visualViewport?.addEventListener('scroll', updateViewportOffset);
-		if (window.visualViewport && 'ongeometrychange' in window.visualViewport) {
-			window.visualViewport.addEventListener('geometrychange', updateViewportOffset);
-		}
+		// geometrychange fires when viewport geometry changes (e.g., mobile keyboard shows/hides)
+		window.visualViewport?.addEventListener('geometrychange', updateViewportOffset);
 
 		// recalculate on app resume (fixes Chrome PWA stale offset)
 		document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -148,9 +150,7 @@
 			window.removeEventListener('resize', handleResize);
 			window.visualViewport?.removeEventListener('resize', updateViewportOffset);
 			window.visualViewport?.removeEventListener('scroll', updateViewportOffset);
-			if (window.visualViewport && 'ongeometrychange' in window.visualViewport) {
-				window.visualViewport.removeEventListener('geometrychange', updateViewportOffset);
-			}
+			window.visualViewport?.removeEventListener('geometrychange', updateViewportOffset);
 			document.removeEventListener('visibilitychange', handleVisibilityChange);
 			observer.disconnect();
 			document.documentElement.style.setProperty('--visual-viewport-offset', '0px');
@@ -328,7 +328,7 @@
 						class:scrolling={artistOverflows}
 						bind:this={artistEl}
 					>
-						<svg class="metadata-icon artist-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<svg class="metadata-icon artist-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 							<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none"/>
 							<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
 						</svg>
@@ -342,7 +342,7 @@
 							class:scrolling={albumOverflows}
 							bind:this={albumEl}
 						>
-							<svg class="metadata-icon album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<svg class="metadata-icon album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 								<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
 								<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
 							</svg>
