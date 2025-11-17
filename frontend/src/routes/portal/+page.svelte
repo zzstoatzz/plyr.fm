@@ -650,21 +650,29 @@
 										</div>
 									{/if}
 								</div>
-								<div class="track-info">
-									<div class="track-title">{track.title}</div>
-									<div class="track-meta">
-										{track.artist}
-										{#if track.features && track.features.length > 0}
-											<span class="features">feat. {track.features.map(f => f.display_name).join(', ')}</span>
-										{/if}
-										{#if track.album}
-											<span class="separator">•</span>
-											<span class="album">{track.album.title}</span>
-										{/if}
-									</div>
-									{#if track.created_at}
-										<div class="track-date">
-											{new Date(track.created_at).toLocaleDateString()}
+				<div class="track-info">
+					<div class="track-title">{track.title}</div>
+					<div class="track-meta">
+						<div class="meta-artist" title={track.artist}>{track.artist}</div>
+						{#if track.features && track.features.length > 0}
+							<div class="meta-features" title={`feat. ${track.features.map(f => f.display_name).join(', ')}`}>
+								<span class="features-label">feat.</span>
+								<span class="features-list">{track.features.map(f => f.display_name).join(', ')}</span>
+							</div>
+						{/if}
+						{#if track.album}
+							<div class="meta-album" title={track.album.title}>
+								<svg class="album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+									<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none" />
+									<circle cx="8" cy="8" r="2.5" fill="currentColor" />
+								</svg>
+								<span class="album-title">{track.album.title}</span>
+							</div>
+						{/if}
+					</div>
+					{#if track.created_at}
+						<div class="track-date">
+							{new Date(track.created_at).toLocaleDateString()}
 										</div>
 									{/if}
 								</div>
@@ -1157,23 +1165,59 @@
 
 	.track-meta {
 		font-size: 0.9rem;
-		color: #aaa;
+		color: #b0b0b0;
 		margin-bottom: 0.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		min-width: 0;
 	}
 
-	.separator {
-		margin: 0 0.5rem;
-		color: #666;
+	.meta-artist,
+	.meta-features,
+	.meta-album {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		width: 100%;
+		min-width: 0;
 	}
 
-	.album {
-		color: #888;
-	}
-
-	.features {
-		color: #8ab3ff;
+	.meta-artist {
 		font-weight: 500;
-		margin-left: 0.5rem;
+		color: #e0e0e0;
+	}
+
+	.features-label {
+		color: #8ab3ff;
+		font-weight: 600;
+	}
+
+	.features-list {
+		color: #8ab3ff;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.meta-album {
+		color: #909090;
+	}
+
+	.album-title {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.album-icon {
+		width: 14px;
+		height: 14px;
+		opacity: 0.7;
+		flex-shrink: 0;
 	}
 
 	.track-date {
