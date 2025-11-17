@@ -635,8 +635,8 @@
 	}
 
 	.player-artist-link.scrolling span {
-		padding-right: 1.5rem;
-		animation: scroll-text 8s linear infinite;
+		padding-right: 3rem;
+		animation: scroll-text 15s linear infinite;
 	}
 
 	.player-artist-link:hover {
@@ -676,8 +676,8 @@
 	}
 
 	.player-album-link.scrolling span {
-		padding-right: 1.5rem;
-		animation: scroll-text 8s linear infinite;
+		padding-right: 3rem;
+		animation: scroll-text 15s linear infinite;
 	}
 
 	.player-controls {
