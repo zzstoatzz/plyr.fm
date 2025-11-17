@@ -80,33 +80,10 @@ class AppSettings(RelaySettingsSection):
         default=60,
         description="Interval for background tasks in seconds",
     )
-    canonical_host: str = Field(
-        default="plyr.fm",
-        description="Canonical host used for metadata and share links",
-    )
-    canonical_url_override: str | None = Field(
-        default=None,
-        description="Override canonical URL if it differs from https://{canonical_host}",
-    )
     broadcast_channel_prefix: str = Field(
         default="plyr",
         description="Prefix used for browser BroadcastChannel identifiers",
     )
-
-    @computed_field
-    @property
-    def canonical_url(self) -> str:
-        """Canonical site URL for metadata/share links."""
-
-        if self.canonical_url_override:
-            return self.canonical_url_override.rstrip("/")
-
-        scheme = "https"
-        if self.canonical_host.startswith(
-            "localhost"
-        ) or self.canonical_host.startswith("127.0.0.1"):
-            scheme = "http"
-        return f"{scheme}://{self.canonical_host}".rstrip("/")
 
 
 class FrontendSettings(RelaySettingsSection):
