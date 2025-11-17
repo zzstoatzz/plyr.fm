@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.config import settings
 from backend.models import QueueState, Track, UserPreferences
+from backend.schemas import TrackResponse
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -253,7 +254,7 @@ class QueueService:
 
         stmt = (
             select(Track)
-            .options(selectinload(Track.artist))
+            .options(selectinload(Track.artist), selectinload(Track.album_rel))
             .where(Track.file_id.in_(track_ids))
         )
         result = await db.execute(stmt)
@@ -283,28 +284,18 @@ class QueueService:
                     track.image_url = url
                     db.add(track)
 
-        # build serialized response
+        # serialize tracks using shared schema
+        # note: queue responses don't include like status or atproto URLs
+        # to avoid additional db queries - clients can fetch these separately if needed
         serialized: list[dict[str, Any]] = []
         for track in tracks_in_order:
-            artist = track.artist
-            serialized.append(
-                {
-                    "id": track.id,
-                    "title": track.title,
-                    "artist": artist.display_name if artist else track.artist_did,
-                    "artist_handle": artist.handle if artist else track.artist_did,
-                    "artist_avatar_url": artist.avatar_url if artist else None,
-                    "album": track.album,
-                    "file_id": track.file_id,
-                    "file_type": track.file_type,
-                    "features": track.features,
-                    "r2_url": track.r2_url,
-                    "atproto_record_uri": track.atproto_record_uri,
-                    "play_count": track.play_count,
-                    "created_at": track.created_at.isoformat(),
-                    "image_url": track.image_url,
-                }
+            track_response = await TrackResponse.from_track(
+                track,
+                pds_url=None,
+                liked_track_ids=None,
+                like_counts=None,
             )
+            serialized.append(track_response.model_dump())
 
         # commit any lazy backfills
         if tracks_needing_backfill:

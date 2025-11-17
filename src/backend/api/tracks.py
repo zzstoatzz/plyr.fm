@@ -49,6 +49,7 @@ from backend._internal.image import ImageFormat
 from backend._internal.uploads import UploadStatus, upload_tracker
 from backend.config import settings
 from backend.models import Album, Artist, Track, TrackLike, get_db
+from backend.schemas import TrackResponse
 from backend.storage import storage
 from backend.storage.r2 import R2Storage
 from backend.utilities.aggregations import get_like_counts
@@ -58,78 +59,6 @@ from backend.utilities.slugs import slugify
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tracks", tags=["tracks"])
-
-
-class TrackResponse(dict):
-    """track response schema."""
-
-    @classmethod
-    async def from_track(
-        cls,
-        track: Track,
-        pds_url: str | None = None,
-        liked_track_ids: set[int] | None = None,
-        like_counts: dict[int, int] | None = None,
-    ) -> "TrackResponse":
-        """build track response from Track model.
-
-        args:
-            track: Track model instance
-            pds_url: optional PDS URL for atproto_record_url
-            liked_track_ids: optional set of liked track IDs for this user (for efficient batched checks)
-            like_counts: optional dict of track_id -> like_count (from batch aggregation)
-        """
-        # check if user has liked this track (efficient O(1) lookup)
-        is_liked = liked_track_ids is not None and track.id in liked_track_ids
-
-        # get like count (defaults to 0 if not in dict)
-        like_count = like_counts.get(track.id, 0) if like_counts else 0
-
-        # use stored image_url if available, fallback to computing it for legacy records
-        image_url = track.image_url
-        if not image_url and track.image_id:
-            image_url = await track.get_image_url()
-
-        album_data: dict[str, Any] | None = None
-        if track.album_id and track.album_rel:
-            album_image_url = track.album_rel.image_url
-            if not album_image_url and track.album_rel.image_id:
-                album_image_url = await track.album_rel.get_image_url()
-            if not album_image_url and track.artist.avatar_url:
-                album_image_url = track.artist.avatar_url
-            album_data = {
-                "id": track.album_rel.id,
-                "slug": track.album_rel.slug,
-                "title": track.album_rel.title,
-                "image_url": album_image_url,
-            }
-
-        return cls(
-            id=track.id,
-            title=track.title,
-            artist=track.artist.display_name,
-            artist_handle=track.artist.handle,
-            artist_avatar_url=track.artist.avatar_url,
-            file_id=track.file_id,
-            file_type=track.file_type,
-            features=track.features,
-            r2_url=track.r2_url,
-            atproto_record_uri=track.atproto_record_uri,
-            atproto_record_url=(
-                f"{pds_url}/xrpc/com.atproto.repo.getRecord"
-                f"?repo={track.artist_did}&collection={settings.atproto.track_collection}"
-                f"&rkey={track.atproto_record_uri.split('/')[-1]}"
-                if track.atproto_record_uri and pds_url
-                else None
-            ),
-            play_count=track.play_count,
-            created_at=track.created_at.isoformat(),
-            image_url=image_url,
-            is_liked=is_liked,
-            like_count=like_count,
-            album=album_data,
-        )
-
 
 # max featured artists per track
 MAX_FEATURES = 5
@@ -838,7 +767,7 @@ async def update_track_metadata(
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,  # JSON array of handles
     image: UploadFile | None = File(None),
-) -> dict:
+) -> TrackResponse:
     """update track metadata (only by owner).
 
     features: optional JSON array of ATProto handles, e.g., ["user1.bsky.social", "user2.bsky.social"]
@@ -1017,7 +946,7 @@ class RestoreRecordResponse(BaseModel):
     """response for restore record endpoint."""
 
     success: bool
-    track: dict[str, Any]
+    track: TrackResponse
     restored_uri: str
 
 
@@ -1317,7 +1246,7 @@ async def get_track(
     db: Annotated[AsyncSession, Depends(get_db)],
     request: Request,
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
-) -> dict:
+) -> TrackResponse:
     """get a specific track."""
     # get authenticated user if cookie or auth header present
     liked_track_ids: set[int] | None = None
