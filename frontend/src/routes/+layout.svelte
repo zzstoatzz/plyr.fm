@@ -244,6 +244,12 @@
 		padding-bottom: calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
 	}
 
+	@media (max-width: 768px) {
+		.main-content {
+			padding-bottom: calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px));
+		}
+	}
+
 	.main-content.with-queue {
 		margin-right: 360px;
 	}
