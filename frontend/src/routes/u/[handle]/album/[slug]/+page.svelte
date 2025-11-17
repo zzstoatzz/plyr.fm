@@ -154,9 +154,6 @@
 		padding: 0 1rem calc(var(--player-height, 120px) + 2rem + env(safe-area-inset-bottom, 0px)) 1rem;
 	}
 
-	.tracks-section {
-		padding-bottom: calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
-	}
 
 	main {
 		margin-top: 2rem;

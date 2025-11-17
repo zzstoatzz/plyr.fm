@@ -89,7 +89,7 @@
 	.page {
 		max-width: 800px;
 		margin: 0 auto;
-		padding: 0 1rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
+		padding: 0 1rem 2rem;
 		min-height: 100vh;
 	}
 
