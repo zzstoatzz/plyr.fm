@@ -139,6 +139,7 @@
 						onPlay={playTrack}
 						{isAuthenticated}
 						hideAlbum={true}
+						hideArtist={true}
 					/>
 				{/each}
 			</div>
