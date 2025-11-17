@@ -45,12 +45,14 @@
 				titleOverflows = span ? span.scrollWidth > titleEl.clientWidth : false;
 			}
 			if (artistEl) {
-				const span = artistEl.querySelector('span');
-				artistOverflows = span ? span.scrollWidth > artistEl.clientWidth : false;
+				const container = artistEl.querySelector('.text-container');
+				const span = container?.querySelector('span');
+				artistOverflows = span && container ? span.scrollWidth > container.clientWidth : false;
 			}
 			if (albumEl) {
-				const span = albumEl.querySelector('span');
-				albumOverflows = span ? span.scrollWidth > albumEl.clientWidth : false;
+				const container = albumEl.querySelector('.text-container');
+				const span = container?.querySelector('span');
+				albumOverflows = span && container ? span.scrollWidth > container.clientWidth : false;
 			}
 		});
 	}
@@ -326,28 +328,30 @@
 					<a
 						href="/u/{player.currentTrack.artist_handle}"
 						class="player-artist-link"
-						class:scrolling={artistOverflows}
 						bind:this={artistEl}
 					>
 						<svg class="metadata-icon artist-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 							<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none"/>
 							<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
 						</svg>
-						<span>{player.currentTrack.artist}</span>
+						<div class="text-container" class:scrolling={artistOverflows}>
+							<span>{player.currentTrack.artist}</span>
+						</div>
 					</a>
 					{#if player.currentTrack.album}
 						<span class="metadata-separator">•</span>
 						<a
 							href="/u/{player.currentTrack.artist_handle}/album/{player.currentTrack.album.slug}"
 							class="player-album-link"
-							class:scrolling={albumOverflows}
 							bind:this={albumEl}
 						>
 							<svg class="metadata-icon album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 								<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none"/>
 								<circle cx="8" cy="8" r="2.5" fill="currentColor"/>
 							</svg>
-							<span>{player.currentTrack.album.title}</span>
+							<div class="text-container" class:scrolling={albumOverflows}>
+								<span>{player.currentTrack.album.title}</span>
+							</div>
 						</a>
 					{/if}
 				</div>
@@ -615,32 +619,35 @@
 		color: #909090;
 		text-decoration: none;
 		transition: color 0.2s;
-		white-space: nowrap;
-		overflow: hidden;
-		position: relative;
 		display: flex;
 		align-items: center;
 		width: 100%;
 	}
 
-	.player-artist-link.scrolling {
+	.player-artist-link:hover {
+		color: var(--accent);
+	}
+
+	.text-container {
 		overflow: hidden;
+		position: relative;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.text-container.scrolling {
 		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
 		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
 	}
 
-	.player-artist-link span {
+	.text-container span {
 		display: inline-block;
 		white-space: nowrap;
 	}
 
-	.player-artist-link.scrolling span {
+	.text-container.scrolling span {
 		padding-right: 3rem;
 		animation: scroll-text 15s linear infinite;
-	}
-
-	.player-artist-link:hover {
-		color: var(--accent);
 	}
 
 	.metadata-separator {
@@ -651,10 +658,6 @@
 		color: #808080;
 		text-decoration: none;
 		transition: color 0.2s;
-		white-space: nowrap;
-		overflow: hidden;
-		position: relative;
-		min-width: 0;
 		display: flex;
 		align-items: center;
 		width: 100%;
@@ -662,22 +665,6 @@
 
 	.player-album-link:hover {
 		color: var(--accent);
-	}
-
-	.player-album-link.scrolling {
-		overflow: hidden;
-		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
-		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
-	}
-
-	.player-album-link span {
-		display: inline-block;
-		white-space: nowrap;
-	}
-
-	.player-album-link.scrolling span {
-		padding-right: 3rem;
-		animation: scroll-text 15s linear infinite;
 	}
 
 	.player-controls {
