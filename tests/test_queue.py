@@ -42,8 +42,11 @@ async def test_notify_with_timeout_prevents_hang(queue_service: QueueService):
     assert queue_service.conn is None
 
 
-async def test_heartbeat_detects_zombie_connection(queue_service: QueueService):
+async def test_heartbeat_detects_zombie_connection():
     """test that heartbeat proactively detects dead connections."""
+    # create service with short timeout for testing
+    queue_service = QueueService(heartbeat_interval=0.1, heartbeat_timeout=0.1)
+
     # create a mock connection that times out on execute
     mock_conn = mock.AsyncMock(spec=asyncpg.Connection)
     mock_conn.is_closed.return_value = False
@@ -57,8 +60,8 @@ async def test_heartbeat_detects_zombie_connection(queue_service: QueueService):
     # start heartbeat loop
     heartbeat_task = asyncio.create_task(queue_service._heartbeat_loop())
 
-    # wait for one heartbeat cycle
-    await asyncio.sleep(0.5)
+    # wait for timeout to trigger
+    await asyncio.sleep(0.3)
 
     # cancel the heartbeat task
     heartbeat_task.cancel()

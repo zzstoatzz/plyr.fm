@@ -24,7 +24,12 @@ logger = logging.getLogger(__name__)
 class QueueService:
     """service for managing queue state with cross-instance sync via LISTEN/NOTIFY."""
 
-    def __init__(self):
+    def __init__(
+        self,
+        heartbeat_interval: float = 5.0,
+        heartbeat_timeout: float = 5.0,
+        reconnect_delay: float = 5.0,
+    ):
         # TTLCache provides both LRU eviction and TTL expiration
         self.cache: TTLCache[str, tuple[dict[str, Any], int, list[dict[str, Any]]]] = (
             TTLCache(maxsize=100, ttl=300)
@@ -32,8 +37,9 @@ class QueueService:
         self.conn: asyncpg.Connection | None = None
         self.listener_task: asyncio.Task | None = None
         self.heartbeat_task: asyncio.Task | None = None
-        self.reconnect_delay = 5  # seconds
-        self.heartbeat_interval = 5  # seconds
+        self.reconnect_delay = reconnect_delay
+        self.heartbeat_interval = heartbeat_interval
+        self.heartbeat_timeout = heartbeat_timeout
 
     async def setup(self) -> None:
         """initialize the queue service and start LISTEN task."""
@@ -90,7 +96,9 @@ class QueueService:
             try:
                 if self.conn and not self.conn.is_closed():
                     # ping the connection with a short timeout
-                    await asyncio.wait_for(self.conn.execute("SELECT 1"), timeout=5.0)
+                    await asyncio.wait_for(
+                        self.conn.execute("SELECT 1"), timeout=self.heartbeat_timeout
+                    )
                 await asyncio.sleep(self.heartbeat_interval)
             except TimeoutError:
                 logger.warning("heartbeat timeout, marking connection as dead")
