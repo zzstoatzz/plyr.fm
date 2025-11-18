@@ -125,28 +125,46 @@ class R2Storage:
             logfire.info("R2 upload complete", file_id=file_id, key=key)
             return file_id
 
-    async def get_url(self, file_id: str) -> str | None:
-        """get public URL for media file (audio or image)."""
-        with logfire.span("R2 get_url", file_id=file_id):
+    async def get_url(
+        self, file_id: str, *, file_type: str | None = None
+    ) -> str | None:
+        """get public URL for media file (audio or image).
+
+        args:
+            file_id: the file identifier hash
+            file_type: optional file type hint - "audio" or "image"
+                      if None, checks both (audio first, then image)
+                      if "audio", only checks audio bucket
+                      if "image", only checks image bucket
+        """
+        with logfire.span("R2 get_url", file_id=file_id, file_type=file_type):
             async with self.async_session.client(
                 "s3",
                 endpoint_url=self.endpoint_url,
                 aws_access_key_id=self.aws_access_key_id,
                 aws_secret_access_key=self.aws_secret_access_key,
             ) as client:
-                # try audio formats first
-                for audio_format in AudioFormat:
-                    key = f"audio/{file_id}{audio_format.extension}"
+                # if file_type is "image", skip audio checks
+                if file_type != "image":
+                    # try audio formats
+                    for audio_format in AudioFormat:
+                        key = f"audio/{file_id}{audio_format.extension}"
 
-                    try:
-                        await client.head_object(Bucket=self.audio_bucket_name, Key=key)
-                        return f"{self.public_audio_bucket_url}/{key}"
-                    except client.exceptions.NoSuchKey:
-                        continue
-                    except ClientError as e:
-                        if e.response.get("Error", {}).get("Code") == "404":
+                        try:
+                            await client.head_object(
+                                Bucket=self.audio_bucket_name, Key=key
+                            )
+                            return f"{self.public_audio_bucket_url}/{key}"
+                        except client.exceptions.NoSuchKey:
                             continue
-                        raise
+                        except ClientError as e:
+                            if e.response.get("Error", {}).get("Code") == "404":
+                                continue
+                            raise
+
+                    # if explicitly looking for audio, stop here
+                    if file_type == "audio":
+                        return None
 
                 # try image formats
                 from backend._internal.image import ImageFormat

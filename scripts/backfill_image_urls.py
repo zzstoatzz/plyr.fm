@@ -93,7 +93,7 @@ async def backfill_image_urls(dry_run: bool = False) -> None:
         ) -> tuple[int, str | None, Exception | None]:
             """compute image_url for a track and return (track_id, url, error)."""
             try:
-                url = await storage.get_url(track.image_id)
+                url = await storage.get_url(track.image_id, file_type="image")
                 return (track.id, url, None)
             except Exception as e:
                 return (track.id, None, e)
