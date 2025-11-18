@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
+	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
@@ -13,8 +14,10 @@
 	let tracks = $derived(tracksCache.tracks);
 	let loadingTracks = $derived(tracksCache.loading);
 	let hasTracks = $derived(tracks.length > 0);
-	// only show loading if we don't have cached data
-	let showLoading = $derived(loadingTracks && !hasTracks);
+	let initialLoad = $state(true);
+
+	// show loading during initial load or when actively loading with no cached data
+	let showLoading = $derived((initialLoad && !hasTracks) || (loadingTracks && !hasTracks));
 
 	// track which track ID we've already auto-played to prevent infinite loops
 	let autoPlayedTrackId = $state<string | null>(null);
@@ -22,6 +25,7 @@
 	onMount(async () => {
 		// fetch tracks from cache (will use cached data if recent)
 		await tracksCache.fetch();
+		initialLoad = false;
 	});
 
 	// reactive effect to auto-play track from URL query param
@@ -40,6 +44,10 @@
 	async function logout() {
 		await auth.logout();
 		window.location.href = '/';
+	}
+
+	async function refreshTracks() {
+		await tracksCache.fetch(true); // force refresh
 	}
 </script>
 
@@ -64,9 +72,13 @@
 
 <main>
 	<section class="tracks">
-		<h2>latest tracks</h2>
+		<h2 class="clickable-heading" onclick={refreshTracks} title="click to refresh">
+			latest tracks
+		</h2>
 		{#if showLoading}
-			<p class="loading-text">loading tracks...</p>
+			<div class="loading-container">
+				<WaveLoading size="lg" message="loading tracks..." />
+			</div>
 		{:else if !hasTracks}
 			<p class="empty">no tracks yet</p>
 		{:else}
@@ -86,10 +98,10 @@
 </main>
 
 <style>
-	.loading-text {
-		color: #808080;
-		padding: 2rem;
-		text-align: center;
+	.loading-container {
+		display: flex;
+		justify-content: center;
+		padding: 3rem 2rem;
 	}
 
 	main {
@@ -102,6 +114,16 @@
 		font-size: var(--text-page-heading);
 		margin-bottom: 1.5rem;
 		color: var(--text-primary);
+	}
+
+	.clickable-heading {
+		cursor: pointer;
+		transition: color 0.2s;
+		user-select: none;
+	}
+
+	.clickable-heading:hover {
+		color: var(--accent);
 	}
 
 	.empty {

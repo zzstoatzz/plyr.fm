@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import LoadingSpinner from './LoadingSpinner.svelte';
+	import WaveLoading from './WaveLoading.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
 	import type { Track } from '$lib/types';
@@ -133,7 +133,7 @@
 
 {#if loading}
 	<div class="loading-container">
-		<LoadingSpinner size="md" />
+		<WaveLoading size="md" />
 	</div>
 {:else if brokenTracks.length > 0}
 	<section class="broken-tracks-section">
