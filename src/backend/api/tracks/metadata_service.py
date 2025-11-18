@@ -1,7 +1,5 @@
 """Helpers for track metadata updates."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 from io import BytesIO

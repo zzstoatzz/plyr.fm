@@ -1,7 +1,5 @@
 """Track detail and playback endpoints."""
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from fastapi import Cookie, Depends, HTTPException, Request

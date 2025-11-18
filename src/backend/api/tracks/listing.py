@@ -1,7 +1,5 @@
 """Read-only track listing endpoints."""
 
-from __future__ import annotations
-
 import asyncio
 from typing import Annotated, Any
 

@@ -1,7 +1,5 @@
 """Track upload endpoints and background processing."""
 
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import json
