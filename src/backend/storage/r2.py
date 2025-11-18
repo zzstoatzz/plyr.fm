@@ -126,39 +126,36 @@ class R2Storage:
 
     async def get_url(self, file_id: str) -> str | None:
         """get public URL for media file (audio or image)."""
-        async with self.async_session.client(
-            "s3",
-            endpoint_url=self.endpoint_url,
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-        ) as client:
-            # try audio formats first
-            for audio_format in AudioFormat:
-                key = f"audio/{file_id}{audio_format.extension}"
+        with logfire.span("R2 get_url", file_id=file_id):
+            async with self.async_session.client(
+                "s3",
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+            ) as client:
+                # try audio formats first
+                for audio_format in AudioFormat:
+                    key = f"audio/{file_id}{audio_format.extension}"
 
-                try:
-                    await client.head_object(Bucket=self.audio_bucket_name, Key=key)
-                    return f"{self.public_audio_bucket_url}/{key}"
-                except client.exceptions.NoSuchKey:
-                    continue
-                except Exception:
-                    continue
+                    try:
+                        await client.head_object(Bucket=self.audio_bucket_name, Key=key)
+                        return f"{self.public_audio_bucket_url}/{key}"
+                    except client.exceptions.NoSuchKey:
+                        continue
 
-            # try image formats
-            from backend._internal.image import ImageFormat
+                # try image formats
+                from backend._internal.image import ImageFormat
 
-            for image_format in ImageFormat:
-                key = f"{file_id}.{image_format.value}"
+                for image_format in ImageFormat:
+                    key = f"{file_id}.{image_format.value}"
 
-                try:
-                    await client.head_object(Bucket=self.image_bucket_name, Key=key)
-                    return f"{self.public_image_bucket_url}/{key}"
-                except client.exceptions.NoSuchKey:
-                    continue
-                except Exception:
-                    continue
+                    try:
+                        await client.head_object(Bucket=self.image_bucket_name, Key=key)
+                        return f"{self.public_image_bucket_url}/{key}"
+                    except client.exceptions.NoSuchKey:
+                        continue
 
-            return None
+                return None
 
     async def delete(self, file_id: str, file_type: str | None = None) -> bool:
         """delete media file from R2.
