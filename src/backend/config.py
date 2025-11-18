@@ -136,6 +136,11 @@ class DatabaseSettings(RelaySettingsSection):
         validation_alias="DATABASE_URL",
         description="PostgreSQL connection string",
     )
+    queue_connect_timeout: float = Field(
+        default=3.0,
+        validation_alias="QUEUE_CONNECT_TIMEOUT",
+        description="Timeout in seconds for queue listener database connections",
+    )
 
 
 class StorageSettings(RelaySettingsSection):
