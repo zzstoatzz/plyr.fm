@@ -1,5 +1,7 @@
 """cloudflare R2 storage for audio files."""
 
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import BinaryIO
 
@@ -11,9 +13,68 @@ from botocore.exceptions import ClientError
 from sqlalchemy import func, select
 
 from backend._internal.audio import AudioFormat
+from backend._internal.image import ImageFormat
 from backend.config import settings
 from backend.utilities.database import db_session
 from backend.utilities.hashing import hash_file_chunked
+
+
+class UploadProgressTracker:
+    """tracks upload progress for streaming R2 uploads with throttling.
+
+    boto3's upload_fileobj accepts a Callback parameter that's invoked
+    after each chunk. this wrapper throttles those callbacks to avoid
+    overwhelming SSE listeners and logfire.
+    """
+
+    def __init__(
+        self,
+        total_size: int,
+        callback: Callable[[float], None],
+        min_bytes_between_updates: int = 5 * 1024 * 1024,  # 5MB
+        min_time_between_updates: float = 0.25,  # 250ms
+    ):
+        """initialize progress tracker.
+
+        args:
+            total_size: total file size in bytes
+            callback: function to call with progress percentage (0-100)
+            min_bytes_between_updates: minimum bytes between progress callbacks
+            min_time_between_updates: minimum seconds between progress callbacks
+        """
+        self.total_size = total_size
+        self.callback = callback
+        self.min_bytes_between_updates = min_bytes_between_updates
+        self.min_time_between_updates = min_time_between_updates
+
+        self.bytes_uploaded = 0
+        self.last_update_bytes = 0
+        self.last_update_time = time.monotonic()
+
+    def __call__(self, bytes_amount: int) -> None:
+        """boto3 callback - invoked after each chunk upload.
+
+        args:
+            bytes_amount: number of bytes uploaded in this chunk
+        """
+        self.bytes_uploaded += bytes_amount
+
+        # calculate progress
+        progress_pct = (self.bytes_uploaded / self.total_size) * 100
+        bytes_since_update = self.bytes_uploaded - self.last_update_bytes
+        time_since_update = time.monotonic() - self.last_update_time
+
+        # throttle: only emit if we've crossed byte or time threshold
+        should_update = (
+            bytes_since_update >= self.min_bytes_between_updates
+            or time_since_update >= self.min_time_between_updates
+            or progress_pct >= 99.9  # always emit near completion
+        )
+
+        if should_update:
+            self.callback(progress_pct)
+            self.last_update_bytes = self.bytes_uploaded
+            self.last_update_time = time.monotonic()
 
 
 class R2Storage:
@@ -55,13 +116,23 @@ class R2Storage:
         self.aws_access_key_id = settings.storage.aws_access_key_id
         self.aws_secret_access_key = settings.storage.aws_secret_access_key
 
-    async def save(self, file: BinaryIO, filename: str) -> str:
+    async def save(
+        self,
+        file: BinaryIO,
+        filename: str,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> str:
         """save media file to R2 using streaming upload.
 
         uses chunked hashing and aioboto3's upload_fileobj for constant
         memory usage regardless of file size.
 
         supports both audio and image files.
+
+        args:
+            file: file-like object to upload
+            filename: original filename (used to determine media type)
+            progress_callback: optional callback for upload progress (receives 0-100 percentage)
         """
         with logfire.span("R2 save", filename=filename):
             # compute hash in chunks (constant memory)
@@ -79,8 +150,6 @@ class R2Storage:
                 image_format = None
             else:
                 # try image format
-                from backend._internal.image import ImageFormat
-
                 image_format, is_valid = ImageFormat.validate_and_extract(filename)
                 if is_valid and image_format:
                     key = f"{file_id}{ext}"
@@ -92,11 +161,19 @@ class R2Storage:
                         f"supported image: jpg, jpeg, png, webp, gif"
                     )
 
-            # stream upload to R2 (constant memory, non-blocking)
+            # get file size for progress tracking
             # file pointer already reset by hash_file_chunked
+            file_size = file.seek(0, 2)  # seek to end
+            file.seek(0)  # reset to beginning
+
+            # stream upload to R2 (constant memory, non-blocking)
             bucket = self.image_bucket_name if image_format else self.audio_bucket_name
             logfire.info(
-                "uploading to R2", bucket=bucket, key=key, media_type=media_type
+                "uploading to R2",
+                bucket=bucket,
+                key=key,
+                media_type=media_type,
+                file_size=file_size,
             )
 
             try:
@@ -106,12 +183,20 @@ class R2Storage:
                     aws_access_key_id=self.aws_access_key_id,
                     aws_secret_access_key=self.aws_secret_access_key,
                 ) as client:
-                    await client.upload_fileobj(
-                        Fileobj=file,
-                        Bucket=bucket,
-                        Key=key,
-                        ExtraArgs={"ContentType": media_type},
-                    )
+                    # prepare upload arguments
+                    upload_kwargs = {
+                        "Fileobj": file,
+                        "Bucket": bucket,
+                        "Key": key,
+                        "ExtraArgs": {"ContentType": media_type},
+                    }
+
+                    # add progress callback if provided
+                    if progress_callback and file_size > 0:
+                        tracker = UploadProgressTracker(file_size, progress_callback)
+                        upload_kwargs["Callback"] = tracker
+
+                    await client.upload_fileobj(**upload_kwargs)
             except Exception as e:
                 logfire.error(
                     "R2 upload failed",
@@ -167,8 +252,6 @@ class R2Storage:
                         return None
 
                 # try image formats
-                from backend._internal.image import ImageFormat
-
                 for image_format in ImageFormat:
                     key = f"{file_id}.{image_format.value}"
 

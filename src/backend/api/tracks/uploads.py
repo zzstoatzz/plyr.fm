@@ -69,13 +69,30 @@ async def _process_upload_background(
 
             # save audio file
             upload_tracker.update_status(
-                upload_id, UploadStatus.PROCESSING, "saving audio file..."
+                upload_id,
+                UploadStatus.PROCESSING,
+                "uploading to storage...",
+                phase="upload",
             )
             try:
                 logfire.info("preparing to save audio file", filename=filename)
+
+                # define progress callback for storage upload
+                def on_upload_progress(progress_pct: float) -> None:
+                    """callback invoked during R2 upload with progress percentage."""
+                    upload_tracker.update_status(
+                        upload_id,
+                        UploadStatus.PROCESSING,
+                        f"uploading to storage... {int(progress_pct)}%",
+                        server_progress_pct=progress_pct,
+                        phase="upload",
+                    )
+
                 with open(file_path, "rb") as file_obj:
                     logfire.info("calling storage.save")
-                    file_id = await storage.save(file_obj, filename)
+                    file_id = await storage.save(
+                        file_obj, filename, progress_callback=on_upload_progress
+                    )
                     logfire.info("storage.save completed", file_id=file_id)
             except ValueError as e:
                 logfire.error("ValueError during storage.save", error=str(e))
@@ -129,7 +146,10 @@ async def _process_upload_background(
             image_url = None
             if image_path and image_filename:
                 upload_tracker.update_status(
-                    upload_id, UploadStatus.PROCESSING, "saving image..."
+                    upload_id,
+                    UploadStatus.PROCESSING,
+                    "saving image...",
+                    phase="image",
                 )
                 image_format, is_valid = ImageFormat.validate_and_extract(
                     image_filename
@@ -174,6 +194,7 @@ async def _process_upload_background(
                         upload_id,
                         UploadStatus.PROCESSING,
                         "resolving featured artists...",
+                        phase="metadata",
                     )
                     try:
                         handles_list = json.loads(features)
@@ -204,7 +225,10 @@ async def _process_upload_background(
                 atproto_cid = None
                 if r2_url:
                     upload_tracker.update_status(
-                        upload_id, UploadStatus.PROCESSING, "creating atproto record..."
+                        upload_id,
+                        UploadStatus.PROCESSING,
+                        "creating atproto record...",
+                        phase="atproto",
                     )
                     try:
                         result = await create_track_record(
@@ -227,7 +251,10 @@ async def _process_upload_background(
 
                 # create track record
                 upload_tracker.update_status(
-                    upload_id, UploadStatus.PROCESSING, "saving track metadata..."
+                    upload_id,
+                    UploadStatus.PROCESSING,
+                    "saving track metadata...",
+                    phase="database",
                 )
                 extra = {}
                 album_record = None
