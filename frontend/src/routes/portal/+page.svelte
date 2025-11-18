@@ -4,7 +4,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
 	import AlbumSelect from '$lib/components/AlbumSelect.svelte';
-	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary } from '$lib/types';
@@ -410,7 +410,9 @@
 </script>
 
 {#if loading}
-	<div class="loading">loading...</div>
+	<div class="loading">
+		<WaveLoading size="lg" message="loading..." />
+	</div>
 {:else if error}
 	<div class="error-container">
 		<h1>{error}</h1>
@@ -559,8 +561,7 @@
 
 			{#if loadingTracks}
 				<div class="loading-container">
-					<LoadingSpinner size="lg" />
-					<p class="loading-text">loading tracks...</p>
+					<WaveLoading size="lg" message="loading tracks..." />
 				</div>
 			{:else if tracks.length === 0}
 				<p class="empty">no tracks uploaded yet</p>
@@ -710,8 +711,7 @@
 
 			{#if loadingAlbums}
 				<div class="loading-container">
-					<LoadingSpinner size="lg" />
-					<p class="loading-text">loading albums...</p>
+					<WaveLoading size="lg" message="loading albums..." />
 				</div>
 			{:else if albums.length === 0}
 				<p class="empty">no albums yet - upload tracks with album names to create albums</p>
@@ -1333,16 +1333,8 @@
 
 	.loading-container {
 		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1rem;
+		justify-content: center;
 		padding: 3rem 1rem;
-	}
-
-	.loading-text {
-		margin: 0;
-		color: var(--text-secondary);
-		font-size: 0.9rem;
 	}
 
 	.albums-section {
