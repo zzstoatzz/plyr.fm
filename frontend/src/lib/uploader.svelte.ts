@@ -64,7 +64,11 @@ class UploaderState {
 		xhr.upload.addEventListener('progress', (e) => {
 			if (e.lengthComputable && !uploadComplete) {
 				const percent = Math.round((e.loaded / e.total) * 100);
-				const progressMsg = `uploading track... ${percent}%`;
+				// for large files, don't show percentage to avoid confusion with server progress
+				// just show a spinner/activity indicator
+				const progressMsg = fileSizeMB > 10
+					? 'uploading to server...'
+					: `uploading to server... ${percent}%`;
 				toast.update(toastId, progressMsg);
 				if (callbacks?.onProgress) {
 					callbacks.onProgress(e.loaded, e.total);
@@ -102,8 +106,10 @@ class UploaderState {
 					eventSource.onmessage = (event) => {
 						const update = JSON.parse(event.data);
 
-						// always show backend processing messages (no percentage)
+						// show backend processing messages
 						if (update.message && update.status === 'processing') {
+							// for upload phase with progress, show determinate progress
+							// for other phases, just show the message
 							toast.update(task.toastId, update.message);
 						}
 
