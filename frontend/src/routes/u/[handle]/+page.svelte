@@ -3,12 +3,13 @@
 	import { fade } from 'svelte/transition';
 	import { API_URL } from '$lib/config';
 	import { browser } from '$app/environment';
-	import type { Analytics } from '$lib/types';
+	import type { Analytics, Track } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { fetchLikedTracks } from '$lib/tracks.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
@@ -63,38 +64,65 @@
 	onMount(() => {
 		// load analytics in background without blocking page render
 		loadAnalytics();
+		primeLikesFromCache();
+		// immediately hydrate tracks client-side for liked state
+		void hydrateTracksWithLikes();
 	});
 
 	async function hydrateTracksWithLikes() {
-		if (!artist?.did) return;
+		if (!browser || tracksHydrated) return;
 
 		tracksLoading = true;
 		try {
-			const response = await fetch(`${API_URL}/tracks/?artist_did=${artist.did}`, {
-				credentials: 'include'
-			});
-
-			if (response.ok) {
-				const data = await response.json();
-				tracks = data.tracks ?? [];
-			}
+			const likedTracks = await fetchLikedTracks();
+			const likedIds = new Set(likedTracks.map(track => track.id));
+			applyLikedFlags(likedIds);
 		} catch (_e) {
-			console.error('failed to hydrate artist tracks:', _e);
+			console.error('failed to hydrate artist likes:', _e);
 		} finally {
 			tracksLoading = false;
 			tracksHydrated = true;
 		}
 	}
 
-	$effect(() => {
-		// wait until we're in the browser and auth check finished
-		if (!browser) return;
-		if (tracksHydrated) return;
-		if (auth.loading) return;
-		if (!artist?.did) return;
+	function applyLikedFlags(likedIds: Set<number>) {
+		let changed = false;
 
-		void hydrateTracksWithLikes();
-	});
+		const nextTracks = tracks.map(track => {
+			const nextLiked = likedIds.has(track.id);
+			const currentLiked = Boolean(track.is_liked);
+			if (currentLiked !== nextLiked) {
+				changed = true;
+				return { ...track, is_liked: nextLiked };
+			}
+			return track;
+		});
+
+		if (changed) {
+			tracks = nextTracks;
+		}
+	}
+
+	function primeLikesFromCache() {
+		if (!browser) return;
+		try {
+			const cachedRaw = localStorage.getItem('tracks_cache');
+			if (!cachedRaw) return;
+			const cached = JSON.parse(cachedRaw) as { tracks?: Track[] };
+			const cachedTracks = cached.tracks ?? [];
+			if (cachedTracks.length === 0) return;
+
+			const likedIds = new Set(
+				cachedTracks.filter(track => Boolean(track.is_liked)).map(track => track.id)
+			);
+
+			if (likedIds.size > 0) {
+				applyLikedFlags(likedIds);
+			}
+		} catch (e) {
+			console.warn('failed to hydrate likes from cache', e);
+		}
+	}
 </script>
 
 <svelte:head>
