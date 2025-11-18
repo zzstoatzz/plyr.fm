@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import { API_URL } from '$lib/config';
+	import { browser } from '$app/environment';
 	import type { Analytics } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
@@ -16,11 +17,13 @@
 
 	// use server-loaded data directly
 	const artist = $derived(data.artist);
-	const tracks = $derived(data.tracks);
+	let tracks = $state(data.tracks ?? []);
 	const albums = $derived(data.albums ?? []);
 
 	let analytics: Analytics | null = $state(null);
 	let analyticsLoading = $state(false);
+	let tracksHydrated = $state(false);
+	let tracksLoading = $state(false);
 
 
 	async function handleLogout() {
@@ -60,6 +63,37 @@
 	onMount(() => {
 		// load analytics in background without blocking page render
 		loadAnalytics();
+	});
+
+	async function hydrateTracksWithLikes() {
+		if (!artist?.did) return;
+
+		tracksLoading = true;
+		try {
+			const response = await fetch(`${API_URL}/tracks/?artist_did=${artist.did}`, {
+				credentials: 'include'
+			});
+
+			if (response.ok) {
+				const data = await response.json();
+				tracks = data.tracks ?? [];
+			}
+		} catch (_e) {
+			console.error('failed to hydrate artist tracks:', _e);
+		} finally {
+			tracksLoading = false;
+			tracksHydrated = true;
+		}
+	}
+
+	$effect(() => {
+		// wait until we're in the browser and auth check finished
+		if (!browser) return;
+		if (tracksHydrated) return;
+		if (auth.loading) return;
+		if (!artist?.did) return;
+
+		void hydrateTracksWithLikes();
 	});
 </script>
 
@@ -171,7 +205,12 @@
 		</section>
 
 		<section class="tracks">
-			<h2>tracks</h2>
+			<h2>
+				tracks
+				{#if tracksLoading}
+					<span class="tracks-loading">updating…</span>
+				{/if}
+			</h2>
 			{#if tracks.length === 0}
 				<p class="empty">no tracks yet</p>
 			{:else}
@@ -521,6 +560,14 @@
 		margin-bottom: 1.5rem;
 		color: #e8e8e8;
 		font-size: 1.8rem;
+	}
+
+	.tracks-loading {
+		margin-left: 0.75rem;
+		font-size: 0.95rem;
+		color: #9ea5b4;
+		font-weight: 400;
+		text-transform: lowercase;
 	}
 
 	.track-list {

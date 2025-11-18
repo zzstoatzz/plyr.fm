@@ -3,15 +3,8 @@ import type { Artist, Track, ArtistAlbumSummary } from '$lib/types';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
+export const load: PageServerLoad = async ({ params, fetch }) => {
 	try {
-		// get session cookie to forward to API for liked state
-		const sessionId = cookies.get('session_id');
-		const headers: HeadersInit = {};
-		if (sessionId) {
-			headers['Cookie'] = `session_id=${sessionId}`;
-		}
-
 		// fetch artist info server-side for SEO/link previews
 		const artistResponse = await fetch(`${API_URL}/artists/by-handle/${params.handle}`);
 
@@ -21,10 +14,8 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 
 		const artist: Artist = await artistResponse.json();
 
-		// fetch artist's tracks with session cookie for liked state
-		const tracksResponse = await fetch(`${API_URL}/tracks/?artist_did=${artist.did}`, {
-			headers
-		});
+		// fetch artist's tracks server-side (no cookie available on frontend host)
+		const tracksResponse = await fetch(`${API_URL}/tracks/?artist_did=${artist.did}`);
 		let tracks: Track[] = [];
 
 		if (tracksResponse.ok) {
@@ -32,9 +23,7 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 			tracks = data.tracks || [];
 		}
 
-		const albumsResponse = await fetch(`${API_URL}/albums/${params.handle}`, {
-			headers
-		});
+		const albumsResponse = await fetch(`${API_URL}/albums/${params.handle}`);
 		let albums: ArtistAlbumSummary[] = [];
 
 		if (albumsResponse.ok) {
