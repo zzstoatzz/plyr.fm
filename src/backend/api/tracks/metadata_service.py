@@ -3,7 +3,7 @@
 import asyncio
 import json
 from io import BytesIO
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,6 +70,8 @@ async def resolve_feature_handles(
                 status_code=400,
                 detail=f"failed to resolve handle: {handle}",
             )
+        if TYPE_CHECKING:
+            assert isinstance(resolved, dict)
         features.append(resolved)
 
     return features
