@@ -288,6 +288,21 @@ consuming input failed: SSL connection has been closed unexpectedly
 3. Add retry logic for initial database connections
 4. Consider connection pool size tuning
 
+## Pre-built Dashboards
+
+### Database Performance Dashboard
+
+comprehensive database query analysis showing:
+- query performance by type and table
+- latency percentiles (p50, p95, p99)
+- error rates and counts
+- query volume and impact
+
+see `logfire-database-dashboard.sql` for the full query with alternative views for:
+- slowest individual queries
+- hourly query volume timeline
+- transaction and connection pool metrics
+
 ## Resources
 
 - [Logfire SQL Explorer Documentation](https://logfire.pydantic.dev/docs/guides/web-ui/explore/)
