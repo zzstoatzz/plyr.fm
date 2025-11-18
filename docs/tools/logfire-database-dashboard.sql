@@ -135,12 +135,12 @@ LIMIT 25;
 */
 
 
--- Alternative: Database Operations Timeline (hourly aggregation)
+-- Alternative: Database Operations Timeline (5-minute aggregation)
 -- Uncomment to see query volume and performance over time
 /*
-WITH hourly_metrics AS (
+WITH time_metrics AS (
     SELECT
-        DATE_TRUNC('hour', start_timestamp) AS hour,
+        DATE_TRUNC('minute', start_timestamp) AS minute,
         CASE
             WHEN span_name = 'SELECT neondb' THEN 'SELECT'
             WHEN span_name = 'INSERT neondb' THEN 'INSERT'
@@ -157,17 +157,17 @@ WITH hourly_metrics AS (
          OR span_name = 'INSERT neondb'
          OR span_name = 'UPDATE neondb'
          OR span_name = 'DELETE neondb')
-        AND start_timestamp > NOW() - INTERVAL '24 hours'
-    GROUP BY hour, query_type
+        AND start_timestamp > NOW() - INTERVAL '2 hours'
+    GROUP BY minute, query_type
 )
 SELECT
-    hour AS "Hour",
+    minute AS "Time",
     query_type AS "Type",
     query_count AS "Count",
     avg_duration_ms AS "Avg Duration (ms)",
     error_count AS "Errors"
-FROM hourly_metrics
-ORDER BY hour DESC, query_count DESC;
+FROM time_metrics
+ORDER BY minute DESC, query_count DESC;
 */
 
 
