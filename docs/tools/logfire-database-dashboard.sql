@@ -2,9 +2,10 @@
 -- Shows aggregated database query metrics grouped by query pattern
 
 WITH query_classification AS (
-    -- Classify queries by type and extract table names
+    -- Classify queries by type and extract table names from actual SQL
     SELECT
         span_name,
+        attributes->>'db.statement' as query_text,
         duration,
         start_timestamp,
         trace_id,
@@ -19,27 +20,54 @@ WITH query_classification AS (
             WHEN span_name LIKE 'ROLLBACK%' THEN 'TRANSACTION'
             ELSE 'OTHER'
         END AS query_type,
-        -- Extract primary table being queried
+        -- Extract primary table from actual SQL query in attributes
         CASE
-            WHEN span_name LIKE '%FROM tracks%' OR span_name LIKE '%INTO tracks%' OR span_name LIKE '%UPDATE tracks%' THEN 'tracks'
-            WHEN span_name LIKE '%FROM artists%' OR span_name LIKE '%INTO artists%' OR span_name LIKE '%UPDATE artists%' THEN 'artists'
-            WHEN span_name LIKE '%FROM albums%' OR span_name LIKE '%INTO albums%' OR span_name LIKE '%UPDATE albums%' THEN 'albums'
-            WHEN span_name LIKE '%FROM queue_state%' OR span_name LIKE '%INTO queue_state%' OR span_name LIKE '%UPDATE queue_state%' THEN 'queue_state'
-            WHEN span_name LIKE '%FROM user_preferences%' OR span_name LIKE '%INTO user_preferences%' OR span_name LIKE '%UPDATE user_preferences%' THEN 'user_preferences'
-            WHEN span_name LIKE '%FROM oauth_sessions%' OR span_name LIKE '%INTO oauth_sessions%' OR span_name LIKE '%UPDATE oauth_sessions%' THEN 'oauth_sessions'
-            WHEN span_name LIKE '%FROM likes%' OR span_name LIKE '%INTO likes%' OR span_name LIKE '%UPDATE likes%' THEN 'likes'
-            ELSE 'other/multiple'
+            -- tracks queries (most common)
+            WHEN attributes->>'db.statement' LIKE '%FROM tracks%' AND attributes->>'db.statement' NOT LIKE '%JOIN%' THEN 'tracks'
+            WHEN attributes->>'db.statement' LIKE '%FROM tracks JOIN%' THEN 'tracks+joins'
+            WHEN attributes->>'db.statement' LIKE '%INTO tracks%' THEN 'tracks'
+            WHEN attributes->>'db.statement' LIKE '%UPDATE tracks%' THEN 'tracks'
+
+            -- track_likes queries
+            WHEN attributes->>'db.statement' LIKE '%FROM track_likes%' THEN 'track_likes'
+            WHEN attributes->>'db.statement' LIKE '%INTO track_likes%' THEN 'track_likes'
+
+            -- user auth/session queries
+            WHEN attributes->>'db.statement' LIKE '%FROM user_sessions%' THEN 'user_sessions'
+            WHEN attributes->>'db.statement' LIKE '%INTO user_sessions%' THEN 'user_sessions'
+            WHEN attributes->>'db.statement' LIKE '%UPDATE user_sessions%' THEN 'user_sessions'
+
+            -- user preferences
+            WHEN attributes->>'db.statement' LIKE '%FROM user_preferences%' THEN 'user_preferences'
+            WHEN attributes->>'db.statement' LIKE '%INTO user_preferences%' THEN 'user_preferences'
+            WHEN attributes->>'db.statement' LIKE '%UPDATE user_preferences%' THEN 'user_preferences'
+
+            -- queue state
+            WHEN attributes->>'db.statement' LIKE '%FROM queue_state%' THEN 'queue_state'
+            WHEN attributes->>'db.statement' LIKE '%INTO queue_state%' THEN 'queue_state'
+            WHEN attributes->>'db.statement' LIKE '%UPDATE queue_state%' THEN 'queue_state'
+
+            -- artists
+            WHEN attributes->>'db.statement' LIKE '%FROM artists%' THEN 'artists'
+            WHEN attributes->>'db.statement' LIKE '%INTO artists%' THEN 'artists'
+            WHEN attributes->>'db.statement' LIKE '%UPDATE artists%' THEN 'artists'
+
+            -- albums
+            WHEN attributes->>'db.statement' LIKE '%FROM albums%' THEN 'albums'
+            WHEN attributes->>'db.statement' LIKE '%INTO albums%' THEN 'albums'
+
+            ELSE 'other/unknown'
         END AS primary_table
     FROM records
     WHERE
         -- Filter for database operations
-        (span_name LIKE 'SELECT%'
-         OR span_name LIKE 'INSERT%'
-         OR span_name LIKE 'UPDATE%'
-         OR span_name LIKE 'DELETE%'
-         OR span_name LIKE 'BEGIN%'
-         OR span_name LIKE 'COMMIT%'
-         OR span_name LIKE 'ROLLBACK%')
+        (span_name = 'SELECT neondb'
+         OR span_name = 'INSERT neondb'
+         OR span_name = 'UPDATE neondb'
+         OR span_name = 'DELETE neondb'
+         OR span_name = 'BEGIN neondb'
+         OR span_name = 'COMMIT neondb'
+         OR span_name = 'ROLLBACK neondb')
         -- Exclude very fast queries (connection pool pings, etc.)
         AND duration > 0.001
 ),
@@ -85,22 +113,22 @@ LIMIT 50;
 SELECT
     ROUND(duration * 1000, 2) AS "Duration (ms)",
     CASE
-        WHEN span_name LIKE 'SELECT%' THEN 'SELECT'
-        WHEN span_name LIKE 'INSERT%' THEN 'INSERT'
-        WHEN span_name LIKE 'UPDATE%' THEN 'UPDATE'
-        WHEN span_name LIKE 'DELETE%' THEN 'DELETE'
+        WHEN span_name = 'SELECT neondb' THEN 'SELECT'
+        WHEN span_name = 'INSERT neondb' THEN 'INSERT'
+        WHEN span_name = 'UPDATE neondb' THEN 'UPDATE'
+        WHEN span_name = 'DELETE neondb' THEN 'DELETE'
         ELSE 'OTHER'
     END AS "Type",
-    LEFT(span_name, 100) AS "Query Preview",
+    LEFT(attributes->>'db.statement', 150) AS "Query Preview",
     start_timestamp AS "Timestamp",
     trace_id AS "Trace ID",
     otel_status_code AS "Status"
 FROM records
 WHERE
-    (span_name LIKE 'SELECT%'
-     OR span_name LIKE 'INSERT%'
-     OR span_name LIKE 'UPDATE%'
-     OR span_name LIKE 'DELETE%')
+    (span_name = 'SELECT neondb'
+     OR span_name = 'INSERT neondb'
+     OR span_name = 'UPDATE neondb'
+     OR span_name = 'DELETE neondb')
     AND duration > 0.001
 ORDER BY duration DESC
 LIMIT 25;
@@ -114,10 +142,10 @@ WITH hourly_metrics AS (
     SELECT
         DATE_TRUNC('hour', start_timestamp) AS hour,
         CASE
-            WHEN span_name LIKE 'SELECT%' THEN 'SELECT'
-            WHEN span_name LIKE 'INSERT%' THEN 'INSERT'
-            WHEN span_name LIKE 'UPDATE%' THEN 'UPDATE'
-            WHEN span_name LIKE 'DELETE%' THEN 'DELETE'
+            WHEN span_name = 'SELECT neondb' THEN 'SELECT'
+            WHEN span_name = 'INSERT neondb' THEN 'INSERT'
+            WHEN span_name = 'UPDATE neondb' THEN 'UPDATE'
+            WHEN span_name = 'DELETE neondb' THEN 'DELETE'
             ELSE 'OTHER'
         END AS query_type,
         COUNT(*) AS query_count,
@@ -125,10 +153,10 @@ WITH hourly_metrics AS (
         COUNT(*) FILTER (WHERE otel_status_code = 'ERROR') AS error_count
     FROM records
     WHERE
-        (span_name LIKE 'SELECT%'
-         OR span_name LIKE 'INSERT%'
-         OR span_name LIKE 'UPDATE%'
-         OR span_name LIKE 'DELETE%')
+        (span_name = 'SELECT neondb'
+         OR span_name = 'INSERT neondb'
+         OR span_name = 'UPDATE neondb'
+         OR span_name = 'DELETE neondb')
         AND start_timestamp > NOW() - INTERVAL '24 hours'
     GROUP BY hour, query_type
 )
@@ -149,16 +177,16 @@ ORDER BY hour DESC, query_count DESC;
 WITH transaction_metrics AS (
     SELECT
         DATE_TRUNC('minute', start_timestamp) AS minute,
-        COUNT(*) FILTER (WHERE span_name LIKE 'BEGIN%') AS begin_count,
-        COUNT(*) FILTER (WHERE span_name LIKE 'COMMIT%') AS commit_count,
-        COUNT(*) FILTER (WHERE span_name LIKE 'ROLLBACK%') AS rollback_count,
-        ROUND(AVG(duration * 1000) FILTER (WHERE span_name LIKE 'BEGIN%')::numeric, 2) AS avg_begin_ms,
-        ROUND(AVG(duration * 1000) FILTER (WHERE span_name LIKE 'COMMIT%')::numeric, 2) AS avg_commit_ms
+        COUNT(*) FILTER (WHERE span_name = 'BEGIN neondb') AS begin_count,
+        COUNT(*) FILTER (WHERE span_name = 'COMMIT neondb') AS commit_count,
+        COUNT(*) FILTER (WHERE span_name = 'ROLLBACK neondb') AS rollback_count,
+        ROUND(AVG(duration * 1000) FILTER (WHERE span_name = 'BEGIN neondb')::numeric, 2) AS avg_begin_ms,
+        ROUND(AVG(duration * 1000) FILTER (WHERE span_name = 'COMMIT neondb')::numeric, 2) AS avg_commit_ms
     FROM records
     WHERE
-        span_name LIKE 'BEGIN%'
-        OR span_name LIKE 'COMMIT%'
-        OR span_name LIKE 'ROLLBACK%'
+        span_name = 'BEGIN neondb'
+        OR span_name = 'COMMIT neondb'
+        OR span_name = 'ROLLBACK neondb'
     GROUP BY minute
 )
 SELECT
