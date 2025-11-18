@@ -71,7 +71,7 @@ async def _process_upload_background(
             upload_tracker.update_status(
                 upload_id,
                 UploadStatus.PROCESSING,
-                "syncing to storage...",
+                "uploading to storage...",
                 phase="upload",
             )
             try:
@@ -83,7 +83,7 @@ async def _process_upload_background(
                     upload_tracker.update_status(
                         upload_id,
                         UploadStatus.PROCESSING,
-                        f"syncing to storage... {int(progress_pct)}%",
+                        f"uploading to storage... {int(progress_pct)}%",
                         server_progress_pct=progress_pct,
                         phase="upload",
                     )
