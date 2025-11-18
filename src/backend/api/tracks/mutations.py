@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
-import json
 import logging
-from io import BytesIO
 from typing import Annotated
 
 import logfire
@@ -14,12 +11,11 @@ from fastapi import Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import attributes, selectinload
+from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import oauth_client, require_auth
 from backend._internal.atproto import delete_record_by_uri
-from backend._internal.atproto.handles import resolve_handle
 from backend._internal.atproto.records import (
     _reconstruct_oauth_session,
     _refresh_session_tokens,
@@ -27,16 +23,17 @@ from backend._internal.atproto.records import (
     update_record,
 )
 from backend._internal.atproto.tid import datetime_to_tid
-from backend._internal.image import ImageFormat
 from backend.config import settings
 from backend.models import Artist, Track, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
-from backend.storage.r2 import R2Storage
 
-from .constants import MAX_FEATURES
+from .metadata_service import (
+    apply_album_update,
+    resolve_feature_handles,
+    upload_track_image,
+)
 from .router import router
-from .services import get_or_create_album
 
 logger = logging.getLogger(__name__)
 
@@ -133,155 +130,80 @@ async def update_track_metadata(
             detail="you can only edit your own tracks",
         )
 
-    # update fields if provided
+    title_changed = False
     if title is not None:
         track.title = title
+        title_changed = True
 
-    if album is not None:
-        if album:
-            if track.extra is None:
-                track.extra = {}
-            track.extra["album"] = album
-            attributes.flag_modified(track, "extra")
-            album_record = await get_or_create_album(
-                db,
-                track.artist,
-                album,
-                track.image_id,
-                track.image_url,
-            )
-            track.album_id = album_record.id
-        else:
-            if track.extra and "album" in track.extra:
-                del track.extra["album"]
-                attributes.flag_modified(track, "extra")
-            track.album_id = None
+    await apply_album_update(db, track, album)
 
     if features is not None:
-        # resolve featured artist handles
-        featured_artists = []
-        try:
-            handles_list = json.loads(features)
-            if not isinstance(handles_list, list):
-                raise HTTPException(
-                    status_code=400, detail="features must be a JSON array of handles"
-                )
+        track.features = await resolve_feature_handles(
+            features, artist_handle=track.artist.handle
+        )
 
-            if len(handles_list) > MAX_FEATURES:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"maximum {MAX_FEATURES} featured artists allowed",
-                )
-
-            # validate all handles first
-            valid_handles = []
-            for handle in handles_list:
-                if not isinstance(handle, str):
-                    raise HTTPException(
-                        status_code=400, detail="each feature must be a string handle"
-                    )
-
-                # prevent self-featuring
-                if handle.lstrip("@") == track.artist.handle:
-                    continue  # skip self-feature silently
-
-                valid_handles.append(handle)
-
-            # batch resolve all handles concurrently
-            if valid_handles:
-                resolved_artists = await asyncio.gather(
-                    *[resolve_handle(h) for h in valid_handles],
-                    return_exceptions=True,
-                )
-
-                # check for any failed resolutions
-                for handle, resolved in zip(
-                    valid_handles, resolved_artists, strict=False
-                ):
-                    if isinstance(resolved, Exception) or not resolved:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"failed to resolve handle: {handle}",
-                        )
-                    featured_artists.append(resolved)
-
-            track.features = featured_artists
-
-        except json.JSONDecodeError as e:
-            raise HTTPException(
-                status_code=400, detail=f"invalid JSON in features: {e}"
-            ) from e
-
-    # handle image update
+    image_changed = False
     image_url = None
     if image and image.filename:
-        _image_format, is_valid = ImageFormat.validate_and_extract(image.filename)
-        if not is_valid:
-            raise HTTPException(
-                status_code=400,
-                detail="unsupported image type. supported: jpg, png, webp, gif",
-            )
+        image_id, image_url = await upload_track_image(image)
 
-        # read and validate image size
-        image_data = await image.read()
-        max_image_size = 20 * 1024 * 1024  # 20MB
-        if len(image_data) > max_image_size:
-            raise HTTPException(
-                status_code=413,
-                detail="image too large (max 20MB)",
-            )
-        image_obj = BytesIO(image_data)
-        image_id = await storage.save(image_obj, f"images/{image.filename}")
-
-        # get R2 URL for image if using R2 storage
-        image_url = None
-        if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
-            image_url = await storage.get_url(image_id)
-
-        # delete old image if exists
         if track.image_id:
             with contextlib.suppress(Exception):
                 await storage.delete(track.image_id)
 
         track.image_id = image_id
         track.image_url = image_url
+        image_changed = True
 
-    # update ATProto record if any fields changed
     if track.atproto_record_uri and (
-        title is not None or album is not None or features is not None or image_url
+        title_changed or album is not None or features is not None or image_changed
     ):
-        try:
-            # build updated record with all current values
-            updated_record = build_track_record(
-                title=track.title,
-                artist=track.artist.display_name,
-                audio_url=track.r2_url,
-                file_type=track.file_type,
-                album=track.album,
-                duration=None,
-                features=track.features if track.features else None,
-                image_url=image_url or await track.get_image_url(),
-            )
-
-            # update the record on the PDS
-            result = await update_record(
-                auth_session=auth_session,
-                record_uri=track.atproto_record_uri,
-                record=updated_record,
-            )
-
-            if result:
-                _, new_cid = result
-                track.atproto_record_cid = new_cid
-
-        except Exception as e:
-            logger.warning(f"failed to update ATProto record: {e}", exc_info=True)
-            # continue even if ATProto update fails - database changes are primary
+        await _update_atproto_record(track, auth_session, image_url)
 
     await db.commit()
     await db.refresh(track)
 
     return await TrackResponse.from_track(track)
+
+
+async def _update_atproto_record(
+    track: Track,
+    auth_session: AuthSession,
+    image_url_override: str | None = None,
+) -> None:
+    record_uri = track.atproto_record_uri
+    audio_url = track.r2_url
+    if not record_uri or not audio_url:
+        return
+
+    try:
+        updated_record = build_track_record(
+            title=track.title,
+            artist=track.artist.display_name,
+            audio_url=audio_url,
+            file_type=track.file_type,
+            album=track.album,
+            duration=None,
+            features=track.features if track.features else None,
+            image_url=image_url_override or await track.get_image_url(),
+        )
+
+        result = await update_record(
+            auth_session=auth_session,
+            record_uri=record_uri,
+            record=updated_record,
+        )
+
+        if result:
+            _, new_cid = result
+            track.atproto_record_cid = new_cid
+
+    except Exception as exc:  # pragma: no cover - network/service failures
+        logger.warning(
+            f"failed to update ATProto record for track {track.id}: {exc}",
+            exc_info=True,
+        )
+        # continue even if ATProto update fails - database changes are primary
 
 
 class RestoreRecordResponse(BaseModel):
