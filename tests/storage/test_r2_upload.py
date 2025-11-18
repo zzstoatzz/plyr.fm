@@ -53,7 +53,3 @@ async def test_r2_upload():
     # cleanup
     test_file.unlink()
     test_dir.rmdir()
-
-
-if __name__ == "__main__":
-    test_r2_upload()
