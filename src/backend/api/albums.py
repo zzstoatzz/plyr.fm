@@ -15,11 +15,12 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile
 from backend._internal.auth import get_session
-from backend.api.tracks import TrackResponse, get_like_counts
 from backend.config import settings
 from backend.models import Album, Artist, Track, TrackLike, get_db
+from backend.schemas import TrackResponse
 from backend.storage import storage
 from backend.storage.r2 import R2Storage
+from backend.utilities.aggregations import get_like_counts
 from backend.utilities.hashing import CHUNK_SIZE
 
 router = APIRouter(prefix="/albums", tags=["albums"])

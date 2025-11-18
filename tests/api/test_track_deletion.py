@@ -204,9 +204,9 @@ async def test_atproto_cleanup_on_track_delete(
     # mock storage delete to avoid R2 errors
     # mock ATProto delete at the records module level before import
     with (
-        patch("backend.api.tracks.storage.delete", new_callable=AsyncMock),
+        patch("backend.api.tracks.mutations.storage.delete", new_callable=AsyncMock),
         patch(
-            "backend._internal.atproto.records.delete_record_by_uri",
+            "backend.api.tracks.mutations.delete_record_by_uri",
             new_callable=AsyncMock,
         ) as mock_delete_atproto,
     ):
@@ -247,9 +247,9 @@ async def test_atproto_cleanup_handles_404(
 
     # mock ATProto delete to raise 404
     with (
-        patch("backend.api.tracks.storage.delete", new_callable=AsyncMock),
+        patch("backend.api.tracks.mutations.storage.delete", new_callable=AsyncMock),
         patch(
-            "backend._internal.atproto.records.delete_record_by_uri",
+            "backend.api.tracks.mutations.delete_record_by_uri",
             side_effect=Exception("404 not found"),
         ) as mock_delete_atproto,
     ):
