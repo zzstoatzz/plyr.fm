@@ -593,20 +593,28 @@ async def list_tracks(
 
     # resolve all uncached PDS URLs concurrently
     if artists_to_resolve:
+        with logfire.span(
+            "resolve PDS URLs",
+            artist_count=len(artists_to_resolve),
+            _level="debug",
+        ):
 
-        async def resolve_artist(artist: Artist) -> tuple[str, str | None]:
-            """resolve PDS URL for an artist, returning (did, pds_url)."""
-            try:
-                atproto_data = await resolver.resolve_atproto_data(artist.did)
-                return (artist.did, atproto_data.pds)
-            except Exception as e:
-                logger.warning(f"failed to resolve PDS for {artist.did}: {e}")
-                return (artist.did, None)
+            async def resolve_artist(artist: Artist) -> tuple[str, str | None]:
+                """resolve PDS URL for an artist, returning (did, pds_url)."""
+                with logfire.span("resolve single PDS", did=artist.did, _level="debug"):
+                    try:
+                        atproto_data = await resolver.resolve_atproto_data(artist.did)
+                        return (artist.did, atproto_data.pds)
+                    except Exception as e:
+                        logfire.warn(
+                            f"failed to resolve PDS for {artist.did}", error=str(e)
+                        )
+                        return (artist.did, None)
 
-        # resolve all concurrently
-        results = await asyncio.gather(
-            *[resolve_artist(a) for a in artists_to_resolve.values()]
-        )
+            # resolve all concurrently
+            results = await asyncio.gather(
+                *[resolve_artist(a) for a in artists_to_resolve.values()]
+            )
 
         # update cache and database with O(1) lookups
         for did, pds_url in results:
