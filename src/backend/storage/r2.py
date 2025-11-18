@@ -7,6 +7,7 @@ import aioboto3
 import boto3
 import logfire
 from botocore.config import Config
+from botocore.exceptions import ClientError
 from sqlalchemy import func, select
 
 from backend._internal.audio import AudioFormat
@@ -142,6 +143,10 @@ class R2Storage:
                         return f"{self.public_audio_bucket_url}/{key}"
                     except client.exceptions.NoSuchKey:
                         continue
+                    except ClientError as e:
+                        if e.response.get("Error", {}).get("Code") == "404":
+                            continue
+                        raise
 
                 # try image formats
                 from backend._internal.image import ImageFormat
@@ -154,6 +159,10 @@ class R2Storage:
                         return f"{self.public_image_bucket_url}/{key}"
                     except client.exceptions.NoSuchKey:
                         continue
+                    except ClientError as e:
+                        if e.response.get("Error", {}).get("Code") == "404":
+                            continue
+                        raise
 
                 return None
 
