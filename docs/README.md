@@ -247,7 +247,7 @@ logger.info(
 
 **enforced by ATProto**: only user with valid OAuth session can create records in their repo
 
-**enforced by relay**: tracks are associated with `artist_did` and only owner can delete
+**enforced by backend**: tracks are associated with `artist_did` and only owner can delete
 
 ### rate limiting
 

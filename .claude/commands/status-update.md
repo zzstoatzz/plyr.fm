@@ -69,7 +69,7 @@ Why certain choices were made:
 
 1. Read the current `README.md`, `CLAUDE.md`, recent status updates in `sandbox/`, and key source files
 2. Check `git status` and recent commits to understand current work
-3. Scan the codebase structure (`src/relay/`, `frontend/src/`)
+3. Scan the codebase structure (`src/backend/`, `frontend/src/`)
 4. Review the tech stack in `pyproject.toml` and `frontend/package.json`
 5. Synthesize into a clear, chronological narrative
 6. Write to `STATUS.md` in the root directory
