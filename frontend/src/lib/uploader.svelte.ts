@@ -64,10 +64,7 @@ class UploaderState {
 		xhr.upload.addEventListener('progress', (e) => {
 			if (e.lengthComputable && !uploadComplete) {
 				const percent = Math.round((e.loaded / e.total) * 100);
-				// for large files, hide XHR percentage to avoid confusion when R2 progress starts
-				const progressMsg = fileSizeMB > 10
-					? 'retrieving your file...'
-					: `retrieving your file... ${percent}%`;
+				const progressMsg = `retrieving your file... ${percent}%`;
 				toast.update(toastId, progressMsg);
 				if (callbacks?.onProgress) {
 					callbacks.onProgress(e.loaded, e.total);
