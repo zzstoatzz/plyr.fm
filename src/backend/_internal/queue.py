@@ -61,11 +61,19 @@ class QueueService:
             db_url = db_url.replace("postgresql+psycopg://", "postgresql://")
 
         try:
-            self.conn = await asyncpg.connect(db_url)
+            # add timeout to prevent hanging indefinitely on slow/unresponsive database
+            # default 3s timeout provides 5x headroom over p99 latency (~550ms) while failing fast
+            timeout = settings.database.queue_connect_timeout
+            self.conn = await asyncio.wait_for(asyncpg.connect(db_url), timeout=timeout)
             if not self.conn:
                 raise Exception("failed to connect to database")
             await self.conn.add_listener("queue_changes", self._handle_notification)
             logger.info("queue service connected to database and listening")
+        except TimeoutError:
+            logger.error(
+                f"database connection timed out after {settings.database.queue_connect_timeout}s for queue listening"
+            )
+            raise
         except Exception:
             logger.exception("failed to connect to database for queue listening")
             raise
