@@ -76,7 +76,6 @@ def mock_oauth_session() -> OAuthSession:
 class TestConcurrentTokenRefresh:
     """test concurrent token refresh race condition handling."""
 
-    @pytest.mark.asyncio
     async def test_concurrent_refresh_only_calls_once(
         self, mock_auth_session: AuthSession, mock_oauth_session: OAuthSession
     ):
@@ -136,7 +135,6 @@ class TestConcurrentTokenRefresh:
             # but OAuth client should only be called once (the lock worked!)
             assert refresh_call_count == 1
 
-    @pytest.mark.asyncio
     async def test_refresh_failure_uses_fallback(
         self, mock_auth_session: AuthSession, mock_oauth_session: OAuthSession
     ):
@@ -195,7 +193,6 @@ class TestConcurrentTokenRefresh:
             # verify it fell back to reloaded tokens
             assert result.access_token == new_token
 
-    @pytest.mark.asyncio
     async def test_second_request_skips_refresh_if_already_done(
         self, mock_auth_session: AuthSession, mock_oauth_session: OAuthSession
     ):

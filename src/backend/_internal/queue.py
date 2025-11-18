@@ -24,22 +24,31 @@ logger = logging.getLogger(__name__)
 class QueueService:
     """service for managing queue state with cross-instance sync via LISTEN/NOTIFY."""
 
-    def __init__(self):
+    def __init__(
+        self,
+        heartbeat_interval: float = 5.0,
+        heartbeat_timeout: float = 5.0,
+        reconnect_delay: float = 5.0,
+    ):
         # TTLCache provides both LRU eviction and TTL expiration
         self.cache: TTLCache[str, tuple[dict[str, Any], int, list[dict[str, Any]]]] = (
             TTLCache(maxsize=100, ttl=300)
         )
         self.conn: asyncpg.Connection | None = None
         self.listener_task: asyncio.Task | None = None
-        self.reconnect_delay = 5  # seconds
+        self.heartbeat_task: asyncio.Task | None = None
+        self.reconnect_delay = reconnect_delay
+        self.heartbeat_interval = heartbeat_interval
+        self.heartbeat_timeout = heartbeat_timeout
 
     async def setup(self) -> None:
         """initialize the queue service and start LISTEN task."""
         logger.info("starting queue service")
         try:
             await self._connect()
-            # start background listener
+            # start background listener and heartbeat
             self.listener_task = asyncio.create_task(self._listen_loop())
+            self.heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         except Exception:
             logger.exception("failed to setup queue service")
 
@@ -79,6 +88,32 @@ class QueueService:
                 break
             except Exception:
                 logger.exception("error in queue listener loop")
+                await asyncio.sleep(self.reconnect_delay)
+
+    async def _heartbeat_loop(self) -> None:
+        """proactively test connection health to detect zombie connections."""
+        while True:
+            try:
+                if self.conn and not self.conn.is_closed():
+                    # ping the connection with a short timeout
+                    await asyncio.wait_for(
+                        self.conn.execute("SELECT 1"), timeout=self.heartbeat_timeout
+                    )
+                await asyncio.sleep(self.heartbeat_interval)
+            except TimeoutError:
+                logger.warning("heartbeat timeout, marking connection as dead")
+                if self.conn:
+                    await self.conn.close()
+                    self.conn = None
+            except asyncio.CancelledError:
+                logger.info("heartbeat task cancelled")
+                break
+            except Exception:
+                logger.exception("error in heartbeat loop")
+                # connection likely dead, close it
+                if self.conn:
+                    await self.conn.close()
+                    self.conn = None
                 await asyncio.sleep(self.reconnect_delay)
 
     async def _handle_notification(
@@ -217,7 +252,19 @@ class QueueService:
 
         try:
             payload = json.dumps({"did": did})
-            await self.conn.execute(f"NOTIFY queue_changes, '{payload}'")
+            # add timeout to prevent hanging on zombie connections
+            await asyncio.wait_for(
+                self.conn.execute(f"NOTIFY queue_changes, '{payload}'"),
+                timeout=1.0,
+            )
+        except TimeoutError:
+            logger.warning(
+                f"queue notification timed out for {did}, marking connection as dead"
+            )
+            # connection is zombie, close it so listener loop reconnects
+            if self.conn:
+                await self.conn.close()
+                self.conn = None
         except Exception:
             logger.exception(f"error sending queue change notification for {did}")
 
@@ -225,11 +272,16 @@ class QueueService:
         """cleanup resources."""
         logger.info("shutting down queue service")
 
-        # cancel listener task
+        # cancel background tasks
         if self.listener_task:
             self.listener_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self.listener_task
+
+        if self.heartbeat_task:
+            self.heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.heartbeat_task
 
         # close connection
         if self.conn and not self.conn.is_closed():
