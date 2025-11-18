@@ -95,8 +95,7 @@ class QueueService:
             except TimeoutError:
                 logger.warning("heartbeat timeout, marking connection as dead")
                 if self.conn:
-                    with contextlib.suppress(Exception):
-                        await self.conn.close()
+                    await self.conn.close()
                     self.conn = None
             except asyncio.CancelledError:
                 logger.info("heartbeat task cancelled")
@@ -105,8 +104,7 @@ class QueueService:
                 logger.exception("error in heartbeat loop")
                 # connection likely dead, close it
                 if self.conn:
-                    with contextlib.suppress(Exception):
-                        await self.conn.close()
+                    await self.conn.close()
                     self.conn = None
                 await asyncio.sleep(self.reconnect_delay)
 
@@ -257,8 +255,7 @@ class QueueService:
             )
             # connection is zombie, close it so listener loop reconnects
             if self.conn:
-                with contextlib.suppress(Exception):
-                    await self.conn.close()
+                await self.conn.close()
                 self.conn = None
         except Exception:
             logger.exception(f"error sending queue change notification for {did}")
