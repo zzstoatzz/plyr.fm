@@ -1,15 +1,11 @@
 """notification service for relay events."""
 
 import logging
-from datetime import UTC, datetime, timedelta
 
 from atproto import AsyncClient, models
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from backend.config import settings
 from backend.models import Track
-from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +14,6 @@ class NotificationService:
     """service for sending notifications about relay events."""
 
     def __init__(self):
-        self.last_check: datetime | None = None
         self.client: AsyncClient | None = None
         self.dm_client: AsyncClient | None = None
         self.recipient_did: str | None = None
@@ -72,48 +67,6 @@ class NotificationService:
             self.client = None
             self.dm_client = None
             self.recipient_did = None
-
-    async def check_new_tracks(self):
-        """check for new tracks and send notifications."""
-        if not settings.notify.enabled:
-            return
-
-        if not self.recipient_did or not self.client:
-            return
-
-        async with db_session() as db:
-            try:
-                # determine time window for checking
-                if self.last_check is None:
-                    # first run: check last 5 minutes
-                    check_since = datetime.now(UTC) - timedelta(minutes=5)
-                else:
-                    check_since = self.last_check
-
-                # query for new tracks with artist eagerly loaded
-                # filter out tracks that have already been notified
-                stmt = (
-                    select(Track)
-                    .options(selectinload(Track.artist))
-                    .where(Track.created_at > check_since)
-                    .where(Track.notification_sent == False)  # noqa: E712
-                )
-                result = await db.execute(stmt)
-                new_tracks = result.scalars().all()
-
-                if new_tracks:
-                    logger.info(f"found {len(new_tracks)} new tracks")
-                    for track in new_tracks:
-                        await self.send_track_notification(track)
-                        track.notification_sent = True
-                    await db.commit()
-                else:
-                    logger.debug("no new tracks found")
-
-                self.last_check = datetime.now(UTC)
-
-            except Exception as e:
-                logger.exception(f"error checking new tracks: {e}")
 
     async def send_track_notification(self, track: Track):
         """send notification about a new track."""

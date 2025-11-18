@@ -1,7 +1,5 @@
 """relay fastapi application."""
 
-import asyncio
-import contextlib
 import logging
 import warnings
 from collections.abc import AsyncIterator
@@ -64,20 +62,6 @@ else:
 logger = logging.getLogger(__name__)
 
 
-async def run_periodic_tasks():
-    """run periodic background tasks."""
-    while True:
-        try:
-            # check for new tracks and send notifications
-            await notification_service.check_new_tracks()
-
-            # NOTE: OAuth state cleanup is handled lazily in PostgresStateStore
-            # (cleanup happens automatically on save_state/get_state during OAuth flows)
-        except Exception:
-            logger.exception("error in periodic task")
-        await asyncio.sleep(settings.app.background_task_interval_seconds)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """handle application lifespan events."""
@@ -91,15 +75,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await notification_service.setup()
     await queue_service.setup()
 
-    # start background task for periodic work
-    task = asyncio.create_task(run_periodic_tasks())
-
     yield
 
     # shutdown: cleanup resources
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await task
     await notification_service.shutdown()
     await queue_service.shutdown()
 
