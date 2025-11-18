@@ -39,14 +39,26 @@ def get_engine() -> AsyncEngine:
                 "prepared_statement_cache_size": 0,
             }
 
+            # apply statement timeout (command_timeout in asyncpg)
+            if settings.database.statement_timeout:
+                kwargs["connect_args"]["command_timeout"] = (
+                    settings.database.statement_timeout
+                )
+
+            # apply connection timeout
+            if settings.database.connection_timeout:
+                kwargs["connect_args"]["timeout"] = settings.database.connection_timeout
+                # also set pool timeout to fail fast when pool is exhausted
+                kwargs["pool_timeout"] = settings.database.connection_timeout
+
         engine = create_async_engine(
             settings.database.url,
             echo=settings.app.debug,
-            pool_pre_ping=True,  # verify connections before use
-            pool_recycle=3600,  # recycle connections after 1 hour
-            pool_use_lifo=True,  # reuse recent connections
-            pool_size=5,
-            max_overflow=0,
+            pool_pre_ping=settings.database.pool_pre_ping,
+            pool_recycle=settings.database.pool_recycle,
+            pool_use_lifo=True,  # reuse recent connections (LIFO order)
+            pool_size=settings.database.pool_size,
+            max_overflow=settings.database.pool_max_overflow,
             **kwargs,
         )
 

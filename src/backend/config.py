@@ -136,10 +136,44 @@ class DatabaseSettings(RelaySettingsSection):
         validation_alias="DATABASE_URL",
         description="PostgreSQL connection string",
     )
+
+    # timeouts
+    statement_timeout: float = Field(
+        default=10.0,
+        validation_alias="DATABASE_STATEMENT_TIMEOUT",
+        description="Timeout in seconds for SQL statement execution. Prevents runaway queries from holding connections indefinitely.",
+    )
+    connection_timeout: float = Field(
+        default=3.0,
+        validation_alias="DATABASE_CONNECTION_TIMEOUT",
+        description="Timeout in seconds for establishing database connections. Fails fast when database is slow or unresponsive.",
+    )
     queue_connect_timeout: float = Field(
         default=3.0,
         validation_alias="QUEUE_CONNECT_TIMEOUT",
         description="Timeout in seconds for queue listener database connections",
+    )
+
+    # connection pool settings
+    pool_size: int = Field(
+        default=5,
+        validation_alias="DATABASE_POOL_SIZE",
+        description="Number of database connections to keep in the pool at all times.",
+    )
+    pool_max_overflow: int = Field(
+        default=0,
+        validation_alias="DATABASE_MAX_OVERFLOW",
+        description="Maximum connections to create beyond pool_size when pool is exhausted. Total max connections = pool_size + pool_max_overflow.",
+    )
+    pool_recycle: int = Field(
+        default=7200,
+        validation_alias="DATABASE_POOL_RECYCLE",
+        description="Seconds before recycling a connection. Prevents stale connections from lingering. Default 2 hours.",
+    )
+    pool_pre_ping: bool = Field(
+        default=True,
+        validation_alias="DATABASE_POOL_PRE_PING",
+        description="Verify connection health before using from pool. Adds small overhead but prevents using dead connections.",
     )
 
 
