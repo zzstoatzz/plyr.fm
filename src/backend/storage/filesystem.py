@@ -1,5 +1,6 @@
 """local filesystem storage for media files."""
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import BinaryIO
 
@@ -21,13 +22,24 @@ class FilesystemStorage:
         (self.base_path / "audio").mkdir(exist_ok=True)
         (self.base_path / "images").mkdir(exist_ok=True)
 
-    async def save(self, file: BinaryIO, filename: str) -> str:
+    async def save(
+        self,
+        file: BinaryIO,
+        filename: str,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> str:
         """save media file using streaming write.
 
         uses chunked hashing and async file I/O for constant
         memory usage regardless of file size.
 
         supports both audio and image files.
+
+        args:
+            file: file-like object to save
+            filename: original filename (used to determine media type)
+            progress_callback: optional callback for upload progress (receives 0-100 percentage)
+                              ignored for filesystem storage (local writes are typically fast)
         """
         # compute hash in chunks (constant memory)
         file_id = hash_file_chunked(file)[:16]

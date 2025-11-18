@@ -36,6 +36,8 @@ class UploadProgress:
     error: str | None = None
     created_at: datetime | None = None
     completed_at: datetime | None = None
+    server_progress_pct: float | None = None
+    phase: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """serialize to dict."""
@@ -49,6 +51,8 @@ class UploadProgress:
             "completed_at": self.completed_at.isoformat()
             if self.completed_at
             else None,
+            "server_progress_pct": self.server_progress_pct,
+            "phase": self.phase,
         }
 
 
@@ -78,6 +82,8 @@ class UploadTracker:
         message: str,
         track_id: int | None = None,
         error: str | None = None,
+        server_progress_pct: float | None = None,
+        phase: str | None = None,
     ) -> None:
         """update upload status and notify listeners."""
         if upload_id not in self._uploads:
@@ -89,6 +95,8 @@ class UploadTracker:
         upload.message = message
         upload.track_id = track_id
         upload.error = error
+        upload.server_progress_pct = server_progress_pct
+        upload.phase = phase
 
         if status in (UploadStatus.COMPLETED, UploadStatus.FAILED):
             upload.completed_at = datetime.now(UTC)
