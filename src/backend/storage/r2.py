@@ -142,8 +142,6 @@ class R2Storage:
                         return f"{self.public_audio_bucket_url}/{key}"
                     except client.exceptions.NoSuchKey:
                         continue
-                    except Exception:
-                        continue
 
                 # try image formats
                 from backend._internal.image import ImageFormat
@@ -155,8 +153,6 @@ class R2Storage:
                         await client.head_object(Bucket=self.image_bucket_name, Key=key)
                         return f"{self.public_image_bucket_url}/{key}"
                     except client.exceptions.NoSuchKey:
-                        continue
-                    except Exception:
                         continue
 
                 return None
