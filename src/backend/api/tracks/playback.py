@@ -60,7 +60,7 @@ async def get_track(
 async def increment_play_count(
     track_id: int, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> dict:
-    """Increment play count for a track."""
+    """Increment play count for a track (called after 30 seconds of playback)."""
     result = await db.execute(select(Track).where(Track.id == track_id))
     track = result.scalar_one_or_none()
 

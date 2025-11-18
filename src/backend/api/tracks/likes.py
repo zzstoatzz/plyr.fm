@@ -26,7 +26,7 @@ async def list_liked_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
 ) -> dict:
-    """List tracks liked by authenticated user."""
+    """List tracks liked by authenticated user (queried from local index)."""
     stmt = (
         select(Track)
         .join(TrackLike, TrackLike.track_id == Track.id)
@@ -193,7 +193,12 @@ async def get_track_likes(
     track_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Get users who liked a track."""
+    """Public endpoint returning users who liked a track.
+
+    Returns a list of user display info (handle, display name, avatar, liked_at
+    timestamp). This endpoint is public—no authentication required to see who
+    liked a track.
+    """
     track_exists = await db.scalar(select(Track.id).where(Track.id == track_id))
     if not track_exists:
         raise HTTPException(status_code=404, detail="track not found")

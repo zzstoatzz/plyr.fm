@@ -160,7 +160,12 @@ async def list_broken_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
 ) -> BrokenTracksResponse:
-    """List tracks owned by authenticated user that have missing ATProto records."""
+    """Return tracks owned by the user that have missing ATProto records.
+
+    These are tracks with a null `atproto_record_uri`, meaning they need
+    recovery. Such tracks cannot be liked and may require migration or
+    recreation.
+    """
     stmt = (
         select(Track)
         .join(Artist)

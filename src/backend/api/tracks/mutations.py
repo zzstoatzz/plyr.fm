@@ -355,7 +355,14 @@ async def restore_track_record(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
 ) -> RestoreRecordResponse:
-    """Restore ATProto record for track with missing record."""
+    """Restore ATProto record for a track with a missing record.
+
+    Handles two cases:
+    1. If the track has a record in the old namespace, respond with 409
+       (`migration_needed`).
+    2. If no record exists, recreate one using a TID derived from
+       `track.created_at` and return the updated track data on success.
+    """
     # fetch and validate track
     result = await db.execute(
         select(Track)

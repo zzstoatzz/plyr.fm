@@ -322,7 +322,18 @@ async def upload_track(
 ) -> dict:
     """Upload a new track (requires authentication and artist profile).
 
-    Returns immediately with upload_id for tracking progress via SSE.
+    Parameters:
+        title: Track title (required).
+        album: Optional album name/ID to associate with the track.
+        features: Optional JSON array of ATProto handles, e.g.,
+            ["user1.bsky.social", "user2.bsky.social"].
+        file: Audio file to upload (required).
+        image: Optional image file for track artwork.
+        background_tasks: FastAPI background-task runner.
+        auth_session: Authenticated artist session (dependency-injected).
+
+    Returns:
+        dict: A payload containing `upload_id` for monitoring progress via SSE.
     """
     # validate audio file type upfront
     if not file.filename:
