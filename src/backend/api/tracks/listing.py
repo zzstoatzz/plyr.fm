@@ -1,7 +1,7 @@
 """Read-only track listing endpoints."""
 
 import asyncio
-from typing import Annotated, Any
+from typing import Annotated
 
 import logfire
 from fastapi import Cookie, Depends, Request
@@ -151,7 +151,7 @@ async def list_my_tracks(
 class BrokenTracksResponse(BaseModel):
     """Response for broken tracks endpoint."""
 
-    tracks: list[dict[str, Any]]
+    tracks: list[TrackResponse]
     count: int
 
 

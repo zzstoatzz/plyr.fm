@@ -1,13 +1,14 @@
 """ATProto handle resolution for featured artists."""
 
 import logging
+from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
 
 
-async def resolve_handle(handle: str) -> dict | None:
+async def resolve_handle(handle: str) -> dict[str, Any] | None:
     """resolve ATProto handle to DID and profile info.
 
     args:

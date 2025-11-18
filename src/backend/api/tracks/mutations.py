@@ -403,6 +403,16 @@ async def restore_track_record(
             },
         )
 
+    # validate track has R2 URL (required for ATProto records)
+    if not track.r2_url:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "no_public_url",
+                "message": "cannot restore ATProto record without R2 URL (local storage tracks are not supported)",
+            },
+        )
+
     # recreate record with TID from created_at
     rkey = datetime_to_tid(track.created_at)
 

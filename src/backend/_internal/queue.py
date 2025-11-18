@@ -31,9 +31,7 @@ class QueueService:
         reconnect_delay: float = 5.0,
     ):
         # TTLCache provides both LRU eviction and TTL expiration
-        self.cache: TTLCache[str, tuple[dict[str, Any], int, list[dict[str, Any]]]] = (
-            TTLCache(maxsize=100, ttl=300)
-        )
+        self.cache: TTLCache = TTLCache(maxsize=100, ttl=300)
         self.conn: asyncpg.Connection | None = None
         self.listener_task: asyncio.Task | None = None
         self.heartbeat_task: asyncio.Task | None = None
@@ -64,6 +62,8 @@ class QueueService:
 
         try:
             self.conn = await asyncpg.connect(db_url)
+            if not self.conn:
+                raise Exception("failed to connect to database")
             await self.conn.add_listener("queue_changes", self._handle_notification)
             logger.info("queue service connected to database and listening")
         except Exception:
