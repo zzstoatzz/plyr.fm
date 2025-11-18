@@ -84,7 +84,7 @@ async def test_like_track_success(
     test_app: FastAPI, db_session: AsyncSession, test_track: Track
 ):
     """test successful track like creates ATProto record and DB entry."""
-    with patch("backend.api.tracks.create_like_record") as mock_create:
+    with patch("backend.api.tracks.likes.create_like_record") as mock_create:
         mock_create.return_value = "at://did:test:user123/fm.plyr.like/abc123"
 
         async with AsyncClient(
@@ -133,8 +133,8 @@ async def test_like_track_cleanup_on_db_failure(
     test_app.dependency_overrides[get_db] = mock_get_db
 
     with (
-        patch("backend.api.tracks.create_like_record") as mock_create,
-        patch("backend.api.tracks.delete_record_by_uri") as mock_delete,
+        patch("backend.api.tracks.likes.create_like_record") as mock_create,
+        patch("backend.api.tracks.likes.delete_record_by_uri") as mock_delete,
     ):
         mock_create.return_value = created_uri
 
@@ -169,7 +169,7 @@ async def test_unlike_track_success(
     db_session.add(like)
     await db_session.commit()
 
-    with patch("backend.api.tracks.delete_record_by_uri") as mock_delete:
+    with patch("backend.api.tracks.likes.delete_record_by_uri") as mock_delete:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -223,8 +223,8 @@ async def test_unlike_track_rollback_on_db_failure(
     test_app.dependency_overrides[get_db] = mock_get_db
 
     with (
-        patch("backend.api.tracks.delete_record_by_uri") as mock_delete,
-        patch("backend.api.tracks.create_like_record") as mock_create,
+        patch("backend.api.tracks.likes.delete_record_by_uri") as mock_delete,
+        patch("backend.api.tracks.likes.create_like_record") as mock_create,
     ):
         mock_create.return_value = "at://did:test:user123/fm.plyr.like/new123"
 
@@ -263,7 +263,7 @@ async def test_like_already_liked_track_idempotent(
     db_session.add(like)
     await db_session.commit()
 
-    with patch("backend.api.tracks.create_like_record") as mock_create:
+    with patch("backend.api.tracks.likes.create_like_record") as mock_create:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -280,7 +280,7 @@ async def test_unlike_not_liked_track_idempotent(
     test_app: FastAPI, db_session: AsyncSession, test_track: Track
 ):
     """test that unliking a not-liked track is idempotent."""
-    with patch("backend.api.tracks.delete_record_by_uri") as mock_delete:
+    with patch("backend.api.tracks.likes.delete_record_by_uri") as mock_delete:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
