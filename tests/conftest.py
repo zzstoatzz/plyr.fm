@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
 import sqlalchemy as sa
@@ -16,6 +17,37 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.config import settings
 from backend.models import Base
+
+
+class MockStorage:
+    """Mock storage for tests - no R2 credentials needed."""
+
+    async def save(self, file_obj, filename: str, progress_callback=None) -> str:
+        """Mock save - returns a fake file_id."""
+        return "mock_file_id_123"
+
+    async def get_url(
+        self, file_id: str, file_type: str | None = None, extension: str | None = None
+    ) -> str:
+        """Mock get_url - returns a fake URL."""
+        return f"https://mock.r2.dev/{file_id}"
+
+    async def delete(self, file_id: str, extension: str | None = None) -> None:
+        """Mock delete."""
+
+
+def pytest_configure(config):
+    """Patch storage before any test modules are imported."""
+    from unittest.mock import patch
+
+    # patch R2Storage.__init__ to prevent credential validation
+    mock_init = MagicMock(return_value=None)
+    patch("backend.storage.r2.R2Storage.__init__", mock_init).start()
+
+    # now safe to import and replace storage with our mock
+    import backend.storage
+
+    backend.storage.storage = MockStorage()  # type: ignore[assignment]
 
 
 @asynccontextmanager
