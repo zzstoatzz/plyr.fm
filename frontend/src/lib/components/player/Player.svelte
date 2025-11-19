@@ -247,21 +247,19 @@
 	}
 
 	.player-content {
-		max-width: 1200px;
-		margin: 0 auto;
-		display: flex;
+		width: 100%;
+		margin: 0;
+		display: grid;
+		grid-template-columns: minmax(200px, 420px) minmax(0, 1fr);
 		align-items: center;
 		gap: 1.5rem;
-		justify-content: space-between;
-		flex-wrap: wrap;
 	}
 
-	:global(.player-track) {
-		flex: 1 1 320px;
-	}
-
-	:global(.player-controls) {
-		flex: 1 1 360px;
+	@media (max-width: 1100px) {
+		.player-content {
+			grid-template-columns: minmax(160px, 360px) minmax(0, 1fr);
+			gap: 1rem;
+		}
 	}
 
 	@media (max-width: 768px) {
@@ -271,11 +269,9 @@
 		}
 
 		.player-content {
-			display: grid;
 			grid-template-columns: 48px 1fr auto auto auto auto;
 			grid-template-rows: auto auto;
 			gap: 0.5rem 0.75rem;
-			align-items: center;
 		}
 	}
 </style>

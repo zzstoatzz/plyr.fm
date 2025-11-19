@@ -147,6 +147,8 @@
 		display: flex;
 		align-items: center;
 		gap: 1rem;
+		min-width: 0;
+		width: 100%;
 	}
 
 	.control-btn {

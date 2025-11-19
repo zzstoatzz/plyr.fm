@@ -93,22 +93,25 @@
 					<span>{track.artist}</span>
 				</div>
 			</a>
-			{#if track.album}
-				<span class="metadata-separator">•</span>
-				<a
-					href="/u/{track.artist_handle}/album/{track.album.slug}"
-					class="metadata-link"
-					bind:this={albumEl}
-				>
-					<svg class="metadata-icon album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-						<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none" />
-						<circle cx="8" cy="8" r="2.5" fill="currentColor" />
-					</svg>
-					<div class="text-container" class:scrolling={albumOverflows}>
-						<span>{track.album.title}</span>
-					</div>
-				</a>
-			{/if}
+			<div class="metadata-line">
+				{#if track.album}
+					<a
+						href="/u/{track.artist_handle}/album/{track.album.slug}"
+						class="metadata-link"
+						bind:this={albumEl}
+					>
+						<svg class="metadata-icon album-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+							<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5" fill="none" />
+							<circle cx="8" cy="8" r="2.5" fill="currentColor" />
+						</svg>
+						<div class="text-container" class:scrolling={albumOverflows}>
+							<span>{track.album.title}</span>
+						</div>
+					</a>
+				{:else}
+					<span class="metadata-placeholder" aria-hidden="true"></span>
+				{/if}
+			</div>
 		</div>
 	</div>
 </div>
@@ -117,8 +120,11 @@
 	.player-track {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.85rem;
 		min-width: 0;
+		flex: 0 1 420px;
+		overflow: visible;
+		height: 56px;
 	}
 
 	.player-artwork {
@@ -131,7 +137,8 @@
 		border: 1px solid #333;
 		display: block;
 		text-decoration: none;
-		transition: transform 0.2s, border-color 0.2s;
+		transition: transform 0.18s ease, border-color 0.2s ease;
+		will-change: transform;
 	}
 
 	.player-artwork:hover {
@@ -155,10 +162,12 @@
 	}
 
 	.player-info {
-		min-width: 200px;
-		max-width: 300px;
-		overflow: hidden;
+		flex: 1;
 		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		justify-content: center;
 	}
 
 	.player-title,
@@ -166,9 +175,11 @@
 		font-size: 0.95rem;
 		font-weight: 600;
 		color: #e8e8e8;
-		margin-bottom: 0.15rem;
+		margin-bottom: 0;
 		position: relative;
 		overflow: hidden;
+		text-overflow: ellipsis;
+		line-height: 1.15;
 	}
 
 	.player-title-link {
@@ -216,21 +227,22 @@
 	.player-metadata {
 		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
+		justify-content: center;
 		gap: 0.15rem;
-		color: #909090;
-		font-size: 0.85rem;
-		overflow: hidden;
+		color: #a0a0a0;
+		font-size: 0.82rem;
 		min-width: 0;
+		height: 32px;
 	}
 
 	.metadata-link {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		color: inherit;
 		text-decoration: none;
 		transition: color 0.2s;
-		width: 100%;
+		min-width: 0;
+		white-space: nowrap;
 	}
 
 	.metadata-link:hover {
@@ -250,10 +262,20 @@
 		position: relative;
 		min-width: 0;
 		flex: 1;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 
-	.metadata-separator {
-		display: none;
+	.metadata-line,
+	.metadata-placeholder {
+		height: 16px;
+		display: flex;
+		align-items: center;
+		min-width: 0;
+	}
+
+	.metadata-placeholder {
+		opacity: 0;
 	}
 
 	@keyframes scroll-text {
@@ -268,6 +290,21 @@
 	@media (max-width: 768px) {
 		.player-track {
 			display: contents;
+			height: auto;
+		}
+
+		.player-metadata {
+			height: auto;
+			gap: 0.1rem;
+		}
+
+		.metadata-line,
+		.metadata-placeholder {
+			height: auto;
+		}
+
+		.metadata-placeholder {
+			display: none;
 		}
 
 		.player-artwork {
@@ -298,8 +335,7 @@
 		}
 
 		.player-title.scrolling,
-		.player-title-link.scrolling,
-		.metadata-link.scrolling {
+		.player-title-link.scrolling {
 			mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
 			-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
 		}
