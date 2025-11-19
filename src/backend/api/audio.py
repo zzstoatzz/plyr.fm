@@ -4,7 +4,6 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
 from backend._internal.audio import AudioFormat
-from backend._internal.image import ImageFormat
 from backend.config import settings
 from backend.storage import storage
 
@@ -12,11 +11,11 @@ router = APIRouter(prefix="/audio", tags=["audio"])
 
 
 @router.get("/{file_id}")
-async def stream_media(file_id: str):
+async def stream_audio(file_id: str):
     """stream audio file by redirecting to R2 CDN URL.
 
-    note: despite the /audio/ prefix, this endpoint only serves audio files.
-    images are served directly via R2 URLs stored in the image_url field.
+    images are served directly via R2 URLs stored in the image_url field,
+    not through this endpoint.
     """
 
     if settings.storage.backend == "r2":
@@ -40,21 +39,9 @@ async def stream_media(file_id: str):
     if not file_path:
         raise HTTPException(status_code=404, detail="audio file not found")
 
-    # determine media type based on extension
-    ext = file_path.suffix
-
-    # try audio first
-    audio_format = AudioFormat.from_extension(ext)
-    if audio_format:
-        media_type = audio_format.media_type
-    else:
-        # try image
-        image_format = ImageFormat.from_filename(file_path.name)
-        if image_format:
-            media_type = image_format.media_type
-        else:
-            # fallback
-            media_type = "application/octet-stream"
+    # determine audio media type
+    audio_format = AudioFormat.from_extension(file_path.suffix)
+    media_type = audio_format.media_type if audio_format else "application/octet-stream"
 
     return FileResponse(
         path=file_path,
