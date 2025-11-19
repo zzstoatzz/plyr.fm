@@ -132,6 +132,6 @@ async def upload_track_image(image: UploadFile) -> tuple[str, str | None]:
 
     image_url = None
     if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
-        image_url = await storage.get_url(image_id)
+        image_url = await storage.get_url(image_id, file_type="image")
 
     return image_id, image_url

@@ -139,7 +139,7 @@ async def _process_upload_background(
             r2_url = None
             if settings.storage.backend == "r2":
                 if isinstance(storage, R2Storage):
-                    r2_url = await storage.get_url(file_id)
+                    r2_url = await storage.get_url(file_id, file_type="audio")
 
             # save image if provided
             image_id = None
@@ -165,7 +165,9 @@ async def _process_upload_background(
                             if settings.storage.backend == "r2" and isinstance(
                                 storage, R2Storage
                             ):
-                                image_url = await storage.get_url(image_id)
+                                image_url = await storage.get_url(
+                                    image_id, file_type="image"
+                                )
                     except Exception as e:
                         logger.warning(f"failed to save image: {e}", exc_info=True)
                         # continue without image - it's optional

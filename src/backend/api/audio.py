@@ -20,7 +20,7 @@ async def stream_media(file_id: str):
         from backend.storage.r2 import R2Storage
 
         if isinstance(storage, R2Storage):
-            url = await storage.get_url(file_id)
+            url = await storage.get_url(file_id, file_type="audio")
             if not url:
                 raise HTTPException(status_code=404, detail="media file not found")
             return RedirectResponse(url=url)
