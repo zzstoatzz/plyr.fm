@@ -143,6 +143,7 @@ plyr.fm should become:
 - ✅ mobile UI polish (#159-185) - consistent layouts, better touch targets, improved navigation
 - ✅ wave loading animation (#283) - music-themed loading states, clickable refresh on homepage
 - ✅ share action parity - added artist detail share button with mobile-friendly placement for consistent copying behavior across track/album/artist pages
+- ✅ modularized player - split artwork/metadata and transport controls into focused components for easier maintenance and future UX tweaks
 
 **security & validation**:
 - ✅ origin validation for image URLs (#168)

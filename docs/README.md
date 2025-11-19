@@ -56,6 +56,7 @@ plyr.fm is fully functional with:
 - ✅ liked tracks (fm.plyr.like namespace)
 - ✅ artist pages and track discovery
 - ✅ share buttons across track, album, and artist detail pages for quick copy-to-clipboard links
+- ✅ modular audio player with dedicated subcomponents for metadata, transport, progress, and volume controls
 - ✅ image uploads for track artwork
 - ✅ audio transcoding service (rust + ffmpeg)
 - ✅ server-sent events for upload progress

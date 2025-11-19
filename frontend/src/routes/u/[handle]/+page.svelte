@@ -18,18 +18,23 @@
 	let { data }: { data: PageData } = $props();
 
 	// use server-loaded data directly
-	const artist = $derived(data.artist);
-	let tracks = $state(data.tracks ?? []);
-	const albums = $derived(data.albums ?? []);
-	let shareUrl = $state(artist?.handle ? `${APP_CANONICAL_URL}/u/${artist.handle}` : '');
+const artist = $derived(data.artist);
+let tracks = $state(data.tracks ?? []);
+const albums = $derived(data.albums ?? []);
+let shareUrl = $state('');
 
-	$effect(() => {
-		if (typeof window !== 'undefined' && artist?.handle) {
-			shareUrl = `${window.location.origin}/u/${artist.handle}`;
-		} else if (artist?.handle) {
-			shareUrl = `${APP_CANONICAL_URL}/u/${artist.handle}`;
-		}
-	});
+$effect(() => {
+	if (!artist?.handle) {
+		shareUrl = '';
+		return;
+	}
+
+	if (typeof window !== 'undefined') {
+		shareUrl = `${window.location.origin}/u/${artist.handle}`;
+	} else {
+		shareUrl = `${APP_CANONICAL_URL}/u/${artist.handle}`;
+	}
+});
 
 	let analytics: Analytics | null = $state(null);
 	let analyticsLoading = $state(false);
