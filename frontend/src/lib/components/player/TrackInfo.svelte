@@ -26,13 +26,11 @@
 			}
 			if (artistEl) {
 				const container = artistEl.querySelector('.text-container');
-				const span = container?.querySelector('span');
-				artistOverflows = span && container ? span.scrollWidth > container.clientWidth : false;
+				artistOverflows = container ? container.scrollWidth - 1 > container.clientWidth : false;
 			}
 			if (albumEl) {
 				const container = albumEl.querySelector('.text-container');
-				const span = container?.querySelector('span');
-				albumOverflows = span && container ? span.scrollWidth > container.clientWidth : false;
+				albumOverflows = container ? container.scrollWidth - 1 > container.clientWidth : false;
 			}
 		});
 	}
@@ -90,16 +88,18 @@
 					<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 				</svg>
 				<div class="text-container" class:scrolling={artistOverflows}>
-					<a href="/u/{track.artist_handle}" class="inline-artist">{track.artist}</a>
-					{#if track.features && track.features.length > 0}
-						<span class="features-inline">
-							<span class="features-label">feat.</span>
-							{#each track.features as feature, i}
-								{#if i > 0}<span class="feature-separator">, </span>{/if}
-								<a href="/u/{feature.handle}" class="feature-link">{feature.display_name}</a>
-							{/each}
-						</span>
-					{/if}
+					<span class="artist-inline">
+						<a href="/u/{track.artist_handle}" class="inline-artist">{track.artist}</a>
+						{#if track.features && track.features.length > 0}
+							<span class="features-inline">
+								<span class="features-label">feat.</span>
+								{#each track.features as feature, i}
+									{#if i > 0}<span class="feature-separator">, </span>{/if}
+									<a href="/u/{feature.handle}" class="feature-link">{feature.display_name}</a>
+								{/each}
+							</span>
+						{/if}
+					</span>
 				</div>
 			</div>
 			<div class="metadata-line">
@@ -223,12 +223,14 @@
 		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
 	}
 
-	.text-container span {
-		display: inline-block;
+	.text-container > span {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
 		white-space: nowrap;
 	}
 
-	.text-container.scrolling span {
+	.text-container.scrolling > span {
 		padding-right: 3rem;
 		animation: scroll-text 15s linear infinite;
 	}
@@ -285,8 +287,10 @@
 	}
 
 	.features-inline {
-		margin-left: 0.35rem;
 		color: #b5b5b5;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
 	}
 
 	.features-label {

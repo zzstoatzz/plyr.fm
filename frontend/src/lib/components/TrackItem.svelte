@@ -128,14 +128,18 @@
 		<div class="track-info">
 			<div class="track-title">{track.title}</div>
 			<div class="track-metadata">
-				{#if !hideArtist}
-					<div class="artist-line">
-						<a
-							href="/u/{track.artist_handle}"
-							class="artist-link"
-						>
-							{track.artist}
-						</a>
+				{#if (!hideArtist) || (track.features && track.features.length > 0)}
+					<div class="artist-line"
+						class:only-features={hideArtist && track.features && track.features.length > 0}
+					>
+						{#if !hideArtist}
+							<a
+								href="/u/{track.artist_handle}"
+								class="artist-link"
+							>
+								{track.artist}
+							</a>
+						{/if}
 						{#if track.features && track.features.length > 0}
 							<span class="features-inline">
 								<span class="features-label">feat.</span>
@@ -376,6 +380,10 @@
 		gap: 0.35rem;
 		min-width: 0;
 		flex-wrap: nowrap;
+	}
+
+	.artist-line.only-features {
+		gap: 0.25rem;
 	}
 
 	.metadata-separator {
