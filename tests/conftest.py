@@ -3,7 +3,6 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
 
 import pytest
 import sqlalchemy as sa
@@ -37,17 +36,11 @@ class MockStorage:
 
 
 def pytest_configure(config):
-    """Patch storage before any test modules are imported."""
-    from unittest.mock import patch
-
-    # patch R2Storage.__init__ to prevent credential validation
-    mock_init = MagicMock(return_value=None)
-    patch("backend.storage.r2.R2Storage.__init__", mock_init).start()
-
-    # now safe to import and replace storage with our mock
+    """Set mock storage before any test modules are imported."""
     import backend.storage
 
-    backend.storage.storage = MockStorage()  # type: ignore[assignment]
+    # set _storage directly to prevent R2Storage initialization
+    backend.storage._storage = MockStorage()  # type: ignore[assignment]
 
 
 @asynccontextmanager
