@@ -25,12 +25,14 @@
 				titleOverflows = span ? span.scrollWidth > titleEl.clientWidth : false;
 			}
 			if (artistEl) {
-				const span = artistEl.querySelector('span');
-				artistOverflows = span ? span.scrollWidth > artistEl.clientWidth : false;
+				const container = artistEl.querySelector('.text-container');
+				const span = container?.querySelector('span');
+				artistOverflows = span && container ? span.scrollWidth > container.clientWidth : false;
 			}
 			if (albumEl) {
-				const span = albumEl.querySelector('span');
-				albumOverflows = span ? span.scrollWidth > albumEl.clientWidth : false;
+				const container = albumEl.querySelector('.text-container');
+				const span = container?.querySelector('span');
+				albumOverflows = span && container ? span.scrollWidth > container.clientWidth : false;
 			}
 		});
 	}
@@ -154,21 +156,19 @@
 
 	.player-info {
 		min-width: 200px;
-		max-width: 320px;
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-		line-height: 1.2;
+		max-width: 300px;
+		overflow: hidden;
+		min-width: 0;
 	}
 
 	.player-title,
 	.player-title-link {
-		font-size: 1rem;
+		font-size: 0.95rem;
 		font-weight: 600;
-		color: #f5f5f5;
-		text-transform: lowercase;
+		color: #e8e8e8;
 		margin-bottom: 0.15rem;
 		position: relative;
+		overflow: hidden;
 	}
 
 	.player-title-link {
@@ -179,37 +179,58 @@
 		color: var(--accent);
 	}
 
-	.player-title.scrolling span,
-	.player-title-link.scrolling span,
-	.text-container.scrolling span {
-		animation: scrollText 12s linear infinite;
-		padding-right: 2rem;
-		display: inline-block;
+	.player-title.scrolling,
+	.player-title-link.scrolling {
+		overflow: hidden;
+		mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
+		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 20px), transparent 100%);
 	}
 
-	.player-title.scrolling,
-	.player-title-link.scrolling,
+	.player-title span,
+	.player-title-link span {
+		display: inline-block;
+		white-space: nowrap;
+	}
+
+	.player-title.scrolling span,
+	.player-title-link.scrolling span {
+		padding-right: 2rem;
+		animation: scroll-text 10s linear infinite;
+	}
+
 	.text-container.scrolling {
 		mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
 		-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
 	}
 
+	.text-container span {
+		display: inline-block;
+		white-space: nowrap;
+	}
+
+	.text-container.scrolling span {
+		padding-right: 3rem;
+		animation: scroll-text 15s linear infinite;
+	}
+
 	.player-metadata {
 		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.9rem;
-		color: #a0a0a0;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.15rem;
+		color: #909090;
+		font-size: 0.85rem;
+		overflow: hidden;
 		min-width: 0;
 	}
 
 	.metadata-link {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
-		gap: 0.35rem;
 		color: inherit;
 		text-decoration: none;
-		min-width: 0;
+		transition: color 0.2s;
+		width: 100%;
 	}
 
 	.metadata-link:hover {
@@ -217,59 +238,70 @@
 	}
 
 	.metadata-icon {
-		width: 16px;
-		height: 16px;
+		width: 12px;
+		height: 12px;
+		opacity: 0.7;
+		flex-shrink: 0;
+		margin-right: 0.35rem;
 	}
 
 	.text-container {
 		overflow: hidden;
-		max-width: 180px;
+		position: relative;
+		min-width: 0;
+		flex: 1;
 	}
 
 	.metadata-separator {
-		color: #555;
+		display: none;
 	}
 
-	@keyframes scrollText {
-		0% {
+	@keyframes scroll-text {
+		0%, 15% {
 			transform: translateX(0);
 		}
-		100% {
-			transform: translateX(-50%);
+		85%, 100% {
+			transform: translateX(-100%);
 		}
 	}
 
 	@media (max-width: 768px) {
 		.player-track {
-			width: 100%;
+			display: contents;
 		}
 
 		.player-artwork {
 			width: 48px;
 			height: 48px;
+			grid-row: 1;
+			grid-column: 1;
 		}
 
 		.player-info {
+			grid-row: 1;
+			grid-column: 2 / 4;
 			min-width: 0;
-			max-width: none;
+			overflow: hidden;
+			display: flex;
+			flex-direction: column;
+			gap: 0.25rem;
 		}
 
 		.player-title,
 		.player-title-link {
 			font-size: 0.9rem;
+			margin-bottom: 0;
 		}
 
 		.player-metadata {
 			font-size: 0.8rem;
-			flex-wrap: wrap;
 		}
 
-		.metadata-link {
-			max-width: 100%;
-		}
-
-		.text-container {
-			max-width: 140px;
+		.player-title.scrolling,
+		.player-title-link.scrolling,
+		.metadata-link.scrolling {
+			mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
+			-webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 15px), transparent 100%);
 		}
 	}
 </style>

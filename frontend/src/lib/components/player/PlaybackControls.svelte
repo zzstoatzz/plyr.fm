@@ -42,42 +42,40 @@
 </script>
 
 <div class="player-controls">
-	<div class="transport">
-		<button class="control-btn" onclick={handlePrevious} title="previous track / restart">
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-				<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z" />
-			</svg>
-		</button>
+	<button class="control-btn" onclick={handlePrevious} title="previous track / restart">
+		<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+			<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z" />
+		</svg>
+	</button>
 
-		<button
-			class="control-btn play-pause"
-			onclick={() => player.togglePlayPause()}
-			title={player.paused ? 'play' : 'pause'}
-		>
-			{#if !player.paused}
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-					<rect x="6" y="4" width="4" height="16" rx="1"></rect>
-					<rect x="14" y="4" width="4" height="16" rx="1"></rect>
-				</svg>
-			{:else}
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-					<path d="M8 5v14l11-7z"></path>
-				</svg>
-			{/if}
-		</button>
-
-		<button
-			class="control-btn"
-			class:disabled={!queue.hasNext}
-			onclick={() => queue.next()}
-			title="next track"
-			disabled={!queue.hasNext}
-		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-				<path d="M16 4h2v16h-2V4zM6 4l10 8-10 8V4z"></path>
+	<button
+		class="control-btn play-pause"
+		onclick={() => player.togglePlayPause()}
+		title={player.paused ? 'play' : 'pause'}
+	>
+		{#if !player.paused}
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+				<rect x="6" y="4" width="4" height="16" rx="1"></rect>
+				<rect x="14" y="4" width="4" height="16" rx="1"></rect>
 			</svg>
-		</button>
-	</div>
+		{:else}
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+				<path d="M8 5v14l11-7z"></path>
+			</svg>
+		{/if}
+	</button>
+
+	<button
+		class="control-btn"
+		class:disabled={!queue.hasNext}
+		onclick={() => queue.next()}
+		title="next track"
+		disabled={!queue.hasNext}
+	>
+		<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+			<path d="M16 4h2v16h-2V4zM6 4l10 8-10 8V4z"></path>
+		</svg>
+	</button>
 
 	<div class="playback-options">
 		<button
@@ -145,16 +143,10 @@
 
 <style>
 	.player-controls {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		color: #e8e8e8;
-	}
-
-	.transport {
+		flex: 1;
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 1rem;
 	}
 
 	.control-btn {
@@ -207,6 +199,12 @@
 		justify-content: center;
 		border-radius: 6px;
 		transition: all 0.2s;
+		position: relative;
+	}
+
+	.option-btn svg {
+		width: 20px;
+		height: 20px;
 	}
 
 	.option-btn:hover {
@@ -220,6 +218,7 @@
 	}
 
 	.time-control {
+		flex: 1;
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
@@ -243,6 +242,7 @@
 		gap: 0.5rem;
 		color: #909090;
 		min-width: 140px;
+		position: relative;
 	}
 
 	.volume-icon {
@@ -357,15 +357,24 @@
 
 	@media (max-width: 768px) {
 		.player-controls {
-			gap: 0.5rem;
-		}
-
-		.transport {
-			justify-content: center;
+			display: contents;
 		}
 
 		.control-btn {
+			grid-row: 1;
 			padding: 0.5rem;
+		}
+
+		.control-btn:nth-of-type(1) {
+			grid-column: 4;
+		}
+
+		.control-btn.play-pause {
+			grid-column: 5;
+		}
+
+		.control-btn:nth-of-type(3) {
+			grid-column: 6;
 		}
 
 		.control-btn svg {
@@ -378,9 +387,29 @@
 			height: 32px;
 		}
 
+		.playback-options {
+			grid-row: 2;
+			grid-column: 1;
+		}
+
+		.option-btn {
+			width: 36px;
+			height: 36px;
+		}
+
+		.option-btn svg {
+			width: 18px;
+			height: 18px;
+		}
+
 		.time-control {
-			flex-direction: column;
-			align-items: stretch;
+			grid-row: 2;
+			grid-column: 2 / 7;
+		}
+
+		.time {
+			font-size: 0.75rem;
+			min-width: 38px;
 		}
 
 		.volume-control {

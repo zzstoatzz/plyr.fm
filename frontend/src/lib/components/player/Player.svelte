@@ -271,14 +271,11 @@
 		}
 
 		.player-content {
-			flex-direction: column;
-			align-items: stretch;
-			gap: 1rem;
-		}
-
-		:global(.player-track),
-		:global(.player-controls) {
-			flex: unset;
+			display: grid;
+			grid-template-columns: 48px 1fr auto auto auto auto;
+			grid-template-rows: auto auto;
+			gap: 0.5rem 0.75rem;
+			align-items: center;
 		}
 	}
 </style>
