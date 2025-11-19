@@ -6,8 +6,6 @@
 	let seekValue = $state(0);
 	let isScrubbing = $state(false);
 	let rafId: number | null = null;
-	let lastRealTime = 0;
-	let lastSampleTs = 0;
 
 	let formattedCurrentTime = $derived(formatTime(seekValue));
 	let formattedDuration = $derived(formatTime(player.duration));
@@ -22,32 +20,17 @@
 		return 'normal';
 	});
 
-	function now() {
-		if (typeof globalThis !== 'undefined' && globalThis.performance) {
-			return globalThis.performance.now();
-		}
-		return Date.now();
-	}
-
 	function animateSeek() {
 		if (typeof window === 'undefined') return;
 		if (!isScrubbing) {
-			if (!player.paused) {
-				const elapsed = (now() - lastSampleTs) / 1000;
-				const duration = player.duration || 0;
-				const estimate = Math.min(lastRealTime + elapsed, duration);
-				seekValue = estimate;
-			} else {
-				seekValue = player.currentTime;
-			}
+			const liveTime = player.audioElement?.currentTime ?? player.currentTime ?? 0;
+			seekValue = liveTime;
 		}
 		rafId = window.requestAnimationFrame(animateSeek);
 	}
 
 	onMount(() => {
 		seekValue = player.currentTime;
-		lastRealTime = player.currentTime;
-		lastSampleTs = now();
 		if (typeof window !== 'undefined') {
 			rafId = window.requestAnimationFrame(animateSeek);
 		}
@@ -56,6 +39,12 @@
 				window.cancelAnimationFrame(rafId);
 			}
 		};
+	});
+
+	$effect(() => {
+		if (!isScrubbing) {
+			seekValue = player.currentTime;
+		}
 	});
 
 	function handlePrevious() {
@@ -108,17 +97,7 @@
 		const value = Number((event.currentTarget as HTMLInputElement).value);
 		commitSeek(value);
 		isScrubbing = false;
-		lastRealTime = value;
-		lastSampleTs = now();
 	}
-
-	$effect(() => {
-		lastRealTime = player.currentTime;
-		lastSampleTs = now();
-		if ((player.paused || !player.audioElement) && !isScrubbing) {
-			seekValue = player.currentTime;
-		}
-	});
 </script>
 
 <div class="player-controls">
@@ -184,7 +163,7 @@
 			min="0"
 			max={player.duration || 0}
 			step="0.01"
-			bind:value={seekValue}
+			value={seekValue}
 			oninput={handleSeekInput}
 			onchange={handleSeekChange}
 			onpointerdown={handleSeekPointerDown}
