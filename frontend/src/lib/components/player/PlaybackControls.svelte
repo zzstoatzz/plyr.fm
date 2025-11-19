@@ -1,12 +1,18 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 
-	let formattedCurrentTime = $derived(formatTime(player.currentTime));
+	let seekValue = $state(0);
+	let isScrubbing = $state(false);
+	let rafId: number | null = null;
+	let lastTrackId: number | null = null;
+
+	let formattedCurrentTime = $derived(formatTime(seekValue));
 	let formattedDuration = $derived(formatTime(player.duration));
 	let progressPercent = $derived.by(() => {
 		if (!player.duration || player.duration === 0) return 0;
-		return (player.currentTime / player.duration) * 100;
+		return (seekValue / player.duration) * 100;
 	});
 
 	let volumeState = $derived.by(() => {
@@ -15,11 +21,45 @@
 		return 'normal';
 	});
 
+	function animateSeek() {
+		if (typeof window === 'undefined') return;
+		if (!isScrubbing) {
+			const liveTime = player.audioElement?.currentTime;
+			if (liveTime !== undefined && !Number.isNaN(liveTime)) {
+				seekValue = liveTime;
+			} else {
+				seekValue = player.currentTime;
+			}
+		}
+		rafId = window.requestAnimationFrame(animateSeek);
+	}
+
+	onMount(() => {
+		seekValue = player.currentTime || 0;
+		if (typeof window !== 'undefined') {
+			rafId = window.requestAnimationFrame(animateSeek);
+		}
+		return () => {
+			if (typeof window !== 'undefined' && rafId !== null) {
+				window.cancelAnimationFrame(rafId);
+			}
+		};
+	});
+
+	$effect(() => {
+		const trackId = player.currentTrack?.id ?? null;
+		if (trackId !== lastTrackId) {
+			lastTrackId = trackId;
+			seekValue = player.currentTime || 0;
+		}
+	});
+
 	function handlePrevious() {
 		const RESTART_THRESHOLD = 1;
 
 		if (player.currentTime > RESTART_THRESHOLD) {
 			player.currentTime = 0;
+			seekValue = 0;
 			if (player.paused) {
 				player.paused = false;
 			}
@@ -27,10 +67,44 @@
 			queue.previous();
 		} else {
 			player.currentTime = 0;
+			seekValue = 0;
 			if (player.paused) {
 				player.paused = false;
 			}
 		}
+	}
+
+	function handleSeekInput(event: Event) {
+		isScrubbing = true;
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		seekValue = value;
+	}
+
+	function commitSeek(value: number) {
+		player.currentTime = value;
+		if (player.audioElement) {
+			player.audioElement.currentTime = value;
+		}
+		seekValue = value;
+	}
+
+	function handleSeekChange(event: Event) {
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		commitSeek(value);
+	}
+
+	function handleSeekPointerUp(event: PointerEvent) {
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		commitSeek(value);
+		isScrubbing = false;
+	}
+
+	function handleSeekPointerCancel(event?: PointerEvent) {
+		if (event) {
+			const value = Number((event.currentTarget as HTMLInputElement).value);
+			commitSeek(value);
+		}
+		isScrubbing = false;
 	}
 
 	function formatTime(seconds: number): string {
@@ -101,7 +175,16 @@
 			class="seek-bar"
 			min="0"
 			max={player.duration || 0}
-			bind:value={player.currentTime}
+			step="0.01"
+			value={seekValue}
+			oninput={handleSeekInput}
+			onchange={handleSeekChange}
+			onpointerdown={() => (isScrubbing = true)}
+			onpointerup={handleSeekPointerUp}
+			onpointerleave={(event) => {
+				if (isScrubbing) handleSeekPointerCancel(event);
+			}}
+			onpointercancel={handleSeekPointerCancel}
 			style="--progress: {progressPercent}%"
 		/>
 		<span class="time">{formattedDuration}</span>
