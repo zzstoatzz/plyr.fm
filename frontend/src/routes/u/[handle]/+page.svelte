@@ -72,6 +72,12 @@
 	async function hydrateTracksWithLikes() {
 		if (!browser || tracksHydrated) return;
 
+		// skip if not authenticated - no need to fetch liked tracks
+		if (!auth.isAuthenticated) {
+			tracksHydrated = true;
+			return;
+		}
+
 		tracksLoading = true;
 		try {
 			const likedTracks = await fetchLikedTracks();

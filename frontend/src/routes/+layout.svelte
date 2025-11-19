@@ -12,8 +12,9 @@
 	import { page } from '$app/stores';
 	import { auth } from '$lib/auth.svelte';
 	import { browser } from '$app/environment';
+	import type { LayoutData } from './$types';
 
-	let { children } = $props();
+	let { children, data } = $props<{ children: any; data: LayoutData }>();
 	let showQueue = $state(false);
 
 	// only show default meta tags on pages without their own specific metadata
@@ -23,10 +24,14 @@
 		$page.url.pathname.match(/^\/u\/[^/]+\/album\/[^/]+/) // album pages have specific metadata
 	);
 
-	// initialize auth on mount
-	if (browser) {
-		void auth.initialize();
-	}
+	// sync auth state from layout data (fetched by +layout.ts)
+	$effect(() => {
+		if (browser) {
+			auth.user = data.user;
+			auth.isAuthenticated = data.isAuthenticated;
+			auth.loading = false;
+		}
+	});
 
 	function handleQueueShortcut(event: KeyboardEvent) {
 		// ignore modifier keys
