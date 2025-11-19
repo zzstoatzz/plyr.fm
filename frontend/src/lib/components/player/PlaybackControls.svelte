@@ -1,18 +1,50 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 
-	let formattedCurrentTime = $derived(formatTime(player.currentTime));
+	let seekValue = $state(0);
+	let isScrubbing = $state(false);
+	let rafId: number | null = null;
+
+	let formattedCurrentTime = $derived(formatTime(seekValue));
 	let formattedDuration = $derived(formatTime(player.duration));
 	let progressPercent = $derived.by(() => {
 		if (!player.duration || player.duration === 0) return 0;
-		return (player.currentTime / player.duration) * 100;
+		return (seekValue / player.duration) * 100;
 	});
 
 	let volumeState = $derived.by(() => {
 		if (player.volume === 0) return 'muted';
 		if (player.volume >= 0.99) return 'max';
 		return 'normal';
+	});
+
+	function animateSeek() {
+		if (typeof window === 'undefined') return;
+		if (!isScrubbing) {
+			const liveTime = player.audioElement?.currentTime ?? player.currentTime ?? 0;
+			seekValue = liveTime;
+		}
+		rafId = window.requestAnimationFrame(animateSeek);
+	}
+
+	onMount(() => {
+		seekValue = player.currentTime;
+		if (typeof window !== 'undefined') {
+			rafId = window.requestAnimationFrame(animateSeek);
+		}
+		return () => {
+			if (typeof window !== 'undefined' && rafId !== null) {
+				window.cancelAnimationFrame(rafId);
+			}
+		};
+	});
+
+	$effect(() => {
+		if (!isScrubbing) {
+			seekValue = player.currentTime;
+		}
 	});
 
 	function handlePrevious() {
@@ -38,6 +70,33 @@
 		const mins = Math.floor(seconds / 60);
 		const secs = Math.floor(seconds % 60);
 		return `${mins}:${secs.toString().padStart(2, '0')}`;
+	}
+
+	function handleSeekInput(event: Event) {
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		seekValue = value;
+	}
+
+	function commitSeek(value: number) {
+		player.currentTime = value;
+		if (player.audioElement) {
+			player.audioElement.currentTime = value;
+		}
+	}
+
+	function handleSeekChange(event: Event) {
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		commitSeek(value);
+	}
+
+	function handleSeekPointerDown() {
+		isScrubbing = true;
+	}
+
+	function handleSeekPointerUp(event: PointerEvent) {
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		commitSeek(value);
+		isScrubbing = false;
 	}
 </script>
 
@@ -103,7 +162,12 @@
 			class="seek-bar"
 			min="0"
 			max={player.duration || 0}
-			bind:value={player.currentTime}
+			step="0.01"
+			value={seekValue}
+			oninput={handleSeekInput}
+			onchange={handleSeekChange}
+			onpointerdown={handleSeekPointerDown}
+			onpointerup={handleSeekPointerUp}
 			style="--progress: {progressPercent}%"
 		/>
 		<span class="time">{formattedDuration}</span>

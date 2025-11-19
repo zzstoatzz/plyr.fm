@@ -65,6 +65,13 @@
 		showLikersTooltip = false;
 	}
 
+	function handleLikesKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			showLikersTooltip = true;
+		}
+	}
+
 	function handleLikeChange(liked: boolean) {
 		// update like count immediately
 		likeCount = liked ? likeCount + 1 : likeCount - 1;
@@ -156,15 +163,22 @@
 			</div>
 			<div class="track-meta">
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
-				{#if likeCount > 0}
-					<span class="meta-separator">•</span>
-					<span
-						class="likes"
-						onmouseenter={handleLikesMouseEnter}
-						onmouseleave={handleLikesMouseLeave}
-					>
-						{likeCount} {likeCount === 1 ? 'like' : 'likes'}
-						{#if showLikersTooltip}
+			{#if likeCount > 0}
+				<span class="meta-separator">•</span>
+				<span
+					class="likes"
+					role="button"
+					tabindex="0"
+					aria-label={`${likeCount} ${likeCount === 1 ? 'like' : 'likes'} (focus to view users)`}
+					aria-expanded={showLikersTooltip}
+					onmouseenter={handleLikesMouseEnter}
+					onmouseleave={handleLikesMouseLeave}
+					onfocus={handleLikesMouseEnter}
+					onblur={handleLikesMouseLeave}
+					onkeydown={handleLikesKeydown}
+				>
+					{likeCount} {likeCount === 1 ? 'like' : 'likes'}
+					{#if showLikersTooltip}
 							<LikersTooltip trackId={track.id} likeCount={likeCount} />
 						{/if}
 					</span>

@@ -72,8 +72,21 @@
 
 <main>
 	<section class="tracks">
-		<h2 class="clickable-heading" onclick={refreshTracks} title="click to refresh">
-			latest tracks
+		<h2>
+			<button
+				type="button"
+				class="clickable-heading"
+				onclick={refreshTracks}
+				onkeydown={(event) => {
+					if (event.key === 'Enter' || event.key === ' ') {
+						event.preventDefault();
+						refreshTracks();
+					}
+				}}
+				title="click to refresh"
+			>
+				latest tracks
+			</button>
 		</h2>
 		{#if showLoading}
 			<div class="loading-container">
@@ -117,6 +130,11 @@
 	}
 
 	.clickable-heading {
+		background: transparent;
+		border: none;
+		padding: 0;
+		font: inherit;
+		color: inherit;
 		cursor: pointer;
 		transition: color 0.2s;
 		user-select: none;
