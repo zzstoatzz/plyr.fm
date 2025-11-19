@@ -1,4 +1,4 @@
-"""media streaming endpoints (audio and images)."""
+"""audio streaming endpoint."""
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
@@ -13,7 +13,11 @@ router = APIRouter(prefix="/audio", tags=["audio"])
 
 @router.get("/{file_id}")
 async def stream_media(file_id: str):
-    """stream media file (audio or image)."""
+    """stream audio file by redirecting to R2 CDN URL.
+
+    note: despite the /audio/ prefix, this endpoint only serves audio files.
+    images are served directly via R2 URLs stored in the image_url field.
+    """
 
     if settings.storage.backend == "r2":
         # R2: redirect to public URL
@@ -22,7 +26,7 @@ async def stream_media(file_id: str):
         if isinstance(storage, R2Storage):
             url = await storage.get_url(file_id, file_type="audio")
             if not url:
-                raise HTTPException(status_code=404, detail="media file not found")
+                raise HTTPException(status_code=404, detail="audio file not found")
             return RedirectResponse(url=url)
 
     # filesystem: serve file directly
@@ -34,7 +38,7 @@ async def stream_media(file_id: str):
     file_path = storage.get_path(file_id)
 
     if not file_path:
-        raise HTTPException(status_code=404, detail="media file not found")
+        raise HTTPException(status_code=404, detail="audio file not found")
 
     # determine media type based on extension
     ext = file_path.suffix
