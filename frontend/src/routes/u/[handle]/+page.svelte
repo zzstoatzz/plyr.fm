@@ -5,6 +5,7 @@
 	import { browser } from '$app/environment';
 	import type { Analytics, Track } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
+	import ShareButton from '$lib/components/ShareButton.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -20,6 +21,15 @@
 	const artist = $derived(data.artist);
 	let tracks = $state(data.tracks ?? []);
 	const albums = $derived(data.albums ?? []);
+	let shareUrl = $state(artist?.handle ? `${APP_CANONICAL_URL}/u/${artist.handle}` : '');
+
+	$effect(() => {
+		if (typeof window !== 'undefined' && artist?.handle) {
+			shareUrl = `${window.location.origin}/u/${artist.handle}`;
+		} else if (artist?.handle) {
+			shareUrl = `${APP_CANONICAL_URL}/u/${artist.handle}`;
+		}
+	});
 
 	let analytics: Analytics | null = $state(null);
 	let analyticsLoading = $state(false);
@@ -181,14 +191,22 @@
 			{#if artist.avatar_url}
 				<img src={artist.avatar_url} alt={artist.display_name} class="artist-avatar" />
 			{/if}
-			<div class="artist-info">
-				<h1>{artist.display_name}</h1>
-				<a href="https://bsky.app/profile/{artist.handle}" target="_blank" rel="noopener" class="handle">
-					@{artist.handle}
-				</a>
-				{#if artist.bio}
-					<p class="bio">{artist.bio}</p>
-				{/if}
+			<div class="artist-details">
+				<div class="artist-info">
+					<h1>{artist.display_name}</h1>
+					<a href="https://bsky.app/profile/{artist.handle}" target="_blank" rel="noopener" class="handle">
+						@{artist.handle}
+					</a>
+					{#if artist.bio}
+						<p class="bio">{artist.bio}</p>
+					{/if}
+				</div>
+				<div class="artist-share-desktop">
+					<ShareButton url={shareUrl} title="share artist" />
+				</div>
+			</div>
+			<div class="artist-share-mobile">
+				<ShareButton url={shareUrl} title="share artist" />
 			</div>
 		</section>
 
@@ -323,6 +341,30 @@
 		background: #141414;
 		border: 1px solid #282828;
 		border-radius: 8px;
+	}
+
+	.artist-details {
+		display: flex;
+		align-items: flex-start;
+		gap: 1.5rem;
+		width: 100%;
+	}
+
+	.artist-info {
+		flex: 1;
+	}
+
+	.artist-share-desktop {
+		display: flex;
+		align-items: flex-start;
+		justify-content: center;
+	}
+
+	.artist-share-mobile {
+		display: none;
+		width: 100%;
+		justify-content: center;
+		margin-top: 0.5rem;
 	}
 
 	.artist-avatar {
@@ -635,6 +677,24 @@
 			text-align: center;
 			gap: 1rem;
 			padding: 1.5rem;
+		}
+
+		.artist-details {
+			flex-direction: column;
+			align-items: center;
+			gap: 1rem;
+		}
+
+		.artist-info {
+			text-align: center;
+		}
+
+		.artist-share-desktop {
+			display: none;
+		}
+
+		.artist-share-mobile {
+			display: flex;
 		}
 
 		.artist-avatar {
