@@ -211,7 +211,11 @@ class R2Storage:
             return file_id
 
     async def get_url(
-        self, file_id: str, *, file_type: str | None = None
+        self,
+        file_id: str,
+        *,
+        file_type: str | None = None,
+        extension: str | None = None,
     ) -> str | None:
         """get public URL for media file (audio or image).
 
@@ -221,8 +225,13 @@ class R2Storage:
                       if None, checks both (audio first, then image)
                       if "audio", only checks audio bucket
                       if "image", only checks image bucket
+            extension: optional specific extension (e.g., "mp3", "flac")
+                      if provided for audio, makes single HEAD request
+                      instead of looping through all formats
         """
-        with logfire.span("R2 get_url", file_id=file_id, file_type=file_type):
+        with logfire.span(
+            "R2 get_url", file_id=file_id, file_type=file_type, extension=extension
+        ):
             async with self.async_session.client(
                 "s3",
                 endpoint_url=self.endpoint_url,
@@ -231,9 +240,11 @@ class R2Storage:
             ) as client:
                 # if file_type is "image", skip audio checks
                 if file_type != "image":
-                    # try audio formats
-                    for audio_format in AudioFormat:
-                        key = f"audio/{file_id}{audio_format.extension}"
+                    # if extension is provided, try single format
+                    if extension:
+                        # normalize extension (remove leading dot if present)
+                        ext = extension.lstrip(".")
+                        key = f"audio/{file_id}.{ext}"
 
                         try:
                             await client.head_object(
@@ -241,11 +252,32 @@ class R2Storage:
                             )
                             return f"{self.public_audio_bucket_url}/{key}"
                         except client.exceptions.NoSuchKey:
-                            continue
+                            # if specific extension not found, fall through to None
+                            if file_type == "audio":
+                                return None
                         except ClientError as e:
                             if e.response.get("Error", {}).get("Code") == "404":
+                                if file_type == "audio":
+                                    return None
+                            else:
+                                raise
+
+                    # fallback: try all audio formats
+                    else:
+                        for audio_format in AudioFormat:
+                            key = f"audio/{file_id}{audio_format.extension}"
+
+                            try:
+                                await client.head_object(
+                                    Bucket=self.audio_bucket_name, Key=key
+                                )
+                                return f"{self.public_audio_bucket_url}/{key}"
+                            except client.exceptions.NoSuchKey:
                                 continue
-                            raise
+                            except ClientError as e:
+                                if e.response.get("Error", {}).get("Code") == "404":
+                                    continue
+                                raise
 
                     # if explicitly looking for audio, stop here
                     if file_type == "audio":
@@ -253,7 +285,7 @@ class R2Storage:
 
                 # try image formats
                 for image_format in ImageFormat:
-                    key = f"{file_id}.{image_format.value}"
+                    key = f"images/{file_id}.{image_format.value}"
 
                     try:
                         await client.head_object(Bucket=self.image_bucket_name, Key=key)

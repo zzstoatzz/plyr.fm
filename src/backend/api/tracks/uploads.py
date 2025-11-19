@@ -139,7 +139,9 @@ async def _process_upload_background(
             r2_url = None
             if settings.storage.backend == "r2":
                 if isinstance(storage, R2Storage):
-                    r2_url = await storage.get_url(file_id, file_type="audio")
+                    r2_url = await storage.get_url(
+                        file_id, file_type="audio", extension=ext[1:]
+                    )
 
             # save image if provided
             image_id = None
