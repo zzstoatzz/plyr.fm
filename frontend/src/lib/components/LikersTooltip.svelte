@@ -76,29 +76,31 @@
 		<div class="loading">loading...</div>
 	{:else if error}
 		<div class="error">{error}</div>
-	{:else if likers.length > 0}
-		<div class="likers-list">
-			{#each likers as liker}
-				<a
-					href="/u/{liker.handle}"
-					class="liker"
-				>
-					{#if liker.avatar_url}
-						<img src={liker.avatar_url} alt={liker.display_name} class="avatar" />
-					{:else}
-						<div class="avatar-placeholder">
-							{liker.display_name.charAt(0).toUpperCase()}
-						</div>
-					{/if}
-					<div class="liker-info">
-						<div class="display-name">{liker.display_name}</div>
-						<div class="handle">@{liker.handle}</div>
+{:else if likers.length > 0}
+	<div class="likers-list">
+		{#each likers as liker}
+			<a
+				href="/u/{liker.handle}"
+				class="liker"
+			>
+				{#if liker.avatar_url}
+					<img src={liker.avatar_url} alt={liker.display_name} class="avatar" />
+				{:else}
+					<div class="avatar-placeholder">
+						{liker.display_name.charAt(0).toUpperCase()}
 					</div>
-					<div class="liked-time">{formatTime(liker.liked_at)}</div>
-				</a>
-			{/each}
-		</div>
-	{/if}
+				{/if}
+				<div class="liker-info">
+					<div class="display-name">{liker.display_name}</div>
+					<div class="handle">@{liker.handle}</div>
+				</div>
+				<div class="liked-time">{formatTime(liker.liked_at)}</div>
+			</a>
+		{/each}
+	</div>
+{:else}
+	<div class="empty">be the first to like this</div>
+{/if}
 </div>
 
 <style>
@@ -201,15 +203,6 @@
 		color: #666;
 		font-size: 0.75rem;
 		flex-shrink: 0;
-	}
-
-	.more {
-		color: #888;
-		font-size: 0.85rem;
-		text-align: center;
-		padding: 0.5rem;
-		border-top: 1px solid #282828;
-		margin-top: 0.25rem;
 	}
 
 	/* custom scrollbar */
