@@ -1,14 +1,7 @@
 """storage implementations."""
 
-from backend.config import settings
+from backend.storage.r2 import R2Storage
 
-if settings.storage.backend == "r2":
-    from backend.storage.r2 import R2Storage
-
-    storage = R2Storage()
-else:
-    from backend.storage.filesystem import FilesystemStorage
-
-    storage = FilesystemStorage()
+storage = R2Storage()
 
 __all__ = ["storage"]

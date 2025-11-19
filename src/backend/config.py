@@ -178,13 +178,8 @@ class DatabaseSettings(RelaySettingsSection):
 
 
 class StorageSettings(RelaySettingsSection):
-    """Asset storage configuration."""
+    """Asset storage configuration (R2 only)."""
 
-    backend: str = Field(
-        default="filesystem",
-        validation_alias="STORAGE_BACKEND",
-        description="Storage backend (filesystem or r2)",
-    )
     max_upload_size_mb: int = Field(
         default=1536,  # 1.5GB - supports 2-hour WAV (worst case) with headroom
         validation_alias="MAX_UPLOAD_SIZE_MB",

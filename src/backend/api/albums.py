@@ -15,7 +15,6 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile
 from backend._internal.auth import get_session
-from backend.config import settings
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
@@ -365,7 +364,7 @@ async def upload_album_cover(
         # construct R2 URL directly if using R2 storage
         # storage.save uses just {file_id}{ext} for images (no subdirectory)
         image_url = None
-        if settings.storage.backend == "r2" and isinstance(storage, R2Storage):
+        if isinstance(storage, R2Storage):
             image_url = f"{storage.public_image_bucket_url}/{image_id}{ext}"
 
         # delete old image if exists (prevent R2 object leaks)
