@@ -129,24 +129,25 @@
 			<div class="track-title">{track.title}</div>
 			<div class="track-metadata">
 				{#if !hideArtist}
-					<a
-						href="/u/{track.artist_handle}"
-						class="artist-link"
-					>
-						{track.artist}
-					</a>
-				{/if}
-				{#if track.features && track.features.length > 0}
-					<span class="metadata-separator">•</span>
-					<span class="features-container">
-						<span class="features-label">feat.</span>
-						{#each track.features as feature, i}
-							{#if i > 0}<span class="feature-separator">, </span>{/if}
-							<a href="/u/{feature.handle}" class="feature-link">
-								{feature.display_name}
-							</a>
-						{/each}
-					</span>
+					<div class="artist-line">
+						<a
+							href="/u/{track.artist_handle}"
+							class="artist-link"
+						>
+							{track.artist}
+						</a>
+						{#if track.features && track.features.length > 0}
+							<span class="features-inline">
+								<span class="features-label">feat.</span>
+								{#each track.features as feature, i}
+									{#if i > 0}<span class="feature-separator">, </span>{/if}
+									<a href="/u/{feature.handle}" class="feature-link">
+										{feature.display_name}
+									</a>
+								{/each}
+							</span>
+						{/if}
+					</div>
 				{/if}
 		{#if track.album && !hideAlbum}
 			<span class="metadata-separator">•</span>
@@ -369,6 +370,14 @@
 		width: 100%;
 	}
 
+	.artist-line {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		min-width: 0;
+		flex-wrap: nowrap;
+	}
+
 	.metadata-separator {
 		display: none;
 		font-size: 0.7rem;
@@ -380,7 +389,6 @@
 		transition: color 0.2s;
 		font-weight: 500;
 		font-family: inherit;
-		display: inline-block;
 		max-width: 100%;
 		min-width: 0;
 		white-space: nowrap;
@@ -392,21 +400,18 @@
 		color: var(--accent);
 	}
 
-	.features-container {
+	.features-inline {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		flex-wrap: nowrap;
-		max-width: 100%;
-		min-width: 0;
+		color: #b5bed1;
 		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 
 	.features-label {
 		color: #8ab3ff;
 		font-weight: 500;
+		text-transform: lowercase;
 	}
 
 	.feature-link {

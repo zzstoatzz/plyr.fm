@@ -84,15 +84,24 @@
 			</a>
 		{/if}
 		<div class="player-metadata">
-			<a href="/u/{track.artist_handle}" class="metadata-link" bind:this={artistEl}>
+			<div class="metadata-entry" bind:this={artistEl}>
 				<svg class="metadata-icon artist-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 					<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
 					<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 				</svg>
 				<div class="text-container" class:scrolling={artistOverflows}>
-					<span>{track.artist}</span>
+					<a href="/u/{track.artist_handle}" class="inline-artist">{track.artist}</a>
+					{#if track.features && track.features.length > 0}
+						<span class="features-inline">
+							<span class="features-label">feat.</span>
+							{#each track.features as feature, i}
+								{#if i > 0}<span class="feature-separator">, </span>{/if}
+								<a href="/u/{feature.handle}" class="feature-link">{feature.display_name}</a>
+							{/each}
+						</span>
+					{/if}
 				</div>
-			</a>
+			</div>
 			<div class="metadata-line">
 				{#if track.album}
 					<a
@@ -235,6 +244,7 @@
 		height: 32px;
 	}
 
+	.metadata-entry,
 	.metadata-link {
 		display: inline-flex;
 		align-items: center;
@@ -245,7 +255,9 @@
 		white-space: nowrap;
 	}
 
-	.metadata-link:hover {
+	.metadata-link:hover,
+	.inline-artist:hover,
+	.feature-link:hover {
 		color: var(--accent);
 	}
 
@@ -264,6 +276,26 @@
 		flex: 1;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+	}
+
+	.inline-artist,
+	.feature-link {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.features-inline {
+		margin-left: 0.35rem;
+		color: #b5b5b5;
+	}
+
+	.features-label {
+		margin-right: 0.25rem;
+		text-transform: lowercase;
+	}
+
+	.feature-separator {
+		margin: 0 0.1rem;
 	}
 
 	.metadata-line,
