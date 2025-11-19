@@ -10,7 +10,6 @@ def clear_settings_env(monkeypatch):
         "FRONTEND_URL",
         "BACKGROUND_TASK_INTERVAL_SECONDS",
         "DATABASE_URL",
-        "STORAGE_BACKEND",
         "R2_BUCKET",
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
@@ -37,7 +36,6 @@ def test_settings_loads_env(monkeypatch):
     monkeypatch.setenv("PORT", "9100")
     monkeypatch.setenv("FRONTEND_URL", "https://relay.example.com")
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://user:pass@host/db")
-    monkeypatch.setenv("STORAGE_BACKEND", "r2")
     monkeypatch.setenv("R2_BUCKET", "media")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "key123")
     monkeypatch.setenv("ATPROTO_CLIENT_ID", "https://client/meta.json")
@@ -55,7 +53,6 @@ def test_settings_loads_env(monkeypatch):
     assert settings.app.port == 9100
     assert settings.frontend.url == "https://relay.example.com"
     assert settings.database.url == "postgresql+psycopg://user:pass@host/db"
-    assert settings.storage.backend == "r2"
     assert settings.storage.r2_bucket == "media"
     assert settings.storage.aws_access_key_id == "key123"
     assert settings.atproto.client_id == "https://client/meta.json"

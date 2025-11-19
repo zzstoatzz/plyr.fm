@@ -18,6 +18,31 @@ from backend.config import settings
 from backend.models import Base
 
 
+class MockStorage:
+    """Mock storage for tests - no R2 credentials needed."""
+
+    async def save(self, file_obj, filename: str, progress_callback=None) -> str:
+        """Mock save - returns a fake file_id."""
+        return "mock_file_id_123"
+
+    async def get_url(
+        self, file_id: str, file_type: str | None = None, extension: str | None = None
+    ) -> str:
+        """Mock get_url - returns a fake URL."""
+        return f"https://mock.r2.dev/{file_id}"
+
+    async def delete(self, file_id: str, extension: str | None = None) -> None:
+        """Mock delete."""
+
+
+def pytest_configure(config):
+    """Set mock storage before any test modules are imported."""
+    import backend.storage
+
+    # set _storage directly to prevent R2Storage initialization
+    backend.storage._storage = MockStorage()  # type: ignore[assignment]
+
+
 @asynccontextmanager
 async def session_context(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
     """create a database session context."""
