@@ -24,7 +24,6 @@ from backend._internal.uploads import UploadStatus, upload_tracker
 from backend.config import settings
 from backend.models import Artist, Track
 from backend.storage import storage
-from backend.storage.r2 import R2Storage
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
 
@@ -136,11 +135,9 @@ async def _process_upload_background(
                     return
 
             # get R2 URL
-            r2_url = None
-            if isinstance(storage, R2Storage):
-                r2_url = await storage.get_url(
-                    file_id, file_type="audio", extension=ext[1:]
-                )
+            r2_url = await storage.get_url(
+                file_id, file_type="audio", extension=ext[1:]
+            )
 
             # save image if provided
             image_id = None
@@ -162,11 +159,10 @@ async def _process_upload_background(
                             image_id = await storage.save(
                                 image_obj, f"images/{image_filename}"
                             )
-                            # get R2 URL for image if using R2 storage
-                            if isinstance(storage, R2Storage):
-                                image_url = await storage.get_url(
-                                    image_id, file_type="image"
-                                )
+                            # get R2 URL for image
+                            image_url = await storage.get_url(
+                                image_id, file_type="image"
+                            )
                     except Exception as e:
                         logger.warning(f"failed to save image: {e}", exc_info=True)
                         # continue without image - it's optional

@@ -18,7 +18,6 @@ from backend._internal.auth import get_session
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
-from backend.storage.r2 import R2Storage
 from backend.utilities.aggregations import get_like_counts
 from backend.utilities.hashing import CHUNK_SIZE
 
@@ -361,11 +360,9 @@ async def upload_album_cover(
         # save returns the file_id (hash)
         image_id = await storage.save(image_obj, image.filename)
 
-        # construct R2 URL directly if using R2 storage
+        # construct R2 URL directly
         # storage.save uses just {file_id}{ext} for images (no subdirectory)
-        image_url = None
-        if isinstance(storage, R2Storage):
-            image_url = f"{storage.public_image_bucket_url}/{image_id}{ext}"
+        image_url = f"{storage.public_image_bucket_url}/{image_id}{ext}"
 
         # delete old image if exists (prevent R2 object leaks)
         if album.image_id:
