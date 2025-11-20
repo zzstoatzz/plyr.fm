@@ -269,7 +269,20 @@ $effect(() => {
 				{/if}
 			</h2>
 			{#if tracks.length === 0}
-				<p class="empty">no tracks yet</p>
+				<div class="empty-state">
+					<p class="empty-message">no tracks yet</p>
+					<p class="empty-detail">
+						{artist.display_name} hasn't uploaded any music to {APP_NAME}.
+					</p>
+					<a
+						href="https://bsky.app/profile/{artist.handle}"
+						target="_blank"
+						rel="noopener"
+						class="bsky-link"
+					>
+						view their Bluesky profile
+					</a>
+				</div>
 			{:else}
 				<div class="track-list">
 		{#each tracks as track, i}
@@ -657,11 +670,39 @@ $effect(() => {
 		gap: 0.75rem;
 	}
 
-	.empty {
+	.empty-state {
 		text-align: center;
 		padding: 3rem;
+		background: #141414;
+		border: 1px solid #282828;
+		border-radius: 8px;
+	}
+
+	.empty-message {
+		color: #b0b0b0;
+		font-size: 1.25rem;
+		margin: 0 0 0.5rem 0;
+	}
+
+	.empty-detail {
 		color: #808080;
-		font-style: italic;
+		margin: 0 0 1.5rem 0;
+	}
+
+	.bsky-link {
+		color: var(--accent);
+		text-decoration: none;
+		font-size: 1rem;
+		padding: 0.75rem 1.5rem;
+		border: 1px solid var(--accent);
+		border-radius: 6px;
+		transition: all 0.2s;
+		display: inline-block;
+	}
+
+	.bsky-link:hover {
+		background: var(--accent);
+		color: #000;
 	}
 
 	/* respect reduced motion preference */
