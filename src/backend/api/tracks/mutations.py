@@ -153,10 +153,23 @@ async def update_track_metadata(
         track.image_url = image_url
         image_changed = True
 
-    if track.atproto_record_uri and (
+    # always update ATProto record if any metadata changed
+    metadata_changed = (
         title_changed or album is not None or features is not None or image_changed
-    ):
-        await _update_atproto_record(track, auth_session, image_url)
+    )
+    if track.atproto_record_uri and metadata_changed:
+        try:
+            await _update_atproto_record(track, auth_session, image_url)
+        except Exception as exc:
+            logger.error(
+                f"failed to update ATProto record for track {track.id}: {exc}",
+                exc_info=True,
+            )
+            await db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"failed to sync track update to ATProto: {exc!s}",
+            ) from exc
 
     await db.commit()
     await db.refresh(track)
@@ -169,39 +182,36 @@ async def _update_atproto_record(
     auth_session: AuthSession,
     image_url_override: str | None = None,
 ) -> None:
+    """Update the ATProto record for a track.
+
+    raises:
+        Exception: if ATProto record update fails
+    """
     record_uri = track.atproto_record_uri
     audio_url = track.r2_url
     if not record_uri or not audio_url:
         return
 
-    try:
-        updated_record = build_track_record(
-            title=track.title,
-            artist=track.artist.display_name,
-            audio_url=audio_url,
-            file_type=track.file_type,
-            album=track.album,
-            duration=None,
-            features=track.features if track.features else None,
-            image_url=image_url_override or await track.get_image_url(),
-        )
+    updated_record = build_track_record(
+        title=track.title,
+        artist=track.artist.display_name,
+        audio_url=audio_url,
+        file_type=track.file_type,
+        album=track.album,
+        duration=None,
+        features=track.features if track.features else None,
+        image_url=image_url_override or await track.get_image_url(),
+    )
 
-        result = await update_record(
-            auth_session=auth_session,
-            record_uri=record_uri,
-            record=updated_record,
-        )
+    result = await update_record(
+        auth_session=auth_session,
+        record_uri=record_uri,
+        record=updated_record,
+    )
 
-        if result:
-            _, new_cid = result
-            track.atproto_record_cid = new_cid
-
-    except Exception as exc:  # pragma: no cover - network/service failures
-        logger.warning(
-            f"failed to update ATProto record for track {track.id}: {exc}",
-            exc_info=True,
-        )
-        # continue even if ATProto update fails - database changes are primary
+    if result:
+        _, new_cid = result
+        track.atproto_record_cid = new_cid
 
 
 class RestoreRecordResponse(BaseModel):
