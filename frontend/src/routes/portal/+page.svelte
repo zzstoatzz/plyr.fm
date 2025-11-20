@@ -414,13 +414,20 @@
 	async function exportAllMedia() {
 		if (exportingMedia) return;
 
+		const trackCount = tracks.length;
+		toast.info(`preparing export of ${trackCount} ${trackCount === 1 ? 'track' : 'tracks'}...`);
+
 		exportingMedia = true;
 		try {
+			toast.info('downloading tracks from storage...');
+
 			const response = await fetch(`${API_URL}/exports/media`, {
 				credentials: 'include'
 			});
 
 			if (response.ok) {
+				toast.info('creating zip archive...');
+
 				// trigger download
 				const blob = await response.blob();
 				const url = window.URL.createObjectURL(blob);
@@ -431,7 +438,8 @@
 				a.click();
 				window.URL.revokeObjectURL(url);
 				document.body.removeChild(a);
-				toast.success('tracks exported successfully');
+
+				toast.success(`${trackCount} ${trackCount === 1 ? 'track' : 'tracks'} exported successfully`);
 			} else {
 				const error = await response.json();
 				toast.error(error.detail || 'failed to export tracks');
@@ -593,19 +601,7 @@
 		</section>
 
 		<section class="tracks-section">
-			<div class="section-header">
-				<h2>your tracks</h2>
-				{#if tracks.length > 0}
-					<button
-						class="export-btn"
-						onclick={exportAllMedia}
-						disabled={exportingMedia}
-						title="export all tracks as zip"
-					>
-						{exportingMedia ? 'exporting...' : 'export all tracks'}
-					</button>
-				{/if}
-			</div>
+			<h2>your tracks</h2>
 
 			{#if loadingTracks}
 				<div class="loading-container">
@@ -857,6 +853,25 @@
 				</div>
 			{/if}
 		</section>
+
+		{#if tracks.length > 0}
+			<section class="export-section">
+				<div class="export-header">
+					<h2>export your music</h2>
+					<p class="export-description">
+						download all {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'} as a zip archive.
+						files are provided in their original format (mp3, wav, m4a) exactly as uploaded.
+					</p>
+				</div>
+				<button
+					class="export-main-btn"
+					onclick={exportAllMedia}
+					disabled={exportingMedia}
+				>
+					{exportingMedia ? 'exporting...' : `export all ${tracks.length} ${tracks.length === 1 ? 'track' : 'tracks'}`}
+				</button>
+			</section>
+		{/if}
 	</main>
 {/if}
 
@@ -1104,37 +1119,7 @@
 
 	.tracks-section h2 {
 		font-size: var(--text-page-heading);
-		margin-bottom: 0;
-	}
-
-	.tracks-section .section-header {
 		margin-bottom: 1.5rem;
-	}
-
-	.export-btn {
-		width: auto;
-		padding: 0.4rem 0.75rem;
-		background: #1a1a1a;
-		border: 1px solid #333;
-		border-radius: 6px;
-		font-size: 0.9rem;
-		color: var(--text-secondary);
-		font-weight: 400;
-		white-space: nowrap;
-		transition: all 0.2s;
-	}
-
-	.export-btn:hover:not(:disabled) {
-		border-color: var(--accent);
-		color: var(--accent);
-		background: #222;
-		transform: none;
-		box-shadow: none;
-	}
-
-	.export-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
 	}
 
 	.empty {
@@ -1580,5 +1565,58 @@
 		display: flex;
 		gap: 0.5rem;
 		justify-content: flex-end;
+	}
+
+	.export-section {
+		margin-top: 3rem;
+		padding: 2rem;
+		background: #1a1a1a;
+		border: 1px solid #2a2a2a;
+		border-radius: 8px;
+	}
+
+	.export-header {
+		margin-bottom: 1.5rem;
+	}
+
+	.export-header h2 {
+		font-size: var(--text-page-heading);
+		margin-bottom: 0.75rem;
+	}
+
+	.export-description {
+		color: #aaa;
+		font-size: 0.95rem;
+		line-height: 1.6;
+		margin: 0;
+	}
+
+	.export-main-btn {
+		width: 100%;
+		padding: 1rem;
+		background: #3a7dff;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.export-main-btn:hover:not(:disabled) {
+		background: #2868e6;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(58, 125, 255, 0.3);
+	}
+
+	.export-main-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+		transform: none;
+	}
+
+	.export-main-btn:active:not(:disabled) {
+		transform: translateY(0);
 	}
 </style>
