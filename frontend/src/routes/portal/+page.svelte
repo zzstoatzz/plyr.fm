@@ -59,6 +59,9 @@
 	let editingAlbumId: string | null = null;
 	let editAlbumCoverFile: File | null = null;
 
+	// export state
+	let exportingMedia = false;
+
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
 		const params = new URLSearchParams(window.location.search);
@@ -406,6 +409,102 @@
 	async function logout() {
 		await auth.logout();
 		window.location.href = '/';
+	}
+
+	async function exportAllMedia() {
+		if (exportingMedia) return;
+
+		const trackCount = tracks.length;
+		const toastId = toast.info(`preparing export of ${trackCount} ${trackCount === 1 ? 'track' : 'tracks'}...`, 30000);
+
+		exportingMedia = true;
+		try {
+			// start the export
+			const response = await fetch(`${API_URL}/exports/media`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				toast.dismiss(toastId);
+				toast.error(error.detail || 'failed to start export');
+				exportingMedia = false;
+				return;
+			}
+
+			const result = await response.json();
+			const exportId = result.export_id;
+
+			// subscribe to progress updates via SSE
+			const eventSource = new EventSource(`${API_URL}/exports/${exportId}/progress`);
+
+			eventSource.onmessage = async (event) => {
+				const update = JSON.parse(event.data);
+
+				// show progress messages
+				if (update.message && update.status === 'processing') {
+					const progressInfo = update.track_count
+						? ` (${update.processed_count}/${update.track_count})`
+						: '';
+					toast.update(toastId, `${update.message}${progressInfo}`);
+				}
+
+				if (update.status === 'completed') {
+					eventSource.close();
+					toast.dismiss(toastId);
+					exportingMedia = false;
+
+					// trigger download
+					try {
+						const downloadResponse = await fetch(`${API_URL}/exports/${exportId}/download`, {
+							credentials: 'include'
+						});
+
+						if (downloadResponse.ok) {
+							const blob = await downloadResponse.blob();
+							const url = window.URL.createObjectURL(blob);
+							const a = document.createElement('a');
+							a.href = url;
+							a.download = `plyr-tracks-${new Date().toISOString().split('T')[0]}.zip`;
+							document.body.appendChild(a);
+							a.click();
+							window.URL.revokeObjectURL(url);
+							document.body.removeChild(a);
+
+							toast.success(`${update.processed_count || trackCount} ${trackCount === 1 ? 'track' : 'tracks'} exported successfully`);
+						} else {
+							toast.error('failed to download export');
+						}
+					} catch (e) {
+						console.error('download failed:', e);
+						toast.error('failed to download export');
+					}
+				}
+
+				if (update.status === 'failed') {
+					eventSource.close();
+					toast.dismiss(toastId);
+					exportingMedia = false;
+
+					const errorMsg = update.error || 'export failed';
+					toast.error(errorMsg);
+				}
+			};
+
+			eventSource.onerror = () => {
+				eventSource.close();
+				toast.dismiss(toastId);
+				exportingMedia = false;
+				toast.error('lost connection to server');
+			};
+
+		} catch (e) {
+			console.error('export failed:', e);
+			toast.dismiss(toastId);
+			toast.error('failed to start export');
+			exportingMedia = false;
+		}
 	}
 </script>
 
@@ -809,6 +908,25 @@
 				</div>
 			{/if}
 		</section>
+
+		{#if tracks.length > 0}
+			<section class="export-section">
+				<div class="export-header">
+					<h2>export your music</h2>
+					<p class="export-description">
+						download all {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'} as a zip archive.
+						files are provided in their original format (mp3, wav, m4a) exactly as uploaded.
+					</p>
+				</div>
+				<button
+					class="export-main-btn"
+					onclick={exportAllMedia}
+					disabled={exportingMedia}
+				>
+					{exportingMedia ? 'exporting...' : `export all ${tracks.length} ${tracks.length === 1 ? 'track' : 'tracks'}`}
+				</button>
+			</section>
+		{/if}
 	</main>
 {/if}
 
@@ -1502,5 +1620,58 @@
 		display: flex;
 		gap: 0.5rem;
 		justify-content: flex-end;
+	}
+
+	.export-section {
+		margin-top: 3rem;
+		padding: 2rem;
+		background: #1a1a1a;
+		border: 1px solid #2a2a2a;
+		border-radius: 8px;
+	}
+
+	.export-header {
+		margin-bottom: 1.5rem;
+	}
+
+	.export-header h2 {
+		font-size: var(--text-page-heading);
+		margin-bottom: 0.75rem;
+	}
+
+	.export-description {
+		color: #aaa;
+		font-size: 0.95rem;
+		line-height: 1.6;
+		margin: 0;
+	}
+
+	.export-main-btn {
+		width: 100%;
+		padding: 1rem;
+		background: #3a7dff;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.export-main-btn:hover:not(:disabled) {
+		background: #2868e6;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(58, 125, 255, 0.3);
+	}
+
+	.export-main-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+		transform: none;
+	}
+
+	.export-main-btn:active:not(:disabled) {
+		transform: translateY(0);
 	}
 </style>

@@ -21,6 +21,7 @@ from backend.api import (
     artists_router,
     audio_router,
     auth_router,
+    exports_router,
     preferences_router,
     queue_router,
     search_router,
@@ -111,6 +112,7 @@ app.include_router(search_router)
 app.include_router(preferences_router)
 app.include_router(queue_router)
 app.include_router(migration_router)
+app.include_router(exports_router)
 
 
 @app.get("/health")
