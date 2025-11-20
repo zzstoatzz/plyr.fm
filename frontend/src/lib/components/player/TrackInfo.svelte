@@ -81,7 +81,7 @@
 				<span>{track.title}</span>
 			</a>
 		{/if}
-		<div class="player-metadata">
+		<div class="player-metadata" class:has-album={!!track.album}>
 			<div class="metadata-entry" bind:this={artistEl}>
 				<svg class="metadata-icon artist-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 					<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
@@ -244,6 +244,10 @@
 		font-size: 0.82rem;
 		min-width: 0;
 		height: 32px;
+	}
+
+	.player-metadata:not(.has-album) {
+		height: 20px;
 	}
 
 	.metadata-entry,
