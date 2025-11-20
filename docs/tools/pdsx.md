@@ -115,9 +115,14 @@ uvx pdsx --pds https://pds.zzstoatzz.io cat at://did:plc:xbtmt2zjwlrfegqvch7fboe
 
 ## atproto namespace
 
-all plyr.fm records use the unified `fm.plyr.track` namespace across all environments (dev, staging, prod). there are no environment-specific namespaces.
+plyr.fm uses environment-specific namespaces configured via `ATPROTO_APP_NAMESPACE`:
+- **dev**: `fm.plyr.dev` → track collection: `fm.plyr.dev.track`
+- **staging**: `fm.plyr.stg` → track collection: `fm.plyr.stg.track`
+- **prod**: `fm.plyr` → track collection: `fm.plyr.track`
 
 **critical**: never use bluesky lexicons (app.bsky.*) for plyr.fm records. always use fm.plyr.* namespace.
+
+when using pdsx with dev environment, query `fm.plyr.dev.track`, not `fm.plyr.track`.
 
 ## credential management
 
