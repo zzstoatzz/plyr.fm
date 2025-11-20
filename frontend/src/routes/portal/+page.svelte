@@ -37,6 +37,7 @@
 	let file: File | null = null;
 	let imageFile: File | null = null;
 	let featuredArtists: FeaturedArtist[] = [];
+	let hasUnresolvedFeaturesInput = $state(false);
 
 	// track editing state
 	let editingTrackId: number | null = null;
@@ -44,6 +45,7 @@
 	let editAlbum = '';
 	let editFeaturedArtists: FeaturedArtist[] = [];
 	let editImageFile: File | null = null;
+	let hasUnresolvedEditFeaturesInput = $state(false);
 
 	// profile editing state
 	let displayName = '';
@@ -615,6 +617,7 @@
 					<label for="features">featured artists (optional)</label>
 					<HandleSearch
 						bind:selected={featuredArtists}
+						bind:hasUnresolvedInput={hasUnresolvedFeaturesInput}
 						onAdd={(artist) => { featuredArtists = [...featuredArtists, artist]; }}
 						onRemove={(did) => { featuredArtists = featuredArtists.filter(a => a.did !== did); }}
 					/>
@@ -649,7 +652,7 @@
 					{/if}
 				</div>
 
-				<button type="submit" disabled={!file} class="upload-btn">
+				<button type="submit" disabled={!file || hasUnresolvedFeaturesInput} class="upload-btn" title={hasUnresolvedFeaturesInput ? "please select or clear featured artist" : ""}>
 					<span>upload track</span>
 				</button>
 			</form>
@@ -692,6 +695,7 @@
 											<div class="edit-label">featured artists (optional)</div>
 											<HandleSearch
 												bind:selected={editFeaturedArtists}
+												bind:hasUnresolvedInput={hasUnresolvedEditFeaturesInput}
 												onAdd={(artist) => { editFeaturedArtists = [...editFeaturedArtists, artist]; }}
 												onRemove={(did) => { editFeaturedArtists = editFeaturedArtists.filter(a => a.did !== did); }}
 											/>
@@ -723,7 +727,8 @@
 										<button
 											class="action-btn save-btn"
 											onclick={() => saveTrackEdit(track.id)}
-											title="save changes"
+											disabled={hasUnresolvedEditFeaturesInput}
+											title={hasUnresolvedEditFeaturesInput ? "please select or clear featured artist" : "save changes"}
 										>
 											✓
 										</button>

@@ -8,28 +8,40 @@
 		onRemove: (_did: string) => void;
 		maxFeatures?: number;
 		disabled?: boolean;
+		hasUnresolvedInput?: boolean;
 	}
 
-	let { selected = $bindable([]), onAdd, onRemove, maxFeatures = 5, disabled = false }: Props = $props();
+	let { selected = $bindable([]), onAdd, onRemove, maxFeatures = 5, disabled = false, hasUnresolvedInput = $bindable(false) }: Props = $props();
 
 	let query = $state('');
 	let results = $state<FeaturedArtist[]>([]);
 	let searching = $state(false);
 	let showResults = $state(false);
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+	let noResultsFound = $state(false);
+
+	// update parent when there's unresolved input
+	$effect(() => {
+		hasUnresolvedInput = query.trim().length > 0;
+	});
 
 	async function searchHandles() {
 		if (query.length < 2) {
 			results = [];
+			noResultsFound = false;
 			return;
 		}
 
 		searching = true;
+		noResultsFound = false;
 		try {
 			const response = await fetch(`${API_URL}/search/handles?q=${encodeURIComponent(query)}`);
 			if (response.ok) {
 				const data = await response.json();
 				results = data.results;
+				if (results.length === 0) {
+					noResultsFound = true;
+				}
 				showResults = true;
 			}
 		} catch (_e) {
@@ -57,6 +69,7 @@
 		query = '';
 		results = [];
 		showResults = false;
+		noResultsFound = false;
 	}
 
 	function removeArtist(did: string) {
@@ -108,6 +121,12 @@
 						</div>
 					</button>
 				{/each}
+			</div>
+		{/if}
+
+		{#if noResultsFound && query.length >= 2}
+			<div class="no-results-message">
+				no artist found with handle "{query}"
 			</div>
 		{/if}
 	</div>
@@ -343,6 +362,17 @@
 		margin-top: 0.5rem;
 		font-size: 0.85rem;
 		color: #ff9966;
+	}
+
+	.no-results-message {
+		margin-top: 0.5rem;
+		padding: 0.75rem;
+		background: #2a1a1a;
+		border: 1px solid #4a3030;
+		border-radius: 4px;
+		color: #ff9966;
+		font-size: 0.9rem;
+		text-align: center;
 	}
 
 	/* mobile styles */

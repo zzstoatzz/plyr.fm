@@ -12,7 +12,7 @@ REMEMBER WE HAVE THE @justfile
 - **migrations**: automated via fly.io release_command
 - **logs**: `flyctl logs` is BLOCKING - use `run_in_background=true`
 - **type hints**: required everywhere
-- **ATProto namespaces**: NEVER use Bluesky lexicons (app.bsky.*). ALWAYS use our namespace (fm.plyr.*) for ALL records
+- **ATProto namespaces**: NEVER use Bluesky lexicons (app.bsky.*). ALWAYS use our namespace (fm.plyr.*), configured per environment via `ATPROTO_APP_NAMESPACE` (e.g., fm.plyr.dev for dev, fm.plyr for prod)
 - **communication**: use emojis sparingly and strictly for emphasis (avoid excessive check marks)
 
 ## structure
