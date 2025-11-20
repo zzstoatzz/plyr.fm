@@ -312,6 +312,8 @@
 
 	.metadata-placeholder {
 		opacity: 0;
+		height: 0;
+		display: none;
 	}
 
 	@keyframes scroll-text {
