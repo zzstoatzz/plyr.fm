@@ -59,6 +59,9 @@
 	let editingAlbumId: string | null = null;
 	let editAlbumCoverFile: File | null = null;
 
+	// export state
+	let exportingMedia = false;
+
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
 		const params = new URLSearchParams(window.location.search);
@@ -407,6 +410,39 @@
 		await auth.logout();
 		window.location.href = '/';
 	}
+
+	async function exportAllMedia() {
+		if (exportingMedia) return;
+
+		exportingMedia = true;
+		try {
+			const response = await fetch(`${API_URL}/exports/media`, {
+				credentials: 'include'
+			});
+
+			if (response.ok) {
+				// trigger download
+				const blob = await response.blob();
+				const url = window.URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `plyr-tracks-${new Date().toISOString().split('T')[0]}.zip`;
+				document.body.appendChild(a);
+				a.click();
+				window.URL.revokeObjectURL(url);
+				document.body.removeChild(a);
+				toast.success('tracks exported successfully');
+			} else {
+				const error = await response.json();
+				toast.error(error.detail || 'failed to export tracks');
+			}
+		} catch (e) {
+			console.error('export failed:', e);
+			toast.error('failed to export tracks');
+		} finally {
+			exportingMedia = false;
+		}
+	}
 </script>
 
 {#if loading}
@@ -557,7 +593,19 @@
 		</section>
 
 		<section class="tracks-section">
-			<h2>your tracks</h2>
+			<div class="section-header">
+				<h2>your tracks</h2>
+				{#if tracks.length > 0}
+					<button
+						class="export-btn"
+						onclick={exportAllMedia}
+						disabled={exportingMedia}
+						title="export all tracks as zip"
+					>
+						{exportingMedia ? 'exporting...' : 'export all tracks'}
+					</button>
+				{/if}
+			</div>
 
 			{#if loadingTracks}
 				<div class="loading-container">
@@ -1056,7 +1104,37 @@
 
 	.tracks-section h2 {
 		font-size: var(--text-page-heading);
+		margin-bottom: 0;
+	}
+
+	.tracks-section .section-header {
 		margin-bottom: 1.5rem;
+	}
+
+	.export-btn {
+		width: auto;
+		padding: 0.4rem 0.75rem;
+		background: #1a1a1a;
+		border: 1px solid #333;
+		border-radius: 6px;
+		font-size: 0.9rem;
+		color: var(--text-secondary);
+		font-weight: 400;
+		white-space: nowrap;
+		transition: all 0.2s;
+	}
+
+	.export-btn:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--accent);
+		background: #222;
+		transform: none;
+		box-shadow: none;
+	}
+
+	.export-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.empty {
