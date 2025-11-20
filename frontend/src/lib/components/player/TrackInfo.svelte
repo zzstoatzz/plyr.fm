@@ -117,9 +117,17 @@
 							<span>{track.album.title}</span>
 						</div>
 					</a>
-				{:else}
-					<span class="metadata-placeholder" aria-hidden="true"></span>
-				{/if}
+			{:else}
+				<span class="metadata-link metadata-fallback" aria-hidden="true">
+					<svg class="metadata-icon album-icon metadata-icon-spacer" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+						<rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1" fill="none" />
+						<circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1" fill="none" />
+					</svg>
+					<div class="text-container">
+						<span>single</span>
+					</div>
+				</span>
+			{/if}
 			</div>
 		</div>
 	</div>
@@ -175,7 +183,7 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.2rem;
+		gap: 0.35rem;
 		justify-content: center;
 	}
 
@@ -246,19 +254,17 @@
 		height: 32px;
 	}
 
-	.player-metadata:not(.has-album) {
-		height: 20px;
-	}
-
 	.metadata-entry,
 	.metadata-link {
 		display: inline-flex;
 		align-items: center;
+		gap: 0.35rem;
 		color: inherit;
 		text-decoration: none;
 		transition: color 0.2s;
 		min-width: 0;
 		white-space: nowrap;
+		line-height: 1.15;
 	}
 
 	.metadata-link:hover,
@@ -272,7 +278,6 @@
 		height: 12px;
 		opacity: 0.7;
 		flex-shrink: 0;
-		margin-right: 0.35rem;
 	}
 
 	.text-container {
@@ -282,6 +287,8 @@
 		flex: 1;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+		display: flex;
+		align-items: center;
 	}
 
 	.inline-artist,
@@ -306,18 +313,23 @@
 		margin: 0 0.1rem;
 	}
 
-	.metadata-line,
-	.metadata-placeholder {
+	.metadata-line {
 		height: 16px;
 		display: flex;
 		align-items: center;
 		min-width: 0;
 	}
 
-	.metadata-placeholder {
-		opacity: 0;
-		height: 0;
-		display: none;
+	.metadata-fallback {
+		opacity: 0.5;
+		cursor: default;
+		padding-left: 0;
+		gap: 0.3rem;
+		align-items: center;
+	}
+
+	.metadata-icon-spacer {
+		opacity: 0.45;
 	}
 
 	@keyframes scroll-text {
@@ -328,6 +340,7 @@
 			transform: translateX(-100%);
 		}
 	}
+
 
 	@media (max-width: 768px) {
 		.player-track {
@@ -340,13 +353,8 @@
 			gap: 0.1rem;
 		}
 
-		.metadata-line,
-		.metadata-placeholder {
+		.metadata-line {
 			height: auto;
-		}
-
-		.metadata-placeholder {
-			display: none;
 		}
 
 		.player-artwork {
