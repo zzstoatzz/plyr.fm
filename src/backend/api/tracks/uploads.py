@@ -221,6 +221,33 @@ async def _process_upload_background(
                     except json.JSONDecodeError:
                         pass  # ignore malformed features
 
+                async def fail_atproto_sync(reason: str) -> None:
+                    """mark upload as failed when ATProto sync cannot complete."""
+
+                    logger.error(
+                        "upload %s failed during ATProto sync",
+                        upload_id,
+                        extra={
+                            "file_id": file_id,
+                            "artist_did": artist_did,
+                            "reason": reason,
+                        },
+                    )
+                    upload_tracker.update_status(
+                        upload_id,
+                        UploadStatus.FAILED,
+                        "upload failed",
+                        error=f"failed to sync track to ATProto: {reason}",
+                        phase="atproto",
+                    )
+
+                    # delete uploaded media so we don't leave orphaned files behind
+                    with contextlib.suppress(Exception):
+                        await storage.delete(file_id, audio_format.value)
+                    if image_id:
+                        with contextlib.suppress(Exception):
+                            await storage.delete(image_id)
+
                 # create ATProto record
                 atproto_uri = None
                 atproto_cid = None
@@ -243,12 +270,16 @@ async def _process_upload_background(
                             features=featured_artists if featured_artists else None,
                             image_url=image_url,
                         )
-                        if result:
-                            atproto_uri, atproto_cid = result
+                        if not result:
+                            await fail_atproto_sync("PDS returned no record data")
+                            return
+                        atproto_uri, atproto_cid = result
                     except Exception as e:
-                        logger.warning(
-                            f"failed to create ATProto record: {e}", exc_info=True
-                        )
+                        await fail_atproto_sync(str(e))
+                        return
+                else:
+                    await fail_atproto_sync("no public audio URL available")
+                    return
 
                 # create track record
                 upload_tracker.update_status(
