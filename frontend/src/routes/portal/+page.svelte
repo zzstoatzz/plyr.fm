@@ -415,39 +415,94 @@
 		if (exportingMedia) return;
 
 		const trackCount = tracks.length;
-		toast.info(`preparing export of ${trackCount} ${trackCount === 1 ? 'track' : 'tracks'}...`);
+		const toastId = toast.info(`preparing export of ${trackCount} ${trackCount === 1 ? 'track' : 'tracks'}...`, 30000);
 
 		exportingMedia = true;
 		try {
-			toast.info('downloading tracks from storage...');
-
+			// start the export
 			const response = await fetch(`${API_URL}/exports/media`, {
+				method: 'POST',
 				credentials: 'include'
 			});
 
-			if (response.ok) {
-				toast.info('creating zip archive...');
-
-				// trigger download
-				const blob = await response.blob();
-				const url = window.URL.createObjectURL(blob);
-				const a = document.createElement('a');
-				a.href = url;
-				a.download = `plyr-tracks-${new Date().toISOString().split('T')[0]}.zip`;
-				document.body.appendChild(a);
-				a.click();
-				window.URL.revokeObjectURL(url);
-				document.body.removeChild(a);
-
-				toast.success(`${trackCount} ${trackCount === 1 ? 'track' : 'tracks'} exported successfully`);
-			} else {
+			if (!response.ok) {
 				const error = await response.json();
-				toast.error(error.detail || 'failed to export tracks');
+				toast.dismiss(toastId);
+				toast.error(error.detail || 'failed to start export');
+				exportingMedia = false;
+				return;
 			}
+
+			const result = await response.json();
+			const exportId = result.export_id;
+
+			// subscribe to progress updates via SSE
+			const eventSource = new EventSource(`${API_URL}/exports/${exportId}/progress`);
+
+			eventSource.onmessage = async (event) => {
+				const update = JSON.parse(event.data);
+
+				// show progress messages
+				if (update.message && update.status === 'processing') {
+					const progressInfo = update.track_count
+						? ` (${update.processed_count}/${update.track_count})`
+						: '';
+					toast.update(toastId, `${update.message}${progressInfo}`);
+				}
+
+				if (update.status === 'completed') {
+					eventSource.close();
+					toast.dismiss(toastId);
+					exportingMedia = false;
+
+					// trigger download
+					try {
+						const downloadResponse = await fetch(`${API_URL}/exports/${exportId}/download`, {
+							credentials: 'include'
+						});
+
+						if (downloadResponse.ok) {
+							const blob = await downloadResponse.blob();
+							const url = window.URL.createObjectURL(blob);
+							const a = document.createElement('a');
+							a.href = url;
+							a.download = `plyr-tracks-${new Date().toISOString().split('T')[0]}.zip`;
+							document.body.appendChild(a);
+							a.click();
+							window.URL.revokeObjectURL(url);
+							document.body.removeChild(a);
+
+							toast.success(`${update.processed_count || trackCount} ${trackCount === 1 ? 'track' : 'tracks'} exported successfully`);
+						} else {
+							toast.error('failed to download export');
+						}
+					} catch (e) {
+						console.error('download failed:', e);
+						toast.error('failed to download export');
+					}
+				}
+
+				if (update.status === 'failed') {
+					eventSource.close();
+					toast.dismiss(toastId);
+					exportingMedia = false;
+
+					const errorMsg = update.error || 'export failed';
+					toast.error(errorMsg);
+				}
+			};
+
+			eventSource.onerror = () => {
+				eventSource.close();
+				toast.dismiss(toastId);
+				exportingMedia = false;
+				toast.error('lost connection to server');
+			};
+
 		} catch (e) {
 			console.error('export failed:', e);
-			toast.error('failed to export tracks');
-		} finally {
+			toast.dismiss(toastId);
+			toast.error('failed to start export');
 			exportingMedia = false;
 		}
 	}
