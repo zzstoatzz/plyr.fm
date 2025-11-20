@@ -58,8 +58,5 @@ class Album(Base):
         if not self.image_id:
             return None
         from backend.storage import storage
-        from backend.storage.r2 import R2Storage
 
-        if isinstance(storage, R2Storage):
-            return await storage.get_url(self.image_id, file_type="image")
-        return None
+        return await storage.get_url(self.image_id, file_type="image")
