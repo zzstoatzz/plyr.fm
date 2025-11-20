@@ -8,9 +8,10 @@
 		onRemove: (_did: string) => void;
 		maxFeatures?: number;
 		disabled?: boolean;
+		hasUnresolvedInput?: boolean;
 	}
 
-	let { selected = $bindable([]), onAdd, onRemove, maxFeatures = 5, disabled = false }: Props = $props();
+	let { selected = $bindable([]), onAdd, onRemove, maxFeatures = 5, disabled = false, hasUnresolvedInput = $bindable(false) }: Props = $props();
 
 	let query = $state('');
 	let results = $state<FeaturedArtist[]>([]);
@@ -18,6 +19,11 @@
 	let showResults = $state(false);
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 	let noResultsFound = $state(false);
+
+	// update parent when there's unresolved input
+	$effect(() => {
+		hasUnresolvedInput = query.trim().length > 0;
+	});
 
 	async function searchHandles() {
 		if (query.length < 2) {
