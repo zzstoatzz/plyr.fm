@@ -32,6 +32,10 @@ primary_region = 'iad'
     hard_limit = 250
     soft_limit = 200
 
+  [http_service.http_options]
+    idle_timeout = "90s"
+    response_timeout = "90s"
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'
