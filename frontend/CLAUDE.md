@@ -8,6 +8,7 @@ key patterns:
 - **routes**: pages in `routes/` with `+page.svelte` and `+page.ts` for data loading
 
 gotchas:
+- **svelte 5 runes mode**: component-local state MUST use `$state()` - plain `let` has no reactivity (see `docs/frontend/state-management.md`)
 - toast positioning: bottom-left above player footer (not top-right)
 - queue sync: uses BroadcastChannel for cross-tab, not SSE
 - preferences: managed in SettingsMenu component, not dedicated state file

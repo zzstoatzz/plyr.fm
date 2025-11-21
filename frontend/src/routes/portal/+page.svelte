@@ -26,43 +26,43 @@
 		return ACCEPTED_AUDIO_EXTENSIONS.includes(ext);
 	}
 
-	let loading = true;
-	let error = '';
-	let tracks: Track[] = [];
-	let loadingTracks = false;
+	let loading = $state(true);
+	let error = $state('');
+	let tracks = $state<Track[]>([]);
+	let loadingTracks = $state(false);
 
 	// upload form fields
-	let title = '';
-	let albumTitle = '';
-	let file: File | null = null;
-	let imageFile: File | null = null;
-	let featuredArtists: FeaturedArtist[] = [];
+	let title = $state('');
+	let albumTitle = $state('');
+	let file = $state<File | null>(null);
+	let imageFile = $state<File | null>(null);
+	let featuredArtists = $state<FeaturedArtist[]>([]);
 	let hasUnresolvedFeaturesInput = $state(false);
 
 	// track editing state
-	let editingTrackId: number | null = null;
-	let editTitle = '';
-	let editAlbum = '';
-	let editFeaturedArtists: FeaturedArtist[] = [];
-	let editImageFile: File | null = null;
+	let editingTrackId = $state<number | null>(null);
+	let editTitle = $state('');
+	let editAlbum = $state('');
+	let editFeaturedArtists = $state<FeaturedArtist[]>([]);
+	let editImageFile = $state<File | null>(null);
 	let hasUnresolvedEditFeaturesInput = $state(false);
 
 	// profile editing state
-	let displayName = '';
-	let bio = '';
-	let avatarUrl = '';
-	let savingProfile = false;
-	let profileSuccess = '';
-	let profileError = '';
+	let displayName = $state('');
+	let bio = $state('');
+	let avatarUrl = $state('');
+	let savingProfile = $state(false);
+	let profileSuccess = $state('');
+	let profileError = $state('');
 
 	// album management state
-	let albums: AlbumSummary[] = [];
-	let loadingAlbums = false;
-	let editingAlbumId: string | null = null;
-	let editAlbumCoverFile: File | null = null;
+	let albums = $state<AlbumSummary[]>([]);
+	let loadingAlbums = $state(false);
+	let editingAlbumId = $state<string | null>(null);
+	let editAlbumCoverFile = $state<File | null>(null);
 
 	// export state
-	let exportingMedia = false;
+	let exportingMedia = $state(false);
 
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)

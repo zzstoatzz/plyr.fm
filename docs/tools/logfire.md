@@ -6,6 +6,7 @@ Logfire uses PostgreSQL-flavored SQL to query trace data. All data is stored in 
 
 ## Key Fields
 
+- `deployment_environment` - environment name (local/staging/production) - **ALWAYS filter by this when investigating issues**
 - `is_exception` - boolean field to filter spans that contain exceptions
 - `kind` - either 'span' or 'event'
 - `trace_id` - unique identifier for a trace (group of related spans)
