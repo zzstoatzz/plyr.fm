@@ -3,11 +3,11 @@
 import asyncio
 import io
 import json
-import logging
 import zipfile
 from typing import Annotated
 
 import aioboto3
+import logfire
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
@@ -18,8 +18,6 @@ from backend._internal.exports import ExportStatus, export_tracker
 from backend.config import settings
 from backend.models import Track, get_db
 from backend.utilities.database import db_session
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/exports", tags=["exports"])
 
@@ -67,9 +65,9 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
 
                 for track in tracks:
                     if not track.file_id or not track.file_type:
-                        logger.warning(
-                            "skipping track %s: missing file_id or file_type",
-                            track.id,
+                        logfire.warn(
+                            "skipping track: missing file_id or file_type",
+                            track_id=track.id,
                         )
                         continue
 
@@ -115,18 +113,18 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
                         zip_file.writestr(filename, file_content)
 
                         processed += 1
-                        logger.info(
+                        logfire.info(
                             "added track to export",
                             track_id=track.id,
                             filename=filename,
                         )
 
                     except Exception as e:
-                        logger.error(
-                            "failed to add track %s to export: %s",
-                            track.id,
-                            e,
-                            exc_info=True,
+                        logfire.error(
+                            "failed to add track to export",
+                            track_id=track.id,
+                            error=str(e),
+                            _exc_info=True,
                         )
                         # continue with other tracks instead of failing entire export
 
@@ -143,7 +141,10 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
         )
 
     except Exception as e:
-        logger.exception(f"export {export_id} failed with unexpected error")
+        logfire.exception(
+            "export failed with unexpected error",
+            export_id=export_id,
+        )
         export_tracker.update_status(
             export_id,
             ExportStatus.FAILED,
