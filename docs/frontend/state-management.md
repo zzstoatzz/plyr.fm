@@ -1,6 +1,107 @@
-# global state management
+# state management
 
-## overview
+## svelte 5 runes mode
+
+plyr.fm uses svelte 5 runes mode throughout the frontend. **all reactive state must use the `$state()` rune**.
+
+### component-local state
+
+**critical**: in svelte 5 runes mode, plain `let` variables are NOT reactive. you must explicitly opt into reactivity.
+
+```typescript
+// ❌ WRONG - no reactivity, UI won't update
+let loading = true;
+let tracks = [];
+let selectedId = null;
+
+// assignments won't trigger UI updates
+loading = false; // template still shows "loading..."
+tracks = newTracks; // template won't re-render
+```
+
+```typescript
+// ✅ CORRECT - reactive state
+let loading = $state(true);
+let tracks = $state<Track[]>([]);
+let selectedId = $state<number | null>(null);
+
+// assignments trigger UI updates
+loading = false; // template updates immediately
+tracks = newTracks; // template re-renders with new data
+```
+
+### when to use `$state()`
+
+use `$state()` for any variable that:
+- is used in the template (`{#if loading}`, `{#each tracks}`, etc.)
+- needs to trigger UI updates when changed
+- is bound to form inputs (`bind:value={title}`)
+- is checked in reactive blocks (`$effect(() => { ... })`)
+
+use plain `let` for:
+- constants that never change
+- variables only used in functions/callbacks (not template)
+- intermediate calculations that don't need reactivity
+
+### common mistakes
+
+**1. mixing reactive and non-reactive state**
+
+```typescript
+// ❌ creates confusing bugs - some state updates, some doesn't
+let loading = true;                    // non-reactive
+let tracks = $state<Track[]>([]);      // reactive
+let selectedId = $state<number | null>(null); // reactive
+```
+
+**2. forgetting `$state()` after copy-pasting**
+
+```typescript
+// ❌ copied from svelte 4 code
+let editing = false;
+let editValue = '';
+
+// ✅ updated for svelte 5
+let editing = $state(false);
+let editValue = $state('');
+```
+
+**3. assuming reactivity from svelte 4 habits**
+
+svelte 4 made all component `let` variables reactive by default. svelte 5 requires explicit `$state()` opt-in for finer control and better performance.
+
+### debugging reactivity issues
+
+**symptom**: template shows stale data even though console.log shows variable updated
+
+```typescript
+async function loadData() {
+    loading = true; // variable updates...
+    const data = await fetch(...);
+    loading = false; // variable updates...
+    console.log('loading:', loading); // logs "false"
+}
+// but UI still shows "loading..." spinner
+```
+
+**diagnosis**: missing `$state()` wrapper
+
+```typescript
+// check variable declaration
+let loading = true; // ❌ missing $state()
+
+// fix
+let loading = $state(true); // ✅ now reactive
+```
+
+**verification**: after adding `$state()`, check:
+1. variable assignments trigger template updates
+2. no console errors about "Cannot access X before initialization"
+3. UI reflects current variable value
+
+## global state management
+
+### overview
 
 plyr.fm uses global state managers following the Svelte 5 runes pattern for cross-component reactive state.
 
