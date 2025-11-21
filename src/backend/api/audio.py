@@ -33,8 +33,8 @@ async def stream_audio(file_id: str):
 
         r2_url, file_type = track_data
 
-    # if we have the r2_url already, use it directly (zero HEADs)
-    if r2_url:
+    # if we have a valid r2_url cached, use it directly (zero HEADs)
+    if r2_url and r2_url.startswith("http"):
         return RedirectResponse(url=r2_url)
 
     # otherwise, get it with the specific extension (single HEAD)
