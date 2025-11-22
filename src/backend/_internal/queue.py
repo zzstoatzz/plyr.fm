@@ -29,6 +29,7 @@ class QueueService:
         heartbeat_interval: float = 5.0,
         heartbeat_timeout: float = 5.0,
         reconnect_delay: float = 5.0,
+        max_reconnect_delay: float = 60.0,
     ):
         # TTLCache provides both LRU eviction and TTL expiration
         self.cache: TTLCache = TTLCache(maxsize=100, ttl=300)
@@ -36,6 +37,7 @@ class QueueService:
         self.listener_task: asyncio.Task | None = None
         self.heartbeat_task: asyncio.Task | None = None
         self.reconnect_delay = reconnect_delay
+        self.max_reconnect_delay = max_reconnect_delay
         self.heartbeat_interval = heartbeat_interval
         self.heartbeat_timeout = heartbeat_timeout
 
@@ -80,13 +82,28 @@ class QueueService:
 
     async def _listen_loop(self) -> None:
         """background task to maintain LISTEN connection with reconnection logic."""
+        current_delay = self.reconnect_delay
+
         while True:
             try:
                 # if connection is None or closed, reconnect
                 if self.conn is None or self.conn.is_closed():
-                    logger.warning("queue listener connection lost, reconnecting...")
-                    await asyncio.sleep(self.reconnect_delay)
-                    await self._connect()
+                    logger.warning(
+                        f"queue listener connection lost, attempting reconnect (delay: {current_delay}s)..."
+                    )
+
+                    try:
+                        await self._connect()
+                        # reset delay on successful connection
+                        current_delay = self.reconnect_delay
+                    except Exception:
+                        # _connect already logs the exception
+                        logger.warning(
+                            f"queue listener reconnection failed, retrying in {current_delay}s"
+                        )
+                        await asyncio.sleep(current_delay)
+                        current_delay = min(current_delay * 2, self.max_reconnect_delay)
+                        continue
 
                 # keep connection alive
                 await asyncio.sleep(30)
@@ -96,7 +113,8 @@ class QueueService:
                 break
             except Exception:
                 logger.exception("error in queue listener loop")
-                await asyncio.sleep(self.reconnect_delay)
+                await asyncio.sleep(current_delay)
+                current_delay = min(current_delay * 2, self.max_reconnect_delay)
 
     async def _heartbeat_loop(self) -> None:
         """proactively test connection health to detect zombie connections."""
