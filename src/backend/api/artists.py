@@ -5,12 +5,12 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
-from backend._internal.atproto import fetch_user_avatar
+from backend._internal.atproto import fetch_user_avatar, normalize_avatar_url
 from backend.models import Artist, Track, TrackLike, get_db
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,12 @@ class ArtistResponse(BaseModel):
     avatar_url: str | None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("avatar_url", mode="before")
+    @classmethod
+    def normalize_avatar(cls, v: str | None) -> str | None:
+        """normalize avatar URL to use Bluesky CDN."""
+        return normalize_avatar_url(v)
 
 
 class TopItemResponse(BaseModel):
@@ -87,6 +93,8 @@ async def create_artist(
     avatar_url = request.avatar_url
     if not avatar_url:
         avatar_url = await fetch_user_avatar(auth_session.did)
+    else:
+        avatar_url = normalize_avatar_url(avatar_url)
 
     # resolve and cache PDS URL for performance
     from atproto_identity.did.resolver import AsyncDidResolver
@@ -155,7 +163,7 @@ async def update_my_artist_profile(
     if request.bio is not None:
         artist.bio = request.bio
     if request.avatar_url is not None:
-        artist.avatar_url = request.avatar_url
+        artist.avatar_url = normalize_avatar_url(request.avatar_url)
 
     artist.updated_at = datetime.now(UTC)
     await db.commit()
