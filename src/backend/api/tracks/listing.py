@@ -111,6 +111,40 @@ async def list_tracks(
     # commit any PDS URL updates
     await db.commit()
 
+    # resolve missing image URLs and self-heal invalid image_ids
+    # this prevents repeated R2 404 checks ("ghost reads") for missing files
+    tracks_needing_images = [t for t in tracks if t.image_id and not t.image_url]
+    if tracks_needing_images:
+        with logfire.span(
+            "resolve missing images", count=len(tracks_needing_images), _level="debug"
+        ):
+
+            async def resolve_image(track: Track) -> None:
+                """Resolve image URL and update track state."""
+                try:
+                    url = await track.get_image_url()
+                    if url:
+                        track.image_url = url
+                    else:
+                        # image_id exists but file not found in R2
+                        # clear image_id to prevent future lookups
+                        logfire.warn(
+                            "clearing invalid image_id",
+                            track_id=track.id,
+                            image_id=track.image_id,
+                        )
+                        track.image_id = None
+                        track.image_url = None
+                except Exception as e:
+                    logfire.warn(
+                        "failed to resolve image",
+                        track_id=track.id,
+                        error=str(e),
+                    )
+
+            await asyncio.gather(*[resolve_image(t) for t in tracks_needing_images])
+            await db.commit()
+
     # fetch all track responses concurrently with like status and counts
     track_responses = await asyncio.gather(
         *[
