@@ -1,6 +1,10 @@
 """ATProto integration for relay."""
 
-from backend._internal.atproto.profile import fetch_user_avatar, fetch_user_profile
+from backend._internal.atproto.profile import (
+    fetch_user_avatar,
+    fetch_user_profile,
+    normalize_avatar_url,
+)
 from backend._internal.atproto.records import (
     create_like_record,
     create_track_record,
@@ -13,4 +17,5 @@ __all__ = [
     "delete_record_by_uri",
     "fetch_user_avatar",
     "fetch_user_profile",
+    "normalize_avatar_url",
 ]
