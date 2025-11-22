@@ -15,6 +15,7 @@
 	let titleOverflows = $state(false);
 	let artistOverflows = $state(false);
 	let albumOverflows = $state(false);
+	let imageError = $state(false);
 
 	function checkOverflows() {
 		if (typeof window === 'undefined') return;
@@ -54,14 +55,17 @@
 
 <div class="player-track">
 	<a href="/track/{track.id}" class="player-artwork" aria-label={`view ${track.title}`}>
-		{#if track.image_url}
-			<img src={track.image_url} alt="{track.title} artwork" />
+		{#if track.image_url && !imageError}
+			<img 
+				src={track.image_url} 
+				alt="{track.title} artwork" 
+				onerror={() => imageError = true}
+			/>
 		{:else}
 			<div class="player-artwork-placeholder">
-				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path d="M9 18V5l12-2v13"></path>
-					<circle cx="6" cy="18" r="3"></circle>
-					<circle cx="18" cy="16" r="3"></circle>
+				<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+					<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
+					<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 				</svg>
 			</div>
 		{/if}
