@@ -57,4 +57,4 @@ docker-build-profile-*.log
 simple-build.log
 
 # gemini
-.gemini/
+.gemini/STATUS.md
