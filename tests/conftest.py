@@ -1,11 +1,13 @@
 """pytest configuration for relay tests."""
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 import pytest
 import sqlalchemy as sa
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
     AsyncEngine,
@@ -203,3 +205,18 @@ async def db_session(
     """
     async with session_context(engine=_engine) as session:
         yield session
+
+
+@pytest.fixture
+def fastapi_app() -> FastAPI:
+    """provides the FastAPI app instance."""
+    from backend.main import app as main_app
+
+    return main_app
+
+
+@pytest.fixture
+def client(fastapi_app: FastAPI) -> Generator[TestClient, None, None]:
+    """provides a TestClient for testing the FastAPI application."""
+    with TestClient(fastapi_app) as tc:
+        yield tc
