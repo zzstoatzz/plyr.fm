@@ -119,6 +119,19 @@ async def _create_clear_database_procedure(
     await connection.execute(sa.text(procedure_body))
 
 
+async def _truncate_tables(connection: AsyncConnection) -> None:
+    """truncate all tables to ensure a clean slate at start of session."""
+    # get all table names from metadata
+    tables = [table.name for table in Base.metadata.sorted_tables]
+    if not tables:
+        return
+
+    # truncate all tables with cascade to handle foreign keys
+    # restart identity resets auto-increment counters
+    stmt = f"TRUNCATE TABLE {', '.join(tables)} RESTART IDENTITY CASCADE;"
+    await connection.execute(sa.text(stmt))
+
+
 @pytest.fixture(scope="session")
 def test_database_url(worker_id: str) -> str:
     """generate a unique test database URL for each pytest worker.
@@ -141,6 +154,7 @@ async def _setup_database(test_database_url: str) -> None:
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await _truncate_tables(conn)
             await _create_clear_database_procedure(conn)
     finally:
         await engine.dispose()

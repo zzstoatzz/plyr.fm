@@ -149,7 +149,7 @@ class DatabaseSettings(RelaySettingsSection):
         description="Timeout in seconds for establishing database connections. Fails fast when database is slow or unresponsive.",
     )
     queue_connect_timeout: float = Field(
-        default=3.0,
+        default=15.0,
         validation_alias="QUEUE_CONNECT_TIMEOUT",
         description="Timeout in seconds for queue listener database connections",
     )
