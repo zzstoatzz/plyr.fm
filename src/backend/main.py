@@ -5,8 +5,9 @@ import warnings
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # filter pydantic warning from atproto library
 warnings.filterwarnings(
@@ -63,6 +64,35 @@ else:
 logger = logging.getLogger(__name__)
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """middleware to add security headers to all responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        """dispatch the request."""
+        response = await call_next(request)
+
+        # prevent MIME sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+
+        # prevent clickjacking
+        response.headers["X-Frame-Options"] = "DENY"
+
+        # enable browser XSS protection
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+
+        # control referrer information
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        # enforce HTTPS in production (HSTS)
+        # skip in debug mode (localhost usually doesn't have https)
+        if not settings.app.debug:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """handle application lifespan events."""
@@ -92,6 +122,9 @@ app = FastAPI(
 # instrument fastapi with logfire
 if logfire:
     logfire.instrument_fastapi(app)
+
+# add security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
 
 # configure CORS - allow localhost for dev and cloudflare pages for production
 app.add_middleware(
