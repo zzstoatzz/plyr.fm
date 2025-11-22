@@ -90,6 +90,11 @@
 			replaceState('/portal', {});
 		}
 
+		// wait for auth to finish loading (synced from layout)
+		while (auth.loading) {
+			await new Promise(resolve => setTimeout(resolve, 50));
+		}
+
 		if (!auth.isAuthenticated) {
 			window.location.href = '/login';
 			return;
@@ -454,8 +459,10 @@
 
 				if (update.status === 'completed') {
 					eventSource.close();
-					toast.dismiss(toastId);
 					exportingMedia = false;
+
+					// update toast to show download is starting
+					toast.update(toastId, 'downloading export...');
 
 					// trigger download
 					try {
@@ -474,12 +481,15 @@
 							window.URL.revokeObjectURL(url);
 							document.body.removeChild(a);
 
+							toast.dismiss(toastId);
 							toast.success(`${update.processed_count || trackCount} ${trackCount === 1 ? 'track' : 'tracks'} exported successfully`);
 						} else {
+							toast.dismiss(toastId);
 							toast.error('failed to download export');
 						}
 					} catch (e) {
 						console.error('download failed:', e);
+						toast.dismiss(toastId);
 						toast.error('failed to download export');
 					}
 				}
