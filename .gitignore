@@ -55,3 +55,6 @@ transcoder/target/
 docker-build-profile-*.log
 *-build-profile.log
 simple-build.log
+
+# gemini
+.gemini/
