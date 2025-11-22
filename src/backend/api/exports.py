@@ -114,15 +114,17 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
 
                         processed += 1
                         logfire.info(
-                            "added track to export",
+                            "added track to export: {track_title}",
                             track_id=track.id,
+                            track_title=track.title,
                             filename=filename,
                         )
 
                     except Exception as e:
                         logfire.error(
-                            "failed to add track to export",
+                            "failed to add track to export: {track_title}",
                             track_id=track.id,
+                            track_title=track.title,
                             error=str(e),
                             _exc_info=True,
                         )
