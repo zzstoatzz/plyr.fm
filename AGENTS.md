@@ -18,8 +18,8 @@
 *   **Backend:** FastAPI, Neon (Postgres), Cloudflare R2, Fly.io.
 *   **Frontend:** SvelteKit (Svelte 5 Runes), Bun, Cloudflare Pages.
 *   **Observability:** Logfire.
-*   **`just` use the justfile!
-*   **use MCPs for access to external systems, review docs/tools when needed
+*   **`just` use the justfiles!**
+*   **use MCPs** for access to external systems, review docs/tools when needed
 
 ## 💻 Development Commands
 *   **Setup:** `uv sync && just frontend install`
@@ -31,13 +31,14 @@
 
 ## 📂 Project Structure
 ```
-plyr/
-├── src/backend/
-│   ├── api/          # Public endpoints
-│   ├── _internal/    # Auth, PDS, Uploads logic
-│   ├── models/       # SQLAlchemy schemas
-│   ├── storage/      # R2 and filesystem adapters
-│   └── utilities/    # Config, helpers
+plyr.fm/
+├── backend/
+│   └── src/backend/
+│       ├── api/          # Public endpoints
+│       ├── _internal/    # Auth, PDS, Uploads logic
+│       ├── models/       # SQLAlchemy schemas
+│       ├── storage/      # R2 and filesystem adapters
+│       └── utilities/    # Config, helpers
 ├── frontend/         # SvelteKit app
 │   ├── src/routes/   # Pages (+page.svelte, +page.server.ts)
 │   └── src/lib/      # Components & State (.svelte.ts)

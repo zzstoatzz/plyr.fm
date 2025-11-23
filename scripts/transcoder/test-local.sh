@@ -8,7 +8,11 @@ if [[ $# -lt 1 ]]; then
 fi
 
 INPUT_FILE="$1"
-OUTPUT_FILE="${2:-$(basename "${INPUT_FILE%.*}")}.mp3"
+if [[ $# -ge 2 ]]; then
+  OUTPUT_FILE="$2"
+else
+  OUTPUT_FILE="$(basename "${INPUT_FILE%.*}").mp3"
+fi
 PORT="${TRANSCODER_PORT:-8082}"
 AUTH_TOKEN="${TRANSCODER_AUTH_TOKEN:-}"
 
