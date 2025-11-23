@@ -1,0 +1,274 @@
+<script lang="ts">
+	import { page } from '$app/stores';
+	import { onMount } from 'svelte';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
+	let track = $derived(data.track);
+
+	let audio: HTMLAudioElement;
+	let paused = $state(true);
+	let currentTime = $state(0);
+	let duration = $state(0);
+
+	function togglePlay() {
+		if (audio.paused) {
+			audio.play();
+		} else {
+			audio.pause();
+		}
+	}
+
+	function formatTime(seconds: number) {
+		const m = Math.floor(seconds / 60);
+		const s = Math.floor(seconds % 60);
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
+
+	function handleSeek(e: MouseEvent) {
+		const bar = e.currentTarget as HTMLElement;
+		const rect = bar.getBoundingClientRect();
+		const x = e.clientX - rect.left;
+		const pct = x / rect.width;
+		audio.currentTime = pct * duration;
+	}
+
+	onMount(() => {
+		const autoplay = $page.url.searchParams.get('autoplay') === '1';
+		if (autoplay) {
+			audio.play().catch(() => {
+				// Autoplay policy might block this
+				paused = true;
+			});
+		}
+	});
+</script>
+
+<div class="embed-container">
+	<div class="art-container">
+		{#if track.image_url}
+			<img src={track.image_url} alt={track.title} class="art" />
+		{:else}
+			<div class="art-placeholder">♪</div>
+		{/if}
+	</div>
+
+	<div class="content">
+		<div class="header">
+			<button class="play-btn" onclick={togglePlay} aria-label={paused ? 'Play' : 'Pause'}>
+				{#if paused}
+					<svg viewBox="0 0 24 24" fill="currentColor" class="icon">
+						<path d="M8 5v14l11-7z" />
+					</svg>
+				{:else}
+					<svg viewBox="0 0 24 24" fill="currentColor" class="icon">
+						<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+					</svg>
+				{/if}
+			</button>
+
+			<div class="meta">
+				<a href="https://plyr.fm/track/{track.id}" target="_blank" rel="noopener noreferrer" class="title">
+					{track.title}
+				</a>
+				<div class="artist">{track.artist}</div>
+			</div>
+            
+            <a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">
+                plyr.fm
+            </a>
+		</div>
+
+		<div class="player-controls">
+			<div class="time">{formatTime(currentTime)}</div>
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div class="progress-bar" onclick={handleSeek}>
+				<div class="progress-bg"></div>
+				<div class="progress-fill" style="width: {(currentTime / (duration || 1)) * 100}%"></div>
+			</div>
+			<div class="time">{formatTime(duration)}</div>
+		</div>
+	</div>
+
+	<audio
+		bind:this={audio}
+		src={track.r2_url}
+		bind:paused
+		bind:currentTime
+		bind:duration
+		onended={() => (paused = true)}
+	></audio>
+</div>
+
+<style>
+	:global(body) {
+		margin: 0;
+		padding: 0;
+		overflow: hidden;
+		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+		background: #000;
+		color: #fff;
+	}
+
+	.embed-container {
+		display: flex;
+		height: 165px;
+		background: #1a1a1a;
+		overflow: hidden;
+	}
+
+	.art-container {
+		width: 165px;
+		height: 165px;
+		flex-shrink: 0;
+		position: relative;
+	}
+
+	.art {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.art-placeholder {
+		width: 100%;
+		height: 100%;
+		background: #333;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 48px;
+		color: #555;
+	}
+
+	.content {
+		flex: 1;
+		padding: 16px;
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+		position: relative;
+	}
+
+	.header {
+		display: flex;
+		align-items: flex-start;
+		gap: 16px;
+	}
+
+	.play-btn {
+		width: 48px;
+		height: 48px;
+		border-radius: 50%;
+		background: #fff;
+		color: #000;
+		border: none;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: transform 0.1s;
+	}
+
+	.play-btn:active {
+		transform: scale(0.95);
+	}
+
+	.icon {
+		width: 24px;
+		height: 24px;
+	}
+
+	.meta {
+		flex: 1;
+		min-width: 0;
+        padding-top: 4px;
+	}
+
+	.title {
+		display: block;
+		font-size: 18px;
+		font-weight: 700;
+		margin: 0 0 4px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-decoration: none;
+		color: #fff;
+	}
+
+	.title:hover {
+		text-decoration: underline;
+	}
+
+	.artist {
+		font-size: 14px;
+		color: #aaa;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+    .logo {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #444;
+        text-decoration: none;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .logo:hover {
+        color: #666;
+    }
+
+	.player-controls {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		margin-bottom: 4px;
+	}
+
+	.time {
+		font-size: 12px;
+		color: #777;
+		font-variant-numeric: tabular-nums;
+		width: 35px;
+        text-align: center;
+	}
+
+	.progress-bar {
+		flex: 1;
+		height: 24px; /* larger hit area */
+		display: flex;
+		align-items: center;
+		cursor: pointer;
+		position: relative;
+	}
+
+	.progress-bg {
+		width: 100%;
+		height: 4px;
+		background: #333;
+		border-radius: 2px;
+	}
+
+	.progress-fill {
+		position: absolute;
+		left: 0;
+		top: 10px; /* (24 - 4) / 2 */
+		height: 4px;
+		background: #fff;
+		border-radius: 2px;
+		pointer-events: none;
+	}
+    
+    .progress-bar:hover .progress-fill {
+        background: #3b82f6; /* blue-500 */
+    }
+</style>
