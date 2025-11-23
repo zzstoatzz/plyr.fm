@@ -20,7 +20,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          cache-dependency-glob: "uv.lock"
+          cache-dependency-glob: "backend/uv.lock"
 
       - name: install bun
         uses: oven-sh/setup-bun@v2
@@ -34,7 +34,7 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: install dependencies
-        run: uv sync
+        run: cd backend && uv sync
 
       - name: install frontend dependencies
         run: cd frontend && bun install
@@ -44,6 +44,7 @@ jobs:
 
       - name: check lockfile is up to date
         run: |
+          cd backend
           if ! uv lock --check; then
             echo "❌ lockfile is out of date!"
             echo "to update the lockfile, run 'uv lock'."

@@ -1,0 +1,34 @@
+# backend/justfile
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+default := "run-backend"
+
+# run backend server (hot reloads)
+run-backend:
+    uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port ${PORT:-8001}
+
+# run tests with docker-compose
+test *ARGS='tests/':
+    docker compose -f tests/docker-compose.yml up -d
+    uv run pytest {{ ARGS }}
+    docker compose -f tests/docker-compose.yml down
+
+# run type checking and linting
+lint:
+    uv run ty check
+    uv run ruff check .
+
+# create a new database migration
+migrate MESSAGE:
+    uv run alembic revision --autogenerate -m "{{ MESSAGE }}"
+
+# upgrade database to latest migration
+migrate-up:
+    uv run alembic upgrade head
+
+# show current migration status
+migrate-status:
+    uv run alembic current
+
+# create a github release (triggers production deployment)
+release:
+    ./scripts/release

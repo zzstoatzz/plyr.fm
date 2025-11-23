@@ -3,10 +3,10 @@ name: backend tests
 on:
   pull_request:
     paths:
-      - "src/backend/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "uv.lock"
+      - "backend/src/backend/**"
+      - "backend/tests/**"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
       - ".github/workflows/test-backend.yml"
 
 permissions:
@@ -44,15 +44,15 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          cache-dependency-glob: "uv.lock"
+          cache-dependency-glob: "backend/uv.lock"
 
       - name: install dependencies
-        run: uv sync --locked
+        run: cd backend && uv sync --locked
 
       - name: run tests
         env:
           DATABASE_URL: postgresql+asyncpg://relay_test:relay_test@localhost:5432/relay_test
-        run: uv run pytest tests/
+        run: cd backend && uv run pytest tests/
 
       - name: prune uv cache
         if: always()

@@ -1,6 +1,7 @@
 # plyr.fm dev workflows
 mod frontend
 mod transcoder
+mod backend # Backend commands are now managed in backend/justfile
 
 
 # show available commands
@@ -13,40 +14,14 @@ setup:
     ln -s AGENTS.md CLAUDE.md
     ln -s AGENTS.md GEMINI.md
 
-# run backend server (hot reloads)
-run-backend:
-    uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port ${PORT:-8001}
-
-# run tests with docker-compose
-test *ARGS='tests/':
-    docker compose -f tests/docker-compose.yml up -d
-    uv run pytest {{ ARGS }}
-    docker compose -f tests/docker-compose.yml down
-
-# run type checking
-lint:
-    uv run ty check
-
-# create a new database migration
-migrate MESSAGE:
-    uv run alembic revision --autogenerate -m "{{ MESSAGE }}"
-
-# upgrade database to latest migration
-migrate-up:
-    uv run alembic upgrade head
-
-# show current migration status
-migrate-status:
-    uv run alembic current
+    # Setup sub-modules if they have setup recipes
+    # just frontend setup # Uncomment if frontend/justfile gets a setup
+    # just backend setup # Uncomment if backend/justfile gets a setup
 
 
 # show commits since last release
 changelog:
     @git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:'%C(yellow)%h%Creset %C(blue)%ad%Creset %C(green)%s%Creset %C(dim)- %an%Creset' --date=relative
-
-# create a github release (triggers production deployment)
-release:
-    ./scripts/release
 
 # deploy frontend only (promote remote main to production-fe branch)
 release-frontend-only:

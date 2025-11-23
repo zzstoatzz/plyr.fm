@@ -1,4 +1,4 @@
 migrations:
-  - "alembic/versions/**"
-  - "alembic/env.py"
-  - "alembic.ini"
+  - "backend/alembic/versions/**"
+  - "backend/alembic/env.py"
+  - "backend/alembic.ini"
