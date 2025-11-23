@@ -1,9 +1,9 @@
 # backend/justfile
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
-default := "run-backend"
+default := "run"
 
 # run backend server (hot reloads)
-run-backend:
+run:
     uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port ${PORT:-8001}
 
 # run tests with docker-compose

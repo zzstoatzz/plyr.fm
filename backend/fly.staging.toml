@@ -7,8 +7,8 @@ app = 'relay-api-staging'
 primary_region = 'iad'
 
 [build]
-  dockerfile = "backend/Dockerfile"
-  ignore_file = "backend/.dockerignore"
+  dockerfile = "Dockerfile"
+  ignore_file = ".dockerignore"
 
 [deploy]
   release_command = 'uv run alembic upgrade head'
