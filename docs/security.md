@@ -5,7 +5,9 @@ Overview of security mechanisms in plyr.fm.
 ## Authentication
 
 We use **HttpOnly Cookies** for session management to prevent XSS attacks.
-See [ATProto Identity & Auth](atproto-identity.md) for details on the OAuth flow and token management.
+See [Authentication](authentication.md) for details on the OAuth flow, token management, and environment architecture.
+
+For backend implementation details regarding ATProto identity resolution, see [backend/atproto-identity.md](backend/atproto-identity.md).
 
 ## Rate Limiting
 
