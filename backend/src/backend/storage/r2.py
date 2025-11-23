@@ -152,7 +152,7 @@ class R2Storage:
                 # try image format
                 image_format, is_valid = ImageFormat.validate_and_extract(filename)
                 if is_valid and image_format:
-                    key = f"{file_id}{ext}"
+                    key = f"images/{file_id}{ext}"
                     media_type = image_format.media_type
                 else:
                     raise ValueError(
