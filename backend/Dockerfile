@@ -9,16 +9,17 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 WORKDIR /app
 
 # install dependencies (separate layer for better caching)
-COPY pyproject.toml uv.lock README.md ./
+# COPY paths are relative to the build context (root)
+COPY backend/pyproject.toml backend/uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project --compile-bytecode
 
 # copy application code
-COPY src ./src
+COPY backend/src ./src
 
 # copy alembic migration files
-COPY alembic.ini ./
-COPY alembic ./alembic
+COPY backend/alembic.ini .
+COPY backend/alembic ./alembic
 
 # install the project itself with bytecode compilation
 RUN --mount=type=cache,target=/root/.cache/uv \

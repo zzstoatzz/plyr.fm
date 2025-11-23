@@ -36,7 +36,6 @@ jobs:
           if [ "${{ steps.changes.outputs.migrations }}" == "true" ]; then
             echo "🔄 migrations detected - will run via release_command before deployment"
           fi
-          cd backend
-          flyctl deploy --config fly.staging.toml --remote-only -a relay-api-staging
+          flyctl deploy --config backend/fly.staging.toml --remote-only -a relay-api-staging
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_STAGING }}
