@@ -70,7 +70,7 @@ all settings can be configured via environment variables. the variable names mat
 DATABASE_URL=postgresql+psycopg://user:pass@host/db
 
 # oauth (uses client metadata discovery - no registration required)
-ATPROTO_CLIENT_ID=https://your-domain.com/client-metadata.json
+ATPROTO_CLIENT_ID=https://your-domain.com/oauth-client-metadata.json
 ATPROTO_CLIENT_SECRET=<optional-client-secret>
 ATPROTO_REDIRECT_URI=https://your-domain.com/auth/callback
 OAUTH_ENCRYPTION_KEY=<base64-encoded-32-byte-key>

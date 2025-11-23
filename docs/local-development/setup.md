@@ -45,7 +45,7 @@ DATABASE_URL=postgresql+asyncpg://localhost/plyr  # local
 # DATABASE_URL=<neon-dev-connection-string>        # neon dev
 
 # oauth (uses client metadata discovery - no registration required)
-ATPROTO_CLIENT_ID=http://localhost:8001/client-metadata.json
+ATPROTO_CLIENT_ID=http://localhost:8001/oauth-client-metadata.json
 ATPROTO_CLIENT_SECRET=<your-client-secret>
 ATPROTO_REDIRECT_URI=http://localhost:5173/auth/callback
 OAUTH_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
@@ -304,7 +304,7 @@ bun --version
 # should be: http://localhost:5173/auth/callback
 
 # check ATPROTO_CLIENT_ID is accessible (should return client metadata JSON)
-curl http://localhost:8001/client-metadata.json
+curl http://localhost:8001/oauth-client-metadata.json
 ```
 
 ### r2 upload failures

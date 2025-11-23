@@ -38,6 +38,6 @@ primary_region = 'iad'
 # - DATABASE_URL
 # - AWS_ACCESS_KEY_ID
 # - AWS_SECRET_ACCESS_KEY
-# - ATPROTO_CLIENT_ID (will be https://api.plyr.fm/client-metadata.json after deployment)
+# - ATPROTO_CLIENT_ID (will be https://api.plyr.fm/oauth-client-metadata.json after deployment)
 # - ATPROTO_REDIRECT_URI (will be https://api.plyr.fm/auth/callback after deployment)
 # - OAUTH_ENCRYPTION_KEY (44-character base64 Fernet key, generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')

@@ -29,21 +29,21 @@ ATProto OAuth uses **client metadata discovery** - there is no central registry 
 ### how it works
 
 1. **client ID is a URL**: your `ATPROTO_CLIENT_ID` must be a publicly accessible HTTPS URL that serves client metadata JSON
-2. **backend serves metadata**: plyr.fm serves this at `/client-metadata.json` on the API domain
+2. **backend serves metadata**: plyr.fm serves this at `/oauth-client-metadata.json` on the API domain
 3. **automatic discovery**: when users authenticate, their PDS fetches the client metadata from your client ID URL
 
 ### configuration per environment
 
 **production**:
-- `ATPROTO_CLIENT_ID=https://api.plyr.fm/client-metadata.json`
+- `ATPROTO_CLIENT_ID=https://api.plyr.fm/oauth-client-metadata.json`
 - `ATPROTO_REDIRECT_URI=https://api.plyr.fm/auth/callback`
 
 **staging**:
-- `ATPROTO_CLIENT_ID=https://api-stg.plyr.fm/client-metadata.json`
+- `ATPROTO_CLIENT_ID=https://api-stg.plyr.fm/oauth-client-metadata.json`
 - `ATPROTO_REDIRECT_URI=https://api-stg.plyr.fm/auth/callback`
 
 **local development**:
-- `ATPROTO_CLIENT_ID=http://localhost:8001/client-metadata.json`
+- `ATPROTO_CLIENT_ID=http://localhost:8001/oauth-client-metadata.json`
 - `ATPROTO_REDIRECT_URI=http://localhost:8001/auth/callback`
 
 ### important notes
@@ -58,7 +58,7 @@ ATProto OAuth uses **client metadata discovery** - there is no central registry 
 check that your client metadata is accessible:
 
 ```bash
-curl https://api.plyr.fm/client-metadata.json
+curl https://api.plyr.fm/oauth-client-metadata.json
 ```
 
 should return JSON with your OAuth configuration including redirect URIs and scopes.
