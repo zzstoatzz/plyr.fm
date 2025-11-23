@@ -24,6 +24,7 @@ dependencies = [
     "cachetools>=6.2.1",
     "pytest-asyncio>=0.25.3",
     "aioboto3>=15.5.0",
+    "slowapi>=0.1.9",
 ]
 
 requires-python = ">=3.11"

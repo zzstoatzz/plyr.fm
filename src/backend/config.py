@@ -365,6 +365,34 @@ class ObservabilitySettings(RelaySettingsSection):
     )
 
 
+class RateLimitSettings(RelaySettingsSection):
+    """Rate limiting configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="RATE_LIMIT_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable API rate limiting",
+    )
+    default_limit: str = Field(
+        default="100/minute",
+        description="Default global rate limit",
+    )
+    auth_limit: str = Field(
+        default="10/minute",
+        description="Rate limit for authentication endpoints",
+    )
+    upload_limit: str = Field(
+        default="5/minute",
+        description="Rate limit for file uploads",
+    )
+
+
 class Settings(RelaySettingsSection):
     """Relay application settings."""
 
@@ -382,6 +410,10 @@ class Settings(RelaySettingsSection):
     storage: StorageSettings = Field(default_factory=StorageSettings)
     atproto: AtprotoSettings = Field(default_factory=AtprotoSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+    rate_limit: RateLimitSettings = Field(
+        default_factory=RateLimitSettings,
+        description="Rate limiting settings",
+    )
     notify: NotificationSettings = Field(
         default_factory=NotificationSettings,
         description="Notification settings",
