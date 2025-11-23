@@ -59,6 +59,5 @@ simple-build.log
 # gemini
 .gemini/
 .gemini-clipboard/
-GEMINI.md
 
 STATUS.md
