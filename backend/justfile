@@ -28,7 +28,3 @@ migrate-up:
 # show current migration status
 migrate-status:
     uv run alembic current
-
-# create a github release (triggers production deployment)
-release:
-    ./scripts/release
