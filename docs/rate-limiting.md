@@ -17,12 +17,16 @@ Rate limits are configured via environment variables. Defaults are set in `src/b
 
 The current implementation uses **in-memory storage**.
 
-*   **Per-Instance:** Limits are tracked per application instance.
-*   **Scaling:** If we run 2 replicas on Fly.io, the *effective* total limit for the cluster is roughly `limit * 2`.
+*   **Per-Instance:** Limits are tracked per application instance (Fly Machine).
+*   **Scaling:** With multiple replicas (e.g., 2 machines), the **effective global limit** scales linearly.
+    *   Example: A limit of `100/minute` with 2 machines results in a total capacity of roughly `200/minute`.
 *   **Keying:** Limits are applied by **IP address** (`get_remote_address`).
 
 ### Why in-memory?
-For our current scale, in-memory is sufficient and avoids the complexity/cost of a dedicated Redis cluster. If we need strict global synchronization in the future, `slowapi` supports Redis backend.
+For our current scale, in-memory is sufficient and avoids the complexity/cost of a dedicated Redis cluster. This provides effective protection against single-source flooding (DDoS/brute-force) directed at any specific instance.
+
+### Future State (Redis)
+If strict global synchronization or complex tier-based limiting is required (similar to [Nebula's architecture](../../sandbox/nebula/docs/rate_limiting.md)), we will migrate to a Redis-backed limiter. `slowapi` supports Redis out of the box.
 
 ## Adding Limits to Endpoints
 
