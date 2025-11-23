@@ -116,9 +116,8 @@ all secrets configured via `flyctl secrets set`. key environment variables:
   - staging: `fm.plyr.stg`
   - production: `fm.plyr`
 - `ATPROTO_CLIENT_ID`, `ATPROTO_REDIRECT_URI` → oauth config (env-specific, must use custom domains for cookie-based auth)
-  - production: `https://api.plyr.fm/client-metadata.json` and `https://api.plyr.fm/auth/callback`
-  - staging: `https://api-stg.plyr.fm/client-metadata.json` and `https://api-stg.plyr.fm/auth/callback`
-- `OAUTH_ENCRYPTION_KEY` → unique per environment
+  - production: `https://api.plyr.fm/oauth-client-metadata.json` and `https://api.plyr.fm/auth/callback`
+  - staging: `https://api-stg.plyr.fm/oauth-client-metadata.json` and `https://api-stg.plyr.fm/auth/callback`- `OAUTH_ENCRYPTION_KEY` → unique per environment
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` → r2 credentials
 - `LOGFIRE_WRITE_TOKEN`, `LOGFIRE_ENVIRONMENT` → observability config
 
