@@ -174,11 +174,11 @@ async def get_public_config() -> dict[str, int]:
     }
 
 
-@app.get("/client-metadata.json")
+@app.get("/oauth-client-metadata.json")
 async def client_metadata() -> dict:
     """serve OAuth client metadata."""
     # Extract base URL from client_id for client_uri
-    client_uri = settings.atproto.client_id.replace("/client-metadata.json", "")
+    client_uri = settings.atproto.client_id.replace("/oauth-client-metadata.json", "")
 
     return {
         "client_id": settings.atproto.client_id,
