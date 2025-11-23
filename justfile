@@ -1,7 +1,7 @@
 # plyr.fm dev workflows
 mod frontend
 mod transcoder
-mod backend # Backend commands are now managed in backend/justfile
+mod backend
 
 
 # show available commands

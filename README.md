@@ -54,15 +54,13 @@ just transcoder run
 <summary>features</summary>
 
 ### listening
-- audio playback with persistent queue across tabs
+- audio playback with persistent queue across tabs/devices
 - like tracks with counts visible to all listeners
 - browse artist profiles and discographies
-- filter tracks by artist or album
-- share tracks and albums via clean URLs
-- keyboard shortcuts for player control
+- share tracks and albums with nice link previews
 
 ### creating
-- OAuth authentication via ATProto (bluesky accounts)
+- well-scoped OAuth authentication via ATProto (bluesky accounts)
 - upload tracks with title, artwork, and featured artists
 - organize tracks into albums with cover art
 - edit metadata and replace artwork anytime
