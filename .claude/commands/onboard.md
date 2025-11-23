@@ -10,7 +10,7 @@ this is meant to help you quickly understand what/where the project is and what 
 
 2. **Review Key Files**
    - `README.md` - project overview and quick start
-   - `CLAUDE.md` - critical reminders and technical details
+   - `AGENTS.md` - critical reminders and technical details
    - Recent commits (`git log --oneline -10`)
    - Current git status (`git status`)
 
