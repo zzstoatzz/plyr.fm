@@ -106,7 +106,7 @@
 		margin: 0;
 		padding: 0;
 		overflow: hidden;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
 		background: #000;
 		color: #fff;
 	}
