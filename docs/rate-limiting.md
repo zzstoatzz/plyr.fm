@@ -26,7 +26,7 @@ The current implementation uses **in-memory storage**.
 For our current scale, in-memory is sufficient and avoids the complexity/cost of a dedicated Redis cluster. This provides effective protection against single-source flooding (DDoS/brute-force) directed at any specific instance.
 
 ### Future State (Redis)
-If strict global synchronization or complex tier-based limiting is required (similar to [Nebula's architecture](../../sandbox/nebula/docs/rate_limiting.md)), we will migrate to a Redis-backed limiter. `slowapi` supports Redis out of the box.
+If strict global synchronization or complex tier-based limiting is required in the future, we will migrate to a Redis-backed limiter. `slowapi` supports Redis out of the box, which would allow maintaining shared counters across all application instances.
 
 ## Adding Limits to Endpoints
 
