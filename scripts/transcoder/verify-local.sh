@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Clean up any previous runs
-rm -f scripts/transcoder/test.aiff scripts/transcoder/test.mp3 transcoder_output.log
+mkdir -p sandbox/test-files
+rm -f sandbox/test-files/test.aiff sandbox/test-files/test.mp3 transcoder_output.log
 
 echo "Building transcoder..."
 cd transcoder
@@ -43,16 +44,16 @@ if ! curl -s "http://127.0.0.1:8083/health" > /dev/null; then
 fi
 
 echo "Generating sample AIFF..."
-uv run scripts/generate_audio_sample.py scripts/transcoder/test.aiff --waveform sine --duration 2
+uv run scripts/generate_audio_sample.py sandbox/test-files/test.aiff --waveform sine --duration 2
 
 echo "Testing transcoding..."
 # Override port for the test script
 export TRANSCODER_PORT=8083
-./scripts/transcoder/test-local.sh scripts/transcoder/test.aiff scripts/transcoder/test.mp3
+./scripts/transcoder/test-local.sh sandbox/test-files/test.aiff sandbox/test-files/test.mp3
 
 # test-local.sh doesn't append .mp3 if output file is provided
-if [[ -f scripts/transcoder/test.mp3 ]]; then
-  SIZE=$(wc -c < scripts/transcoder/test.mp3)
+if [[ -f sandbox/test-files/test.mp3 ]]; then
+  SIZE=$(wc -c < sandbox/test-files/test.mp3)
   echo "Success! generated MP3 size: $SIZE bytes"
 else
   echo "Failure! MP3 file not created."
