@@ -24,6 +24,8 @@
 		$page.url.pathname.match(/^\/u\/[^/]+\/album\/[^/]+/) // album pages have specific metadata
 	);
 
+	let isEmbed = $derived($page.url.pathname.startsWith('/embed/'));
+
 	// sync auth state from layout data (fetched by +layout.ts)
 	$effect(() => {
 		if (browser) {
@@ -149,32 +151,34 @@
 </svelte:head>
 
 <div class="app-layout">
-	<main class="main-content" class:with-queue={showQueue}>
+	<main class="main-content" class:with-queue={showQueue && !isEmbed}>
 		{@render children?.()}
 	</main>
 
-	{#if showQueue}
+	{#if showQueue && !isEmbed}
 		<aside class="queue-sidebar">
 			<Queue />
 		</aside>
 	{/if}
 </div>
 
-<button
-	class="queue-toggle"
-	onclick={toggleQueue}
-	aria-pressed={showQueue}
-	aria-label="toggle queue (Q)"
-	title={showQueue ? 'hide queue (Q)' : 'show queue (Q)'}
->
-	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-		<line x1="3" y1="6" x2="21" y2="6"></line>
-		<line x1="3" y1="12" x2="21" y2="12"></line>
-		<line x1="3" y1="18" x2="21" y2="18"></line>
-	</svg>
-</button>
+{#if !isEmbed}
+	<button
+		class="queue-toggle"
+		onclick={toggleQueue}
+		aria-pressed={showQueue}
+		aria-label="toggle queue (Q)"
+		title={showQueue ? 'hide queue (Q)' : 'show queue (Q)'}
+	>
+		<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<line x1="3" y1="6" x2="21" y2="6"></line>
+			<line x1="3" y1="12" x2="21" y2="12"></line>
+			<line x1="3" y1="18" x2="21" y2="18"></line>
+		</svg>
+	</button>
 
-<Player />
+	<Player />
+{/if}
 <Toast />
 
 <style>
