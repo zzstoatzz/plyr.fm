@@ -9,7 +9,15 @@ from pathlib import Path
 from typing import Annotated
 
 import logfire
-from fastapi import BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -26,6 +34,7 @@ from backend.models import Artist, Track
 from backend.storage import storage
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
+from backend.utilities.rate_limit import limiter
 
 from .router import router
 from .services import get_or_create_album
@@ -366,7 +375,9 @@ async def _process_upload_background(
 
 
 @router.post("/")
+@limiter.limit(settings.rate_limit.upload_limit)
 async def upload_track(
+    request: Request,
     title: Annotated[str, Form()],
     background_tasks: BackgroundTasks,
     auth_session: AuthSession = Depends(require_artist_profile),

@@ -7,6 +7,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # filter pydantic warning from atproto library
@@ -32,6 +35,7 @@ from backend.api.albums import router as albums_router
 from backend.api.migration import router as migration_router
 from backend.config import settings
 from backend.models import init_db
+from backend.utilities.rate_limit import limiter
 
 # configure logfire if enabled
 if settings.observability.enabled:
@@ -119,6 +123,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# setup rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # instrument fastapi with logfire
 if logfire:
     logfire.instrument_fastapi(app)
@@ -134,6 +142,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# add rate limiting middleware
+app.add_middleware(SlowAPIMiddleware)
 
 # include routers
 app.include_router(auth_router)

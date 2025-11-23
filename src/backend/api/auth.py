@@ -2,10 +2,9 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
-from starlette.requests import Request
 from starlette.responses import Response
 
 from backend._internal import (
@@ -20,6 +19,7 @@ from backend._internal import (
     start_oauth_flow,
 )
 from backend.config import settings
+from backend.utilities.rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -32,7 +32,8 @@ class CurrentUserResponse(BaseModel):
 
 
 @router.get("/start")
-async def start_login(handle: str) -> RedirectResponse:
+@limiter.limit(settings.rate_limit.auth_limit)
+async def start_login(request: Request, handle: str) -> RedirectResponse:
     """start OAuth flow for a given handle."""
     auth_url, _state = await start_oauth_flow(handle)
     return RedirectResponse(url=auth_url)
@@ -80,9 +81,10 @@ class ExchangeTokenResponse(BaseModel):
 
 
 @router.post("/exchange")
+@limiter.limit(settings.rate_limit.auth_limit)
 async def exchange_token(
-    request: ExchangeTokenRequest,
-    http_request: Request,
+    request: Request,
+    exchange_request: ExchangeTokenRequest,
     response: Response,
 ) -> ExchangeTokenResponse:
     """exchange one-time token for session_id.
@@ -93,7 +95,7 @@ async def exchange_token(
     for browser requests: sets HttpOnly cookie and still returns session_id in response
     for SDK/CLI clients: only returns session_id in response (no cookie)
     """
-    session_id = await consume_exchange_token(request.exchange_token)
+    session_id = await consume_exchange_token(exchange_request.exchange_token)
 
     if not session_id:
         raise HTTPException(
@@ -101,7 +103,7 @@ async def exchange_token(
             detail="invalid, expired, or already used exchange token",
         )
 
-    user_agent = http_request.headers.get("user-agent", "").lower()
+    user_agent = request.headers.get("user-agent", "").lower()
     is_browser = any(
         browser in user_agent
         for browser in ["mozilla", "chrome", "safari", "firefox", "edge", "opera"]
