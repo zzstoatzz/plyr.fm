@@ -67,7 +67,7 @@ def main() -> int:
 
         # check for backend changes since last release
         result = subprocess.run(
-            ["git", "log", f"{last_release}..HEAD", "--oneline", "--", "src/backend/"],
+            ["git", "log", f"{last_release}..HEAD", "--oneline", "--", "backend/src/backend/"],
             capture_output=True,
             text=True,
             check=True,
