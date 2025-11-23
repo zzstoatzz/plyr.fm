@@ -34,12 +34,12 @@ music on [atproto](https://atproto.com)
 using [just](https://github.com/casey/just):
 
 ```bash
-# install dependencies
-cd backend && uv sync
+# install dependencies (uv handles backend venv automatically)
+uv sync # For root-level deps, if any, and initializes uv
 just frontend install
 
 # run backend (hot reloads at http://localhost:8001)
-just run-backend
+just backend run
 
 # run frontend (hot reloads at http://localhost:5173)
 just frontend dev
