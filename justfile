@@ -7,6 +7,11 @@ mod transcoder
 default:
     @just --list
 
+# get setup
+setup:
+    # symlink AGENTS.md to CLAUDE.md and GEMINI.md
+    ln -s AGENTS.md CLAUDE.md
+    ln -s AGENTS.md GEMINI.md
 
 # run backend server (hot reloads)
 run-backend:
