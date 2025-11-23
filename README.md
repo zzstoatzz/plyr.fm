@@ -35,7 +35,7 @@ using [just](https://github.com/casey/just):
 
 ```bash
 # install dependencies
-uv sync
+cd backend && uv sync
 just frontend install
 
 # run backend (hot reloads at http://localhost:8001)
@@ -77,17 +77,20 @@ just transcoder run
 
 ```
 plyr.fm/
-├── src/backend/
-│   ├── api/              # public endpoints
-│   ├── _internal/        # internal services (auth, atproto, uploads)
-│   ├── models/           # database schemas
-│   └── storage/          # r2 and filesystem storage
-├── frontend/
-│   ├── src/lib/          # components, state managers, types
+├── backend/              # FastAPI app & Python tooling
+│   ├── src/backend/      # application code
+│   │   ├── api/          # public endpoints
+│   │   ├── _internal/    # internal services
+│   │   ├── models/       # database schemas
+│   │   └── storage/      # storage adapters
+│   ├── tests/            # pytest suite
+│   └── alembic/          # database migrations
+├── frontend/             # SvelteKit app
+│   ├── src/lib/          # components & state
 │   └── src/routes/       # pages
-├── tests/                # pytest suite
-├── docs/                 # organized guides
-└── Justfile              # task runner
+├── transcoder/           # Rust audio service
+├── docs/                 # documentation
+└── justfile              # task runner
 ```
 
 </details>
