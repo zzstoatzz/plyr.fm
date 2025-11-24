@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("type", sa.String(), nullable=False),
         sa.Column("status", sa.String(), nullable=False),
         sa.Column("owner_did", sa.String(), nullable=False),
-        sa.Column("progress_pct", sa.Float(), nullable=False),
+        sa.Column("progress_pct", sa.Float(), nullable=False, server_default="0.0"),
         sa.Column("message", sa.String(), nullable=True),
         sa.Column("phase", sa.String(), nullable=True),
         sa.Column(

@@ -527,7 +527,7 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
                 job = await job_service.get_job(upload_id)
                 if not job:
                     # Job not found or lost
-                    yield f"data: {json.dumps({'status': 'failed', 'message': 'upload job not found', 'error': 'job lost'})}\\n\n"
+                    yield f"data: {json.dumps({'status': 'failed', 'message': 'upload job not found', 'error': 'job lost'})}\n\n"
                     break
 
                 # Construct payload matching old UploadProgress.to_dict()
@@ -548,7 +548,7 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
                 if job.result and "track_id" in job.result:
                     payload["track_id"] = job.result["track_id"]
 
-                yield f"data: {json.dumps(payload)}\\n\n"
+                yield f"data: {json.dumps(payload)}\n\n"
 
                 if job.status in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
                     break
@@ -557,7 +557,7 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
 
         except Exception as e:
             logger.error(f"error in upload progress stream: {e}")
-            yield f"data: {json.dumps({'status': 'failed', 'message': 'connection error', 'error': str(e)})}\\n\n"
+            yield f"data: {json.dumps({'status': 'failed', 'message': 'connection error', 'error': str(e)})}\n\n"
 
     return StreamingResponse(
         event_stream(),

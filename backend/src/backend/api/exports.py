@@ -261,7 +261,7 @@ async def export_progress(export_id: str) -> StreamingResponse:
             while True:
                 job = await job_service.get_job(export_id)
                 if not job:
-                    yield f"data: {json.dumps({'status': 'failed', 'message': 'export job not found', 'error': 'job lost'})}\\n\n"
+                    yield f"data: {json.dumps({'status': 'failed', 'message': 'export job not found', 'error': 'job lost'})}\n\n"
                     break
 
                 # Construct payload
@@ -278,7 +278,7 @@ async def export_progress(export_id: str) -> StreamingResponse:
                 if job.result and "download_url" in job.result:
                     payload["download_url"] = job.result["download_url"]
 
-                yield f"data: {json.dumps(payload)}\\n\n"
+                yield f"data: {json.dumps(payload)}\n\n"
 
                 if job.status in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
                     break
@@ -287,7 +287,7 @@ async def export_progress(export_id: str) -> StreamingResponse:
 
         except Exception as e:
             logger.error(f"error in export progress stream: {e}")
-            yield f"data: {json.dumps({'status': 'failed', 'message': 'connection error', 'error': str(e)})}\\n\n"
+            yield f"data: {json.dumps({'status': 'failed', 'message': 'connection error', 'error': str(e)})}\n\n"
 
     return StreamingResponse(
         event_stream(),
