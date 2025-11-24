@@ -3,7 +3,7 @@
 **music streaming on AT Protocol**
 
 ## 🚨 Critical Rules & Workflows
-*   **Read `STATUS.md` First:** Always check for active tasks and known issues.
+*   **Read `STATUS.md` First:** Always check for active tasks and known issues. This file is NEVER tracked in git.
 *   **Workflow:**
     *   Use **GitHub Issues** (not Linear).
     *   **PRs:** Always create for review; never push to main directly.
