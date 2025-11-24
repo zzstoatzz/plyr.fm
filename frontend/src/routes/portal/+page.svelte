@@ -422,7 +422,8 @@
 		if (exportingMedia) return;
 
 		const trackCount = tracks.length;
-		const toastId = toast.info(`preparing export of ${trackCount} ${trackCount === 1 ? 'track' : 'tracks'}...`, 30000);
+		// 0 means infinite/persist until dismissed
+		const toastId = toast.info(`preparing export of ${trackCount} ${trackCount === 1 ? 'track' : 'tracks'}...`, 0);
 
 		exportingMedia = true;
 		try {
@@ -451,8 +452,8 @@
 
 				// show progress messages
 				if (update.message && update.status === 'processing') {
-					const progressInfo = update.track_count
-						? ` (${update.processed_count}/${update.track_count})`
+					const progressInfo = update.total_count
+						? ` (${update.processed_count}/${update.total_count})`
 						: '';
 					toast.update(toastId, `${update.message}${progressInfo}`);
 				}
@@ -462,35 +463,22 @@
 					exportingMedia = false;
 
 					// update toast to show download is starting
-					toast.update(toastId, 'downloading export...');
-
-					// trigger download
-					try {
-						const downloadResponse = await fetch(`${API_URL}/exports/${exportId}/download`, {
-							credentials: 'include'
-						});
-
-						if (downloadResponse.ok) {
-							const blob = await downloadResponse.blob();
-							const url = window.URL.createObjectURL(blob);
-							const a = document.createElement('a');
-							a.href = url;
-							a.download = `plyr-tracks-${new Date().toISOString().split('T')[0]}.zip`;
-							document.body.appendChild(a);
-							a.click();
-							window.URL.revokeObjectURL(url);
-							document.body.removeChild(a);
-
-							toast.dismiss(toastId);
-							toast.success(`${update.processed_count || trackCount} ${trackCount === 1 ? 'track' : 'tracks'} exported successfully`);
-						} else {
-							toast.dismiss(toastId);
-							toast.error('failed to download export');
-						}
-					} catch (e) {
-						console.error('download failed:', e);
+					toast.update(toastId, 'download starting...');
+					
+					if (update.download_url) {
+						// Trigger download directly from R2
+						const a = document.createElement('a');
+						a.href = update.download_url;
+						a.download = `plyr-tracks-${new Date().toISOString().split('T')[0]}.zip`;
+						document.body.appendChild(a);
+						a.click();
+						document.body.removeChild(a);
+						
 						toast.dismiss(toastId);
-						toast.error('failed to download export');
+						toast.success(`${update.processed_count || trackCount} ${trackCount === 1 ? 'track' : 'tracks'} exported successfully`);
+					} else {
+						toast.dismiss(toastId);
+						toast.error('export completed but download url missing');
 					}
 				}
 

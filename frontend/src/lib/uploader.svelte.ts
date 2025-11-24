@@ -40,7 +40,8 @@ class UploaderState {
 		const uploadMessage = fileSizeMB > 10
 			? 'uploading track... (large file, this may take a moment)'
 			: 'uploading track...';
-		const toastId = toast.info(uploadMessage, 30000);
+		// 0 means infinite/persist until dismissed
+		const toastId = toast.info(uploadMessage, 0);
 
 		if (!browser) return;
 		const formData = new FormData();
@@ -104,9 +105,13 @@ class UploaderState {
 
 						// show backend processing messages
 						if (update.message && update.status === 'processing') {
-							// for upload phase with progress, show determinate progress
-							// for other phases, just show the message
-							toast.update(task.toastId, update.message);
+							// if we have server-side progress, show it
+							const serverProgress = update.server_progress_pct;
+							if (serverProgress !== undefined && serverProgress !== null) {
+								toast.update(task.toastId, `${update.message} (${Math.round(serverProgress)}%)`);
+							} else {
+								toast.update(task.toastId, update.message);
+							}
 						}
 
 						if (update.status === 'completed') {

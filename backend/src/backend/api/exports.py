@@ -3,30 +3,34 @@
 import asyncio
 import io
 import json
+import logging
 import zipfile
 from typing import Annotated
 
 import aioboto3
 import logfire
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
-from backend._internal.exports import ExportStatus, export_tracker
+from backend._internal.jobs import job_service
 from backend.config import settings
 from backend.models import Track, get_db
+from backend.models.job import JobStatus, JobType
 from backend.utilities.database import db_session
+from backend.utilities.progress import R2ProgressTracker
 
 router = APIRouter(prefix="/exports", tags=["exports"])
+logger = logging.getLogger(__name__)
 
 
 async def _process_export_background(export_id: str, artist_did: str) -> None:
     """background task to process export."""
     try:
-        export_tracker.update_status(
-            export_id, ExportStatus.PROCESSING, "fetching tracks..."
+        await job_service.update_progress(
+            export_id, JobStatus.PROCESSING, "fetching tracks..."
         )
 
         # query all tracks for the user
@@ -40,9 +44,9 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
             tracks = result.scalars().all()
 
         if not tracks:
-            export_tracker.update_status(
+            await job_service.update_progress(
                 export_id,
-                ExportStatus.FAILED,
+                JobStatus.FAILED,
                 "export failed",
                 error="no tracks found to export",
             )
@@ -62,6 +66,7 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
                 # track counter for duplicate titles
                 title_counts: dict[str, int] = {}
                 processed = 0
+                total = len(tracks)
 
                 for track in tracks:
                     if not track.file_id or not track.file_type:
@@ -76,11 +81,13 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
 
                     try:
                         # update progress
-                        export_tracker.update_status(
+                        pct = (processed / total) * 100
+                        await job_service.update_progress(
                             export_id,
-                            ExportStatus.PROCESSING,
+                            JobStatus.PROCESSING,
                             f"downloading {track.title}...",
-                            processed_count=processed,
+                            progress_pct=pct,
+                            result={"processed_count": processed, "total_count": total},
                         )
 
                         # download file from R2
@@ -130,16 +137,70 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
                         )
                         # continue with other tracks instead of failing entire export
 
-        # store the zip data
+        # store the zip data to R2
         zip_buffer.seek(0)
-        export_tracker.store_export_data(export_id, zip_buffer.getvalue())
+        zip_filename = f"{export_id}.zip"
+        key = f"exports/{zip_filename}"
+
+        await job_service.update_progress(
+            export_id,
+            JobStatus.PROCESSING,
+            "uploading export to storage...",
+        )
+
+        # Upload using aioboto3 directly
+        try:
+            async_session = aioboto3.Session()
+            zip_size = zip_buffer.getbuffer().nbytes
+
+            async with (
+                R2ProgressTracker(
+                    job_id=export_id,
+                    total_size=zip_size,
+                    message="uploading export to storage...",
+                    phase="upload",
+                ) as tracker,
+                async_session.client(
+                    "s3",
+                    endpoint_url=settings.storage.r2_endpoint_url,
+                    aws_access_key_id=settings.storage.aws_access_key_id,
+                    aws_secret_access_key=settings.storage.aws_secret_access_key,
+                ) as s3_client,
+            ):
+                await s3_client.upload_fileobj(
+                    zip_buffer,
+                    settings.storage.r2_bucket,
+                    key,
+                    ExtraArgs={"ContentType": "application/zip"},
+                    Callback=tracker.on_progress,
+                )
+
+            # Final 100% update
+            await job_service.update_progress(
+                export_id,
+                JobStatus.PROCESSING,
+                "uploading export to storage...",
+                phase="upload",
+                progress_pct=100.0,
+            )
+
+        except Exception as e:
+            logfire.error("failed to upload export zip", error=str(e))
+            raise
+
+        # get download URL
+        download_url = f"{settings.storage.r2_public_bucket_url}/{key}"
 
         # mark as completed
-        export_tracker.update_status(
+        await job_service.update_progress(
             export_id,
-            ExportStatus.COMPLETED,
+            JobStatus.COMPLETED,
             f"export completed - {processed} tracks ready",
-            processed_count=processed,
+            result={
+                "processed_count": processed,
+                "total_count": len(tracks),
+                "download_url": download_url,
+            },
         )
 
     except Exception as e:
@@ -147,9 +208,9 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
             "export failed with unexpected error",
             export_id=export_id,
         )
-        export_tracker.update_status(
+        await job_service.update_progress(
             export_id,
-            ExportStatus.FAILED,
+            JobStatus.FAILED,
             "export failed",
             error=f"unexpected error: {e!s}",
         )
@@ -174,7 +235,9 @@ async def export_media(
         raise HTTPException(status_code=404, detail="no tracks found to export")
 
     # create export tracking
-    export_id = export_tracker.create_export(track_count=len(tracks))
+    export_id = await job_service.create_job(
+        JobType.EXPORT, session.did, "export queued for processing"
+    )
 
     # schedule background processing
     background_tasks.add_task(_process_export_background, export_id, session.did)
@@ -193,24 +256,38 @@ async def export_progress(export_id: str) -> StreamingResponse:
 
     async def event_stream():
         """generate SSE events for export progress."""
-        queue = await export_tracker.subscribe(export_id)
+        # Polling loop
         try:
             while True:
-                try:
-                    # wait for next update with timeout
-                    update = await asyncio.wait_for(queue.get(), timeout=30.0)
-                    yield f"data: {json.dumps(update)}\n\n"
+                job = await job_service.get_job(export_id)
+                if not job:
+                    yield f"data: {json.dumps({'status': 'failed', 'message': 'export job not found', 'error': 'job lost'})}\n\n"
+                    break
 
-                    # if export completed or failed, close stream
-                    if update["status"] in ("completed", "failed"):
-                        break
+                # Construct payload
+                payload = {
+                    "export_id": job.id,
+                    "status": job.status,
+                    "message": job.message,
+                    "error": job.error,
+                    "processed_count": job.result.get("processed_count")
+                    if job.result
+                    else 0,
+                    "total_count": job.result.get("total_count") if job.result else 0,
+                }
+                if job.result and "download_url" in job.result:
+                    payload["download_url"] = job.result["download_url"]
 
-                except TimeoutError:
-                    # send keepalive
-                    yield ": keepalive\n\n"
+                yield f"data: {json.dumps(payload)}\n\n"
 
-        finally:
-            export_tracker.unsubscribe(export_id, queue)
+                if job.status in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
+                    break
+
+                await asyncio.sleep(1.0)
+
+        except Exception as e:
+            logger.error(f"error in export progress stream: {e}")
+            yield f"data: {json.dumps({'status': 'failed', 'message': 'connection error', 'error': str(e)})}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -227,17 +304,20 @@ async def export_progress(export_id: str) -> StreamingResponse:
 async def download_export(
     export_id: str,
     session: Annotated[Session, Depends(require_auth)],
-) -> StreamingResponse:
+) -> RedirectResponse:
     """download the completed export zip file."""
-    export_data = export_tracker.get_export_data(export_id)
+    job = await job_service.get_job(export_id)
 
-    if not export_data:
-        raise HTTPException(status_code=404, detail="export not found or expired")
+    if not job:
+        raise HTTPException(status_code=404, detail="export not found")
 
-    return StreamingResponse(
-        iter([export_data]),
-        media_type="application/zip",
-        headers={
-            "Content-Disposition": 'attachment; filename="plyr-tracks.zip"',
-        },
-    )
+    if job.owner_did != session.did:
+        raise HTTPException(status_code=403, detail="not authorized")
+
+    if job.status != JobStatus.COMPLETED.value:
+        raise HTTPException(status_code=400, detail="export not ready")
+
+    if not job.result or "download_url" not in job.result:
+        raise HTTPException(status_code=500, detail="export url not found")
+
+    return RedirectResponse(url=job.result["download_url"])
