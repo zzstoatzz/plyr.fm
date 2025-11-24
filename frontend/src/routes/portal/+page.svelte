@@ -295,12 +295,13 @@
 			if (response.ok) {
 				await loadMyTracks();
 				await loadMyAlbums();
+				toast.success('track deleted');
 			} else {
 				const error = await response.json();
-				alert(error.detail || 'failed to delete track');
+				toast.error(error.detail || 'failed to delete track');
 			}
 		} catch (e) {
-			alert(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
+			toast.error(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
 		}
 	}
 
