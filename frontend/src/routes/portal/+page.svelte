@@ -422,8 +422,10 @@
 		if (exportingMedia) return;
 
 		const trackCount = tracks.length;
+		const exportMsg = trackCount === 1 ? 'preparing export of your track...' : `preparing export of ${trackCount} tracks...`;
+		
 		// 0 means infinite/persist until dismissed
-		const toastId = toast.info(`preparing export of ${trackCount} ${trackCount === 1 ? 'track' : 'tracks'}...`, 0);
+		const toastId = toast.info(exportMsg, 0);
 
 		exportingMedia = true;
 		try {
@@ -926,7 +928,7 @@
 					onclick={exportAllMedia}
 					disabled={exportingMedia}
 				>
-					{exportingMedia ? 'exporting...' : `export all ${tracks.length} ${tracks.length === 1 ? 'track' : 'tracks'}`}
+					{exportingMedia ? 'exporting...' : tracks.length === 1 ? 'export track' : `export all ${tracks.length} tracks`}
 				</button>
 			</section>
 		{/if}
