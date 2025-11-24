@@ -1,7 +1,6 @@
 """media export API endpoints."""
 
 import asyncio
-import contextlib
 import io
 import json
 import logging
@@ -21,6 +20,7 @@ from backend.config import settings
 from backend.models import Track, get_db
 from backend.models.job import JobStatus, JobType
 from backend.utilities.database import db_session
+from backend.utilities.progress import R2ProgressTracker
 
 router = APIRouter(prefix="/exports", tags=["exports"])
 logger = logging.getLogger(__name__)
@@ -151,38 +151,16 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
         # Upload using aioboto3 directly
         try:
             async_session = aioboto3.Session()
-
-            # Shared state for R2 upload progress
-            r2_progress_percent = {"value": 0.0}
             zip_size = zip_buffer.getbuffer().nbytes
 
-            # Sync callback for s3_client.upload_fileobj
-            def on_r2_upload_progress(bytes_uploaded_so_far: int) -> None:
-                if zip_size > 0:
-                    r2_progress_percent["value"] = (
-                        bytes_uploaded_so_far / zip_size
-                    ) * 100
-                else:
-                    r2_progress_percent["value"] = 100.0
+            tracker = R2ProgressTracker(
+                job_id=export_id,
+                total_size=zip_size,
+                message="uploading export to storage...",
+                phase="upload",
+            )
 
-            async def report_progress():
-                """Async task to report progress to DB."""
-                while True:
-                    current_pct = r2_progress_percent["value"]
-                    if current_pct < 100.0:
-                        await job_service.update_progress(
-                            export_id,
-                            JobStatus.PROCESSING,
-                            "uploading export to storage...",
-                            phase="upload",
-                            progress_pct=current_pct,
-                        )
-                    if current_pct >= 99.99:  # Report 100% only when truly done
-                        break
-                    await asyncio.sleep(1.0)  # Update DB every second
-
-            # Start reporter task
-            reporter_task = asyncio.create_task(report_progress())
+            await tracker.start()
 
             try:
                 async with async_session.client(
@@ -196,22 +174,19 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
                         settings.storage.r2_bucket,
                         key,
                         ExtraArgs={"ContentType": "application/zip"},
-                        Callback=on_r2_upload_progress,  # Pass the sync callback here
+                        Callback=tracker.on_progress,
                     )
-                # After upload completes, ensure final progress is reported
-                r2_progress_percent["value"] = 100.0
-                await job_service.update_progress(
-                    export_id,
-                    JobStatus.PROCESSING,
-                    "uploading export to storage...",
-                    phase="upload",
-                    progress_pct=100.0,
-                )
-
             finally:
-                reporter_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await reporter_task
+                await tracker.stop()
+
+            # Final 100% update
+            await job_service.update_progress(
+                export_id,
+                JobStatus.PROCESSING,
+                "uploading export to storage...",
+                phase="upload",
+                progress_pct=100.0,
+            )
 
         except Exception as e:
             logfire.error("failed to upload export zip", error=str(e))
@@ -290,7 +265,7 @@ async def export_progress(export_id: str) -> StreamingResponse:
             while True:
                 job = await job_service.get_job(export_id)
                 if not job:
-                    yield f"data: {json.dumps({'status': 'failed', 'message': 'export job not found', 'error': 'job lost'})}\n\n"
+                    yield f"data: {json.dumps({'status': 'failed', 'message': 'export job not found', 'error': 'job lost'})}\\n\n"
                     break
 
                 # Construct payload
@@ -307,7 +282,7 @@ async def export_progress(export_id: str) -> StreamingResponse:
                 if job.result and "download_url" in job.result:
                     payload["download_url"] = job.result["download_url"]
 
-                yield f"data: {json.dumps(payload)}\n\n"
+                yield f"data: {json.dumps(payload)}\\n\n"
 
                 if job.status in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
                     break
@@ -316,7 +291,7 @@ async def export_progress(export_id: str) -> StreamingResponse:
 
         except Exception as e:
             logger.error(f"error in export progress stream: {e}")
-            yield f"data: {json.dumps({'status': 'failed', 'message': 'connection error', 'error': str(e)})}\n\n"
+            yield f"data: {json.dumps({'status': 'failed', 'message': 'connection error', 'error': str(e)})}\\n\n"
 
     return StreamingResponse(
         event_stream(),

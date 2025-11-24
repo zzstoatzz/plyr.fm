@@ -35,6 +35,7 @@ from backend.models.job import JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
+from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.rate_limit import limiter
 
 from .router import router
@@ -87,52 +88,33 @@ async def _process_upload_background(
             try:
                 logfire.info("preparing to save audio file", filename=filename)
 
-                # Shared state for R2 upload progress
-                r2_progress_percent = {"value": 0.0}
+                file_size = Path(file_path).stat().st_size
+                tracker = R2ProgressTracker(
+                    job_id=upload_id,
+                    total_size=file_size,
+                    message="uploading to storage...",
+                    phase="upload",
+                )
 
-                # Sync callback for storage.save
-                def on_r2_progress(pct: float) -> None:
-                    r2_progress_percent["value"] = pct
-
-                async def report_progress():
-                    """Async task to report progress to DB."""
-                    while True:
-                        current_pct = r2_progress_percent["value"]
-                        # Ensure progress doesn't go backwards or exceed 99% during actual transfer
-                        if current_pct < 100.0:
-                            await job_service.update_progress(
-                                upload_id,
-                                JobStatus.PROCESSING,
-                                "uploading to storage...",
-                                phase="upload",
-                                progress_pct=current_pct,
-                            )
-                        if current_pct >= 99.9:  # Report 100% only when truly done
-                            break
-                        await asyncio.sleep(1.0)  # Update DB every second
-
-                # Start reporter task
-                reporter_task = asyncio.create_task(report_progress())
+                await tracker.start()
 
                 try:
                     with open(file_path, "rb") as file_obj:
                         logfire.info("calling storage.save")
                         file_id = await storage.save(
-                            file_obj, filename, progress_callback=on_r2_progress
+                            file_obj, filename, progress_callback=tracker.on_progress
                         )
-                    # After storage.save completes, ensure final progress is reported
-                    r2_progress_percent["value"] = 100.0
-                    await job_service.update_progress(
-                        upload_id,
-                        JobStatus.PROCESSING,
-                        "uploading to storage...",
-                        phase="upload",
-                        progress_pct=100.0,
-                    )
                 finally:
-                    reporter_task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await reporter_task
+                    await tracker.stop()
+
+                # Final 100% update
+                await job_service.update_progress(
+                    upload_id,
+                    JobStatus.PROCESSING,
+                    "uploading to storage...",
+                    phase="upload",
+                    progress_pct=100.0,
+                )
 
                 logfire.info("storage.save completed", file_id=file_id)
 
