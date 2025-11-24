@@ -63,7 +63,7 @@ class JobService:
             if phase:
                 job.phase = phase
             if result:
-                job.result = result
+                job.result = {**(job.result or {}), **result}
             if error:
                 job.error = error
 
