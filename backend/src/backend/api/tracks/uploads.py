@@ -88,11 +88,8 @@ async def _process_upload_background(
             try:
                 logfire.info("preparing to save audio file", filename=filename)
 
-                file_size = Path(file_path).stat().st_size
-
                 async with R2ProgressTracker(
                     job_id=upload_id,
-                    total_size=file_size,
                     message="uploading to storage...",
                     phase="upload",
                 ) as tracker:

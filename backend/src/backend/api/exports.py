@@ -19,6 +19,7 @@ from backend._internal.jobs import job_service
 from backend.config import settings
 from backend.models import Track, get_db
 from backend.models.job import JobStatus, JobType
+from backend.storage.r2 import UploadProgressTracker
 from backend.utilities.database import db_session
 from backend.utilities.progress import R2ProgressTracker
 
@@ -155,7 +156,6 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
             async with (
                 R2ProgressTracker(
                     job_id=export_id,
-                    total_size=zip_size,
                     message="finalizing export...",
                     phase="upload",
                 ) as tracker,
@@ -166,6 +166,8 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
                     aws_secret_access_key=settings.storage.aws_secret_access_key,
                 ) as s3_client,
             ):
+                # Wrap callback with UploadProgressTracker to convert bytes to percentage
+                bytes_to_pct = UploadProgressTracker(zip_size, tracker.on_progress)
                 await s3_client.upload_fileobj(
                     zip_buffer,
                     settings.storage.r2_bucket,
@@ -174,7 +176,7 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
                         "ContentType": "application/zip",
                         "ContentDisposition": f'attachment; filename="{download_filename}"',
                     },
-                    Callback=tracker.on_progress,
+                    Callback=bytes_to_pct,
                 )
 
             # Final 100% update

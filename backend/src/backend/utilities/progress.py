@@ -14,29 +14,28 @@ logger = logging.getLogger(__name__)
 class R2ProgressTracker:
     """Tracks R2 upload progress and updates the job service.
 
-    Bridges the gap between boto3's synchronous callback and our async
-    database job service.
+    Bridges the gap between the synchronous storage callback and our async
+    database job service. Receives percentage updates from the storage layer
+    and periodically reports them to the job service.
     """
 
     def __init__(
         self,
         job_id: str,
-        total_size: int,
         message: str = "uploading to storage...",
         phase: str = "upload",
         update_interval: float = 1.0,
     ):
         self.job_id = job_id
-        self.total_size = total_size
         self.message = message
         self.phase = phase
         self.update_interval = update_interval
-        self._bytes_transferred = 0
+        self._progress_pct: float = 0.0
         self._reporter_task: asyncio.Task | None = None
 
-    def on_progress(self, bytes_amount: int) -> None:
-        """Synchronous callback for boto3."""
-        self._bytes_transferred += bytes_amount
+    def on_progress(self, progress_pct: float) -> None:
+        """Synchronous callback that receives percentage (0-100) from storage layer."""
+        self._progress_pct = progress_pct
 
     async def __aenter__(self) -> "R2ProgressTracker":
         await self.start()
@@ -60,11 +59,9 @@ class R2ProgressTracker:
     async def _report_loop(self) -> None:
         """Periodic reporting loop."""
         while True:
-            pct = self.percentage
-
             # Don't report 100% until explicitly finished by the caller
             # via final job update, or let it sit at 99.9%
-            report_pct = min(pct, 99.9)
+            report_pct = min(self._progress_pct, 99.9)
 
             await job_service.update_progress(
                 self.job_id,
@@ -74,14 +71,7 @@ class R2ProgressTracker:
                 progress_pct=report_pct,
             )
 
-            if pct >= 100.0:
+            if self._progress_pct >= 100.0:
                 break
 
             await asyncio.sleep(self.update_interval)
-
-    @property
-    def percentage(self) -> float:
-        """Calculate current percentage."""
-        if self.total_size <= 0:
-            return 0.0 if self._bytes_transferred == 0 else 100.0
-        return (self._bytes_transferred / self.total_size) * 100.0
