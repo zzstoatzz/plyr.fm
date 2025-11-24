@@ -449,6 +449,7 @@
 
 			// subscribe to progress updates via SSE
 			const eventSource = new EventSource(`${API_URL}/exports/${exportId}/progress`);
+			let exportComplete = false;
 
 			eventSource.onmessage = async (event) => {
 				const update = JSON.parse(event.data);
@@ -462,12 +463,13 @@
 				}
 
 				if (update.status === 'completed') {
+					exportComplete = true;
 					eventSource.close();
 					exportingMedia = false;
 
 					// update toast to show download is starting
 					toast.update(toastId, 'download starting...');
-					
+
 					if (update.download_url) {
 						// Trigger download directly from R2
 						const a = document.createElement('a');
@@ -476,7 +478,7 @@
 						document.body.appendChild(a);
 						a.click();
 						document.body.removeChild(a);
-						
+
 						toast.dismiss(toastId);
 						toast.success(`${update.processed_count || trackCount} ${trackCount === 1 ? 'track' : 'tracks'} exported successfully`);
 					} else {
@@ -486,6 +488,7 @@
 				}
 
 				if (update.status === 'failed') {
+					exportComplete = true;
 					eventSource.close();
 					toast.dismiss(toastId);
 					exportingMedia = false;
@@ -497,6 +500,8 @@
 
 			eventSource.onerror = () => {
 				eventSource.close();
+				// Don't show error if export already completed - SSE stream closing is normal
+				if (exportComplete) return;
 				toast.dismiss(toastId);
 				exportingMedia = false;
 				toast.error('lost connection to server');
