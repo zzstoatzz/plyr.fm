@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+from typing import Any
 
 from backend._internal.jobs import job_service
 from backend.models.job import JobStatus
@@ -36,6 +37,13 @@ class R2ProgressTracker:
     def on_progress(self, bytes_amount: int) -> None:
         """Synchronous callback for boto3."""
         self._bytes_transferred += bytes_amount
+
+    async def __aenter__(self) -> "R2ProgressTracker":
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        await self.stop()
 
     async def start(self) -> None:
         """Start the background reporting task."""

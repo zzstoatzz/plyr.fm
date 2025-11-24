@@ -153,31 +153,27 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
             async_session = aioboto3.Session()
             zip_size = zip_buffer.getbuffer().nbytes
 
-            tracker = R2ProgressTracker(
-                job_id=export_id,
-                total_size=zip_size,
-                message="uploading export to storage...",
-                phase="upload",
-            )
-
-            await tracker.start()
-
-            try:
-                async with async_session.client(
+            async with (
+                R2ProgressTracker(
+                    job_id=export_id,
+                    total_size=zip_size,
+                    message="uploading export to storage...",
+                    phase="upload",
+                ) as tracker,
+                async_session.client(
                     "s3",
                     endpoint_url=settings.storage.r2_endpoint_url,
                     aws_access_key_id=settings.storage.aws_access_key_id,
                     aws_secret_access_key=settings.storage.aws_secret_access_key,
-                ) as s3_client:
-                    await s3_client.upload_fileobj(
-                        zip_buffer,
-                        settings.storage.r2_bucket,
-                        key,
-                        ExtraArgs={"ContentType": "application/zip"},
-                        Callback=tracker.on_progress,
-                    )
-            finally:
-                await tracker.stop()
+                ) as s3_client,
+            ):
+                await s3_client.upload_fileobj(
+                    zip_buffer,
+                    settings.storage.r2_bucket,
+                    key,
+                    ExtraArgs={"ContentType": "application/zip"},
+                    Callback=tracker.on_progress,
+                )
 
             # Final 100% update
             await job_service.update_progress(

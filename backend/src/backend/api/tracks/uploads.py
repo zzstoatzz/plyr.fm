@@ -89,23 +89,18 @@ async def _process_upload_background(
                 logfire.info("preparing to save audio file", filename=filename)
 
                 file_size = Path(file_path).stat().st_size
-                tracker = R2ProgressTracker(
+
+                async with R2ProgressTracker(
                     job_id=upload_id,
                     total_size=file_size,
                     message="uploading to storage...",
                     phase="upload",
-                )
-
-                await tracker.start()
-
-                try:
+                ) as tracker:
                     with open(file_path, "rb") as file_obj:
                         logfire.info("calling storage.save")
                         file_id = await storage.save(
                             file_obj, filename, progress_callback=tracker.on_progress
                         )
-                finally:
-                    await tracker.stop()
 
                 # Final 100% update
                 await job_service.update_progress(
@@ -532,7 +527,7 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
                 job = await job_service.get_job(upload_id)
                 if not job:
                     # Job not found or lost
-                    yield f"data: {json.dumps({'status': 'failed', 'message': 'upload job not found', 'error': 'job lost'})}\n\n"
+                    yield f"data: {json.dumps({'status': 'failed', 'message': 'upload job not found', 'error': 'job lost'})}\\n\n"
                     break
 
                 # Construct payload matching old UploadProgress.to_dict()
@@ -553,7 +548,7 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
                 if job.result and "track_id" in job.result:
                     payload["track_id"] = job.result["track_id"]
 
-                yield f"data: {json.dumps(payload)}\n\n"
+                yield f"data: {json.dumps(payload)}\\n\n"
 
                 if job.status in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
                     break
@@ -562,7 +557,7 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
 
         except Exception as e:
             logger.error(f"error in upload progress stream: {e}")
-            yield f"data: {json.dumps({'status': 'failed', 'message': 'connection error', 'error': str(e)})}\n\n"
+            yield f"data: {json.dumps({'status': 'failed', 'message': 'connection error', 'error': str(e)})}\\n\n"
 
     return StreamingResponse(
         event_stream(),
