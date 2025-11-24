@@ -142,22 +142,21 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
         zip_filename = f"{export_id}.zip"
         key = f"exports/{zip_filename}"
 
-        await job_service.update_progress(
-            export_id,
-            JobStatus.PROCESSING,
-            "uploading export to storage...",
-        )
-
         # Upload using aioboto3 directly
         try:
             async_session = aioboto3.Session()
             zip_size = zip_buffer.getbuffer().nbytes
 
+            # Generate user-friendly filename for download
+            from datetime import datetime
+
+            download_filename = f"plyr-tracks-{datetime.now().date()}.zip"
+
             async with (
                 R2ProgressTracker(
                     job_id=export_id,
                     total_size=zip_size,
-                    message="uploading export to storage...",
+                    message="finalizing export...",
                     phase="upload",
                 ) as tracker,
                 async_session.client(
@@ -171,7 +170,10 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
                     zip_buffer,
                     settings.storage.r2_bucket,
                     key,
-                    ExtraArgs={"ContentType": "application/zip"},
+                    ExtraArgs={
+                        "ContentType": "application/zip",
+                        "ContentDisposition": f'attachment; filename="{download_filename}"',
+                    },
                     Callback=tracker.on_progress,
                 )
 
@@ -179,7 +181,7 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
             await job_service.update_progress(
                 export_id,
                 JobStatus.PROCESSING,
-                "uploading export to storage...",
+                "finalizing export...",
                 phase="upload",
                 progress_pct=100.0,
             )
