@@ -28,9 +28,10 @@ from backend._internal.atproto import create_track_record
 from backend._internal.atproto.handles import resolve_handle
 from backend._internal.audio import AudioFormat
 from backend._internal.image import ImageFormat
-from backend._internal.uploads import UploadStatus, upload_tracker
+from backend._internal.jobs import job_service
 from backend.config import settings
 from backend.models import Artist, Track
+from backend.models.job import JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
@@ -59,53 +60,86 @@ async def _process_upload_background(
         "process upload background", upload_id=upload_id, filename=filename
     ):
         try:
-            upload_tracker.update_status(
-                upload_id, UploadStatus.PROCESSING, "processing upload..."
+            await job_service.update_progress(
+                upload_id, JobStatus.PROCESSING, "processing upload..."
             )
 
             # validate file type
             ext = Path(filename).suffix.lower()
             audio_format = AudioFormat.from_extension(ext)
             if not audio_format:
-                upload_tracker.update_status(
+                await job_service.update_progress(
                     upload_id,
-                    UploadStatus.FAILED,
+                    JobStatus.FAILED,
                     "upload failed",
                     error=f"unsupported file type: {ext}",
                 )
                 return
 
             # save audio file
-            upload_tracker.update_status(
+            await job_service.update_progress(
                 upload_id,
-                UploadStatus.PROCESSING,
+                JobStatus.PROCESSING,
                 "uploading to storage...",
                 phase="upload",
+                progress_pct=0,
             )
             try:
                 logfire.info("preparing to save audio file", filename=filename)
 
-                # define progress callback for storage upload
-                def on_upload_progress(progress_pct: float) -> None:
-                    """callback invoked during R2 upload with progress percentage."""
-                    upload_tracker.update_status(
-                        upload_id,
-                        UploadStatus.PROCESSING,
-                        f"uploading to storage... {int(progress_pct)}%",
-                        server_progress_pct=progress_pct,
-                        phase="upload",
-                    )
+                # Shared state for R2 upload progress
+                r2_progress_percent = {"value": 0.0}
 
-                with open(file_path, "rb") as file_obj:
-                    logfire.info("calling storage.save")
-                    file_id = await storage.save(
-                        file_obj, filename, progress_callback=on_upload_progress
+                # Sync callback for storage.save
+                def on_r2_progress(pct: float) -> None:
+                    r2_progress_percent["value"] = pct
+
+                async def report_progress():
+                    """Async task to report progress to DB."""
+                    while True:
+                        current_pct = r2_progress_percent["value"]
+                        # Ensure progress doesn't go backwards or exceed 99% during actual transfer
+                        if current_pct < 100.0:
+                            await job_service.update_progress(
+                                upload_id,
+                                JobStatus.PROCESSING,
+                                "uploading to storage...",
+                                phase="upload",
+                                progress_pct=current_pct,
+                            )
+                        if current_pct >= 99.9:  # Report 100% only when truly done
+                            break
+                        await asyncio.sleep(1.0)  # Update DB every second
+
+                # Start reporter task
+                reporter_task = asyncio.create_task(report_progress())
+
+                try:
+                    with open(file_path, "rb") as file_obj:
+                        logfire.info("calling storage.save")
+                        file_id = await storage.save(
+                            file_obj, filename, progress_callback=on_r2_progress
+                        )
+                    # After storage.save completes, ensure final progress is reported
+                    r2_progress_percent["value"] = 100.0
+                    await job_service.update_progress(
+                        upload_id,
+                        JobStatus.PROCESSING,
+                        "uploading to storage...",
+                        phase="upload",
+                        progress_pct=100.0,
                     )
-                    logfire.info("storage.save completed", file_id=file_id)
+                finally:
+                    reporter_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await reporter_task
+
+                logfire.info("storage.save completed", file_id=file_id)
+
             except ValueError as e:
                 logfire.error("ValueError during storage.save", error=str(e))
-                upload_tracker.update_status(
-                    upload_id, UploadStatus.FAILED, "upload failed", error=str(e)
+                await job_service.update_progress(
+                    upload_id, JobStatus.FAILED, "upload failed", error=str(e)
                 )
                 return
             except Exception as e:
@@ -114,8 +148,8 @@ async def _process_upload_background(
                     error=str(e),
                     exc_info=True,
                 )
-                upload_tracker.update_status(
-                    upload_id, UploadStatus.FAILED, "upload failed", error=str(e)
+                await job_service.update_progress(
+                    upload_id, JobStatus.FAILED, "upload failed", error=str(e)
                 )
                 return
 
@@ -135,9 +169,9 @@ async def _process_upload_background(
                         existing_track_id=existing_track.id,
                         artist_did=artist_did,
                     )
-                    upload_tracker.update_status(
+                    await job_service.update_progress(
                         upload_id,
-                        UploadStatus.FAILED,
+                        JobStatus.FAILED,
                         "upload failed",
                         error=f"duplicate upload: track already exists (id: {existing_track.id})",
                     )
@@ -152,9 +186,9 @@ async def _process_upload_background(
             image_id = None
             image_url = None
             if image_path and image_filename:
-                upload_tracker.update_status(
+                await job_service.update_progress(
                     upload_id,
-                    UploadStatus.PROCESSING,
+                    JobStatus.PROCESSING,
                     "saving image...",
                     phase="image",
                 )
@@ -185,9 +219,9 @@ async def _process_upload_background(
                 )
                 artist = result.scalar_one_or_none()
                 if not artist:
-                    upload_tracker.update_status(
+                    await job_service.update_progress(
                         upload_id,
-                        UploadStatus.FAILED,
+                        JobStatus.FAILED,
                         "upload failed",
                         error="artist profile not found",
                     )
@@ -196,9 +230,9 @@ async def _process_upload_background(
                 # resolve featured artist handles
                 featured_artists = []
                 if features:
-                    upload_tracker.update_status(
+                    await job_service.update_progress(
                         upload_id,
-                        UploadStatus.PROCESSING,
+                        JobStatus.PROCESSING,
                         "resolving featured artists...",
                         phase="metadata",
                     )
@@ -238,9 +272,9 @@ async def _process_upload_background(
                             "reason": reason,
                         },
                     )
-                    upload_tracker.update_status(
+                    await job_service.update_progress(
                         upload_id,
-                        UploadStatus.FAILED,
+                        JobStatus.FAILED,
                         "upload failed",
                         error=f"failed to sync track to ATProto: {reason}",
                         phase="atproto",
@@ -257,9 +291,9 @@ async def _process_upload_background(
                 atproto_uri = None
                 atproto_cid = None
                 if r2_url:
-                    upload_tracker.update_status(
+                    await job_service.update_progress(
                         upload_id,
-                        UploadStatus.PROCESSING,
+                        JobStatus.PROCESSING,
                         "creating atproto record...",
                         phase="atproto",
                     )
@@ -287,9 +321,9 @@ async def _process_upload_background(
                     return
 
                 # create track record
-                upload_tracker.update_status(
+                await job_service.update_progress(
                     upload_id,
-                    UploadStatus.PROCESSING,
+                    JobStatus.PROCESSING,
                     "saving track metadata...",
                     phase="database",
                 )
@@ -339,19 +373,22 @@ async def _process_upload_background(
                             f"failed to send notification for track {track.id}: {e}"
                         )
 
-                    upload_tracker.update_status(
+                    await job_service.update_progress(
                         upload_id,
-                        UploadStatus.COMPLETED,
+                        JobStatus.COMPLETED,
                         "upload completed successfully",
-                        track_id=track.id,
+                        result={"track_id": track.id},
                     )
 
                 except IntegrityError as e:
                     await db.rollback()
                     # integrity errors now only occur for foreign key violations or other constraints
                     error_msg = f"database constraint violation: {e!s}"
-                    upload_tracker.update_status(
-                        upload_id, UploadStatus.FAILED, "upload failed", error=error_msg
+                    await job_service.update_progress(
+                        upload_id,
+                        JobStatus.FAILED,
+                        "upload failed",
+                        error=error_msg,
                     )
                     # cleanup: delete uploaded file
                     with contextlib.suppress(Exception):
@@ -359,9 +396,9 @@ async def _process_upload_background(
 
         except Exception as e:
             logger.exception(f"upload {upload_id} failed with unexpected error")
-            upload_tracker.update_status(
+            await job_service.update_progress(
                 upload_id,
-                UploadStatus.FAILED,
+                JobStatus.FAILED,
                 "upload failed",
                 error=f"unexpected error: {e!s}",
             )
@@ -466,8 +503,10 @@ async def upload_track(
                         )
                     tmp_image.write(chunk)
 
-        # create upload tracking
-        upload_id = upload_tracker.create_upload()
+        # create upload tracking via JobService
+        upload_id = await job_service.create_job(
+            JobType.UPLOAD, auth_session.did, "upload queued for processing"
+        )
 
         # schedule background processing once response is sent
         background_tasks.add_task(
@@ -505,24 +544,43 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
 
     async def event_stream():
         """Generate SSE events for upload progress."""
-        queue = await upload_tracker.subscribe(upload_id)
+        # Polling loop
         try:
             while True:
-                try:
-                    # wait for next update with timeout
-                    update = await asyncio.wait_for(queue.get(), timeout=30.0)
-                    yield f"data: {json.dumps(update)}\n\n"
+                job = await job_service.get_job(upload_id)
+                if not job:
+                    # Job not found or lost
+                    yield f"data: {json.dumps({'status': 'failed', 'message': 'upload job not found', 'error': 'job lost'})}\n\n"
+                    break
 
-                    # if upload completed or failed, close stream
-                    if update["status"] in ("completed", "failed"):
-                        break
+                # Construct payload matching old UploadProgress.to_dict()
+                payload = {
+                    "upload_id": job.id,
+                    "status": job.status,
+                    "message": job.message,
+                    "error": job.error,
+                    "phase": job.phase,
+                    "server_progress_pct": job.progress_pct,
+                    "created_at": job.created_at.isoformat()
+                    if job.created_at
+                    else None,
+                    "completed_at": job.completed_at.isoformat()
+                    if job.completed_at
+                    else None,
+                }
+                if job.result and "track_id" in job.result:
+                    payload["track_id"] = job.result["track_id"]
 
-                except TimeoutError:
-                    # send keepalive
-                    yield ": keepalive\n\n"
+                yield f"data: {json.dumps(payload)}\n\n"
 
-        finally:
-            upload_tracker.unsubscribe(upload_id, queue)
+                if job.status in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
+                    break
+
+                await asyncio.sleep(1.0)
+
+        except Exception as e:
+            logger.error(f"error in upload progress stream: {e}")
+            yield f"data: {json.dumps({'status': 'failed', 'message': 'connection error', 'error': str(e)})}\n\n"
 
     return StreamingResponse(
         event_stream(),
