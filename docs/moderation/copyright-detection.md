@@ -10,7 +10,7 @@ upload completes
        ▼
 ┌──────────────┐     ┌─────────────┐     ┌──────────────┐
 │   backend    │────▶│  AuDD API   │────▶│   database   │
-│ (background) │     │ (enterprise)│     │ (copyright_  │
+│ (background) │     │             │     │ (copyright_  │
 │              │◀────│             │     │    flags)    │
 └──────────────┘     └─────────────┘     └──────────────┘
                            │
@@ -21,19 +21,19 @@ upload completes
 ```
 
 1. track upload completes, file stored in R2
-2. background job sends R2 URL to AuDD enterprise API
+2. background job sends R2 URL to AuDD API
 3. AuDD scans file against their music database
 4. results stored in `copyright_flags` table
 5. admin can query flagged tracks
 
 ## AuDD API
 
-[AuDD](https://audd.io/) is a music recognition service similar to Shazam. their enterprise endpoint scans entire files (not just clips) and returns all matched songs.
+[AuDD](https://audd.io/) is a music recognition service similar to Shazam. their API scans audio and returns matched songs with confidence scores.
 
 ### request
 
 ```bash
-curl -X POST https://enterprise.audd.io/ \
+curl -X POST https://api.audd.io/ \
   -F "api_token=YOUR_TOKEN" \
   -F "url=https://your-r2-bucket.com/audio/abc123.mp3" \
   -F "accurate_offsets=1"
@@ -100,7 +100,7 @@ CREATE TABLE copyright_flags (
     resolved_at TIMESTAMPTZ,
 
     -- metadata
-    scanned_by VARCHAR(50),     -- 'audd_enterprise', 'manual'
+    scanned_by VARCHAR(50),     -- 'audd', 'manual'
     error_message TEXT,
 
     UNIQUE(track_id)
@@ -124,7 +124,7 @@ CREATE TABLE copyright_flags (
 AUDD_API_TOKEN=your_token_here
 
 # optional (have defaults)
-AUDD_ENTERPRISE_URL=https://enterprise.audd.io/
+AUDD_API_URL=https://api.audd.io/
 AUDD_TIMEOUT_SECONDS=300
 
 # scan behavior

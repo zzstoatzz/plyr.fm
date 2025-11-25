@@ -117,7 +117,6 @@ future possibilities:
 - [Bluesky's Stackable Approach to Moderation](https://bsky.social/about/blog/03-12-2024-stackable-moderation) - the blog post that inspired this architecture
 - [Ozone GitHub](https://github.com/bluesky-social/ozone) - Bluesky's open-source moderation tool
 - [AuDD API](https://docs.audd.io/) - music recognition service we use for copyright detection
-- [AuDD Enterprise](https://docs.audd.io/enterprise/) - full-file scanning for copyright detection
 - [AT Protocol](https://atproto.com/) - the protocol plyr.fm is built on
 
 ## related documentation
