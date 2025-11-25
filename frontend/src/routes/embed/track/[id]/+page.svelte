@@ -45,6 +45,13 @@
 </script>
 
 <div class="embed-container">
+	<!-- background image for mobile layout -->
+	{#if track.image_url}
+		<div class="bg-image" style="background-image: url({track.image_url})"></div>
+	{/if}
+	<div class="bg-overlay"></div>
+
+	<!-- desktop: side art -->
 	<div class="art-container">
 		{#if track.image_url}
 			<img src={track.image_url} alt={track.title} class="art" />
@@ -73,10 +80,10 @@
 				</a>
 				<a href="https://plyr.fm/u/{track.artist_handle}" target="_blank" rel="noopener noreferrer" class="artist">{track.artist}</a>
 			</div>
-            
-            <a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">
-                plyr.fm
-            </a>
+
+			<a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">
+				plyr.fm
+			</a>
 		</div>
 
 		<div class="player-controls">
@@ -116,6 +123,16 @@
 		height: 165px;
 		background: #1a1a1a;
 		overflow: hidden;
+		position: relative;
+	}
+
+	/* background image - hidden on desktop */
+	.bg-image {
+		display: none;
+	}
+
+	.bg-overlay {
+		display: none;
 	}
 
 	.art-container {
@@ -150,6 +167,7 @@
 		justify-content: space-between;
 		position: relative;
 		min-width: 0;
+		z-index: 1;
 	}
 
 	.header {
@@ -219,21 +237,21 @@
 		text-decoration: underline;
 	}
 
-    .logo {
-        position: absolute;
-        top: 16px;
-        right: 16px;
-        font-size: 12px;
-        font-weight: 700;
-        color: #444;
-        text-decoration: none;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
+	.logo {
+		position: absolute;
+		top: 16px;
+		right: 16px;
+		font-size: 12px;
+		font-weight: 700;
+		color: #444;
+		text-decoration: none;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+	}
 
-    .logo:hover {
-        color: #666;
-    }
+	.logo:hover {
+		color: #666;
+	}
 
 	.player-controls {
 		display: flex;
@@ -247,7 +265,7 @@
 		color: #777;
 		font-variant-numeric: tabular-nums;
 		width: 35px;
-        text-align: center;
+		text-align: center;
 	}
 
 	.progress-bar {
@@ -276,75 +294,103 @@
 		pointer-events: none;
 	}
 
-    .progress-bar:hover .progress-fill {
-        background: #3b82f6; /* blue-500 */
-    }
-
-	/* narrow screens - reduce art size, tighten spacing */
-	@media (max-width: 400px) {
-		.art-container {
-			width: 100px;
-			height: 165px;
-		}
-
-		.art-placeholder {
-			font-size: 32px;
-		}
-
-		.content {
-			padding: 12px;
-		}
-
-		.header {
-			gap: 10px;
-		}
-
-		.play-btn {
-			width: 40px;
-			height: 40px;
-		}
-
-		.icon {
-			width: 20px;
-			height: 20px;
-		}
-
-		.title {
-			font-size: 15px;
-		}
-
-		.artist {
-			font-size: 12px;
-		}
-
-		.meta {
-			padding-right: 50px;
-		}
-
-		.logo {
-			top: 12px;
-			right: 12px;
-			font-size: 10px;
-		}
-
-		.player-controls {
-			gap: 8px;
-		}
-
-		.time {
-			font-size: 11px;
-			width: 30px;
-		}
+	.progress-bar:hover .progress-fill {
+		background: #3b82f6; /* blue-500 */
 	}
 
-	/* very narrow - hide art entirely */
-	@media (max-width: 280px) {
+	/* mobile: background image layout */
+	@media (max-width: 400px) {
+		.embed-container {
+			height: 165px; /* match bluesky iframe height */
+			flex-direction: column;
+		}
+
+		/* show blurred background */
+		.bg-image {
+			display: block;
+			position: absolute;
+			inset: 0;
+			background-size: cover;
+			background-position: center;
+			filter: blur(20px);
+			transform: scale(1.2); /* prevent blur edges */
+		}
+
+		.bg-overlay {
+			display: block;
+			position: absolute;
+			inset: 0;
+			background: rgba(0, 0, 0, 0.65);
+		}
+
+		/* hide side art */
 		.art-container {
 			display: none;
 		}
 
 		.content {
-			padding: 14px;
+			flex: 1;
+			padding: 16px;
+			justify-content: space-between;
+		}
+
+		.header {
+			gap: 12px;
+		}
+
+		.play-btn {
+			width: 44px;
+			height: 44px;
+		}
+
+		.icon {
+			width: 22px;
+			height: 22px;
+		}
+
+		.meta {
+			padding-right: 55px;
+		}
+
+		.title {
+			font-size: 16px;
+			color: #fff;
+			text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+		}
+
+		.artist {
+			font-size: 13px;
+			color: rgba(255, 255, 255, 0.8);
+			text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+		}
+
+		.logo {
+			top: 16px;
+			right: 16px;
+			font-size: 10px;
+			color: rgba(255, 255, 255, 0.4);
+		}
+
+		.logo:hover {
+			color: rgba(255, 255, 255, 0.6);
+		}
+
+		.player-controls {
+			gap: 10px;
+		}
+
+		.time {
+			font-size: 11px;
+			color: rgba(255, 255, 255, 0.6);
+			width: 32px;
+		}
+
+		.progress-bg {
+			background: rgba(255, 255, 255, 0.2);
+		}
+
+		.progress-fill {
+			background: #fff;
 		}
 	}
 </style>
