@@ -360,9 +360,8 @@ async def upload_album_cover(
         # save returns the file_id (hash)
         image_id = await storage.save(image_obj, image.filename)
 
-        # construct R2 URL directly
-        # storage.save uses just {file_id}{ext} for images (no subdirectory)
-        image_url = f"{storage.public_image_bucket_url}/{image_id}{ext}"
+        # construct R2 URL directly (images are stored under images/ prefix)
+        image_url = f"{storage.public_image_bucket_url}/images/{image_id}{ext}"
 
         # delete old image if exists (prevent R2 object leaks)
         if album.image_id:
