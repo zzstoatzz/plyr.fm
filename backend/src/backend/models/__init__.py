@@ -2,6 +2,7 @@
 
 from backend.models.album import Album
 from backend.models.artist import Artist
+from backend.models.copyright_scan import CopyrightScan, ScanResolution
 from backend.models.database import Base
 from backend.models.exchange_token import ExchangeToken
 from backend.models.job import Job
@@ -17,10 +18,12 @@ __all__ = [
     "Album",
     "Artist",
     "Base",
+    "CopyrightScan",
     "ExchangeToken",
     "Job",
     "OAuthStateModel",
     "QueueState",
+    "ScanResolution",
     "Track",
     "TrackLike",
     "UserPreferences",

@@ -1,0 +1,32 @@
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+default := "run"
+
+alias r := run
+alias b := build
+
+run:
+    MODERATION_HOST="${MODERATION_HOST:-127.0.0.1}" \
+    MODERATION_PORT="${MODERATION_PORT:-8083}" \
+    MODERATION_AUDD_API_TOKEN="${MODERATION_AUDD_API_TOKEN:-}" \
+    cargo watch -x run
+
+build:
+    cargo build --release
+
+check:
+    cargo check
+
+fmt:
+    cargo fmt
+
+clippy:
+    cargo clippy --all-targets --all-features
+
+image tag="plyr-moderation:local":
+    docker build -t {{tag}} .
+
+docker-run TAG="plyr-moderation:local" PORT="8083":
+    docker run --rm -p {{PORT}}:8080 {{TAG}}
+
+deploy ARGS="":
+    fly deploy --config fly.toml {{ARGS}}
