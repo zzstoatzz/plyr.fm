@@ -102,6 +102,13 @@ $effect(() => {
 		<meta property="og:audio:type" content="audio/{track.file_type}" />
 	{/if}
 
+	<!-- og:video for iframely to discover our embed iframe as the player -->
+	<meta property="og:video" content="{APP_CANONICAL_URL}/embed/track/{track.id}" />
+	<meta property="og:video:secure_url" content="{APP_CANONICAL_URL}/embed/track/{track.id}" />
+	<meta property="og:video:type" content="text/html" />
+	<meta property="og:video:width" content="400" />
+	<meta property="og:video:height" content="165" />
+
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content="{track.title}" />
