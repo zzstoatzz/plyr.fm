@@ -71,7 +71,7 @@
 				<a href="https://plyr.fm/track/{track.id}" target="_blank" rel="noopener noreferrer" class="title">
 					{track.title}
 				</a>
-				<div class="artist">{track.artist}</div>
+				<a href="https://plyr.fm/u/{track.artist_handle}" target="_blank" rel="noopener noreferrer" class="artist">{track.artist}</a>
 			</div>
             
             <a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">
@@ -206,11 +206,17 @@
 	}
 
 	.artist {
+		display: block;
 		font-size: 14px;
 		color: #aaa;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		text-decoration: none;
+	}
+
+	.artist:hover {
+		text-decoration: underline;
 	}
 
     .logo {
