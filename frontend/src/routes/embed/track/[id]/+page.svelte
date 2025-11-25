@@ -314,6 +314,8 @@
 			background-position: center;
 			filter: blur(20px);
 			transform: scale(1.2); /* prevent blur edges */
+			z-index: 0;
+			pointer-events: none;
 		}
 
 		.bg-overlay {
@@ -321,6 +323,8 @@
 			position: absolute;
 			inset: 0;
 			background: rgba(0, 0, 0, 0.35);
+			z-index: 0;
+			pointer-events: none;
 		}
 
 		/* hide side art */
