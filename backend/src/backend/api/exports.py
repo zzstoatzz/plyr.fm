@@ -86,16 +86,19 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
                         key = f"audio/{track.file_id}.{track.file_type}"
 
                         try:
-                            # update progress
+                            # update progress (current_track is 1-indexed for display)
+                            current_track = processed + 1
                             pct = (processed / total) * 100
                             await job_service.update_progress(
                                 export_id,
                                 JobStatus.PROCESSING,
-                                f"downloading {track.title}...",
+                                f"downloading track {current_track} of {total}...",
                                 progress_pct=pct,
                                 result={
                                     "processed_count": processed,
                                     "total_count": total,
+                                    "current_track": current_track,
+                                    "current_title": track.title,
                                 },
                             )
 

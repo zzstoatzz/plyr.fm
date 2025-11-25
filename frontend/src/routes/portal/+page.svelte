@@ -456,10 +456,7 @@
 
 				// show progress messages
 				if (update.message && update.status === 'processing') {
-					const progressInfo = update.total_count
-						? ` (${update.processed_count}/${update.total_count})`
-						: '';
-					toast.update(toastId, `${update.message}${progressInfo}`);
+					toast.update(toastId, update.message);
 				}
 
 				if (update.status === 'completed') {
