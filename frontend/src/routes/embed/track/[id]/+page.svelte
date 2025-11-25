@@ -320,7 +320,7 @@
 			display: block;
 			position: absolute;
 			inset: 0;
-			background: rgba(0, 0, 0, 0.65);
+			background: rgba(0, 0, 0, 0.35);
 		}
 
 		/* hide side art */
@@ -368,11 +368,12 @@
 			top: 16px;
 			right: 16px;
 			font-size: 10px;
-			color: rgba(255, 255, 255, 0.4);
+			color: rgba(255, 255, 255, 0.5);
+			z-index: 2;
 		}
 
 		.logo:hover {
-			color: rgba(255, 255, 255, 0.6);
+			color: rgba(255, 255, 255, 0.7);
 		}
 
 		.player-controls {
