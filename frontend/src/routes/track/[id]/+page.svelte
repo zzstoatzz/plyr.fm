@@ -112,6 +112,14 @@ $effect(() => {
 	{#if track.image_url}
 		<meta name="twitter:image" content="{track.image_url}" />
 	{/if}
+
+	<!-- oEmbed discovery for embed services like iframely -->
+	<link
+		rel="alternate"
+		type="application/json+oembed"
+		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/track/${track.id}`)}"
+		title="{track.title} - {track.artist}"
+	/>
 </svelte:head>
 
 <div class="page-container">
