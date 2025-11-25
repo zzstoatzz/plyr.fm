@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend.main import app
-from backend.models import Artist, Track
+from backend.models import Album, Artist, Track
 
 
 class MockSession(Session):
@@ -267,3 +267,118 @@ async def test_atproto_cleanup_handles_404(
     # verify track was still deleted from DB
     result = await db_session.execute(select(Track).where(Track.id == track.id))
     assert result.scalar_one_or_none() is None
+
+
+async def test_track_deletion_preserves_shared_album_image(
+    test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
+):
+    """test that deleting a track doesn't delete the image if album shares it.
+
+    regression test for issue where track and album share the same image_id.
+    when the track is deleted, the image should NOT be deleted from R2 if
+    the album still references it.
+    """
+    shared_image_id = "shared_image_abc123"
+
+    # create album with image
+    album = Album(
+        artist_did=test_artist.did,
+        slug="test-album",
+        title="Test Album",
+        image_id=shared_image_id,
+        image_url="https://example.com/images/shared_image_abc123.jpg",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create track with same image (this happens when album inherits track's image)
+    track = Track(
+        title="test track",
+        artist_did=test_artist.did,
+        file_id="test_file_shared_img",
+        file_type="mp3",
+        extra={},
+        album_id=album.id,
+        image_id=shared_image_id,
+        image_url="https://example.com/images/shared_image_abc123.jpg",
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+
+    # track storage.delete calls
+    delete_calls: list[str] = []
+
+    async def mock_delete(file_id: str, file_type: str | None = None):
+        delete_calls.append(file_id)
+
+    with (
+        patch(
+            "backend.api.tracks.mutations.storage.delete",
+            side_effect=mock_delete,
+        ),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/tracks/{track.id}")
+
+    assert response.status_code == 200
+
+    # audio file should be deleted
+    assert "test_file_shared_img" in delete_calls
+
+    # shared image should NOT be deleted (album still uses it)
+    assert shared_image_id not in delete_calls
+
+    # verify album still has its image
+    await db_session.refresh(album)
+    assert album.image_id == shared_image_id
+
+
+async def test_track_deletion_deletes_unshared_image(
+    test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
+):
+    """test that deleting a track DOES delete the image if album doesn't share it.
+
+    when the track has an image but the album has a different image (or no album),
+    the track's image should be deleted from R2.
+    """
+    track_image_id = "track_only_image_xyz"
+
+    # create track with image but no album
+    track = Track(
+        title="test track",
+        artist_did=test_artist.did,
+        file_id="test_file_unshared_img",
+        file_type="mp3",
+        extra={},
+        image_id=track_image_id,
+        image_url="https://example.com/images/track_only_image_xyz.jpg",
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+
+    # track storage.delete calls
+    delete_calls: list[str] = []
+
+    async def mock_delete(file_id: str, file_type: str | None = None):
+        delete_calls.append(file_id)
+
+    with (
+        patch(
+            "backend.api.tracks.mutations.storage.delete",
+            side_effect=mock_delete,
+        ),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/tracks/{track.id}")
+
+    assert response.status_code == 200
+
+    # both audio file and image should be deleted (no album shares the image)
+    assert "test_file_unshared_img" in delete_calls
+    assert track_image_id in delete_calls

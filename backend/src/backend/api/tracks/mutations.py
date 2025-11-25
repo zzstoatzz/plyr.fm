@@ -43,7 +43,9 @@ async def delete_track(
     auth_session: AuthSession = Depends(require_auth),
 ) -> dict:
     """Delete a track (only by owner)."""
-    result = await db.execute(select(Track).where(Track.id == track_id))
+    result = await db.execute(
+        select(Track).options(selectinload(Track.album_rel)).where(Track.id == track_id)
+    )
     track = result.scalar_one_or_none()
 
     if not track:
@@ -91,6 +93,19 @@ async def delete_track(
     except Exception as e:
         # log but don't fail - maybe file was already deleted
         logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)
+
+    # delete image file from storage (if album doesn't share it)
+    if track.image_id:
+        album_shares_image = (
+            track.album_rel and track.album_rel.image_id == track.image_id
+        )
+        if not album_shares_image:
+            try:
+                await storage.delete(track.image_id)
+            except Exception as e:
+                logger.warning(
+                    f"failed to delete image {track.image_id}: {e}", exc_info=True
+                )
 
     # delete track record
     await db.delete(track)
@@ -146,8 +161,14 @@ async def update_track_metadata(
         image_id, image_url = await upload_track_image(image)
 
         if track.image_id:
-            with contextlib.suppress(Exception):
-                await storage.delete(track.image_id)
+            # only delete old image from R2 if album doesn't share it
+            # (albums inherit track's image_id on creation, so they may reference the same file)
+            album_shares_image = (
+                track.album_rel and track.album_rel.image_id == track.image_id
+            )
+            if not album_shares_image:
+                with contextlib.suppress(Exception):
+                    await storage.delete(track.image_id)
 
         track.image_id = image_id
         track.image_url = image_url
