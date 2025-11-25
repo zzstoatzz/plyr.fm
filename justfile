@@ -1,6 +1,7 @@
 # plyr.fm dev workflows
 mod frontend
 mod transcoder
+mod moderation
 mod backend
 
 
