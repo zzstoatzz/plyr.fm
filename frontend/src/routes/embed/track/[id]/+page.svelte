@@ -149,6 +149,7 @@
 		flex-direction: column;
 		justify-content: space-between;
 		position: relative;
+		min-width: 0;
 	}
 
 	.header {
@@ -222,7 +223,7 @@
         text-transform: uppercase;
         letter-spacing: 1px;
     }
-    
+
     .logo:hover {
         color: #666;
     }
@@ -267,8 +268,72 @@
 		border-radius: 2px;
 		pointer-events: none;
 	}
-    
+
     .progress-bar:hover .progress-fill {
         background: #3b82f6; /* blue-500 */
     }
+
+	/* narrow screens - reduce art size, tighten spacing */
+	@media (max-width: 400px) {
+		.art-container {
+			width: 100px;
+			height: 165px;
+		}
+
+		.art-placeholder {
+			font-size: 32px;
+		}
+
+		.content {
+			padding: 12px;
+		}
+
+		.header {
+			gap: 10px;
+		}
+
+		.play-btn {
+			width: 40px;
+			height: 40px;
+		}
+
+		.icon {
+			width: 20px;
+			height: 20px;
+		}
+
+		.title {
+			font-size: 15px;
+		}
+
+		.artist {
+			font-size: 12px;
+		}
+
+		.logo {
+			top: 12px;
+			right: 12px;
+			font-size: 10px;
+		}
+
+		.player-controls {
+			gap: 8px;
+		}
+
+		.time {
+			font-size: 11px;
+			width: 30px;
+		}
+	}
+
+	/* very narrow - hide art entirely */
+	@media (max-width: 280px) {
+		.art-container {
+			display: none;
+		}
+
+		.content {
+			padding: 14px;
+		}
+	}
 </style>
