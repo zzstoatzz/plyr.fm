@@ -314,13 +314,17 @@
 			background-position: center;
 			filter: blur(20px);
 			transform: scale(1.2); /* prevent blur edges */
+			z-index: 0;
+			pointer-events: none;
 		}
 
 		.bg-overlay {
 			display: block;
 			position: absolute;
 			inset: 0;
-			background: rgba(0, 0, 0, 0.65);
+			background: rgba(0, 0, 0, 0.35);
+			z-index: 0;
+			pointer-events: none;
 		}
 
 		/* hide side art */
@@ -368,11 +372,12 @@
 			top: 16px;
 			right: 16px;
 			font-size: 10px;
-			color: rgba(255, 255, 255, 0.4);
+			color: rgba(255, 255, 255, 0.5);
+			z-index: 2;
 		}
 
 		.logo:hover {
-			color: rgba(255, 255, 255, 0.6);
+			color: rgba(255, 255, 255, 0.7);
 		}
 
 		.player-controls {
