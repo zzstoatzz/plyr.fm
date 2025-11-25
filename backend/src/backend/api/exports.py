@@ -1,13 +1,16 @@
 """media export API endpoints."""
 
 import asyncio
-import io
 import json
 import logging
+import os
+import tempfile
 import zipfile
+from pathlib import Path
 from typing import Annotated
 
 import aioboto3
+import aiofiles
 import logfire
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import RedirectResponse, StreamingResponse
@@ -53,159 +56,167 @@ async def _process_export_background(export_id: str, artist_did: str) -> None:
             )
             return
 
-        # create zip archive in memory
-        zip_buffer = io.BytesIO()
-        async_session = aioboto3.Session()
-
-        async with async_session.client(
-            "s3",
-            endpoint_url=settings.storage.r2_endpoint_url,
-            aws_access_key_id=settings.storage.aws_access_key_id,
-            aws_secret_access_key=settings.storage.aws_secret_access_key,
-        ) as s3_client:
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                # track counter for duplicate titles
-                title_counts: dict[str, int] = {}
-                processed = 0
-                total = len(tracks)
-
-                for track in tracks:
-                    if not track.file_id or not track.file_type:
-                        logfire.warn(
-                            "skipping track: missing file_id or file_type",
-                            track_id=track.id,
-                        )
-                        continue
-
-                    # construct R2 key
-                    key = f"audio/{track.file_id}.{track.file_type}"
-
-                    try:
-                        # update progress
-                        pct = (processed / total) * 100
-                        await job_service.update_progress(
-                            export_id,
-                            JobStatus.PROCESSING,
-                            f"downloading {track.title}...",
-                            progress_pct=pct,
-                            result={"processed_count": processed, "total_count": total},
-                        )
-
-                        # download file from R2
-                        response = await s3_client.get_object(
-                            Bucket=settings.storage.r2_bucket,
-                            Key=key,
-                        )
-
-                        # read file content
-                        file_content = await response["Body"].read()
-
-                        # create safe filename
-                        # handle duplicate titles by appending counter
-                        base_filename = f"{track.title}.{track.file_type}"
-                        if base_filename in title_counts:
-                            title_counts[base_filename] += 1
-                            filename = f"{track.title} ({title_counts[base_filename]}).{track.file_type}"
-                        else:
-                            title_counts[base_filename] = 0
-                            filename = base_filename
-
-                        # sanitize filename (remove invalid chars)
-                        filename = "".join(
-                            c
-                            for c in filename
-                            if c.isalnum() or c in (" ", ".", "-", "_", "(", ")")
-                        )
-
-                        # add to zip
-                        zip_file.writestr(filename, file_content)
-
-                        processed += 1
-                        logfire.info(
-                            "added track to export: {track_title}",
-                            track_id=track.id,
-                            track_title=track.title,
-                            filename=filename,
-                        )
-
-                    except Exception as e:
-                        logfire.error(
-                            "failed to add track to export: {track_title}",
-                            track_id=track.id,
-                            track_title=track.title,
-                            error=str(e),
-                            _exc_info=True,
-                        )
-                        # continue with other tracks instead of failing entire export
-
-        # store the zip data to R2
-        zip_buffer.seek(0)
-        zip_filename = f"{export_id}.zip"
-        key = f"exports/{zip_filename}"
-
-        # Upload using aioboto3 directly
-        try:
+        # use temp directory to avoid loading large files into memory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            zip_path = temp_path / f"{export_id}.zip"
             async_session = aioboto3.Session()
-            zip_size = zip_buffer.getbuffer().nbytes
 
-            # Generate user-friendly filename for download
-            from datetime import datetime
+            async with async_session.client(
+                "s3",
+                endpoint_url=settings.storage.r2_endpoint_url,
+                aws_access_key_id=settings.storage.aws_access_key_id,
+                aws_secret_access_key=settings.storage.aws_secret_access_key,
+            ) as s3_client:
+                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                    # track counter for duplicate titles
+                    title_counts: dict[str, int] = {}
+                    processed = 0
+                    total = len(tracks)
 
-            download_filename = f"plyr-tracks-{datetime.now().date()}.zip"
+                    for track in tracks:
+                        if not track.file_id or not track.file_type:
+                            logfire.warn(
+                                "skipping track: missing file_id or file_type",
+                                track_id=track.id,
+                            )
+                            continue
 
-            async with (
-                R2ProgressTracker(
-                    job_id=export_id,
-                    message="finalizing export...",
+                        # construct R2 key
+                        key = f"audio/{track.file_id}.{track.file_type}"
+
+                        try:
+                            # update progress
+                            pct = (processed / total) * 100
+                            await job_service.update_progress(
+                                export_id,
+                                JobStatus.PROCESSING,
+                                f"downloading {track.title}...",
+                                progress_pct=pct,
+                                result={
+                                    "processed_count": processed,
+                                    "total_count": total,
+                                },
+                            )
+
+                            # create safe filename
+                            # handle duplicate titles by appending counter
+                            base_filename = f"{track.title}.{track.file_type}"
+                            if base_filename in title_counts:
+                                title_counts[base_filename] += 1
+                                filename = f"{track.title} ({title_counts[base_filename]}).{track.file_type}"
+                            else:
+                                title_counts[base_filename] = 0
+                                filename = base_filename
+
+                            # sanitize filename (remove invalid chars)
+                            filename = "".join(
+                                c
+                                for c in filename
+                                if c.isalnum() or c in (" ", ".", "-", "_", "(", ")")
+                            )
+
+                            # download file to temp location, streaming to disk
+                            temp_file_path = temp_path / filename
+                            response = await s3_client.get_object(
+                                Bucket=settings.storage.r2_bucket,
+                                Key=key,
+                            )
+
+                            # stream to disk in chunks to avoid loading into memory
+                            async with aiofiles.open(temp_file_path, "wb") as f:
+                                async for chunk in response["Body"].iter_chunks():
+                                    await f.write(chunk)
+
+                            # add to zip from disk (streams from file, doesn't load into memory)
+                            zip_file.write(temp_file_path, arcname=filename)
+
+                            # remove temp file immediately to free disk space
+                            os.unlink(temp_file_path)
+
+                            processed += 1
+                            logfire.info(
+                                "added track to export: {track_title}",
+                                track_id=track.id,
+                                track_title=track.title,
+                                filename=filename,
+                            )
+
+                        except Exception as e:
+                            logfire.error(
+                                "failed to add track to export: {track_title}",
+                                track_id=track.id,
+                                track_title=track.title,
+                                error=str(e),
+                                _exc_info=True,
+                            )
+                            # continue with other tracks instead of failing entire export
+
+            # upload the zip file to R2 (still inside temp directory context)
+            r2_key = f"exports/{export_id}.zip"
+
+            try:
+                zip_size = zip_path.stat().st_size
+
+                # Generate user-friendly filename for download
+                from datetime import datetime
+
+                download_filename = f"plyr-tracks-{datetime.now().date()}.zip"
+
+                async with (
+                    R2ProgressTracker(
+                        job_id=export_id,
+                        message="finalizing export...",
+                        phase="upload",
+                    ) as tracker,
+                    async_session.client(
+                        "s3",
+                        endpoint_url=settings.storage.r2_endpoint_url,
+                        aws_access_key_id=settings.storage.aws_access_key_id,
+                        aws_secret_access_key=settings.storage.aws_secret_access_key,
+                    ) as upload_client,
+                ):
+                    # Wrap callback with UploadProgressTracker to convert bytes to percentage
+                    bytes_to_pct = UploadProgressTracker(zip_size, tracker.on_progress)
+                    with open(zip_path, "rb") as zip_file_obj:
+                        await upload_client.upload_fileobj(
+                            zip_file_obj,
+                            settings.storage.r2_bucket,
+                            r2_key,
+                            ExtraArgs={
+                                "ContentType": "application/zip",
+                                "ContentDisposition": f'attachment; filename="{download_filename}"',
+                            },
+                            Callback=bytes_to_pct,
+                        )
+
+                # Final 100% update
+                await job_service.update_progress(
+                    export_id,
+                    JobStatus.PROCESSING,
+                    "finalizing export...",
                     phase="upload",
-                ) as tracker,
-                async_session.client(
-                    "s3",
-                    endpoint_url=settings.storage.r2_endpoint_url,
-                    aws_access_key_id=settings.storage.aws_access_key_id,
-                    aws_secret_access_key=settings.storage.aws_secret_access_key,
-                ) as s3_client,
-            ):
-                # Wrap callback with UploadProgressTracker to convert bytes to percentage
-                bytes_to_pct = UploadProgressTracker(zip_size, tracker.on_progress)
-                await s3_client.upload_fileobj(
-                    zip_buffer,
-                    settings.storage.r2_bucket,
-                    key,
-                    ExtraArgs={
-                        "ContentType": "application/zip",
-                        "ContentDisposition": f'attachment; filename="{download_filename}"',
-                    },
-                    Callback=bytes_to_pct,
+                    progress_pct=100.0,
                 )
 
-            # Final 100% update
+            except Exception as e:
+                logfire.error("failed to upload export zip", error=str(e))
+                raise
+
+            # get download URL
+            download_url = f"{settings.storage.r2_public_bucket_url}/{r2_key}"
+
+            # mark as completed
             await job_service.update_progress(
                 export_id,
-                JobStatus.PROCESSING,
-                "finalizing export...",
-                phase="upload",
-                progress_pct=100.0,
+                JobStatus.COMPLETED,
+                f"export completed - {processed} tracks ready",
+                result={
+                    "processed_count": processed,
+                    "total_count": len(tracks),
+                    "download_url": download_url,
+                },
             )
-
-        except Exception as e:
-            logfire.error("failed to upload export zip", error=str(e))
-            raise
-
-        # get download URL
-        download_url = f"{settings.storage.r2_public_bucket_url}/{key}"
-
-        # mark as completed
-        await job_service.update_progress(
-            export_id,
-            JobStatus.COMPLETED,
-            f"export completed - {processed} tracks ready",
-            result={
-                "processed_count": processed,
-                "total_count": len(tracks),
-                "download_url": download_url,
-            },
-        )
 
     except Exception as e:
         logfire.exception(
