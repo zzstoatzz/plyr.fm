@@ -36,7 +36,7 @@ impl Config {
             audd_api_token: env::var("MODERATION_AUDD_API_TOKEN")
                 .map_err(|_| anyhow!("MODERATION_AUDD_API_TOKEN is required"))?,
             audd_api_url: env::var("MODERATION_AUDD_API_URL")
-                .unwrap_or_else(|_| "https://api.audd.io/".to_string()),
+                .unwrap_or_else(|_| "https://enterprise.audd.io/".to_string()),
             score_threshold: env::var("MODERATION_SCORE_THRESHOLD")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -97,11 +97,12 @@ enum AuddResult {
 
 #[derive(Debug, Deserialize)]
 struct AuddGroup {
-    offset: Option<i64>,
+    offset: Option<serde_json::Value>, // can be i64 (ms) or string like "00:00"
     songs: Option<Vec<AuddSong>>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // fields needed for deserialization
 struct AuddSong {
     artist: Option<String>,
     title: Option<String>,
@@ -109,6 +110,9 @@ struct AuddSong {
     score: Option<i32>,
     isrc: Option<String>,
     timecode: Option<String>,
+    release_date: Option<String>,
+    label: Option<String>,
+    song_link: Option<String>,
 }
 
 // --- main ---
@@ -261,7 +265,7 @@ fn extract_matches(response: &AuddResponse) -> Vec<AuddMatch> {
                     .map(|songs| {
                         songs
                             .iter()
-                            .map(|song| parse_song(song, group.offset))
+                            .map(|song| parse_song(song, group.offset.as_ref()))
                             .collect::<Vec<_>>()
                     })
                     .unwrap_or_default()
@@ -271,7 +275,14 @@ fn extract_matches(response: &AuddResponse) -> Vec<AuddMatch> {
     }
 }
 
-fn parse_song(song: &AuddSong, offset_ms: Option<i64>) -> AuddMatch {
+fn parse_song(song: &AuddSong, offset: Option<&serde_json::Value>) -> AuddMatch {
+    // convert offset to ms - can be i64 or string like "00:00" or "01:24"
+    let offset_ms = offset.and_then(|v| match v {
+        serde_json::Value::Number(n) => n.as_i64(),
+        serde_json::Value::String(s) => parse_timecode_to_ms(s),
+        _ => None,
+    });
+
     AuddMatch {
         artist: song.artist.clone().unwrap_or_else(|| "Unknown".to_string()),
         title: song.title.clone().unwrap_or_else(|| "Unknown".to_string()),
@@ -280,6 +291,25 @@ fn parse_song(song: &AuddSong, offset_ms: Option<i64>) -> AuddMatch {
         isrc: song.isrc.clone(),
         timecode: song.timecode.clone(),
         offset_ms,
+    }
+}
+
+fn parse_timecode_to_ms(timecode: &str) -> Option<i64> {
+    // parse "MM:SS" or "HH:MM:SS" to milliseconds
+    let parts: Vec<&str> = timecode.split(':').collect();
+    match parts.len() {
+        2 => {
+            let mins: i64 = parts[0].parse().ok()?;
+            let secs: i64 = parts[1].parse().ok()?;
+            Some((mins * 60 + secs) * 1000)
+        }
+        3 => {
+            let hours: i64 = parts[0].parse().ok()?;
+            let mins: i64 = parts[1].parse().ok()?;
+            let secs: i64 = parts[2].parse().ok()?;
+            Some((hours * 3600 + mins * 60 + secs) * 1000)
+        }
+        _ => None,
     }
 }
 
