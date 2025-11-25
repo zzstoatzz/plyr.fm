@@ -185,7 +185,8 @@
 	.meta {
 		flex: 1;
 		min-width: 0;
-        padding-top: 4px;
+		padding-top: 4px;
+		padding-right: 60px; /* leave room for logo */
 	}
 
 	.title {
@@ -308,6 +309,10 @@
 
 		.artist {
 			font-size: 12px;
+		}
+
+		.meta {
+			padding-right: 50px;
 		}
 
 		.logo {
