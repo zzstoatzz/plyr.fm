@@ -18,6 +18,7 @@ class PreferencesResponse(BaseModel):
 
     accent_color: str
     auto_advance: bool
+    allow_comments: bool
 
 
 class PreferencesUpdate(BaseModel):
@@ -25,6 +26,7 @@ class PreferencesUpdate(BaseModel):
 
     accent_color: str | None = None
     auto_advance: bool | None = None
+    allow_comments: bool | None = None
 
 
 @router.get("/")
@@ -46,7 +48,9 @@ async def get_preferences(
         await db.refresh(prefs)
 
     return PreferencesResponse(
-        accent_color=prefs.accent_color, auto_advance=prefs.auto_advance
+        accent_color=prefs.accent_color,
+        auto_advance=prefs.auto_advance,
+        allow_comments=prefs.allow_comments,
     )
 
 
@@ -70,6 +74,9 @@ async def update_preferences(
             auto_advance=update.auto_advance
             if update.auto_advance is not None
             else True,
+            allow_comments=update.allow_comments
+            if update.allow_comments is not None
+            else False,
         )
         db.add(prefs)
     else:
@@ -78,10 +85,14 @@ async def update_preferences(
             prefs.accent_color = update.accent_color
         if update.auto_advance is not None:
             prefs.auto_advance = update.auto_advance
+        if update.allow_comments is not None:
+            prefs.allow_comments = update.allow_comments
 
     await db.commit()
     await db.refresh(prefs)
 
     return PreferencesResponse(
-        accent_color=prefs.accent_color, auto_advance=prefs.auto_advance
+        accent_color=prefs.accent_color,
+        auto_advance=prefs.auto_advance,
+        allow_comments=prefs.allow_comments,
     )

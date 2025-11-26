@@ -22,6 +22,11 @@ class UserPreferences(Base):
         Boolean, nullable=False, default=True, server_default=text("true")
     )
 
+    # artist preferences
+    allow_comments: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
     # metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -3,8 +3,9 @@
 from .router import router
 
 # Import route modules to register handlers on the shared router.
-from . import listing as _listing
+from . import comments as _comments
 from . import likes as _likes
+from . import listing as _listing
 from . import mutations as _mutations
 from . import playback as _playback
 from . import uploads as _uploads

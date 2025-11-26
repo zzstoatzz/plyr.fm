@@ -10,7 +10,9 @@ from backend.models import (  # noqa: F401
     Artist,
     CopyrightScan,
     Track,
+    TrackComment,
     TrackLike,
+    UserPreferences,
     UserSession,
 )
 from backend.models.database import Base

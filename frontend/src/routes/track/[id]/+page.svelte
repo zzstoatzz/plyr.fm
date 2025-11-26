@@ -9,12 +9,31 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
+
+	interface Comment {
+		id: number;
+		user_did: string;
+		user_handle: string;
+		user_display_name: string | null;
+		user_avatar_url: string | null;
+		text: string;
+		timestamp_ms: number;
+		created_at: string;
+	}
 
 	// receive server-loaded data
 	let { data }: { data: PageData } = $props();
 
 	let track = $state<Track>(data.track);
+
+	// comments state
+	let comments = $state<Comment[]>([]);
+	let commentsEnabled = $state(false);
+	let loadingComments = $state(true);
+	let newCommentText = $state('');
+	let submittingComment = $state(false);
 
 	// reactive check if this track is currently playing
 	let isCurrentlyPlaying = $derived(
@@ -52,10 +71,78 @@
 		queue.addTracks([track]);
 	}
 
+	async function loadComments() {
+		loadingComments = true;
+		try {
+			const response = await fetch(`${API_URL}/tracks/${track.id}/comments`);
+			if (response.ok) {
+				const data = await response.json();
+				comments = data.comments;
+				commentsEnabled = data.comments_enabled;
+			}
+		} catch (e) {
+			console.error('failed to load comments:', e);
+		} finally {
+			loadingComments = false;
+		}
+	}
+
+	async function submitComment() {
+		if (!newCommentText.trim() || submittingComment) return;
+
+		// get current playback position (default to 0 if not playing this track)
+		let timestampMs = 0;
+		if (player.currentTrack?.id === track.id) {
+			timestampMs = Math.floor((player.currentTime || 0) * 1000);
+		}
+
+		submittingComment = true;
+		try {
+			const response = await fetch(`${API_URL}/tracks/${track.id}/comments`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({
+					text: newCommentText.trim(),
+					timestamp_ms: timestampMs
+				})
+			});
+
+			if (response.ok) {
+				const comment = await response.json();
+				// insert comment in sorted position by timestamp
+				const insertIndex = comments.findIndex(c => c.timestamp_ms > comment.timestamp_ms);
+				if (insertIndex === -1) {
+					comments = [...comments, comment];
+				} else {
+					comments = [...comments.slice(0, insertIndex), comment, ...comments.slice(insertIndex)];
+				}
+				newCommentText = '';
+				toast.success('comment added');
+			} else {
+				const error = await response.json();
+				toast.error(error.detail || 'failed to add comment');
+			}
+		} catch (e) {
+			console.error('failed to submit comment:', e);
+			toast.error('failed to add comment');
+		} finally {
+			submittingComment = false;
+		}
+	}
+
+	function formatTimestamp(ms: number): string {
+		const totalSeconds = Math.floor(ms / 1000);
+		const minutes = Math.floor(totalSeconds / 60);
+		const seconds = totalSeconds % 60;
+		return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+	}
+
 onMount(async () => {
 	if (auth.isAuthenticated) {
 		await loadLikedState();
 	}
+	await loadComments();
 });
 
 let shareUrl = $state('');
@@ -228,6 +315,69 @@ $effect(() => {
 				</div>
 			</div>
 		</div>
+
+		<!-- comments section -->
+		{#if commentsEnabled}
+			<section class="comments-section">
+				<h2 class="comments-title">
+					comments
+					{#if comments.length > 0}
+						<span class="comment-count">({comments.length})</span>
+					{/if}
+				</h2>
+
+				{#if auth.isAuthenticated}
+					<form class="comment-form" onsubmit={(e) => { e.preventDefault(); submitComment(); }}>
+						<input
+							type="text"
+							class="comment-input"
+							placeholder={player.currentTrack?.id === track.id ? `comment at ${formatTimestamp((player.currentTime || 0) * 1000)}...` : 'add a comment...'}
+							bind:value={newCommentText}
+							maxlength={300}
+							disabled={submittingComment}
+						/>
+						<button
+							type="submit"
+							class="comment-submit"
+							disabled={!newCommentText.trim() || submittingComment}
+						>
+							{submittingComment ? '...' : 'post'}
+						</button>
+					</form>
+				{:else}
+					<p class="login-prompt">
+						<a href="/login">log in</a> to leave a comment
+					</p>
+				{/if}
+
+				{#if loadingComments}
+					<div class="comments-loading">loading comments...</div>
+				{:else if comments.length === 0}
+					<div class="no-comments">no comments yet</div>
+				{:else}
+					<div class="comments-list">
+						{#each comments as comment}
+							<div class="comment">
+								<div class="comment-timestamp">{formatTimestamp(comment.timestamp_ms)}</div>
+								<div class="comment-content">
+									<div class="comment-header">
+										{#if comment.user_avatar_url}
+											<img src={comment.user_avatar_url} alt="" class="comment-avatar" />
+										{:else}
+											<div class="comment-avatar-placeholder"></div>
+										{/if}
+										<a href="/u/{comment.user_handle}" class="comment-author">
+											{comment.user_display_name || comment.user_handle}
+										</a>
+									</div>
+									<p class="comment-text">{comment.text}</p>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</section>
+		{/if}
 	</main>
 </div>
 
@@ -571,6 +721,186 @@ $effect(() => {
 		.btn-queue svg {
 			width: 18px;
 			height: 18px;
+		}
+	}
+
+	/* comments section */
+	.comments-section {
+		width: 100%;
+		max-width: 600px;
+		margin-top: 2rem;
+		padding-top: 2rem;
+		border-top: 1px solid #2a2a2a;
+	}
+
+	.comments-title {
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: #e8e8e8;
+		margin: 0 0 1rem 0;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.comment-count {
+		color: #888;
+		font-weight: 400;
+	}
+
+	.comment-form {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.comment-input {
+		flex: 1;
+		padding: 0.6rem 0.8rem;
+		background: #1a1a1a;
+		border: 1px solid #333;
+		border-radius: 6px;
+		color: #e8e8e8;
+		font-size: 0.9rem;
+		font-family: inherit;
+	}
+
+	.comment-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.comment-input::placeholder {
+		color: #666;
+	}
+
+	.comment-submit {
+		padding: 0.6rem 1rem;
+		background: var(--accent);
+		color: #000;
+		border: none;
+		border-radius: 6px;
+		font-size: 0.9rem;
+		font-weight: 600;
+		font-family: inherit;
+		cursor: pointer;
+		transition: opacity 0.2s;
+	}
+
+	.comment-submit:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.comment-submit:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+
+	.login-prompt {
+		color: #888;
+		font-size: 0.9rem;
+		margin-bottom: 1rem;
+	}
+
+	.login-prompt a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.login-prompt a:hover {
+		text-decoration: underline;
+	}
+
+	.comments-loading,
+	.no-comments {
+		color: #666;
+		font-size: 0.9rem;
+		text-align: center;
+		padding: 1rem;
+	}
+
+	.comments-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.comment {
+		display: flex;
+		gap: 0.75rem;
+		padding: 0.75rem;
+		background: #1a1a1a;
+		border-radius: 6px;
+	}
+
+	.comment-timestamp {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--accent);
+		background: rgba(138, 179, 255, 0.1);
+		padding: 0.2rem 0.5rem;
+		border-radius: 4px;
+		white-space: nowrap;
+		height: fit-content;
+	}
+
+	.comment-content {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.comment-header {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.25rem;
+	}
+
+	.comment-avatar {
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		object-fit: cover;
+	}
+
+	.comment-avatar-placeholder {
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		background: #333;
+	}
+
+	.comment-author {
+		font-size: 0.85rem;
+		font-weight: 500;
+		color: #b0b0b0;
+		text-decoration: none;
+	}
+
+	.comment-author:hover {
+		color: var(--accent);
+	}
+
+	.comment-text {
+		font-size: 0.9rem;
+		color: #e8e8e8;
+		margin: 0;
+		line-height: 1.4;
+		word-break: break-word;
+	}
+
+	@media (max-width: 768px) {
+		.comments-section {
+			margin-top: 1.5rem;
+			padding-top: 1.5rem;
+		}
+
+		.comment {
+			padding: 0.6rem;
+		}
+
+		.comment-timestamp {
+			font-size: 0.75rem;
 		}
 	}
 </style>

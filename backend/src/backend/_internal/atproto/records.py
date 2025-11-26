@@ -542,3 +542,91 @@ async def delete_record_by_uri(
 
     # all attempts failed
     raise Exception(f"Failed to delete record: {response.status_code} {response.text}")
+
+
+async def create_comment_record(
+    auth_session: AuthSession,
+    subject_uri: str,
+    subject_cid: str,
+    text: str,
+    timestamp_ms: int,
+) -> str:
+    """create a timed comment record on the user's PDS.
+
+    args:
+        auth_session: authenticated user session
+        subject_uri: AT URI of the track being commented on
+        subject_cid: CID of the track being commented on
+        text: comment text content
+        timestamp_ms: playback position in milliseconds when comment was made
+
+    returns:
+        comment record URI
+
+    raises:
+        ValueError: if session is invalid
+        Exception: if record creation fails
+    """
+    # get OAuth session data from database
+    oauth_data = auth_session.oauth_session
+    if not oauth_data or "access_token" not in oauth_data:
+        raise ValueError(
+            f"OAuth session data missing or invalid for {auth_session.did}"
+        )
+
+    # reconstruct OAuthSession from database
+    oauth_session = _reconstruct_oauth_session(oauth_data)
+
+    # construct comment record
+    record = {
+        "$type": settings.atproto.comment_collection,
+        "subject": {
+            "uri": subject_uri,
+            "cid": subject_cid,
+        },
+        "text": text,
+        "timestampMs": timestamp_ms,
+        "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
+
+    # make authenticated request to create record
+    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
+    payload = {
+        "repo": auth_session.did,
+        "collection": settings.atproto.comment_collection,
+        "record": record,
+    }
+
+    # try creating the record, refresh token if expired
+    for attempt in range(2):
+        response = await oauth_client.make_authenticated_request(
+            session=oauth_session,
+            method="POST",
+            url=url,
+            json=payload,
+        )
+
+        # success
+        if response.status_code in (200, 201):
+            result = response.json()
+            return result["uri"]
+
+        # token expired - refresh and retry
+        if response.status_code == 401 and attempt == 0:
+            try:
+                error_data = response.json()
+                if "exp" in error_data.get("message", ""):
+                    logger.info(
+                        f"access token expired for {auth_session.did}, attempting refresh"
+                    )
+                    oauth_session = await _refresh_session_tokens(
+                        auth_session, oauth_session
+                    )
+                    continue  # retry with refreshed token
+            except (json.JSONDecodeError, KeyError):
+                pass  # not a token expiration error
+
+    # all attempts failed
+    raise Exception(
+        f"Failed to create comment record: {response.status_code} {response.text}"
+    )
