@@ -141,13 +141,29 @@
 	}
 
 	function seekToTimestamp(ms: number) {
-		// start playing this track if not already
-		if (player.currentTrack?.id !== track.id) {
-			queue.playNow(track);
+		const doSeek = () => {
+			if (player.audioElement) {
+				player.audioElement.currentTime = ms / 1000;
+			}
+		};
+
+		// if this track is already loaded, seek immediately
+		if (player.currentTrack?.id === track.id) {
+			doSeek();
+			return;
 		}
-		// seek to the timestamp
-		if (player.audioElement) {
-			player.audioElement.currentTime = ms / 1000;
+
+		// otherwise start playing and wait for audio to be ready
+		queue.playNow(track);
+		if (player.audioElement && player.audioElement.readyState >= 1) {
+			doSeek();
+		} else {
+			// wait for metadata to load before seeking
+			const onReady = () => {
+				doSeek();
+				player.audioElement?.removeEventListener('loadedmetadata', onReady);
+			};
+			player.audioElement?.addEventListener('loadedmetadata', onReady);
 		}
 	}
 
@@ -344,6 +360,7 @@ $effect(() => {
 						<input
 							type="text"
 							class="comment-input"
+							aria-label="Add a timed comment"
 							placeholder={player.currentTrack?.id === track.id ? `comment at ${formatTimestamp((player.currentTime || 0) * 1000)}...` : 'add a comment...'}
 							bind:value={newCommentText}
 							maxlength={300}

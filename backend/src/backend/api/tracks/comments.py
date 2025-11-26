@@ -176,6 +176,7 @@ async def create_comment(
         await db.refresh(comment)
 
     except Exception as e:
+        await db.rollback()
         logger.error(
             f"failed to create comment on track {track_id} by {auth_session.did}: {e}",
             exc_info=True,

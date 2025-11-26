@@ -966,6 +966,7 @@
 				<label class="toggle-switch">
 					<input
 						type="checkbox"
+						aria-label="Allow timed comments on your tracks"
 						checked={allowComments}
 						onchange={(e) => saveAllowComments((e.target as HTMLInputElement).checked)}
 					/>
