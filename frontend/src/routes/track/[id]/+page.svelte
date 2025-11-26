@@ -60,9 +60,11 @@
 	}
 
 	function handlePlay() {
-		if (isCurrentlyPlaying) {
+		if (player.currentTrack?.id === track.id) {
+			// this track is already loaded - just toggle play/pause
 			player.togglePlayPause();
 		} else {
+			// different track or no track - start this one
 			queue.playNow(track);
 		}
 	}
@@ -136,6 +138,17 @@
 		const minutes = Math.floor(totalSeconds / 60);
 		const seconds = totalSeconds % 60;
 		return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+	}
+
+	function seekToTimestamp(ms: number) {
+		// start playing this track if not already
+		if (player.currentTrack?.id !== track.id) {
+			queue.playNow(track);
+		}
+		// seek to the timestamp
+		if (player.audioElement) {
+			player.audioElement.currentTime = ms / 1000;
+		}
 	}
 
 onMount(async () => {
@@ -358,7 +371,13 @@ $effect(() => {
 					<div class="comments-list">
 						{#each comments as comment}
 							<div class="comment">
-								<div class="comment-timestamp">{formatTimestamp(comment.timestamp_ms)}</div>
+								<button
+									class="comment-timestamp"
+									onclick={() => seekToTimestamp(comment.timestamp_ms)}
+									title="jump to {formatTimestamp(comment.timestamp_ms)}"
+								>
+									{formatTimestamp(comment.timestamp_ms)}
+								</button>
 								<div class="comment-content">
 									<div class="comment-header">
 										{#if comment.user_avatar_url}
@@ -391,8 +410,9 @@ $effect(() => {
 	main {
 		flex: 1;
 		display: flex;
+		flex-direction: column;
 		align-items: center;
-		justify-content: center;
+		justify-content: flex-start;
 		padding: 2rem;
 		padding-bottom: 8rem;
 		width: 100%;
@@ -727,17 +747,17 @@ $effect(() => {
 	/* comments section */
 	.comments-section {
 		width: 100%;
-		max-width: 600px;
-		margin-top: 2rem;
-		padding-top: 2rem;
+		max-width: 500px;
+		margin-top: 1.5rem;
+		padding-top: 1.5rem;
 		border-top: 1px solid #2a2a2a;
 	}
 
 	.comments-title {
-		font-size: 1.1rem;
+		font-size: 1rem;
 		font-weight: 600;
 		color: #e8e8e8;
-		margin: 0 0 1rem 0;
+		margin: 0 0 0.75rem 0;
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -751,7 +771,7 @@ $effect(() => {
 	.comment-form {
 		display: flex;
 		gap: 0.5rem;
-		margin-bottom: 1rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.comment-input {
@@ -822,13 +842,15 @@ $effect(() => {
 	.comments-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 0.5rem;
+		max-height: 300px;
+		overflow-y: auto;
 	}
 
 	.comment {
 		display: flex;
-		gap: 0.75rem;
-		padding: 0.75rem;
+		gap: 0.6rem;
+		padding: 0.5rem 0.6rem;
 		background: #1a1a1a;
 		border-radius: 6px;
 	}
@@ -842,6 +864,15 @@ $effect(() => {
 		border-radius: 4px;
 		white-space: nowrap;
 		height: fit-content;
+		border: none;
+		cursor: pointer;
+		transition: all 0.2s;
+		font-family: inherit;
+	}
+
+	.comment-timestamp:hover {
+		background: rgba(138, 179, 255, 0.25);
+		transform: scale(1.05);
 	}
 
 	.comment-content {
@@ -891,16 +922,21 @@ $effect(() => {
 
 	@media (max-width: 768px) {
 		.comments-section {
-			margin-top: 1.5rem;
-			padding-top: 1.5rem;
+			margin-top: 1rem;
+			padding-top: 1rem;
+		}
+
+		.comments-list {
+			max-height: 200px;
 		}
 
 		.comment {
-			padding: 0.6rem;
+			padding: 0.5rem;
 		}
 
 		.comment-timestamp {
 			font-size: 0.75rem;
+			padding: 0.15rem 0.4rem;
 		}
 	}
 </style>
