@@ -150,6 +150,69 @@ async def _refresh_session_tokens(
             raise ValueError(f"failed to refresh access token: {e}") from e
 
 
+async def _make_pds_request(
+    auth_session: AuthSession,
+    method: str,
+    endpoint: str,
+    payload: dict[str, Any],
+    success_codes: tuple[int, ...] = (200, 201),
+) -> dict[str, Any]:
+    """make an authenticated request to the PDS with automatic token refresh.
+
+    args:
+        auth_session: authenticated user session
+        method: HTTP method (POST, GET, etc.)
+        endpoint: XRPC endpoint (e.g., "com.atproto.repo.createRecord")
+        payload: request payload
+        success_codes: HTTP status codes considered successful
+
+    returns:
+        response JSON dict (empty dict for 204 responses)
+
+    raises:
+        ValueError: if session is invalid
+        Exception: if request fails after retry
+    """
+    oauth_data = auth_session.oauth_session
+    if not oauth_data or "access_token" not in oauth_data:
+        raise ValueError(
+            f"OAuth session data missing or invalid for {auth_session.did}"
+        )
+
+    oauth_session = _reconstruct_oauth_session(oauth_data)
+    url = f"{oauth_data['pds_url']}/xrpc/{endpoint}"
+
+    for attempt in range(2):
+        response = await oauth_client.make_authenticated_request(
+            session=oauth_session,
+            method=method,
+            url=url,
+            json=payload,
+        )
+
+        if response.status_code in success_codes:
+            if response.status_code == 204:
+                return {}
+            return response.json()
+
+        # token expired - refresh and retry
+        if response.status_code == 401 and attempt == 0:
+            try:
+                error_data = response.json()
+                if "exp" in error_data.get("message", ""):
+                    logger.info(
+                        f"access token expired for {auth_session.did}, attempting refresh"
+                    )
+                    oauth_session = await _refresh_session_tokens(
+                        auth_session, oauth_session
+                    )
+                    continue
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+    raise Exception(f"PDS request failed: {response.status_code} {response.text}")
+
+
 def build_track_record(
     title: str,
     artist: str,
@@ -217,7 +280,7 @@ async def create_track_record(
     duration: int | None = None,
     features: list[dict] | None = None,
     image_url: str | None = None,
-) -> tuple[str, str] | None:
+) -> tuple[str, str]:
     """Create a track record on the user's PDS using the configured collection.
 
     args:
@@ -238,17 +301,6 @@ async def create_track_record(
         ValueError: if session is invalid
         Exception: if record creation fails
     """
-    # get OAuth session data from database
-    oauth_data = auth_session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise ValueError(
-            f"OAuth session data missing or invalid for {auth_session.did}"
-        )
-
-    # reconstruct OAuthSession from database
-    oauth_session = _reconstruct_oauth_session(oauth_data)
-
-    # construct record
     record = build_track_record(
         title=title,
         artist=artist,
@@ -260,54 +312,33 @@ async def create_track_record(
         image_url=image_url,
     )
 
-    # make authenticated request to create record
-    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
     payload = {
         "repo": auth_session.did,
         "collection": settings.atproto.track_collection,
         "record": record,
     }
 
-    # try creating the record, refresh token if expired
-    for attempt in range(2):  # max 2 attempts: initial + 1 retry after refresh
-        response = await oauth_client.make_authenticated_request(
-            session=oauth_session,
-            method="POST",
-            url=url,
-            json=payload,
-        )
+    result = await _make_pds_request(
+        auth_session, "POST", "com.atproto.repo.createRecord", payload
+    )
+    return result["uri"], result["cid"]
 
-        # success
-        if response.status_code in (200, 201):
-            result = response.json()
-            return result["uri"], result["cid"]
 
-        # token expired - refresh and retry
-        if response.status_code == 401 and attempt == 0:
-            try:
-                error_data = response.json()
-                if "exp" in error_data.get("message", ""):
-                    logger.info(
-                        f"access token expired for {auth_session.did}, attempting refresh"
-                    )
-                    oauth_session = await _refresh_session_tokens(
-                        auth_session, oauth_session
-                    )
-                    continue  # retry with refreshed token
-            except (json.JSONDecodeError, KeyError):
-                pass  # not a token expiration error
-
-        # other error or retry failed
-        raise Exception(
-            f"Failed to create ATProto record: {response.status_code} {response.text}"
-        )
+def _parse_at_uri(uri: str) -> tuple[str, str, str]:
+    """parse an AT URI into (repo, collection, rkey)."""
+    if not uri.startswith("at://"):
+        raise ValueError(f"Invalid AT URI format: {uri}")
+    parts = uri.replace("at://", "").split("/")
+    if len(parts) != 3:
+        raise ValueError(f"Invalid AT URI structure: {uri}")
+    return parts[0], parts[1], parts[2]
 
 
 async def update_record(
     auth_session: AuthSession,
     record_uri: str,
     record: dict[str, Any],
-) -> tuple[str, str] | None:
+) -> tuple[str, str]:
     """Update an existing record on the user's PDS.
 
     args:
@@ -322,29 +353,8 @@ async def update_record(
         ValueError: if session is invalid or URI is malformed
         Exception: if record update fails
     """
-    # get OAuth session data from database
-    oauth_data = auth_session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise ValueError(
-            f"OAuth session data missing or invalid for {auth_session.did}"
-        )
+    repo, collection, rkey = _parse_at_uri(record_uri)
 
-    # reconstruct OAuthSession from database
-    oauth_session = _reconstruct_oauth_session(oauth_data)
-
-    # parse the AT URI to get repo and collection
-    # format: at://did:plc:.../collection/rkey
-    if not record_uri.startswith("at://"):
-        raise ValueError(f"Invalid AT URI format: {record_uri}")
-
-    parts = record_uri.replace("at://", "").split("/")
-    if len(parts) != 3:
-        raise ValueError(f"Invalid AT URI structure: {record_uri}")
-
-    repo, collection, rkey = parts
-
-    # make authenticated request to update record
-    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.putRecord"
     payload = {
         "repo": repo,
         "collection": collection,
@@ -352,39 +362,10 @@ async def update_record(
         "record": record,
     }
 
-    # try updating the record, refresh token if expired
-    for attempt in range(2):  # max 2 attempts: initial + 1 retry after refresh
-        response = await oauth_client.make_authenticated_request(
-            session=oauth_session,
-            method="POST",
-            url=url,
-            json=payload,
-        )
-
-        # success
-        if response.status_code in (200, 201):
-            result = response.json()
-            return result["uri"], result["cid"]
-
-        # token expired - refresh and retry
-        if response.status_code == 401 and attempt == 0:
-            try:
-                error_data = response.json()
-                if "exp" in error_data.get("message", ""):
-                    logger.info(
-                        f"access token expired for {auth_session.did}, attempting refresh"
-                    )
-                    oauth_session = await _refresh_session_tokens(
-                        auth_session, oauth_session
-                    )
-                    continue  # retry with refreshed token
-            except (json.JSONDecodeError, KeyError):
-                pass  # not a token expiration error
-
-        # other error or retry failed
-        raise Exception(
-            f"Failed to update ATProto record: {response.status_code} {response.text}"
-        )
+    result = await _make_pds_request(
+        auth_session, "POST", "com.atproto.repo.putRecord", payload
+    )
+    return result["uri"], result["cid"]
 
 
 async def create_like_record(
@@ -406,17 +387,6 @@ async def create_like_record(
         ValueError: if session is invalid
         Exception: if record creation fails
     """
-    # get OAuth session data from database
-    oauth_data = auth_session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise ValueError(
-            f"OAuth session data missing or invalid for {auth_session.did}"
-        )
-
-    # reconstruct OAuthSession from database
-    oauth_session = _reconstruct_oauth_session(oauth_data)
-
-    # construct like record
     record = {
         "$type": settings.atproto.like_collection,
         "subject": {
@@ -426,47 +396,16 @@ async def create_like_record(
         "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
 
-    # make authenticated request to create record
-    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
     payload = {
         "repo": auth_session.did,
         "collection": settings.atproto.like_collection,
         "record": record,
     }
 
-    # try creating the record, refresh token if expired
-    for attempt in range(2):
-        response = await oauth_client.make_authenticated_request(
-            session=oauth_session,
-            method="POST",
-            url=url,
-            json=payload,
-        )
-
-        # success
-        if response.status_code in (200, 201):
-            result = response.json()
-            return result["uri"]
-
-        # token expired - refresh and retry
-        if response.status_code == 401 and attempt == 0:
-            try:
-                error_data = response.json()
-                if "exp" in error_data.get("message", ""):
-                    logger.info(
-                        f"access token expired for {auth_session.did}, attempting refresh"
-                    )
-                    oauth_session = await _refresh_session_tokens(
-                        auth_session, oauth_session
-                    )
-                    continue  # retry with refreshed token
-            except (json.JSONDecodeError, KeyError):
-                pass  # not a token expiration error
-
-    # all attempts failed
-    raise Exception(
-        f"Failed to create like record: {response.status_code} {response.text}"
+    result = await _make_pds_request(
+        auth_session, "POST", "com.atproto.repo.createRecord", payload
     )
+    return result["uri"]
 
 
 async def delete_record_by_uri(
@@ -483,65 +422,21 @@ async def delete_record_by_uri(
         ValueError: if session is invalid or URI is malformed
         Exception: if record deletion fails
     """
-    # get OAuth session data from database
-    oauth_data = auth_session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise ValueError(
-            f"OAuth session data missing or invalid for {auth_session.did}"
-        )
+    repo, collection, rkey = _parse_at_uri(record_uri)
 
-    # reconstruct OAuthSession from database
-    oauth_session = _reconstruct_oauth_session(oauth_data)
-
-    # parse the AT URI to get repo and collection
-    # format: at://did:plc:.../collection/rkey
-    if not record_uri.startswith("at://"):
-        raise ValueError(f"Invalid AT URI format: {record_uri}")
-
-    parts = record_uri.replace("at://", "").split("/")
-    if len(parts) != 3:
-        raise ValueError(f"Invalid AT URI structure: {record_uri}")
-
-    repo, collection, rkey = parts
-
-    # make authenticated request to delete record
-    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.deleteRecord"
     payload = {
         "repo": repo,
         "collection": collection,
         "rkey": rkey,
     }
 
-    # try deleting the record, refresh token if expired
-    for attempt in range(2):
-        response = await oauth_client.make_authenticated_request(
-            session=oauth_session,
-            method="POST",
-            url=url,
-            json=payload,
-        )
-
-        # success
-        if response.status_code in (200, 201, 204):
-            return
-
-        # token expired - refresh and retry
-        if response.status_code == 401 and attempt == 0:
-            try:
-                error_data = response.json()
-                if "exp" in error_data.get("message", ""):
-                    logger.info(
-                        f"access token expired for {auth_session.did}, attempting refresh"
-                    )
-                    oauth_session = await _refresh_session_tokens(
-                        auth_session, oauth_session
-                    )
-                    continue  # retry with refreshed token
-            except (json.JSONDecodeError, KeyError):
-                pass  # not a token expiration error
-
-    # all attempts failed
-    raise Exception(f"Failed to delete record: {response.status_code} {response.text}")
+    await _make_pds_request(
+        auth_session,
+        "POST",
+        "com.atproto.repo.deleteRecord",
+        payload,
+        success_codes=(200, 201, 204),
+    )
 
 
 async def create_comment_record(
@@ -567,17 +462,6 @@ async def create_comment_record(
         ValueError: if session is invalid
         Exception: if record creation fails
     """
-    # get OAuth session data from database
-    oauth_data = auth_session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise ValueError(
-            f"OAuth session data missing or invalid for {auth_session.did}"
-        )
-
-    # reconstruct OAuthSession from database
-    oauth_session = _reconstruct_oauth_session(oauth_data)
-
-    # construct comment record
     record = {
         "$type": settings.atproto.comment_collection,
         "subject": {
@@ -589,44 +473,13 @@ async def create_comment_record(
         "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
 
-    # make authenticated request to create record
-    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
     payload = {
         "repo": auth_session.did,
         "collection": settings.atproto.comment_collection,
         "record": record,
     }
 
-    # try creating the record, refresh token if expired
-    for attempt in range(2):
-        response = await oauth_client.make_authenticated_request(
-            session=oauth_session,
-            method="POST",
-            url=url,
-            json=payload,
-        )
-
-        # success
-        if response.status_code in (200, 201):
-            result = response.json()
-            return result["uri"]
-
-        # token expired - refresh and retry
-        if response.status_code == 401 and attempt == 0:
-            try:
-                error_data = response.json()
-                if "exp" in error_data.get("message", ""):
-                    logger.info(
-                        f"access token expired for {auth_session.did}, attempting refresh"
-                    )
-                    oauth_session = await _refresh_session_tokens(
-                        auth_session, oauth_session
-                    )
-                    continue  # retry with refreshed token
-            except (json.JSONDecodeError, KeyError):
-                pass  # not a token expiration error
-
-    # all attempts failed
-    raise Exception(
-        f"Failed to create comment record: {response.status_code} {response.text}"
+    result = await _make_pds_request(
+        auth_session, "POST", "com.atproto.repo.createRecord", payload
     )
+    return result["uri"]
