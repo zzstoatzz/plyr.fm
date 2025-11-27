@@ -22,6 +22,7 @@ warnings.filterwarnings(
 
 from backend._internal import notification_service, queue_service
 from backend.api import (
+    account_router,
     artists_router,
     audio_router,
     auth_router,
@@ -149,6 +150,7 @@ app.add_middleware(SlowAPIMiddleware)
 
 # include routers
 app.include_router(auth_router)
+app.include_router(account_router)
 app.include_router(artists_router)
 app.include_router(tracks_router)
 app.include_router(albums_router)
