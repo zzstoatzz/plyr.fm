@@ -165,7 +165,7 @@
 
 	async function loadPreferences() {
 		try {
-			const response = await fetch(`${API_URL}/preferences`, {
+			const response = await fetch(`${API_URL}/preferences/`, {
 				credentials: 'include'
 			});
 			if (response.ok) {
@@ -179,7 +179,7 @@
 
 	async function saveAllowComments(enabled: boolean) {
 		try {
-			const response = await fetch(`${API_URL}/preferences`, {
+			const response = await fetch(`${API_URL}/preferences/`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				credentials: 'include',
