@@ -56,6 +56,6 @@ class TrackComment(Base):
     __table_args__ = (
         # composite index for fetching comments ordered by timestamp
         Index("ix_track_comments_track_timestamp", "track_id", "timestamp_ms"),
-        # composite index for user's comments sorted by recency
-        Index("ix_track_comments_user_created", "user_did", created_at.desc()),
+        # composite index for user's comments (order by recency handled in queries)
+        Index("ix_track_comments_user_created", "user_did", "created_at"),
     )

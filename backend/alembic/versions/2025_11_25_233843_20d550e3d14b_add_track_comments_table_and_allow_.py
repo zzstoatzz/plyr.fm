@@ -70,20 +70,24 @@ def upgrade() -> None:
         op.create_index(
             "ix_track_comments_user_created",
             "track_comments",
-            ["user_did", sa.text("created_at DESC")],
+            ["user_did", "created_at"],
             unique=False,
         )
 
-    # add allow_comments to user_preferences
-    op.add_column(
-        "user_preferences",
-        sa.Column(
-            "allow_comments",
-            sa.Boolean(),
-            server_default=sa.text("false"),
-            nullable=False,
-        ),
-    )
+    # add allow_comments to user_preferences (check if column exists first)
+    existing_columns = [
+        col["name"] for col in inspector.get_columns("user_preferences")
+    ]
+    if "allow_comments" not in existing_columns:
+        op.add_column(
+            "user_preferences",
+            sa.Column(
+                "allow_comments",
+                sa.Boolean(),
+                server_default=sa.text("false"),
+                nullable=False,
+            ),
+        )
 
 
 def downgrade() -> None:

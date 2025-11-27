@@ -81,6 +81,8 @@
 				const data = await response.json();
 				comments = data.comments;
 				commentsEnabled = data.comments_enabled;
+			} else {
+				console.error('failed to load comments: response not OK');
 			}
 		} catch (e) {
 			console.error('failed to load comments:', e);
