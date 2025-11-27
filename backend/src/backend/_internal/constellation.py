@@ -17,6 +17,7 @@ from backend.config import settings
 logger = logging.getLogger(__name__)
 
 CONSTELLATION_URL = "https://constellation.microcosm.blue"
+USER_AGENT = "plyr.fm (zzstoatzz.io)"
 
 
 async def get_like_count(target_uri: str) -> int:
@@ -31,7 +32,7 @@ async def get_like_count(target_uri: str) -> int:
     returns:
         total like count from across the atproto network
     """
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}) as client:
         resp = await client.get(
             f"{CONSTELLATION_URL}/links/count",
             params={
