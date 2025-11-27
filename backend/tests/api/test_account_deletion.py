@@ -1,5 +1,6 @@
 """tests for account deletion functionality."""
 
+import json
 from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
@@ -80,6 +81,17 @@ def test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
     app.dependency_overrides.clear()
 
 
+async def _delete_account(
+    client: AsyncClient, confirmation: str, delete_atproto: bool = False
+):
+    """helper to make DELETE request with JSON body."""
+    return await client.request(
+        "DELETE",
+        "/account/",
+        json={"confirmation": confirmation, "delete_atproto_records": delete_atproto},
+    )
+
+
 async def test_delete_account_requires_confirmation(
     test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
 ):
@@ -87,11 +99,7 @@ async def test_delete_account_requires_confirmation(
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
-        # wrong confirmation
-        response = await client.delete(
-            "/account/",
-            json={"confirmation": "wrong.handle", "delete_atproto_records": False},
-        )
+        response = await _delete_account(client, "wrong.handle")
 
     assert response.status_code == 400
     assert "confirmation must match your handle" in response.json()["detail"]
@@ -101,7 +109,6 @@ async def test_delete_account_deletes_tracks(
     test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
 ):
     """test that account deletion removes all user tracks."""
-    # create tracks for user
     track1 = Track(
         title="track 1",
         artist_did=TEST_DID,
@@ -119,7 +126,6 @@ async def test_delete_account_deletes_tracks(
     db_session.add_all([track1, track2])
     await db_session.commit()
 
-    # verify tracks exist
     result = await db_session.execute(select(Track).where(Track.artist_did == TEST_DID))
     assert len(result.scalars().all()) == 2
 
@@ -127,15 +133,11 @@ async def test_delete_account_deletes_tracks(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": False},
-            )
+            response = await _delete_account(client, TEST_HANDLE)
 
     assert response.status_code == 200
     assert response.json()["deleted"]["tracks"] == 2
 
-    # verify tracks are deleted
     result = await db_session.execute(select(Track).where(Track.artist_did == TEST_DID))
     assert len(result.scalars().all()) == 0
 
@@ -156,15 +158,11 @@ async def test_delete_account_deletes_albums(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": False},
-            )
+            response = await _delete_account(client, TEST_HANDLE)
 
     assert response.status_code == 200
     assert response.json()["deleted"]["albums"] == 1
 
-    # verify album is deleted
     result = await db_session.execute(select(Album).where(Album.artist_did == TEST_DID))
     assert result.scalar_one_or_none() is None
 
@@ -173,7 +171,6 @@ async def test_delete_account_deletes_likes_given(
     test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
 ):
     """test that account deletion removes likes given by the user."""
-    # create another artist and their track
     other_artist = Artist(
         did="did:plc:other",
         handle="other.bsky.social",
@@ -192,7 +189,6 @@ async def test_delete_account_deletes_likes_given(
     db_session.add(other_track)
     await db_session.flush()
 
-    # user likes other's track
     like = TrackLike(
         track_id=other_track.id,
         user_did=TEST_DID,
@@ -205,15 +201,11 @@ async def test_delete_account_deletes_likes_given(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": False},
-            )
+            response = await _delete_account(client, TEST_HANDLE)
 
     assert response.status_code == 200
     assert response.json()["deleted"]["likes"] == 1
 
-    # verify like is deleted
     result = await db_session.execute(
         select(TrackLike).where(TrackLike.user_did == TEST_DID)
     )
@@ -224,7 +216,6 @@ async def test_delete_account_deletes_comments_made(
     test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
 ):
     """test that account deletion removes comments made by the user."""
-    # create another artist and their track
     other_artist = Artist(
         did="did:plc:other",
         handle="other.bsky.social",
@@ -243,7 +234,6 @@ async def test_delete_account_deletes_comments_made(
     db_session.add(other_track)
     await db_session.flush()
 
-    # user comments on other's track
     comment = TrackComment(
         track_id=other_track.id,
         user_did=TEST_DID,
@@ -258,15 +248,11 @@ async def test_delete_account_deletes_comments_made(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": False},
-            )
+            response = await _delete_account(client, TEST_HANDLE)
 
     assert response.status_code == 200
     assert response.json()["deleted"]["comments"] == 1
 
-    # verify comment is deleted
     result = await db_session.execute(
         select(TrackComment).where(TrackComment.user_did == TEST_DID)
     )
@@ -290,14 +276,10 @@ async def test_delete_account_deletes_preferences(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": False},
-            )
+            response = await _delete_account(client, TEST_HANDLE)
 
     assert response.status_code == 200
 
-    # verify preferences are deleted
     result = await db_session.execute(
         select(UserPreferences).where(UserPreferences.did == TEST_DID)
     )
@@ -312,7 +294,7 @@ async def test_delete_account_deletes_sessions(
         did=TEST_DID,
         handle=TEST_HANDLE,
         session_id="session123",
-        oauth_data=b"encrypted_data",
+        oauth_session_data=json.dumps({"token": "fake"}),
     )
     db_session.add(session)
     await db_session.commit()
@@ -321,14 +303,10 @@ async def test_delete_account_deletes_sessions(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": False},
-            )
+            response = await _delete_account(client, TEST_HANDLE)
 
     assert response.status_code == 200
 
-    # verify session is deleted
     result = await db_session.execute(
         select(UserSession).where(UserSession.did == TEST_DID)
     )
@@ -341,8 +319,7 @@ async def test_delete_account_deletes_queue(
     """test that account deletion removes user queue state."""
     queue = QueueState(
         did=TEST_DID,
-        track_ids=[1, 2, 3],
-        current_index=0,
+        state={"track_ids": [1, 2, 3], "current_index": 0},
     )
     db_session.add(queue)
     await db_session.commit()
@@ -351,14 +328,10 @@ async def test_delete_account_deletes_queue(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": False},
-            )
+            response = await _delete_account(client, TEST_HANDLE)
 
     assert response.status_code == 200
 
-    # verify queue is deleted
     result = await db_session.execute(
         select(QueueState).where(QueueState.did == TEST_DID)
     )
@@ -369,7 +342,6 @@ async def test_delete_account_with_atproto_records(
     test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
 ):
     """test that account deletion can delete ATProto records when requested."""
-    # create track with ATProto record
     track = Track(
         title="track with atproto",
         artist_did=TEST_DID,
@@ -390,15 +362,11 @@ async def test_delete_account_with_atproto_records(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": True},
-            )
+            response = await _delete_account(client, TEST_HANDLE, delete_atproto=True)
 
     assert response.status_code == 200
     assert response.json()["deleted"]["atproto_records"] == 1
 
-    # verify ATProto delete was called
     mock_delete_atproto.assert_called_once()
 
 
@@ -406,7 +374,6 @@ async def test_delete_account_deletes_r2_objects(
     test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
 ):
     """test that account deletion removes R2 objects."""
-    # create track with audio and image
     track = Track(
         title="track with media",
         artist_did=TEST_DID,
@@ -428,15 +395,11 @@ async def test_delete_account_deletes_r2_objects(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": False},
-            )
+            response = await _delete_account(client, TEST_HANDLE)
 
     assert response.status_code == 200
     assert response.json()["deleted"]["r2_objects"] == 2
 
-    # verify both audio and image were deleted
     deleted_ids = [call[0] for call in delete_calls]
     assert "audio_file" in deleted_ids
     assert "image_file" in deleted_ids
@@ -446,7 +409,6 @@ async def test_delete_account_deletes_likes_on_user_tracks(
     test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
 ):
     """test that account deletion removes likes from OTHER users on the user's tracks."""
-    # create user's track
     track = Track(
         title="my track",
         artist_did=TEST_DID,
@@ -457,7 +419,6 @@ async def test_delete_account_deletes_likes_on_user_tracks(
     db_session.add(track)
     await db_session.flush()
 
-    # other user likes user's track
     other_like = TrackLike(
         track_id=track.id,
         user_did="did:plc:other",
@@ -470,14 +431,10 @@ async def test_delete_account_deletes_likes_on_user_tracks(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": False},
-            )
+            response = await _delete_account(client, TEST_HANDLE)
 
     assert response.status_code == 200
 
-    # verify other user's like on our track is deleted (cascade)
     result = await db_session.execute(
         select(TrackLike).where(TrackLike.track_id == track.id)
     )
@@ -488,7 +445,6 @@ async def test_delete_account_deletes_comments_on_user_tracks(
     test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
 ):
     """test that account deletion removes comments from OTHER users on the user's tracks."""
-    # create user's track
     track = Track(
         title="my track",
         artist_did=TEST_DID,
@@ -499,7 +455,6 @@ async def test_delete_account_deletes_comments_on_user_tracks(
     db_session.add(track)
     await db_session.flush()
 
-    # other user comments on user's track
     other_comment = TrackComment(
         track_id=track.id,
         user_did="did:plc:other",
@@ -514,14 +469,10 @@ async def test_delete_account_deletes_comments_on_user_tracks(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.delete(
-                "/account/",
-                json={"confirmation": TEST_HANDLE, "delete_atproto_records": False},
-            )
+            response = await _delete_account(client, TEST_HANDLE)
 
     assert response.status_code == 200
 
-    # verify other user's comment on our track is deleted (cascade)
     result = await db_session.execute(
         select(TrackComment).where(TrackComment.track_id == track.id)
     )
