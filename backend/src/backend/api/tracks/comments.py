@@ -1,6 +1,7 @@
 """Track timed comments endpoints."""
 
 import logging
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
@@ -10,7 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_auth
-from backend._internal.atproto import create_comment_record, delete_record_by_uri
+from backend._internal.atproto import (
+    create_comment_record,
+    delete_record_by_uri,
+    update_comment_record,
+)
 from backend.models import Artist, Track, TrackComment, UserPreferences, get_db
 
 from .router import router
@@ -28,6 +33,12 @@ class CommentCreate(BaseModel):
     timestamp_ms: int = Field(..., ge=0)
 
 
+class CommentUpdate(BaseModel):
+    """request body for updating a comment."""
+
+    text: str = Field(..., min_length=1, max_length=300)
+
+
 class CommentResponse(BaseModel):
     """response model for a single comment."""
 
@@ -39,6 +50,7 @@ class CommentResponse(BaseModel):
     text: str
     timestamp_ms: int
     created_at: str
+    updated_at: str | None
 
 
 class CommentsListResponse(BaseModel):
@@ -95,6 +107,7 @@ async def get_track_comments(
             text=comment.text,
             timestamp_ms=comment.timestamp_ms,
             created_at=comment.created_at.isoformat(),
+            updated_at=comment.updated_at.isoformat() if comment.updated_at else None,
         )
         for comment, artist in rows
     ]
@@ -209,6 +222,7 @@ async def create_comment(
         text=comment.text,
         timestamp_ms=comment.timestamp_ms,
         created_at=comment.created_at.isoformat(),
+        updated_at=None,
     )
 
 
@@ -241,3 +255,80 @@ async def delete_comment(
     await db.commit()
 
     return {"deleted": True}
+
+
+@router.patch("/comments/{comment_id}")
+async def update_comment(
+    comment_id: int,
+    body: CommentUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> CommentResponse:
+    """update a comment's text. only the author can edit their own comments."""
+    comment_result = await db.execute(
+        select(TrackComment).where(TrackComment.id == comment_id)
+    )
+    comment = comment_result.scalar_one_or_none()
+
+    if not comment:
+        raise HTTPException(status_code=404, detail="comment not found")
+
+    if comment.user_did != auth_session.did:
+        raise HTTPException(status_code=403, detail="can only edit your own comments")
+
+    # get track info for ATProto record update
+    track_result = await db.execute(select(Track).where(Track.id == comment.track_id))
+    track = track_result.scalar_one_or_none()
+
+    if not track or not track.atproto_record_uri or not track.atproto_record_cid:
+        raise HTTPException(
+            status_code=422,
+            detail="track missing ATProto record - cannot update comment",
+        )
+
+    # update ATProto record first
+    updated_at = datetime.now(UTC)
+    try:
+        await update_comment_record(
+            auth_session=auth_session,
+            comment_uri=comment.atproto_comment_uri,
+            subject_uri=track.atproto_record_uri,
+            subject_cid=track.atproto_record_cid,
+            text=body.text,
+            timestamp_ms=comment.timestamp_ms,
+            created_at=comment.created_at,
+            updated_at=updated_at,
+        )
+    except Exception as e:
+        logger.error(
+            f"failed to update ATProto comment record {comment.atproto_comment_uri}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail="failed to update comment on ATProto"
+        ) from e
+
+    # update database record
+    comment.text = body.text
+    comment.updated_at = updated_at
+
+    await db.commit()
+    await db.refresh(comment)
+
+    # get user info for response
+    artist_result = await db.execute(
+        select(Artist).where(Artist.did == auth_session.did)
+    )
+    artist = artist_result.scalar_one_or_none()
+
+    return CommentResponse(
+        id=comment.id,
+        user_did=comment.user_did,
+        user_handle=artist.handle if artist else auth_session.did,
+        user_display_name=artist.display_name if artist else None,
+        user_avatar_url=artist.avatar_url if artist else None,
+        text=comment.text,
+        timestamp_ms=comment.timestamp_ms,
+        created_at=comment.created_at.isoformat(),
+        updated_at=comment.updated_at.isoformat() if comment.updated_at else None,
+    )
