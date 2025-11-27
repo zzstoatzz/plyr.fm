@@ -1,18 +1,21 @@
 // auth state management using Svelte 5 runes
 import { browser } from '$app/environment';
 import { API_URL } from '$lib/config';
+import { toast } from '$lib/toast.svelte';
 import type { User } from '$lib/types';
 
 export interface AuthState {
 	user: User | null;
 	isAuthenticated: boolean;
 	loading: boolean;
+	scopeUpgradeRequired: boolean;
 }
 
 class AuthManager {
 	user = $state<User | null>(null);
 	isAuthenticated = $state(false);
 	loading = $state(true);
+	scopeUpgradeRequired = $state(false);
 
 	async initialize(): Promise<void> {
 		if (!browser) {
@@ -28,6 +31,21 @@ class AuthManager {
 			if (response.ok) {
 				this.user = await response.json();
 				this.isAuthenticated = true;
+				this.scopeUpgradeRequired = false;
+			} else if (response.status === 403) {
+				// check if this is a scope upgrade requirement
+				const data = await response.json().catch(() => ({}));
+				if (data.detail === 'scope_upgrade_required') {
+					this.scopeUpgradeRequired = true;
+					this.clearSession();
+					toast.info(
+						"plyr.fm's permissions have changed since you logged in. please log in again",
+						5000,
+						{ label: 'see changes', href: 'https://github.com/zzstoatzz/plyr.fm/releases/latest' }
+					);
+				} else {
+					this.clearSession();
+				}
 			} else {
 				this.clearSession();
 			}

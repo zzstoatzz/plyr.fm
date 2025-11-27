@@ -1,6 +1,7 @@
 """OAuth 2.1 authentication and session management."""
 
 import json
+import logging
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -16,6 +17,36 @@ from backend._internal.oauth_stores import PostgresStateStore
 from backend.config import settings
 from backend.models import ExchangeToken, UserSession
 from backend.utilities.database import db_session
+
+logger = logging.getLogger(__name__)
+
+
+def _parse_scopes(scope_string: str) -> set[str]:
+    """parse an OAuth scope string into a set of individual scopes.
+
+    handles format like: "atproto repo:fm.plyr.track repo:fm.plyr.like"
+    returns: {"repo:fm.plyr.track", "repo:fm.plyr.like"}
+    """
+    parts = scope_string.split()
+    # filter out the "atproto" prefix and keep just the repo: scopes
+    return {p for p in parts if p.startswith("repo:")}
+
+
+def _check_scope_coverage(granted_scope: str, required_scope: str) -> bool:
+    """check if granted scope covers all required scopes.
+
+    returns True if the session has all required permissions.
+    """
+    granted = _parse_scopes(granted_scope)
+    required = _parse_scopes(required_scope)
+    return required.issubset(granted)
+
+
+def _get_missing_scopes(granted_scope: str, required_scope: str) -> set[str]:
+    """get the scopes that are required but not granted."""
+    granted = _parse_scopes(granted_scope)
+    required = _parse_scopes(required_scope)
+    return required - granted
 
 
 @dataclass
@@ -286,6 +317,9 @@ async def require_auth(
     checks cookie first (for browser requests), then falls back to Authorization
     header (for SDK/CLI clients). this enables secure HttpOnly cookies for browsers
     while maintaining bearer token support for API clients.
+
+    also validates that the session's granted scopes cover all currently required
+    scopes. if not, returns 403 with "scope_upgrade_required" to prompt re-login.
     """
     session_id_value = None
 
@@ -305,6 +339,20 @@ async def require_auth(
         raise HTTPException(
             status_code=401,
             detail="invalid or expired session",
+        )
+
+    # check if session has all required scopes
+    granted_scope = session.oauth_session.get("scope", "")
+    required_scope = settings.atproto.resolved_scope
+
+    if not _check_scope_coverage(granted_scope, required_scope):
+        missing = _get_missing_scopes(granted_scope, required_scope)
+        logger.info(
+            f"session {session.did} missing scopes: {missing}, prompting re-auth"
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="scope_upgrade_required",
         )
 
     return session
