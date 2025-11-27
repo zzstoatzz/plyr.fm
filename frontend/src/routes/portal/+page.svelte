@@ -1081,6 +1081,9 @@
 								/>
 								<span>also delete records from my ATProto repo</span>
 							</label>
+							<p class="atproto-note">
+								you can manage your PDS records directly via <a href="https://pdsls.dev/at://{auth.user?.did}" target="_blank" rel="noopener">pdsls.dev</a>, or let us clean them up for you.
+							</p>
 							{#if deleteAtprotoRecords}
 								<p class="atproto-warning">
 									this removes track, like, and comment records from your PDS. other users' likes and comments that reference your tracks will become orphaned (pointing to records that no longer exist).
@@ -1952,6 +1955,21 @@
 		width: 16px;
 		height: 16px;
 		cursor: pointer;
+	}
+
+	.atproto-note {
+		margin: 0.5rem 0 0 0;
+		font-size: 0.85rem;
+		color: #777;
+	}
+
+	.atproto-note a {
+		color: #999;
+		text-decoration: underline;
+	}
+
+	.atproto-note a:hover {
+		color: #bbb;
 	}
 
 	.atproto-warning {
