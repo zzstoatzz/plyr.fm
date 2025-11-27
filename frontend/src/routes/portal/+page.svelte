@@ -51,6 +51,7 @@
 	let displayName = $state('');
 	let bio = $state('');
 	let avatarUrl = $state('');
+	let allowComments = $state(false);
 	let savingProfile = $state(false);
 	let profileSuccess = $state('');
 	let profileError = $state('');
@@ -104,6 +105,7 @@
 			await loadMyTracks();
 			await loadArtistProfile();
 			await loadMyAlbums();
+			await loadPreferences();
 		} catch (_e) {
 			console.error('error loading portal data:', _e);
 			error = 'failed to load portal data';
@@ -158,6 +160,40 @@
 			console.error('failed to load albums:', _e);
 		} finally {
 			loadingAlbums = false;
+		}
+	}
+
+	async function loadPreferences() {
+		try {
+			const response = await fetch(`${API_URL}/preferences`, {
+				credentials: 'include'
+			});
+			if (response.ok) {
+				const prefs = await response.json();
+				allowComments = prefs.allow_comments;
+			}
+		} catch (_e) {
+			console.error('failed to load preferences:', _e);
+		}
+	}
+
+	async function saveAllowComments(enabled: boolean) {
+		try {
+			const response = await fetch(`${API_URL}/preferences`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({ allow_comments: enabled })
+			});
+			if (response.ok) {
+				allowComments = enabled;
+				toast.success(enabled ? 'comments enabled on your tracks' : 'comments disabled');
+			} else {
+				toast.error('failed to update preference');
+			}
+		} catch (_e) {
+			console.error('failed to save preference:', _e);
+			toast.error('failed to update preference');
 		}
 	}
 
@@ -917,24 +953,46 @@
 			{/if}
 		</section>
 
-		{#if tracks.length > 0}
-			<section class="export-section">
-				<div class="export-header">
-					<h2>export your music</h2>
-					<p class="export-description">
-						download all {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'} as a zip archive.
-						files are provided in their original format (mp3, wav, m4a) exactly as uploaded.
+		<section class="data-section">
+			<h2>your data</h2>
+
+			<div class="data-control">
+				<div class="control-info">
+					<h3>timed comments</h3>
+					<p class="control-description">
+						allow other users to leave comments on your tracks
 					</p>
 				</div>
-				<button
-					class="export-main-btn"
-					onclick={exportAllMedia}
-					disabled={exportingMedia}
-				>
-					{exportingMedia ? 'exporting...' : tracks.length === 1 ? 'export track' : `export all ${tracks.length} tracks`}
-				</button>
-			</section>
-		{/if}
+				<label class="toggle-switch">
+					<input
+						type="checkbox"
+						aria-label="Allow timed comments on your tracks"
+						checked={allowComments}
+						onchange={(e) => saveAllowComments((e.target as HTMLInputElement).checked)}
+					/>
+					<span class="toggle-slider"></span>
+					<span class="toggle-label">{allowComments ? 'enabled' : 'disabled'}</span>
+				</label>
+			</div>
+
+			{#if tracks.length > 0}
+				<div class="data-control">
+					<div class="control-info">
+						<h3>export tracks</h3>
+						<p class="control-description">
+							{tracks.length === 1 ? 'download your track as a zip archive' : `download all ${tracks.length} tracks as a zip archive`}
+						</p>
+					</div>
+					<button
+						class="export-btn"
+						onclick={exportAllMedia}
+						disabled={exportingMedia}
+					>
+						{exportingMedia ? 'exporting...' : 'export'}
+					</button>
+				</div>
+			{/if}
+		</section>
 	</main>
 {/if}
 
@@ -1630,56 +1688,116 @@
 		justify-content: flex-end;
 	}
 
-	.export-section {
+	/* your data section */
+	.data-section {
 		margin-top: 3rem;
-		padding: 2rem;
-		background: #1a1a1a;
-		border: 1px solid #2a2a2a;
-		border-radius: 8px;
 	}
 
-	.export-header {
+	.data-section h2 {
+		font-size: var(--text-page-heading);
 		margin-bottom: 1.5rem;
 	}
 
-	.export-header h2 {
-		font-size: var(--text-page-heading);
-		margin-bottom: 0.75rem;
+	.data-control {
+		padding: 1.5rem;
+		background: #1a1a1a;
+		border: 1px solid #2a2a2a;
+		border-radius: 8px;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+		margin-bottom: 1rem;
 	}
 
-	.export-description {
-		color: #aaa;
-		font-size: 0.95rem;
-		line-height: 1.6;
+	.data-control:last-child {
+		margin-bottom: 0;
+	}
+
+	.control-info h3 {
+		font-size: 1rem;
+		font-weight: 600;
+		margin: 0 0 0.25rem 0;
+		color: #e8e8e8;
+	}
+
+	.control-description {
+		font-size: 0.85rem;
+		color: #888;
 		margin: 0;
 	}
 
-	.export-main-btn {
-		width: 100%;
-		padding: 1rem;
+	.export-btn {
+		padding: 0.6rem 1.25rem;
 		background: #3a7dff;
 		color: white;
 		border: none;
 		border-radius: 6px;
-		font-size: 1rem;
+		font-size: 0.9rem;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.2s;
+		white-space: nowrap;
+		width: auto;
 	}
 
-	.export-main-btn:hover:not(:disabled) {
+	.export-btn:hover:not(:disabled) {
 		background: #2868e6;
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px rgba(58, 125, 255, 0.3);
 	}
 
-	.export-main-btn:disabled {
+	.export-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 		transform: none;
 	}
 
-	.export-main-btn:active:not(:disabled) {
-		transform: translateY(0);
+	.toggle-switch {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.toggle-switch input {
+		display: none;
+	}
+
+	.toggle-slider {
+		width: 44px;
+		height: 24px;
+		background: #333;
+		border-radius: 12px;
+		position: relative;
+		transition: background 0.2s;
+	}
+
+	.toggle-slider::after {
+		content: '';
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: 20px;
+		height: 20px;
+		background: #888;
+		border-radius: 50%;
+		transition: all 0.2s;
+	}
+
+	.toggle-switch input:checked + .toggle-slider {
+		background: var(--accent, #3a7dff);
+	}
+
+	.toggle-switch input:checked + .toggle-slider::after {
+		left: 22px;
+		background: white;
+	}
+
+	.toggle-label {
+		font-size: 0.85rem;
+		color: #888;
+		min-width: 60px;
 	}
 </style>

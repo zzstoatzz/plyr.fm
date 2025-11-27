@@ -317,6 +317,13 @@ class AtprotoSettings(RelaySettingsSection):
 
     @computed_field
     @property
+    def comment_collection(self) -> str:
+        """Collection name for timed comment records."""
+
+        return f"{self.app_namespace}.comment"
+
+    @computed_field
+    @property
     def old_track_collection(self) -> str | None:
         """Collection name for old namespace, if migration is active."""
 
@@ -332,10 +339,11 @@ class AtprotoSettings(RelaySettingsSection):
         if self.scope_override:
             return self.scope_override
 
-        # base scopes: our track collection + our like collection
+        # base scopes: our track, like, and comment collections
         scopes = [
             f"repo:{self.track_collection}",
             f"repo:{self.like_collection}",
+            f"repo:{self.comment_collection}",
         ]
 
         # if we have an old namespace, add old track collection too

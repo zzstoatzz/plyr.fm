@@ -6,12 +6,14 @@ from backend._internal.atproto.profile import (
     normalize_avatar_url,
 )
 from backend._internal.atproto.records import (
+    create_comment_record,
     create_like_record,
     create_track_record,
     delete_record_by_uri,
 )
 
 __all__ = [
+    "create_comment_record",
     "create_like_record",
     "create_track_record",
     "delete_record_by_uri",
