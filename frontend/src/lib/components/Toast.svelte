@@ -22,7 +22,14 @@
 				<span class="toast-icon" aria-hidden="true">
 					{icons[item.type]}
 				</span>
-				<span class="toast-message">{item.message}</span>
+				<span class="toast-message">
+					{item.message}
+					{#if item.action}
+						<a href={item.action.href} target="_blank" rel="noopener noreferrer" class="toast-action">
+							{item.action.label}
+						</a>
+					{/if}
+				</span>
 			</div>
 		{/each}
 	</div>
@@ -69,6 +76,17 @@
 		word-wrap: break-word;
 		overflow-wrap: break-word;
 		hyphens: auto;
+	}
+
+	.toast-action {
+		color: var(--accent);
+		text-decoration: underline;
+		pointer-events: auto;
+		margin-left: 0.5rem;
+	}
+
+	.toast-action:hover {
+		opacity: 0.8;
 	}
 
 	.toast-success .toast-icon {

@@ -38,7 +38,11 @@ class AuthManager {
 				if (data.detail === 'scope_upgrade_required') {
 					this.scopeUpgradeRequired = true;
 					this.clearSession();
-					toast.info('we added new features! log in again to use them');
+					toast.info(
+						"plyr.fm's permissions have changed since you logged in. please log in again",
+						5000,
+						{ label: 'see changes', href: 'https://github.com/zzstoatzz/plyr.fm/releases/latest' }
+					);
 				} else {
 					this.clearSession();
 				}

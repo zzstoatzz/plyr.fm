@@ -2,25 +2,32 @@
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
+export interface ToastAction {
+	label: string;
+	href: string;
+}
+
 export interface Toast {
 	id: string;
 	message: string;
 	type: ToastType;
 	duration: number;
 	dismissible: boolean;
+	action?: ToastAction;
 }
 
 class ToastState {
 	toasts = $state<Toast[]>([]);
 
-	add(message: string, type: ToastType = 'info', duration = 3000): string {
+	add(message: string, type: ToastType = 'info', duration = 3000, action?: ToastAction): string {
 		const id = crypto.randomUUID();
 		const toast: Toast = {
 			id,
 			message,
 			type,
 			duration,
-			dismissible: true
+			dismissible: true,
+			action
 		};
 
 		this.toasts = [toast, ...this.toasts];
@@ -54,8 +61,8 @@ class ToastState {
 		return this.add(message, 'error', duration);
 	}
 
-	info(message: string, duration = 3000): string {
-		return this.add(message, 'info', duration);
+	info(message: string, duration = 3000, action?: ToastAction): string {
+		return this.add(message, 'info', duration, action);
 	}
 
 	warning(message: string, duration = 4000): string {
