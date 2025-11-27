@@ -33,12 +33,14 @@
 
 	let showLikersTooltip = $state(false);
 	let likeCount = $state(track.like_count || 0);
+	let commentCount = $state(track.comment_count || 0);
 	let trackImageError = $state(false);
 	let avatarError = $state(false);
 
-	// sync likeCount when track changes
+	// sync counts when track changes
 	$effect(() => {
 		likeCount = track.like_count || 0;
+		commentCount = track.comment_count || 0;
 		// reset error states when track changes (e.g. recycled component)
 		trackImageError = false;
 		avatarError = false;
@@ -193,6 +195,20 @@
 							<LikersTooltip trackId={track.id} likeCount={likeCount} />
 						{/if}
 					</span>
+				{/if}
+				{#if commentCount > 0}
+					<span class="meta-separator">•</span>
+					<a
+						href="/track/{track.id}"
+						class="comments"
+						title="view comments"
+						onclick={(e) => e.stopPropagation()}
+					>
+						<svg class="comment-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<path d="M2 3h12v8H5l-3 3V3z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
+						</svg>
+						<span class="comment-count">{commentCount}</span>
+					</a>
 				{/if}
 			</div>
 		</div>
@@ -504,6 +520,30 @@
 
 	.likes:hover {
 		color: var(--accent);
+	}
+
+	.comments {
+		color: #999;
+		font-family: inherit;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		text-decoration: none;
+		transition: color 0.2s;
+	}
+
+	.comments:hover {
+		color: var(--accent);
+	}
+
+	.comment-icon {
+		width: 12px;
+		height: 12px;
+		flex-shrink: 0;
+	}
+
+	.comment-count {
+		font-family: inherit;
 	}
 
 	.action-button {

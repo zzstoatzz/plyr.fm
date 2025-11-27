@@ -53,6 +53,13 @@ class TrackComment(Base):
         nullable=False,
     )
 
+    # when it was last updated (null if never edited)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
+
     __table_args__ = (
         # composite index for fetching comments ordered by timestamp
         Index("ix_track_comments_track_timestamp", "track_id", "timestamp_ms"),

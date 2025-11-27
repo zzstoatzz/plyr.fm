@@ -21,6 +21,7 @@
 		text: string;
 		timestamp_ms: number;
 		created_at: string;
+		updated_at: string | null;
 	}
 
 	// receive server-loaded data
@@ -34,6 +35,8 @@
 	let loadingComments = $state(true);
 	let newCommentText = $state('');
 	let submittingComment = $state(false);
+	let editingCommentId = $state<number | null>(null);
+	let editingCommentText = $state('');
 
 	// reactive check if this track is currently playing
 	let isCurrentlyPlaying = $derived(
@@ -166,6 +169,78 @@
 				player.audioElement?.removeEventListener('loadedmetadata', onReady);
 			};
 			player.audioElement?.addEventListener('loadedmetadata', onReady);
+		}
+	}
+
+	function formatRelativeTime(isoString: string): string {
+		const date = new Date(isoString);
+		const now = new Date();
+		const diffMs = now.getTime() - date.getTime();
+		const diffSecs = Math.floor(diffMs / 1000);
+		const diffMins = Math.floor(diffSecs / 60);
+		const diffHours = Math.floor(diffMins / 60);
+		const diffDays = Math.floor(diffHours / 24);
+
+		if (diffSecs < 60) return 'just now';
+		if (diffMins < 60) return `${diffMins}m ago`;
+		if (diffHours < 24) return `${diffHours}h ago`;
+		if (diffDays < 7) return `${diffDays}d ago`;
+		return date.toLocaleDateString();
+	}
+
+	function startEditing(comment: Comment) {
+		editingCommentId = comment.id;
+		editingCommentText = comment.text;
+	}
+
+	function cancelEditing() {
+		editingCommentId = null;
+		editingCommentText = '';
+	}
+
+	async function saveEdit(commentId: number) {
+		if (!editingCommentText.trim()) return;
+
+		try {
+			const response = await fetch(`${API_URL}/tracks/comments/${commentId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({ text: editingCommentText.trim() })
+			});
+
+			if (response.ok) {
+				const updated = await response.json();
+				comments = comments.map(c => c.id === commentId ? updated : c);
+				cancelEditing();
+				toast.success('comment updated');
+			} else {
+				const error = await response.json();
+				toast.error(error.detail || 'failed to update comment');
+			}
+		} catch (e) {
+			console.error('failed to update comment:', e);
+			toast.error('failed to update comment');
+		}
+	}
+
+	async function deleteComment(commentId: number) {
+		try {
+			const response = await fetch(`${API_URL}/tracks/comments/${commentId}`, {
+				method: 'DELETE',
+				credentials: 'include'
+			});
+
+			if (response.ok) {
+				comments = comments.filter(c => c.id !== commentId);
+				toast.success('comment deleted');
+			} else {
+				const error = await response.json();
+				toast.error(error.detail || 'failed to delete comment');
+			}
+		} catch (e) {
+			console.error('failed to delete comment:', e);
+			toast.error('failed to delete comment');
 		}
 	}
 
@@ -407,8 +482,39 @@ $effect(() => {
 										<a href="/u/{comment.user_handle}" class="comment-author">
 											{comment.user_display_name || comment.user_handle}
 										</a>
+										<span class="comment-separator">•</span>
+										<span class="comment-time" title={new Date(comment.created_at).toLocaleString()}>
+											{formatRelativeTime(comment.created_at)}{#if comment.updated_at}
+												<span class="edited-indicator" title={`edited ${new Date(comment.updated_at).toLocaleString()}`}> (edited)</span>
+											{/if}
+										</span>
 									</div>
-									<p class="comment-text">{comment.text}</p>
+									{#if editingCommentId === comment.id}
+										<div class="comment-edit-form">
+											<input
+												type="text"
+												class="comment-edit-input"
+												bind:value={editingCommentText}
+												maxlength={300}
+												onkeydown={(e) => {
+													if (e.key === 'Enter') saveEdit(comment.id);
+													if (e.key === 'Escape') cancelEditing();
+												}}
+											/>
+											<div class="comment-edit-actions">
+												<button class="edit-form-btn save" onclick={() => saveEdit(comment.id)}>save</button>
+												<button class="edit-form-btn cancel" onclick={cancelEditing}>cancel</button>
+											</div>
+										</div>
+									{:else}
+										<p class="comment-text">{comment.text}</p>
+										{#if auth.user?.did === comment.user_did}
+											<div class="comment-actions">
+												<button class="comment-action-btn" onclick={() => startEditing(comment)}>edit</button>
+												<button class="comment-action-btn delete" onclick={() => deleteComment(comment.id)}>delete</button>
+											</div>
+										{/if}
+									{/if}
 								</div>
 							</div>
 						{/each}
@@ -868,10 +974,16 @@ $effect(() => {
 
 	.comment {
 		display: flex;
+		align-items: flex-start;
 		gap: 0.6rem;
 		padding: 0.5rem 0.6rem;
 		background: #1a1a1a;
 		border-radius: 6px;
+		transition: background 0.15s;
+	}
+
+	.comment:hover {
+		background: #222;
 	}
 
 	.comment-timestamp {
@@ -904,6 +1016,17 @@ $effect(() => {
 		align-items: center;
 		gap: 0.5rem;
 		margin-bottom: 0.25rem;
+		flex-wrap: wrap;
+	}
+
+	.comment-separator {
+		color: #444;
+		font-size: 0.6rem;
+	}
+
+	.comment-time {
+		font-size: 0.75rem;
+		color: #666;
 	}
 
 	.comment-avatar {
@@ -937,6 +1060,110 @@ $effect(() => {
 		margin: 0;
 		line-height: 1.4;
 		word-break: break-word;
+	}
+
+	.edited-indicator {
+		color: #555;
+		font-style: italic;
+	}
+
+	/* actions below comment text - show on hover */
+	.comment-actions {
+		display: flex;
+		gap: 0.75rem;
+		margin-top: 0.35rem;
+		opacity: 0;
+		transition: opacity 0.15s;
+	}
+
+	.comment:hover .comment-actions {
+		opacity: 1;
+	}
+
+	.comment-action-btn {
+		background: none;
+		border: none;
+		padding: 0;
+		color: #666;
+		font-size: 0.8rem;
+		cursor: pointer;
+		transition: color 0.15s;
+		font-family: inherit;
+	}
+
+	.comment-action-btn:hover {
+		color: var(--accent);
+	}
+
+	.comment-action-btn.delete:hover {
+		color: #ff6b6b;
+	}
+
+	/* mobile: always show actions */
+	@media (hover: none) {
+		.comment-actions {
+			opacity: 1;
+		}
+	}
+
+	.comment-edit-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		width: 100%;
+	}
+
+	.comment-edit-input {
+		width: 100%;
+		padding: 0.5rem;
+		background: #0a0a0a;
+		border: 1px solid #333;
+		border-radius: 4px;
+		color: #e8e8e8;
+		font-size: 0.9rem;
+		font-family: inherit;
+	}
+
+	.comment-edit-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.comment-edit-actions {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
+	}
+
+	.edit-form-btn {
+		padding: 0.25rem 0.6rem;
+		font-size: 0.8rem;
+		font-family: inherit;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.edit-form-btn.save {
+		background: var(--accent);
+		color: #000;
+		border: none;
+		font-weight: 500;
+	}
+
+	.edit-form-btn.save:hover {
+		opacity: 0.9;
+	}
+
+	.edit-form-btn.cancel {
+		background: transparent;
+		color: #888;
+		border: 1px solid #444;
+	}
+
+	.edit-form-btn.cancel:hover {
+		border-color: #666;
+		color: #aaa;
 	}
 
 	@media (max-width: 768px) {

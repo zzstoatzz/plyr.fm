@@ -39,6 +39,7 @@ export interface Track {
 	atproto_record_url?: string;
 	play_count: number;
 	like_count?: number;
+	comment_count?: number;
 	features?: FeaturedArtist[];
 	created_at?: string;
 	image_url?: string;

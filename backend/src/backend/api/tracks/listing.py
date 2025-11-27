@@ -15,7 +15,7 @@ from backend._internal import require_auth
 from backend._internal.auth import get_session
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
-from backend.utilities.aggregations import get_like_counts
+from backend.utilities.aggregations import get_comment_counts, get_like_counts
 
 from .router import router
 
@@ -55,9 +55,12 @@ async def list_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    # batch fetch like counts for all tracks
+    # batch fetch like and comment counts for all tracks
     track_ids = [track.id for track in tracks]
-    like_counts = await get_like_counts(db, track_ids)
+    like_counts, comment_counts = await asyncio.gather(
+        get_like_counts(db, track_ids),
+        get_comment_counts(db, track_ids),
+    )
 
     # use cached PDS URLs with fallback on failure
     resolver = AsyncDidResolver()
@@ -149,7 +152,11 @@ async def list_tracks(
     track_responses = await asyncio.gather(
         *[
             TrackResponse.from_track(
-                track, pds_cache.get(track.artist_did), liked_track_ids, like_counts
+                track,
+                pds_cache.get(track.artist_did),
+                liked_track_ids,
+                like_counts,
+                comment_counts,
             )
             for track in tracks
         ]
