@@ -65,6 +65,12 @@
 	// export state
 	let exportingMedia = $state(false);
 
+	// account deletion state
+	let showDeleteConfirm = $state(false);
+	let deleteConfirmText = $state('');
+	let deleteAtprotoRecords = $state(false);
+	let deleting = $state(false);
+
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
 		const params = new URLSearchParams(window.location.search);
@@ -547,6 +553,59 @@
 			exportingMedia = false;
 		}
 	}
+
+	async function deleteAccount() {
+		if (!auth.user || deleteConfirmText !== auth.user.handle) return;
+
+		deleting = true;
+		const toastId = toast.info('deleting account...', 0);
+
+		try {
+			const response = await fetch(`${API_URL}/account/`, {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({
+					confirmation: deleteConfirmText,
+					delete_atproto_records: deleteAtprotoRecords
+				})
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				toast.dismiss(toastId);
+				toast.error(error.detail || 'failed to delete account');
+				deleting = false;
+				return;
+			}
+
+			const result = await response.json();
+			toast.dismiss(toastId);
+
+			// show summary of what was deleted
+			const { deleted } = result;
+			const summary = [
+				deleted.tracks && `${deleted.tracks} tracks`,
+				deleted.albums && `${deleted.albums} albums`,
+				deleted.likes && `${deleted.likes} likes`,
+				deleted.comments && `${deleted.comments} comments`,
+				deleted.atproto_records && `${deleted.atproto_records} ATProto records`
+			].filter(Boolean).join(', ');
+
+			toast.success(`account deleted: ${summary || 'all data removed'}`);
+
+			// redirect to home after a moment
+			setTimeout(() => {
+				window.location.href = '/';
+			}, 2000);
+
+		} catch (e) {
+			console.error('delete failed:', e);
+			toast.dismiss(toastId);
+			toast.error('failed to delete account');
+			deleting = false;
+		}
+	}
 </script>
 
 {#if loading}
@@ -992,6 +1051,77 @@
 					</button>
 				</div>
 			{/if}
+
+			<div class="data-control danger-zone">
+				<div class="control-info">
+					<h3>delete account</h3>
+					<p class="control-description">
+						permanently delete all your data from plyr.fm.
+						<a href="https://github.com/zzstoatzz/plyr.fm/blob/main/docs/offboarding.md#account-deletion" target="_blank" rel="noopener">learn more</a>
+					</p>
+				</div>
+				{#if !showDeleteConfirm}
+					<button
+						class="delete-account-btn"
+						onclick={() => showDeleteConfirm = true}
+					>
+						delete account
+					</button>
+				{:else}
+					<div class="delete-confirm-panel">
+						<p class="delete-warning">
+							this will permanently delete all your tracks, albums, likes, and comments from plyr.fm. this cannot be undone.
+						</p>
+
+						<div class="atproto-section">
+							<label class="atproto-option">
+								<input
+									type="checkbox"
+									bind:checked={deleteAtprotoRecords}
+								/>
+								<span>also delete records from my ATProto repo</span>
+							</label>
+							{#if deleteAtprotoRecords}
+								<p class="atproto-warning">
+									this removes track, like, and comment records from your PDS. other users' likes and comments that reference your tracks will become orphaned (pointing to records that no longer exist).
+								</p>
+							{/if}
+						</div>
+
+						<p class="confirm-prompt">
+							type <strong>{auth.user?.handle}</strong> to confirm:
+						</p>
+						<input
+							type="text"
+							class="confirm-input"
+							bind:value={deleteConfirmText}
+							placeholder={auth.user?.handle}
+							disabled={deleting}
+						/>
+
+						<div class="delete-actions">
+							<button
+								class="cancel-btn"
+								onclick={() => {
+									showDeleteConfirm = false;
+									deleteConfirmText = '';
+									deleteAtprotoRecords = false;
+								}}
+								disabled={deleting}
+							>
+								cancel
+							</button>
+							<button
+								class="confirm-delete-btn"
+								onclick={deleteAccount}
+								disabled={deleting || deleteConfirmText !== auth.user?.handle}
+							>
+								{deleting ? 'deleting...' : 'delete everything'}
+							</button>
+						</div>
+					</div>
+				{/if}
+			</div>
 		</section>
 	</main>
 {/if}
@@ -1751,6 +1881,167 @@
 		opacity: 0.5;
 		cursor: not-allowed;
 		transform: none;
+	}
+
+	/* danger zone / account deletion */
+	.danger-zone {
+		border-color: #4a2020;
+		background: #1a1010;
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.danger-zone .control-info h3 {
+		color: #ff6b6b;
+	}
+
+	.danger-zone .control-description a {
+		color: #888;
+		text-decoration: underline;
+	}
+
+	.danger-zone .control-description a:hover {
+		color: #aaa;
+	}
+
+	.delete-account-btn {
+		padding: 0.6rem 1.25rem;
+		background: transparent;
+		color: #ff6b6b;
+		border: 1px solid #ff6b6b;
+		border-radius: 6px;
+		font-size: 0.9rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+		align-self: flex-end;
+	}
+
+	.delete-account-btn:hover {
+		background: #ff6b6b;
+		color: white;
+	}
+
+	.delete-confirm-panel {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid #3a2020;
+	}
+
+	.delete-warning {
+		color: #ff8888;
+		font-size: 0.9rem;
+		margin: 0 0 1rem 0;
+		line-height: 1.5;
+	}
+
+	.atproto-section {
+		margin-bottom: 1rem;
+	}
+
+	.atproto-option {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.9rem;
+		color: #aaa;
+		cursor: pointer;
+	}
+
+	.atproto-option input {
+		width: 16px;
+		height: 16px;
+		cursor: pointer;
+	}
+
+	.atproto-warning {
+		margin: 0.75rem 0 0 0;
+		padding: 0.75rem;
+		background: rgba(255, 107, 107, 0.1);
+		border-left: 2px solid #ff6b6b;
+		font-size: 0.85rem;
+		color: #cc8888;
+		line-height: 1.5;
+	}
+
+	.confirm-prompt {
+		font-size: 0.9rem;
+		color: #888;
+		margin: 0 0 0.5rem 0;
+	}
+
+	.confirm-prompt strong {
+		color: #e8e8e8;
+		font-family: monospace;
+	}
+
+	.confirm-input {
+		width: 100%;
+		padding: 0.75rem;
+		background: #0a0505;
+		border: 1px solid #3a2020;
+		border-radius: 6px;
+		color: #e8e8e8;
+		font-size: 0.9rem;
+		font-family: monospace;
+		margin-bottom: 1rem;
+	}
+
+	.confirm-input:focus {
+		outline: none;
+		border-color: #ff6b6b;
+	}
+
+	.confirm-input::placeholder {
+		color: #555;
+	}
+
+	.delete-actions {
+		display: flex;
+		gap: 0.75rem;
+		justify-content: flex-end;
+	}
+
+	.cancel-btn {
+		padding: 0.6rem 1.25rem;
+		background: transparent;
+		color: #888;
+		border: 1px solid #444;
+		border-radius: 6px;
+		font-size: 0.9rem;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.cancel-btn:hover:not(:disabled) {
+		border-color: #666;
+		color: #aaa;
+	}
+
+	.cancel-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.confirm-delete-btn {
+		padding: 0.6rem 1.25rem;
+		background: #ff4444;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		font-size: 0.9rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.confirm-delete-btn:hover:not(:disabled) {
+		background: #ff2222;
+	}
+
+	.confirm-delete-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.toggle-switch {

@@ -33,10 +33,72 @@ Users can download a ZIP archive containing all their uploaded tracks in their o
     *   This ensures we don't pay for indefinite storage of duplicate data.
     *   Users must download their export within this window.
 
-## Account Deletion (Planned)
+## Account Deletion
 
-*   **Goal**: Allow users to permanently delete their account and all associated data (tracks, images, metadata).
-*   **Prerequisite**: Users should be encouraged to export their data before deletion.
-*   **Implementation**:
-    *   Will likely use a similar `Job` based approach for reliability.
-    *   Must scrub database records and delete corresponding R2 objects.
+Users can permanently delete their account and all associated data. This is a synchronous, interactive process.
+
+### What Gets Deleted
+
+#### Always Deleted (plyr.fm infrastructure)
+
+| Location | Data |
+|----------|------|
+| **PostgreSQL** | tracks, albums, likes (given), comments (made), preferences, sessions, queue entries, jobs |
+| **R2 Storage** | audio files, track cover images, album cover images |
+
+#### Optionally Deleted (user's ATProto PDS)
+
+If the user opts in, we delete records from their Personal Data Server:
+
+| Collection | Description |
+|------------|-------------|
+| `fm.plyr.track` / `fm.plyr.dev.track` | track metadata records |
+| `fm.plyr.like` / `fm.plyr.dev.like` | like records |
+| `fm.plyr.comment` / `fm.plyr.dev.comment` | comment records |
+
+> **Note**: ATProto deletion requires a valid authenticated session. If the session has expired or lacks required scopes, ATProto records will remain on the user's PDS but all plyr.fm data will still be deleted.
+
+### Workflow
+
+1. **Confirmation**: User types their handle to confirm intent
+2. **ATProto Option**: Checkbox to opt into deleting ATProto records
+3. **Processing**:
+   - Delete R2 objects (audio, images)
+   - Delete database records in dependency order
+   - If opted in: delete ATProto records via PDS API
+4. **Session Cleanup**: All sessions invalidated, user logged out
+
+### API
+
+```
+DELETE /account/
+```
+
+**Request Body**:
+```json
+{
+  "confirmation": "handle.bsky.social",
+  "delete_atproto_records": true
+}
+```
+
+**Response** (success):
+```json
+{
+  "deleted": {
+    "tracks": 5,
+    "albums": 1,
+    "likes": 12,
+    "comments": 3,
+    "r2_objects": 11,
+    "atproto_records": 20
+  }
+}
+```
+
+### Important Notes
+
+- **Irreversible**: There is no undo. Export data first if needed.
+- **Likes received**: Likes from other users on your tracks are deleted when your tracks are deleted.
+- **Comments received**: Comments from other users on your tracks are deleted when your tracks are deleted.
+- **ATProto propagation**: Even after deletion from your PDS, cached copies may exist on relay servers temporarily.
