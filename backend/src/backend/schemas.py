@@ -61,6 +61,7 @@ class TrackResponse(BaseModel):
     image_url: str | None
     is_liked: bool
     like_count: int
+    comment_count: int
     album: AlbumSummary | None
 
     @classmethod
@@ -70,6 +71,7 @@ class TrackResponse(BaseModel):
         pds_url: str | None = None,
         liked_track_ids: set[int] | None = None,
         like_counts: dict[int, int] | None = None,
+        comment_counts: dict[int, int] | None = None,
     ) -> "TrackResponse":
         """build track response from Track model.
 
@@ -78,12 +80,16 @@ class TrackResponse(BaseModel):
             pds_url: optional PDS URL for atproto_record_url
             liked_track_ids: optional set of liked track IDs for this user
             like_counts: optional dict of track_id -> like_count
+            comment_counts: optional dict of track_id -> comment_count
         """
         # check if user has liked this track
         is_liked = liked_track_ids is not None and track.id in liked_track_ids
 
         # get like count
         like_count = like_counts.get(track.id, 0) if like_counts else 0
+
+        # get comment count
+        comment_count = comment_counts.get(track.id, 0) if comment_counts else 0
 
         # resolve image URL
         image_url = track.image_url
@@ -127,5 +133,6 @@ class TrackResponse(BaseModel):
             image_url=image_url,
             is_liked=is_liked,
             like_count=like_count,
+            comment_count=comment_count,
             album=album_data,
         )

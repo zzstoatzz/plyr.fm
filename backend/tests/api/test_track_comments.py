@@ -276,3 +276,175 @@ async def test_get_comments_track_not_found(test_app: FastAPI):
         response = await client.get("/tracks/99999/comments")
 
     assert response.status_code == 404
+
+
+async def test_edit_comment_success(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    test_track: Track,
+    artist_with_comments_enabled: UserPreferences,
+    commenter_artist: Artist,
+):
+    """test that comment owner can edit their comment and ATProto record is updated."""
+    from unittest.mock import AsyncMock, patch
+
+    comment = TrackComment(
+        track_id=test_track.id,
+        user_did="did:test:commenter123",
+        text="original text",
+        timestamp_ms=5000,
+        atproto_comment_uri="at://did:test:commenter123/fm.plyr.comment/edit1",
+    )
+    db_session.add(comment)
+    await db_session.commit()
+    await db_session.refresh(comment)
+
+    with patch(
+        "backend.api.tracks.comments.update_comment_record", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.return_value = "bafynewcid"
+
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.patch(
+                f"/tracks/comments/{comment.id}",
+                json={"text": "edited text"},
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["text"] == "edited text"
+    assert data["updated_at"] is not None
+
+    # verify ATProto record was updated
+    mock_update.assert_called_once()
+    call_kwargs = mock_update.call_args.kwargs
+    assert call_kwargs["comment_uri"] == comment.atproto_comment_uri
+    assert call_kwargs["subject_uri"] == test_track.atproto_record_uri
+    assert call_kwargs["subject_cid"] == test_track.atproto_record_cid
+    assert call_kwargs["text"] == "edited text"
+    assert call_kwargs["timestamp_ms"] == 5000
+
+
+async def test_edit_comment_syncs_to_atproto(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    test_track: Track,
+    artist_with_comments_enabled: UserPreferences,
+    commenter_artist: Artist,
+):
+    """regression test: editing a comment must update the ATProto record."""
+    from unittest.mock import AsyncMock, patch
+
+    comment = TrackComment(
+        track_id=test_track.id,
+        user_did="did:test:commenter123",
+        text="original text",
+        timestamp_ms=12345,
+        atproto_comment_uri="at://did:test:commenter123/fm.plyr.comment/sync1",
+    )
+    db_session.add(comment)
+    await db_session.commit()
+    await db_session.refresh(comment)
+    original_created_at = comment.created_at
+
+    with patch(
+        "backend.api.tracks.comments.update_comment_record", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.return_value = "bafynewcid123"
+
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.patch(
+                f"/tracks/comments/{comment.id}",
+                json={"text": "updated via edit"},
+            )
+
+    assert response.status_code == 200
+
+    # verify ATProto sync happened with correct data
+    mock_update.assert_called_once()
+    call_kwargs = mock_update.call_args.kwargs
+
+    # subject must reference the track's ATProto record
+    assert call_kwargs["subject_uri"] == test_track.atproto_record_uri
+    assert call_kwargs["subject_cid"] == test_track.atproto_record_cid
+
+    # original timestamp_ms and created_at preserved
+    assert call_kwargs["timestamp_ms"] == 12345
+    assert call_kwargs["created_at"] == original_created_at
+
+    # new text and updated_at passed
+    assert call_kwargs["text"] == "updated via edit"
+    assert "updated_at" in call_kwargs  # updated_at should be set
+
+
+async def test_edit_comment_forbidden_for_other_user(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    test_track: Track,
+    artist_with_comments_enabled: UserPreferences,
+):
+    """test that non-owner cannot edit comment."""
+    comment = TrackComment(
+        track_id=test_track.id,
+        user_did="did:plc:other",
+        text="someone else's comment",
+        timestamp_ms=5000,
+        atproto_comment_uri="at://did:plc:other/fm.plyr.comment/other1",
+    )
+    db_session.add(comment)
+    await db_session.commit()
+    await db_session.refresh(comment)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.patch(
+            f"/tracks/comments/{comment.id}",
+            json={"text": "trying to edit"},
+        )
+
+    assert response.status_code == 403
+    assert "own" in response.json()["detail"]
+
+
+async def test_delete_comment_success(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    test_track: Track,
+    artist_with_comments_enabled: UserPreferences,
+    commenter_artist: Artist,
+):
+    """test that comment owner can delete their comment."""
+    from unittest.mock import AsyncMock, patch
+
+    comment = TrackComment(
+        track_id=test_track.id,
+        user_did="did:test:commenter123",
+        text="to be deleted",
+        timestamp_ms=5000,
+        atproto_comment_uri="at://did:test:commenter123/fm.plyr.comment/del1",
+    )
+    db_session.add(comment)
+    await db_session.commit()
+    await db_session.refresh(comment)
+    comment_id = comment.id
+
+    with patch(
+        "backend.api.tracks.comments.delete_record_by_uri", new_callable=AsyncMock
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/tracks/comments/{comment_id}")
+
+    assert response.status_code == 200
+    assert response.json()["deleted"] is True
+
+    result = await db_session.execute(
+        select(TrackComment).where(TrackComment.id == comment_id)
+    )
+    assert result.scalar_one_or_none() is None

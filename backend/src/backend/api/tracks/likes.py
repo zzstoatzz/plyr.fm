@@ -14,7 +14,7 @@ from backend._internal import require_auth
 from backend._internal.atproto import create_like_record, delete_record_by_uri
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
-from backend.utilities.aggregations import get_like_counts
+from backend.utilities.aggregations import get_comment_counts, get_like_counts
 
 from .router import router
 
@@ -41,12 +41,18 @@ async def list_liked_tracks(
 
     liked_track_ids = {track.id for track in tracks}
     track_ids = [track.id for track in tracks]
-    like_counts = await get_like_counts(db, track_ids)
+    like_counts, comment_counts = await asyncio.gather(
+        get_like_counts(db, track_ids),
+        get_comment_counts(db, track_ids),
+    )
 
     track_responses = await asyncio.gather(
         *[
             TrackResponse.from_track(
-                track, liked_track_ids=liked_track_ids, like_counts=like_counts
+                track,
+                liked_track_ids=liked_track_ids,
+                like_counts=like_counts,
+                comment_counts=comment_counts,
             )
             for track in tracks
         ]
