@@ -1179,7 +1179,8 @@
 				<div class="control-info">
 					<h3>developer tokens</h3>
 					<p class="control-description">
-						create tokens for programmatic API access (uploads, track management)
+						create tokens for programmatic API access (uploads, track management).
+						use with the <a href="https://github.com/zzstoatzz/plyr-python-client" target="_blank" rel="noopener">python SDK</a>
 					</p>
 				</div>
 
