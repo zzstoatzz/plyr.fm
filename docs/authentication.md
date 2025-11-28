@@ -411,17 +411,27 @@ curl -X DELETE -H "Authorization: Bearer $PLYR_TOKEN" https://api.plyr.fm/auth/d
 set the token in your environment:
 ```bash
 export PLYR_TOKEN="your_token_here"
-# or
-export PLYRFM_API_TOKEN="your_token_here"
 ```
 
 use with any authenticated endpoint:
 ```bash
 # check auth
 curl -H "Authorization: Bearer $PLYR_TOKEN" https://api.plyr.fm/auth/me
+```
 
-# upload a track (uses PLYR_TOKEN or PLYRFM_API_TOKEN from env)
-PLYR_API_URL=https://api.plyr.fm uv run --with httpx sandbox/upload_track.py track.mp3 "My Track" "My Album"
+**CLI usage** (`scripts/plyr.py`):
+```bash
+# list your tracks
+PLYR_API_URL=https://api.plyr.fm uv run scripts/plyr.py list
+
+# upload a track
+PLYR_API_URL=https://api.plyr.fm uv run scripts/plyr.py upload track.mp3 "My Track"
+
+# download a track
+PLYR_API_URL=https://api.plyr.fm uv run scripts/plyr.py download 42 -o my-track.mp3
+
+# delete a track
+PLYR_API_URL=https://api.plyr.fm uv run scripts/plyr.py delete 42 -y
 ```
 
 ### configuration
@@ -436,6 +446,7 @@ backend settings in `AuthSettings`:
 developer tokens are sessions with their own independent OAuth grant. when you create a dev token, you go through a full OAuth authorization flow at your PDS, which gives the token its own access/refresh credentials. this means:
 - dev tokens can refresh independently (no staleness when browser session refreshes)
 - each token has its own DPoP keypair for request signing
+- logging out of browser doesn't affect dev tokens (cookie isolation)
 - revoking browser session doesn't affect dev tokens
 
 dev tokens can:
