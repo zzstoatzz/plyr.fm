@@ -110,6 +110,7 @@ plyr.fm/
 
 - **production**: https://plyr.fm
 - **API docs**: https://api.plyr.fm/docs
+- **python SDK**: [plyrfm](https://github.com/zzstoatzz/plyr-python-client) ([PyPI](https://pypi.org/project/plyrfm/))
 - **repository**: https://github.com/zzstoatzz/plyr.fm
 
 ## documentation
