@@ -367,16 +367,21 @@ for scripts, CLIs, and automated workflows, create a long-lived developer token:
 2. optionally enter a name (e.g., "upload-script", "ci-pipeline")
 3. select expiration (30/90/180/365 days or never)
 4. click "create token"
-5. copy immediately (shown only once)
+5. **authorize at your PDS** (you'll be redirected to approve the OAuth grant)
+6. copy the token immediately after redirect (shown only once)
 
 **via API**:
 ```javascript
-fetch('/auth/developer-token', {
+// step 1: start OAuth flow (returns auth_url to redirect to)
+const response = await fetch('/auth/developer-token/start', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     credentials: 'include',
     body: JSON.stringify({ name: 'my-script', expires_in_days: 90 })
-}).then(r => r.json()).then(d => console.log('Token:', d.token))
+});
+const { auth_url } = await response.json();
+// step 2: redirect user to auth_url to authorize at their PDS
+// step 3: on callback, token is returned via exchange flow
 ```
 
 ### managing tokens
@@ -428,7 +433,12 @@ backend settings in `AuthSettings`:
 
 ### how it works
 
-developer tokens are sessions marked with `is_developer_token=True` for tracking. they inherit your OAuth credentials, so they can:
+developer tokens are sessions with their own independent OAuth grant. when you create a dev token, you go through a full OAuth authorization flow at your PDS, which gives the token its own access/refresh credentials. this means:
+- dev tokens can refresh independently (no staleness when browser session refreshes)
+- each token has its own DPoP keypair for request signing
+- revoking browser session doesn't affect dev tokens
+
+dev tokens can:
 - read your data (tracks, likes, profile)
 - upload tracks (creates ATProto records on your PDS)
 - perform any authenticated action
@@ -438,6 +448,7 @@ developer tokens are sessions marked with `is_developer_token=True` for tracking
 - revoke individual tokens via the portal or API
 - each token is independent - revoking one doesn't affect others
 - token names help identify which token is used where
+- tokens require explicit OAuth consent at your PDS
 
 ## references
 
@@ -449,3 +460,4 @@ developer tokens are sessions marked with `is_developer_token=True` for tracking
 - PR #239: frontend localStorage removal
 - PR #243: backend cookie implementation
 - PR #244: merged cookie-based auth
+- PR #367: developer tokens with independent OAuth grants
