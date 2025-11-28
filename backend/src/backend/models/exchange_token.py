@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.models.database import Base
@@ -30,3 +30,7 @@ class ExchangeToken(Base):
         nullable=False,
     )
     used: Mapped[bool] = mapped_column(default=False, nullable=False)
+    # dev token exchanges should not set browser cookies
+    is_dev_token: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )

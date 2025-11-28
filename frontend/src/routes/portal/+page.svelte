@@ -71,13 +71,32 @@
 	let deleteAtprotoRecords = $state(false);
 	let deleting = $state(false);
 
+	// developer token state
+	let creatingToken = $state(false);
+	let developerToken = $state<string | null>(null);
+	let tokenExpiresDays = $state(90);
+	let tokenName = $state('');
+	let tokenCopied = $state(false);
+
+	// existing tokens list
+	interface TokenInfo {
+		session_id: string;
+		name: string | null;
+		created_at: string;
+		expires_at: string | null;
+	}
+	let existingTokens = $state<TokenInfo[]>([]);
+	let loadingTokens = $state(false);
+	let revokingToken = $state<string | null>(null);
+
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
 		const params = new URLSearchParams(window.location.search);
 		const exchangeToken = params.get('exchange_token');
+		const isDevToken = params.get('dev_token') === 'true';
 
 		if (exchangeToken) {
-			// exchange token for session_id (cookie is set automatically by backend)
+			// exchange token for session_id
 			try {
 				const exchangeResponse = await fetch(`${API_URL}/auth/exchange`, {
 					method: 'POST',
@@ -87,7 +106,16 @@
 				});
 
 				if (exchangeResponse.ok) {
-					await auth.initialize();
+					const data = await exchangeResponse.json();
+
+					if (isDevToken) {
+						// this is a developer token - display it to the user
+						developerToken = data.session_id;
+						toast.success('developer token created - save it now!');
+					} else {
+						// regular login - initialize auth
+						await auth.initialize();
+					}
 				}
 			} catch (_e) {
 				console.error('failed to exchange token:', _e);
@@ -112,6 +140,7 @@
 			await loadArtistProfile();
 			await loadMyAlbums();
 			await loadPreferences();
+			await loadDeveloperTokens();
 		} catch (_e) {
 			console.error('error loading portal data:', _e);
 			error = 'failed to load portal data';
@@ -119,6 +148,23 @@
 			loading = false;
 		}
 	});
+
+	async function loadDeveloperTokens() {
+		loadingTokens = true;
+		try {
+			const response = await fetch(`${API_URL}/auth/developer-tokens`, {
+				credentials: 'include'
+			});
+			if (response.ok) {
+				const data = await response.json();
+				existingTokens = data.tokens;
+			}
+		} catch (_e) {
+			console.error('failed to load developer tokens:', _e);
+		} finally {
+			loadingTokens = false;
+		}
+	}
 
 	async function loadMyTracks() {
 		loadingTracks = true;
@@ -551,6 +597,83 @@
 			toast.dismiss(toastId);
 			toast.error('failed to start export');
 			exportingMedia = false;
+		}
+	}
+
+	async function createDeveloperToken() {
+		creatingToken = true;
+		developerToken = null;
+		tokenCopied = false;
+
+		try {
+			// start OAuth flow for dev token - this returns an auth URL
+			const response = await fetch(`${API_URL}/auth/developer-token/start`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({
+					name: tokenName || null,
+					expires_in_days: tokenExpiresDays
+				})
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				toast.error(error.detail || 'failed to start token creation');
+				creatingToken = false;
+				return;
+			}
+
+			const result = await response.json();
+			tokenName = ''; // clear the name field
+
+			// redirect to PDS for authorization
+			// on callback, user will return with dev_token=true and the token will be displayed
+			window.location.href = result.auth_url;
+		} catch (e) {
+			console.error('failed to create token:', e);
+			toast.error('failed to create token');
+			creatingToken = false;
+		}
+		// note: we don't set creatingToken = false here because we're redirecting
+	}
+
+	async function revokeToken(tokenId: string, name: string | null) {
+		if (!confirm(`revoke token "${name || tokenId}"?`)) return;
+
+		revokingToken = tokenId;
+		try {
+			const response = await fetch(`${API_URL}/auth/developer-tokens/${tokenId}`, {
+				method: 'DELETE',
+				credentials: 'include'
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				toast.error(error.detail || 'failed to revoke token');
+				return;
+			}
+
+			toast.success('token revoked');
+			await loadDeveloperTokens();
+		} catch (e) {
+			console.error('failed to revoke token:', e);
+			toast.error('failed to revoke token');
+		} finally {
+			revokingToken = null;
+		}
+	}
+
+	async function copyToken() {
+		if (!developerToken) return;
+		try {
+			await navigator.clipboard.writeText(developerToken);
+			tokenCopied = true;
+			toast.success('token copied to clipboard');
+			setTimeout(() => { tokenCopied = false; }, 2000);
+		} catch (e) {
+			console.error('failed to copy:', e);
+			toast.error('failed to copy token');
 		}
 	}
 
@@ -1051,6 +1174,98 @@
 					</button>
 				</div>
 			{/if}
+
+			<div class="data-control developer-section">
+				<div class="control-info">
+					<h3>developer tokens</h3>
+					<p class="control-description">
+						create tokens for programmatic API access (uploads, track management)
+					</p>
+				</div>
+
+				{#if loadingTokens}
+					<p class="loading-tokens">loading tokens...</p>
+				{:else if existingTokens.length > 0}
+					<div class="existing-tokens">
+						<h4 class="tokens-header">active tokens</h4>
+						<div class="tokens-list">
+							{#each existingTokens as token}
+								<div class="token-item">
+									<div class="token-info">
+										<span class="token-name">{token.name || `token_${token.session_id}`}</span>
+										<span class="token-meta">
+											created {new Date(token.created_at).toLocaleDateString()}
+											{#if token.expires_at}
+												· expires {new Date(token.expires_at).toLocaleDateString()}
+											{:else}
+												· never expires
+											{/if}
+										</span>
+									</div>
+									<button
+										class="revoke-btn"
+										onclick={() => revokeToken(token.session_id, token.name)}
+										disabled={revokingToken === token.session_id}
+										title="revoke token"
+									>
+										{revokingToken === token.session_id ? '...' : 'revoke'}
+									</button>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				{#if developerToken}
+					<div class="token-display">
+						<code class="token-value">{developerToken}</code>
+						<button
+							class="copy-btn"
+							onclick={copyToken}
+							title="copy token"
+						>
+							{tokenCopied ? '✓' : 'copy'}
+						</button>
+						<button
+							class="dismiss-btn"
+							onclick={() => developerToken = null}
+							title="dismiss"
+						>
+							✕
+						</button>
+					</div>
+					<p class="token-warning">
+						save this token now - you won't be able to see it again
+					</p>
+				{:else}
+					<div class="token-form">
+						<input
+							type="text"
+							class="token-name-input"
+							bind:value={tokenName}
+							placeholder="token name (optional)"
+							disabled={creatingToken}
+						/>
+						<label class="expires-label">
+							<span>expires in</span>
+							<select bind:value={tokenExpiresDays} class="expires-select">
+								<option value={30}>30 days</option>
+								<option value={90}>90 days</option>
+								<option value={180}>180 days</option>
+								<option value={365}>1 year</option>
+								<option value={0}>never</option>
+							</select>
+						</label>
+						<button
+							class="create-token-btn"
+							onclick={createDeveloperToken}
+							disabled={creatingToken}
+						>
+							{creatingToken ? 'creating...' : 'create token'}
+						</button>
+					</div>
+				{/if}
+			</div>
 
 			<div class="data-control danger-zone">
 				<div class="control-info">
@@ -2108,5 +2323,225 @@
 		font-size: 0.85rem;
 		color: #888;
 		min-width: 60px;
+	}
+
+	/* developer token section */
+	.developer-section {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 1rem;
+	}
+
+	.developer-section .control-info h3 {
+		color: var(--accent);
+	}
+
+	.token-form {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.expires-label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.9rem;
+		color: #888;
+	}
+
+	.expires-select {
+		padding: 0.5rem 0.75rem;
+		background: #0a0a0a;
+		border: 1px solid #333;
+		border-radius: 4px;
+		color: white;
+		font-size: 0.9rem;
+		font-family: inherit;
+		cursor: pointer;
+	}
+
+	.expires-select:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.create-token-btn {
+		padding: 0.6rem 1.25rem;
+		background: var(--accent);
+		color: white;
+		border: none;
+		border-radius: 6px;
+		font-size: 0.9rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+		width: auto;
+	}
+
+	.create-token-btn:hover:not(:disabled) {
+		filter: brightness(1.1);
+		transform: translateY(-1px);
+	}
+
+	.create-token-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+		transform: none;
+	}
+
+	.token-display {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: #0a0a0a;
+		border: 1px solid #333;
+		border-radius: 6px;
+		padding: 0.75rem;
+		overflow: hidden;
+	}
+
+	.token-value {
+		flex: 1;
+		font-family: monospace;
+		font-size: 0.85rem;
+		color: #5ce87b;
+		word-break: break-all;
+		user-select: all;
+	}
+
+	.copy-btn,
+	.dismiss-btn {
+		padding: 0.4rem 0.75rem;
+		background: #2a2a2a;
+		border: 1px solid #3a3a3a;
+		border-radius: 4px;
+		color: #888;
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: all 0.2s;
+		width: auto;
+	}
+
+	.copy-btn:hover {
+		background: #3a3a3a;
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.dismiss-btn:hover {
+		background: #3a3a3a;
+		border-color: #666;
+		color: #aaa;
+	}
+
+	.token-warning {
+		font-size: 0.85rem;
+		color: #e9a545;
+		margin: 0;
+	}
+
+	/* existing tokens list */
+	.existing-tokens {
+		width: 100%;
+		margin-bottom: 1rem;
+	}
+
+	.tokens-header {
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: #888;
+		margin: 0 0 0.75rem 0;
+	}
+
+	.tokens-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.token-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.75rem;
+		background: #0a0a0a;
+		border: 1px solid #2a2a2a;
+		border-radius: 6px;
+	}
+
+	.token-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.token-name {
+		font-family: monospace;
+		font-size: 0.9rem;
+		color: #e8e8e8;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.token-meta {
+		font-size: 0.8rem;
+		color: #666;
+	}
+
+	.revoke-btn {
+		padding: 0.4rem 0.75rem;
+		background: transparent;
+		border: 1px solid #4a2020;
+		border-radius: 4px;
+		color: #ff6b6b;
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: all 0.2s;
+		width: auto;
+		flex-shrink: 0;
+	}
+
+	.revoke-btn:hover:not(:disabled) {
+		background: rgba(255, 107, 107, 0.1);
+		border-color: #ff6b6b;
+	}
+
+	.revoke-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.token-name-input {
+		padding: 0.5rem 0.75rem;
+		background: #0a0a0a;
+		border: 1px solid #333;
+		border-radius: 4px;
+		color: white;
+		font-size: 0.9rem;
+		font-family: inherit;
+		min-width: 150px;
+	}
+
+	.token-name-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.token-name-input:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.loading-tokens {
+		font-size: 0.9rem;
+		color: #666;
+		margin: 0;
 	}
 </style>

@@ -171,12 +171,20 @@ def _database_setup(test_database_url: str) -> None:
 
 
 @pytest.fixture()
-async def _engine(test_database_url: str, _database_setup: None) -> AsyncEngine:
+async def _engine(
+    test_database_url: str, _database_setup: None
+) -> AsyncGenerator[AsyncEngine, None]:
     """create a database engine for each test (to avoid event loop issues)."""
-    return create_async_engine(
+    engine = create_async_engine(
         test_database_url,
         echo=False,
+        pool_size=2,
+        max_overflow=0,
     )
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
 
 
 @pytest.fixture()

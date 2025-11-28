@@ -1,4 +1,4 @@
-"""Relay configuration using nested Pydantic settings."""
+"""plyr.fm configuration using nested Pydantic settings."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 
-class RelaySettingsSection(BaseSettings):
+class AppSettingsSection(BaseSettings):
     """Base class for all settings sections with shared defaults."""
 
     model_config = SettingsConfigDict(
@@ -22,7 +22,7 @@ class RelaySettingsSection(BaseSettings):
     )
 
 
-class NotificationBotSettings(RelaySettingsSection):
+class NotificationBotSettings(AppSettingsSection):
     """Settings for the notification bot."""
 
     model_config = SettingsConfigDict(
@@ -36,7 +36,7 @@ class NotificationBotSettings(RelaySettingsSection):
     password: str = Field(default="", description="App password for bot")
 
 
-class NotificationSettings(RelaySettingsSection):
+class NotificationSettings(AppSettingsSection):
     """Settings for notifications."""
 
     model_config = SettingsConfigDict(
@@ -56,7 +56,7 @@ class NotificationSettings(RelaySettingsSection):
     )
 
 
-class AppSettings(RelaySettingsSection):
+class AppSettings(AppSettingsSection):
     """Core application configuration."""
 
     name: str = Field(
@@ -86,7 +86,7 @@ class AppSettings(RelaySettingsSection):
     )
 
 
-class FrontendSettings(RelaySettingsSection):
+class FrontendSettings(AppSettingsSection):
     """Frontend-specific configuration."""
 
     url: str = Field(
@@ -128,7 +128,7 @@ class FrontendSettings(RelaySettingsSection):
             return r"^(http://localhost:5173)$"
 
 
-class DatabaseSettings(RelaySettingsSection):
+class DatabaseSettings(AppSettingsSection):
     """Database configuration."""
 
     url: str = Field(
@@ -177,7 +177,7 @@ class DatabaseSettings(RelaySettingsSection):
     )
 
 
-class StorageSettings(RelaySettingsSection):
+class StorageSettings(AppSettingsSection):
     """Asset storage configuration (R2 only)."""
 
     max_upload_size_mb: int = Field(
@@ -257,7 +257,7 @@ class StorageSettings(RelaySettingsSection):
         return True
 
 
-class AtprotoSettings(RelaySettingsSection):
+class AtprotoSettings(AppSettingsSection):
     """ATProto integration settings."""
 
     pds_url: str = Field(
@@ -353,7 +353,7 @@ class AtprotoSettings(RelaySettingsSection):
         return f"atproto {' '.join(scopes)}"
 
 
-class ObservabilitySettings(RelaySettingsSection):
+class ObservabilitySettings(AppSettingsSection):
     """Observability configuration."""
 
     enabled: bool = Field(
@@ -373,7 +373,7 @@ class ObservabilitySettings(RelaySettingsSection):
     )
 
 
-class RateLimitSettings(RelaySettingsSection):
+class RateLimitSettings(AppSettingsSection):
     """Rate limiting configuration."""
 
     model_config = SettingsConfigDict(
@@ -401,7 +401,27 @@ class RateLimitSettings(RelaySettingsSection):
     )
 
 
-class Settings(RelaySettingsSection):
+class AuthSettings(AppSettingsSection):
+    """Authentication configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="AUTH_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    developer_token_default_days: int = Field(
+        default=90,
+        description="Default expiration in days for developer tokens (0 = no expiration)",
+    )
+    developer_token_max_days: int = Field(
+        default=365,
+        description="Maximum allowed expiration in days for developer tokens",
+    )
+
+
+class Settings(AppSettingsSection):
     """Relay application settings."""
 
     model_config = SettingsConfigDict(
@@ -421,6 +441,10 @@ class Settings(RelaySettingsSection):
     rate_limit: RateLimitSettings = Field(
         default_factory=RateLimitSettings,
         description="Rate limiting settings",
+    )
+    auth: AuthSettings = Field(
+        default_factory=AuthSettings,
+        description="Authentication settings",
     )
     notify: NotificationSettings = Field(
         default_factory=NotificationSettings,

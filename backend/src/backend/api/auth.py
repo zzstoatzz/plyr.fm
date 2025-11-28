@@ -13,9 +13,14 @@ from backend._internal import (
     consume_exchange_token,
     create_exchange_token,
     create_session,
+    delete_pending_dev_token,
     delete_session,
+    get_pending_dev_token,
     handle_oauth_callback,
+    list_developer_tokens,
     require_auth,
+    revoke_developer_token,
+    save_pending_dev_token,
     start_oauth_flow,
 )
 from backend.config import settings
@@ -49,8 +54,45 @@ async def oauth_callback(
 
     returns exchange token in URL which frontend will exchange for session_id.
     exchange token is short-lived (60s) and one-time use for security.
+
+    if this is a developer token flow (state exists in pending_dev_tokens),
+    creates a dev token session and redirects with dev_token=true flag.
     """
     did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
+
+    # check if this is a developer token OAuth flow
+    pending_dev_token = await get_pending_dev_token(state)
+
+    if pending_dev_token:
+        # verify the DID matches (user must be the one who started the flow)
+        if pending_dev_token.did != did:
+            raise HTTPException(
+                status_code=403,
+                detail="developer token flow was started by a different user",
+            )
+
+        # create dev token session with its own OAuth credentials
+        session_id = await create_session(
+            did=did,
+            handle=handle,
+            oauth_session=oauth_session,
+            expires_in_days=pending_dev_token.expires_in_days,
+            is_developer_token=True,
+            token_name=pending_dev_token.token_name,
+        )
+
+        # clean up pending record
+        await delete_pending_dev_token(state)
+
+        # create exchange token (marked as dev token to prevent cookie override)
+        exchange_token = await create_exchange_token(session_id, is_dev_token=True)
+
+        return RedirectResponse(
+            url=f"{settings.frontend.url}/portal?exchange_token={exchange_token}&dev_token=true",
+            status_code=303,
+        )
+
+    # regular login flow
     session_id = await create_session(did, handle, oauth_session)
 
     # create one-time exchange token (expires in 60 seconds)
@@ -94,14 +136,22 @@ async def exchange_token(
 
     for browser requests: sets HttpOnly cookie and still returns session_id in response
     for SDK/CLI clients: only returns session_id in response (no cookie)
+    for dev token exchanges: returns session_id but does NOT set cookie
     """
-    session_id = await consume_exchange_token(exchange_request.exchange_token)
+    result = await consume_exchange_token(exchange_request.exchange_token)
 
-    if not session_id:
+    if not result:
         raise HTTPException(
             status_code=401,
             detail="invalid, expired, or already used exchange token",
         )
+
+    session_id, is_dev_token = result
+
+    # don't set cookie for dev token exchanges - this prevents overwriting
+    # the browser's session cookie when creating a dev token
+    if is_dev_token:
+        return ExchangeTokenResponse(session_id=session_id)
 
     user_agent = request.headers.get("user-agent", "").lower()
     is_browser = any(
@@ -154,3 +204,121 @@ async def get_current_user(
         did=session.did,
         handle=session.handle,
     )
+
+
+class DeveloperTokenInfo(BaseModel):
+    """info about a developer token (without the actual token)."""
+
+    session_id: str  # first 8 chars only for identification
+    name: str | None
+    created_at: str  # ISO format
+    expires_at: str | None  # ISO format or null for never
+
+
+class DeveloperTokenListResponse(BaseModel):
+    """response model for listing developer tokens."""
+
+    tokens: list[DeveloperTokenInfo]
+
+
+@router.get("/developer-tokens")
+async def get_developer_tokens(
+    session: Session = Depends(require_auth),
+) -> DeveloperTokenListResponse:
+    """list all developer tokens for the current user."""
+    tokens = await list_developer_tokens(session.did)
+
+    return DeveloperTokenListResponse(
+        tokens=[
+            DeveloperTokenInfo(
+                session_id=t.session_id[:8],  # only show prefix for identification
+                name=t.token_name,
+                created_at=t.created_at.isoformat(),
+                expires_at=t.expires_at.isoformat() if t.expires_at else None,
+            )
+            for t in tokens
+        ]
+    )
+
+
+@router.delete("/developer-tokens/{token_prefix}")
+async def delete_developer_token(
+    token_prefix: str,
+    session: Session = Depends(require_auth),
+) -> JSONResponse:
+    """revoke a developer token by its prefix (first 8 chars of session_id)."""
+    # find the full session_id from prefix
+    tokens = await list_developer_tokens(session.did)
+    matching = [t for t in tokens if t.session_id.startswith(token_prefix)]
+
+    if not matching:
+        raise HTTPException(status_code=404, detail="token not found")
+
+    if len(matching) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="ambiguous prefix - provide more characters",
+        )
+
+    success = await revoke_developer_token(session.did, matching[0].session_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="token not found")
+
+    return JSONResponse(content={"message": "token revoked successfully"})
+
+
+class DevTokenStartRequest(BaseModel):
+    """request model for starting developer token OAuth flow."""
+
+    name: str | None = None
+    expires_in_days: int | None = None
+
+
+class DevTokenStartResponse(BaseModel):
+    """response model with OAuth authorization URL."""
+
+    auth_url: str
+
+
+@router.post("/developer-token/start")
+@limiter.limit(settings.rate_limit.auth_limit)
+async def start_developer_token_flow(
+    request: Request,
+    body: DevTokenStartRequest,
+    session: Session = Depends(require_auth),
+) -> DevTokenStartResponse:
+    """start OAuth flow to create a developer token with its own credentials.
+
+    this initiates a new OAuth authorization flow. the user will be redirected
+    to authorize, and on callback a dev token with independent OAuth credentials
+    will be created. this ensures dev tokens don't become stale when browser
+    sessions refresh their tokens.
+
+    returns the authorization URL that the frontend should redirect to.
+    """
+    # validate expiration
+    expires_in_days = (
+        body.expires_in_days
+        if body.expires_in_days is not None
+        else settings.auth.developer_token_default_days
+    )
+
+    max_days = settings.auth.developer_token_max_days
+    if expires_in_days > max_days:
+        raise HTTPException(
+            status_code=400,
+            detail=f"expires_in_days cannot exceed {max_days} (use 0 for no expiration)",
+        )
+
+    # start OAuth flow using the user's handle
+    auth_url, state = await start_oauth_flow(session.handle)
+
+    # save pending dev token metadata keyed by state
+    await save_pending_dev_token(
+        state=state,
+        did=session.did,
+        token_name=body.name,
+        expires_in_days=expires_in_days,
+    )
+
+    return DevTokenStartResponse(auth_url=auth_url)

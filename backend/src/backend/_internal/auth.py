@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from backend._internal.oauth_stores import PostgresStateStore
 from backend.config import settings
-from backend.models import ExchangeToken, UserSession
+from backend.models import ExchangeToken, PendingDevToken, UserSession
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -108,15 +108,35 @@ def _decrypt_data(encrypted: str) -> str | None:
         return None
 
 
-async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -> str:
-    """create a new session for authenticated user with encrypted OAuth data."""
+async def create_session(
+    did: str,
+    handle: str,
+    oauth_session: dict[str, Any],
+    expires_in_days: int = 14,
+    is_developer_token: bool = False,
+    token_name: str | None = None,
+) -> str:
+    """create a new session for authenticated user with encrypted OAuth data.
+
+    args:
+        did: user's decentralized identifier
+        handle: user's ATProto handle
+        oauth_session: OAuth session data to encrypt and store
+        expires_in_days: session expiration in days (default 14, use 0 for no expiration)
+        is_developer_token: whether this is a developer token (for listing/revocation)
+        token_name: optional name for the token (only for developer tokens)
+    """
     session_id = secrets.token_urlsafe(32)
 
     # encrypt sensitive OAuth session data before storing
     encrypted_data = _encrypt_data(json.dumps(oauth_session))
 
-    # store in database with expiration (2 weeks from now per OAuth 2.1 requirements)
-    expires_at = datetime.now(UTC) + timedelta(days=14)
+    # store in database with expiration
+    expires_at = (
+        datetime.now(UTC) + timedelta(days=expires_in_days)
+        if expires_in_days > 0
+        else None
+    )
 
     async with db_session() as db:
         user_session = UserSession(
@@ -125,6 +145,8 @@ async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -
             handle=handle,
             oauth_session_data=encrypted_data,
             expires_at=expires_at,
+            is_developer_token=is_developer_token,
+            token_name=token_name,
         )
         db.add(user_session)
         await db.commit()
@@ -252,11 +274,15 @@ async def check_artist_profile_exists(did: str) -> bool:
         return artist is not None
 
 
-async def create_exchange_token(session_id: str) -> str:
+async def create_exchange_token(session_id: str, is_dev_token: bool = False) -> str:
     """create a one-time use exchange token for secure OAuth callback.
 
     exchange tokens expire after 60 seconds and can only be used once,
     preventing session_id exposure in browser history/referrers.
+
+    args:
+        session_id: the session to associate with this exchange token
+        is_dev_token: if True, the exchange will not set a browser cookie
     """
     token = secrets.token_urlsafe(32)
 
@@ -264,6 +290,7 @@ async def create_exchange_token(session_id: str) -> str:
         exchange_token = ExchangeToken(
             token=token,
             session_id=session_id,
+            is_dev_token=is_dev_token,
         )
         db.add(exchange_token)
         await db.commit()
@@ -271,8 +298,8 @@ async def create_exchange_token(session_id: str) -> str:
     return token
 
 
-async def consume_exchange_token(token: str) -> str | None:
-    """consume an exchange token and return the associated session_id.
+async def consume_exchange_token(token: str) -> tuple[str, bool] | None:
+    """consume an exchange token and return (session_id, is_dev_token).
 
     returns None if token is invalid, expired, or already used.
     uses atomic UPDATE to prevent race conditions (token can only be used once).
@@ -293,6 +320,9 @@ async def consume_exchange_token(token: str) -> str | None:
         if datetime.now(UTC) > exchange_token.expires_at:
             return None
 
+        # capture is_dev_token before atomic update
+        is_dev_token = exchange_token.is_dev_token
+
         # atomically mark as used ONLY if not already used
         # this prevents race conditions where two requests try to use the same token
         result = await db.execute(
@@ -305,7 +335,10 @@ async def consume_exchange_token(token: str) -> str | None:
 
         # if no rows were updated, token was already used
         session_id = result.scalar_one_or_none()
-        return session_id
+        if session_id is None:
+            return None
+
+        return session_id, is_dev_token
 
 
 async def require_auth(
@@ -377,3 +410,126 @@ async def require_artist_profile(
         )
 
     return session
+
+
+@dataclass
+class DeveloperToken:
+    """developer token metadata (without sensitive session data)."""
+
+    session_id: str
+    token_name: str | None
+    created_at: datetime
+    expires_at: datetime | None
+
+
+async def list_developer_tokens(did: str) -> list[DeveloperToken]:
+    """list all developer tokens for a user."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.did == did,
+                UserSession.is_developer_token == True,  # noqa: E712
+            )
+        )
+        sessions = result.scalars().all()
+
+        tokens = []
+        for session in sessions:
+            # check if expired
+            if session.expires_at and datetime.now(UTC) > session.expires_at:
+                continue  # skip expired tokens
+
+            tokens.append(
+                DeveloperToken(
+                    session_id=session.session_id,
+                    token_name=session.token_name,
+                    created_at=session.created_at,
+                    expires_at=session.expires_at,
+                )
+            )
+
+        return tokens
+
+
+async def revoke_developer_token(did: str, session_id: str) -> bool:
+    """revoke a developer token. returns True if successful, False if not found."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.session_id == session_id,
+                UserSession.did == did,  # ensure user owns this token
+                UserSession.is_developer_token == True,  # noqa: E712
+            )
+        )
+        session = result.scalar_one_or_none()
+
+        if not session:
+            return False
+
+        await db.delete(session)
+        await db.commit()
+        return True
+
+
+@dataclass
+class PendingDevTokenData:
+    """metadata for a pending developer token OAuth flow."""
+
+    state: str
+    did: str
+    token_name: str | None
+    expires_in_days: int
+
+
+async def save_pending_dev_token(
+    state: str,
+    did: str,
+    token_name: str | None,
+    expires_in_days: int,
+) -> None:
+    """save pending dev token metadata keyed by OAuth state."""
+    async with db_session() as db:
+        pending = PendingDevToken(
+            state=state,
+            did=did,
+            token_name=token_name,
+            expires_in_days=expires_in_days,
+        )
+        db.add(pending)
+        await db.commit()
+
+
+async def get_pending_dev_token(state: str) -> PendingDevTokenData | None:
+    """get pending dev token metadata by OAuth state."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(PendingDevToken).where(PendingDevToken.state == state)
+        )
+        pending = result.scalar_one_or_none()
+
+        if not pending:
+            return None
+
+        # check if expired
+        if datetime.now(UTC) > pending.expires_at:
+            await db.delete(pending)
+            await db.commit()
+            return None
+
+        return PendingDevTokenData(
+            state=pending.state,
+            did=pending.did,
+            token_name=pending.token_name,
+            expires_in_days=pending.expires_in_days,
+        )
+
+
+async def delete_pending_dev_token(state: str) -> None:
+    """delete pending dev token metadata after use."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(PendingDevToken).where(PendingDevToken.state == state)
+        )
+        if pending := result.scalar_one_or_none():
+            await db.delete(pending)
+            await db.commit()

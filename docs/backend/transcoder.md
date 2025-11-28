@@ -224,7 +224,7 @@ fly secrets unset TRANSCODER_AUTH_TOKEN -a plyr-transcoder
 if needed in the future, add to `src/backend/config.py`:
 
 ```python
-class TranscoderSettings(RelaySettingsSection):
+class TranscoderSettings(AppSettingsSection):
     url: str = Field(
         default="https://plyr-transcoder.fly.dev",
         validation_alias="TRANSCODER_URL"
