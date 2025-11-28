@@ -13,11 +13,14 @@ from backend._internal import (
     consume_exchange_token,
     create_exchange_token,
     create_session,
+    delete_pending_dev_token,
     delete_session,
+    get_pending_dev_token,
     handle_oauth_callback,
     list_developer_tokens,
     require_auth,
     revoke_developer_token,
+    save_pending_dev_token,
     start_oauth_flow,
 )
 from backend.config import settings
@@ -51,8 +54,45 @@ async def oauth_callback(
 
     returns exchange token in URL which frontend will exchange for session_id.
     exchange token is short-lived (60s) and one-time use for security.
+
+    if this is a developer token flow (state exists in pending_dev_tokens),
+    creates a dev token session and redirects with dev_token=true flag.
     """
     did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
+
+    # check if this is a developer token OAuth flow
+    pending_dev_token = await get_pending_dev_token(state)
+
+    if pending_dev_token:
+        # verify the DID matches (user must be the one who started the flow)
+        if pending_dev_token.did != did:
+            raise HTTPException(
+                status_code=403,
+                detail="developer token flow was started by a different user",
+            )
+
+        # create dev token session with its own OAuth credentials
+        session_id = await create_session(
+            did=did,
+            handle=handle,
+            oauth_session=oauth_session,
+            expires_in_days=pending_dev_token.expires_in_days,
+            is_developer_token=True,
+            token_name=pending_dev_token.token_name,
+        )
+
+        # clean up pending record
+        await delete_pending_dev_token(state)
+
+        # create exchange token and redirect with dev_token flag
+        exchange_token = await create_exchange_token(session_id)
+
+        return RedirectResponse(
+            url=f"{settings.frontend.url}/portal?exchange_token={exchange_token}&dev_token=true",
+            status_code=303,
+        )
+
+    # regular login flow
     session_id = await create_session(did, handle, oauth_session)
 
     # create one-time exchange token (expires in 60 seconds)
@@ -158,21 +198,6 @@ async def get_current_user(
     )
 
 
-class DeveloperTokenRequest(BaseModel):
-    """request model for creating developer tokens."""
-
-    name: str | None = None  # optional friendly name for the token
-    expires_in_days: int | None = None  # None = use default from settings
-
-
-class DeveloperTokenResponse(BaseModel):
-    """response model for developer token creation."""
-
-    token: str
-    expires_in_days: int
-    message: str
-
-
 class DeveloperTokenInfo(BaseModel):
     """info about a developer token (without the actual token)."""
 
@@ -234,28 +259,42 @@ async def delete_developer_token(
     return JSONResponse(content={"message": "token revoked successfully"})
 
 
-@router.post("/developer-token")
+class DevTokenStartRequest(BaseModel):
+    """request model for starting developer token OAuth flow."""
+
+    name: str | None = None
+    expires_in_days: int | None = None
+
+
+class DevTokenStartResponse(BaseModel):
+    """response model with OAuth authorization URL."""
+
+    auth_url: str
+
+
+@router.post("/developer-token/start")
 @limiter.limit(settings.rate_limit.auth_limit)
-async def create_developer_token(
+async def start_developer_token_flow(
     request: Request,
-    token_request: DeveloperTokenRequest,
+    body: DevTokenStartRequest,
     session: Session = Depends(require_auth),
-) -> DeveloperTokenResponse:
-    """create a long-lived developer token for programmatic API access.
+) -> DevTokenStartResponse:
+    """start OAuth flow to create a developer token with its own credentials.
 
-    this creates a new session with a configurable expiration.
-    the token can be used as a Bearer token for API requests.
+    this initiates a new OAuth authorization flow. the user will be redirected
+    to authorize, and on callback a dev token with independent OAuth credentials
+    will be created. this ensures dev tokens don't become stale when browser
+    sessions refresh their tokens.
 
-    use expires_in_days=0 for a token that never expires.
+    returns the authorization URL that the frontend should redirect to.
     """
-    # use default from settings if not specified
+    # validate expiration
     expires_in_days = (
-        token_request.expires_in_days
-        if token_request.expires_in_days is not None
+        body.expires_in_days
+        if body.expires_in_days is not None
         else settings.auth.developer_token_default_days
     )
 
-    # cap expiration at max from settings (0 = no expiration is always allowed)
     max_days = settings.auth.developer_token_max_days
     if expires_in_days > max_days:
         raise HTTPException(
@@ -263,23 +302,15 @@ async def create_developer_token(
             detail=f"expires_in_days cannot exceed {max_days} (use 0 for no expiration)",
         )
 
-    # create a new session with the user's OAuth data but longer expiration
-    token = await create_session(
+    # start OAuth flow using the user's handle
+    auth_url, state = await start_oauth_flow(session.handle)
+
+    # save pending dev token metadata keyed by state
+    await save_pending_dev_token(
+        state=state,
         did=session.did,
-        handle=session.handle,
-        oauth_session=session.oauth_session,
+        token_name=body.name,
         expires_in_days=expires_in_days,
-        is_developer_token=True,
-        token_name=token_request.name,
     )
 
-    expires_msg = (
-        f"expires in {expires_in_days} days" if expires_in_days > 0 else "never expires"
-    )
-
-    return DeveloperTokenResponse(
-        token=token,
-        expires_in_days=expires_in_days,
-        message=f"Developer token created ({expires_msg}). "
-        "Use as: Authorization: Bearer <token>",
-    )
+    return DevTokenStartResponse(auth_url=auth_url)

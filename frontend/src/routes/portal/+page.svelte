@@ -93,9 +93,10 @@
 		// check if exchange_token is in URL (from OAuth callback)
 		const params = new URLSearchParams(window.location.search);
 		const exchangeToken = params.get('exchange_token');
+		const isDevToken = params.get('dev_token') === 'true';
 
 		if (exchangeToken) {
-			// exchange token for session_id (cookie is set automatically by backend)
+			// exchange token for session_id
 			try {
 				const exchangeResponse = await fetch(`${API_URL}/auth/exchange`, {
 					method: 'POST',
@@ -105,7 +106,16 @@
 				});
 
 				if (exchangeResponse.ok) {
-					await auth.initialize();
+					const data = await exchangeResponse.json();
+
+					if (isDevToken) {
+						// this is a developer token - display it to the user
+						developerToken = data.session_id;
+						toast.success('developer token created - save it now!');
+					} else {
+						// regular login - initialize auth
+						await auth.initialize();
+					}
 				}
 			} catch (_e) {
 				console.error('failed to exchange token:', _e);
@@ -596,7 +606,8 @@
 		tokenCopied = false;
 
 		try {
-			const response = await fetch(`${API_URL}/auth/developer-token`, {
+			// start OAuth flow for dev token - this returns an auth URL
+			const response = await fetch(`${API_URL}/auth/developer-token/start`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				credentials: 'include',
@@ -608,22 +619,23 @@
 
 			if (!response.ok) {
 				const error = await response.json();
-				toast.error(error.detail || 'failed to create token');
+				toast.error(error.detail || 'failed to start token creation');
 				creatingToken = false;
 				return;
 			}
 
 			const result = await response.json();
-			developerToken = result.token;
 			tokenName = ''; // clear the name field
-			toast.success(`developer token created (expires in ${result.expires_in_days} days)`);
-			await loadDeveloperTokens(); // refresh the list
+
+			// redirect to PDS for authorization
+			// on callback, user will return with dev_token=true and the token will be displayed
+			window.location.href = result.auth_url;
 		} catch (e) {
 			console.error('failed to create token:', e);
 			toast.error('failed to create token');
-		} finally {
 			creatingToken = false;
 		}
+		// note: we don't set creatingToken = false here because we're redirecting
 	}
 
 	async function revokeToken(tokenId: string, name: string | null) {

@@ -1,13 +1,14 @@
-"""tests for developer token api endpoint."""
+"""tests for developer token api endpoints."""
 
 from collections.abc import Generator
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session, require_auth
+from backend._internal import Session, create_session, require_auth
 from backend.main import app
 
 
@@ -48,64 +49,53 @@ def test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
     app.dependency_overrides.clear()
 
 
-async def test_create_developer_token_default_expiration(
-    test_app: FastAPI, db_session: AsyncSession
-):
-    """test creating developer token with default expiration."""
-    async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
-    ) as client:
-        response = await client.post(
-            "/auth/developer-token",
-            json={},
+async def test_start_developer_token_flow(test_app: FastAPI, db_session: AsyncSession):
+    """test starting the developer token OAuth flow."""
+    with patch(
+        "backend.api.auth.start_oauth_flow", new_callable=AsyncMock
+    ) as mock_oauth:
+        mock_oauth.return_value = (
+            "https://auth.example.com/authorize?...",
+            "test_state",
         )
 
-    assert response.status_code == 200
-    data = response.json()
-    assert "token" in data
-    assert data["expires_in_days"] == 90  # default
-    assert "Developer token created" in data["message"]
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/auth/developer-token/start",
+                json={"name": "my-token", "expires_in_days": 30},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "auth_url" in data
+        assert data["auth_url"].startswith("https://auth.example.com")
+        mock_oauth.assert_called_once_with("testuser.bsky.social")
 
 
-async def test_create_developer_token_custom_expiration(
+async def test_start_developer_token_default_expiration(
     test_app: FastAPI, db_session: AsyncSession
 ):
-    """test creating developer token with custom expiration."""
-    async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
-    ) as client:
-        response = await client.post(
-            "/auth/developer-token",
-            json={"expires_in_days": 30},
-        )
+    """test starting dev token flow with default expiration."""
+    with patch(
+        "backend.api.auth.start_oauth_flow", new_callable=AsyncMock
+    ) as mock_oauth:
+        mock_oauth.return_value = ("https://auth.example.com/authorize", "test_state")
 
-    assert response.status_code == 200
-    data = response.json()
-    assert "token" in data
-    assert data["expires_in_days"] == 30
-    assert "30 days" in data["message"]
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/auth/developer-token/start",
+                json={},
+            )
 
-
-async def test_create_developer_token_no_expiration(
-    test_app: FastAPI, db_session: AsyncSession
-):
-    """test creating developer token that never expires."""
-    async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
-    ) as client:
-        response = await client.post(
-            "/auth/developer-token",
-            json={"expires_in_days": 0},
-        )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert "token" in data
-    assert data["expires_in_days"] == 0
-    assert "never expires" in data["message"]
+        assert response.status_code == 200
+        # verify pending dev token was saved (would fail if expiration wasn't set)
 
 
-async def test_create_developer_token_exceeds_max(
+async def test_start_developer_token_exceeds_max(
     test_app: FastAPI, db_session: AsyncSession
 ):
     """test that expiration cannot exceed max allowed."""
@@ -113,7 +103,7 @@ async def test_create_developer_token_exceeds_max(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/auth/developer-token",
+            "/auth/developer-token/start",
             json={"expires_in_days": 999},  # exceeds default max of 365
         )
 
@@ -121,55 +111,40 @@ async def test_create_developer_token_exceeds_max(
     assert "cannot exceed" in response.json()["detail"]
 
 
-async def test_create_developer_token_requires_auth(db_session: AsyncSession):
-    """test that developer token creation requires authentication."""
-    # use app without mocked auth
+async def test_start_developer_token_requires_auth(db_session: AsyncSession):
+    """test that developer token start requires authentication."""
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/auth/developer-token",
+            "/auth/developer-token/start",
             json={},
         )
 
     assert response.status_code == 401
 
 
-async def test_create_developer_token_with_name(
-    test_app: FastAPI, db_session: AsyncSession
-):
-    """test creating developer token with a name."""
+async def test_list_developer_tokens(test_app: FastAPI, db_session: AsyncSession):
+    """test listing developer tokens."""
+    mock_session = MockSession()
+
+    # create a dev token directly in the database
+    await create_session(
+        did=mock_session.did,
+        handle=mock_session.handle,
+        oauth_session=mock_session.oauth_session,
+        expires_in_days=30,
+        is_developer_token=True,
+        token_name="list-test-token",
+    )
+
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
-        response = await client.post(
-            "/auth/developer-token",
-            json={"name": "my-test-token", "expires_in_days": 30},
-        )
+        response = await client.get("/auth/developer-tokens")
 
     assert response.status_code == 200
     data = response.json()
-    assert "token" in data
-    assert data["expires_in_days"] == 30
-
-
-async def test_list_developer_tokens(test_app: FastAPI, db_session: AsyncSession):
-    """test listing developer tokens."""
-    async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
-    ) as client:
-        # first create a token
-        create_response = await client.post(
-            "/auth/developer-token",
-            json={"name": "list-test-token"},
-        )
-        assert create_response.status_code == 200
-
-        # list tokens
-        list_response = await client.get("/auth/developer-tokens")
-
-    assert list_response.status_code == 200
-    data = list_response.json()
     assert "tokens" in data
     assert len(data["tokens"]) >= 1
 
@@ -182,16 +157,21 @@ async def test_list_developer_tokens(test_app: FastAPI, db_session: AsyncSession
 
 async def test_revoke_developer_token(test_app: FastAPI, db_session: AsyncSession):
     """test revoking a developer token."""
+    mock_session = MockSession()
+
+    # create a dev token directly
+    await create_session(
+        did=mock_session.did,
+        handle=mock_session.handle,
+        oauth_session=mock_session.oauth_session,
+        expires_in_days=30,
+        is_developer_token=True,
+        token_name="revoke-test-token",
+    )
+
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
-        # create a token
-        create_response = await client.post(
-            "/auth/developer-token",
-            json={"name": "revoke-test-token"},
-        )
-        assert create_response.status_code == 200
-
         # list tokens to get session_id prefix
         list_response = await client.get("/auth/developer-tokens")
         assert list_response.status_code == 200

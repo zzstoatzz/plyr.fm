@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from backend._internal.oauth_stores import PostgresStateStore
 from backend.config import settings
-from backend.models import ExchangeToken, UserSession
+from backend.models import ExchangeToken, PendingDevToken, UserSession
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -458,3 +458,67 @@ async def revoke_developer_token(did: str, session_id: str) -> bool:
         await db.delete(session)
         await db.commit()
         return True
+
+
+@dataclass
+class PendingDevTokenData:
+    """metadata for a pending developer token OAuth flow."""
+
+    state: str
+    did: str
+    token_name: str | None
+    expires_in_days: int
+
+
+async def save_pending_dev_token(
+    state: str,
+    did: str,
+    token_name: str | None,
+    expires_in_days: int,
+) -> None:
+    """save pending dev token metadata keyed by OAuth state."""
+    async with db_session() as db:
+        pending = PendingDevToken(
+            state=state,
+            did=did,
+            token_name=token_name,
+            expires_in_days=expires_in_days,
+        )
+        db.add(pending)
+        await db.commit()
+
+
+async def get_pending_dev_token(state: str) -> PendingDevTokenData | None:
+    """get pending dev token metadata by OAuth state."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(PendingDevToken).where(PendingDevToken.state == state)
+        )
+        pending = result.scalar_one_or_none()
+
+        if not pending:
+            return None
+
+        # check if expired
+        if datetime.now(UTC) > pending.expires_at:
+            await db.delete(pending)
+            await db.commit()
+            return None
+
+        return PendingDevTokenData(
+            state=pending.state,
+            did=pending.did,
+            token_name=pending.token_name,
+            expires_in_days=pending.expires_in_days,
+        )
+
+
+async def delete_pending_dev_token(state: str) -> None:
+    """delete pending dev token metadata after use."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(PendingDevToken).where(PendingDevToken.state == state)
+        )
+        if pending := result.scalar_one_or_none():
+            await db.delete(pending)
+            await db.commit()
