@@ -154,8 +154,11 @@ async def test_create_exchange_token(db_session: AsyncSession):
     token = await create_exchange_token(session_id)
 
     # verify token can be consumed (proves it was created correctly)
-    returned_session_id = await consume_exchange_token(token)
+    result = await consume_exchange_token(token)
+    assert result is not None
+    returned_session_id, is_dev_token = result
     assert returned_session_id == session_id
+    assert is_dev_token is False
 
     # verify token can't be reused
     second_attempt = await consume_exchange_token(token)
@@ -172,8 +175,11 @@ async def test_consume_exchange_token(db_session: AsyncSession):
     token = await create_exchange_token(session_id)
 
     # consume token
-    returned_session_id = await consume_exchange_token(token)
+    result = await consume_exchange_token(token)
+    assert result is not None
+    returned_session_id, is_dev_token = result
     assert returned_session_id == session_id
+    assert is_dev_token is False
 
     # verify token can't be consumed again (proves it was marked as used)
     second_attempt = await consume_exchange_token(token)
@@ -190,8 +196,10 @@ async def test_exchange_token_cannot_be_reused(db_session: AsyncSession):
     token = await create_exchange_token(session_id)
 
     # consume token first time
-    first_result = await consume_exchange_token(token)
-    assert first_result == session_id
+    result = await consume_exchange_token(token)
+    assert result is not None
+    returned_session_id, is_dev_token = result
+    assert returned_session_id == session_id
 
     # try to consume again - should return None
     second_result = await consume_exchange_token(token)

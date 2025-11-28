@@ -84,8 +84,8 @@ async def oauth_callback(
         # clean up pending record
         await delete_pending_dev_token(state)
 
-        # create exchange token and redirect with dev_token flag
-        exchange_token = await create_exchange_token(session_id)
+        # create exchange token (marked as dev token to prevent cookie override)
+        exchange_token = await create_exchange_token(session_id, is_dev_token=True)
 
         return RedirectResponse(
             url=f"{settings.frontend.url}/portal?exchange_token={exchange_token}&dev_token=true",
@@ -136,14 +136,22 @@ async def exchange_token(
 
     for browser requests: sets HttpOnly cookie and still returns session_id in response
     for SDK/CLI clients: only returns session_id in response (no cookie)
+    for dev token exchanges: returns session_id but does NOT set cookie
     """
-    session_id = await consume_exchange_token(exchange_request.exchange_token)
+    result = await consume_exchange_token(exchange_request.exchange_token)
 
-    if not session_id:
+    if not result:
         raise HTTPException(
             status_code=401,
             detail="invalid, expired, or already used exchange token",
         )
+
+    session_id, is_dev_token = result
+
+    # don't set cookie for dev token exchanges - this prevents overwriting
+    # the browser's session cookie when creating a dev token
+    if is_dev_token:
+        return ExchangeTokenResponse(session_id=session_id)
 
     user_agent = request.headers.get("user-agent", "").lower()
     is_browser = any(

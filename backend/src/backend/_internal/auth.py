@@ -274,11 +274,15 @@ async def check_artist_profile_exists(did: str) -> bool:
         return artist is not None
 
 
-async def create_exchange_token(session_id: str) -> str:
+async def create_exchange_token(session_id: str, is_dev_token: bool = False) -> str:
     """create a one-time use exchange token for secure OAuth callback.
 
     exchange tokens expire after 60 seconds and can only be used once,
     preventing session_id exposure in browser history/referrers.
+
+    args:
+        session_id: the session to associate with this exchange token
+        is_dev_token: if True, the exchange will not set a browser cookie
     """
     token = secrets.token_urlsafe(32)
 
@@ -286,6 +290,7 @@ async def create_exchange_token(session_id: str) -> str:
         exchange_token = ExchangeToken(
             token=token,
             session_id=session_id,
+            is_dev_token=is_dev_token,
         )
         db.add(exchange_token)
         await db.commit()
@@ -293,8 +298,8 @@ async def create_exchange_token(session_id: str) -> str:
     return token
 
 
-async def consume_exchange_token(token: str) -> str | None:
-    """consume an exchange token and return the associated session_id.
+async def consume_exchange_token(token: str) -> tuple[str, bool] | None:
+    """consume an exchange token and return (session_id, is_dev_token).
 
     returns None if token is invalid, expired, or already used.
     uses atomic UPDATE to prevent race conditions (token can only be used once).
@@ -315,6 +320,9 @@ async def consume_exchange_token(token: str) -> str | None:
         if datetime.now(UTC) > exchange_token.expires_at:
             return None
 
+        # capture is_dev_token before atomic update
+        is_dev_token = exchange_token.is_dev_token
+
         # atomically mark as used ONLY if not already used
         # this prevents race conditions where two requests try to use the same token
         result = await db.execute(
@@ -327,7 +335,10 @@ async def consume_exchange_token(token: str) -> str | None:
 
         # if no rows were updated, token was already used
         session_id = result.scalar_one_or_none()
-        return session_id
+        if session_id is None:
+            return None
+
+        return session_id, is_dev_token
 
 
 async def require_auth(

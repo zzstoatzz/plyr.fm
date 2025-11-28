@@ -1,4 +1,4 @@
-"""add pending_dev_tokens table
+"""add pending_dev_tokens table and exchange_tokens.is_dev_token
 
 Revision ID: e3d1b1eebe4b
 Revises: 9851b6850eb1
@@ -18,7 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Create pending_dev_tokens table for OAuth flow metadata."""
+    """Create pending_dev_tokens table and add is_dev_token to exchange_tokens."""
     op.create_table(
         "pending_dev_tokens",
         sa.Column("state", sa.String(64), primary_key=True, index=True),
@@ -40,7 +40,19 @@ def upgrade() -> None:
         ),
     )
 
+    # add is_dev_token column to exchange_tokens to prevent cookie override
+    op.add_column(
+        "exchange_tokens",
+        sa.Column(
+            "is_dev_token",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        ),
+    )
+
 
 def downgrade() -> None:
-    """Drop pending_dev_tokens table."""
+    """Drop pending_dev_tokens table and remove is_dev_token from exchange_tokens."""
+    op.drop_column("exchange_tokens", "is_dev_token")
     op.drop_table("pending_dev_tokens")
