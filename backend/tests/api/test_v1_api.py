@@ -141,9 +141,7 @@ def test_api_keys_are_unique():
 # --------------------------------------------------------------------------
 
 
-async def test_create_api_key(
-    test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
-):
+async def test_create_api_key(test_app: FastAPI, db_session: AsyncSession):
     """test creating an API key."""
     # need artist with same DID as mock session
     artist = Artist(

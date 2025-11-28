@@ -171,12 +171,33 @@ def _database_setup(test_database_url: str) -> None:
 
 
 @pytest.fixture()
-async def _engine(test_database_url: str, _database_setup: None) -> AsyncEngine:
-    """create a database engine for each test (to avoid event loop issues)."""
-    return create_async_engine(
+async def _engine(
+    test_database_url: str, _database_setup: None
+) -> AsyncGenerator[AsyncEngine, None]:
+    """create a database engine for each test and properly dispose it."""
+    engine = create_async_engine(
         test_database_url,
         echo=False,
+        pool_size=5,
+        max_overflow=5,
     )
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+async def _clear_app_engines() -> AsyncGenerator[None, None]:
+    """clear the app's engine cache after each test to prevent connection buildup."""
+    from backend.utilities.database import ENGINES
+
+    yield
+
+    # dispose all app engines and clear the cache
+    for engine in list(ENGINES.values()):
+        await engine.dispose()
+    ENGINES.clear()
 
 
 @pytest.fixture()
