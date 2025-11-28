@@ -357,7 +357,7 @@ async def test_list_my_tracks_requires_auth(
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.get("/v1/tracks/me/tracks")
+            response = await client.get("/v1/me/tracks")
 
         assert response.status_code == 401
     finally:
@@ -406,7 +406,7 @@ async def test_list_my_tracks_with_session(test_app: FastAPI, db_session: AsyncS
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.get("/v1/tracks/me/tracks")
+            response = await client.get("/v1/me/tracks")
 
         assert response.status_code == 200
         data = response.json()
@@ -454,7 +454,7 @@ async def test_list_my_tracks_with_api_key(test_app: FastAPI, db_session: AsyncS
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
             response = await client.get(
-                "/v1/tracks/me/tracks",
+                "/v1/me/tracks",
                 headers={"Authorization": "Bearer plyr_sk_live_fakekeyhere"},
             )
 
