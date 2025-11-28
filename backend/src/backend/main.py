@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import ORJSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -123,6 +124,7 @@ app = FastAPI(
     title=settings.app.name,
     debug=settings.app.debug,
     lifespan=lifespan,
+    default_response_class=ORJSONResponse,
 )
 
 # setup rate limiter

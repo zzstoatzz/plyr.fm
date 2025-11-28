@@ -25,6 +25,7 @@ dependencies = [
     "pytest-asyncio>=0.25.3",
     "aioboto3>=15.5.0",
     "slowapi @ git+https://github.com/zzstoatzz/slowapi.git@fix-deprecation",
+    "orjson>=3.11.4",
 ]
 
 requires-python = ">=3.11"
