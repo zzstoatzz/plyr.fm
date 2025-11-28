@@ -405,6 +405,10 @@ async def authenticate_api_key(bearer_token: str) -> APIKeyAuth | None:
     if not bearer_token.startswith("plyr_"):
         return None
 
+    # ensure token is long enough for prefix extraction
+    if len(bearer_token) < 24:
+        return None
+
     # extract prefix for lookup (first 24 chars)
     prefix = bearer_token[:24]
 

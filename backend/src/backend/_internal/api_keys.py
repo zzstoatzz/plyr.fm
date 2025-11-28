@@ -49,7 +49,11 @@ def verify_api_key(full_key: str, stored_hash: str) -> bool:
     try:
         _hasher.verify(stored_hash, full_key)
         return True
-    except argon2.exceptions.VerifyMismatchError:
+    except (
+        argon2.exceptions.VerifyMismatchError,
+        argon2.exceptions.VerificationError,
+        argon2.exceptions.InvalidHashError,
+    ):
         return False
 
 

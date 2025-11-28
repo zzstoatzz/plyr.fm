@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.api_keys import generate_api_key
@@ -152,20 +152,19 @@ async def revoke_api_key(
     except ValueError:
         raise HTTPException(400, "invalid key id") from None
 
+    # atomic update to prevent race conditions
     result = await db.execute(
-        select(APIKey)
+        update(APIKey)
         .where(APIKey.id == key_uuid)
         .where(APIKey.owner_did == session.did)
+        .where(APIKey.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+        .returning(APIKey.id)
     )
-    api_key = result.scalar_one_or_none()
-
-    if not api_key:
-        raise HTTPException(404, "key not found")
-
-    if api_key.revoked_at:
-        raise HTTPException(400, "key already revoked")
-
-    api_key.revoked_at = datetime.now(UTC)
     await db.commit()
+
+    if result.scalar_one_or_none() is None:
+        # either key doesn't exist, not owned by user, or already revoked
+        raise HTTPException(404, "key not found or already revoked")
 
     return {"revoked": True}
