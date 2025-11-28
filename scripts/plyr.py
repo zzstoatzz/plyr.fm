@@ -16,10 +16,14 @@ setup:
     2. export PLYR_TOKEN="your_token_here"
 
 usage:
-    uv run sandbox/plyr.py upload track.mp3 "My Track" --album "My Album"
-    uv run sandbox/plyr.py download 42 -o my-track.mp3
-    uv run sandbox/plyr.py list
-    uv run sandbox/plyr.py delete 42
+    uv run scripts/plyr.py list
+    uv run scripts/plyr.py upload track.mp3 "My Track" --album "My Album"
+    uv run scripts/plyr.py download 42 -o my-track.mp3
+    uv run scripts/plyr.py delete 42
+
+environments (defaults to localhost:8001):
+    PLYR_API_URL=https://api-stg.plyr.fm uv run scripts/plyr.py list  # staging
+    PLYR_API_URL=https://api.plyr.fm uv run scripts/plyr.py list      # production
 """
 
 import json
@@ -38,14 +42,20 @@ console = Console()
 
 
 class Settings(BaseSettings):
-    """plyr.fm CLI configuration."""
+    """plyr.fm CLI configuration.
+
+    override api_url for different environments:
+        PLYR_API_URL=http://localhost:8001    # local dev (default)
+        PLYR_API_URL=https://api-stg.plyr.fm  # staging
+        PLYR_API_URL=https://api.plyr.fm      # production
+    """
 
     model_config = SettingsConfigDict(
         env_prefix="PLYR_", env_file=".env", extra="ignore"
     )
 
     token: str | None = Field(default=None, description="API token")
-    api_url: str = Field(default="https://api.plyr.fm", description="API base URL")
+    api_url: str = Field(default="http://localhost:8001", description="API base URL")
 
     @property
     def headers(self) -> dict[str, str]:
