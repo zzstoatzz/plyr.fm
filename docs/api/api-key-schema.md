@@ -16,7 +16,7 @@ CREATE TABLE api_keys (
     owner_did VARCHAR NOT NULL REFERENCES artists(did) ON DELETE CASCADE,
 
     -- key identification
-    key_prefix VARCHAR(20) NOT NULL,      -- "plyr_sk_live_abc1" (first ~20 chars for lookup)
+    key_prefix VARCHAR(24) NOT NULL,      -- "plyr_sk_live_abc1..." (first 24 chars for lookup)
     key_hash VARCHAR(128) NOT NULL,       -- argon2id hash of full key
 
     -- metadata
@@ -119,7 +119,7 @@ class APIKey(Base):
     )
 
     # key identification
-    key_prefix: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    key_prefix: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
     key_hash: Mapped[str] = mapped_column(String(128), nullable=False)
 
     # metadata
@@ -166,9 +166,9 @@ class APIKey(Base):
         return True
 
     @property
-    def display_key(self) -> str:
-        """return masked key for display: plyr_sk_live_abc1...xyz9"""
-        return f"{self.key_prefix}...{self.key_prefix[-4:]}"
+    def display_prefix(self) -> str:
+        """return key prefix for display (e.g., plyr_sk_live_abc1...)."""
+        return f"{self.key_prefix}..."
 ```
 
 ## key generation
@@ -215,7 +215,7 @@ def generate_api_key(
     full_key = f"plyr_{type_str}_{env_str}_{random_part}"
 
     # prefix for lookup (enough to be unique, short enough to display)
-    prefix = full_key[:20]
+    prefix = full_key[:24]
 
     # hash for verification
     key_hash = _hasher.hash(full_key)
@@ -280,7 +280,7 @@ async def authenticate_api_key(
         return None
 
     # extract prefix for lookup
-    prefix = full_key[:20]
+    prefix = full_key[:24]
 
     # find key by prefix
     result = await db.execute(
@@ -472,7 +472,7 @@ def upgrade() -> None:
         'api_keys',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('owner_did', sa.String(), sa.ForeignKey('artists.did', ondelete='CASCADE'), nullable=False),
-        sa.Column('key_prefix', sa.String(20), nullable=False),
+        sa.Column('key_prefix', sa.String(24), nullable=False),
         sa.Column('key_hash', sa.String(128), nullable=False),
         sa.Column('name', sa.String(100), nullable=False),
         sa.Column('key_type', sa.String(10), nullable=False),

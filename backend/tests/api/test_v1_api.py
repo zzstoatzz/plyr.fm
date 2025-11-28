@@ -71,7 +71,7 @@ async def test_track(db_session: AsyncSession, test_artist: Artist) -> Track:
 
 
 @pytest.fixture
-def test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
+def test_app() -> Generator[FastAPI, None, None]:
     """create test app with mocked auth."""
 
     async def mock_require_auth() -> Session:

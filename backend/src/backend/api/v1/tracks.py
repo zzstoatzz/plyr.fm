@@ -1,8 +1,10 @@
 """v1 API - tracks endpoints."""
 
+import base64
+import binascii
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,10 +85,8 @@ async def list_tracks(
     offset = 0
     if cursor:
         try:
-            import base64
-
             offset = int(base64.b64decode(cursor).decode())
-        except Exception:
+        except (ValueError, binascii.Error):
             offset = 0
 
     query = query.offset(offset).limit(limit + 1)  # +1 to check has_more
@@ -144,8 +144,6 @@ async def list_tracks(
     # build next cursor
     next_cursor = None
     if has_more:
-        import base64
-
         next_cursor = base64.b64encode(str(offset + limit).encode()).decode()
 
     return TrackListResponse(
@@ -164,8 +162,6 @@ async def get_track(
 
     public endpoint - no authentication required.
     """
-    from fastapi import HTTPException
-
     result = await db.execute(
         select(Track)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))

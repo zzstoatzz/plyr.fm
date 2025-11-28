@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -146,8 +147,6 @@ async def revoke_api_key(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """revoke an API key. cannot be undone."""
-    from uuid import UUID
-
     try:
         key_uuid = UUID(key_id)
     except ValueError:
