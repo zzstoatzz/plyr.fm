@@ -401,6 +401,26 @@ class RateLimitSettings(RelaySettingsSection):
     )
 
 
+class AuthSettings(RelaySettingsSection):
+    """Authentication configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="AUTH_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    developer_token_default_days: int = Field(
+        default=90,
+        description="Default expiration in days for developer tokens (0 = no expiration)",
+    )
+    developer_token_max_days: int = Field(
+        default=365,
+        description="Maximum allowed expiration in days for developer tokens",
+    )
+
+
 class Settings(RelaySettingsSection):
     """Relay application settings."""
 
@@ -421,6 +441,10 @@ class Settings(RelaySettingsSection):
     rate_limit: RateLimitSettings = Field(
         default_factory=RateLimitSettings,
         description="Rate limiting settings",
+    )
+    auth: AuthSettings = Field(
+        default_factory=AuthSettings,
+        description="Authentication settings",
     )
     notify: NotificationSettings = Field(
         default_factory=NotificationSettings,

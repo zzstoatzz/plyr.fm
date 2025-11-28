@@ -356,6 +356,89 @@ authentication implementation checklist:
 2. frontend and backend both on `localhost` (not `127.0.0.1`)?
 3. backend using `secure=False` for localhost?
 
+## developer tokens (programmatic access)
+
+for scripts, CLIs, and automated workflows, create a long-lived developer token:
+
+### creating a token
+
+**via UI (recommended)**:
+1. go to portal → "your data" → "developer tokens" section
+2. optionally enter a name (e.g., "upload-script", "ci-pipeline")
+3. select expiration (30/90/180/365 days or never)
+4. click "create token"
+5. copy immediately (shown only once)
+
+**via API**:
+```javascript
+fetch('/auth/developer-token', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify({ name: 'my-script', expires_in_days: 90 })
+}).then(r => r.json()).then(d => console.log('Token:', d.token))
+```
+
+### managing tokens
+
+**list active tokens**:
+the portal shows all your active developer tokens with:
+- token name (or auto-generated identifier)
+- creation date
+- expiration date
+
+**revoke a token**:
+1. go to portal → "your data" → "developer tokens"
+2. find the token in the list
+3. click "revoke" to immediately invalidate it
+
+**via API**:
+```bash
+# list tokens
+curl -H "Authorization: Bearer $PLYR_TOKEN" https://api.plyr.fm/auth/developer-tokens
+
+# revoke by prefix (first 8 chars shown in list)
+curl -X DELETE -H "Authorization: Bearer $PLYR_TOKEN" https://api.plyr.fm/auth/developer-tokens/abc12345
+```
+
+### using tokens
+
+set the token in your environment:
+```bash
+export PLYR_TOKEN="your_token_here"
+# or
+export PLYRFM_API_TOKEN="your_token_here"
+```
+
+use with any authenticated endpoint:
+```bash
+# check auth
+curl -H "Authorization: Bearer $PLYR_TOKEN" https://api.plyr.fm/auth/me
+
+# upload a track (uses PLYR_TOKEN or PLYRFM_API_TOKEN from env)
+PLYR_API_URL=https://api.plyr.fm uv run --with httpx sandbox/upload_track.py track.mp3 "My Track" "My Album"
+```
+
+### configuration
+
+backend settings in `AuthSettings`:
+- `developer_token_default_days`: default expiration (90 days)
+- `developer_token_max_days`: max allowed expiration (365 days)
+- use `expires_in_days: 0` for tokens that never expire
+
+### how it works
+
+developer tokens are sessions marked with `is_developer_token=True` for tracking. they inherit your OAuth credentials, so they can:
+- read your data (tracks, likes, profile)
+- upload tracks (creates ATProto records on your PDS)
+- perform any authenticated action
+
+**security notes**:
+- tokens have full account access - treat like passwords
+- revoke individual tokens via the portal or API
+- each token is independent - revoking one doesn't affect others
+- token names help identify which token is used where
+
 ## references
 
 - [MDN: HttpOnly cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#security)

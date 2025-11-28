@@ -108,15 +108,35 @@ def _decrypt_data(encrypted: str) -> str | None:
         return None
 
 
-async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -> str:
-    """create a new session for authenticated user with encrypted OAuth data."""
+async def create_session(
+    did: str,
+    handle: str,
+    oauth_session: dict[str, Any],
+    expires_in_days: int = 14,
+    is_developer_token: bool = False,
+    token_name: str | None = None,
+) -> str:
+    """create a new session for authenticated user with encrypted OAuth data.
+
+    args:
+        did: user's decentralized identifier
+        handle: user's ATProto handle
+        oauth_session: OAuth session data to encrypt and store
+        expires_in_days: session expiration in days (default 14, use 0 for no expiration)
+        is_developer_token: whether this is a developer token (for listing/revocation)
+        token_name: optional name for the token (only for developer tokens)
+    """
     session_id = secrets.token_urlsafe(32)
 
     # encrypt sensitive OAuth session data before storing
     encrypted_data = _encrypt_data(json.dumps(oauth_session))
 
-    # store in database with expiration (2 weeks from now per OAuth 2.1 requirements)
-    expires_at = datetime.now(UTC) + timedelta(days=14)
+    # store in database with expiration
+    expires_at = (
+        datetime.now(UTC) + timedelta(days=expires_in_days)
+        if expires_in_days > 0
+        else None
+    )
 
     async with db_session() as db:
         user_session = UserSession(
@@ -125,6 +145,8 @@ async def create_session(did: str, handle: str, oauth_session: dict[str, Any]) -
             handle=handle,
             oauth_session_data=encrypted_data,
             expires_at=expires_at,
+            is_developer_token=is_developer_token,
+            token_name=token_name,
         )
         db.add(user_session)
         await db.commit()
@@ -377,3 +399,62 @@ async def require_artist_profile(
         )
 
     return session
+
+
+@dataclass
+class DeveloperToken:
+    """developer token metadata (without sensitive session data)."""
+
+    session_id: str
+    token_name: str | None
+    created_at: datetime
+    expires_at: datetime | None
+
+
+async def list_developer_tokens(did: str) -> list[DeveloperToken]:
+    """list all developer tokens for a user."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.did == did,
+                UserSession.is_developer_token == True,  # noqa: E712
+            )
+        )
+        sessions = result.scalars().all()
+
+        tokens = []
+        for session in sessions:
+            # check if expired
+            if session.expires_at and datetime.now(UTC) > session.expires_at:
+                continue  # skip expired tokens
+
+            tokens.append(
+                DeveloperToken(
+                    session_id=session.session_id,
+                    token_name=session.token_name,
+                    created_at=session.created_at,
+                    expires_at=session.expires_at,
+                )
+            )
+
+        return tokens
+
+
+async def revoke_developer_token(did: str, session_id: str) -> bool:
+    """revoke a developer token. returns True if successful, False if not found."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.session_id == session_id,
+                UserSession.did == did,  # ensure user owns this token
+                UserSession.is_developer_token == True,  # noqa: E712
+            )
+        )
+        session = result.scalar_one_or_none()
+
+        if not session:
+            return False
+
+        await db.delete(session)
+        await db.commit()
+        return True

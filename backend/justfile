@@ -12,6 +12,10 @@ test *ARGS='tests/':
     uv run pytest {{ ARGS }}
     docker compose -f tests/docker-compose.yml down
 
+# run integration tests (requires running backend and PLYRFM_API_TOKEN in .env)
+integration:
+    set -a && source ../.env && set +a && uv run pytest tests/test_integration_upload.py -m integration -v -s
+
 # run type checking and linting
 lint:
     uv run ty check

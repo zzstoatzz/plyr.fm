@@ -243,3 +243,78 @@ async def test_session_isolation(db_session: AsyncSession):
     result = await db_session.execute(select(ExchangeToken))
     tokens = result.scalars().all()
     assert len(tokens) == 0
+
+
+async def test_create_session_with_custom_expiration(db_session: AsyncSession):
+    """verify session creation with custom expiration works."""
+    did = "did:plc:customexp123"
+    handle = "customexp.bsky.social"
+    oauth_data = {"access_token": "token", "refresh_token": "refresh"}
+
+    # create session with 30-day expiration
+    session_id = await create_session(did, handle, oauth_data, expires_in_days=30)
+
+    # verify session exists and works
+    session = await get_session(session_id)
+    assert session is not None
+    assert session.did == did
+
+    # verify expiration is set (within reasonable range)
+    result = await db_session.execute(
+        select(UserSession).where(UserSession.session_id == session_id)
+    )
+    db_session_record = result.scalar_one_or_none()
+    assert db_session_record is not None
+    assert db_session_record.expires_at is not None
+
+    # should expire roughly 30 days from now
+    expected_expiry = datetime.now(UTC) + timedelta(days=30)
+    actual_expiry = db_session_record.expires_at.replace(tzinfo=UTC)
+    diff = abs((expected_expiry - actual_expiry).total_seconds())
+    assert diff < 60  # within 1 minute
+
+
+async def test_create_session_with_no_expiration(db_session: AsyncSession):
+    """verify session creation with expires_in_days=0 creates non-expiring session."""
+    did = "did:plc:noexp123"
+    handle = "noexp.bsky.social"
+    oauth_data = {"access_token": "token", "refresh_token": "refresh"}
+
+    # create session with no expiration
+    session_id = await create_session(did, handle, oauth_data, expires_in_days=0)
+
+    # verify session exists
+    session = await get_session(session_id)
+    assert session is not None
+    assert session.did == did
+
+    # verify expires_at is None
+    result = await db_session.execute(
+        select(UserSession).where(UserSession.session_id == session_id)
+    )
+    db_session_record = result.scalar_one_or_none()
+    assert db_session_record is not None
+    assert db_session_record.expires_at is None
+
+
+async def test_create_session_default_expiration(db_session: AsyncSession):
+    """verify session creation uses default 14-day expiration."""
+    did = "did:plc:defaultexp123"
+    handle = "defaultexp.bsky.social"
+    oauth_data = {"access_token": "token", "refresh_token": "refresh"}
+
+    # create session with default expiration
+    session_id = await create_session(did, handle, oauth_data)
+
+    # verify expiration is set to default (14 days)
+    result = await db_session.execute(
+        select(UserSession).where(UserSession.session_id == session_id)
+    )
+    db_session_record = result.scalar_one_or_none()
+    assert db_session_record is not None
+    assert db_session_record.expires_at is not None
+
+    expected_expiry = datetime.now(UTC) + timedelta(days=14)
+    actual_expiry = db_session_record.expires_at.replace(tzinfo=UTC)
+    diff = abs((expected_expiry - actual_expiry).total_seconds())
+    assert diff < 60  # within 1 minute

@@ -15,7 +15,9 @@ from backend._internal import (
     create_session,
     delete_session,
     handle_oauth_callback,
+    list_developer_tokens,
     require_auth,
+    revoke_developer_token,
     start_oauth_flow,
 )
 from backend.config import settings
@@ -153,4 +155,131 @@ async def get_current_user(
     return CurrentUserResponse(
         did=session.did,
         handle=session.handle,
+    )
+
+
+class DeveloperTokenRequest(BaseModel):
+    """request model for creating developer tokens."""
+
+    name: str | None = None  # optional friendly name for the token
+    expires_in_days: int | None = None  # None = use default from settings
+
+
+class DeveloperTokenResponse(BaseModel):
+    """response model for developer token creation."""
+
+    token: str
+    expires_in_days: int
+    message: str
+
+
+class DeveloperTokenInfo(BaseModel):
+    """info about a developer token (without the actual token)."""
+
+    session_id: str  # first 8 chars only for identification
+    name: str | None
+    created_at: str  # ISO format
+    expires_at: str | None  # ISO format or null for never
+
+
+class DeveloperTokenListResponse(BaseModel):
+    """response model for listing developer tokens."""
+
+    tokens: list[DeveloperTokenInfo]
+
+
+@router.get("/developer-tokens")
+async def get_developer_tokens(
+    session: Session = Depends(require_auth),
+) -> DeveloperTokenListResponse:
+    """list all developer tokens for the current user."""
+    tokens = await list_developer_tokens(session.did)
+
+    return DeveloperTokenListResponse(
+        tokens=[
+            DeveloperTokenInfo(
+                session_id=t.session_id[:8],  # only show prefix for identification
+                name=t.token_name,
+                created_at=t.created_at.isoformat(),
+                expires_at=t.expires_at.isoformat() if t.expires_at else None,
+            )
+            for t in tokens
+        ]
+    )
+
+
+@router.delete("/developer-tokens/{token_prefix}")
+async def delete_developer_token(
+    token_prefix: str,
+    session: Session = Depends(require_auth),
+) -> JSONResponse:
+    """revoke a developer token by its prefix (first 8 chars of session_id)."""
+    # find the full session_id from prefix
+    tokens = await list_developer_tokens(session.did)
+    matching = [t for t in tokens if t.session_id.startswith(token_prefix)]
+
+    if not matching:
+        raise HTTPException(status_code=404, detail="token not found")
+
+    if len(matching) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="ambiguous prefix - provide more characters",
+        )
+
+    success = await revoke_developer_token(session.did, matching[0].session_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="token not found")
+
+    return JSONResponse(content={"message": "token revoked successfully"})
+
+
+@router.post("/developer-token")
+@limiter.limit(settings.rate_limit.auth_limit)
+async def create_developer_token(
+    request: Request,
+    token_request: DeveloperTokenRequest,
+    session: Session = Depends(require_auth),
+) -> DeveloperTokenResponse:
+    """create a long-lived developer token for programmatic API access.
+
+    this creates a new session with a configurable expiration.
+    the token can be used as a Bearer token for API requests.
+
+    use expires_in_days=0 for a token that never expires.
+    """
+    # use default from settings if not specified
+    expires_in_days = (
+        token_request.expires_in_days
+        if token_request.expires_in_days is not None
+        else settings.auth.developer_token_default_days
+    )
+
+    # cap expiration at max from settings (0 = no expiration is always allowed)
+    max_days = settings.auth.developer_token_max_days
+    if expires_in_days > max_days:
+        raise HTTPException(
+            status_code=400,
+            detail=f"expires_in_days cannot exceed {max_days} (use 0 for no expiration)",
+        )
+
+    # create a new session with the user's OAuth data but longer expiration
+    token = await create_session(
+        did=session.did,
+        handle=session.handle,
+        oauth_session=session.oauth_session,
+        expires_in_days=expires_in_days,
+        is_developer_token=True,
+        token_name=token_request.name,
+    )
+
+    expires_msg = (
+        f"expires in {expires_in_days} days" if expires_in_days > 0 else "never expires"
+    )
+
+    return DeveloperTokenResponse(
+        token=token,
+        expires_in_days=expires_in_days,
+        message=f"Developer token created ({expires_msg}). "
+        "Use as: Authorization: Bearer <token>",
     )
