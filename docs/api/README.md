@@ -8,7 +8,6 @@ design docs for plyr.fm's public developer API (issue #56).
 |----------|-------------|
 | [public-api-design.md](./public-api-design.md) | RFC covering resource model, versioning, auth, rate limiting |
 | [api-key-schema.md](./api-key-schema.md) | database schema and implementation for API key management |
-| [openapi-v1-draft.yaml](./openapi-v1-draft.yaml) | draft OpenAPI 3.1 spec for v1 endpoints |
 
 ## status
 
@@ -19,7 +18,7 @@ these docs represent the proposed design. implementation will begin after review
 ## quick summary
 
 ### versioning
-- URI-based: `/v1/items`, `/v2/items`
+- URI-based: `/v1/tracks`, `/v2/tracks`
 - deprecation headers with 6+ month warning
 
 ### authentication
@@ -27,18 +26,23 @@ these docs represent the proposed design. implementation will begin after review
 - session cookies (existing browser auth)
 
 ### resource model
-- generic "items" for future multi-content support
-- tracks, voice memos, snippets share common patterns
+- `/tracks` for tracks (no premature abstraction)
+- add `/voice-memos` etc when needed
 
 ### key endpoints
 ```
-GET  /v1/items              list items
-GET  /v1/items/{id}         get item
+GET  /v1/tracks             list tracks
+GET  /v1/tracks/{id}        get track
 GET  /v1/artists/{handle}   get artist
 GET  /v1/me                 current user
-GET  /v1/me/likes           liked items
-POST /v1/upload/presigned   get upload URL
+GET  /v1/me/likes           liked tracks
+POST /v1/tracks             upload track
 ```
+
+### OpenAPI
+FastAPI auto-generates from route definitions:
+- `/v1/openapi.json` - spec
+- `/v1/docs` - interactive docs
 
 ## open questions
 

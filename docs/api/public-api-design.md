@@ -9,7 +9,7 @@ this document proposes the design for plyr.fm's public developer API, enabling t
 ## goals
 
 1. **external integrations** - enable third-party apps to interact with plyr.fm
-2. **future-proof vocabulary** - generic "items" model for multi-content support (tracks, voice memos, snippets)
+2. **stable vocabulary** - `/tracks` for tracks, add new endpoints when needed
 3. **versioning without breakage** - clear contract with deprecation policies
 4. **security** - API keys with scopes, rate limiting, audit trails
 
@@ -24,71 +24,56 @@ this document proposes the design for plyr.fm's public developer API, enabling t
 
 ## resource model
 
-### design principle: items, not tracks
+### design principle: keep it simple
 
-the current internal model uses "tracks" everywhere. for the public API, we introduce a **generic item model** that supports multiple content types:
+the public API mirrors the internal model. tracks are tracks - no premature abstraction.
 
-```
-item
-├── type: "track" | "voice_memo" | "snippet" (future)
-├── id: string (uuid)
-├── title: string
-├── artist: artist reference
-├── album: album reference (optional)
-├── metadata: type-specific fields
-└── engagement: plays, likes, comments
-```
-
-### why "items"?
-
-1. **forward compatibility** - adding voice memos, samples, or snippets won't require new top-level resources
-2. **consistent patterns** - all content types share common fields (title, artist, engagement)
-3. **simpler SDK design** - one `client.items.list()` method works for all types
-4. **ATProto alignment** - lexicons can evolve (`fm.plyr.item` → `fm.plyr.item.track`, `fm.plyr.item.memo`)
+when we add new content types (voice memos, snippets), we add new endpoints (`/voice-memos`). adding endpoints is cheap; maintaining unnecessary abstractions is expensive.
 
 ### v1 resource hierarchy
 
 ```
 /v1
-├── /items                    # all content items (filterable by type)
-│   ├── GET /                 # list items
-│   ├── GET /{id}            # get item by id
-│   ├── POST /               # create item (upload)
-│   ├── PATCH /{id}          # update item metadata
-│   └── DELETE /{id}         # delete item
+├── /tracks                   # audio tracks
+│   ├── GET /                 # list tracks
+│   ├── GET /{id}            # get track by id
+│   ├── POST /               # upload track
+│   ├── PATCH /{id}          # update track metadata
+│   ├── DELETE /{id}         # delete track
+│   ├── POST /{id}/play      # record play
+│   └── GET /{id}/comments   # get track comments
 │
 ├── /artists                  # artist profiles
 │   ├── GET /                 # list artists
 │   ├── GET /{handle}        # get artist by handle
-│   └── GET /{handle}/items  # get artist's items
+│   └── GET /{handle}/tracks # get artist's tracks
 │
 ├── /albums                   # album collections
 │   ├── GET /                 # list albums
 │   ├── GET /{id}            # get album by id
-│   └── GET /{id}/items      # get album's items
+│   └── GET /{id}/tracks     # get album's tracks
 │
 ├── /me                       # authenticated user context
 │   ├── GET /                 # get current user
-│   ├── GET /items           # get user's items
-│   ├── GET /likes           # get user's liked items
-│   ├── POST /likes/{id}     # like an item
-│   └── DELETE /likes/{id}   # unlike an item
+│   ├── GET /tracks          # get user's tracks
+│   ├── GET /likes           # get user's liked tracks
+│   ├── POST /likes/{id}     # like a track
+│   └── DELETE /likes/{id}   # unlike a track
 │
 ├── /upload                   # upload workflow
 │   ├── POST /presigned      # get presigned upload URL
 │   └── POST /complete       # finalize upload
 │
 └── /search                   # discovery
-    └── GET /                 # search items, artists, albums
+    └── GET /                 # search tracks, artists, albums
 ```
 
 ### response models
 
-**item response** (all types):
+**track response**:
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
-  "type": "track",
   "title": "summer vibes",
   "artist": {
     "did": "did:plc:abc123",
@@ -101,7 +86,7 @@ item
     "title": "debut ep",
     "slug": "debut-ep"
   },
-  "media_url": "https://cdn.plyr.fm/audio/...",
+  "audio_url": "https://cdn.plyr.fm/audio/...",
   "image_url": "https://cdn.plyr.fm/images/...",
   "duration_ms": 180000,
   "play_count": 1234,
@@ -118,7 +103,7 @@ item
 **collection response** (paginated):
 ```json
 {
-  "items": [...],
+  "tracks": [...],
   "cursor": "eyJvZmZzZXQiOjUwfQ==",
   "has_more": true
 }
@@ -131,8 +116,8 @@ item
 ### approach: URI-based versioning
 
 ```
-https://api.plyr.fm/v1/items
-https://api.plyr.fm/v2/items  (future)
+https://api.plyr.fm/v1/tracks
+https://api.plyr.fm/v2/tracks  (future)
 ```
 
 **rationale**:
@@ -155,7 +140,7 @@ deprecated endpoints include headers:
 ```http
 Deprecation: Sun, 01 Jun 2025 00:00:00 GMT
 Sunset: Sun, 01 Dec 2025 00:00:00 GMT
-Link: <https://api.plyr.fm/v2/items>; rel="successor-version"
+Link: <https://api.plyr.fm/v2/tracks>; rel="successor-version"
 ```
 
 ### breaking changes require new version
@@ -243,10 +228,10 @@ examples:
 
 v1 launches with full-access keys. future versions may add granular scopes:
 ```
-items:read      - list and read items
-items:write     - create, update, delete items
+tracks:read     - list and read tracks
+tracks:write    - create, update, delete tracks
 likes:read      - read user's likes
-likes:write     - like/unlike items
+likes:write     - like/unlike tracks
 upload          - upload new content
 ```
 
@@ -297,13 +282,13 @@ extend existing slowapi setup with:
 ```json
 {
   "error": {
-    "code": "item_not_found",
-    "message": "the requested item does not exist",
+    "code": "track_not_found",
+    "message": "the requested track does not exist",
     "status": 404,
     "details": {
-      "item_id": "550e8400-e29b-41d4-a716-446655440000"
+      "track_id": "550e8400-e29b-41d4-a716-446655440000"
     },
-    "docs_url": "https://docs.plyr.fm/errors/item_not_found"
+    "docs_url": "https://docs.plyr.fm/errors/track_not_found"
   },
   "request_id": "req_abc123"
 }
@@ -316,7 +301,7 @@ extend existing slowapi setup with:
 | `invalid_request` | 400 | malformed request body or parameters |
 | `unauthorized` | 401 | missing or invalid authentication |
 | `forbidden` | 403 | valid auth but insufficient permissions |
-| `item_not_found` | 404 | resource does not exist |
+| `not_found` | 404 | resource does not exist |
 | `conflict` | 409 | resource state conflict (e.g., already liked) |
 | `rate_limited` | 429 | too many requests |
 | `internal_error` | 500 | server error (retry with backoff) |
@@ -328,13 +313,13 @@ extend existing slowapi setup with:
 ### cursor-based pagination
 
 ```http
-GET /v1/items?limit=25&cursor=eyJvZmZzZXQiOjI1fQ==
+GET /v1/tracks?limit=25&cursor=eyJvZmZzZXQiOjI1fQ==
 ```
 
 **response**:
 ```json
 {
-  "items": [...],
+  "tracks": [...],
   "cursor": "eyJvZmZzZXQiOjUwfQ==",
   "has_more": true
 }
@@ -369,10 +354,10 @@ uploads use presigned URLs to avoid passing large files through the API server:
 
 3. POST /v1/upload/complete
    body: { upload_id: "...", title: "my track", album_id: "..." }
-   response: { item: {...}, job_id: "..." }
+   response: { track: {...}, job_id: "..." }
 
 4. GET /v1/jobs/{job_id}  # poll for processing status
-   response: { status: "completed", item_id: "..." }
+   response: { status: "completed", track_id: "..." }
 ```
 
 **benefits**:
@@ -387,29 +372,31 @@ uploads use presigned URLs to avoid passing large files through the API server:
 for v2, consider webhook support:
 ```json
 {
-  "event": "item.played",
+  "event": "track.played",
   "timestamp": "2025-01-15T10:30:00Z",
   "data": {
-    "item_id": "...",
+    "track_id": "...",
     "listener_did": "did:plc:..."
   }
 }
 ```
 
 potential events:
-- `item.created`, `item.deleted`
-- `item.played`
-- `item.liked`, `item.unliked`
-- `item.commented`
+- `track.created`, `track.deleted`
+- `track.played`
+- `track.liked`, `track.unliked`
+- `track.commented`
 
 ---
 
 ## OpenAPI specification
 
-the API will be documented with OpenAPI 3.1:
-- auto-generated from FastAPI route definitions
-- published at `https://api.plyr.fm/v1/openapi.json`
-- interactive docs at `https://docs.plyr.fm/api`
+FastAPI auto-generates OpenAPI from route definitions:
+- `https://api.plyr.fm/v1/openapi.json` - spec
+- `https://api.plyr.fm/v1/docs` - interactive docs (Swagger UI)
+- `https://api.plyr.fm/v1/redoc` - alternative docs (ReDoc)
+
+no separate spec file to maintain - Pydantic models and docstrings are the source of truth.
 
 ---
 
@@ -422,21 +409,20 @@ the API will be documented with OpenAPI 3.1:
 - [ ] versioned router (`/v1/` prefix)
 
 ### phase 2: core endpoints
-- [ ] `GET /v1/items` (list with filters)
-- [ ] `GET /v1/items/{id}`
+- [ ] `GET /v1/tracks` (list with filters)
+- [ ] `GET /v1/tracks/{id}`
 - [ ] `GET /v1/artists/{handle}`
 - [ ] `GET /v1/me`
 - [ ] `GET /v1/me/likes`
 
 ### phase 3: mutations
-- [ ] `POST /v1/upload/*` workflow
-- [ ] `PATCH /v1/items/{id}`
-- [ ] `DELETE /v1/items/{id}`
+- [ ] `POST /v1/tracks` (upload)
+- [ ] `PATCH /v1/tracks/{id}`
+- [ ] `DELETE /v1/tracks/{id}`
 - [ ] `POST/DELETE /v1/me/likes/{id}`
 
 ### phase 4: polish
-- [ ] OpenAPI spec generation
-- [ ] developer documentation site
+- [ ] developer documentation page
 - [ ] SDK templates (Python, TypeScript)
 - [ ] rate limiting refinements
 
