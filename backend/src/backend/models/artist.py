@@ -10,6 +10,7 @@ from backend.models.database import Base
 
 if TYPE_CHECKING:
     from backend.models.album import Album
+    from backend.models.api_key import APIKey
     from backend.models.track import Track
 
 
@@ -43,6 +44,7 @@ class Artist(Base):
         nullable=False,
     )
 
-    # relationship
+    # relationships
     tracks: Mapped[list["Track"]] = relationship("Track", back_populates="artist")
     albums: Mapped[list["Album"]] = relationship("Album", back_populates="artist")
+    api_keys: Mapped[list["APIKey"]] = relationship("APIKey", back_populates="owner")

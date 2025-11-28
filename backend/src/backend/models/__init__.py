@@ -1,6 +1,7 @@
 """database models."""
 
 from backend.models.album import Album
+from backend.models.api_key import APIKey, KeyEnvironment, KeyType
 from backend.models.artist import Artist
 from backend.models.copyright_scan import CopyrightScan, ScanResolution
 from backend.models.database import Base
@@ -16,12 +17,15 @@ from backend.models.track_like import TrackLike
 from backend.utilities.database import db_session, get_db, init_db
 
 __all__ = [
+    "APIKey",
     "Album",
     "Artist",
     "Base",
     "CopyrightScan",
     "ExchangeToken",
     "Job",
+    "KeyEnvironment",
+    "KeyType",
     "OAuthStateModel",
     "QueueState",
     "ScanResolution",

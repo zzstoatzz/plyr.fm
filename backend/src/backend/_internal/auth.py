@@ -13,9 +13,10 @@ from cryptography.fernet import Fernet
 from fastapi import Cookie, Header, HTTPException
 from sqlalchemy import select
 
+from backend._internal.api_keys import verify_api_key
 from backend._internal.oauth_stores import PostgresStateStore
 from backend.config import settings
-from backend.models import ExchangeToken, UserSession
+from backend.models import APIKey, ExchangeToken, UserSession
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -377,3 +378,124 @@ async def require_artist_profile(
         )
 
     return session
+
+
+# --------------------------------------------------------------------------
+# API Key Authentication
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class APIKeyAuth:
+    """authenticated API key context."""
+
+    api_key_id: str
+    owner_did: str
+    key_type: str
+    environment: str
+    scopes: list[str]
+
+
+async def authenticate_api_key(bearer_token: str) -> APIKeyAuth | None:
+    """authenticate request via API key.
+
+    returns APIKeyAuth if valid, None otherwise.
+    updates last_used_at on successful auth.
+    """
+    if not bearer_token.startswith("plyr_"):
+        return None
+
+    # extract prefix for lookup (first 24 chars)
+    prefix = bearer_token[:24]
+
+    async with db_session() as db:
+        result = await db.execute(
+            select(APIKey)
+            .where(APIKey.key_prefix == prefix)
+            .where(APIKey.revoked_at.is_(None))
+        )
+        api_key = result.scalar_one_or_none()
+
+        if not api_key:
+            return None
+
+        # verify hash
+        if not verify_api_key(bearer_token, api_key.key_hash):
+            return None
+
+        # check expiration
+        if not api_key.is_active:
+            return None
+
+        # update last used
+        api_key.last_used_at = datetime.now(UTC)
+        await db.commit()
+
+        return APIKeyAuth(
+            api_key_id=str(api_key.id),
+            owner_did=api_key.owner_did,
+            key_type=api_key.key_type,
+            environment=api_key.environment,
+            scopes=api_key.scopes or [],
+        )
+
+
+@dataclass
+class AuthContext:
+    """unified auth context for session or API key auth."""
+
+    did: str
+    handle: str | None  # None for API key auth
+    auth_type: str  # "session" or "api_key"
+
+    # only set for session auth
+    session: Session | None = None
+    # only set for API key auth
+    api_key: APIKeyAuth | None = None
+
+
+async def require_auth_v1(
+    authorization: Annotated[str | None, Header()] = None,
+    session_id: Annotated[str | None, Cookie(alias="session_id")] = None,
+) -> AuthContext:
+    """fastapi dependency for v1 API - accepts session OR API key.
+
+    tries in order:
+    1. API key (Bearer plyr_...)
+    2. session cookie
+    3. session from Authorization header
+    """
+    bearer_token = None
+
+    if authorization and authorization.startswith("Bearer "):
+        bearer_token = authorization.removeprefix("Bearer ").strip()
+
+    # try API key first
+    if bearer_token and bearer_token.startswith("plyr_"):
+        api_key_auth = await authenticate_api_key(bearer_token)
+        if api_key_auth:
+            return AuthContext(
+                did=api_key_auth.owner_did,
+                handle=None,
+                auth_type="api_key",
+                api_key=api_key_auth,
+            )
+        # invalid API key
+        raise HTTPException(status_code=401, detail="invalid API key")
+
+    # fall back to session auth
+    session_id_value = session_id or bearer_token
+
+    if not session_id_value:
+        raise HTTPException(status_code=401, detail="authentication required")
+
+    session = await get_session(session_id_value)
+    if not session:
+        raise HTTPException(status_code=401, detail="invalid or expired session")
+
+    return AuthContext(
+        did=session.did,
+        handle=session.handle,
+        auth_type="session",
+        session=session,
+    )

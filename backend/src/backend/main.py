@@ -36,6 +36,7 @@ from backend.api import (
 )
 from backend.api.albums import router as albums_router
 from backend.api.migration import router as migration_router
+from backend.api.v1 import router as v1_router
 from backend.config import settings
 from backend.models import init_db
 from backend.utilities.rate_limit import limiter
@@ -163,6 +164,7 @@ app.include_router(queue_router)
 app.include_router(migration_router)
 app.include_router(exports_router)
 app.include_router(oembed_router)
+app.include_router(v1_router)
 
 
 @app.get("/health")
