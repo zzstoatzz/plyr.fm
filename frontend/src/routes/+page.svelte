@@ -129,14 +129,16 @@
 		display: none;
 	}
 
-	/* Show sidebar only when there's actually room (800px content + 200px sidebar + gaps on both sides) */
+	/* Show sidebar centered in left margin */
 	@media (min-width: 1300px) {
 		.stats-sidebar {
 			display: block;
 			position: fixed;
-			left: calc((100vw - 800px) / 2 - 200px);
-			top: 140px;
-			width: 160px;
+			/* Center in the left margin: halfway between left edge and content */
+			left: calc((100vw - 800px) / 4);
+			transform: translateX(-50%);
+			top: 160px;
+			width: auto;
 		}
 	}
 
