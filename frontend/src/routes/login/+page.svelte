@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { APP_NAME, APP_TAGLINE } from '$lib/branding';
 	import { API_URL } from '$lib/config';
+	import HandleAutocomplete from '$lib/components/HandleAutocomplete.svelte';
 
-	let handle = '';
-	let loading = false;
+	let handle = $state('');
+	let loading = $state(false);
 
 	function startOAuth(e: SubmitEvent) {
 		e.preventDefault();
@@ -11,6 +12,10 @@
 		loading = true;
 		// redirect to backend OAuth start endpoint
 		window.location.href = `${API_URL}/auth/start?handle=${encodeURIComponent(handle)}`;
+	}
+
+	function handleSelect(selected: string) {
+		handle = selected;
 	}
 </script>
 
@@ -33,13 +38,11 @@
 						what's this?
 					</a>
 				</div>
-				<input
-					id="handle"
-					type="text"
+				<HandleAutocomplete
 					bind:value={handle}
+					onSelect={handleSelect}
 					placeholder="yourname.bsky.social"
 					disabled={loading}
-					required
 				/>
 				<p class="input-help">
 					don't have one?
@@ -114,33 +117,6 @@
 	.help-link:hover {
 		color: var(--accent-hover);
 		text-decoration: underline;
-	}
-
-	input {
-		width: 100%;
-		padding: 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
-		border-radius: 4px;
-		color: white;
-		font-size: 1rem;
-		font-family: inherit;
-		transition: all 0.2s;
-		box-sizing: border-box;
-	}
-
-	input:focus {
-		outline: none;
-		border-color: #3a7dff;
-	}
-
-	input:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	input::placeholder {
-		color: #666;
 	}
 
 	.input-help {
