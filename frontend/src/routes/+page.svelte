@@ -4,6 +4,7 @@
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
+	import PlatformStats from '$lib/components/PlatformStats.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
@@ -71,6 +72,7 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 
 <main>
+	<PlatformStats />
 	<section class="tracks">
 		<h2>
 			<button
@@ -121,6 +123,9 @@
 		max-width: 800px;
 		margin: 0 auto;
 		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
 	}
 
 	.tracks h2 {
