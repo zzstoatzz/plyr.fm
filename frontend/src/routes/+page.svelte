@@ -129,12 +129,12 @@
 		display: none;
 	}
 
-	/* Show sidebar on wide screens where there's room */
-	@media (min-width: 1100px) {
+	/* Show sidebar only when there's actually room (800px content + 200px sidebar + gaps on both sides) */
+	@media (min-width: 1300px) {
 		.stats-sidebar {
 			display: block;
 			position: fixed;
-			left: max(1rem, calc((100vw - 800px) / 2 - 200px));
+			left: calc((100vw - 800px) / 2 - 200px);
 			top: 140px;
 			width: 160px;
 		}

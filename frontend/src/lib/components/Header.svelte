@@ -244,7 +244,7 @@
 	}
 
 	/* Show LinksMenu (with stats) when sidebar is hidden */
-	@media (max-width: 1099px) {
+	@media (max-width: 1299px) {
 		.desktop-only {
 			display: none !important;
 		}

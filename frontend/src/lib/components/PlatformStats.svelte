@@ -142,12 +142,15 @@
 {/if}
 
 <style>
-	/* Sidebar card variant */
+	/* Sidebar card variant - glass effect matching Toast */
 	.stats-sidebar-card {
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-subtle);
+		background: rgba(10, 10, 10, 0.6);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border: 1px solid rgba(255, 255, 255, 0.06);
 		border-radius: 10px;
 		overflow: hidden;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 	}
 
 	.stats-sidebar-card.skeleton {
@@ -163,7 +166,7 @@
 
 	.skeleton-row {
 		height: 20px;
-		background: linear-gradient(90deg, #1a1a1a 0%, #242424 50%, #1a1a1a 100%);
+		background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0.03) 100%);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
 		border-radius: 4px;
@@ -174,8 +177,8 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.65rem 0.85rem;
-		background: rgba(255, 255, 255, 0.02);
-		border-bottom: 1px solid var(--border-subtle);
+		background: rgba(255, 255, 255, 0.03);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 		color: var(--text-secondary);
 		font-size: 0.7rem;
 		font-weight: 600;
