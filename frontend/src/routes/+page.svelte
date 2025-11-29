@@ -118,28 +118,33 @@
 
 <style>
 	.page-layout {
-		display: flex;
-		justify-content: center;
-		gap: 2rem;
-		max-width: 1200px;
+		display: block;
+		max-width: 800px;
 		margin: 0 auto;
 		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
+		position: relative;
 	}
 
 	.stats-sidebar {
 		display: none;
-		width: 200px;
-		flex-shrink: 0;
-		padding-top: 1rem;
 	}
 
-	/* Show sidebar on desktop */
-	@media (min-width: 1024px) {
+	/* Show sidebar anchored to the left edge on wide screens */
+	@media (min-width: 1200px) {
 		.stats-sidebar {
 			display: block;
-			position: sticky;
+			position: fixed;
+			left: calc((100vw - 800px) / 2 - 220px);
 			top: 80px;
-			height: fit-content;
+			width: 180px;
+		}
+	}
+
+	/* Adjust for very wide screens - cap the distance */
+	@media (min-width: 1600px) {
+		.stats-sidebar {
+			left: calc((100vw - 800px) / 2 - 260px);
+			width: 200px;
 		}
 	}
 
@@ -150,9 +155,7 @@
 	}
 
 	main {
-		max-width: 800px;
 		width: 100%;
-		flex: 1;
 	}
 
 	.tracks h2 {

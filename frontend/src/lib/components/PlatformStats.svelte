@@ -42,26 +42,48 @@
 
 {#if variant === 'bar'}
 	{#if loading}
-		<div class="stats-bar skeleton" transition:fade={{ duration: 200 }}>
-			<div class="stat-item">
-				<span class="skeleton-bar"></span>
+		<div class="stats-sidebar-card skeleton" transition:fade={{ duration: 200 }}>
+			<div class="skeleton-rows">
+				<span class="skeleton-row"></span>
+				<span class="skeleton-row"></span>
+				<span class="skeleton-row"></span>
 			</div>
 		</div>
 	{:else if stats}
-		<div class="stats-bar" transition:fade={{ duration: 200 }}>
-			<div class="stat-item">
-				<span class="stat-value">{stats.total_plays.toLocaleString()}</span>
-				<span class="stat-label">{pluralize(stats.total_plays, 'play', 'plays')}</span>
+		<div class="stats-sidebar-card" transition:fade={{ duration: 200 }}>
+			<div class="sidebar-header">
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<line x1="18" y1="20" x2="18" y2="10"></line>
+					<line x1="12" y1="20" x2="12" y2="4"></line>
+					<line x1="6" y1="20" x2="6" y2="14"></line>
+				</svg>
+				<span>stats</span>
 			</div>
-			<span class="stat-divider">•</span>
-			<div class="stat-item">
-				<span class="stat-value">{stats.total_tracks.toLocaleString()}</span>
-				<span class="stat-label">{pluralize(stats.total_tracks, 'track', 'tracks')}</span>
-			</div>
-			<span class="stat-divider">•</span>
-			<div class="stat-item">
-				<span class="stat-value">{stats.total_artists.toLocaleString()}</span>
-				<span class="stat-label">{pluralize(stats.total_artists, 'artist', 'artists')}</span>
+			<div class="sidebar-stats">
+				<div class="sidebar-stat">
+					<svg class="stat-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<polygon points="5 3 19 12 5 21 5 3"></polygon>
+					</svg>
+					<span class="stat-value">{stats.total_plays.toLocaleString()}</span>
+					<span class="stat-label">{pluralize(stats.total_plays, 'play', 'plays')}</span>
+				</div>
+				<div class="sidebar-stat">
+					<svg class="stat-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M9 18V5l12-2v13"></path>
+						<circle cx="6" cy="18" r="3"></circle>
+						<circle cx="18" cy="16" r="3"></circle>
+					</svg>
+					<span class="stat-value">{stats.total_tracks.toLocaleString()}</span>
+					<span class="stat-label">{pluralize(stats.total_tracks, 'track', 'tracks')}</span>
+				</div>
+				<div class="sidebar-stat">
+					<svg class="stat-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
+						<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
+						<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+					</svg>
+					<span class="stat-value">{stats.total_artists.toLocaleString()}</span>
+					<span class="stat-label">{pluralize(stats.total_artists, 'artist', 'artists')}</span>
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -69,8 +91,8 @@
 	<div class="stats-menu-section">
 		<div class="stats-menu-header">
 			<svg
-				width="16"
-				height="16"
+				width="14"
+				height="14"
 				viewBox="0 0 24 24"
 				fill="none"
 				stroke="currentColor"
@@ -82,7 +104,7 @@
 				<line x1="12" y1="20" x2="12" y2="4"></line>
 				<line x1="6" y1="20" x2="6" y2="14"></line>
 			</svg>
-			<span>platform stats</span>
+			<span>stats</span>
 		</div>
 		{#if loading}
 			<div class="stats-menu-loading">
@@ -91,14 +113,26 @@
 		{:else if stats}
 			<div class="stats-menu-grid">
 				<div class="stats-menu-item">
+					<svg class="menu-stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<polygon points="5 3 19 12 5 21 5 3"></polygon>
+					</svg>
 					<span class="stats-menu-value">{stats.total_plays.toLocaleString()}</span>
 					<span class="stats-menu-label">{pluralize(stats.total_plays, 'play', 'plays')}</span>
 				</div>
 				<div class="stats-menu-item">
+					<svg class="menu-stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M9 18V5l12-2v13"></path>
+						<circle cx="6" cy="18" r="3"></circle>
+						<circle cx="18" cy="16" r="3"></circle>
+					</svg>
 					<span class="stats-menu-value">{stats.total_tracks.toLocaleString()}</span>
 					<span class="stats-menu-label">{pluralize(stats.total_tracks, 'track', 'tracks')}</span>
 				</div>
 				<div class="stats-menu-item">
+					<svg class="menu-stat-icon" width="12" height="12" viewBox="0 0 16 16" fill="none">
+						<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
+						<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+					</svg>
 					<span class="stats-menu-value">{stats.total_artists.toLocaleString()}</span>
 					<span class="stats-menu-label">{pluralize(stats.total_artists, 'artist', 'artists')}</span>
 				</div>
@@ -108,53 +142,87 @@
 {/if}
 
 <style>
-	.stats-bar {
+	/* Sidebar card variant */
+	.stats-sidebar-card {
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 10px;
+		overflow: hidden;
+	}
+
+	.stats-sidebar-card.skeleton {
+		min-height: 140px;
+		padding: 1rem;
+	}
+
+	.skeleton-rows {
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
-		padding: 1rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
-		font-size: 0.85rem;
 	}
 
-	.stats-bar.skeleton {
-		min-height: 120px;
-	}
-
-	.stat-item {
-		display: flex;
-		align-items: baseline;
-		gap: 0.35rem;
-	}
-
-	.stat-value {
-		color: var(--accent);
-		font-weight: 600;
-		font-size: 1.1rem;
-	}
-
-	.stat-label {
-		color: var(--text-secondary);
-	}
-
-	.stat-divider {
-		display: none;
-	}
-
-	.skeleton-bar {
-		width: 100%;
-		height: 16px;
-		background: linear-gradient(
-			90deg,
-			#1a1a1a 0%,
-			#242424 50%,
-			#1a1a1a 100%
-		);
+	.skeleton-row {
+		height: 20px;
+		background: linear-gradient(90deg, #1a1a1a 0%, #242424 50%, #1a1a1a 100%);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
 		border-radius: 4px;
+	}
+
+	.sidebar-header {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.65rem 0.85rem;
+		background: rgba(255, 255, 255, 0.02);
+		border-bottom: 1px solid var(--border-subtle);
+		color: var(--text-secondary);
+		font-size: 0.7rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.sidebar-header svg {
+		opacity: 0.6;
+	}
+
+	.sidebar-stats {
+		padding: 0.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+
+	.sidebar-stat {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.5rem;
+		border-radius: 6px;
+		transition: background 0.15s ease;
+	}
+
+	.sidebar-stat:hover {
+		background: rgba(255, 255, 255, 0.03);
+	}
+
+	.stat-icon {
+		color: var(--text-muted);
+		opacity: 0.6;
+		flex-shrink: 0;
+	}
+
+	.stat-value {
+		color: var(--text-primary);
+		font-weight: 600;
+		font-size: 0.9rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.stat-label {
+		color: var(--text-tertiary);
+		font-size: 0.8rem;
 	}
 
 	@keyframes shimmer {
@@ -167,7 +235,7 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.skeleton-bar,
+		.skeleton-row,
 		.skeleton-text {
 			animation: none;
 		}
@@ -185,14 +253,14 @@
 		gap: 0.5rem;
 		margin-bottom: 0.75rem;
 		color: var(--text-secondary);
-		font-size: 0.75rem;
+		font-size: 0.7rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
 
 	.stats-menu-header svg {
-		opacity: 0.7;
+		opacity: 0.6;
 	}
 
 	.stats-menu-loading {
@@ -202,7 +270,7 @@
 	.skeleton-text {
 		display: block;
 		width: 100%;
-		height: 48px;
+		height: 60px;
 		background: linear-gradient(90deg, #1a1a1a 0%, #242424 50%, #1a1a1a 100%);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
@@ -219,19 +287,27 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		padding: 0.5rem;
+		gap: 0.15rem;
+		padding: 0.6rem 0.4rem;
 		background: var(--bg-tertiary, #1a1a1a);
 		border-radius: 6px;
 	}
 
+	.menu-stat-icon {
+		color: var(--text-muted);
+		opacity: 0.5;
+		margin-bottom: 0.15rem;
+	}
+
 	.stats-menu-value {
-		font-size: 1rem;
+		font-size: 0.95rem;
 		font-weight: 600;
-		color: var(--accent);
+		color: var(--text-primary);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.stats-menu-label {
-		font-size: 0.7rem;
+		font-size: 0.65rem;
 		color: var(--text-tertiary);
 		text-transform: lowercase;
 	}
