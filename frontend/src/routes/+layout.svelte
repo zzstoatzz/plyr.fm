@@ -10,18 +10,22 @@
 	import Queue from '$lib/components/Queue.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
+	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
+	import { player } from '$lib/player.svelte';
 	import { browser } from '$app/environment';
 	import type { LayoutData } from './$types';
 
 	let { children, data } = $props<{ children: any; data: LayoutData }>();
 	let showQueue = $state(false);
 
-	// only show default meta tags on pages without their own specific metadata
+	// pages that define their own <title> in svelte:head
 	let hasPageMetadata = $derived(
-		$page.url.pathname === '/' || // homepage has its own metadata
-		$page.url.pathname.startsWith('/track/') || // track pages have specific metadata
-		$page.url.pathname.match(/^\/u\/[^/]+\/album\/[^/]+/) // album pages have specific metadata
+		$page.url.pathname === '/' || // homepage
+		$page.url.pathname.startsWith('/track/') || // track detail
+		$page.url.pathname === '/liked' || // liked tracks
+		$page.url.pathname.match(/^\/u\/[^/]+$/) || // artist detail
+		$page.url.pathname.match(/^\/u\/[^/]+\/album\/[^/]+/) // album detail
 	);
 
 	let isEmbed = $derived($page.url.pathname.startsWith('/embed/'));
@@ -33,6 +37,36 @@
 			auth.isAuthenticated = data.isAuthenticated;
 			auth.loading = false;
 		}
+	});
+
+	// document title: show playing track, or fall back to page title
+	let pageTitle = $state(`${APP_NAME} - ${APP_TAGLINE}`);
+
+	function updateTitle() {
+		const track = player.currentTrack;
+		const playing = track && !player.paused;
+		document.title = playing
+			? `${track.title} - ${track.artist} • ${APP_NAME}`
+			: pageTitle;
+	}
+
+	afterNavigate(() => {
+		// capture page title after svelte:head renders, then apply correct title
+		window.requestAnimationFrame(() => {
+			const currentTitle = document.title;
+			if (!currentTitle.includes(` • ${APP_NAME}`)) {
+				pageTitle = currentTitle;
+			}
+			updateTitle();
+		});
+	});
+
+	// react to play/pause changes
+	$effect(() => {
+		if (!browser) return;
+		player.currentTrack;
+		player.paused;
+		updateTitle();
 	});
 
 	function handleQueueShortcut(event: KeyboardEvent) {
