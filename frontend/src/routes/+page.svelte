@@ -122,29 +122,28 @@
 		max-width: 800px;
 		margin: 0 auto;
 		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
-		position: relative;
 	}
 
 	.stats-sidebar {
-		display: none;
+		display: block;
+		margin-bottom: 1.5rem;
 	}
 
-	/* Show sidebar anchored to the left edge on wide screens */
-	@media (min-width: 1200px) {
+	/* Hide sidebar on mobile when LinksMenu is visible */
+	@media (max-width: 768px) {
 		.stats-sidebar {
-			display: block;
-			position: fixed;
-			left: calc((100vw - 800px) / 2 - 220px);
-			top: 80px;
-			width: 180px;
+			display: none;
 		}
 	}
 
-	/* Adjust for very wide screens - cap the distance */
-	@media (min-width: 1600px) {
+	/* Float sidebar to left on wide screens */
+	@media (min-width: 1100px) {
 		.stats-sidebar {
-			left: calc((100vw - 800px) / 2 - 260px);
-			width: 200px;
+			position: fixed;
+			left: max(1rem, calc((100vw - 800px) / 2 - 200px));
+			top: 140px;
+			width: 160px;
+			margin-bottom: 0;
 		}
 	}
 
