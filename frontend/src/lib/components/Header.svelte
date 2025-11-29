@@ -3,6 +3,7 @@
 	import type { User } from '$lib/types';
 	import SettingsMenu from './SettingsMenu.svelte';
 	import LinksMenu from './LinksMenu.svelte';
+	import PlatformStats from './PlatformStats.svelte';
 	import { APP_NAME, APP_TAGLINE } from '$lib/branding';
 
 	interface Props {
@@ -15,6 +16,10 @@
 </script>
 
 <header>
+	<!-- Stats positioned on far left, outside main header flow -->
+	<div class="stats-left desktop-only">
+		<PlatformStats variant="header" />
+	</div>
 	<div class="header-content">
 		<div class="left-section">
 			<!-- desktop: show icons inline -->
@@ -84,6 +89,7 @@
 	header {
 		border-bottom: 1px solid #333;
 		margin-bottom: 2rem;
+		position: relative;
 	}
 
 	.header-content {
@@ -122,6 +128,13 @@
 
 	.mobile-only {
 		display: none;
+	}
+
+	.stats-left {
+		position: absolute;
+		left: calc((100vw - 800px) / 4);
+		top: 50%;
+		transform: translate(-50%, -50%);
 	}
 
 	.bluesky-link,
