@@ -292,7 +292,9 @@ $effect(() => {
 </script>
 
 <svelte:head>
-	<title>{track.title} - {track.artist}{track.album ? ` • ${track.album.title}` : ''}</title>
+	{#if !player.currentTrack || player.currentTrack.id === track.id}
+		<title>{track.title} - {track.artist}{track.album ? ` • ${track.album.title}` : ''}</title>
+	{/if}
 	<meta
 		name="description"
 		content="{track.title} by {track.artist}{track.album ? ` from ${track.album.title}` : ''} - listen on {APP_NAME}"

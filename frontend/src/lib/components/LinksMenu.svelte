@@ -12,7 +12,16 @@
 
 <div class="links-menu">
 	<button class="menu-button" onclick={toggleMenu} title="view links">
-		<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<svg
+			width="20"
+			height="20"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+		>
 			<circle cx="12" cy="12" r="10"></circle>
 			<line x1="12" y1="16" x2="12" y2="12"></line>
 			<line x1="12" y1="8" x2="12.01" y2="8"></line>
@@ -26,30 +35,69 @@
 		<div class="menu-popover">
 			<div class="menu-header">
 				<span>links</span>
-				<button class="close-button" onclick={closeMenu} aria-label="close">
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<button
+					class="close-button"
+					onclick={closeMenu}
+					aria-label="close"
+				>
+					<svg
+						width="18"
+						height="18"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>
 					</svg>
 				</button>
 			</div>
 			<nav class="menu-links">
-				<a href="https://bsky.app/profile/plyr.fm" target="_blank" rel="noopener noreferrer" class="menu-link">
-					<svg width="24" height="24" viewBox="0 0 600 530" fill="currentColor">
-						<path d="m135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46 47.98-36.021 125.72-63.892 125.72 24.795 0 17.712-10.155 148.79-16.111 170.07-20.703 73.984-96.144 92.854-163.25 81.433 117.3 19.964 147.14 86.092 82.697 152.22-122.39 125.59-175.91-31.511-189.63-71.766-2.514-7.3797-3.6904-10.832-3.7077-7.8964-0.0174-2.9357-1.1937 0.51669-3.7077 7.8964-13.714 40.255-67.233 197.36-189.63 71.766-64.444-66.128-34.605-132.26 82.697-152.22-67.108 11.421-142.55-7.4491-163.25-81.433-5.9562-21.282-16.111-152.36-16.111-170.07 0-88.687 77.742-60.816 125.72-24.795z"/>
+				<a
+					href="https://bsky.app/profile/plyr.fm"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="menu-link"
+				>
+					<svg
+						width="24"
+						height="24"
+						viewBox="0 0 600 530"
+						fill="currentColor"
+					>
+						<path
+							d="m135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46 47.98-36.021 125.72-63.892 125.72 24.795 0 17.712-10.155 148.79-16.111 170.07-20.703 73.984-96.144 92.854-163.25 81.433 117.3 19.964 147.14 86.092 82.697 152.22-122.39 125.59-175.91-31.511-189.63-71.766-2.514-7.3797-3.6904-10.832-3.7077-7.8964-0.0174-2.9357-1.1937 0.51669-3.7077 7.8964-13.714 40.255-67.233 197.36-189.63 71.766-64.444-66.128-34.605-132.26 82.697-152.22-67.108 11.421-142.55-7.4491-163.25-81.433-5.9562-21.282-16.111-152.36-16.111-170.07 0-88.687 77.742-60.816 125.72-24.795z"
+						/>
 					</svg>
 					<div class="link-info">
 						<span class="link-title">bluesky profile</span>
 						<span class="link-subtitle">@plyr.fm</span>
 					</div>
 				</a>
-				<a href="https://status.zzstoatzz.io/@plyr.fm" target="_blank" rel="noopener noreferrer" class="menu-link">
-					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+				<a
+					href="https://status.zzstoatzz.io/@plyr.fm"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="menu-link"
+				>
+					<svg
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
+						></polyline>
 					</svg>
 					<div class="link-info">
 						<span class="link-title">status page</span>
-						<span class="link-subtitle">system health</span>
 					</div>
 				</a>
 			</nav>
