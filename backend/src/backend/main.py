@@ -32,6 +32,7 @@ from backend.api import (
     preferences_router,
     queue_router,
     search_router,
+    stats_router,
     tracks_router,
 )
 from backend.api.albums import router as albums_router
@@ -163,6 +164,7 @@ app.include_router(queue_router)
 app.include_router(migration_router)
 app.include_router(exports_router)
 app.include_router(oembed_router)
+app.include_router(stats_router)
 
 
 @app.get("/health")

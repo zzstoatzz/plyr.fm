@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PlatformStats from './PlatformStats.svelte';
+
 	let showMenu = $state(false);
 
 	function toggleMenu() {
@@ -101,6 +103,7 @@
 					</div>
 				</a>
 			</nav>
+			<PlatformStats variant="menu" />
 		</div>
 	{/if}
 </div>

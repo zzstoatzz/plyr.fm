@@ -4,6 +4,7 @@
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
+	import PlatformStats from '$lib/components/PlatformStats.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
@@ -70,8 +71,12 @@
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 
-<main>
-	<section class="tracks">
+<div class="page-layout">
+	<aside class="stats-sidebar">
+		<PlatformStats />
+	</aside>
+	<main>
+		<section class="tracks">
 		<h2>
 			<button
 				type="button"
@@ -109,8 +114,32 @@
 		{/if}
 	</section>
 </main>
+</div>
 
 <style>
+	.page-layout {
+		display: block;
+		max-width: 800px;
+		margin: 0 auto;
+		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
+	}
+
+	/* Hide by default - only show on wide screens */
+	.stats-sidebar {
+		display: none;
+	}
+
+	/* Show sidebar only when there's actually room (800px content + 200px sidebar + gaps on both sides) */
+	@media (min-width: 1300px) {
+		.stats-sidebar {
+			display: block;
+			position: fixed;
+			left: calc((100vw - 800px) / 2 - 200px);
+			top: 140px;
+			width: 160px;
+		}
+	}
+
 	.loading-container {
 		display: flex;
 		justify-content: center;
@@ -118,9 +147,7 @@
 	}
 
 	main {
-		max-width: 800px;
-		margin: 0 auto;
-		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
+		width: 100%;
 	}
 
 	.tracks h2 {
