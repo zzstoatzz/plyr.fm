@@ -6,6 +6,75 @@
 	import { page } from '$app/stores';
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
+	import type { Track } from '$lib/types';
+
+	// update media session metadata for system media controls (CarPlay, lock screen, etc.)
+	function updateMediaSessionMetadata(track: Track) {
+		if (!('mediaSession' in navigator)) return;
+
+		const artwork: MediaImage[] = [];
+		if (track.image_url) {
+			artwork.push({ src: track.image_url, sizes: '512x512', type: 'image/jpeg' });
+		} else if (track.artist_avatar_url) {
+			// fall back to artist avatar if no track artwork
+			artwork.push({ src: track.artist_avatar_url, sizes: '256x256', type: 'image/jpeg' });
+		}
+
+		navigator.mediaSession.metadata = new MediaMetadata({
+			title: track.title,
+			artist: track.artist,
+			album: track.album?.title ?? '',
+			artwork
+		});
+	}
+
+	// set up media session action handlers
+	function setupMediaSessionHandlers() {
+		if (!('mediaSession' in navigator)) return;
+
+		navigator.mediaSession.setActionHandler('play', () => {
+			player.paused = false;
+		});
+
+		navigator.mediaSession.setActionHandler('pause', () => {
+			player.paused = true;
+		});
+
+		navigator.mediaSession.setActionHandler('previoustrack', () => {
+			if (queue.hasPrevious) {
+				queue.previous();
+			}
+		});
+
+		navigator.mediaSession.setActionHandler('nexttrack', () => {
+			if (queue.hasNext) {
+				queue.next();
+			}
+		});
+
+		navigator.mediaSession.setActionHandler('seekto', (details) => {
+			if (details.seekTime !== undefined && player.audioElement) {
+				player.audioElement.currentTime = details.seekTime;
+			}
+		});
+
+		navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+			if (player.audioElement) {
+				const skipTime = details.seekOffset ?? 10;
+				player.audioElement.currentTime = Math.max(0, player.audioElement.currentTime - skipTime);
+			}
+		});
+
+		navigator.mediaSession.setActionHandler('seekforward', (details) => {
+			if (player.audioElement) {
+				const skipTime = details.seekOffset ?? 10;
+				player.audioElement.currentTime = Math.min(
+					player.duration,
+					player.audioElement.currentTime + skipTime
+				);
+			}
+		});
+	}
 
 	// check if we're on the current track's detail page
 	let isOnTrackDetailPage = $derived(
@@ -26,6 +95,9 @@
 	});
 
 	onMount(() => {
+		// set up media session handlers for system controls (CarPlay, lock screen, etc.)
+		setupMediaSessionHandlers();
+
 		// restore volume from localStorage if available
 		const savedVolume = localStorage.getItem('player_volume');
 		if (savedVolume) {
@@ -111,6 +183,33 @@
 	// save volume to localStorage when it changes
 	$effect(() => {
 		localStorage.setItem('player_volume', player.volume.toString());
+	});
+
+	// update media session metadata when track changes
+	$effect(() => {
+		if (player.currentTrack) {
+			updateMediaSessionMetadata(player.currentTrack);
+		}
+	});
+
+	// update media session playback state when paused changes
+	$effect(() => {
+		if (!('mediaSession' in navigator)) return;
+		navigator.mediaSession.playbackState = player.paused ? 'paused' : 'playing';
+	});
+
+	// update media session position state when time/duration changes
+	$effect(() => {
+		if (!('mediaSession' in navigator) || !player.duration || player.duration <= 0) return;
+		try {
+			navigator.mediaSession.setPositionState({
+				duration: player.duration,
+				playbackRate: 1,
+				position: Math.min(player.currentTime, player.duration)
+			});
+		} catch {
+			// ignore errors from invalid position state
+		}
 	});
 
 	// handle track changes - load new audio when track changes

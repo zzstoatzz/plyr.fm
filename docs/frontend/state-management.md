@@ -112,6 +112,7 @@ plyr.fm uses global state managers following the Svelte 5 runes pattern for cros
 - tracks: current track, play/pause, volume, progress
 - persists across navigation
 - integrates with queue for track advancement
+- media session integration in `Player.svelte` (see below)
 
 ### uploader (`frontend/src/lib/uploader.svelte.ts`)
 - manages file uploads in background
@@ -240,3 +241,38 @@ this avoids HTTP/1.1 connection pooling issues by using cached data instead of b
 - **instant feedback**: optimistic updates keep UI responsive
 - **server authority**: conflicts resolved by server state
 - **efficient updates**: debouncing and batching reduce API calls
+
+## media session API
+
+the player component (`frontend/src/lib/components/player/Player.svelte`) integrates with the [Media Session API](https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API) to provide metadata and controls to external interfaces like:
+
+- **lock screen controls** (iOS/Android)
+- **CarPlay / Android Auto**
+- **bluetooth devices**
+- **macOS control center**
+
+### metadata
+
+when a track plays, we update `navigator.mediaSession.metadata` with:
+- title, artist, album
+- artwork (track image or artist avatar fallback)
+
+### action handlers
+
+set up in `onMount`, these respond to system media controls:
+- `play` / `pause` - toggle playback
+- `previoustrack` / `nexttrack` - navigate queue
+- `seekto` - jump to position
+- `seekbackward` / `seekforward` - skip 10 seconds
+
+### position state
+
+reactive effects keep `navigator.mediaSession.setPositionState()` synced with playback progress, enabling scrubbers on lock screens.
+
+### implementation notes
+
+- handlers are registered once in `onMount`
+- metadata updates reactively via `$effect` when `player.currentTrack` changes
+- playback state syncs reactively with `player.paused`
+- position updates on every `player.currentTime` / `player.duration` change
+- gracefully no-ops if `navigator.mediaSession` is unavailable
