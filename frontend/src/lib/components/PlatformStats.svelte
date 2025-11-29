@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fade } from 'svelte/transition';
 	import { API_URL } from '$lib/config';
 
 	interface Props {
-		variant?: 'bar' | 'menu';
+		variant?: 'header' | 'menu';
 	}
 
-	let { variant = 'bar' }: Props = $props();
+	let { variant = 'header' }: Props = $props();
 
 	interface Stats {
 		total_plays: number;
@@ -40,45 +39,29 @@
 	});
 </script>
 
-{#if variant === 'bar'}
-	<div class="stats-sidebar">
-		{#if loading}
-			<div class="sidebar-stat">
-				<span class="skeleton-icon"></span>
-				<span class="skeleton-value"></span>
-			</div>
-			<div class="sidebar-stat">
-				<span class="skeleton-icon"></span>
-				<span class="skeleton-value"></span>
-			</div>
-			<div class="sidebar-stat">
-				<span class="skeleton-icon"></span>
-				<span class="skeleton-value"></span>
-			</div>
-		{:else if stats}
-			<div class="sidebar-stat" in:fade={{ duration: 300 }}>
-				<svg class="stat-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+{#if variant === 'header'}
+	<div class="stats-header">
+		{#if !loading && stats}
+			<div class="header-stat" title="{stats.total_plays.toLocaleString()} {pluralize(stats.total_plays, 'play', 'plays')}">
+				<svg class="header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<polygon points="5 3 19 12 5 21 5 3"></polygon>
 				</svg>
-				<span class="stat-value">{stats.total_plays.toLocaleString()}</span>
-				<span class="stat-label">{pluralize(stats.total_plays, 'play', 'plays')}</span>
+				<span class="header-value">{stats.total_plays.toLocaleString()}</span>
 			</div>
-			<div class="sidebar-stat" in:fade={{ duration: 300, delay: 50 }}>
-				<svg class="stat-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+			<div class="header-stat" title="{stats.total_tracks.toLocaleString()} {pluralize(stats.total_tracks, 'track', 'tracks')}">
+				<svg class="header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 					<path d="M9 18V5l12-2v13"></path>
 					<circle cx="6" cy="18" r="3"></circle>
 					<circle cx="18" cy="16" r="3"></circle>
 				</svg>
-				<span class="stat-value">{stats.total_tracks.toLocaleString()}</span>
-				<span class="stat-label">{pluralize(stats.total_tracks, 'track', 'tracks')}</span>
+				<span class="header-value">{stats.total_tracks.toLocaleString()}</span>
 			</div>
-			<div class="sidebar-stat" in:fade={{ duration: 300, delay: 100 }}>
-				<svg class="stat-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
+			<div class="header-stat" title="{stats.total_artists.toLocaleString()} {pluralize(stats.total_artists, 'artist', 'artists')}">
+				<svg class="header-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
 					<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
 					<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 				</svg>
-				<span class="stat-value">{stats.total_artists.toLocaleString()}</span>
-				<span class="stat-label">{pluralize(stats.total_artists, 'artist', 'artists')}</span>
+				<span class="header-value">{stats.total_artists.toLocaleString()}</span>
 			</div>
 		{/if}
 	</div>
@@ -137,54 +120,38 @@
 {/if}
 
 <style>
-	/* Sidebar variant - clean, minimal */
-	.stats-sidebar {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.sidebar-stat {
+	/* Header variant - inline, compact */
+	.stats-header {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.75rem;
 	}
 
-	.stat-icon {
-		color: var(--text-muted);
-		opacity: 0.5;
-		flex-shrink: 0;
-	}
-
-	.stat-value {
-		color: var(--text-primary);
-		font-weight: 600;
-		font-size: 1.1rem;
-		font-variant-numeric: tabular-nums;
-		line-height: 1;
-	}
-
-	.stat-label {
-		color: var(--text-tertiary);
+	.header-stat {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		color: var(--text-secondary);
 		font-size: 0.8rem;
-		text-transform: lowercase;
+		transition: color 0.2s;
 	}
 
-	.skeleton-icon {
-		width: 14px;
-		height: 14px;
-		background: rgba(255, 255, 255, 0.04);
-		border-radius: 3px;
+	.header-stat:hover {
+		color: var(--text-primary);
+	}
+
+	.header-icon {
+		opacity: 0.6;
 		flex-shrink: 0;
 	}
 
-	.skeleton-value {
-		width: 50px;
-		height: 1.1rem;
-		background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0.03) 100%);
-		background-size: 200% 100%;
-		animation: shimmer 1.5s ease-in-out infinite;
-		border-radius: 3px;
+	.header-stat:hover .header-icon {
+		opacity: 0.8;
+	}
+
+	.header-value {
+		font-variant-numeric: tabular-nums;
+		font-weight: 500;
 	}
 
 	@keyframes shimmer {
@@ -197,7 +164,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.skeleton-value,
 		.skeleton-text {
 			animation: none;
 		}
