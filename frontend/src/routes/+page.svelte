@@ -124,26 +124,19 @@
 		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
 	}
 
+	/* Hide by default - only show on wide screens */
 	.stats-sidebar {
-		display: block;
-		margin-bottom: 1.5rem;
+		display: none;
 	}
 
-	/* Hide sidebar on mobile when LinksMenu is visible */
-	@media (max-width: 768px) {
-		.stats-sidebar {
-			display: none;
-		}
-	}
-
-	/* Float sidebar to left on wide screens */
+	/* Show sidebar on wide screens where there's room */
 	@media (min-width: 1100px) {
 		.stats-sidebar {
+			display: block;
 			position: fixed;
 			left: max(1rem, calc((100vw - 800px) / 2 - 200px));
 			top: 140px;
 			width: 160px;
-			margin-bottom: 0;
 		}
 	}
 

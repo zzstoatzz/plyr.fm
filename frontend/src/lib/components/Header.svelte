@@ -243,7 +243,8 @@
 		color: var(--accent);
 	}
 
-	@media (max-width: 768px) {
+	/* Show LinksMenu (with stats) when sidebar is hidden */
+	@media (max-width: 1099px) {
 		.desktop-only {
 			display: none !important;
 		}
@@ -252,6 +253,13 @@
 			display: flex;
 		}
 
+		.brand {
+			margin-left: 0;
+		}
+	}
+
+	/* Smaller screens: compact header */
+	@media (max-width: 768px) {
 		.header-content {
 			padding: 0.75rem 0.75rem;
 			gap: 0.75rem;
@@ -261,22 +269,12 @@
 			gap: 0.5rem;
 		}
 
-		.brand {
-			margin-left: 0;
-		}
-
 		.brand h1 {
 			font-size: 1.15rem;
 		}
 
 		.brand p {
 			font-size: 0.7rem;
-		}
-
-		.bluesky-link svg,
-		.status-link svg {
-			width: 16px;
-			height: 16px;
 		}
 
 		nav {
