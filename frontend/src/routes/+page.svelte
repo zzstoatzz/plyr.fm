@@ -71,9 +71,12 @@
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 
-<main>
-	<PlatformStats />
-	<section class="tracks">
+<div class="page-layout">
+	<aside class="stats-sidebar">
+		<PlatformStats />
+	</aside>
+	<main>
+		<section class="tracks">
 		<h2>
 			<button
 				type="button"
@@ -111,8 +114,35 @@
 		{/if}
 	</section>
 </main>
+</div>
 
 <style>
+	.page-layout {
+		display: flex;
+		justify-content: center;
+		gap: 2rem;
+		max-width: 1200px;
+		margin: 0 auto;
+		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
+	}
+
+	.stats-sidebar {
+		display: none;
+		width: 200px;
+		flex-shrink: 0;
+		padding-top: 1rem;
+	}
+
+	/* Show sidebar on desktop */
+	@media (min-width: 1024px) {
+		.stats-sidebar {
+			display: block;
+			position: sticky;
+			top: 80px;
+			height: fit-content;
+		}
+	}
+
 	.loading-container {
 		display: flex;
 		justify-content: center;
@@ -121,11 +151,8 @@
 
 	main {
 		max-width: 800px;
-		margin: 0 auto;
-		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
+		width: 100%;
+		flex: 1;
 	}
 
 	.tracks h2 {
