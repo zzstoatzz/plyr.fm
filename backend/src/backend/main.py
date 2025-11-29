@@ -1,11 +1,13 @@
 """relay fastapi application."""
 
 import logging
+import re
 import warnings
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -71,6 +73,41 @@ else:
 
 logger = logging.getLogger(__name__)
 
+# pattern to match plyrfm SDK/MCP user-agent headers
+# format: "plyrfm/{version}" or "plyrfm-mcp/{version}"
+_PLYRFM_UA_PATTERN = re.compile(r"^plyrfm(-mcp)?/(\d+\.\d+\.\d+)")
+
+
+def parse_plyrfm_user_agent(user_agent: str | None) -> dict[str, str]:
+    """parse plyrfm SDK/MCP user-agent into span attributes.
+
+    returns dict with:
+        - client_type: "sdk", "mcp", or "browser"
+        - client_version: version string (only for sdk/mcp)
+    """
+    if not user_agent:
+        return {"client_type": "browser"}
+
+    match = _PLYRFM_UA_PATTERN.match(user_agent)
+    if not match:
+        return {"client_type": "browser"}
+
+    is_mcp = match.group(1) is not None  # "-mcp" suffix present
+    version = match.group(2)
+
+    return {
+        "client_type": "mcp" if is_mcp else "sdk",
+        "client_version": version,
+    }
+
+
+def request_attributes_mapper(
+    request: Request | WebSocket, attributes: dict[str, Any], /
+) -> dict[str, Any] | None:
+    """extract client metadata from request headers for span enrichment."""
+    user_agent = request.headers.get("user-agent")
+    return parse_plyrfm_user_agent(user_agent)
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """middleware to add security headers to all responses."""
@@ -134,7 +171,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # instrument fastapi with logfire
 if logfire:
-    logfire.instrument_fastapi(app)
+    logfire.instrument_fastapi(app, request_attributes_mapper=request_attributes_mapper)
 
 # add security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)

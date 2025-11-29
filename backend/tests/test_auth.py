@@ -198,7 +198,7 @@ async def test_exchange_token_cannot_be_reused(db_session: AsyncSession):
     # consume token first time
     result = await consume_exchange_token(token)
     assert result is not None
-    returned_session_id, is_dev_token = result
+    returned_session_id, _is_dev_token = result
     assert returned_session_id == session_id
 
     # try to consume again - should return None

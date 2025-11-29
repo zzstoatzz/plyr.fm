@@ -71,8 +71,8 @@
 	{/if}
 </svelte:head>
 
+<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={() => goto('/login')} />
 <div class="container">
-	<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={() => goto('/login')} />
 	<main>
 		<div class="album-hero">
 			{#if album.metadata.image_url}
