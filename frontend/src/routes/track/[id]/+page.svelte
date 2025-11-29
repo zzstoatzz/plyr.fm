@@ -43,6 +43,37 @@
 		player.currentTrack?.id === track.id && !player.paused
 	);
 
+	// URL regex pattern for linkifying comment text
+	const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+
+	type TextSegment = { type: 'text'; content: string } | { type: 'link'; url: string };
+
+	function parseTextWithLinks(text: string): TextSegment[] {
+		const segments: TextSegment[] = [];
+		let lastIndex = 0;
+		let match: RegExpExecArray | null;
+
+		// reset regex state
+		urlPattern.lastIndex = 0;
+
+		while ((match = urlPattern.exec(text)) !== null) {
+			// add text before the URL
+			if (match.index > lastIndex) {
+				segments.push({ type: 'text', content: text.slice(lastIndex, match.index) });
+			}
+			// add the URL as a link
+			segments.push({ type: 'link', url: match[0] });
+			lastIndex = match.index + match[0].length;
+		}
+
+		// add remaining text after the last URL
+		if (lastIndex < text.length) {
+			segments.push({ type: 'text', content: text.slice(lastIndex) });
+		}
+
+		return segments.length > 0 ? segments : [{ type: 'text', content: text }];
+	}
+
 	async function loadLikedState() {
 		try {
 			const response = await fetch(`${API_URL}/tracks/${track.id}`, {
@@ -507,7 +538,7 @@ $effect(() => {
 											</div>
 										</div>
 									{:else}
-										<p class="comment-text">{comment.text}</p>
+										<p class="comment-text">{#each parseTextWithLinks(comment.text) as segment}{#if segment.type === 'link'}<a href={segment.url} target="_blank" rel="noopener noreferrer" class="comment-link">{segment.url}</a>{:else}{segment.content}{/if}{/each}</p>
 										{#if auth.user?.did === comment.user_did}
 											<div class="comment-actions">
 												<button class="comment-action-btn" onclick={() => startEditing(comment)}>edit</button>
@@ -1060,6 +1091,16 @@ $effect(() => {
 		margin: 0;
 		line-height: 1.4;
 		word-break: break-word;
+	}
+
+	.comment-link {
+		color: var(--accent);
+		text-decoration: none;
+		word-break: break-all;
+	}
+
+	.comment-link:hover {
+		text-decoration: underline;
 	}
 
 	.edited-indicator {

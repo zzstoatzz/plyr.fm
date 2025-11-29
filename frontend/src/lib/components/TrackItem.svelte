@@ -202,7 +202,6 @@
 						href="/track/{track.id}"
 						class="comments"
 						title="view comments"
-						onclick={(e) => e.stopPropagation()}
 					>
 						<svg class="comment-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 							<path d="M2 3h12v8H5l-3 3V3z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
