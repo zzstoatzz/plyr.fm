@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { fade } from 'svelte/transition';
 	import type { PageData } from './$types';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { API_URL } from '$lib/config';
@@ -29,9 +30,9 @@
 
 	let track = $state<Track>(data.track);
 
-	// comments state
+	// comments state - assume enabled until we know otherwise
 	let comments = $state<Comment[]>([]);
-	let commentsEnabled = $state(false);
+	let commentsEnabled = $state<boolean | null>(null); // null = unknown, true/false = known
 	let loadingComments = $state(true);
 	let newCommentText = $state('');
 	let submittingComment = $state(false);
@@ -455,12 +456,12 @@ $effect(() => {
 			</div>
 		</div>
 
-		<!-- comments section -->
-		{#if commentsEnabled}
+		<!-- comments section - show immediately with skeleton loading -->
+		{#if commentsEnabled !== false}
 			<section class="comments-section">
 				<h2 class="comments-title">
 					comments
-					{#if comments.length > 0}
+					{#if !loadingComments && comments.length > 0}
 						<span class="comment-count">({comments.length})</span>
 					{/if}
 				</h2>
@@ -484,75 +485,93 @@ $effect(() => {
 							{submittingComment ? '...' : 'post'}
 						</button>
 					</form>
-				{:else}
+				{:else if !loadingComments}
 					<p class="login-prompt">
 						<a href="/login">log in</a> to leave a comment
 					</p>
 				{/if}
 
-				{#if loadingComments}
-					<div class="comments-loading">loading comments...</div>
-				{:else if comments.length === 0}
-					<div class="no-comments">no comments yet</div>
-				{:else}
-					<div class="comments-list">
-						{#each comments as comment}
-							<div class="comment">
-								<button
-									class="comment-timestamp"
-									onclick={() => seekToTimestamp(comment.timestamp_ms)}
-									title="jump to {formatTimestamp(comment.timestamp_ms)}"
-								>
-									{formatTimestamp(comment.timestamp_ms)}
-								</button>
-								<div class="comment-content">
-									<div class="comment-header">
-										{#if comment.user_avatar_url}
-											<img src={comment.user_avatar_url} alt="" class="comment-avatar" />
-										{:else}
-											<div class="comment-avatar-placeholder"></div>
-										{/if}
-										<a href="/u/{comment.user_handle}" class="comment-author">
-											{comment.user_display_name || comment.user_handle}
-										</a>
-										<span class="comment-separator">•</span>
-										<span class="comment-time" title={new Date(comment.created_at).toLocaleString()}>
-											{formatRelativeTime(comment.created_at)}{#if comment.updated_at}
-												<span class="edited-indicator" title={`edited ${new Date(comment.updated_at).toLocaleString()}`}> (edited)</span>
-											{/if}
-										</span>
-									</div>
-									{#if editingCommentId === comment.id}
-										<div class="comment-edit-form">
-											<input
-												type="text"
-												class="comment-edit-input"
-												bind:value={editingCommentText}
-												maxlength={300}
-												onkeydown={(e) => {
-													if (e.key === 'Enter') saveEdit(comment.id);
-													if (e.key === 'Escape') cancelEditing();
-												}}
-											/>
-											<div class="comment-edit-actions">
-												<button class="edit-form-btn save" onclick={() => saveEdit(comment.id)}>save</button>
-												<button class="edit-form-btn cancel" onclick={cancelEditing}>cancel</button>
+				<div class="comments-container">
+					{#key loadingComments}
+						{#if loadingComments}
+							<div class="comments-list" transition:fade={{ duration: 200 }}>
+								{#each [1, 2, 3] as _}
+									<div class="comment skeleton">
+										<div class="comment-timestamp-skeleton skeleton-bar"></div>
+										<div class="comment-content">
+											<div class="comment-header">
+												<div class="comment-avatar-skeleton skeleton-bar"></div>
+												<div class="comment-author-skeleton skeleton-bar"></div>
+												<div class="comment-time-skeleton skeleton-bar"></div>
 											</div>
+											<div class="comment-text-skeleton skeleton-bar"></div>
 										</div>
-									{:else}
-										<p class="comment-text">{#each parseTextWithLinks(comment.text) as segment}{#if segment.type === 'link'}<a href={segment.url} target="_blank" rel="noopener noreferrer" class="comment-link">{segment.url}</a>{:else}{segment.content}{/if}{/each}</p>
-										{#if auth.user?.did === comment.user_did}
-											<div class="comment-actions">
-												<button class="comment-action-btn" onclick={() => startEditing(comment)}>edit</button>
-												<button class="comment-action-btn delete" onclick={() => deleteComment(comment.id)}>delete</button>
-											</div>
-										{/if}
-									{/if}
-								</div>
+									</div>
+								{/each}
 							</div>
-						{/each}
-					</div>
-				{/if}
+						{:else if comments.length === 0}
+							<div class="no-comments" transition:fade={{ duration: 200 }}>no comments yet</div>
+						{:else}
+							<div class="comments-list" transition:fade={{ duration: 200 }}>
+								{#each comments as comment}
+									<div class="comment">
+										<button
+											class="comment-timestamp"
+											onclick={() => seekToTimestamp(comment.timestamp_ms)}
+											title="jump to {formatTimestamp(comment.timestamp_ms)}"
+										>
+											{formatTimestamp(comment.timestamp_ms)}
+										</button>
+										<div class="comment-content">
+											<div class="comment-header">
+												{#if comment.user_avatar_url}
+													<img src={comment.user_avatar_url} alt="" class="comment-avatar" />
+												{:else}
+													<div class="comment-avatar-placeholder"></div>
+												{/if}
+												<a href="/u/{comment.user_handle}" class="comment-author">
+													{comment.user_display_name || comment.user_handle}
+												</a>
+												<span class="comment-separator">•</span>
+												<span class="comment-time" title={new Date(comment.created_at).toLocaleString()}>
+													{formatRelativeTime(comment.created_at)}{#if comment.updated_at}
+														<span class="edited-indicator" title={`edited ${new Date(comment.updated_at).toLocaleString()}`}> (edited)</span>
+													{/if}
+												</span>
+											</div>
+											{#if editingCommentId === comment.id}
+												<div class="comment-edit-form">
+													<input
+														type="text"
+														class="comment-edit-input"
+														bind:value={editingCommentText}
+														maxlength={300}
+														onkeydown={(e) => {
+															if (e.key === 'Enter') saveEdit(comment.id);
+															if (e.key === 'Escape') cancelEditing();
+														}}
+													/>
+													<div class="comment-edit-actions">
+														<button class="edit-form-btn save" onclick={() => saveEdit(comment.id)}>save</button>
+														<button class="edit-form-btn cancel" onclick={cancelEditing}>cancel</button>
+													</div>
+												</div>
+											{:else}
+												<p class="comment-text">{#each parseTextWithLinks(comment.text) as segment}{#if segment.type === 'link'}<a href={segment.url} target="_blank" rel="noopener noreferrer" class="comment-link">{segment.url}</a>{:else}{segment.content}{/if}{/each}</p>
+												{#if auth.user?.did === comment.user_did}
+													<div class="comment-actions">
+														<button class="comment-action-btn" onclick={() => startEditing(comment)}>edit</button>
+														<button class="comment-action-btn delete" onclick={() => deleteComment(comment.id)}>delete</button>
+													</div>
+												{/if}
+											{/if}
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					{/key}
+				</div>
 			</section>
 		{/if}
 	</main>
@@ -906,7 +925,7 @@ $effect(() => {
 	.comments-section {
 		width: 100%;
 		max-width: 500px;
-		margin-top: 1.5rem;
+		margin: 1.5rem auto 0;
 		padding-top: 1.5rem;
 		border-top: 1px solid #2a2a2a;
 	}
@@ -989,7 +1008,6 @@ $effect(() => {
 		text-decoration: underline;
 	}
 
-	.comments-loading,
 	.no-comments {
 		color: #666;
 		font-size: 0.9rem;
@@ -1003,6 +1021,26 @@ $effect(() => {
 		gap: 0.5rem;
 		max-height: 300px;
 		overflow-y: auto;
+		scrollbar-width: thin;
+		scrollbar-color: #333 #0a0a0a;
+	}
+
+	.comments-list::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.comments-list::-webkit-scrollbar-track {
+		background: #0a0a0a;
+		border-radius: 4px;
+	}
+
+	.comments-list::-webkit-scrollbar-thumb {
+		background: #333;
+		border-radius: 4px;
+	}
+
+	.comments-list::-webkit-scrollbar-thumb:hover {
+		background: #444;
 	}
 
 	.comment {
@@ -1207,6 +1245,76 @@ $effect(() => {
 	.edit-form-btn.cancel:hover {
 		border-color: #666;
 		color: #aaa;
+	}
+
+	/* comments container prevents layout shift during transition */
+	.comments-container {
+		min-height: 120px;
+	}
+
+	/* skeleton loading styles for comments */
+	.comment.skeleton {
+		pointer-events: none;
+	}
+
+	.comment.skeleton:hover {
+		background: #1a1a1a;
+	}
+
+	.skeleton-bar {
+		background: linear-gradient(
+			90deg,
+			#1a1a1a 0%,
+			#242424 50%,
+			#1a1a1a 100%
+		);
+		background-size: 200% 100%;
+		animation: shimmer 1.5s ease-in-out infinite;
+		border-radius: 4px;
+	}
+
+	.comment-timestamp-skeleton {
+		width: 40px;
+		height: 24px;
+		flex-shrink: 0;
+	}
+
+	.comment-avatar-skeleton {
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+	}
+
+	.comment-author-skeleton {
+		width: 80px;
+		height: 14px;
+	}
+
+	.comment-time-skeleton {
+		width: 50px;
+		height: 12px;
+	}
+
+	.comment-text-skeleton {
+		width: 90%;
+		height: 16px;
+		margin-top: 0.25rem;
+	}
+
+	@keyframes shimmer {
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
+	}
+
+	/* respect reduced motion preference */
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-bar {
+			animation: none;
+		}
 	}
 
 	@media (max-width: 768px) {
