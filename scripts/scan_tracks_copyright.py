@@ -5,7 +5,7 @@
 #     "httpx",
 #     "pydantic-settings",
 #     "sqlalchemy[asyncio]",
-#     "psycopg[binary]",
+#     "asyncpg",
 #     "logfire[sqlalchemy]",
 # ]
 # ///
@@ -15,6 +15,7 @@ usage:
     uv run scripts/scan_tracks_copyright.py --env staging
     uv run scripts/scan_tracks_copyright.py --env prod --dry-run
     uv run scripts/scan_tracks_copyright.py --env staging --limit 10
+    uv run scripts/scan_tracks_copyright.py --env prod --max-duration 5
 
 this will:
 - fetch all tracks that haven't been scanned yet
@@ -91,6 +92,41 @@ def setup_env(settings: ScanSettings, env: Environment) -> None:
     os.environ["DATABASE_URL"] = settings.get_database_url(env)
 
 
+async def get_file_size(client: httpx.AsyncClient, url: str) -> int | None:
+    """get file size from HTTP HEAD request."""
+    try:
+        response = await client.head(url, timeout=10.0)
+        content_length = response.headers.get("content-length")
+        if content_length:
+            return int(content_length)
+    except Exception:
+        pass
+    return None
+
+
+def estimate_duration_minutes(file_size_bytes: int, file_type: str) -> float:
+    """estimate audio duration from file size.
+
+    uses high bitrate estimates to avoid OVERestimating duration:
+    - mp3: ~320 kbps (2.4 MB ≈ 1 minute)
+    - m4a/aac: ~256 kbps (1.9 MB ≈ 1 minute)
+    - wav: ~1411 kbps for 16-bit 44.1kHz stereo (10 MB ≈ 1 minute)
+    - flac: ~1000 kbps high quality (7.5 MB ≈ 1 minute)
+    """
+    mb = file_size_bytes / (1024 * 1024)
+
+    if file_type == "mp3":
+        return mb / 2.4  # ~2.4 MB per minute at 320kbps
+    elif file_type in ("m4a", "aac"):
+        return mb / 1.9  # ~1.9 MB per minute at 256kbps
+    elif file_type == "wav":
+        return mb / 10  # ~10 MB per minute for CD quality
+    elif file_type == "flac":
+        return mb / 7.5  # ~7.5 MB per minute high quality
+    else:
+        return mb / 2.4  # default to mp3-like estimate
+
+
 async def scan_track(
     client: httpx.AsyncClient,
     settings: ScanSettings,
@@ -111,6 +147,7 @@ async def run_scan(
     env: Environment,
     dry_run: bool = False,
     limit: int | None = None,
+    max_duration: float | None = None,
 ) -> None:
     """scan all tracks for copyright."""
     # load settings
@@ -165,16 +202,43 @@ async def run_scan(
             return
 
         print(f"\n📋 found {len(tracks)} tracks to scan")
+        if max_duration:
+            print(f"⏱️  skipping tracks > {max_duration} minutes")
 
         if dry_run:
-            print("\n[DRY RUN] would scan:")
-            for track in tracks:
-                print(f"  - {track.id}: {track.title} by @{track.artist.handle}")
+            print("\n[DRY RUN] checking tracks...")
+            async with httpx.AsyncClient() as client:
+                would_scan = []
+                would_skip = []
+                for track in tracks:
+                    if max_duration and track.r2_url:
+                        file_size = await get_file_size(client, track.r2_url)
+                        if file_size:
+                            est_duration = estimate_duration_minutes(
+                                file_size, track.file_type
+                            )
+                            if est_duration > max_duration:
+                                would_skip.append((track, file_size, est_duration))
+                                continue
+                    would_scan.append(track)
+
+                print(f"\nwould scan ({len(would_scan)}):")
+                for track in would_scan:
+                    print(f"  - {track.id}: {track.title} by @{track.artist.handle}")
+
+                if would_skip:
+                    print(f"\nwould skip ({len(would_skip)}):")
+                    for track, size, duration in would_skip:
+                        print(
+                            f"  - {track.id}: {track.title} "
+                            f"({size / (1024 * 1024):.1f} MB, ~{duration:.1f} min)"
+                        )
             return
 
         # scan tracks
         async with httpx.AsyncClient() as client:
             scanned = 0
+            skipped = 0
             failed = 0
             flagged = 0
 
@@ -182,6 +246,22 @@ async def run_scan(
                 print(f"\n[{i}/{len(tracks)}] scanning: {track.title}")
                 print(f"  artist: @{track.artist.handle}")
                 print(f"  url: {track.r2_url}")
+
+                # check duration if max_duration is set
+                if max_duration and track.r2_url:
+                    file_size = await get_file_size(client, track.r2_url)
+                    if file_size:
+                        est_duration = estimate_duration_minutes(
+                            file_size, track.file_type
+                        )
+                        print(
+                            f"  size: {file_size / (1024 * 1024):.1f} MB, "
+                            f"est. duration: {est_duration:.1f} min"
+                        )
+                        if est_duration > max_duration:
+                            print(f"  ⏭️  skipped (>{max_duration} min)")
+                            skipped += 1
+                            continue
 
                 try:
                     result = await scan_track(client, settings, track.r2_url)
@@ -224,6 +304,7 @@ async def run_scan(
         print("✅ scan complete")
         print(f"   scanned: {scanned}")
         print(f"   flagged: {flagged}")
+        print(f"   skipped: {skipped}")
         print(f"   failed: {failed}")
 
 
@@ -250,13 +331,19 @@ def main() -> None:
         default=None,
         help="limit number of tracks to scan",
     )
+    parser.add_argument(
+        "--max-duration",
+        type=float,
+        default=None,
+        help="skip tracks longer than this many minutes (estimated from file size)",
+    )
 
     args = parser.parse_args()
 
     print(f"🔍 copyright scan - {args.env}")
     print("=" * 50)
 
-    asyncio.run(run_scan(args.env, args.dry_run, args.limit))
+    asyncio.run(run_scan(args.env, args.dry_run, args.limit, args.max_duration))
 
 
 if __name__ == "__main__":
