@@ -3,7 +3,7 @@
 use axum::{extract::State, response::Html, Json};
 use serde::{Deserialize, Serialize};
 
-use crate::AppError;
+use crate::state::{AppError, AppState};
 
 /// A flagged track pending review.
 #[derive(Debug, Serialize)]
@@ -43,7 +43,7 @@ pub struct ResolveResponse {
 
 /// List all flagged tracks (copyright-violation labels without negations).
 pub async fn list_flagged(
-    State(state): State<crate::AppState>,
+    State(state): State<AppState>,
 ) -> Result<Json<ListFlaggedResponse>, AppError> {
     let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
 
@@ -54,7 +54,7 @@ pub async fn list_flagged(
 
 /// Resolve (negate) a copyright flag, marking it as a false positive.
 pub async fn resolve_flag(
-    State(state): State<crate::AppState>,
+    State(state): State<AppState>,
     Json(request): Json<ResolveRequest>,
 ) -> Result<Json<ResolveResponse>, AppError> {
     let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
