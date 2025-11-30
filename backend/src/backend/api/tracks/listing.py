@@ -17,7 +17,7 @@ from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
     get_comment_counts,
-    get_copyright_flags,
+    get_copyright_info,
     get_like_counts,
 )
 
@@ -59,12 +59,12 @@ async def list_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    # batch fetch like, comment counts and copyright flags for all tracks
+    # batch fetch like, comment counts and copyright info for all tracks
     track_ids = [track.id for track in tracks]
-    like_counts, comment_counts, copyright_flags = await asyncio.gather(
+    like_counts, comment_counts, copyright_info = await asyncio.gather(
         get_like_counts(db, track_ids),
         get_comment_counts(db, track_ids),
-        get_copyright_flags(db, track_ids),
+        get_copyright_info(db, track_ids),
     )
 
     # use cached PDS URLs with fallback on failure
@@ -162,7 +162,7 @@ async def list_tracks(
                 liked_track_ids,
                 like_counts,
                 comment_counts,
-                copyright_flags,
+                copyright_info,
             )
             for track in tracks
         ]
@@ -187,14 +187,14 @@ async def list_my_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    # batch fetch copyright flags
+    # batch fetch copyright info
     track_ids = [track.id for track in tracks]
-    copyright_flags = await get_copyright_flags(db, track_ids)
+    copyright_info = await get_copyright_info(db, track_ids)
 
     # fetch all track responses concurrently
     track_responses = await asyncio.gather(
         *[
-            TrackResponse.from_track(track, copyright_flags=copyright_flags)
+            TrackResponse.from_track(track, copyright_info=copyright_info)
             for track in tracks
         ]
     )
@@ -231,14 +231,14 @@ async def list_broken_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    # batch fetch copyright flags
+    # batch fetch copyright info
     track_ids = [track.id for track in tracks]
-    copyright_flags = await get_copyright_flags(db, track_ids)
+    copyright_info = await get_copyright_info(db, track_ids)
 
     # fetch all track responses concurrently
     track_responses = await asyncio.gather(
         *[
-            TrackResponse.from_track(track, copyright_flags=copyright_flags)
+            TrackResponse.from_track(track, copyright_info=copyright_info)
             for track in tracks
         ]
     )

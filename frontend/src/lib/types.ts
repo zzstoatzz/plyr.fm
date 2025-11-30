@@ -45,6 +45,7 @@ export interface Track {
 	image_url?: string;
 	is_liked?: boolean;
 	copyright_flagged?: boolean | null; // null = not scanned, false = clear, true = flagged
+	copyright_match?: string | null; // "Title by Artist" of primary match
 }
 
 export interface User {

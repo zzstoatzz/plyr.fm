@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from backend.models import Album, Track
+from backend.utilities.aggregations import CopyrightInfo
 
 
 class AlbumSummary(BaseModel):
@@ -66,6 +67,7 @@ class TrackResponse(BaseModel):
     copyright_flagged: bool | None = (
         None  # None = not scanned, False = clear, True = flagged
     )
+    copyright_match: str | None = None  # "Title by Artist" of primary match
 
     @classmethod
     async def from_track(
@@ -75,7 +77,7 @@ class TrackResponse(BaseModel):
         liked_track_ids: set[int] | None = None,
         like_counts: dict[int, int] | None = None,
         comment_counts: dict[int, int] | None = None,
-        copyright_flags: dict[int, bool] | None = None,
+        copyright_info: dict[int, CopyrightInfo] | None = None,
     ) -> "TrackResponse":
         """build track response from Track model.
 
@@ -85,7 +87,7 @@ class TrackResponse(BaseModel):
             liked_track_ids: optional set of liked track IDs for this user
             like_counts: optional dict of track_id -> like_count
             comment_counts: optional dict of track_id -> comment_count
-            copyright_flags: optional dict of track_id -> is_flagged (None if not scanned)
+            copyright_info: optional dict of track_id -> CopyrightInfo
         """
         # check if user has liked this track
         is_liked = liked_track_ids is not None and track.id in liked_track_ids
@@ -121,8 +123,10 @@ class TrackResponse(BaseModel):
                 f"&rkey={rkey}"
             )
 
-        # get copyright flag status (None if not in dict = not scanned)
-        copyright_flagged = copyright_flags.get(track.id) if copyright_flags else None
+        # get copyright info (None if not in dict = not scanned)
+        track_copyright = copyright_info.get(track.id) if copyright_info else None
+        copyright_flagged = track_copyright.is_flagged if track_copyright else None
+        copyright_match = track_copyright.primary_match if track_copyright else None
 
         return cls(
             id=track.id,
@@ -144,4 +148,5 @@ class TrackResponse(BaseModel):
             comment_count=comment_count,
             album=album_data,
             copyright_flagged=copyright_flagged,
+            copyright_match=copyright_match,
         )
