@@ -6,6 +6,7 @@
 #     "pydantic-settings",
 #     "sqlalchemy[asyncio]",
 #     "psycopg[binary]",
+#     "logfire[sqlalchemy]",
 # ]
 # ///
 """scan all tracks for copyright using the moderation service.

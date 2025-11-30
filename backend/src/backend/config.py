@@ -373,6 +373,34 @@ class ObservabilitySettings(AppSettingsSection):
     )
 
 
+class ModerationSettings(AppSettingsSection):
+    """Moderation service configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="MODERATION_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable copyright scanning on upload",
+    )
+    service_url: str = Field(
+        default="https://plyr-moderation.fly.dev",
+        description="URL of the moderation service",
+    )
+    auth_token: str = Field(
+        default="",
+        description="Auth token for moderation service (X-Moderation-Key header)",
+    )
+    timeout_seconds: int = Field(
+        default=300,
+        description="Timeout for moderation service requests",
+    )
+
+
 class RateLimitSettings(AppSettingsSection):
     """Rate limiting configuration."""
 
@@ -449,6 +477,10 @@ class Settings(AppSettingsSection):
     notify: NotificationSettings = Field(
         default_factory=NotificationSettings,
         description="Notification settings",
+    )
+    moderation: ModerationSettings = Field(
+        default_factory=ModerationSettings,
+        description="Moderation service settings",
     )
 
 
