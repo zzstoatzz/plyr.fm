@@ -25,6 +25,7 @@ use tokio::{net::TcpListener, sync::broadcast};
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::{error, info, warn};
 
+mod admin;
 mod db;
 mod labels;
 
@@ -237,6 +238,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/scan", post(scan))
         // Label emission (internal API)
         .route("/emit-label", post(emit_label))
+        // Admin UI and API
+        .route("/admin", get(admin::admin_ui))
+        .route("/admin/flags", get(admin::list_flagged))
+        .route("/admin/resolve", post(admin::resolve_flag))
         // ATProto XRPC endpoints (public)
         .route("/xrpc/com.atproto.label.queryLabels", get(query_labels))
         .route(
