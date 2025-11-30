@@ -29,6 +29,7 @@ from backend._internal.atproto.handles import resolve_handle
 from backend._internal.audio import AudioFormat
 from backend._internal.image import ImageFormat
 from backend._internal.jobs import job_service
+from backend._internal.moderation import scan_track_for_copyright
 from backend.config import settings
 from backend.models import Artist, Track
 from backend.models.job import JobStatus, JobType
@@ -345,6 +346,15 @@ async def _process_upload_background(
                     except Exception as e:
                         logger.warning(
                             f"failed to send notification for track {track.id}: {e}"
+                        )
+
+                    # kick off copyright scan in background (fire-and-forget)
+                    # this runs independently and doesn't affect the upload result
+                    if r2_url:
+                        # intentionally not storing reference - scan failures are logged
+                        # but shouldn't affect the upload result
+                        asyncio.create_task(  # noqa: RUF006
+                            scan_track_for_copyright(track.id, r2_url)
                         )
 
                     await job_service.update_progress(
