@@ -19,6 +19,9 @@ async def scan_track_for_copyright(track_id: int, audio_url: str) -> None:
     this runs as a fire-and-forget background task. failures are logged
     but do not affect the upload flow.
 
+    if the scan fails (e.g., audio too short, unreadable format), we store
+    a "clear" result with the error info so the track isn't stuck unscanned.
+
     args:
         track_id: database ID of the track to scan
         audio_url: public URL of the audio file (R2)
@@ -40,12 +43,14 @@ async def scan_track_for_copyright(track_id: int, audio_url: str) -> None:
             result = await _call_moderation_service(audio_url)
             await _store_scan_result(track_id, result)
         except Exception as e:
-            logger.error(
-                "copyright scan failed for track %d: %s",
+            logger.warning(
+                "copyright scan failed for track %d: %s - storing as clear",
                 track_id,
                 e,
-                exc_info=True,
             )
+            # store as "clear" with error info so track doesn't stay unscanned
+            # this handles cases like: audio too short, unreadable format, etc.
+            await _store_scan_error(track_id, str(e))
             # don't re-raise - this is fire-and-forget
 
 
@@ -98,4 +103,32 @@ async def _store_scan_result(track_id: int, result: dict[str, Any]) -> None:
             is_flagged=scan.is_flagged,
             highest_score=scan.highest_score,
             match_count=len(scan.matches),
+        )
+
+
+async def _store_scan_error(track_id: int, error: str) -> None:
+    """store a scan error as a clear result.
+
+    when the moderation service can't process a file (too short, bad format, etc.),
+    we still want to record that we tried so the track isn't stuck in limbo.
+
+    args:
+        track_id: database ID of the track
+        error: error message from the failed scan
+    """
+    async with db_session() as db:
+        scan = CopyrightScan(
+            track_id=track_id,
+            is_flagged=False,
+            highest_score=0,
+            matches=[],
+            raw_response={"error": error, "status": "scan_failed"},
+        )
+        db.add(scan)
+        await db.commit()
+
+        logfire.info(
+            "copyright scan error stored as clear",
+            track_id=track_id,
+            error=error,
         )

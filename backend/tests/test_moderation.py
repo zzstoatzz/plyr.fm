@@ -188,8 +188,29 @@ async def test_scan_track_no_auth_token() -> None:
             mock_call.assert_not_called()
 
 
-async def test_scan_track_service_error_does_not_raise() -> None:
-    """test that service errors are logged but don't propagate."""
+async def test_scan_track_service_error_stores_as_clear(
+    db_session: AsyncSession,
+) -> None:
+    """test that service errors are stored as clear results."""
+    # create test artist and track
+    artist = Artist(
+        did="did:plc:errortest",
+        handle="errortest.bsky.social",
+        display_name="Error Test User",
+    )
+    db_session.add(artist)
+    await db_session.commit()
+
+    track = Track(
+        title="Error Test Track",
+        file_id="error_test_file",
+        file_type="mp3",
+        artist_did=artist.did,
+        r2_url="https://example.com/short.mp3",
+    )
+    db_session.add(track)
+    await db_session.commit()
+
     with patch("backend._internal.moderation.settings") as mock_settings:
         mock_settings.moderation.enabled = True
         mock_settings.moderation.auth_token = "test-token"
@@ -199,13 +220,25 @@ async def test_scan_track_service_error_does_not_raise() -> None:
             new_callable=AsyncMock,
         ) as mock_call:
             mock_call.side_effect = httpx.HTTPStatusError(
-                "500 error",
+                "502 error",
                 request=AsyncMock(),
-                response=AsyncMock(status_code=500),
+                response=AsyncMock(status_code=502),
             )
 
-            # should not raise - fire and forget
-            await scan_track_for_copyright(1, "https://example.com/audio.mp3")
+            # should not raise - stores error as clear
+            await scan_track_for_copyright(track.id, "https://example.com/short.mp3")
+
+    # verify scan was stored as clear with error info
+    result = await db_session.execute(
+        select(CopyrightScan).where(CopyrightScan.track_id == track.id)
+    )
+    scan = result.scalar_one()
+
+    assert scan.is_flagged is False
+    assert scan.highest_score == 0
+    assert scan.matches == []
+    assert "error" in scan.raw_response
+    assert scan.raw_response["status"] == "scan_failed"
 
 
 async def test_scan_track_full_flow(
