@@ -4,7 +4,6 @@
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
-	import EndOfList from '$lib/components/EndOfList.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
@@ -107,7 +106,6 @@
 					/>
 				{/each}
 			</div>
-			<EndOfList />
 		{/if}
 	</section>
 </main>
