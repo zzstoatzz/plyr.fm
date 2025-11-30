@@ -8,23 +8,26 @@ technical documentation for the copyright scanning system.
 upload completes
        │
        ▼
-┌──────────────┐     ┌─────────────┐     ┌──────────────┐
-│   backend    │────▶│  AuDD API   │────▶│   database   │
-│ (background) │     │             │     │ (copyright_  │
-│              │◀────│             │     │    flags)    │
-└──────────────┘     └─────────────┘     └──────────────┘
-                           │
-                           ▼
-                    music recognition
-                    against licensed
-                    database
+┌──────────────┐     ┌─────────────────┐     ┌─────────────┐
+│   backend    │────▶│   moderation    │────▶│  AuDD API   │
+│ (background) │     │   service       │     │             │
+│              │◀────│   (Rust)        │◀────│             │
+└──────────────┘     └─────────────────┘     └─────────────┘
+       │                    │
+       │                    │ if flagged
+       ▼                    ▼
+┌──────────────┐     ┌─────────────────┐
+│ copyright_   │     │  ATProto label  │
+│ scans table  │     │  emission       │
+└──────────────┘     └─────────────────┘
 ```
 
 1. track upload completes, file stored in R2
-2. background job sends R2 URL to AuDD API
-3. AuDD scans file against their music database
-4. results stored in `copyright_flags` table
-5. admin can query flagged tracks
+2. backend calls moderation service `/scan` endpoint with R2 URL
+3. moderation service calls AuDD API for music recognition
+4. results returned to backend, stored in `copyright_scans` table
+5. if flagged, backend calls `/emit-label` to create ATProto label
+6. label stored in moderation service's `labels` table
 
 ## AuDD API
 
@@ -81,56 +84,80 @@ curl -X POST https://api.audd.io/ \
 
 ## database schema
 
+### backend: copyright_scans table
+
 ```sql
-CREATE TABLE copyright_flags (
+CREATE TABLE copyright_scans (
     id SERIAL PRIMARY KEY,
     track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
 
-    -- status: pending | scanning | clear | flagged | error
-    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    is_flagged BOOLEAN NOT NULL DEFAULT FALSE,
+    highest_score INTEGER NOT NULL DEFAULT 0,
+    matches JSONB NOT NULL DEFAULT '[]',      -- [{artist, title, score, isrc}]
+    raw_response JSONB NOT NULL DEFAULT '{}', -- full API response
 
-    -- AuDD data
-    audd_response JSONB,        -- full API response
-    matched_tracks JSONB,       -- [{artist, title, score, isrc}]
-    confidence_score INTEGER,   -- highest match score (0-100)
-
-    -- timestamps
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    scanned_at TIMESTAMPTZ,
-    resolved_at TIMESTAMPTZ,
-
-    -- metadata
-    scanned_by VARCHAR(50),     -- 'audd', 'manual'
-    error_message TEXT,
 
     UNIQUE(track_id)
 );
 ```
 
-### status meanings
+### moderation service: labels table
 
-| status | description |
-|--------|-------------|
-| `pending` | awaiting scan |
-| `scanning` | scan in progress |
-| `clear` | no matches above threshold |
-| `flagged` | matches found above threshold |
-| `error` | scan failed |
+```sql
+CREATE TABLE labels (
+    id BIGSERIAL PRIMARY KEY,
+    seq BIGSERIAL UNIQUE NOT NULL,           -- monotonic sequence for subscriptions
+    src TEXT NOT NULL,                        -- labeler DID
+    uri TEXT NOT NULL,                        -- target AT URI
+    cid TEXT,                                 -- optional target CID
+    val TEXT NOT NULL,                        -- label value (e.g., "copyright-violation")
+    neg BOOLEAN NOT NULL DEFAULT FALSE,       -- negation (for revoking labels)
+    cts TIMESTAMPTZ NOT NULL,                 -- creation timestamp
+    exp TIMESTAMPTZ,                          -- optional expiration
+    sig BYTEA NOT NULL,                       -- secp256k1 signature
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### scan result states
+
+| is_flagged | highest_score | meaning |
+|------------|---------------|---------|
+| `false` | 0 | no matches found |
+| `false` | 0 | scan failed (error in raw_response) |
+| `true` | > 0 | matches found, label emitted |
 
 ## configuration
 
+### backend environment variables
+
 ```bash
-# required
-AUDD_API_TOKEN=your_token_here
+# moderation service connection
+MODERATION_SERVICE_URL=https://moderation.plyr.fm
+MODERATION_AUTH_TOKEN=shared_secret_token
+MODERATION_TIMEOUT_SECONDS=300
+MODERATION_ENABLED=true
 
-# optional (have defaults)
-AUDD_API_URL=https://api.audd.io/
-AUDD_TIMEOUT_SECONDS=300
+# labeler URL (for emitting labels after scan)
+MODERATION_LABELER_URL=https://moderation.plyr.fm
+```
 
-# scan behavior
-MODERATION_SCORE_THRESHOLD=70   # flag if score >= this
-MODERATION_AUTO_SCAN=true       # scan on upload
-MODERATION_ENABLED=true         # master switch
+### moderation service environment variables
+
+```bash
+# AuDD API
+AUDD_API_KEY=your_audd_token
+
+# database
+DATABASE_URL=postgres://...
+
+# labeler identity
+LABELER_DID=did:plc:your-labeler-did
+LABELER_SIGNING_KEY=hex-encoded-secp256k1-private-key
+
+# auth
+MODERATION_AUTH_TOKEN=shared_secret_token
 ```
 
 ## interpreting results
@@ -196,6 +223,34 @@ WHERE cf.id IS NULL OR cf.status = 'pending'
 ORDER BY t.created_at DESC;
 ```
 
+## querying labels
+
+labels can be queried via standard ATProto XRPC endpoints:
+
+```bash
+# query labels for a specific track
+curl "https://moderation.plyr.fm/xrpc/com.atproto.label.queryLabels?uriPatterns=at://did:plc:artist/fm.plyr.track/*"
+
+# query all labels from our labeler
+curl "https://moderation.plyr.fm/xrpc/com.atproto.label.queryLabels?sources=did:plc:plyr-labeler"
+```
+
+response:
+
+```json
+{
+  "labels": [
+    {
+      "src": "did:plc:plyr-labeler",
+      "uri": "at://did:plc:artist/fm.plyr.track/abc123",
+      "val": "copyright-violation",
+      "cts": "2025-11-30T12:00:00.000Z",
+      "sig": "base64-encoded-signature"
+    }
+  ]
+}
+```
+
 ## future considerations
 
 ### batch scanning existing tracks
@@ -206,28 +261,16 @@ async def backfill_scans():
     async with get_session() as session:
         unscanned = await session.execute(
             select(Track)
-            .outerjoin(CopyrightFlag)
-            .where(CopyrightFlag.id.is_(None))
+            .outerjoin(CopyrightScan)
+            .where(CopyrightScan.id.is_(None))
         )
         for track in unscanned.scalars():
             await scan_track_for_copyright(track.id, track.r2_url)
 ```
 
-### ATProto labels
+### label subscriptions
 
-future integration could publish copyright status as ATProto labels:
-
-```json
-{
-  "$type": "com.atproto.label.defs#label",
-  "src": "did:plc:plyr-moderation",
-  "uri": "at://did:plc:artist/fm.plyr.track/abc123",
-  "val": "copyright-flagged",
-  "cts": "2025-11-24T12:00:00Z"
-}
-```
-
-this would allow other apps in the ATProto ecosystem to see and act on our moderation signals.
+the moderation service exposes `com.atproto.label.subscribeLabels` for real-time label streaming. apps can subscribe to receive new labels as they're created.
 
 ### user-facing appeals
 
@@ -235,4 +278,13 @@ eventual flow:
 1. artist sees flag on their track
 2. artist submits dispute with evidence (license, original work proof)
 3. admin reviews dispute
-4. flag status updated to `resolved` or `confirmed`
+4. if resolved: emit negation label (`neg: true`) to revoke the original
+
+### admin dashboard
+
+considerations for where to build the admin UI:
+- **option A**: add to main frontend (plyr.fm/admin) - simpler, reuse existing auth
+- **option B**: separate UI on moderation service - isolated, but needs its own auth
+- **option C**: use Ozone - Bluesky's open-source moderation tool, already built for ATProto labels
+
+see [overview.md](./overview.md) for architecture discussion.
