@@ -91,26 +91,141 @@ future possibilities:
 - configurable thresholds per user/context
 - integration with ATProto labeling
 
+## architecture
+
+### current implementation
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          upload flow                                     │
+└─────────────────────────────────────────────────────────────────────────┘
+
+    track upload
+         │
+         ▼
+┌─────────────────┐      ┌──────────────────┐      ┌─────────────────┐
+│  plyr backend   │─────▶│   moderation     │─────▶│     AuDD        │
+│  (FastAPI)      │      │   service (Rust) │      │  (recognition)  │
+└─────────────────┘      └──────────────────┘      └─────────────────┘
+         │                        │
+         │                        ▼
+         │               ┌──────────────────┐
+         │               │  if flagged:     │
+         │               │  emit ATProto    │
+         │               │  label           │
+         │               └──────────────────┘
+         │                        │
+         ▼                        ▼
+┌─────────────────┐      ┌──────────────────┐
+│  copyright_scans│      │  labels table    │
+│  (postgres)     │      │  (postgres)      │
+└─────────────────┘      └──────────────────┘
+```
+
+### components
+
+1. **plyr backend** - triggers scans on upload, stores results in `copyright_scans`
+2. **moderation service** - Rust service that wraps AuDD and emits ATProto labels
+3. **ATProto labeler** - signed labels queryable via `com.atproto.label.queryLabels`
+
+### ATProto label integration
+
+labels are **signed data objects** (not repository records) that follow the AT Protocol labeling spec. when a track is flagged:
+
+1. backend stores scan result in `copyright_scans` table
+2. backend calls moderation service `/emit-label` endpoint
+3. moderation service creates signed label with DID key
+4. label stored in moderation service's `labels` table
+5. label queryable via standard ATProto XRPC endpoints
+
+this means other apps in the ATProto ecosystem can query our labels and apply their own enforcement policies.
+
+```json
+{
+  "$type": "com.atproto.label.defs#label",
+  "src": "did:plc:plyr-labeler",
+  "uri": "at://did:plc:artist/fm.plyr.track/abc123",
+  "val": "copyright-violation",
+  "cts": "2025-11-30T12:00:00Z",
+  "sig": "<secp256k1 signature>"
+}
+```
+
 ## what we're building
 
-### phase 1: detection infrastructure
+### phase 1: detection infrastructure ✅
 
-- `copyright_flags` table storing scan results
-- AuDD integration for music recognition
+- `copyright_scans` table storing scan results
+- AuDD integration via moderation service
 - background job triggered on upload
-- admin endpoints to query flagged tracks
+- ATProto label emission for flagged tracks
 
-### phase 2: visibility
+### phase 2: visibility (in progress)
 
 - admin dashboard for reviewing flags
-- stats and trends
-- manual rescan capability
+- stats and trends via Logfire
+- label query endpoints
 
 ### phase 3: user-facing (future)
 
 - artists see flags on their own tracks
 - dispute/appeal workflow
 - notification on flag status change
+- label negation for resolved disputes
+
+## admin UI considerations
+
+the admin interface for managing moderation needs to live somewhere. three options:
+
+### option A: main frontend (plyr.fm/admin)
+
+**pros:**
+- reuse existing auth (session cookies, artist roles)
+- shared component library
+- single deployment
+- direct database access to both `tracks` and `copyright_scans`
+
+**cons:**
+- admin code bundled with user-facing app
+- moderation logic spread across frontend + backend
+- harder to open-source separately
+
+### option B: separate UI on moderation service
+
+**pros:**
+- isolated deployment
+- moderation service becomes self-contained
+- could expose admin API alongside XRPC endpoints
+
+**cons:**
+- needs its own auth system
+- Rust service now needs to serve HTML/JS (or add another service)
+- queries `labels` table but needs to call backend API for track details
+
+### option C: use Ozone
+
+[Ozone](https://github.com/bluesky-social/ozone) is Bluesky's open-source moderation tool, designed for ATProto labelers.
+
+**pros:**
+- battle-tested, feature-complete
+- team review workflows built-in
+- ATProto-native (speaks labeler protocol)
+- would work with our existing label endpoints
+
+**cons:**
+- designed for Bluesky's needs, not music-specific
+- may need customization for copyright review workflow
+- another service to deploy
+
+### recommendation
+
+**option A (main frontend)** is simplest for MVP:
+- add `/admin` routes protected by role check
+- query `copyright_scans` + `tracks` for review UI
+- admin can emit negation labels via backend API
+- later: extract to separate service if needed
+
+the moderation service stays focused on scanning + labeling. the backend + frontend handle the human review workflow.
 
 ## references
 
@@ -121,4 +236,5 @@ future possibilities:
 
 ## related documentation
 
-- [copyright-detection.md](./copyright-detection.md) - technical implementation details
+- [copyright-detection.md](./copyright-detection.md) - scan flow and database schema
+- [atproto-labeler.md](./atproto-labeler.md) - labeler service endpoints and signing
