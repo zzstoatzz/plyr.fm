@@ -5,11 +5,23 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
-axum = { version = "0.7", features = ["macros", "json"] }
+axum = { version = "0.7", features = ["macros", "json", "ws"] }
+bytes = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+hex = "0.4"
+k256 = { version = "0.13", features = ["ecdsa"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_bytes = "0.11"
+serde_ipld_dagcbor = "0.6"
 serde_json = "1.0"
-thiserror = "1.0"
-tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "signal"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono", "tls-rustls"] }
+thiserror = "2.0"
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "signal", "sync"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+rand = "0.8"

@@ -5,9 +5,10 @@ from typing import Any
 
 import httpx
 import logfire
+from sqlalchemy import select
 
 from backend.config import settings
-from backend.models import CopyrightScan
+from backend.models import CopyrightScan, Track
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -87,9 +88,11 @@ async def _store_scan_result(track_id: int, result: dict[str, Any]) -> None:
         result: scan result from moderation service
     """
     async with db_session() as db:
+        is_flagged = result.get("is_flagged", False)
+
         scan = CopyrightScan(
             track_id=track_id,
-            is_flagged=result.get("is_flagged", False),
+            is_flagged=is_flagged,
             highest_score=result.get("highest_score", 0),
             matches=result.get("matches", []),
             raw_response=result.get("raw_response", {}),
@@ -104,6 +107,46 @@ async def _store_scan_result(track_id: int, result: dict[str, Any]) -> None:
             highest_score=scan.highest_score,
             match_count=len(scan.matches),
         )
+
+        # emit ATProto label if flagged
+        if is_flagged:
+            track = await db.scalar(select(Track).where(Track.id == track_id))
+            if track and track.atproto_record_uri:
+                await _emit_copyright_label(
+                    uri=track.atproto_record_uri,
+                    cid=track.atproto_record_cid,
+                )
+
+
+async def _emit_copyright_label(uri: str, cid: str | None) -> None:
+    """emit a copyright-violation label to the ATProto labeler service.
+
+    this is fire-and-forget - failures are logged but don't affect the scan result.
+
+    args:
+        uri: AT URI of the track record
+        cid: optional CID of the record
+    """
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            response = await client.post(
+                f"{settings.moderation.labeler_url}/emit-label",
+                json={
+                    "uri": uri,
+                    "val": "copyright-violation",
+                    "cid": cid,
+                },
+                headers={"X-Moderation-Key": settings.moderation.auth_token},
+            )
+            response.raise_for_status()
+
+            logfire.info(
+                "copyright label emitted",
+                uri=uri,
+                cid=cid,
+            )
+    except Exception as e:
+        logger.warning("failed to emit copyright label for %s: %s", uri, e)
 
 
 async def _store_scan_error(track_id: int, error: str) -> None:
