@@ -399,6 +399,10 @@ class ModerationSettings(AppSettingsSection):
         default=300,
         description="Timeout for moderation service requests",
     )
+    labeler_url: str = Field(
+        default="https://moderation.plyr.fm",
+        description="URL of the ATProto labeler service for emitting labels",
+    )
 
 
 class RateLimitSettings(AppSettingsSection):

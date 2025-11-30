@@ -122,6 +122,80 @@ async def test_store_scan_result_flagged(
     assert scan.matches[0]["artist"] == "Test Artist"
 
 
+async def test_store_scan_result_flagged_emits_label(
+    db_session: AsyncSession,
+    mock_moderation_response: dict,
+) -> None:
+    """test that flagged scan result emits ATProto label."""
+    # create test artist and track with ATProto URI
+    artist = Artist(
+        did="did:plc:labelertest",
+        handle="labeler.bsky.social",
+        display_name="Labeler Test User",
+    )
+    db_session.add(artist)
+    await db_session.commit()
+
+    track = Track(
+        title="Labeler Test Track",
+        file_id="labeler_test_file",
+        file_type="mp3",
+        artist_did=artist.did,
+        r2_url="https://example.com/audio.mp3",
+        atproto_record_uri="at://did:plc:labelertest/fm.plyr.track/abc123",
+        atproto_record_cid="bafyreiabc123",
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    with patch(
+        "backend._internal.moderation._emit_copyright_label",
+        new_callable=AsyncMock,
+    ) as mock_emit:
+        await _store_scan_result(track.id, mock_moderation_response)
+
+        # verify label emission was called
+        mock_emit.assert_called_once_with(
+            uri="at://did:plc:labelertest/fm.plyr.track/abc123",
+            cid="bafyreiabc123",
+        )
+
+
+async def test_store_scan_result_flagged_no_atproto_uri_skips_label(
+    db_session: AsyncSession,
+    mock_moderation_response: dict,
+) -> None:
+    """test that flagged scan without ATProto URI skips label emission."""
+    # create test artist and track without ATProto URI
+    artist = Artist(
+        did="did:plc:nouri",
+        handle="nouri.bsky.social",
+        display_name="No URI User",
+    )
+    db_session.add(artist)
+    await db_session.commit()
+
+    track = Track(
+        title="No URI Track",
+        file_id="nouri_file",
+        file_type="mp3",
+        artist_did=artist.did,
+        r2_url="https://example.com/audio.mp3",
+        # no atproto_record_uri
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    with patch(
+        "backend._internal.moderation._emit_copyright_label",
+        new_callable=AsyncMock,
+    ) as mock_emit:
+        await _store_scan_result(track.id, mock_moderation_response)
+
+        # label emission should not be called
+        mock_emit.assert_not_called()
+
+
 async def test_store_scan_result_clear(
     db_session: AsyncSession,
     mock_clear_response: dict,
