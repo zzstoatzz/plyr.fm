@@ -15,7 +15,11 @@ from backend._internal import require_auth
 from backend._internal.auth import get_session
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
-from backend.utilities.aggregations import get_comment_counts, get_like_counts
+from backend.utilities.aggregations import (
+    get_comment_counts,
+    get_copyright_flags,
+    get_like_counts,
+)
 
 from .router import router
 
@@ -55,11 +59,12 @@ async def list_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    # batch fetch like and comment counts for all tracks
+    # batch fetch like, comment counts and copyright flags for all tracks
     track_ids = [track.id for track in tracks]
-    like_counts, comment_counts = await asyncio.gather(
+    like_counts, comment_counts, copyright_flags = await asyncio.gather(
         get_like_counts(db, track_ids),
         get_comment_counts(db, track_ids),
+        get_copyright_flags(db, track_ids),
     )
 
     # use cached PDS URLs with fallback on failure
@@ -157,6 +162,7 @@ async def list_tracks(
                 liked_track_ids,
                 like_counts,
                 comment_counts,
+                copyright_flags,
             )
             for track in tracks
         ]
@@ -181,9 +187,16 @@ async def list_my_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
+    # batch fetch copyright flags
+    track_ids = [track.id for track in tracks]
+    copyright_flags = await get_copyright_flags(db, track_ids)
+
     # fetch all track responses concurrently
     track_responses = await asyncio.gather(
-        *[TrackResponse.from_track(track) for track in tracks]
+        *[
+            TrackResponse.from_track(track, copyright_flags=copyright_flags)
+            for track in tracks
+        ]
     )
 
     return {"tracks": track_responses}
@@ -218,9 +231,16 @@ async def list_broken_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
+    # batch fetch copyright flags
+    track_ids = [track.id for track in tracks]
+    copyright_flags = await get_copyright_flags(db, track_ids)
+
     # fetch all track responses concurrently
     track_responses = await asyncio.gather(
-        *[TrackResponse.from_track(track) for track in tracks]
+        *[
+            TrackResponse.from_track(track, copyright_flags=copyright_flags)
+            for track in tracks
+        ]
     )
 
     return BrokenTracksResponse(tracks=track_responses, count=len(track_responses))

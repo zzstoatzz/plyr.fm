@@ -44,6 +44,7 @@ export interface Track {
 	created_at?: string;
 	image_url?: string;
 	is_liked?: boolean;
+	copyright_flagged?: boolean | null; // null = not scanned, false = clear, true = flagged
 }
 
 export interface User {
