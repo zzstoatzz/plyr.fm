@@ -1,0 +1,30 @@
+name: deploy moderation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "moderation/src/**"
+      - "moderation/Cargo.toml"
+      - "moderation/Cargo.lock"
+      - "moderation/Dockerfile"
+      - "moderation/fly.toml"
+      - ".github/workflows/deploy-moderation.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: deploy moderation
+    runs-on: ubuntu-latest
+    concurrency: deploy-moderation
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: deploy to fly.io
+        run: flyctl deploy --config moderation/fly.toml --remote-only -a plyr-moderation
+        working-directory: moderation
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_MODERATION }}

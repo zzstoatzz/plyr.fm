@@ -12,16 +12,18 @@ pub async fn auth_middleware(
     let path = req.uri().path();
 
     // Public endpoints - no auth required
+    // Note: /admin serves HTML, auth is handled client-side for API calls
     if path == "/"
         || path == "/health"
+        || path == "/admin"
         || path.starts_with("/xrpc/com.atproto.label.")
     {
         return Ok(next.run(req).await);
     }
 
     let Some(expected_token) = auth_token else {
-        warn!("no MODERATION_AUTH_TOKEN set - accepting all requests");
-        return Ok(next.run(req).await);
+        warn!("no MODERATION_AUTH_TOKEN set - rejecting protected request");
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
     };
 
     let token = req
