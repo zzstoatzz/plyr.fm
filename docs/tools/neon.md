@@ -28,9 +28,9 @@ returns all neon projects in your account with details like:
 - storage size
 
 **plyr.fm projects:**
-- `plyr` (cold-butterfly-11920742) - production (us-east-1)
+- `plyr-prd` (cold-butterfly-11920742) - production (us-east-1)
+- `plyr-stg` (frosty-math-37367092) - staging (us-west-2)
 - `plyr-dev` (muddy-flower-98795112) - development (us-east-2)
-- `plyr-staging` (frosty-math-37367092) - staging (us-west-2)
 
 ### get project details
 
