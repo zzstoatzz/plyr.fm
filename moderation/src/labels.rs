@@ -120,7 +120,7 @@ impl Label {
 
         // Encode to DAG-CBOR
         let cbor_bytes =
-            serde_ipld_dagcbor::to_vec(&unsigned).map_err(|e| LabelError::Serialization(e))?;
+            serde_ipld_dagcbor::to_vec(&unsigned).map_err(LabelError::Serialization)?;
 
         // Sign with secp256k1
         let signature: Signature = signing_key.sign(&cbor_bytes);

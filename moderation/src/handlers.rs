@@ -1,0 +1,156 @@
+//! HTTP request handlers for core endpoints.
+
+use axum::{extract::State, response::Html, Json};
+use serde::{Deserialize, Serialize};
+use tracing::info;
+
+use crate::labels::Label;
+use crate::state::{AppError, AppState};
+
+// --- types ---
+
+#[derive(Debug, Serialize)]
+pub struct HealthResponse {
+    pub status: &'static str,
+    pub labeler_enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EmitLabelRequest {
+    /// AT URI of the resource to label (e.g., at://did:plc:xxx/fm.plyr.track/abc123)
+    pub uri: String,
+    /// Label value (e.g., "copyright-violation")
+    #[serde(default = "default_label_val")]
+    pub val: String,
+    /// Optional CID of specific version
+    pub cid: Option<String>,
+    /// If true, negate an existing label
+    #[serde(default)]
+    pub neg: bool,
+}
+
+fn default_label_val() -> String {
+    "copyright-violation".to_string()
+}
+
+#[derive(Debug, Serialize)]
+pub struct EmitLabelResponse {
+    pub seq: i64,
+    pub label: Label,
+}
+
+// --- handlers ---
+
+/// Health check endpoint.
+pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "ok",
+        labeler_enabled: state.db.is_some(),
+    })
+}
+
+/// Landing page with service info.
+pub async fn landing(State(state): State<AppState>) -> Html<String> {
+    let labeler_did = state
+        .signer
+        .as_ref()
+        .map(|s| s.did().to_string())
+        .unwrap_or_else(|| "not configured".to_string());
+
+    Html(format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>plyr.fm moderation</title>
+    <style>
+        body {{
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0a0a0a;
+            color: #e5e5e5;
+            max-width: 600px;
+            margin: 80px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        h1 {{ color: #fff; margin-bottom: 8px; }}
+        .subtitle {{ color: #888; margin-bottom: 32px; }}
+        a {{ color: #3b82f6; }}
+        code {{
+            background: #1a1a1a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }}
+        .endpoint {{
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }}
+        .endpoint-name {{ color: #10b981; font-family: monospace; }}
+    </style>
+</head>
+<body>
+    <h1>plyr.fm moderation</h1>
+    <p class="subtitle">ATProto labeler for audio content moderation</p>
+
+    <p>This service provides content labels for <a href="https://plyr.fm">plyr.fm</a>,
+    the music streaming platform on ATProto.</p>
+
+    <p><strong>Labeler DID:</strong> <code>{}</code></p>
+
+    <h2>Endpoints</h2>
+
+    <div class="endpoint">
+        <div class="endpoint-name">GET /xrpc/com.atproto.label.queryLabels</div>
+        <p>Query labels by URI pattern</p>
+    </div>
+
+    <div class="endpoint">
+        <div class="endpoint-name">GET /xrpc/com.atproto.label.subscribeLabels</div>
+        <p>WebSocket subscription for real-time label updates</p>
+    </div>
+
+    <p style="margin-top: 32px; color: #666;">
+        <a href="https://bsky.app/profile/moderation.plyr.fm">@moderation.plyr.fm</a>
+    </p>
+</body>
+</html>"#,
+        labeler_did
+    ))
+}
+
+/// Emit a new label (internal API).
+pub async fn emit_label(
+    State(state): State<AppState>,
+    Json(request): Json<EmitLabelRequest>,
+) -> Result<Json<EmitLabelResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+    let signer = state.signer.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    info!(uri = %request.uri, val = %request.val, neg = request.neg, "emitting label");
+
+    // Create and sign the label
+    let mut label = Label::new(signer.did(), &request.uri, &request.val);
+    if let Some(cid) = request.cid {
+        label = label.with_cid(cid);
+    }
+    if request.neg {
+        label = label.negated();
+    }
+    let label = signer.sign_label(label)?;
+
+    // Store in database
+    let seq = db.store_label(&label).await?;
+    info!(seq, uri = %request.uri, "label stored");
+
+    // Broadcast to subscribers
+    if let Some(tx) = &state.label_tx {
+        let _ = tx.send((seq, label.clone()));
+    }
+
+    Ok(Json(EmitLabelResponse { seq, label }))
+}

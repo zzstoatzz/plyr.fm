@@ -3,6 +3,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 
+use crate::admin::FlaggedTrack;
 use crate::labels::Label;
 
 /// Database connection pool and operations.
@@ -231,6 +232,54 @@ impl LabelDb {
             .fetch_one(&self.pool)
             .await
             .map(|s| s.unwrap_or(0))
+    }
+
+    /// Get all copyright-violation labels with their resolution status.
+    ///
+    /// A label is resolved if there's a negation label for the same uri+val.
+    pub async fn get_pending_flags(&self) -> Result<Vec<FlaggedTrack>, sqlx::Error> {
+        // Get all copyright-violation labels (non-negations)
+        let rows = sqlx::query_as::<_, LabelRow>(
+            r#"
+            SELECT seq, src, uri, cid, val, neg, cts, exp, sig
+            FROM labels
+            WHERE val = 'copyright-violation' AND neg = false
+            ORDER BY seq DESC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        // Get all negation labels for these URIs
+        let uris: Vec<String> = rows.iter().map(|r| r.uri.clone()).collect();
+        let negated_uris: std::collections::HashSet<String> = if !uris.is_empty() {
+            sqlx::query_scalar::<_, String>(
+                r#"
+                SELECT DISTINCT uri
+                FROM labels
+                WHERE val = 'copyright-violation' AND neg = true
+                "#,
+            )
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+
+        let tracks = rows
+            .into_iter()
+            .map(|r| FlaggedTrack {
+                seq: r.seq,
+                uri: r.uri.clone(),
+                val: r.val,
+                created_at: r.cts.format("%Y-%m-%d %H:%M:%S").to_string(),
+                resolved: negated_uris.contains(&r.uri),
+            })
+            .collect();
+
+        Ok(tracks)
     }
 }
 
