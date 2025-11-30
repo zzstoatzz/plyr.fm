@@ -21,7 +21,6 @@ struct Config {
     auth_token: Option<String>,
     audd_api_token: String,
     audd_api_url: String,
-    score_threshold: i32,
 }
 
 impl Config {
@@ -37,10 +36,6 @@ impl Config {
                 .map_err(|_| anyhow!("MODERATION_AUDD_API_TOKEN is required"))?,
             audd_api_url: env::var("MODERATION_AUDD_API_URL")
                 .unwrap_or_else(|_| "https://enterprise.audd.io/".to_string()),
-            score_threshold: env::var("MODERATION_SCORE_THRESHOLD")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(70),
         })
     }
 }
@@ -136,7 +131,6 @@ async fn main() -> anyhow::Result<()> {
         .with_state(AppState {
             audd_api_token: config.audd_api_token,
             audd_api_url: config.audd_api_url,
-            score_threshold: config.score_threshold,
         });
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port)
@@ -155,7 +149,6 @@ async fn main() -> anyhow::Result<()> {
 struct AppState {
     audd_api_token: String,
     audd_api_url: String,
-    score_threshold: i32,
 }
 
 // --- middleware ---
@@ -233,7 +226,8 @@ async fn scan(
 
     let matches = extract_matches(&audd_response);
     let highest_score = matches.iter().map(|m| m.score).max().unwrap_or(0);
-    let is_flagged = highest_score >= state.score_threshold;
+    // flag if any matches are found - audd enterprise doesn't return confidence scores
+    let is_flagged = !matches.is_empty();
 
     info!(
         match_count = matches.len(),
