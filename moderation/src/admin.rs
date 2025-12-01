@@ -198,6 +198,24 @@ fn render_flags_list(tracks: &[FlaggedTrack]) -> String {
     cards.join("\n")
 }
 
+/// Extract namespace from AT URI (e.g., "fm.plyr.dev" from "at://did:plc:xxx/fm.plyr.dev.track/yyy")
+fn extract_namespace(uri: &str) -> Option<&str> {
+    // URI format: at://did:plc:xxx/fm.plyr[.env].track/rkey
+    let collection = uri.split('/').nth(3)?;
+    // Strip ".track" suffix to get namespace
+    collection.strip_suffix(".track")
+}
+
+/// Determine environment from namespace
+fn namespace_to_env(namespace: &str) -> Option<(&'static str, &'static str)> {
+    match namespace {
+        "fm.plyr" => None, // production - no badge needed
+        "fm.plyr.stg" => Some(("staging", "stg")),
+        "fm.plyr.dev" => Some(("development", "dev")),
+        _ => Some(("unknown", "?")),
+    }
+}
+
 /// Render a single flag card as HTML.
 fn render_flag_card(track: &FlaggedTrack) -> String {
     let ctx = track.context.as_ref();
@@ -214,6 +232,17 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
     } else {
         r#"<div class="no-context">no track info available</div>"#.to_string()
     };
+
+    // Add environment badge for non-production namespaces
+    let env_badge = extract_namespace(&track.uri)
+        .and_then(namespace_to_env)
+        .map(|(label, short)| {
+            format!(
+                r#"<span class="badge env" title="{}">{}</span>"#,
+                label, short
+            )
+        })
+        .unwrap_or_default();
 
     let score_badge = ctx
         .and_then(|c| c.highest_score)
@@ -282,6 +311,7 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
                 <div class="flag-badges">
                     {}
                     {}
+                    {}
                 </div>
             </div>
             {}
@@ -292,6 +322,7 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
         resolved_class,
         track_info,
         html_escape(&track.uri),
+        env_badge,
         score_badge,
         status_badge,
         matches_html,
