@@ -13,9 +13,11 @@ pub async fn auth_middleware(
 
     // Public endpoints - no auth required
     // Note: /admin serves HTML, auth is handled client-side for API calls
+    // Static files must be public for admin UI CSS/JS to load
     if path == "/"
         || path == "/health"
         || path == "/admin"
+        || path.starts_with("/static/")
         || path.starts_with("/xrpc/com.atproto.label.")
     {
         return Ok(next.run(req).await);
