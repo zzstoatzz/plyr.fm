@@ -245,9 +245,9 @@ h1 {
     color: var(--success);
 }
 
-.badge.score {
-    background: rgba(239, 68, 68, 0.15);
-    color: var(--error);
+.badge.matches {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
 }
 
 .badge.env {
@@ -290,11 +290,6 @@ h1 {
 
 .match-item .artist {
     color: var(--text-tertiary);
-}
-
-.match-item .score {
-    color: var(--error);
-    font-weight: 500;
 }
 
 /* actions */

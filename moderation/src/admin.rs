@@ -327,13 +327,14 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
         })
         .unwrap_or_default();
 
-    let score_badge = ctx
-        .and_then(|c| c.highest_score)
-        .filter(|&s| s > 0.0)
-        .map(|s| {
+    // Show match count instead of score (AuDD doesn't provide scores in accurate_offsets mode)
+    let match_count_badge = ctx
+        .and_then(|c| c.matches.as_ref())
+        .filter(|m| !m.is_empty())
+        .map(|matches| {
             format!(
-                r#"<span class="badge score">{}% match</span>"#,
-                (s * 100.0) as i32
+                r#"<span class="badge matches">{} matches</span>"#,
+                matches.len()
             )
         })
         .unwrap_or_default();
@@ -354,12 +355,10 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
                 .map(|m| {
                     format!(
                         r#"<div class="match-item">
-                            <span><span class="title">{}</span> <span class="artist">by {}</span></span>
-                            <span class="score">{}%</span>
+                            <span class="title">{}</span> <span class="artist">by {}</span>
                         </div>"#,
                         html_escape(&m.title),
                         html_escape(&m.artist),
-                        (m.score * 100.0) as i32
                     )
                 })
                 .collect();
@@ -424,7 +423,7 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
         track_info,
         html_escape(&track.uri),
         env_badge,
-        score_badge,
+        match_count_badge,
         status_badge,
         matches_html,
         action_button
