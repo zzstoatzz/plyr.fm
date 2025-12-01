@@ -1,0 +1,153 @@
+# weekly status maintenance via claude code
+#
+# archives old STATUS.md sections and optionally generates audio overviews.
+# runs every monday or on manual trigger.
+#
+# required secrets:
+#   ANTHROPIC_API_KEY - claude code
+#   GOOGLE_API_KEY - gemini TTS (optional, for audio generation)
+#   PLYR_BOT_TOKEN - plyr.fm developer token (optional, for audio upload)
+
+name: status maintenance
+
+on:
+  # TODO: restore these after testing
+  # schedule:
+  #   - cron: "0 9 * * 1" # every monday 9am UTC
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/status-maintenance.yml"
+  workflow_dispatch:
+    inputs:
+      skip_audio:
+        description: "skip audio generation"
+        type: boolean
+        default: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            you are maintaining the plyr.fm project status file.
+
+            ## context
+
+            this may be the first time this workflow has run. handle gracefully:
+            - .status_history/ directory may not exist yet
+            - STATUS.md structure may vary
+
+            ## task 1: archive old sections (if needed)
+
+            read STATUS.md and count the lines.
+
+            if over 500 lines:
+            1. identify natural section boundaries (marked by "---" or headers like "### " with dates)
+            2. keep the most recent ~500 lines in STATUS.md
+            3. move older sections to .status_history/YYYY-MM.md files, grouped by month
+            4. create .status_history/ directory if it doesn't exist
+            5. preserve raw content - don't summarize or modify the archived text
+
+            if 500 lines or fewer, skip archiving.
+
+            ## task 2: generate audio overview (if secrets available)
+
+            check if GOOGLE_API_KEY and PLYR_TOKEN environment variables are set.
+            skip_audio input: ${{ inputs.skip_audio }}
+
+            if both are set and skip_audio is false:
+            1. write a 2-3 minute podcast script about recent updates to podcast_script.txt
+               - two hosts having a casual technical conversation
+               - focus on shipped features from the top of STATUS.md
+               - format: "Host: ..." and "Cohost: ..." lines
+
+            2. create and run this inline script:
+
+            ```python
+            # /// script
+            # requires-python = ">=3.11"
+            # dependencies = ["google-genai", "plyrfm"]
+            # ///
+            import os
+            from datetime import date
+            from pathlib import Path
+            from google import genai
+            from google.genai import types
+            from plyrfm import PlyrClient
+
+            script = Path("podcast_script.txt").read_text()
+
+            client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+            response = client.models.generate_content(
+                model="gemini-2.5-flash-preview-tts",
+                contents=script,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
+                            speaker_voice_configs=[
+                                types.SpeakerVoiceConfig(
+                                    speaker="Host",
+                                    voice_config=types.VoiceConfig(
+                                        prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Kore")
+                                    )
+                                ),
+                                types.SpeakerVoiceConfig(
+                                    speaker="Cohost",
+                                    voice_config=types.VoiceConfig(
+                                        prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Puck")
+                                    )
+                                ),
+                            ]
+                        )
+                    )
+                )
+            )
+
+            audio_path = Path(f"plyr-update-{date.today()}.wav")
+            audio_path.write_bytes(response.candidates[0].content.parts[0].inline_data.data)
+            print(f"saved audio to {audio_path}")
+
+            plyr = PlyrClient(token=os.environ["PLYR_TOKEN"])
+            result = plyr.upload(audio_path, f"plyr.fm update - {date.today().strftime('%B %d, %Y').lower()}")
+            print(f"uploaded: https://plyr.fm/track/{result.track_id}")
+            ```
+
+            if secrets are missing, just print a message and skip audio generation.
+
+            ## task 3: commit changes
+
+            if any files changed (.status_history/*, STATUS.md):
+            1. git add the changed files
+            2. commit with message "chore: weekly status maintenance"
+            3. push to origin
+
+            if nothing changed, just report that no maintenance was needed.
+
+          allowed_tools: |
+            Read
+            Write
+            Edit
+            Bash(uv:*)
+            Bash(git:*)
+            Bash(mkdir:*)
+            Bash(ls:*)
+            Bash(wc:*)
+
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          PLYR_TOKEN: ${{ secrets.PLYR_BOT_TOKEN }}
