@@ -36,11 +36,29 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
 
+      - name: Create MCP config
+        run: |
+          cat > /tmp/mcp-config.json << 'EOF'
+          {
+            "mcpServers": {
+              "plyrfm": {
+                "command": "uvx",
+                "args": ["plyrfm-mcp"],
+                "env": {
+                  "PLYR_TOKEN": "${{ secrets.PLYR_BOT_TOKEN }}"
+                }
+              }
+            }
+          }
+          EOF
+
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
           claude_args: |
-            --allowedTools "Read,Write,Edit,Bash"
+            --allowedTools "Read,Write,Edit,Bash,mcp__plyrfm__list_tracks,mcp__plyrfm__my_tracks,mcp__plyrfm__get_track"
+            --mcp-config /tmp/mcp-config.json
           prompt: |
             you are maintaining the plyr.fm project status file.
 
@@ -49,6 +67,9 @@ jobs:
             this may be the first time this workflow has run. handle gracefully:
             - .status_history/ directory may not exist yet
             - STATUS.md structure may vary
+
+            you have access to the plyrfm MCP server for interacting with plyr.fm.
+            PLYR_TOKEN is set in the environment for CLI uploads.
 
             ## task 1: archive old sections (if needed)
 
