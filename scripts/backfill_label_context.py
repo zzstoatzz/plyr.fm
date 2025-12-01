@@ -1,12 +1,9 @@
-#!/usr/bin/env -S uv run --script --quiet
+#!/usr/bin/env -S uv run --script --quiet --with-editable=backend
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
 #     "httpx",
 #     "pydantic-settings",
-#     "sqlalchemy[asyncio]",
-#     "asyncpg",
-#     "logfire[sqlalchemy]",
 # ]
 # ///
 """backfill label context from copyright_scans to moderation service.
@@ -29,15 +26,11 @@ environment variables (set in .env or export):
 import asyncio
 import os
 import sys
-from pathlib import Path
 from typing import Any, Literal
 
 import httpx
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-# add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "backend" / "src"))
 
 
 Environment = Literal["dev", "staging", "prod"]
