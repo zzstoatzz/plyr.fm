@@ -6,6 +6,7 @@
  */
 
 import { browser } from '$app/environment';
+import { auth } from './auth.svelte';
 import { API_URL } from './config';
 import type { Track } from './types';
 
@@ -31,8 +32,8 @@ class NowPlayingService {
 			return;
 		}
 
-		// skip if not authenticated
-		if (!localStorage.getItem('session_id')) {
+		// skip if not authenticated (auth uses HttpOnly cookies)
+		if (!auth.isAuthenticated) {
 			return;
 		}
 
@@ -130,8 +131,8 @@ class NowPlayingService {
 			return;
 		}
 
-		// skip if not authenticated
-		if (!localStorage.getItem('session_id')) {
+		// skip if not authenticated (auth uses HttpOnly cookies)
+		if (!auth.isAuthenticated) {
 			return;
 		}
 
