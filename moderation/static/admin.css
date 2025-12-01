@@ -210,6 +210,13 @@ h1 {
     color: var(--error);
 }
 
+.badge.env {
+    background: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 /* matches section */
 .matches {
     background: var(--bg-primary);
@@ -314,6 +321,15 @@ h1 {
 }
 .htmx-request.htmx-indicator {
     opacity: 1;
+}
+
+/* refresh button with inline indicator */
+.btn-secondary .htmx-indicator {
+    display: none;
+    margin-right: 6px;
+}
+.btn-secondary.htmx-request .htmx-indicator {
+    display: inline;
 }
 
 /* mobile */
