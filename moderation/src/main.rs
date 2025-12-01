@@ -78,7 +78,9 @@ async fn main() -> anyhow::Result<()> {
         // Admin UI and API
         .route("/admin", get(admin::admin_ui))
         .route("/admin/flags", get(admin::list_flagged))
+        .route("/admin/flags-html", get(admin::list_flagged_html))
         .route("/admin/resolve", post(admin::resolve_flag))
+        .route("/admin/resolve-htmx", post(admin::resolve_flag_htmx))
         .route("/admin/context", post(admin::store_context))
         // ATProto XRPC endpoints (public)
         .route("/xrpc/com.atproto.label.queryLabels", get(xrpc::query_labels))
