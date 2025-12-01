@@ -337,37 +337,12 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
             notes_text, reason_text
         )
     } else {
+        // Multi-step flow: button -> reason select -> confirm
         format!(
-            r#"<div class="resolve-dropdown">
-                <button type="button" class="btn btn-warning dropdown-toggle" onclick="toggleDropdown(this)">
+            r#"<div class="resolve-flow" data-uri="{}" data-val="{}">
+                <button type="button" class="btn btn-warning" onclick="showReasonSelect(this)">
                     mark false positive
                 </button>
-                <div class="dropdown-menu">
-                    <form hx-post="/admin/resolve-htmx" hx-swap="none">
-                        <input type="hidden" name="uri" value="{}">
-                        <input type="hidden" name="val" value="{}">
-                        <button type="submit" name="reason" value="original_artist" class="dropdown-item">
-                            original artist
-                            <span class="item-desc">artist uploaded their own work</span>
-                        </button>
-                        <button type="submit" name="reason" value="licensed" class="dropdown-item">
-                            licensed
-                            <span class="item-desc">has rights/permission</span>
-                        </button>
-                        <button type="submit" name="reason" value="fingerprint_noise" class="dropdown-item">
-                            fingerprint noise
-                            <span class="item-desc">matcher false positive</span>
-                        </button>
-                        <button type="submit" name="reason" value="cover_version" class="dropdown-item">
-                            cover/remix
-                            <span class="item-desc">legal derivative work</span>
-                        </button>
-                        <button type="submit" name="reason" value="other" class="dropdown-item">
-                            other
-                            <span class="item-desc">see notes</span>
-                        </button>
-                    </form>
-                </div>
             </div>"#,
             html_escape(&track.uri),
             html_escape(&track.val)
