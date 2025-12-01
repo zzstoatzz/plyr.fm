@@ -11,12 +11,27 @@ requires GOOGLE_API_KEY environment variable.
 # dependencies = ["google-genai"]
 # ///
 
+import io
 import os
 import sys
+import wave
 from pathlib import Path
 
 from google import genai
 from google.genai import types
+
+
+def pcm_to_wav(
+    pcm_data: bytes, sample_rate: int = 24000, channels: int = 1, sample_width: int = 2
+) -> bytes:
+    """wrap raw PCM data in a WAV header."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(channels)
+        wav.setsampwidth(sample_width)
+        wav.setframerate(sample_rate)
+        wav.writeframes(pcm_data)
+    return buffer.getvalue()
 
 
 def main() -> None:
@@ -70,9 +85,11 @@ def main() -> None:
         ),
     )
 
-    audio_data = response.candidates[0].content.parts[0].inline_data.data
-    output_path.write_bytes(audio_data)
-    print(f"saved audio to {output_path} ({len(audio_data)} bytes)")
+    # gemini returns raw PCM (audio/L16;codec=pcm;rate=24000), wrap in WAV header
+    pcm_data = response.candidates[0].content.parts[0].inline_data.data
+    wav_data = pcm_to_wav(pcm_data)
+    output_path.write_bytes(wav_data)
+    print(f"saved audio to {output_path} ({len(wav_data)} bytes)")
 
 
 if __name__ == "__main__":
