@@ -217,15 +217,14 @@ async def _make_pds_request(
                 output_encoding="application/json",
             )
 
-            # invoke_procedure returns Response object, extract the model/dict
-            if response is None:
+            # Response is dataclass with .content: dict | bytes | XrpcError | None
+            if response is None or response.content is None:
                 return {}
-            # response.model_dump() if it's a pydantic model, or to_dict() if DotDict
-            if hasattr(response, "to_dict"):
-                return response.to_dict()  # type: ignore[no-any-return]
-            if hasattr(response, "model_dump"):
-                return response.model_dump()  # type: ignore[no-any-return]
-            return dict(response) if response else {}  # type: ignore[arg-type]
+            if not isinstance(response.content, dict):
+                raise Exception(
+                    f"unexpected response content type: {type(response.content)}"
+                )
+            return response.content  # type: ignore[return-value]
 
         except UnauthorizedError as e:
             # token expired - check if we should refresh
@@ -288,14 +287,14 @@ async def _make_pds_query(
                 output_encoding="application/json",
             )
 
-            # extract dict from response
-            if response is None:
+            # Response is dataclass with .content: dict | bytes | XrpcError | None
+            if response is None or response.content is None:
                 return {}
-            if hasattr(response, "to_dict"):
-                return response.to_dict()  # type: ignore[no-any-return]
-            if hasattr(response, "model_dump"):
-                return response.model_dump()  # type: ignore[no-any-return]
-            return dict(response) if response else {}  # type: ignore[arg-type]
+            if not isinstance(response.content, dict):
+                raise Exception(
+                    f"unexpected response content type: {type(response.content)}"
+                )
+            return response.content  # type: ignore[return-value]
 
         except UnauthorizedError as e:
             if attempt == 0:
