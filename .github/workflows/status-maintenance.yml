@@ -1,0 +1,93 @@
+# weekly status maintenance via claude code
+#
+# archives old STATUS.md sections and optionally generates audio overviews.
+# runs every monday or on manual trigger.
+#
+# required secrets:
+#   ANTHROPIC_API_KEY - claude code
+#   GOOGLE_API_KEY - gemini TTS (for audio generation)
+#   PLYR_BOT_TOKEN - plyr.fm developer token (for audio upload)
+
+name: status maintenance
+
+on:
+  # TODO: restore schedule after testing
+  # schedule:
+  #   - cron: "0 9 * * 1" # every monday 9am UTC
+  workflow_dispatch:
+    inputs:
+      skip_audio:
+        description: "skip audio generation"
+        type: boolean
+        default: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --allowedTools "Read,Write,Edit,Bash"
+          prompt: |
+            you are maintaining the plyr.fm project status file.
+
+            ## context
+
+            this may be the first time this workflow has run. handle gracefully:
+            - .status_history/ directory may not exist yet
+            - STATUS.md structure may vary
+
+            ## task 1: archive old sections (if needed)
+
+            read STATUS.md and count the lines.
+
+            if over 500 lines:
+            1. identify natural section boundaries (marked by "---" or headers like "### " with dates)
+            2. keep the most recent ~500 lines in STATUS.md
+            3. move older sections to .status_history/YYYY-MM.md files, grouped by month
+            4. create .status_history/ directory if it doesn't exist
+            5. preserve raw content - don't summarize or modify the archived text
+
+            if 500 lines or fewer, skip archiving.
+
+            ## task 2: generate audio overview
+
+            skip_audio input: ${{ inputs.skip_audio }}
+
+            if skip_audio is false:
+            1. write a 2-3 minute podcast script to podcast_script.txt
+               - two hosts having a casual technical conversation
+               - focus on shipped features from the top of STATUS.md
+               - format: "Host: ..." and "Cohost: ..." lines
+
+            2. run: uv run scripts/generate_tts.py podcast_script.txt update.wav
+
+            3. run: uv run --with plyrfm -- plyrfm upload update.wav "plyr.fm update - <today's date>"
+
+            ## task 3: open PR with changes
+
+            if any files changed (.status_history/*, STATUS.md):
+            1. create a new branch: git checkout -b status-maintenance-<date>
+            2. git add .status_history/ STATUS.md (NOT audio files or temp scripts)
+            3. commit with message "chore: weekly status maintenance"
+            4. push the branch: git push -u origin status-maintenance-<date>
+            5. create a PR using: gh pr create --title "chore: weekly status maintenance" --body "automated status archival and audio overview"
+
+            if nothing changed, just report that no maintenance was needed.
+
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          PLYR_TOKEN: ${{ secrets.PLYR_BOT_TOKEN }}
