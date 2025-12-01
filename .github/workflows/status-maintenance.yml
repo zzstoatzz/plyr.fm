@@ -11,13 +11,9 @@
 name: status maintenance
 
 on:
-  # TODO: restore these after testing
+  # TODO: restore schedule after testing
   # schedule:
   #   - cron: "0 9 * * 1" # every monday 9am UTC
-  pull_request:
-    branches: [main]
-    paths:
-      - ".github/workflows/status-maintenance.yml"
   workflow_dispatch:
     inputs:
       skip_audio:
@@ -137,15 +133,9 @@ jobs:
 
             if nothing changed, just report that no maintenance was needed.
 
-          allowed_tools: |
-            Read
-            Write
-            Edit
-            Bash(uv:*)
-            Bash(git:*)
-            Bash(mkdir:*)
-            Bash(ls:*)
-            Bash(wc:*)
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --allowedTools "Read,Write,Edit,Bash"
 
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
