@@ -39,6 +39,10 @@ pub struct ResolveRequest {
     pub uri: String,
     #[serde(default = "default_val")]
     pub val: String,
+    /// Reason for marking as false positive.
+    pub reason: Option<String>,
+    /// Additional notes about the resolution.
+    pub notes: Option<String>,
 }
 
 fn default_val() -> String {
@@ -100,7 +104,10 @@ pub async fn resolve_flag(
     Json(request): Json<ResolveRequest>,
 ) -> Result<Json<ResolveResponse>, AppError> {
     let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
-    let signer = state.signer.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+    let signer = state
+        .signer
+        .as_ref()
+        .ok_or(AppError::LabelerNotConfigured)?;
 
     tracing::info!(uri = %request.uri, val = %request.val, "resolving flag (creating negation)");
 
@@ -127,9 +134,24 @@ pub async fn resolve_flag_htmx(
     axum::Form(request): axum::Form<ResolveRequest>,
 ) -> Result<Response, AppError> {
     let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
-    let signer = state.signer.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+    let signer = state
+        .signer
+        .as_ref()
+        .ok_or(AppError::LabelerNotConfigured)?;
 
-    tracing::info!(uri = %request.uri, val = %request.val, "resolving flag via htmx");
+    // Parse the reason
+    let reason = request
+        .reason
+        .as_deref()
+        .and_then(crate::db::ResolutionReason::from_str);
+
+    tracing::info!(
+        uri = %request.uri,
+        val = %request.val,
+        reason = ?reason,
+        notes = ?request.notes,
+        "resolving flag via htmx"
+    );
 
     // Create a negation label
     let label = crate::labels::Label::new(signer.did(), &request.uri, &request.val).negated();
@@ -137,22 +159,30 @@ pub async fn resolve_flag_htmx(
 
     let seq = db.store_label(&label).await?;
 
+    // Store resolution reason in context
+    if let Some(r) = reason {
+        db.store_resolution(&request.uri, r, request.notes.as_deref())
+            .await?;
+    }
+
     // Broadcast to subscribers
     if let Some(tx) = &state.label_tx {
         let _ = tx.send((seq, label));
     }
 
     // Return success toast + trigger refresh
+    let reason_label = reason.map(|r| r.label()).unwrap_or("unknown");
     let html = format!(
-        r#"<div id="toast" class="toast success" hx-swap-oob="true">resolved (seq: {})</div>"#,
-        seq
+        r#"<div id="toast" class="toast success" hx-swap-oob="true">resolved: {} (seq: {})</div>"#,
+        reason_label, seq
     );
 
     Ok((
-        [
-            (CONTENT_TYPE, "text/html; charset=utf-8"),
-        ],
-        [(axum::http::header::HeaderName::from_static("hx-trigger"), "flagsUpdated")],
+        [(CONTENT_TYPE, "text/html; charset=utf-8")],
+        [(
+            axum::http::header::HeaderName::from_static("hx-trigger"),
+            "flagsUpdated",
+        )],
         html,
     )
         .into_response())
@@ -173,6 +203,8 @@ pub async fn store_context(
         artist_did: request.context.artist_did,
         highest_score: request.context.highest_score,
         matches: request.context.matches,
+        resolution_reason: None,
+        resolution_notes: None,
     };
 
     db.store_context(&request.uri, &label_ctx).await?;
@@ -219,7 +251,7 @@ fn namespace_to_env(namespace: &str) -> Option<(&'static str, &'static str)> {
 /// Render a single flag card as HTML.
 fn render_flag_card(track: &FlaggedTrack) -> String {
     let ctx = track.context.as_ref();
-    let has_context = ctx.map_or(false, |c| c.track_title.is_some() || c.artist_handle.is_some());
+    let has_context = ctx.is_some_and(|c| c.track_title.is_some() || c.artist_handle.is_some());
 
     let track_info = if has_context {
         let c = ctx.unwrap();
@@ -247,7 +279,12 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
     let score_badge = ctx
         .and_then(|c| c.highest_score)
         .filter(|&s| s > 0.0)
-        .map(|s| format!(r#"<span class="badge score">{}% match</span>"#, (s * 100.0) as i32))
+        .map(|s| {
+            format!(
+                r#"<span class="badge score">{}% match</span>"#,
+                (s * 100.0) as i32
+            )
+        })
         .unwrap_or_default();
 
     let status_badge = if track.resolved {
@@ -286,14 +323,52 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
         .unwrap_or_default();
 
     let action_button = if track.resolved {
-        r#"<button class="btn btn-secondary" disabled>resolved</button>"#.to_string()
+        // Show the resolution reason if available
+        let reason_text = ctx
+            .and_then(|c| c.resolution_reason.as_ref())
+            .map(|r| r.label())
+            .unwrap_or("resolved");
+        let notes_text = ctx
+            .and_then(|c| c.resolution_notes.as_ref())
+            .map(|n| format!(r#" title="{}""#, html_escape(n)))
+            .unwrap_or_default();
+        format!(
+            r#"<span class="resolution-reason"{}>{}</span>"#,
+            notes_text, reason_text
+        )
     } else {
         format!(
-            r#"<form hx-post="/admin/resolve-htmx" hx-swap="none" style="display:inline">
-                <input type="hidden" name="uri" value="{}">
-                <input type="hidden" name="val" value="{}">
-                <button type="submit" class="btn btn-warning">mark false positive</button>
-            </form>"#,
+            r#"<div class="resolve-dropdown">
+                <button type="button" class="btn btn-warning dropdown-toggle" onclick="toggleDropdown(this)">
+                    mark false positive
+                </button>
+                <div class="dropdown-menu">
+                    <form hx-post="/admin/resolve-htmx" hx-swap="none">
+                        <input type="hidden" name="uri" value="{}">
+                        <input type="hidden" name="val" value="{}">
+                        <button type="submit" name="reason" value="original_artist" class="dropdown-item">
+                            original artist
+                            <span class="item-desc">artist uploaded their own work</span>
+                        </button>
+                        <button type="submit" name="reason" value="licensed" class="dropdown-item">
+                            licensed
+                            <span class="item-desc">has rights/permission</span>
+                        </button>
+                        <button type="submit" name="reason" value="fingerprint_noise" class="dropdown-item">
+                            fingerprint noise
+                            <span class="item-desc">matcher false positive</span>
+                        </button>
+                        <button type="submit" name="reason" value="cover_version" class="dropdown-item">
+                            cover/remix
+                            <span class="item-desc">legal derivative work</span>
+                        </button>
+                        <button type="submit" name="reason" value="other" class="dropdown-item">
+                            other
+                            <span class="item-desc">see notes</span>
+                        </button>
+                    </form>
+                </div>
+            </div>"#,
             html_escape(&track.uri),
             html_escape(&track.val)
         )

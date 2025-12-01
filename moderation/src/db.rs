@@ -14,6 +14,8 @@ type ContextRow = (
     Option<String>,
     Option<f64>,
     Option<serde_json::Value>,
+    Option<String>,
+    Option<String>,
 );
 
 /// Type alias for flagged track row from database query.
@@ -27,6 +29,8 @@ type FlaggedRow = (
     Option<String>,
     Option<f64>,
     Option<serde_json::Value>,
+    Option<String>,
+    Option<String>,
 );
 
 /// Copyright match info stored alongside labels.
@@ -37,6 +41,47 @@ pub struct CopyrightMatch {
     pub score: f64,
 }
 
+/// Reason for resolving a false positive.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ResolutionReason {
+    /// Artist uploaded their own distributed music
+    OriginalArtist,
+    /// Artist has licensing/permission for the content
+    Licensed,
+    /// Fingerprint matcher produced a false match
+    FingerprintNoise,
+    /// Legal cover version or remix
+    CoverVersion,
+    /// Other reason (see resolution_notes)
+    Other,
+}
+
+impl ResolutionReason {
+    /// Human-readable label for the reason.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::OriginalArtist => "original artist",
+            Self::Licensed => "licensed",
+            Self::FingerprintNoise => "fingerprint noise",
+            Self::CoverVersion => "cover/remix",
+            Self::Other => "other",
+        }
+    }
+
+    /// Parse from string.
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "original_artist" => Some(Self::OriginalArtist),
+            "licensed" => Some(Self::Licensed),
+            "fingerprint_noise" => Some(Self::FingerprintNoise),
+            "cover_version" => Some(Self::CoverVersion),
+            "other" => Some(Self::Other),
+            _ => None,
+        }
+    }
+}
+
 /// Context stored alongside a label for display in admin UI.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LabelContext {
@@ -45,6 +90,12 @@ pub struct LabelContext {
     pub artist_did: Option<String>,
     pub highest_score: Option<f64>,
     pub matches: Option<Vec<CopyrightMatch>>,
+    /// Why the flag was resolved as false positive (set on resolution).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolution_reason: Option<ResolutionReason>,
+    /// Additional notes about the resolution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolution_notes: Option<String>,
 }
 
 /// Database connection pool and operations.
@@ -134,26 +185,43 @@ impl LabelDb {
             .execute(&self.pool)
             .await?;
 
+        // Add resolution columns (migration-safe: only adds if missing)
+        sqlx::query("ALTER TABLE label_context ADD COLUMN IF NOT EXISTS resolution_reason TEXT")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("ALTER TABLE label_context ADD COLUMN IF NOT EXISTS resolution_notes TEXT")
+            .execute(&self.pool)
+            .await?;
+
         Ok(())
     }
 
     /// Store or update label context for a URI.
-    pub async fn store_context(&self, uri: &str, context: &LabelContext) -> Result<(), sqlx::Error> {
+    pub async fn store_context(
+        &self,
+        uri: &str,
+        context: &LabelContext,
+    ) -> Result<(), sqlx::Error> {
         let matches_json = context
             .matches
             .as_ref()
             .map(|m| serde_json::to_value(m).unwrap_or_default());
+        let reason_str = context
+            .resolution_reason
+            .map(|r| format!("{:?}", r).to_lowercase());
 
         sqlx::query(
             r#"
-            INSERT INTO label_context (uri, track_title, artist_handle, artist_did, highest_score, matches)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO label_context (uri, track_title, artist_handle, artist_did, highest_score, matches, resolution_reason, resolution_notes)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (uri) DO UPDATE SET
-                track_title = EXCLUDED.track_title,
-                artist_handle = EXCLUDED.artist_handle,
-                artist_did = EXCLUDED.artist_did,
-                highest_score = EXCLUDED.highest_score,
-                matches = EXCLUDED.matches
+                track_title = COALESCE(EXCLUDED.track_title, label_context.track_title),
+                artist_handle = COALESCE(EXCLUDED.artist_handle, label_context.artist_handle),
+                artist_did = COALESCE(EXCLUDED.artist_did, label_context.artist_did),
+                highest_score = COALESCE(EXCLUDED.highest_score, label_context.highest_score),
+                matches = COALESCE(EXCLUDED.matches, label_context.matches),
+                resolution_reason = COALESCE(EXCLUDED.resolution_reason, label_context.resolution_reason),
+                resolution_notes = COALESCE(EXCLUDED.resolution_notes, label_context.resolution_notes)
             "#,
         )
         .bind(uri)
@@ -162,6 +230,34 @@ impl LabelDb {
         .bind(&context.artist_did)
         .bind(context.highest_score)
         .bind(matches_json)
+        .bind(reason_str)
+        .bind(&context.resolution_notes)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Store resolution reason for a URI (without overwriting other context).
+    pub async fn store_resolution(
+        &self,
+        uri: &str,
+        reason: ResolutionReason,
+        notes: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
+        let reason_str = format!("{:?}", reason).to_lowercase();
+        sqlx::query(
+            r#"
+            INSERT INTO label_context (uri, resolution_reason, resolution_notes)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (uri) DO UPDATE SET
+                resolution_reason = EXCLUDED.resolution_reason,
+                resolution_notes = EXCLUDED.resolution_notes
+            "#,
+        )
+        .bind(uri)
+        .bind(reason_str)
+        .bind(notes)
         .execute(&self.pool)
         .await?;
 
@@ -172,7 +268,7 @@ impl LabelDb {
     pub async fn get_context(&self, uri: &str) -> Result<Option<LabelContext>, sqlx::Error> {
         let row: Option<ContextRow> = sqlx::query_as(
                 r#"
-                SELECT track_title, artist_handle, artist_did, highest_score, matches
+                SELECT track_title, artist_handle, artist_did, highest_score, matches, resolution_reason, resolution_notes
                 FROM label_context
                 WHERE uri = $1
                 "#,
@@ -181,24 +277,34 @@ impl LabelDb {
             .fetch_optional(&self.pool)
             .await?;
 
-        Ok(row.map(|(track_title, artist_handle, artist_did, highest_score, matches)| {
-            LabelContext {
+        Ok(row.map(
+            |(
                 track_title,
                 artist_handle,
                 artist_did,
                 highest_score,
-                matches: matches.and_then(|v| serde_json::from_value(v).ok()),
-            }
-        }))
+                matches,
+                resolution_reason,
+                resolution_notes,
+            )| {
+                LabelContext {
+                    track_title,
+                    artist_handle,
+                    artist_did,
+                    highest_score,
+                    matches: matches.and_then(|v| serde_json::from_value(v).ok()),
+                    resolution_reason: resolution_reason
+                        .and_then(|s| ResolutionReason::from_str(&s)),
+                    resolution_notes,
+                }
+            },
+        ))
     }
 
     /// Store a signed label and return its sequence number.
     pub async fn store_label(&self, label: &Label) -> Result<i64, sqlx::Error> {
         let sig = label.sig.as_ref().map(|b| b.to_vec()).unwrap_or_default();
-        let cts: DateTime<Utc> = label
-            .cts
-            .parse()
-            .unwrap_or_else(|_| Utc::now());
+        let cts: DateTime<Utc> = label.cts.parse().unwrap_or_else(|_| Utc::now());
         let exp: Option<DateTime<Utc>> = label.exp.as_ref().and_then(|e| e.parse().ok());
 
         let row = sqlx::query_scalar::<_, i64>(
@@ -328,7 +434,11 @@ impl LabelDb {
     }
 
     /// Get labels since a sequence number (for subscribeLabels).
-    pub async fn get_labels_since(&self, cursor: i64, limit: i64) -> Result<Vec<LabelRow>, sqlx::Error> {
+    pub async fn get_labels_since(
+        &self,
+        cursor: i64,
+        limit: i64,
+    ) -> Result<Vec<LabelRow>, sqlx::Error> {
         sqlx::query_as::<_, LabelRow>(
             r#"
             SELECT seq, src, uri, cid, val, neg, cts, exp, sig
@@ -358,17 +468,18 @@ impl LabelDb {
     pub async fn get_pending_flags(&self) -> Result<Vec<FlaggedTrack>, sqlx::Error> {
         // Get all copyright-violation labels with context via LEFT JOIN
         let rows: Vec<FlaggedRow> = sqlx::query_as(
-                r#"
+            r#"
                 SELECT l.seq, l.uri, l.val, l.cts,
-                       c.track_title, c.artist_handle, c.artist_did, c.highest_score, c.matches
+                       c.track_title, c.artist_handle, c.artist_did, c.highest_score, c.matches,
+                       c.resolution_reason, c.resolution_notes
                 FROM labels l
                 LEFT JOIN label_context c ON l.uri = c.uri
                 WHERE l.val = 'copyright-violation' AND l.neg = false
                 ORDER BY l.seq DESC
                 "#,
-            )
-            .fetch_all(&self.pool)
-            .await?;
+        )
+        .fetch_all(&self.pool)
+        .await?;
 
         // Get all negation labels
         let negated_uris: std::collections::HashSet<String> = sqlx::query_scalar::<_, String>(
@@ -385,28 +496,48 @@ impl LabelDb {
 
         let tracks = rows
             .into_iter()
-            .map(|(seq, uri, val, cts, track_title, artist_handle, artist_did, highest_score, matches)| {
-                let context = if track_title.is_some() || artist_handle.is_some() {
-                    Some(LabelContext {
-                        track_title,
-                        artist_handle,
-                        artist_did,
-                        highest_score,
-                        matches: matches.and_then(|v| serde_json::from_value(v).ok()),
-                    })
-                } else {
-                    None
-                };
-
-                FlaggedTrack {
+            .map(
+                |(
                     seq,
-                    uri: uri.clone(),
+                    uri,
                     val,
-                    created_at: cts.format("%Y-%m-%d %H:%M:%S").to_string(),
-                    resolved: negated_uris.contains(&uri),
-                    context,
-                }
-            })
+                    cts,
+                    track_title,
+                    artist_handle,
+                    artist_did,
+                    highest_score,
+                    matches,
+                    resolution_reason,
+                    resolution_notes,
+                )| {
+                    let context = if track_title.is_some()
+                        || artist_handle.is_some()
+                        || resolution_reason.is_some()
+                    {
+                        Some(LabelContext {
+                            track_title,
+                            artist_handle,
+                            artist_did,
+                            highest_score,
+                            matches: matches.and_then(|v| serde_json::from_value(v).ok()),
+                            resolution_reason: resolution_reason
+                                .and_then(|s| ResolutionReason::from_str(&s)),
+                            resolution_notes,
+                        })
+                    } else {
+                        None
+                    };
+
+                    FlaggedTrack {
+                        seq,
+                        uri: uri.clone(),
+                        val,
+                        created_at: cts.format("%Y-%m-%d %H:%M:%S").to_string(),
+                        resolved: negated_uris.contains(&uri),
+                        context,
+                    }
+                },
+            )
             .collect();
 
         Ok(tracks)
@@ -424,8 +555,60 @@ impl LabelRow {
             val: self.val.clone(),
             neg: if self.neg { Some(true) } else { None },
             cts: self.cts.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
-            exp: self.exp.map(|e| e.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()),
+            exp: self
+                .exp
+                .map(|e| e.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()),
             sig: Some(bytes::Bytes::from(self.sig.clone())),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolution_reason_from_str() {
+        assert_eq!(
+            ResolutionReason::from_str("original_artist"),
+            Some(ResolutionReason::OriginalArtist)
+        );
+        assert_eq!(
+            ResolutionReason::from_str("licensed"),
+            Some(ResolutionReason::Licensed)
+        );
+        assert_eq!(
+            ResolutionReason::from_str("fingerprint_noise"),
+            Some(ResolutionReason::FingerprintNoise)
+        );
+        assert_eq!(
+            ResolutionReason::from_str("cover_version"),
+            Some(ResolutionReason::CoverVersion)
+        );
+        assert_eq!(
+            ResolutionReason::from_str("other"),
+            Some(ResolutionReason::Other)
+        );
+        assert_eq!(ResolutionReason::from_str("invalid"), None);
+    }
+
+    #[test]
+    fn test_resolution_reason_labels() {
+        assert_eq!(ResolutionReason::OriginalArtist.label(), "original artist");
+        assert_eq!(ResolutionReason::Licensed.label(), "licensed");
+        assert_eq!(
+            ResolutionReason::FingerprintNoise.label(),
+            "fingerprint noise"
+        );
+        assert_eq!(ResolutionReason::CoverVersion.label(), "cover/remix");
+        assert_eq!(ResolutionReason::Other.label(), "other");
+    }
+
+    #[test]
+    fn test_label_context_default() {
+        let ctx = LabelContext::default();
+        assert!(ctx.track_title.is_none());
+        assert!(ctx.resolution_reason.is_none());
+        assert!(ctx.resolution_notes.is_none());
     }
 }

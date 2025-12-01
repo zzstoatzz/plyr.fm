@@ -113,9 +113,7 @@ pub async fn scan(
 
     info!(
         match_count = matches.len(),
-        highest_score,
-        is_flagged,
-        "scan complete"
+        highest_score, is_flagged, "scan complete"
     );
 
     Ok(Json(ScanResponse {

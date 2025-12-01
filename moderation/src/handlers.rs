@@ -142,7 +142,10 @@ pub async fn emit_label(
     Json(request): Json<EmitLabelRequest>,
 ) -> Result<Json<EmitLabelResponse>, AppError> {
     let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
-    let signer = state.signer.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+    let signer = state
+        .signer
+        .as_ref()
+        .ok_or(AppError::LabelerNotConfigured)?;
 
     info!(uri = %request.uri, val = %request.val, neg = request.neg, "emitting label");
 
@@ -168,6 +171,8 @@ pub async fn emit_label(
             artist_did: ctx.artist_did,
             highest_score: ctx.highest_score,
             matches: ctx.matches,
+            resolution_reason: None,
+            resolution_notes: None,
         };
         if let Err(e) = db.store_context(&request.uri, &label_ctx).await {
             // Log but don't fail - context is supplementary

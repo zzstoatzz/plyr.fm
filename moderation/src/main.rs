@@ -20,11 +20,11 @@ use tracing::{info, warn};
 
 mod admin;
 mod audd;
+mod auth;
 mod config;
 mod db;
 mod handlers;
 mod labels;
-mod auth;
 mod state;
 mod xrpc;
 
@@ -86,7 +86,10 @@ async fn main() -> anyhow::Result<()> {
         // Static files (CSS, JS for admin UI)
         .nest_service("/static", ServeDir::new("static"))
         // ATProto XRPC endpoints (public)
-        .route("/xrpc/com.atproto.label.queryLabels", get(xrpc::query_labels))
+        .route(
+            "/xrpc/com.atproto.label.queryLabels",
+            get(xrpc::query_labels),
+        )
         .route(
             "/xrpc/com.atproto.label.subscribeLabels",
             get(xrpc::subscribe_labels),
