@@ -25,7 +25,7 @@
 *   **Setup:** `uv sync && just frontend install`
 *   **Backend:** `just run-backend` (or `uv run uvicorn backend.main:app --reload`)
 *   **Frontend:** `just frontend dev` (or `cd frontend && bun run dev`)
-*   **Tests:** `just test`
+*   **Tests:** `just backend test`
 *   **Linting:** `just lint`
 *   **Migrations:** `just migrate "message"` (create), `just migrate-up` (apply)
 
