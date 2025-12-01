@@ -1,6 +1,13 @@
 //! Admin API for reviewing and resolving copyright flags.
+//!
+//! Uses htmx for interactivity with server-rendered HTML.
 
-use axum::{extract::State, response::Html, Json};
+use axum::{
+    extract::State,
+    http::header::CONTENT_TYPE,
+    response::{IntoResponse, Response},
+    Json,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::db::LabelContext;
@@ -13,7 +20,7 @@ pub struct FlaggedTrack {
     pub uri: String,
     pub val: String,
     pub created_at: String,
-    /// If there's a negation label for this URI+val, it's been resolved.
+    /// Track status: pending review, resolved (false positive), or confirmed (takedown).
     pub resolved: bool,
     /// Optional context about the track (title, artist, matches).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,15 +75,23 @@ pub struct StoreContextResponse {
     pub message: String,
 }
 
-/// List all flagged tracks (copyright-violation labels without negations).
+/// List all flagged tracks - returns JSON for API, HTML for htmx.
 pub async fn list_flagged(
     State(state): State<AppState>,
 ) -> Result<Json<ListFlaggedResponse>, AppError> {
     let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+    let tracks = db.get_pending_flags().await?;
+    Ok(Json(ListFlaggedResponse { tracks }))
+}
 
+/// Render flags as HTML partial for htmx.
+pub async fn list_flagged_html(State(state): State<AppState>) -> Result<Response, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
     let tracks = db.get_pending_flags().await?;
 
-    Ok(Json(ListFlaggedResponse { tracks }))
+    let html = render_flags_list(&tracks);
+
+    Ok(([(CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response())
 }
 
 /// Resolve (negate) a copyright flag, marking it as a false positive.
@@ -106,6 +121,43 @@ pub async fn resolve_flag(
     }))
 }
 
+/// Resolve flag and return HTML response for htmx.
+pub async fn resolve_flag_htmx(
+    State(state): State<AppState>,
+    axum::Form(request): axum::Form<ResolveRequest>,
+) -> Result<Response, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+    let signer = state.signer.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    tracing::info!(uri = %request.uri, val = %request.val, "resolving flag via htmx");
+
+    // Create a negation label
+    let label = crate::labels::Label::new(signer.did(), &request.uri, &request.val).negated();
+    let label = signer.sign_label(label)?;
+
+    let seq = db.store_label(&label).await?;
+
+    // Broadcast to subscribers
+    if let Some(tx) = &state.label_tx {
+        let _ = tx.send((seq, label));
+    }
+
+    // Return success toast + trigger refresh
+    let html = format!(
+        r#"<div id="toast" class="toast success" hx-swap-oob="true">resolved (seq: {})</div>"#,
+        seq
+    );
+
+    Ok((
+        [
+            (CONTENT_TYPE, "text/html; charset=utf-8"),
+        ],
+        [(axum::http::header::HeaderName::from_static("hx-trigger"), "flagsUpdated")],
+        html,
+    )
+        .into_response())
+}
+
 /// Store context for a label (for backfill without re-emitting labels).
 pub async fn store_context(
     State(state): State<AppState>,
@@ -130,331 +182,128 @@ pub async fn store_context(
     }))
 }
 
-/// Serve the admin UI HTML.
-pub async fn admin_ui() -> Html<&'static str> {
-    Html(ADMIN_HTML)
+/// Serve the admin UI HTML from static file.
+pub async fn admin_ui() -> Result<Response, AppError> {
+    let html = tokio::fs::read_to_string("static/admin.html").await?;
+    Ok(([(CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response())
 }
 
-const ADMIN_HTML: &str = r##"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>plyr.fm moderation admin</title>
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            background: #0a0a0a;
-            color: #e5e5e5;
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        h1 { color: #fff; margin-bottom: 8px; }
-        .subtitle { color: #888; margin-bottom: 24px; }
-        .auth-form {
-            background: #111;
-            border: 1px solid #222;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 24px;
-        }
-        .auth-form input {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            color: #fff;
-            padding: 8px 12px;
-            border-radius: 4px;
-            width: 300px;
-            margin-right: 8px;
-        }
-        .auth-form button {
-            background: #3b82f6;
-            color: #fff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .auth-form button:hover { background: #2563eb; }
-        .status {
-            padding: 8px 12px;
-            border-radius: 4px;
-            margin-bottom: 16px;
-            display: none;
-        }
-        .status.error { display: block; background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-        .status.success { display: block; background: rgba(34, 197, 94, 0.2); color: #22c55e; }
-        .flags-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .flag-card {
-            background: #111;
-            border: 1px solid #222;
-            border-radius: 8px;
-            padding: 16px;
-        }
-        .flag-card.resolved { opacity: 0.6; }
-        .flag-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 12px;
-        }
-        .track-info h3 {
-            margin: 0 0 4px 0;
-            color: #fff;
-            font-size: 1.1em;
-        }
-        .track-info .artist {
-            color: #888;
-            font-size: 0.9em;
-        }
-        .track-info .uri {
-            font-family: monospace;
-            font-size: 0.75em;
-            color: #666;
-            word-break: break-all;
-            margin-top: 4px;
-        }
-        .flag-badges {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.8em;
-        }
-        .badge.pending { background: rgba(234, 179, 8, 0.2); color: #eab308; }
-        .badge.resolved { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
-        .badge.score { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-        .matches {
-            background: #0a0a0a;
-            border-radius: 4px;
-            padding: 12px;
-            margin-top: 12px;
-        }
-        .matches h4 {
-            margin: 0 0 8px 0;
-            color: #888;
-            font-size: 0.85em;
-            font-weight: 500;
-        }
-        .match-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 6px 0;
-            border-bottom: 1px solid #1a1a1a;
-            font-size: 0.9em;
-        }
-        .match-item:last-child { border-bottom: none; }
-        .match-item .title { color: #e5e5e5; }
-        .match-item .artist { color: #888; }
-        .match-item .score {
-            color: #ef4444;
-            font-family: monospace;
-        }
-        .flag-actions {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #222;
-        }
-        .resolve-btn {
-            background: #f59e0b;
-            color: #000;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.85em;
-            font-weight: 500;
-        }
-        .resolve-btn:hover { background: #d97706; }
-        .resolve-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
-        .empty { color: #666; text-align: center; padding: 40px; }
-        .loading { color: #888; text-align: center; padding: 40px; }
-        .refresh-btn {
-            background: #333;
-            color: #fff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-left: auto;
-        }
-        .refresh-btn:hover { background: #444; }
-        .header-row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-        .header-row h2 { margin: 0; }
-        .no-context { color: #666; font-style: italic; font-size: 0.9em; }
-    </style>
-</head>
-<body>
-    <h1>moderation admin</h1>
-    <p class="subtitle">review and resolve copyright flags</p>
+/// Render the flags list as HTML.
+fn render_flags_list(tracks: &[FlaggedTrack]) -> String {
+    if tracks.is_empty() {
+        return r#"<div class="empty">no flagged tracks</div>"#.to_string();
+    }
 
-    <div class="auth-form">
-        <input type="password" id="token" placeholder="moderation auth token">
-        <button onclick="authenticate()">authenticate</button>
-    </div>
+    let cards: Vec<String> = tracks.iter().map(render_flag_card).collect();
+    cards.join("\n")
+}
 
-    <div id="status" class="status"></div>
+/// Render a single flag card as HTML.
+fn render_flag_card(track: &FlaggedTrack) -> String {
+    let ctx = track.context.as_ref();
+    let has_context = ctx.map_or(false, |c| c.track_title.is_some() || c.artist_handle.is_some());
 
-    <div id="content" style="display: none;">
-        <div class="header-row">
-            <h2>flagged tracks</h2>
-            <button class="refresh-btn" onclick="loadFlags()">refresh</button>
-        </div>
-        <div id="flags-list" class="flags-list">
-            <div class="loading">loading...</div>
-        </div>
-    </div>
+    let track_info = if has_context {
+        let c = ctx.unwrap();
+        format!(
+            r#"<h3>{}</h3>
+            <div class="artist">by @{}</div>"#,
+            html_escape(c.track_title.as_deref().unwrap_or("unknown track")),
+            html_escape(c.artist_handle.as_deref().unwrap_or("unknown"))
+        )
+    } else {
+        r#"<div class="no-context">no track info available</div>"#.to_string()
+    };
 
-    <script>
-        let authToken = localStorage.getItem('moderation_token') || '';
+    let score_badge = ctx
+        .and_then(|c| c.highest_score)
+        .filter(|&s| s > 0.0)
+        .map(|s| format!(r#"<span class="badge score">{}% match</span>"#, (s * 100.0) as i32))
+        .unwrap_or_default();
 
-        if (authToken) {
-            document.getElementById('token').value = '••••••••';
-            showContent();
-            loadFlags();
-        }
+    let status_badge = if track.resolved {
+        r#"<span class="badge resolved">resolved</span>"#
+    } else {
+        r#"<span class="badge pending">pending</span>"#
+    };
 
-        function authenticate() {
-            authToken = document.getElementById('token').value;
-            localStorage.setItem('moderation_token', authToken);
-            showContent();
-            loadFlags();
-        }
+    let matches_html = ctx
+        .and_then(|c| c.matches.as_ref())
+        .filter(|m| !m.is_empty())
+        .map(|matches| {
+            let items: Vec<String> = matches
+                .iter()
+                .take(3)
+                .map(|m| {
+                    format!(
+                        r#"<div class="match-item">
+                            <span><span class="title">{}</span> <span class="artist">by {}</span></span>
+                            <span class="score">{}%</span>
+                        </div>"#,
+                        html_escape(&m.title),
+                        html_escape(&m.artist),
+                        (m.score * 100.0) as i32
+                    )
+                })
+                .collect();
+            format!(
+                r#"<div class="matches">
+                    <h4>potential matches</h4>
+                    {}
+                </div>"#,
+                items.join("\n")
+            )
+        })
+        .unwrap_or_default();
 
-        function showContent() {
-            document.getElementById('content').style.display = 'block';
-        }
+    let action_button = if track.resolved {
+        r#"<button class="btn btn-secondary" disabled>resolved</button>"#.to_string()
+    } else {
+        format!(
+            r#"<form hx-post="/admin/resolve-htmx" hx-swap="none" style="display:inline">
+                <input type="hidden" name="uri" value="{}">
+                <input type="hidden" name="val" value="{}">
+                <button type="submit" class="btn btn-warning">mark false positive</button>
+            </form>"#,
+            html_escape(&track.uri),
+            html_escape(&track.val)
+        )
+    };
 
-        function showStatus(message, type) {
-            const status = document.getElementById('status');
-            status.textContent = message;
-            status.className = 'status ' + type;
-        }
+    let resolved_class = if track.resolved { " resolved" } else { "" };
 
-        async function loadFlags() {
-            const container = document.getElementById('flags-list');
-            container.innerHTML = '<div class="loading">loading...</div>';
+    format!(
+        r#"<div class="flag-card{}">
+            <div class="flag-header">
+                <div class="track-info">
+                    {}
+                    <div class="uri">{}</div>
+                </div>
+                <div class="flag-badges">
+                    {}
+                    {}
+                </div>
+            </div>
+            {}
+            <div class="flag-actions">
+                {}
+            </div>
+        </div>"#,
+        resolved_class,
+        track_info,
+        html_escape(&track.uri),
+        score_badge,
+        status_badge,
+        matches_html,
+        action_button
+    )
+}
 
-            try {
-                const res = await fetch('/admin/flags', {
-                    headers: { 'X-Moderation-Key': authToken }
-                });
-
-                if (!res.ok) {
-                    if (res.status === 401) {
-                        showStatus('invalid token', 'error');
-                        localStorage.removeItem('moderation_token');
-                        return;
-                    }
-                    throw new Error('failed to load flags');
-                }
-
-                const data = await res.json();
-
-                if (data.tracks.length === 0) {
-                    container.innerHTML = '<div class="empty">no flagged tracks</div>';
-                    return;
-                }
-
-                container.innerHTML = data.tracks.map(track => {
-                    const ctx = track.context || {};
-                    const hasContext = ctx.track_title || ctx.artist_handle;
-                    const matches = ctx.matches || [];
-
-                    return `
-                        <div class="flag-card ${track.resolved ? 'resolved' : ''}">
-                            <div class="flag-header">
-                                <div class="track-info">
-                                    ${hasContext ? `
-                                        <h3>${escapeHtml(ctx.track_title || 'unknown track')}</h3>
-                                        <div class="artist">by @${escapeHtml(ctx.artist_handle || 'unknown')}</div>
-                                    ` : `
-                                        <div class="no-context">no track info available</div>
-                                    `}
-                                    <div class="uri">${escapeHtml(track.uri)}</div>
-                                </div>
-                                <div class="flag-badges">
-                                    ${ctx.highest_score ? `<span class="badge score">${(ctx.highest_score * 100).toFixed(0)}% match</span>` : ''}
-                                    <span class="badge ${track.resolved ? 'resolved' : 'pending'}">${track.resolved ? 'resolved' : 'pending'}</span>
-                                </div>
-                            </div>
-                            ${matches.length > 0 ? `
-                                <div class="matches">
-                                    <h4>potential matches</h4>
-                                    ${matches.slice(0, 3).map(m => `
-                                        <div class="match-item">
-                                            <span><span class="title">${escapeHtml(m.title)}</span> <span class="artist">by ${escapeHtml(m.artist)}</span></span>
-                                            <span class="score">${(m.score * 100).toFixed(0)}%</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            ` : ''}
-                            <div class="flag-actions">
-                                <button class="resolve-btn"
-                                        onclick="resolveFlag('${escapeHtml(track.uri)}', '${escapeHtml(track.val)}')"
-                                        ${track.resolved ? 'disabled' : ''}>
-                                    ${track.resolved ? 'resolved' : 'mark false positive'}
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-
-            } catch (err) {
-                container.innerHTML = `<div class="empty">error: ${err.message}</div>`;
-            }
-        }
-
-        async function resolveFlag(uri, val) {
-            try {
-                const res = await fetch('/admin/resolve', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Moderation-Key': authToken
-                    },
-                    body: JSON.stringify({ uri, val })
-                });
-
-                if (!res.ok) {
-                    const data = await res.json();
-                    throw new Error(data.message || 'failed to resolve');
-                }
-
-                showStatus('flag resolved successfully', 'success');
-                loadFlags();
-
-            } catch (err) {
-                showStatus(err.message, 'error');
-            }
-        }
-
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/&/g, '&amp;')
-                      .replace(/</g, '&lt;')
-                      .replace(/>/g, '&gt;')
-                      .replace(/"/g, '&quot;')
-                      .replace(/'/g, '&#039;');
-        }
-    </script>
-</body>
-</html>
-"##;
+/// Simple HTML escaping.
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#039;")
+}
