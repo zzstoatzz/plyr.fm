@@ -37,6 +37,9 @@ pub enum AppError {
 
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
+
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 impl IntoResponse for AppError {
@@ -49,6 +52,7 @@ impl IntoResponse for AppError {
             }
             AppError::Label(_) => (StatusCode::INTERNAL_SERVER_ERROR, "LabelError"),
             AppError::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, "DatabaseError"),
+            AppError::Io(_) => (StatusCode::INTERNAL_SERVER_ERROR, "IoError"),
         };
         let body = serde_json::json!({
             "error": error_type,

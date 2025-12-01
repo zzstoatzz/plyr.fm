@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>moderation · plyr.fm</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+    <h1>moderation</h1>
+    <p class="subtitle">review and resolve copyright flags</p>
+
+    <div class="auth-section">
+        <input type="password"
+               id="auth-token"
+               placeholder="auth token"
+               onkeyup="if(event.key==='Enter')authenticate()">
+        <button class="btn btn-primary" onclick="authenticate()" style="margin-left: 10px">
+            authenticate
+        </button>
+    </div>
+
+    <div id="main-content" style="display: none;">
+        <div class="header-row">
+            <h2>flagged tracks</h2>
+            <button class="btn btn-secondary"
+                    hx-get="/admin/flags-html"
+                    hx-target="#flags-list"
+                    hx-indicator="#refresh-indicator">
+                <span id="refresh-indicator" class="htmx-indicator">...</span>
+                refresh
+            </button>
+        </div>
+
+        <div id="flags-list" class="flags-list"
+             hx-get="/admin/flags-html"
+             hx-trigger="load, flagsUpdated from:body"
+             hx-indicator="#loading">
+            <div id="loading" class="loading htmx-indicator">loading...</div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script src="/static/admin.js"></script>
+</body>
+</html>
