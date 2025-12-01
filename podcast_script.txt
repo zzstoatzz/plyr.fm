@@ -1,0 +1,25 @@
+Host: Welcome to the plyr.fm update for early December 2025. Just shipped some major copyright moderation infrastructure this past week.
+
+Cohost: Yeah, this is a big one. We integrated an ATProto labeler service into the Rust-based moderation system. Think of it like a referee for the music sharing platform - when copyright violations get detected, proper labels get emitted that other ATProto apps can subscribe to.
+
+Host: The key piece is the admin UI that went live at the end of November. It's built with htmx for server-rendered interactivity, no JavaScript bloat. Admins can review copyright flags, see what tracks got matched against the AuDD fingerprinting API, and mark false positives with a single button click.
+
+Cohost: And those false positive resolutions emit negation labels, which is a nice touch. The system already reviewed 25 flagged tracks - found 8 actual violations, 11 false positives from fingerprint noise, and 6 cases where artists uploaded their own distributed music.
+
+Host: There's also some UX polish worth mentioning. The artist portal now shows a copyright flag indicator on flagged tracks with a tooltip showing the primary match. So artists can see immediately if something got flagged and why.
+
+Cohost: Late November also brought platform stats to the homepage - total plays, tracks, and artists displayed right in the header. Small detail, but it gives visitors an immediate sense of activity.
+
+Host: The Media Session API integration is pretty slick too. Your plyr.fm tracks now show up in CarPlay, lock screens, and system control centers with full metadata and artwork. Play, pause, skip - all works from the system UI.
+
+Cohost: And timed comments shipped. You can drop a comment at a specific timestamp in a track, and clicking that timestamp seeks right to that moment. Makes discussing specific parts of a song much more natural.
+
+Host: There's also developer token functionality with independent OAuth grants. Each token gets its own OAuth flow, separate from your browser session. So you can script uploads or deletions without worrying about your browser logout invalidating the token.
+
+Cohost: Looking back, the project started in November 2025, so we're about a month in. The copyright moderation system was the big push this past week, but earlier in November there was work on export reliability, oEmbed support for embeds, and a lot of mobile UI polish.
+
+Host: The oEmbed endpoint lets plyr.fm tracks embed properly in Leaflet.pub and other services. Before that, you'd just see a basic HTML5 audio element instead of the custom player.
+
+Cohost: Database-backed jobs fixed export failures on large files. Used to hit out-of-memory errors on 90-minute WAV files, but now exports stream to disk with constant memory usage.
+
+Host: That's the snapshot for early December. Copyright moderation infrastructure is live, platform stats are visible, and timed comments let people discuss specific moments in tracks.
