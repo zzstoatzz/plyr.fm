@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "moderation/src/**"
+      - "moderation/static/**"
       - "moderation/Cargo.toml"
       - "moderation/Cargo.lock"
       - "moderation/Dockerfile"
