@@ -158,6 +158,7 @@ async def test_store_scan_result_flagged_emits_label(
         mock_emit.assert_called_once_with(
             uri="at://did:plc:labelertest/fm.plyr.track/abc123",
             cid="bafyreiabc123",
+            track_id=track.id,
             track_title="Labeler Test Track",
             artist_handle="labeler.bsky.social",
             artist_did="did:plc:labelertest",
