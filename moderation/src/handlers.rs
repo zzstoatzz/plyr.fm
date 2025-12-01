@@ -46,6 +46,16 @@ fn default_label_val() -> String {
     "copyright-violation".to_string()
 }
 
+/// Normalize a score from integer (0-100) to float (0.0-1.0) range.
+/// AuDD returns scores as integers like 85 meaning 85%.
+fn normalize_score(score: f64) -> f64 {
+    if score > 1.0 {
+        score / 100.0
+    } else {
+        score
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct EmitLabelResponse {
     pub seq: i64,
@@ -169,8 +179,16 @@ pub async fn emit_label(
             track_title: ctx.track_title,
             artist_handle: ctx.artist_handle,
             artist_did: ctx.artist_did,
-            highest_score: ctx.highest_score,
-            matches: ctx.matches,
+            highest_score: ctx.highest_score.map(normalize_score),
+            matches: ctx.matches.map(|matches| {
+                matches
+                    .into_iter()
+                    .map(|mut m| {
+                        m.score = normalize_score(m.score);
+                        m
+                    })
+                    .collect()
+            }),
             resolution_reason: None,
             resolution_notes: None,
         };
@@ -186,4 +204,23 @@ pub async fn emit_label(
     }
 
     Ok(Json(EmitLabelResponse { seq, label }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_score() {
+        // Integer scores (0-100) should be converted to 0.0-1.0
+        assert!((normalize_score(85.0) - 0.85).abs() < 0.001);
+        assert!((normalize_score(100.0) - 1.0).abs() < 0.001);
+        assert!((normalize_score(50.0) - 0.5).abs() < 0.001);
+
+        // Scores already in 0.0-1.0 range should stay unchanged
+        assert!((normalize_score(0.85) - 0.85).abs() < 0.001);
+        assert!((normalize_score(1.0) - 1.0).abs() < 0.001);
+        assert!((normalize_score(0.5) - 0.5).abs() < 0.001);
+        assert!((normalize_score(0.0) - 0.0).abs() < 0.001);
+    }
 }
