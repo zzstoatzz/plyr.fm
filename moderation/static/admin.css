@@ -209,9 +209,28 @@ h1 {
     color: var(--text-primary);
 }
 
+.track-info h3 a {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.track-info h3 a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
 .track-info .artist {
     color: var(--text-secondary);
     font-size: 0.9rem;
+}
+
+.track-info .artist a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.track-info .artist a:hover {
+    text-decoration: underline;
 }
 
 .track-info .uri {
@@ -223,7 +242,9 @@ h1 {
 
 .flag-badges {
     display: flex;
-    gap: 8px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
     flex-shrink: 0;
 }
 
@@ -246,8 +267,8 @@ h1 {
 }
 
 .badge.matches {
-    background: rgba(251, 191, 36, 0.15);
-    color: #fbbf24;
+    background: rgba(106, 159, 255, 0.15);
+    color: var(--accent);
 }
 
 .badge.env {

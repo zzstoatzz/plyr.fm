@@ -78,6 +78,7 @@ pub struct StoreContextRequest {
 /// Context payload for storage.
 #[derive(Debug, Deserialize)]
 pub struct ContextPayload {
+    pub track_id: Option<i64>,
     pub track_title: Option<String>,
     pub artist_handle: Option<String>,
     pub artist_did: Option<String>,
@@ -225,6 +226,7 @@ pub async fn store_context(
     tracing::info!(uri = %request.uri, "storing label context");
 
     let label_ctx = LabelContext {
+        track_id: request.context.track_id,
         track_title: request.context.track_title,
         artist_handle: request.context.artist_handle,
         artist_did: request.context.artist_did,
@@ -306,11 +308,35 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
 
     let track_info = if has_context {
         let c = ctx.unwrap();
+        let handle = c.artist_handle.as_deref().unwrap_or("unknown");
+        let title = c.track_title.as_deref().unwrap_or("unknown track");
+
+        // Link to track if we have track_id
+        let title_html = if let Some(track_id) = c.track_id {
+            format!(
+                r#"<a href="https://plyr.fm/track/{}" target="_blank" rel="noopener">{}</a>"#,
+                track_id,
+                html_escape(title)
+            )
+        } else {
+            html_escape(title)
+        };
+
+        // Link to artist if we have handle
+        let artist_link = if handle != "unknown" {
+            format!(
+                r#"<a href="https://plyr.fm/u/{}" target="_blank" rel="noopener">@{}</a>"#,
+                html_escape(handle),
+                html_escape(handle)
+            )
+        } else {
+            format!("@{}", html_escape(handle))
+        };
         format!(
             r#"<h3>{}</h3>
-            <div class="artist">by @{}</div>"#,
-            html_escape(c.track_title.as_deref().unwrap_or("unknown track")),
-            html_escape(c.artist_handle.as_deref().unwrap_or("unknown"))
+            <div class="artist">by {}</div>"#,
+            title_html,
+            artist_link
         )
     } else {
         r#"<div class="no-context">no track info available</div>"#.to_string()
