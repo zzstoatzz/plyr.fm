@@ -90,13 +90,20 @@ jobs:
 
             if skip_audio is false:
             1. write a 2-3 minute podcast script to podcast_script.txt
-               - two hosts having a casual technical conversation
+               - two hosts having a casual conversation
                - focus on shipped features from the top of STATUS.md
                - format: "Host: ..." and "Cohost: ..." lines
 
+               tone guidelines:
+               - accessible to non-technical listeners, but don't dumb it down
+               - focus on user impact: what can people do now that they couldn't before?
+               - use intuitive analogies to explain technical concepts in terms of everyday experience
+               - matter-of-fact delivery, not hype-y or marketing-speak
+               - brief, conversational - like two friends catching up on what shipped
+
             2. run: uv run scripts/generate_tts.py podcast_script.txt update.wav
 
-            3. run: uv run --with plyrfm -- plyrfm upload update.wav "plyr.fm update - <today's date>"
+            3. run: uv run --with plyrfm -- plyrfm upload update.wav "plyr.fm update - <today's date>" --album "$(date +%Y)"
 
             ## task 3: open PR with changes
 
