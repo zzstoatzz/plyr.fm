@@ -86,6 +86,7 @@ jobs:
                - two hosts having a casual conversation
                - focus on shipped features from the top of STATUS.md
                - format: "Host: ..." and "Cohost: ..." lines
+               - IMPORTANT: "plyr.fm" is pronounced "player FM" (not "plir" or spelling it out)
 
                temporal awareness:
                - use the git history to understand WHEN things actually shipped
@@ -102,13 +103,15 @@ jobs:
 
             2. run: uv run scripts/generate_tts.py podcast_script.txt update.wav
 
-            3. DO NOT upload to plyr.fm yet - that happens after PR merge
+            3. delete the podcast script (we only need the audio): rm podcast_script.txt
+
+            4. DO NOT upload to plyr.fm yet - that happens after PR merge
 
             ## task 4: open PR with changes
 
             if any files changed (.status_history/*, STATUS.md) OR audio was generated:
             1. create a new branch: git checkout -b status-maintenance-<date>
-            2. git add .status_history/ STATUS.md update.wav (include the audio file!)
+            2. git add .status_history/ STATUS.md update.wav (do NOT add podcast_script.txt)
             3. commit with message "chore: weekly status maintenance"
             4. push the branch: git push -u origin status-maintenance-<date>
             5. create a PR using: gh pr create --title "chore: weekly status maintenance" --body "automated status archival and audio overview"

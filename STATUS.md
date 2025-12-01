@@ -1,3 +1,46 @@
+# plyr.fm - status
+
+## long-term vision
+
+### the problem
+
+today's music streaming is fundamentally broken:
+- spotify and apple music trap your data in proprietary silos
+- artists pay distribution fees and streaming cuts to multiple gatekeepers
+- listeners can't own their music collections - they rent them
+- switching platforms means losing everything: playlists, play history, social connections
+
+### the atproto solution
+
+plyr.fm is built on the AT Protocol (the protocol powering Bluesky) and enables:
+- **portable identity**: your music collection, playlists, and listening history belong to you, stored in your personal data server (PDS)
+- **decentralized distribution**: artists publish directly to the network without platform gatekeepers
+- **interoperable data**: any client can read your music records - you're not locked into plyr.fm
+- **authentic social**: artist profiles are real ATProto identities with verifiable handles (@artist.bsky.social)
+
+### the dream state
+
+plyr.fm should become:
+
+1. **for artists**: the easiest way to publish music to the decentralized web
+   - upload once, available everywhere in the ATProto network
+   - direct connection to listeners without platform intermediaries
+   - real ownership of audience relationships
+
+2. **for listeners**: a streaming platform where you actually own your data
+   - your collection lives in your PDS, playable by any ATProto music client
+   - switch between plyr.fm and other clients freely - your data travels with you
+   - share tracks as native ATProto posts to Bluesky
+
+3. **for developers**: a reference implementation showing how to build on ATProto
+   - open source end-to-end example of ATProto integration
+   - demonstrates OAuth, record creation, federation patterns
+   - proves decentralized music streaming is viable
+
+---
+
+## recent work
+
 ### ATProto labeler and admin UI improvements (PRs #385-395, Nov 29-Dec 1, 2025)
 
 **motivation**: integrate with ATProto labeling protocol for proper copyright violation signaling, and improve admin tooling for reviewing flagged content.
