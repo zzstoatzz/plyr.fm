@@ -1,11 +1,12 @@
 """ATProto record creation for relay audio items."""
 
 import asyncio
-import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from atproto_client import AsyncClient
+from atproto_client.models.dot_dict import DotDict
 from atproto_oauth.models import OAuthSession
 
 from backend._internal import Session as AuthSession
@@ -150,6 +151,21 @@ async def _refresh_session_tokens(
             raise ValueError(f"failed to refresh access token: {e}") from e
 
 
+def _create_oauth_client_for_session(oauth_session: OAuthSession) -> AsyncClient:
+    """create an AsyncClient configured for a specific OAuth session.
+
+    the client is configured with OAuth parameters and logged in with the session.
+    all requests made through this client will be authenticated with DPoP.
+    """
+    client = AsyncClient(
+        oauth_client_id=settings.atproto.client_id,
+        oauth_redirect_uri=settings.atproto.redirect_uri,
+        oauth_scope=settings.atproto.resolved_scope,
+    )
+    client.oauth_login(oauth_session)
+    return client
+
+
 async def _make_pds_request(
     auth_session: AuthSession,
     method: str,
@@ -158,6 +174,8 @@ async def _make_pds_request(
     success_codes: tuple[int, ...] = (200, 201),
 ) -> dict[str, Any]:
     """make an authenticated request to the PDS with automatic token refresh.
+
+    uses AsyncClient with OAuth mixin for transparent DPoP proof handling.
 
     args:
         auth_session: authenticated user session
@@ -173,6 +191,8 @@ async def _make_pds_request(
         ValueError: if session is invalid
         Exception: if request fails after retry
     """
+    from atproto_client.exceptions import UnauthorizedError
+
     oauth_data = auth_session.oauth_session
     if not oauth_data or "access_token" not in oauth_data:
         raise ValueError(
@@ -180,26 +200,38 @@ async def _make_pds_request(
         )
 
     oauth_session = _reconstruct_oauth_session(oauth_data)
-    url = f"{oauth_data['pds_url']}/xrpc/{endpoint}"
 
     for attempt in range(2):
-        response = await oauth_client.make_authenticated_request(
-            session=oauth_session,
-            method=method,
-            url=url,
-            json=payload,
-        )
+        try:
+            # create a fresh client for this request with the user's session
+            client = _create_oauth_client_for_session(oauth_session)
 
-        if response.status_code in success_codes:
-            if response.status_code == 204:
+            # use invoke_procedure for raw XRPC calls
+            # this goes through _invoke which handles DPoP automatically
+            # wrap payload in DotDict for SDK compatibility
+            # type: ignore because SDK types are too narrow (accepts DotDict at runtime)
+            response = await client.invoke_procedure(
+                endpoint,
+                data=DotDict(payload),  # type: ignore[arg-type]
+                input_encoding="application/json",
+                output_encoding="application/json",
+            )
+
+            # invoke_procedure returns Response object, extract the model/dict
+            if response is None:
                 return {}
-            return response.json()
+            # response.model_dump() if it's a pydantic model, or to_dict() if DotDict
+            if hasattr(response, "to_dict"):
+                return response.to_dict()  # type: ignore[no-any-return]
+            if hasattr(response, "model_dump"):
+                return response.model_dump()  # type: ignore[no-any-return]
+            return dict(response) if response else {}  # type: ignore[arg-type]
 
-        # token expired - refresh and retry
-        if response.status_code == 401 and attempt == 0:
-            try:
-                error_data = response.json()
-                if "exp" in error_data.get("message", ""):
+        except UnauthorizedError as e:
+            # token expired - check if we should refresh
+            if attempt == 0:
+                error_message = str(e)
+                if "exp" in error_message.lower():
                     logger.info(
                         f"access token expired for {auth_session.did}, attempting refresh"
                     )
@@ -207,10 +239,80 @@ async def _make_pds_request(
                         auth_session, oauth_session
                     )
                     continue
-            except (json.JSONDecodeError, KeyError):
-                pass
+            raise Exception(f"PDS request failed: {e}") from e
+        except Exception as e:
+            raise Exception(f"PDS request failed: {e}") from e
 
-    raise Exception(f"PDS request failed: {response.status_code} {response.text}")
+    raise Exception("PDS request failed after retry")
+
+
+async def _make_pds_query(
+    auth_session: AuthSession,
+    endpoint: str,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """make an authenticated query (GET) to the PDS with automatic token refresh.
+
+    uses AsyncClient with OAuth mixin for transparent DPoP proof handling.
+
+    args:
+        auth_session: authenticated user session
+        endpoint: XRPC endpoint (e.g., "com.atproto.repo.listRecords")
+        params: query parameters
+
+    returns:
+        response JSON dict
+
+    raises:
+        ValueError: if session is invalid
+        Exception: if request fails after retry
+    """
+    from atproto_client.exceptions import UnauthorizedError
+
+    oauth_data = auth_session.oauth_session
+    if not oauth_data or "access_token" not in oauth_data:
+        raise ValueError(
+            f"OAuth session data missing or invalid for {auth_session.did}"
+        )
+
+    oauth_session = _reconstruct_oauth_session(oauth_data)
+
+    for attempt in range(2):
+        try:
+            client = _create_oauth_client_for_session(oauth_session)
+            # wrap params in DotDict for SDK compatibility
+            # type: ignore because SDK types are too narrow (accepts DotDict at runtime)
+            response = await client.invoke_query(
+                endpoint,
+                params=DotDict(params),  # type: ignore[arg-type]
+                output_encoding="application/json",
+            )
+
+            # extract dict from response
+            if response is None:
+                return {}
+            if hasattr(response, "to_dict"):
+                return response.to_dict()  # type: ignore[no-any-return]
+            if hasattr(response, "model_dump"):
+                return response.model_dump()  # type: ignore[no-any-return]
+            return dict(response) if response else {}  # type: ignore[arg-type]
+
+        except UnauthorizedError as e:
+            if attempt == 0:
+                error_message = str(e)
+                if "exp" in error_message.lower():
+                    logger.info(
+                        f"access token expired for {auth_session.did}, attempting refresh"
+                    )
+                    oauth_session = await _refresh_session_tokens(
+                        auth_session, oauth_session
+                    )
+                    continue
+            raise Exception(f"PDS query failed: {e}") from e
+        except Exception as e:
+            raise Exception(f"PDS query failed: {e}") from e
+
+    raise Exception("PDS query failed after retry")
 
 
 def build_track_record(

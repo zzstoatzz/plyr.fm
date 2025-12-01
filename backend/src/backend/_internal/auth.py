@@ -8,7 +8,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from atproto_oauth import OAuthClient
-from atproto_oauth.stores.memory import MemorySessionStore
 from cryptography.fernet import Fernet
 from fastapi import Cookie, Header, HTTPException
 from sqlalchemy import select
@@ -65,17 +64,16 @@ class Session:
 
 # OAuth stores
 # state store: postgres-backed for multi-instance resilience
-# session store: in-memory (not used, we use UserSession table instead)
+# session persistence is our responsibility (UserSession table with encryption)
 _state_store = PostgresStateStore()
-_session_store = MemorySessionStore()
 
-# OAuth client
+# OAuth client - handles authorization flow only
+# session management is handled by AsyncClient with OAuth mixin
 oauth_client = OAuthClient(
     client_id=settings.atproto.client_id,
     redirect_uri=settings.atproto.redirect_uri,
     scope=settings.atproto.resolved_scope,
     state_store=_state_store,
-    session_store=_session_store,
 )
 
 # encryption for sensitive OAuth data at rest

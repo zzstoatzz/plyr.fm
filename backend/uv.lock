@@ -278,8 +278,8 @@ wheels = [
 
 [[package]]
 name = "atproto"
-version = "0.0.1.dev461"
-source = { git = "https://github.com/zzstoatzz/atproto?rev=main#57bb99a28c916a5b5c960ade00e4f82695860af1" }
+version = "0.0.1.dev469"
+source = { git = "https://github.com/zzstoatzz/atproto?rev=feat%2Foauth-client-mixin#9a65f7960e79a3da12c207f10ac5f7755477ffc0" }
 dependencies = [
     { name = "click" },
     { name = "cryptography" },
@@ -350,7 +350,7 @@ requires-dist = [
     { name = "aioboto3", specifier = ">=15.5.0" },
     { name = "alembic", specifier = ">=1.14.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
-    { name = "atproto", git = "https://github.com/zzstoatzz/atproto?rev=main" },
+    { name = "atproto", git = "https://github.com/zzstoatzz/atproto?rev=feat%2Foauth-client-mixin" },
     { name = "boto3", specifier = ">=1.37.0" },
     { name = "cachetools", specifier = ">=6.2.1" },
     { name = "fastapi", specifier = ">=0.115.0" },
