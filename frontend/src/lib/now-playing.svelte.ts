@@ -77,20 +77,33 @@ class NowPlayingService {
 		this.lastReportedState = stateFingerprint;
 	}
 
+	private pendingState: { track: Track; isPlaying: boolean; currentTimeMs: number; durationMs: number } | null = null;
+
 	private scheduleReport(
 		track: Track,
 		isPlaying: boolean,
 		currentTimeMs: number,
 		durationMs: number
 	): void {
+		// always update pending state so timer fires with latest values
+		this.pendingState = { track, isPlaying, currentTimeMs, durationMs };
+
 		if (this.reportTimer !== null) {
-			return; // already scheduled
+			return; // timer already running
 		}
 
 		this.reportTimer = window.setTimeout(async () => {
 			this.reportTimer = null;
-			await this.sendReport(track, isPlaying, currentTimeMs, durationMs);
-			this.lastReportTime = Date.now();
+			if (this.pendingState) {
+				await this.sendReport(
+					this.pendingState.track,
+					this.pendingState.isPlaying,
+					this.pendingState.currentTimeMs,
+					this.pendingState.durationMs
+				);
+				this.pendingState = null;
+				this.lastReportTime = Date.now();
+			}
 		}, REPORT_DEBOUNCE_MS);
 	}
 
