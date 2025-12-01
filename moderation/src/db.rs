@@ -1,10 +1,51 @@
 //! Database operations for the labeler.
 
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 
 use crate::admin::FlaggedTrack;
 use crate::labels::Label;
+
+/// Type alias for context row from database query.
+type ContextRow = (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<f64>,
+    Option<serde_json::Value>,
+);
+
+/// Type alias for flagged track row from database query.
+type FlaggedRow = (
+    i64,
+    String,
+    String,
+    DateTime<Utc>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<f64>,
+    Option<serde_json::Value>,
+);
+
+/// Copyright match info stored alongside labels.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CopyrightMatch {
+    pub title: String,
+    pub artist: String,
+    pub score: f64,
+}
+
+/// Context stored alongside a label for display in admin UI.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LabelContext {
+    pub track_title: Option<String>,
+    pub artist_handle: Option<String>,
+    pub artist_did: Option<String>,
+    pub highest_score: Option<f64>,
+    pub matches: Option<Vec<CopyrightMatch>>,
+}
 
 /// Database connection pool and operations.
 #[derive(Clone)]
@@ -71,7 +112,84 @@ impl LabelDb {
             .execute(&self.pool)
             .await?;
 
+        // Label context table for admin UI display
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS label_context (
+                id BIGSERIAL PRIMARY KEY,
+                uri TEXT NOT NULL UNIQUE,
+                track_title TEXT,
+                artist_handle TEXT,
+                artist_did TEXT,
+                highest_score DOUBLE PRECISION,
+                matches JSONB,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_label_context_uri ON label_context(uri)")
+            .execute(&self.pool)
+            .await?;
+
         Ok(())
+    }
+
+    /// Store or update label context for a URI.
+    pub async fn store_context(&self, uri: &str, context: &LabelContext) -> Result<(), sqlx::Error> {
+        let matches_json = context
+            .matches
+            .as_ref()
+            .map(|m| serde_json::to_value(m).unwrap_or_default());
+
+        sqlx::query(
+            r#"
+            INSERT INTO label_context (uri, track_title, artist_handle, artist_did, highest_score, matches)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (uri) DO UPDATE SET
+                track_title = EXCLUDED.track_title,
+                artist_handle = EXCLUDED.artist_handle,
+                artist_did = EXCLUDED.artist_did,
+                highest_score = EXCLUDED.highest_score,
+                matches = EXCLUDED.matches
+            "#,
+        )
+        .bind(uri)
+        .bind(&context.track_title)
+        .bind(&context.artist_handle)
+        .bind(&context.artist_did)
+        .bind(context.highest_score)
+        .bind(matches_json)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get label context for a URI.
+    pub async fn get_context(&self, uri: &str) -> Result<Option<LabelContext>, sqlx::Error> {
+        let row: Option<ContextRow> = sqlx::query_as(
+                r#"
+                SELECT track_title, artist_handle, artist_did, highest_score, matches
+                FROM label_context
+                WHERE uri = $1
+                "#,
+            )
+            .bind(uri)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        Ok(row.map(|(track_title, artist_handle, artist_did, highest_score, matches)| {
+            LabelContext {
+                track_title,
+                artist_handle,
+                artist_did,
+                highest_score,
+                matches: matches.and_then(|v| serde_json::from_value(v).ok()),
+            }
+        }))
     }
 
     /// Store a signed label and return its sequence number.
@@ -234,48 +352,60 @@ impl LabelDb {
             .map(|s| s.unwrap_or(0))
     }
 
-    /// Get all copyright-violation labels with their resolution status.
+    /// Get all copyright-violation labels with their resolution status and context.
     ///
     /// A label is resolved if there's a negation label for the same uri+val.
     pub async fn get_pending_flags(&self) -> Result<Vec<FlaggedTrack>, sqlx::Error> {
-        // Get all copyright-violation labels (non-negations)
-        let rows = sqlx::query_as::<_, LabelRow>(
-            r#"
-            SELECT seq, src, uri, cid, val, neg, cts, exp, sig
-            FROM labels
-            WHERE val = 'copyright-violation' AND neg = false
-            ORDER BY seq DESC
-            "#,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        // Get all negation labels for these URIs
-        let uris: Vec<String> = rows.iter().map(|r| r.uri.clone()).collect();
-        let negated_uris: std::collections::HashSet<String> = if !uris.is_empty() {
-            sqlx::query_scalar::<_, String>(
+        // Get all copyright-violation labels with context via LEFT JOIN
+        let rows: Vec<FlaggedRow> = sqlx::query_as(
                 r#"
-                SELECT DISTINCT uri
-                FROM labels
-                WHERE val = 'copyright-violation' AND neg = true
+                SELECT l.seq, l.uri, l.val, l.cts,
+                       c.track_title, c.artist_handle, c.artist_did, c.highest_score, c.matches
+                FROM labels l
+                LEFT JOIN label_context c ON l.uri = c.uri
+                WHERE l.val = 'copyright-violation' AND l.neg = false
+                ORDER BY l.seq DESC
                 "#,
             )
             .fetch_all(&self.pool)
-            .await?
-            .into_iter()
-            .collect()
-        } else {
-            std::collections::HashSet::new()
-        };
+            .await?;
+
+        // Get all negation labels
+        let negated_uris: std::collections::HashSet<String> = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT DISTINCT uri
+            FROM labels
+            WHERE val = 'copyright-violation' AND neg = true
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .collect();
 
         let tracks = rows
             .into_iter()
-            .map(|r| FlaggedTrack {
-                seq: r.seq,
-                uri: r.uri.clone(),
-                val: r.val,
-                created_at: r.cts.format("%Y-%m-%d %H:%M:%S").to_string(),
-                resolved: negated_uris.contains(&r.uri),
+            .map(|(seq, uri, val, cts, track_title, artist_handle, artist_did, highest_score, matches)| {
+                let context = if track_title.is_some() || artist_handle.is_some() {
+                    Some(LabelContext {
+                        track_title,
+                        artist_handle,
+                        artist_did,
+                        highest_score,
+                        matches: matches.and_then(|v| serde_json::from_value(v).ok()),
+                    })
+                } else {
+                    None
+                };
+
+                FlaggedTrack {
+                    seq,
+                    uri: uri.clone(),
+                    val,
+                    created_at: cts.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    resolved: negated_uris.contains(&uri),
+                    context,
+                }
             })
             .collect();
 

@@ -3,6 +3,7 @@
 use axum::{extract::State, response::Html, Json};
 use serde::{Deserialize, Serialize};
 
+use crate::db::LabelContext;
 use crate::state::{AppError, AppState};
 
 /// A flagged track pending review.
@@ -14,6 +15,9 @@ pub struct FlaggedTrack {
     pub created_at: String,
     /// If there's a negation label for this URI+val, it's been resolved.
     pub resolved: bool,
+    /// Optional context about the track (title, artist, matches).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<LabelContext>,
 }
 
 /// Response for listing flagged tracks.
@@ -38,6 +42,29 @@ fn default_val() -> String {
 #[derive(Debug, Serialize)]
 pub struct ResolveResponse {
     pub seq: i64,
+    pub message: String,
+}
+
+/// Request to store label context (for backfill).
+#[derive(Debug, Deserialize)]
+pub struct StoreContextRequest {
+    pub uri: String,
+    pub context: ContextPayload,
+}
+
+/// Context payload for storage.
+#[derive(Debug, Deserialize)]
+pub struct ContextPayload {
+    pub track_title: Option<String>,
+    pub artist_handle: Option<String>,
+    pub artist_did: Option<String>,
+    pub highest_score: Option<f64>,
+    pub matches: Option<Vec<crate::db::CopyrightMatch>>,
+}
+
+/// Response after storing context.
+#[derive(Debug, Serialize)]
+pub struct StoreContextResponse {
     pub message: String,
 }
 
@@ -79,6 +106,30 @@ pub async fn resolve_flag(
     }))
 }
 
+/// Store context for a label (for backfill without re-emitting labels).
+pub async fn store_context(
+    State(state): State<AppState>,
+    Json(request): Json<StoreContextRequest>,
+) -> Result<Json<StoreContextResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    tracing::info!(uri = %request.uri, "storing label context");
+
+    let label_ctx = LabelContext {
+        track_title: request.context.track_title,
+        artist_handle: request.context.artist_handle,
+        artist_did: request.context.artist_did,
+        highest_score: request.context.highest_score,
+        matches: request.context.matches,
+    };
+
+    db.store_context(&request.uri, &label_ctx).await?;
+
+    Ok(Json(StoreContextResponse {
+        message: format!("context stored for {}", request.uri),
+    }))
+}
+
 /// Serve the admin UI HTML.
 pub async fn admin_ui() -> Html<&'static str> {
     Html(ADMIN_HTML)
@@ -96,7 +147,7 @@ const ADMIN_HTML: &str = r##"<!DOCTYPE html>
             font-family: system-ui, -apple-system, sans-serif;
             background: #0a0a0a;
             color: #e5e5e5;
-            max-width: 900px;
+            max-width: 1100px;
             margin: 0 auto;
             padding: 20px;
             line-height: 1.6;
@@ -136,20 +187,44 @@ const ADMIN_HTML: &str = r##"<!DOCTYPE html>
         }
         .status.error { display: block; background: rgba(239, 68, 68, 0.2); color: #ef4444; }
         .status.success { display: block; background: rgba(34, 197, 94, 0.2); color: #22c55e; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
+        .flags-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
-        th, td {
-            text-align: left;
-            padding: 12px;
-            border-bottom: 1px solid #222;
+        .flag-card {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 8px;
+            padding: 16px;
         }
-        th { color: #888; font-weight: 500; }
-        .uri {
+        .flag-card.resolved { opacity: 0.6; }
+        .flag-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .track-info h3 {
+            margin: 0 0 4px 0;
+            color: #fff;
+            font-size: 1.1em;
+        }
+        .track-info .artist {
+            color: #888;
+            font-size: 0.9em;
+        }
+        .track-info .uri {
             font-family: monospace;
-            font-size: 0.85em;
+            font-size: 0.75em;
+            color: #666;
             word-break: break-all;
+            margin-top: 4px;
+        }
+        .flag-badges {
+            display: flex;
+            gap: 8px;
+            align-items: center;
         }
         .badge {
             display: inline-block;
@@ -159,19 +234,54 @@ const ADMIN_HTML: &str = r##"<!DOCTYPE html>
         }
         .badge.pending { background: rgba(234, 179, 8, 0.2); color: #eab308; }
         .badge.resolved { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .badge.score { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .matches {
+            background: #0a0a0a;
+            border-radius: 4px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+        .matches h4 {
+            margin: 0 0 8px 0;
+            color: #888;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        .match-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #1a1a1a;
+            font-size: 0.9em;
+        }
+        .match-item:last-child { border-bottom: none; }
+        .match-item .title { color: #e5e5e5; }
+        .match-item .artist { color: #888; }
+        .match-item .score {
+            color: #ef4444;
+            font-family: monospace;
+        }
+        .flag-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #222;
+        }
         .resolve-btn {
             background: #f59e0b;
             color: #000;
             border: none;
-            padding: 6px 12px;
+            padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 0.85em;
+            font-weight: 500;
         }
         .resolve-btn:hover { background: #d97706; }
-        .resolve-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
+        .resolve-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
         .empty { color: #666; text-align: center; padding: 40px; }
-        .loading { color: #888; }
+        .loading { color: #888; text-align: center; padding: 40px; }
         .refresh-btn {
             background: #333;
             color: #fff;
@@ -188,6 +298,7 @@ const ADMIN_HTML: &str = r##"<!DOCTYPE html>
             margin-bottom: 16px;
         }
         .header-row h2 { margin: 0; }
+        .no-context { color: #666; font-style: italic; font-size: 0.9em; }
     </style>
 </head>
 <body>
@@ -206,20 +317,9 @@ const ADMIN_HTML: &str = r##"<!DOCTYPE html>
             <h2>flagged tracks</h2>
             <button class="refresh-btn" onclick="loadFlags()">refresh</button>
         </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>seq</th>
-                    <th>uri</th>
-                    <th>label</th>
-                    <th>status</th>
-                    <th>action</th>
-                </tr>
-            </thead>
-            <tbody id="flags-table">
-                <tr><td colspan="5" class="loading">loading...</td></tr>
-            </tbody>
-        </table>
+        <div id="flags-list" class="flags-list">
+            <div class="loading">loading...</div>
+        </div>
     </div>
 
     <script>
@@ -249,8 +349,8 @@ const ADMIN_HTML: &str = r##"<!DOCTYPE html>
         }
 
         async function loadFlags() {
-            const tbody = document.getElementById('flags-table');
-            tbody.innerHTML = '<tr><td colspan="5" class="loading">loading...</td></tr>';
+            const container = document.getElementById('flags-list');
+            container.innerHTML = '<div class="loading">loading...</div>';
 
             try {
                 const res = await fetch('/admin/flags', {
@@ -269,28 +369,56 @@ const ADMIN_HTML: &str = r##"<!DOCTYPE html>
                 const data = await res.json();
 
                 if (data.tracks.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="empty">no flagged tracks</td></tr>';
+                    container.innerHTML = '<div class="empty">no flagged tracks</div>';
                     return;
                 }
 
-                tbody.innerHTML = data.tracks.map(track => `
-                    <tr>
-                        <td>${track.seq}</td>
-                        <td class="uri">${escapeHtml(track.uri)}</td>
-                        <td><span class="badge pending">${escapeHtml(track.val)}</span></td>
-                        <td><span class="badge ${track.resolved ? 'resolved' : 'pending'}">${track.resolved ? 'resolved' : 'pending'}</span></td>
-                        <td>
-                            <button class="resolve-btn"
-                                    onclick="resolveFlag('${escapeHtml(track.uri)}', '${escapeHtml(track.val)}')"
-                                    ${track.resolved ? 'disabled' : ''}>
-                                ${track.resolved ? 'resolved' : 'mark false positive'}
-                            </button>
-                        </td>
-                    </tr>
-                `).join('');
+                container.innerHTML = data.tracks.map(track => {
+                    const ctx = track.context || {};
+                    const hasContext = ctx.track_title || ctx.artist_handle;
+                    const matches = ctx.matches || [];
+
+                    return `
+                        <div class="flag-card ${track.resolved ? 'resolved' : ''}">
+                            <div class="flag-header">
+                                <div class="track-info">
+                                    ${hasContext ? `
+                                        <h3>${escapeHtml(ctx.track_title || 'unknown track')}</h3>
+                                        <div class="artist">by @${escapeHtml(ctx.artist_handle || 'unknown')}</div>
+                                    ` : `
+                                        <div class="no-context">no track info available</div>
+                                    `}
+                                    <div class="uri">${escapeHtml(track.uri)}</div>
+                                </div>
+                                <div class="flag-badges">
+                                    ${ctx.highest_score ? `<span class="badge score">${(ctx.highest_score * 100).toFixed(0)}% match</span>` : ''}
+                                    <span class="badge ${track.resolved ? 'resolved' : 'pending'}">${track.resolved ? 'resolved' : 'pending'}</span>
+                                </div>
+                            </div>
+                            ${matches.length > 0 ? `
+                                <div class="matches">
+                                    <h4>potential matches</h4>
+                                    ${matches.slice(0, 3).map(m => `
+                                        <div class="match-item">
+                                            <span><span class="title">${escapeHtml(m.title)}</span> <span class="artist">by ${escapeHtml(m.artist)}</span></span>
+                                            <span class="score">${(m.score * 100).toFixed(0)}%</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                            <div class="flag-actions">
+                                <button class="resolve-btn"
+                                        onclick="resolveFlag('${escapeHtml(track.uri)}', '${escapeHtml(track.val)}')"
+                                        ${track.resolved ? 'disabled' : ''}>
+                                    ${track.resolved ? 'resolved' : 'mark false positive'}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
 
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5" class="empty">error: ${err.message}</td></tr>`;
+                container.innerHTML = `<div class="empty">error: ${err.message}</div>`;
             }
         }
 
@@ -319,6 +447,7 @@ const ADMIN_HTML: &str = r##"<!DOCTYPE html>
         }
 
         function escapeHtml(str) {
+            if (!str) return '';
             return str.replace(/&/g, '&amp;')
                       .replace(/</g, '&lt;')
                       .replace(/>/g, '&gt;')

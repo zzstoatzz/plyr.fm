@@ -4,6 +4,7 @@ use axum::{extract::State, response::Html, Json};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
+use crate::db::{CopyrightMatch, LabelContext};
 use crate::labels::Label;
 use crate::state::{AppError, AppState};
 
@@ -13,6 +14,16 @@ use crate::state::{AppError, AppState};
 pub struct HealthResponse {
     pub status: &'static str,
     pub labeler_enabled: bool,
+}
+
+/// Context info for display in admin UI.
+#[derive(Debug, Deserialize)]
+pub struct EmitLabelContext {
+    pub track_title: Option<String>,
+    pub artist_handle: Option<String>,
+    pub artist_did: Option<String>,
+    pub highest_score: Option<f64>,
+    pub matches: Option<Vec<CopyrightMatch>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -27,6 +38,8 @@ pub struct EmitLabelRequest {
     /// If true, negate an existing label
     #[serde(default)]
     pub neg: bool,
+    /// Optional context for admin UI display
+    pub context: Option<EmitLabelContext>,
 }
 
 fn default_label_val() -> String {
@@ -146,6 +159,21 @@ pub async fn emit_label(
     // Store in database
     let seq = db.store_label(&label).await?;
     info!(seq, uri = %request.uri, "label stored");
+
+    // Store context if provided (for admin UI)
+    if let Some(ctx) = request.context {
+        let label_ctx = LabelContext {
+            track_title: ctx.track_title,
+            artist_handle: ctx.artist_handle,
+            artist_did: ctx.artist_did,
+            highest_score: ctx.highest_score,
+            matches: ctx.matches,
+        };
+        if let Err(e) = db.store_context(&request.uri, &label_ctx).await {
+            // Log but don't fail - context is supplementary
+            tracing::warn!(uri = %request.uri, error = %e, "failed to store label context");
+        }
+    }
 
     // Broadcast to subscribers
     if let Some(tx) = &state.label_tx {

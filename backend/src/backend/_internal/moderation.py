@@ -87,6 +87,8 @@ async def _store_scan_result(track_id: int, result: dict[str, Any]) -> None:
         track_id: database ID of the track
         result: scan result from moderation service
     """
+    from sqlalchemy.orm import joinedload
+
     async with db_session() as db:
         is_flagged = result.get("is_flagged", False)
 
@@ -110,15 +112,32 @@ async def _store_scan_result(track_id: int, result: dict[str, Any]) -> None:
 
         # emit ATProto label if flagged
         if is_flagged:
-            track = await db.scalar(select(Track).where(Track.id == track_id))
+            track = await db.scalar(
+                select(Track)
+                .options(joinedload(Track.artist))
+                .where(Track.id == track_id)
+            )
             if track and track.atproto_record_uri:
                 await _emit_copyright_label(
                     uri=track.atproto_record_uri,
                     cid=track.atproto_record_cid,
+                    track_title=track.title,
+                    artist_handle=track.artist.handle if track.artist else None,
+                    artist_did=track.artist_did,
+                    highest_score=scan.highest_score,
+                    matches=scan.matches,
                 )
 
 
-async def _emit_copyright_label(uri: str, cid: str | None) -> None:
+async def _emit_copyright_label(
+    uri: str,
+    cid: str | None,
+    track_title: str | None = None,
+    artist_handle: str | None = None,
+    artist_did: str | None = None,
+    highest_score: float | None = None,
+    matches: list[dict[str, Any]] | None = None,
+) -> None:
     """emit a copyright-violation label to the ATProto labeler service.
 
     this is fire-and-forget - failures are logged but don't affect the scan result.
@@ -126,16 +145,36 @@ async def _emit_copyright_label(uri: str, cid: str | None) -> None:
     args:
         uri: AT URI of the track record
         cid: optional CID of the record
+        track_title: title of the track (for admin UI context)
+        artist_handle: handle of the artist (for admin UI context)
+        artist_did: DID of the artist (for admin UI context)
+        highest_score: highest match score (for admin UI context)
+        matches: list of copyright matches (for admin UI context)
     """
     try:
+        # build context for admin UI display
+        context: dict[str, Any] | None = None
+        if track_title or artist_handle or matches:
+            context = {
+                "track_title": track_title,
+                "artist_handle": artist_handle,
+                "artist_did": artist_did,
+                "highest_score": highest_score,
+                "matches": matches,
+            }
+
+        payload: dict[str, Any] = {
+            "uri": uri,
+            "val": "copyright-violation",
+            "cid": cid,
+        }
+        if context:
+            payload["context"] = context
+
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             response = await client.post(
                 f"{settings.moderation.labeler_url}/emit-label",
-                json={
-                    "uri": uri,
-                    "val": "copyright-violation",
-                    "cid": cid,
-                },
+                json=payload,
                 headers={"X-Moderation-Key": settings.moderation.auth_token},
             )
             response.raise_for_status()
