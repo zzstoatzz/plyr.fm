@@ -19,6 +19,7 @@ pub struct HealthResponse {
 /// Context info for display in admin UI.
 #[derive(Debug, Deserialize)]
 pub struct EmitLabelContext {
+    pub track_id: Option<i64>,
     pub track_title: Option<String>,
     pub artist_handle: Option<String>,
     pub artist_did: Option<String>,
@@ -176,6 +177,7 @@ pub async fn emit_label(
     // Store context if provided (for admin UI)
     if let Some(ctx) = request.context {
         let label_ctx = LabelContext {
+            track_id: ctx.track_id,
             track_title: ctx.track_title,
             artist_handle: ctx.artist_handle,
             artist_did: ctx.artist_did,

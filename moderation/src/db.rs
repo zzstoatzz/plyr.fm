@@ -9,28 +9,30 @@ use crate::labels::Label;
 
 /// Type alias for context row from database query.
 type ContextRow = (
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<f64>,
-    Option<serde_json::Value>,
-    Option<String>,
-    Option<String>,
+    Option<i64>,    // track_id
+    Option<String>, // track_title
+    Option<String>, // artist_handle
+    Option<String>, // artist_did
+    Option<f64>,    // highest_score
+    Option<serde_json::Value>, // matches
+    Option<String>, // resolution_reason
+    Option<String>, // resolution_notes
 );
 
 /// Type alias for flagged track row from database query.
 type FlaggedRow = (
-    i64,
-    String,
-    String,
-    DateTime<Utc>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<f64>,
-    Option<serde_json::Value>,
-    Option<String>,
-    Option<String>,
+    i64,            // seq
+    String,         // uri
+    String,         // val
+    DateTime<Utc>,  // cts
+    Option<i64>,    // track_id
+    Option<String>, // track_title
+    Option<String>, // artist_handle
+    Option<String>, // artist_did
+    Option<f64>,    // highest_score
+    Option<serde_json::Value>, // matches
+    Option<String>, // resolution_reason
+    Option<String>, // resolution_notes
 );
 
 /// Copyright match info stored alongside labels.
@@ -85,6 +87,7 @@ impl ResolutionReason {
 /// Context stored alongside a label for display in admin UI.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LabelContext {
+    pub track_id: Option<i64>,
     pub track_title: Option<String>,
     pub artist_handle: Option<String>,
     pub artist_did: Option<String>,
@@ -212,9 +215,10 @@ impl LabelDb {
 
         sqlx::query(
             r#"
-            INSERT INTO label_context (uri, track_title, artist_handle, artist_did, highest_score, matches, resolution_reason, resolution_notes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO label_context (uri, track_id, track_title, artist_handle, artist_did, highest_score, matches, resolution_reason, resolution_notes)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (uri) DO UPDATE SET
+                track_id = COALESCE(EXCLUDED.track_id, label_context.track_id),
                 track_title = COALESCE(EXCLUDED.track_title, label_context.track_title),
                 artist_handle = COALESCE(EXCLUDED.artist_handle, label_context.artist_handle),
                 artist_did = COALESCE(EXCLUDED.artist_did, label_context.artist_did),
@@ -225,6 +229,7 @@ impl LabelDb {
             "#,
         )
         .bind(uri)
+        .bind(context.track_id)
         .bind(&context.track_title)
         .bind(&context.artist_handle)
         .bind(&context.artist_did)
@@ -268,7 +273,7 @@ impl LabelDb {
     pub async fn get_context(&self, uri: &str) -> Result<Option<LabelContext>, sqlx::Error> {
         let row: Option<ContextRow> = sqlx::query_as(
                 r#"
-                SELECT track_title, artist_handle, artist_did, highest_score, matches, resolution_reason, resolution_notes
+                SELECT track_id, track_title, artist_handle, artist_did, highest_score, matches, resolution_reason, resolution_notes
                 FROM label_context
                 WHERE uri = $1
                 "#,
@@ -279,6 +284,7 @@ impl LabelDb {
 
         Ok(row.map(
             |(
+                track_id,
                 track_title,
                 artist_handle,
                 artist_did,
@@ -288,6 +294,7 @@ impl LabelDb {
                 resolution_notes,
             )| {
                 LabelContext {
+                    track_id,
                     track_title,
                     artist_handle,
                     artist_did,
@@ -470,7 +477,7 @@ impl LabelDb {
         let rows: Vec<FlaggedRow> = sqlx::query_as(
             r#"
                 SELECT l.seq, l.uri, l.val, l.cts,
-                       c.track_title, c.artist_handle, c.artist_did, c.highest_score, c.matches,
+                       c.track_id, c.track_title, c.artist_handle, c.artist_did, c.highest_score, c.matches,
                        c.resolution_reason, c.resolution_notes
                 FROM labels l
                 LEFT JOIN label_context c ON l.uri = c.uri
@@ -502,6 +509,7 @@ impl LabelDb {
                     uri,
                     val,
                     cts,
+                    track_id,
                     track_title,
                     artist_handle,
                     artist_did,
@@ -510,11 +518,13 @@ impl LabelDb {
                     resolution_reason,
                     resolution_notes,
                 )| {
-                    let context = if track_title.is_some()
+                    let context = if track_id.is_some()
+                        || track_title.is_some()
                         || artist_handle.is_some()
                         || resolution_reason.is_some()
                     {
                         Some(LabelContext {
+                            track_id,
                             track_title,
                             artist_handle,
                             artist_did,

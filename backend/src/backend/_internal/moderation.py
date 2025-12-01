@@ -121,6 +121,7 @@ async def _store_scan_result(track_id: int, result: dict[str, Any]) -> None:
                 await _emit_copyright_label(
                     uri=track.atproto_record_uri,
                     cid=track.atproto_record_cid,
+                    track_id=track_id,
                     track_title=track.title,
                     artist_handle=track.artist.handle if track.artist else None,
                     artist_did=track.artist_did,
@@ -132,6 +133,7 @@ async def _store_scan_result(track_id: int, result: dict[str, Any]) -> None:
 async def _emit_copyright_label(
     uri: str,
     cid: str | None,
+    track_id: int | None = None,
     track_title: str | None = None,
     artist_handle: str | None = None,
     artist_did: str | None = None,
@@ -145,6 +147,7 @@ async def _emit_copyright_label(
     args:
         uri: AT URI of the track record
         cid: optional CID of the record
+        track_id: database ID of the track (for admin UI links)
         track_title: title of the track (for admin UI context)
         artist_handle: handle of the artist (for admin UI context)
         artist_did: DID of the artist (for admin UI context)
@@ -154,8 +157,9 @@ async def _emit_copyright_label(
     try:
         # build context for admin UI display
         context: dict[str, Any] | None = None
-        if track_title or artist_handle or matches:
+        if track_id or track_title or artist_handle or matches:
             context = {
+                "track_id": track_id,
                 "track_title": track_title,
                 "artist_handle": artist_handle,
                 "artist_did": artist_did,
