@@ -99,18 +99,19 @@ function confirmResolve(btn, reason) {
     btn.disabled = true;
     btn.textContent = '...';
 
-    // Submit via fetch
-    const formData = new FormData();
-    formData.append('uri', uri);
-    formData.append('val', val);
-    formData.append('reason', reason);
+    // Submit via fetch (URLSearchParams for application/x-www-form-urlencoded)
+    const params = new URLSearchParams();
+    params.append('uri', uri);
+    params.append('val', val);
+    params.append('reason', reason);
 
     fetch('/admin/resolve-htmx', {
         method: 'POST',
         headers: {
-            'X-Moderation-Key': currentToken
+            'X-Moderation-Key': currentToken,
+            'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: formData
+        body: params
     })
     .then(response => {
         if (response.ok) {
