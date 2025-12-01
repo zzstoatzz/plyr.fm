@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import { nowPlaying } from '$lib/now-playing.svelte';
 	import { API_URL } from '$lib/config';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
@@ -212,6 +213,18 @@
 		}
 	});
 
+	// report now-playing state for external integrations (teal.fm/Piper)
+	$effect(() => {
+		if (!player.currentTrack || !player.duration) return;
+
+		nowPlaying.report(
+			player.currentTrack,
+			!player.paused,
+			player.currentTime * 1000, // convert to ms
+			player.duration * 1000
+		);
+	});
+
 	// handle track changes - load new audio when track changes
 	let previousTrackId = $state<number | null>(null);
 	let isLoadingTrack = $state(false);
@@ -289,6 +302,7 @@
 	function handleTrackEnded() {
 		if (!queue.autoAdvance) {
 			player.reset();
+			nowPlaying.clear();
 			return;
 		}
 
@@ -297,6 +311,7 @@
 			queue.next();
 		} else {
 			player.reset();
+			nowPlaying.clear();
 		}
 	}
 

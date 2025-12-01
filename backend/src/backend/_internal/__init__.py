@@ -24,6 +24,7 @@ from backend._internal.auth import (
 )
 from backend._internal.constellation import get_like_count_safe
 from backend._internal.notifications import notification_service
+from backend._internal.now_playing import now_playing_service
 from backend._internal.queue import queue_service
 
 __all__ = [
@@ -42,6 +43,7 @@ __all__ = [
     "handle_oauth_callback",
     "list_developer_tokens",
     "notification_service",
+    "now_playing_service",
     "oauth_client",
     "queue_service",
     "require_artist_profile",
