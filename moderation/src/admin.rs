@@ -3,7 +3,7 @@
 //! Uses htmx for interactivity with server-rendered HTML.
 
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::header::CONTENT_TYPE,
     response::{IntoResponse, Response},
     Json,
@@ -31,6 +31,18 @@ pub struct FlaggedTrack {
 #[derive(Debug, Serialize)]
 pub struct ListFlaggedResponse {
     pub tracks: Vec<FlaggedTrack>,
+}
+
+/// Query parameters for listing flags.
+#[derive(Debug, Deserialize, Default)]
+pub struct ListFlagsQuery {
+    /// Filter: "pending" (default), "resolved", or "all"
+    #[serde(default = "default_filter")]
+    pub filter: String,
+}
+
+fn default_filter() -> String {
+    "pending".to_string()
 }
 
 /// Request to resolve (negate) a flag.
@@ -82,20 +94,35 @@ pub struct StoreContextResponse {
 /// List all flagged tracks - returns JSON for API, HTML for htmx.
 pub async fn list_flagged(
     State(state): State<AppState>,
+    Query(query): Query<ListFlagsQuery>,
 ) -> Result<Json<ListFlaggedResponse>, AppError> {
     let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
-    let tracks = db.get_pending_flags().await?;
+    let all_tracks = db.get_pending_flags().await?;
+    let tracks = filter_tracks(all_tracks, &query.filter);
     Ok(Json(ListFlaggedResponse { tracks }))
 }
 
 /// Render flags as HTML partial for htmx.
-pub async fn list_flagged_html(State(state): State<AppState>) -> Result<Response, AppError> {
+pub async fn list_flagged_html(
+    State(state): State<AppState>,
+    Query(query): Query<ListFlagsQuery>,
+) -> Result<Response, AppError> {
     let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
-    let tracks = db.get_pending_flags().await?;
+    let all_tracks = db.get_pending_flags().await?;
+    let tracks = filter_tracks(all_tracks, &query.filter);
 
-    let html = render_flags_list(&tracks);
+    let html = render_flags_list(&tracks, &query.filter);
 
     Ok(([(CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response())
+}
+
+/// Filter tracks based on filter parameter.
+fn filter_tracks(tracks: Vec<FlaggedTrack>, filter: &str) -> Vec<FlaggedTrack> {
+    match filter {
+        "resolved" => tracks.into_iter().filter(|t| t.resolved).collect(),
+        "all" => tracks,
+        _ => tracks.into_iter().filter(|t| !t.resolved).collect(), // "pending" is default
+    }
 }
 
 /// Resolve (negate) a copyright flag, marking it as a false positive.
@@ -220,14 +247,38 @@ pub async fn admin_ui() -> Result<Response, AppError> {
     Ok(([(CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response())
 }
 
-/// Render the flags list as HTML.
-fn render_flags_list(tracks: &[FlaggedTrack]) -> String {
+/// Render the flags list as HTML with filter controls.
+fn render_flags_list(tracks: &[FlaggedTrack], current_filter: &str) -> String {
+    let pending_active = if current_filter == "pending" { " active" } else { "" };
+    let resolved_active = if current_filter == "resolved" { " active" } else { "" };
+    let all_active = if current_filter == "all" { " active" } else { "" };
+
+    let filter_buttons = format!(
+        "<div class=\"filter-row\">\
+            <span class=\"filter-label\">show:</span>\
+            <button type=\"button\" class=\"filter-btn{}\" hx-get=\"/admin/flags-html?filter=pending\" hx-target=\"#flags-list\">pending</button>\
+            <button type=\"button\" class=\"filter-btn{}\" hx-get=\"/admin/flags-html?filter=resolved\" hx-target=\"#flags-list\">resolved</button>\
+            <button type=\"button\" class=\"filter-btn{}\" hx-get=\"/admin/flags-html?filter=all\" hx-target=\"#flags-list\">all</button>\
+        </div>",
+        pending_active,
+        resolved_active,
+        all_active,
+    );
+
     if tracks.is_empty() {
-        return r#"<div class="empty">no flagged tracks</div>"#.to_string();
+        let empty_msg = match current_filter {
+            "pending" => "no pending flags",
+            "resolved" => "no resolved flags",
+            _ => "no flagged tracks",
+        };
+        return format!(
+            "{}<div class=\"empty\">{}</div>",
+            filter_buttons, empty_msg
+        );
     }
 
     let cards: Vec<String> = tracks.iter().map(render_flag_card).collect();
-    cards.join("\n")
+    format!("{}\n{}", filter_buttons, cards.join("\n"))
 }
 
 /// Extract namespace from AT URI (e.g., "fm.plyr.dev" from "at://did:plc:xxx/fm.plyr.dev.track/yyy")

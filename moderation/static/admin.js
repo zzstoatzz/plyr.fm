@@ -1,9 +1,19 @@
 // Set up auth header listener first (before any htmx requests)
 let currentToken = null;
+let currentFilter = 'pending'; // track current filter state
 
 document.body.addEventListener('htmx:configRequest', function(evt) {
     if (currentToken) {
         evt.detail.headers['X-Moderation-Key'] = currentToken;
+    }
+});
+
+// Track filter changes via htmx
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+    const url = evt.detail.pathInfo?.requestPath || '';
+    const match = url.match(/filter=(\w+)/);
+    if (match) {
+        currentFilter = match[1];
     }
 });
 
@@ -115,8 +125,6 @@ function confirmResolve(btn, reason) {
     })
     .then(response => {
         if (response.ok) {
-            // Trigger refresh of flags list
-            htmx.trigger('#flags-list', 'flagsUpdated');
             return response.text();
         }
         throw new Error('Failed to resolve');
@@ -127,11 +135,18 @@ function confirmResolve(btn, reason) {
         if (match) {
             showToast(match[0], 'success');
         }
+        // Refresh flags list with current filter
+        refreshFlagsList();
     })
     .catch(err => {
         showToast('failed to resolve: ' + err.message, 'error');
         cancelResolve(btn);
     });
+}
+
+// Refresh flags list preserving current filter
+function refreshFlagsList() {
+    htmx.ajax('GET', `/admin/flags-html?filter=${currentFilter}`, '#flags-list');
 }
 
 // Cancel: restore original button

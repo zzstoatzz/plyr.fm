@@ -25,18 +25,14 @@
     <div id="main-content" style="display: none;">
         <div class="header-row">
             <h2>flagged tracks</h2>
-            <button class="btn btn-secondary"
-                    hx-get="/admin/flags-html"
-                    hx-target="#flags-list"
-                    hx-indicator="#refresh-indicator">
-                <span id="refresh-indicator" class="htmx-indicator">...</span>
+            <button class="btn btn-secondary" onclick="refreshFlagsList()">
                 refresh
             </button>
         </div>
 
         <div id="flags-list" class="flags-list"
-             hx-get="/admin/flags-html"
-             hx-trigger="load, flagsUpdated from:body"
+             hx-get="/admin/flags-html?filter=pending"
+             hx-trigger="load"
              hx-indicator="#loading">
             <div id="loading" class="loading htmx-indicator">loading...</div>
         </div>
