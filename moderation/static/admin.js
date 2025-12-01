@@ -7,14 +7,8 @@ document.body.addEventListener('htmx:configRequest', function(evt) {
     }
 });
 
-// Check for saved token on load
-const savedToken = localStorage.getItem('mod_token');
-if (savedToken) {
-    document.getElementById('auth-token').value = '••••••••';
-    currentToken = savedToken;
-    showMain();
-    // Trigger load after DOM is ready and htmx is initialized
-    setTimeout(() => htmx.trigger('#flags-list', 'load'), 0);
+function showMain() {
+    document.getElementById('main-content').style.display = 'block';
 }
 
 function authenticate() {
@@ -27,8 +21,14 @@ function authenticate() {
     }
 }
 
-function showMain() {
-    document.getElementById('main-content').style.display = 'block';
+// Check for saved token on load
+const savedToken = localStorage.getItem('mod_token');
+if (savedToken) {
+    document.getElementById('auth-token').value = '••••••••';
+    currentToken = savedToken;
+    showMain();
+    // Trigger load after DOM is ready and htmx is initialized
+    setTimeout(() => htmx.trigger('#flags-list', 'load'), 0);
 }
 
 // Handle auth errors
