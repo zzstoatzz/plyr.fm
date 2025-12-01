@@ -43,6 +43,20 @@ repos:
         files: ^frontend/.*\.(ts|svelte)$
         pass_filenames: false
 
+      - id: cargo-check-moderation
+        name: cargo check (moderation)
+        entry: bash -c 'cd moderation && cargo check --quiet'
+        language: system
+        files: ^moderation/.*\.rs$
+        pass_filenames: false
+
+      - id: cargo-check-transcoder
+        name: cargo check (transcoder)
+        entry: bash -c 'cd transcoder && cargo check --quiet'
+        language: system
+        files: ^transcoder/.*\.rs$
+        pass_filenames: false
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
