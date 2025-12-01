@@ -278,8 +278,8 @@ wheels = [
 
 [[package]]
 name = "atproto"
-version = "0.0.1.dev469"
-source = { git = "https://github.com/zzstoatzz/atproto?rev=feat%2Foauth-client-mixin#9a65f7960e79a3da12c207f10ac5f7755477ffc0" }
+version = "0.0.1.dev470"
+source = { git = "https://github.com/zzstoatzz/atproto?rev=feat%2Foauth-client-mixin#8d2f3a0bf660af464701c83df6da0a29f6b6d055" }
 dependencies = [
     { name = "click" },
     { name = "cryptography" },
