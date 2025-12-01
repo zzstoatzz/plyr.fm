@@ -275,64 +275,79 @@ h1 {
     cursor: help;
 }
 
-/* dropdown for reason selection */
-.resolve-dropdown {
-    position: relative;
-    display: inline-block;
-}
-
-.dropdown-toggle::after {
-    content: ' ▼';
-    font-size: 0.7em;
-}
-
-.dropdown-menu {
-    display: none;
-    position: absolute;
-    right: 0;
-    bottom: 100%;
-    margin-bottom: 4px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-default);
-    border-radius: 8px;
-    min-width: 220px;
-    z-index: 100;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
-    overflow: hidden;
-}
-
-.resolve-dropdown.open .dropdown-menu {
-    display: block;
-}
-
-.dropdown-item {
+/* multi-step resolve flow */
+.resolve-flow {
     display: flex;
-    flex-direction: column;
-    width: 100%;
-    padding: 12px 16px;
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid var(--border-subtle);
-    color: var(--text-primary);
+    gap: 8px;
+    align-items: center;
+}
+
+/* reason selection (step 2) */
+.reason-select {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.reason-btn {
     font-family: inherit;
-    font-size: 0.85rem;
-    text-align: left;
+    font-size: 0.8rem;
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border-default);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
     cursor: pointer;
-    transition: background 0.1s ease;
+    transition: all 0.15s ease;
 }
 
-.dropdown-item:last-child {
-    border-bottom: none;
-}
-
-.dropdown-item:hover {
+.reason-btn:hover {
     background: var(--bg-hover);
+    border-color: var(--border-emphasis);
+    color: var(--text-primary);
 }
 
-.dropdown-item .item-desc {
+.reason-btn.selected {
+    background: var(--warning);
+    color: var(--bg-primary);
+    border-color: var(--warning);
+}
+
+.reason-btn.cancel {
+    background: transparent;
+    border-color: var(--border-subtle);
     color: var(--text-muted);
-    font-size: 0.75rem;
-    margin-top: 2px;
+}
+
+.reason-btn.cancel:hover {
+    border-color: var(--error);
+    color: var(--error);
+}
+
+/* confirm step (step 3) */
+.confirm-step {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.confirm-text {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.confirm-text strong {
+    color: var(--warning);
+}
+
+.btn-confirm {
+    background: var(--error);
+    color: white;
+}
+
+.btn-confirm:hover {
+    background: #dc2626;
 }
 
 /* states */

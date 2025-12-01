@@ -48,28 +48,97 @@ function showToast(message, type) {
     setTimeout(() => { toast.style.display = 'none'; }, 3000);
 }
 
-// Dropdown toggle for reason selection
-function toggleDropdown(btn) {
-    const dropdown = btn.closest('.resolve-dropdown');
-    const wasOpen = dropdown.classList.contains('open');
+// Reason options for false positive resolution
+const REASONS = [
+    { value: 'original_artist', label: 'original artist' },
+    { value: 'licensed', label: 'licensed' },
+    { value: 'fingerprint_noise', label: 'fp noise' },
+    { value: 'cover_version', label: 'cover/remix' },
+    { value: 'other', label: 'other' }
+];
 
-    // Close all dropdowns first
-    document.querySelectorAll('.resolve-dropdown.open').forEach(d => d.classList.remove('open'));
+// Step 1 -> Step 2: Show reason selection buttons
+function showReasonSelect(btn) {
+    const flow = btn.closest('.resolve-flow');
 
-    // Toggle this one
-    if (!wasOpen) {
-        dropdown.classList.add('open');
-    }
+    // Replace button with reason selection
+    flow.innerHTML = `
+        <div class="reason-select">
+            ${REASONS.map(r => `
+                <button type="button" class="reason-btn" data-reason="${r.value}" onclick="selectReason(this, '${r.value}')">
+                    ${r.label}
+                </button>
+            `).join('')}
+            <button type="button" class="reason-btn cancel" onclick="cancelResolve(this)">✕</button>
+        </div>
+    `;
 }
 
-// Close dropdowns when clicking outside
-document.addEventListener('click', function(evt) {
-    if (!evt.target.closest('.resolve-dropdown')) {
-        document.querySelectorAll('.resolve-dropdown.open').forEach(d => d.classList.remove('open'));
-    }
-});
+// Step 2 -> Step 3: Show confirmation
+function selectReason(btn, reason) {
+    const flow = btn.closest('.resolve-flow');
+    const reasonLabel = REASONS.find(r => r.value === reason)?.label || reason;
 
-// Close dropdowns after form submission
-document.body.addEventListener('htmx:afterRequest', function(evt) {
-    document.querySelectorAll('.resolve-dropdown.open').forEach(d => d.classList.remove('open'));
-});
+    // Replace with confirmation
+    flow.innerHTML = `
+        <div class="confirm-step">
+            <span class="confirm-text">resolve as <strong>${reasonLabel}</strong>?</span>
+            <button type="button" class="btn btn-confirm" onclick="confirmResolve(this, '${reason}')">confirm</button>
+            <button type="button" class="reason-btn cancel" onclick="cancelResolve(this)">cancel</button>
+        </div>
+    `;
+}
+
+// Step 3: Actually submit the resolution
+function confirmResolve(btn, reason) {
+    const flow = btn.closest('.resolve-flow');
+    const uri = flow.dataset.uri;
+    const val = flow.dataset.val;
+
+    // Show loading state
+    btn.disabled = true;
+    btn.textContent = '...';
+
+    // Submit via fetch
+    const formData = new FormData();
+    formData.append('uri', uri);
+    formData.append('val', val);
+    formData.append('reason', reason);
+
+    fetch('/admin/resolve-htmx', {
+        method: 'POST',
+        headers: {
+            'X-Moderation-Key': currentToken
+        },
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            // Trigger refresh of flags list
+            htmx.trigger('#flags-list', 'flagsUpdated');
+            return response.text();
+        }
+        throw new Error('Failed to resolve');
+    })
+    .then(html => {
+        // Parse and show toast from response
+        const match = html.match(/resolved: ([^<]+)/);
+        if (match) {
+            showToast(match[0], 'success');
+        }
+    })
+    .catch(err => {
+        showToast('failed to resolve: ' + err.message, 'error');
+        cancelResolve(btn);
+    });
+}
+
+// Cancel: restore original button
+function cancelResolve(btn) {
+    const flow = btn.closest('.resolve-flow');
+    flow.innerHTML = `
+        <button type="button" class="btn btn-warning" onclick="showReasonSelect(this)">
+            mark false positive
+        </button>
+    `;
+}
