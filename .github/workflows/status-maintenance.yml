@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
       id-token: write
 
     steps:
@@ -76,12 +77,14 @@ jobs:
 
             3. run: uv run --with plyrfm -- plyrfm upload update.wav "plyr.fm update - <today's date>"
 
-            ## task 3: commit changes
+            ## task 3: open PR with changes
 
             if any files changed (.status_history/*, STATUS.md):
-            1. git add .status_history/ STATUS.md (NOT audio files or temp scripts)
-            2. commit with message "chore: weekly status maintenance"
-            3. push to origin
+            1. create a new branch: git checkout -b status-maintenance-<date>
+            2. git add .status_history/ STATUS.md (NOT audio files or temp scripts)
+            3. commit with message "chore: weekly status maintenance"
+            4. push the branch: git push -u origin status-maintenance-<date>
+            5. create a PR using: gh pr create --title "chore: weekly status maintenance" --body "automated status archival and audio overview"
 
             if nothing changed, just report that no maintenance was needed.
 
