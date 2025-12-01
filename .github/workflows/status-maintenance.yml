@@ -48,7 +48,7 @@ jobs:
           claude_args: |
             --allowedTools "Read,Write,Edit,Bash"
           prompt: |
-            you are maintaining the plyr.fm project status file.
+            you are maintaining the plyr.fm (pronounce as "player FM") project status file.
 
             ## context
 
@@ -68,14 +68,14 @@ jobs:
 
             read STATUS.md and count the lines.
 
-            if over 500 lines:
+            if over 250 lines:
             1. identify natural section boundaries (marked by "---" or headers like "### " with dates)
-            2. keep the most recent ~500 lines in STATUS.md
+            2. keep the most recent ~250 lines in STATUS.md
             3. move older sections to .status_history/YYYY-MM.md files, grouped by month
             4. create .status_history/ directory if it doesn't exist
             5. preserve raw content - don't summarize or modify the archived text
 
-            if 500 lines or fewer, skip archiving.
+            if 250 lines or fewer, skip archiving.
 
             ## task 3: generate audio overview
 
