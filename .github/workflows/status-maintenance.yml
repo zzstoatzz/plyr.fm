@@ -70,9 +70,8 @@ jobs:
             determine:
             - what is today's date?
             - what shipped in the last week vs earlier?
-            - does .status_history/ exist?
+            - does .status_history/ exist? (this implies whether or not this is the first episode)
             - how many lines is STATUS.md currently?
-            - is this the FIRST episode (no .status_history/ exists)?
 
             ## task 2: archive old sections (MANDATORY if over 250 lines)
 
@@ -84,13 +83,13 @@ jobs:
             5. preserve the document structure (keep "## recent work" header, "## immediate priorities", etc)
             6. do NOT summarize archived content - move it verbatim
 
-            example: if STATUS.md has sections from Nov 10, Nov 12, Nov 24, Nov 27, Dec 1:
+            example (which happens to be from November 2025): if STATUS.md has sections from Nov 10, Nov 12, Nov 24, Nov 27, Dec 1:
             - move Nov 10-24 content to .status_history/2025-11.md
             - keep Nov 27 and Dec 1 content in STATUS.md
 
             VERIFY: run `wc -l STATUS.md` after archiving. it MUST be under 250 lines.
 
-            ## task 3: generate audio overview
+            ## task 3: generate audio overview (if skip_audio is false)
 
             skip_audio input: ${{ inputs.skip_audio }}
 
@@ -104,7 +103,7 @@ jobs:
             - Fetch https://atproto.com/guides/overview to understand ATProto primitives
             - Fetch https://atproto.com/guides/lexicon to understand NSIDs and lexicons
 
-            this context helps you explain things accurately without over-simplifying.
+            this context helps you explain things accurately, and accessibly without over-simplifying.
 
             ### determine episode type
 
@@ -132,29 +131,21 @@ jobs:
             ### tone requirements (CRITICAL)
 
             the hosts should sound like two engineers who:
-            - are mildly amused by the absurdity of building things
+            - are skeptical, amused and somewhat intruiged by the absurdity of building things
             - acknowledge problems and limitations honestly
-            - don't use superlatives ("amazing", "incredible", "exciting")
-            - don't congratulate the project or its creator
-            - explain technical concepts through analogy, not hype
-            - are slightly sardonic but not mean
+            - don't over-use superlatives ("amazing", "incredible", "exciting")
+            - explain technical concepts through analogy, not hypey jargon
 
             BAD example:
             "Host: Wow, they've done an incredible job building this decentralized music platform!"
             "Cohost: Absolutely! The ATProto integration is amazing!"
 
-            GOOD example:
-            "Host: So someone built a music streaming thing on ATProto."
-            "Cohost: Right, the protocol Bluesky uses. The idea being your playlists and play history live in your personal data server instead of Spotify's database."
-            "Host: Which means if plyr.fm disappears tomorrow, you still have your data."
-            "Cohost: In theory. Whether anyone else builds a client that reads it is another question."
-
-            forbidden phrases:
+            avoid excessive phrasing:
             - "exciting", "amazing", "incredible", "impressive", "great job"
             - "the team has done", "they've really", "fantastic work"
-            - any variation of congratulating or praising the project
+            - any variation of over-congratulating or over-sensationalizing the project
 
-            pronunciation: "plyr.fm" = "player FM" (not "plir" or spelled out)
+            pronunciation: "plyr.fm" is pronounced "player FM" (not "plir" or spelled out)
 
             target length: 2-3 minutes spoken (~300-400 words)
 
@@ -172,6 +163,8 @@ jobs:
             4. git push -u origin status-maintenance-$(date +%Y%m%d)
             5. gh pr create --title "chore: weekly status maintenance" --body "automated status archival and audio overview"
 
+            add detail as desired to the PR body and title.
+            add a label like "ai-generated" to the PR (create the label if it doesn't exist)
             if nothing changed, report that no maintenance was needed.
 
         env:
