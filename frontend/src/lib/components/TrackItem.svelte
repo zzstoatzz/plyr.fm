@@ -176,7 +176,7 @@
 		{#if track.tags && track.tags.length > 0}
 			<span class="tags-line">
 				{#each track.tags as tag}
-					<a href="/tag/{encodeURIComponent(tag)}" class="tag-badge" onclick={(e) => e.stopPropagation()}>{tag}</a>
+					<a href="/tag/{encodeURIComponent(tag)}" class="tag-badge">{tag}</a>
 				{/each}
 			</span>
 		{/if}
