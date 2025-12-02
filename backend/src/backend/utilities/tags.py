@@ -1,7 +1,9 @@
 """tag normalization and management utilities."""
 
-import json
 import re
+from typing import Annotated
+
+from pydantic import Field, TypeAdapter, ValidationError
 
 # tags that are hidden by default for new users
 DEFAULT_HIDDEN_TAGS: list[str] = ["ai"]
@@ -10,63 +12,41 @@ DEFAULT_HIDDEN_TAGS: list[str] = ["ai"]
 MAX_TAG_LENGTH = 50
 MAX_TAGS_PER_TRACK = 10
 
+# pydantic type adapter for parsing JSON tag arrays
+TagList = TypeAdapter(list[Annotated[str, Field(max_length=MAX_TAG_LENGTH)]])
 
-class TagValidationError(ValueError):
-    """raised when tag validation fails."""
 
-
-def validate_tags_json(tags_json: str | None) -> list[str]:
-    """validate and parse a JSON array of tag names.
+def parse_tags_json(tags_json: str | None) -> list[str]:
+    """parse and normalize a JSON array of tag names.
 
     args:
         tags_json: JSON string containing array of tag names, or None
 
     returns:
-        list of validated, normalized tag names
+        list of normalized, deduplicated tag names
 
     raises:
-        TagValidationError: if tags_json is malformed or contains invalid tags
+        ValueError: if tags_json is malformed or exceeds limits
     """
     if not tags_json:
         return []
 
     try:
-        tag_names = json.loads(tags_json)
-    except json.JSONDecodeError as e:
-        raise TagValidationError(f"tags must be a valid JSON array: {e}") from e
+        tag_names = TagList.validate_json(tags_json)
+    except ValidationError as e:
+        raise ValueError(f"invalid tags: {e}") from e
 
-    if not isinstance(tag_names, list):
-        raise TagValidationError("tags must be a JSON array")
-
-    # validate each tag
-    validated: list[str] = []
-    for i, tag in enumerate(tag_names):
-        if not isinstance(tag, str):
-            raise TagValidationError(f"tag at index {i} must be a string")
-
-        normalized = normalize_tag(tag)
-        if not normalized:
-            continue  # skip empty tags after normalization
-
-        if len(normalized) > MAX_TAG_LENGTH:
-            raise TagValidationError(
-                f"tag '{normalized[:20]}...' exceeds maximum length of {MAX_TAG_LENGTH}"
-            )
-
-        validated.append(normalized)
-
-    # deduplicate while preserving order
+    # normalize and deduplicate
     seen: set[str] = set()
     unique: list[str] = []
-    for tag in validated:
-        if tag not in seen:
-            seen.add(tag)
-            unique.append(tag)
+    for tag in tag_names:
+        normalized = normalize_tag(tag)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            unique.append(normalized)
 
     if len(unique) > MAX_TAGS_PER_TRACK:
-        raise TagValidationError(
-            f"too many tags: {len(unique)} (maximum {MAX_TAGS_PER_TRACK})"
-        )
+        raise ValueError(f"too many tags: {len(unique)} (maximum {MAX_TAGS_PER_TRACK})")
 
     return unique
 

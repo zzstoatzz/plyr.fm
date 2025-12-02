@@ -27,7 +27,7 @@ from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackTag, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
-from backend.utilities.tags import TagValidationError, validate_tags_json
+from backend.utilities.tags import parse_tags_json
 
 from .metadata_service import (
     apply_album_update,
@@ -62,7 +62,12 @@ async def _get_or_create_tag(db: AsyncSession, tag_name: str, creator_did: str) 
     try:
         await db.flush()
         return tag
-    except IntegrityError:
+    except IntegrityError as e:
+        # only handle unique constraint violation on tag name (pgcode 23505)
+        # re-raise other integrity errors (e.g., foreign key violations)
+        pgcode = getattr(e.orig, "pgcode", None)
+        if pgcode != "23505":
+            raise
         # another process created the tag - rollback and fetch it
         await db.rollback()
         result = await db.execute(select(Tag).where(Tag.name == tag_name))
@@ -213,8 +218,8 @@ async def update_track_metadata(
     updated_tags: set[str] = set()
     if tags is not None:
         try:
-            validated_tags = validate_tags_json(tags)
-        except TagValidationError as e:
+            validated_tags = parse_tags_json(tags)
+        except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
         # delete existing track_tags for this track

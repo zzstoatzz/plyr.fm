@@ -40,7 +40,7 @@ from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
 from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.rate_limit import limiter
-from backend.utilities.tags import TagValidationError, validate_tags_json
+from backend.utilities.tags import parse_tags_json
 
 from .router import router
 from .services import get_or_create_album
@@ -73,7 +73,12 @@ async def _get_or_create_tag(
     try:
         await db.flush()
         return tag
-    except IntegrityError:
+    except IntegrityError as e:
+        # only handle unique constraint violation on tag name (pgcode 23505)
+        # re-raise other integrity errors (e.g., foreign key violations)
+        pgcode = getattr(e.orig, "pgcode", None)
+        if pgcode != "23505":
+            raise
         # another process created the tag - rollback and fetch it
         await db.rollback()
         result = await db.execute(select(Tag).where(Tag.name == tag_name))
@@ -482,8 +487,8 @@ async def upload_track(
     """
     # validate tags upfront before any processing
     try:
-        validated_tags = validate_tags_json(tags)
-    except TagValidationError as e:
+        validated_tags = parse_tags_json(tags)
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     # validate audio file type upfront
