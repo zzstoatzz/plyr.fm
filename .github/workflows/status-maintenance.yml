@@ -102,6 +102,7 @@ jobs:
             - docs/deployment/overview.md if it exists
             - Fetch https://atproto.com/guides/overview to understand ATProto primitives
             - Fetch https://atproto.com/guides/lexicon to understand NSIDs and lexicons
+            - fetch and read: https://overreacted.io/open-social/ to understand the vision of open social
 
             this context helps you explain things accurately, and accessibly without over-simplifying.
 
@@ -117,16 +118,17 @@ jobs:
 
             INAUGURAL EPISODE (first time):
             - introduce what plyr.fm is: decentralized music streaming on ATProto
-            - explain the core value prop: your music data lives in your PDS, portable between apps
+            - explain the core value prop: your music data lives in your PDS, portable between apps (open social)
             - cover the technical foundation that's been built (summarize from STATUS.md)
             - set expectations: this is an early-stage project, rough edges exist
-            - tone: "here's what we're building and why it matters"
+            - tone: "here's what is being built and why it could matter"
+            - work chronologically from beginning to end, don't heavily bias towards nascent or recent work
 
             SUBSEQUENT EPISODES:
             - focus on what actually shipped since last episode
             - use git history to determine timing ("last week" vs "earlier this month")
             - don't re-explain the whole project - listeners already know
-            - tone: "here's what changed"
+            - tone: "here's what changed since last time"
 
             ### tone requirements (CRITICAL)
 
@@ -136,10 +138,6 @@ jobs:
             - don't over-use superlatives ("amazing", "incredible", "exciting")
             - explain technical concepts through analogy, not hypey jargon
 
-            BAD example:
-            "Host: Wow, they've done an incredible job building this decentralized music platform!"
-            "Cohost: Absolutely! The ATProto integration is amazing!"
-
             avoid excessive phrasing:
             - "exciting", "amazing", "incredible", "impressive", "great job"
             - "the team has done", "they've really", "fantastic work"
@@ -147,7 +145,7 @@ jobs:
 
             pronunciation: "plyr.fm" is pronounced "player FM" (not "plir" or spelled out)
 
-            target length: 2-3 minutes spoken (~300-400 words)
+            target length: 2-3 minutes spoken (~300-400 words) (it should be 4-5 if its the first episode)
 
             ### generate audio
 
