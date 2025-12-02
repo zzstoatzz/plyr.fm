@@ -22,6 +22,7 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile
@@ -39,12 +40,45 @@ from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
 from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.rate_limit import limiter
-from backend.utilities.tags import normalize_tags
+from backend.utilities.tags import TagValidationError, validate_tags_json
 
 from .router import router
 from .services import get_or_create_album
 
 logger = logging.getLogger(__name__)
+
+
+async def _get_or_create_tag(
+    db: "AsyncSession", tag_name: str, creator_did: str
+) -> Tag:
+    """get existing tag or create new one, handling race conditions.
+
+    uses a select-then-insert pattern with IntegrityError handling
+    to safely handle concurrent tag creation.
+    """
+    # first try to find existing tag
+    result = await db.execute(select(Tag).where(Tag.name == tag_name))
+    tag = result.scalar_one_or_none()
+    if tag:
+        return tag
+
+    # try to create new tag
+    tag = Tag(
+        name=tag_name,
+        created_by_did=creator_did,
+        created_at=datetime.now(UTC),
+    )
+    db.add(tag)
+
+    try:
+        await db.flush()
+        return tag
+    except IntegrityError:
+        # another process created the tag - rollback and fetch it
+        await db.rollback()
+        result = await db.execute(select(Tag).where(Tag.name == tag_name))
+        tag = result.scalar_one()
+        return tag
 
 
 async def _process_upload_background(
@@ -55,7 +89,7 @@ async def _process_upload_background(
     artist_did: str,
     album: str | None,
     features: str | None,
-    tags: str | None,
+    validated_tags: list[str],
     auth_session: AuthSession,
     image_path: str | None = None,
     image_filename: str | None = None,
@@ -337,44 +371,25 @@ async def _process_upload_background(
                     await db.commit()
                     await db.refresh(track)
 
-                    # handle tags if provided
-                    if tags:
+                    # handle tags if provided (already validated)
+                    if validated_tags:
                         try:
-                            tag_names: list[str] = json.loads(tags)
-                            if isinstance(tag_names, list):
-                                # normalize and deduplicate tag names
-                                tag_names_set = normalize_tags(
-                                    [n for n in tag_names if isinstance(n, str)]
-                                )
+                            for tag_name in validated_tags:
+                                # get or create tag with race condition handling
+                                tag = await _get_or_create_tag(db, tag_name, artist_did)
 
-                                for tag_name in tag_names_set:
-                                    # try to find existing tag
-                                    tag_result = await db.execute(
-                                        select(Tag).where(Tag.name == tag_name)
-                                    )
-                                    tag = tag_result.scalar_one_or_none()
+                                # create track_tag association
+                                track_tag = TrackTag(track_id=track.id, tag_id=tag.id)
+                                db.add(track_tag)
 
-                                    if not tag:
-                                        # create new tag
-                                        tag = Tag(
-                                            name=tag_name,
-                                            created_by_did=artist_did,
-                                            created_at=datetime.now(UTC),
-                                        )
-                                        db.add(tag)
-                                        await db.flush()
-
-                                    # create track_tag association
-                                    track_tag = TrackTag(
-                                        track_id=track.id, tag_id=tag.id
-                                    )
-                                    db.add(track_tag)
-
-                                await db.commit()
-                        except json.JSONDecodeError:
-                            pass  # ignore malformed tags
+                            await db.commit()
                         except Exception as e:
-                            logger.warning(f"failed to add tags to track: {e}")
+                            logfire.error(
+                                "failed to add tags to track",
+                                track_id=track.id,
+                                tags=validated_tags,
+                                error=str(e),
+                            )
 
                     # send notification about new track
                     from backend._internal.notifications import notification_service
@@ -465,6 +480,12 @@ async def upload_track(
     Returns:
         dict: A payload containing `upload_id` for monitoring progress via SSE.
     """
+    # validate tags upfront before any processing
+    try:
+        validated_tags = validate_tags_json(tags)
+    except TagValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
     # validate audio file type upfront
     if not file.filename:
         raise HTTPException(status_code=400, detail="no filename provided")
@@ -545,7 +566,7 @@ async def upload_track(
             auth_session.did,
             album,
             features,
-            tags,
+            validated_tags,
             auth_session,
             image_path,
             image_filename,

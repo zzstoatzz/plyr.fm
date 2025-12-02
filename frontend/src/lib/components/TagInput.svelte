@@ -176,15 +176,15 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
 		min-height: 48px;
 		transition: all 0.2s;
 	}
 
 	.tags-container:focus-within {
-		border-color: #3a7dff;
+		border-color: var(--accent);
 	}
 
 	.tag-chip {
@@ -192,8 +192,8 @@
 		align-items: center;
 		gap: 0.35rem;
 		padding: 0.35rem 0.6rem;
-		background: #1a2330;
-		border: 1px solid #2a3a4a;
+		background: rgba(138, 179, 255, 0.1);
+		border: 1px solid rgba(138, 179, 255, 0.2);
 		color: #8ab3ff;
 		border-radius: 20px;
 		font-size: 0.9rem;
@@ -209,7 +209,7 @@
 		padding: 0;
 		background: none;
 		border: none;
-		color: #888;
+		color: var(--text-tertiary);
 		cursor: pointer;
 		font-size: 1.2rem;
 		font-family: inherit;
@@ -232,14 +232,14 @@
 		padding: 0;
 		background: transparent;
 		border: none;
-		color: white;
+		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
 		outline: none;
 	}
 
 	.tag-input::placeholder {
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	.tag-input:disabled {
@@ -248,7 +248,7 @@
 	}
 
 	.spinner {
-		color: #666;
+		color: var(--text-muted);
 		font-size: 0.85rem;
 		margin-left: auto;
 	}
@@ -259,13 +259,13 @@
 		width: 100%;
 		max-height: 200px;
 		overflow-y: auto;
-		background: #1a1a1a;
-		border: 1px solid #333;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
 		margin-top: 0.25rem;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 		scrollbar-width: thin;
-		scrollbar-color: #333 #0a0a0a;
+		scrollbar-color: var(--border-default) var(--bg-primary);
 	}
 
 	.suggestions::-webkit-scrollbar {
@@ -273,17 +273,17 @@
 	}
 
 	.suggestions::-webkit-scrollbar-track {
-		background: #0a0a0a;
+		background: var(--bg-primary);
 		border-radius: 4px;
 	}
 
 	.suggestions::-webkit-scrollbar-thumb {
-		background: #333;
+		background: var(--border-default);
 		border-radius: 4px;
 	}
 
 	.suggestions::-webkit-scrollbar-thumb:hover {
-		background: #444;
+		background: var(--border-emphasis);
 	}
 
 	.suggestion-item {
@@ -294,8 +294,8 @@
 		padding: 0.75rem;
 		background: transparent;
 		border: none;
-		border-bottom: 1px solid #2a2a2a;
-		color: white;
+		border-bottom: 1px solid var(--border-default);
+		color: var(--text-primary);
 		text-align: left;
 		font-family: inherit;
 		cursor: pointer;
@@ -308,17 +308,17 @@
 
 	.suggestion-item:hover,
 	.suggestion-item.selected {
-		background: #222;
+		background: var(--bg-hover);
 	}
 
 	.tag-name {
 		font-weight: 500;
-		color: #e8e8e8;
+		color: var(--text-primary);
 	}
 
 	.tag-count {
 		font-size: 0.85rem;
-		color: #888;
+		color: var(--text-tertiary);
 	}
 
 	@media (max-width: 768px) {
