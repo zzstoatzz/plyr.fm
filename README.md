@@ -2,6 +2,8 @@
 
 music on [atproto](https://atproto.com)
 
+check the [plyr.fm artist page](https://plyr.fm/u/plyr.fm) for the latest [auto-generated](.github/workflows/status-maintenance.yml) development podcast!
+
 <details>
 <summary>tech stack</summary>
 
