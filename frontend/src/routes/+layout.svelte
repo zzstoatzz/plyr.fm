@@ -12,6 +12,7 @@
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
+	import { preferences } from '$lib/preferences.svelte';
 	import { player } from '$lib/player.svelte';
 	import { browser } from '$app/environment';
 	import type { LayoutData } from './$types';
@@ -30,12 +31,13 @@
 
 	let isEmbed = $derived($page.url.pathname.startsWith('/embed/'));
 
-	// sync auth state from layout data (fetched by +layout.ts)
+	// sync auth and preferences state from layout data (fetched by +layout.ts)
 	$effect(() => {
 		if (browser) {
 			auth.user = data.user;
 			auth.isAuthenticated = data.isAuthenticated;
 			auth.loading = false;
+			preferences.data = data.preferences;
 		}
 	});
 

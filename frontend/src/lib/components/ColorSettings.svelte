@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { API_URL } from '$lib/config';
+	import { preferences } from '$lib/preferences.svelte';
 
 	let showSettings = $state(false);
-	let currentColor = $state('#6a9fff');
 
 	const presetColors = [
 		{ name: 'blue', value: '#6a9fff' },
@@ -14,26 +13,20 @@
 		{ name: 'red', value: '#ef4444' }
 	];
 
-	onMount(async () => {
-		// try to fetch from backend if authenticated
-		try {
-			const response = await fetch(`${API_URL}/preferences/`, {
-				credentials: 'include'
-			});
-			if (response.ok) {
-				const data = await response.json();
-				currentColor = data.accent_color;
-				applyColorLocally(data.accent_color);
-				return;
-			}
-		} catch (e) {
-			console.error('failed to fetch preferences:', e);
-		}
+	// derive from preferences store
+	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 
-		// fallback to localStorage
+	// apply color when it changes
+	$effect(() => {
+		if (currentColor) {
+			applyColorLocally(currentColor);
+		}
+	});
+
+	onMount(() => {
+		// apply initial color from localStorage while waiting for preferences
 		const saved = localStorage.getItem('accentColor');
 		if (saved) {
-			currentColor = saved;
 			applyColorLocally(saved);
 		}
 	});
@@ -50,25 +43,9 @@
 	}
 
 	async function applyColor(color: string) {
-		currentColor = color;
 		applyColorLocally(color);
-
-		// save to localStorage (immediate)
 		localStorage.setItem('accentColor', color);
-
-		// save to backend if authenticated
-		try {
-			await fetch(`${API_URL}/preferences/`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				credentials: 'include',
-				body: JSON.stringify({ accent_color: color })
-			});
-		} catch (e) {
-			console.error('failed to save preferences:', e);
-		}
+		await preferences.update({ accent_color: color });
 	}
 
 	function handleColorInput(e: Event) {

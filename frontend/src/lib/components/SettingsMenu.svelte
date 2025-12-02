@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { API_URL } from '$lib/config';
 	import { queue } from '$lib/queue.svelte';
+	import { preferences } from '$lib/preferences.svelte';
 
 	let showSettings = $state(false);
-	let currentColor = $state('#6a9fff');
-	let autoAdvance = $state(true);
 
 	const presetColors = [
 		{ name: 'blue', value: '#6a9fff' },
@@ -16,36 +14,27 @@
 		{ name: 'red', value: '#ef4444' }
 	];
 
-	onMount(async () => {
+	// derive from preferences store
+	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
+	let autoAdvance = $derived(preferences.autoAdvance);
+
+	// apply color when it changes
+	$effect(() => {
+		if (currentColor) {
+			applyColorLocally(currentColor);
+		}
+	});
+
+	// sync auto-advance with queue
+	$effect(() => {
+		queue.setAutoAdvance(autoAdvance);
+	});
+
+	onMount(() => {
+		// apply initial color from localStorage while waiting for preferences
 		const savedAccent = localStorage.getItem('accentColor');
 		if (savedAccent) {
-			currentColor = savedAccent;
 			applyColorLocally(savedAccent);
-		}
-
-		const savedAutoAdvance = localStorage.getItem('autoAdvance');
-		autoAdvance = savedAutoAdvance === null ? true : savedAutoAdvance !== '0';
-		queue.setAutoAdvance(autoAdvance);
-
-		try {
-			const response = await fetch(`${API_URL}/preferences/`, {
-				credentials: 'include'
-			});
-
-			if (!response.ok) return;
-
-			const data = await response.json();
-			if (data.accent_color) {
-				currentColor = data.accent_color;
-				applyColorLocally(data.accent_color);
-				localStorage.setItem('accentColor', data.accent_color);
-			}
-
-			autoAdvance = data.auto_advance ?? true;
-			queue.setAutoAdvance(autoAdvance);
-			localStorage.setItem('autoAdvance', autoAdvance ? '1' : '0');
-		} catch (error) {
-			console.error('failed to fetch preferences:', error);
 		}
 	});
 
@@ -63,26 +52,10 @@
 		document.documentElement.style.setProperty('--accent-hover', hover);
 	}
 
-	async function savePreferences(update: Record<string, unknown>) {
-		try {
-			await fetch(`${API_URL}/preferences/`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				credentials: 'include',
-				body: JSON.stringify(update)
-			});
-		} catch (error) {
-			console.error('failed to save preferences:', error);
-		}
-	}
-
-	function applyColor(color: string) {
-		currentColor = color;
+	async function applyColor(color: string) {
 		applyColorLocally(color);
 		localStorage.setItem('accentColor', color);
-		savePreferences({ accent_color: color });
+		await preferences.update({ accent_color: color });
 	}
 
 	function handleColorInput(event: Event) {
@@ -94,12 +67,12 @@
 		applyColor(color);
 	}
 
-	function handleAutoAdvanceToggle(event: Event) {
+	async function handleAutoAdvanceToggle(event: Event) {
 		const input = event.target as HTMLInputElement;
-		autoAdvance = input.checked;
-		queue.setAutoAdvance(autoAdvance);
-		localStorage.setItem('autoAdvance', autoAdvance ? '1' : '0');
-		savePreferences({ auto_advance: autoAdvance });
+		const value = input.checked;
+		queue.setAutoAdvance(value);
+		localStorage.setItem('autoAdvance', value ? '1' : '0');
+		await preferences.update({ auto_advance: value });
 	}
 </script>
 

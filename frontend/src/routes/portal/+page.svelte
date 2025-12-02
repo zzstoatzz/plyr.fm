@@ -13,6 +13,7 @@
 	import { uploader } from '$lib/uploader.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { preferences } from '$lib/preferences.svelte';
 
 	// browser-compatible audio formats only
 	// note: aiff/aif not supported in most browsers (safari only)
@@ -54,7 +55,8 @@
 	let displayName = $state('');
 	let bio = $state('');
 	let avatarUrl = $state('');
-	let allowComments = $state(false);
+	// derive from preferences store
+	let allowComments = $derived(preferences.allowComments);
 	let savingProfile = $state(false);
 	let profileSuccess = $state('');
 	let profileError = $state('');
@@ -142,7 +144,6 @@
 			await loadMyTracks();
 			await loadArtistProfile();
 			await loadMyAlbums();
-			await loadPreferences();
 			await loadDeveloperTokens();
 		} catch (_e) {
 			console.error('error loading portal data:', _e);
@@ -218,34 +219,10 @@
 		}
 	}
 
-	async function loadPreferences() {
-		try {
-			const response = await fetch(`${API_URL}/preferences/`, {
-				credentials: 'include'
-			});
-			if (response.ok) {
-				const prefs = await response.json();
-				allowComments = prefs.allow_comments;
-			}
-		} catch (_e) {
-			console.error('failed to load preferences:', _e);
-		}
-	}
-
 	async function saveAllowComments(enabled: boolean) {
 		try {
-			const response = await fetch(`${API_URL}/preferences/`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({ allow_comments: enabled })
-			});
-			if (response.ok) {
-				allowComments = enabled;
-				toast.success(enabled ? 'comments enabled on your tracks' : 'comments disabled');
-			} else {
-				toast.error('failed to update preference');
-			}
+			await preferences.update({ allow_comments: enabled });
+			toast.success(enabled ? 'comments enabled on your tracks' : 'comments disabled');
 		} catch (_e) {
 			console.error('failed to save preference:', _e);
 			toast.error('failed to update preference');
