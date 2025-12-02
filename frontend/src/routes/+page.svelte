@@ -4,6 +4,7 @@
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
+	import HiddenTagsFilter from '$lib/components/HiddenTagsFilter.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache } from '$lib/tracks.svelte';
@@ -88,6 +89,7 @@
 				latest tracks
 			</button>
 		</h2>
+		<HiddenTagsFilter />
 		{#if showLoading}
 			<div class="loading-container">
 				<WaveLoading size="lg" message="loading tracks..." />

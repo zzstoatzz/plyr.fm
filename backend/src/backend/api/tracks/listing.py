@@ -39,9 +39,19 @@ async def list_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     request: Request,
     artist_did: str | None = None,
+    filter_hidden_tags: bool | None = None,
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> dict:
-    """List all tracks, optionally filtered by artist DID."""
+    """List all tracks, optionally filtered by artist DID.
+
+    Args:
+        artist_did: Filter to tracks by this artist only.
+        filter_hidden_tags: Whether to exclude tracks with user's hidden tags.
+            - None (default): auto-decide based on context (filter on discovery feed,
+              don't filter on artist pages)
+            - True: always filter hidden tags
+            - False: never filter hidden tags
+    """
     from atproto_identity.did.resolver import AsyncDidResolver
 
     # get authenticated user if cookie or auth header present
@@ -76,8 +86,14 @@ async def list_tracks(
     if artist_did:
         stmt = stmt.where(Track.artist_did == artist_did)
 
-    # filter out tracks with hidden tags (only for discovery feed, not artist pages)
-    if hidden_tags and not artist_did:
+    # filter out tracks with hidden tags
+    # when filter_hidden_tags is None (default), auto-decide:
+    # - discovery feed (no artist_did): filter
+    # - artist page (has artist_did): don't filter (show all their tracks)
+    should_filter = (
+        filter_hidden_tags if filter_hidden_tags is not None else (artist_did is None)
+    )
+    if hidden_tags and should_filter:
         # subquery: track IDs that have any of the hidden tags
         hidden_track_ids_subq = (
             select(TrackTag.track_id)
