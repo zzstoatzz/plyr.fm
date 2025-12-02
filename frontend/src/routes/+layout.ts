@@ -1,18 +1,28 @@
 import { browser } from '$app/environment';
 import { API_URL } from '$lib/config';
 import type { User } from '$lib/types';
+import type { Preferences } from '$lib/preferences.svelte';
 import type { LoadEvent } from '@sveltejs/kit';
 
 export interface LayoutData {
 	user: User | null;
 	isAuthenticated: boolean;
+	preferences: Preferences | null;
 }
+
+const DEFAULT_PREFERENCES: Preferences = {
+	accent_color: null,
+	auto_advance: true,
+	allow_comments: true,
+	hidden_tags: ['ai']
+};
 
 export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
 	if (!browser) {
 		return {
 			user: null,
-			isAuthenticated: false
+			isAuthenticated: false,
+			preferences: null
 		};
 	}
 
@@ -23,9 +33,30 @@ export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
 
 		if (response.ok) {
 			const user = await response.json();
+
+			// fetch preferences in parallel once we know user is authenticated
+			let preferences: Preferences = { ...DEFAULT_PREFERENCES };
+			try {
+				const prefsResponse = await fetch(`${API_URL}/preferences/`, {
+					credentials: 'include'
+				});
+				if (prefsResponse.ok) {
+					const data = await prefsResponse.json();
+					preferences = {
+						accent_color: data.accent_color ?? null,
+						auto_advance: data.auto_advance ?? true,
+						allow_comments: data.allow_comments ?? true,
+						hidden_tags: data.hidden_tags ?? ['ai']
+					};
+				}
+			} catch (e) {
+				console.error('preferences fetch failed:', e);
+			}
+
 			return {
 				user,
-				isAuthenticated: true
+				isAuthenticated: true,
+				preferences
 			};
 		}
 	} catch (e) {
@@ -34,6 +65,7 @@ export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
 
 	return {
 		user: null,
-		isAuthenticated: false
+		isAuthenticated: false,
+		preferences: null
 	};
 }

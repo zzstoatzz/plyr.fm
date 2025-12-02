@@ -1,63 +1,19 @@
 <script lang="ts">
-	import { API_URL, getServerConfig } from '$lib/config';
 	import { tracksCache } from '$lib/tracks.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { preferences } from '$lib/preferences.svelte';
 
-	let hiddenTags = $state<string[]>([]);
-	let defaultHiddenTags = $state<string[]>([]);
 	let isExpanded = $state(false);
 	let addingTag = $state(false);
 	let newTag = $state('');
 	let inputEl = $state<HTMLInputElement | null>(null);
-	let hasFetched = $state(false);
 
-	// load default hidden tags from server config on mount
-	$effect(() => {
-		getServerConfig().then((config) => {
-			defaultHiddenTags = config.default_hidden_tags;
-		});
-	});
-
-	// fetch preferences when auth becomes available
-	$effect(() => {
-		if (auth.isAuthenticated && !hasFetched) {
-			hasFetched = true;
-			fetchPreferences();
-		}
-	});
-
-	async function fetchPreferences() {
-		try {
-			const response = await fetch(`${API_URL}/preferences/`, {
-				credentials: 'include'
-			});
-			if (response.ok) {
-				const data = await response.json();
-				// use server value, falling back to default from server config
-				hiddenTags = data.hidden_tags ?? defaultHiddenTags;
-			}
-		} catch (error) {
-			console.error('failed to fetch preferences:', error);
-			hiddenTags = defaultHiddenTags;
-		}
-	}
-
-	async function saveHiddenTags(tags: string[]) {
-		try {
-			await fetch(`${API_URL}/preferences/`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({ hidden_tags: tags })
-			});
-		} catch (error) {
-			console.error('failed to save preferences:', error);
-		}
-	}
+	// derive hidden tags from preferences store
+	let hiddenTags = $derived(preferences.data?.hidden_tags ?? []);
 
 	async function removeTag(tag: string) {
-		hiddenTags = hiddenTags.filter((t) => t !== tag);
-		await saveHiddenTags(hiddenTags);
+		const updated = hiddenTags.filter((t) => t !== tag);
+		await preferences.update({ hidden_tags: updated });
 		tracksCache.invalidate();
 		tracksCache.fetch(true);
 	}
@@ -69,8 +25,8 @@
 		addingTag = false;
 
 		if (normalized && !hiddenTags.includes(normalized)) {
-			hiddenTags = [...hiddenTags, normalized];
-			await saveHiddenTags(hiddenTags);
+			const updated = [...hiddenTags, normalized];
+			await preferences.update({ hidden_tags: updated });
 			tracksCache.invalidate();
 			tracksCache.fetch(true);
 		}
@@ -100,7 +56,7 @@
 	}
 </script>
 
-{#if auth.isAuthenticated}
+{#if auth.isAuthenticated && preferences.data !== null}
 	<div class="filter-bar">
 		<button
 			type="button"
