@@ -5,6 +5,13 @@
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
 
+	// touch drag state
+	let touchDragIndex = $state<number | null>(null);
+	let touchStartY = $state(0);
+	let touchCurrentY = $state(0);
+	let touchDragElement = $state<HTMLElement | null>(null);
+	let queueTracksElement = $state<HTMLElement | null>(null);
+
 	const currentTrack = $derived.by<Track | null>(() => queue.tracks[queue.currentIndex] ?? null);
 	const upcoming = $derived.by<{ track: Track; index: number }[]>(() => {
 		return queue.tracks
@@ -12,8 +19,12 @@
 			.filter(({ index }) => index > queue.currentIndex);
 	});
 
-	function handleDragStart(index: number) {
+	// desktop drag and drop
+	function handleDragStart(event: DragEvent, index: number) {
 		draggedIndex = index;
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+		}
 	}
 
 	function handleDragOver(event: DragEvent, index: number) {
@@ -33,6 +44,68 @@
 	function handleDragEnd() {
 		draggedIndex = null;
 		dragOverIndex = null;
+	}
+
+	// touch drag and drop
+	function handleTouchStart(event: TouchEvent, index: number) {
+		const touch = event.touches[0];
+		touchDragIndex = index;
+		touchStartY = touch.clientY;
+		touchCurrentY = touch.clientY;
+		touchDragElement = event.currentTarget as HTMLElement;
+
+		// add dragging class
+		touchDragElement.classList.add('touch-dragging');
+	}
+
+	function handleTouchMove(event: TouchEvent) {
+		if (touchDragIndex === null || !touchDragElement || !queueTracksElement) return;
+
+		event.preventDefault();
+		const touch = event.touches[0];
+		touchCurrentY = touch.clientY;
+
+		// calculate visual offset
+		const offset = touchCurrentY - touchStartY;
+		touchDragElement.style.transform = `translateY(${offset}px)`;
+
+		// find which track we're hovering over
+		const tracks = queueTracksElement.querySelectorAll('.queue-track');
+		for (let i = 0; i < tracks.length; i++) {
+			const track = tracks[i] as HTMLElement;
+			const rect = track.getBoundingClientRect();
+			const midY = rect.top + rect.height / 2;
+
+			if (touch.clientY < midY && i > 0) {
+				// get the actual index from the data attribute
+				const targetIndex = parseInt(track.dataset.index || '0');
+				if (targetIndex !== touchDragIndex) {
+					dragOverIndex = targetIndex;
+				}
+				break;
+			} else if (touch.clientY >= midY) {
+				const targetIndex = parseInt(track.dataset.index || '0');
+				if (targetIndex !== touchDragIndex) {
+					dragOverIndex = targetIndex;
+				}
+			}
+		}
+	}
+
+	function handleTouchEnd() {
+		if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
+			queue.moveTrack(touchDragIndex, dragOverIndex);
+		}
+
+		// cleanup
+		if (touchDragElement) {
+			touchDragElement.classList.remove('touch-dragging');
+			touchDragElement.style.transform = '';
+		}
+
+		touchDragIndex = null;
+		dragOverIndex = null;
+		touchDragElement = null;
 	}
 </script>
 
@@ -74,21 +147,47 @@
 				</div>
 
 				{#if upcoming.length > 0}
-					<div class="queue-tracks">
+					<div
+						class="queue-tracks"
+						bind:this={queueTracksElement}
+						ontouchmove={handleTouchMove}
+						ontouchend={handleTouchEnd}
+						ontouchcancel={handleTouchEnd}
+					>
 						{#each upcoming as { track, index } (`${track.file_id}:${index}`)}
 							<div
 								class="queue-track"
-								class:drag-over={dragOverIndex === index}
+								class:drag-over={dragOverIndex === index && touchDragIndex !== index}
+								class:is-dragging={touchDragIndex === index || draggedIndex === index}
+								data-index={index}
 								draggable="true"
 								role="button"
 								tabindex="0"
-								ondragstart={() => handleDragStart(index)}
+								ondragstart={(e) => handleDragStart(e, index)}
 								ondragover={(e) => handleDragOver(e, index)}
 								ondrop={(e) => handleDrop(e, index)}
 								ondragend={handleDragEnd}
 								onclick={() => queue.goTo(index)}
 								onkeydown={(e) => e.key === 'Enter' && queue.goTo(index)}
 							>
+								<!-- drag handle for reordering -->
+								<button
+									class="drag-handle"
+									ontouchstart={(e) => handleTouchStart(e, index)}
+									onclick={(e) => e.stopPropagation()}
+									aria-label="drag to reorder"
+									title="drag to reorder"
+								>
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+										<circle cx="5" cy="3" r="1.5"></circle>
+										<circle cx="11" cy="3" r="1.5"></circle>
+										<circle cx="5" cy="8" r="1.5"></circle>
+										<circle cx="11" cy="8" r="1.5"></circle>
+										<circle cx="5" cy="13" r="1.5"></circle>
+										<circle cx="11" cy="13" r="1.5"></circle>
+									</svg>
+								</button>
+
 								<div class="track-info">
 									<div class="track-title">{track.title}</div>
 									<div class="track-artist">
@@ -271,13 +370,14 @@
 	.queue-track {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		gap: 0.5rem;
 		padding: 0.85rem 0.9rem;
 		border-radius: 8px;
 		cursor: pointer;
 		transition: all 0.2s;
 		border: 1px solid var(--border-subtle);
 		background: var(--bg-secondary);
+		position: relative;
 	}
 
 	.queue-track:hover {
@@ -288,6 +388,50 @@
 	.queue-track.drag-over {
 		border-color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 12%, transparent);
+	}
+
+	.queue-track.is-dragging {
+		opacity: 0.9;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		z-index: 10;
+	}
+
+	/* applied dynamically via JS during touch drag */
+	:global(.queue-track.touch-dragging) {
+		z-index: 100;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+	}
+
+	.drag-handle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.35rem;
+		background: transparent;
+		border: none;
+		color: var(--text-muted);
+		cursor: grab;
+		touch-action: none;
+		border-radius: 4px;
+		transition: all 0.2s;
+		flex-shrink: 0;
+	}
+
+	.drag-handle:hover {
+		color: var(--text-secondary);
+		background: var(--bg-tertiary);
+	}
+
+	.drag-handle:active {
+		cursor: grabbing;
+		color: var(--accent);
+	}
+
+	/* always show drag handle on touch devices */
+	@media (pointer: coarse) {
+		.drag-handle {
+			color: var(--text-tertiary);
+		}
 	}
 
 	.track-info {
@@ -334,6 +478,7 @@
 		transition: all 0.2s;
 		border-radius: 4px;
 		opacity: 0;
+		flex-shrink: 0;
 	}
 
 	.queue-track:hover .remove-btn {
@@ -343,6 +488,13 @@
 	.remove-btn:hover {
 		color: var(--error);
 		background: color-mix(in srgb, var(--error) 12%, transparent);
+	}
+
+	/* always show remove button on touch devices */
+	@media (pointer: coarse) {
+		.remove-btn {
+			opacity: 1;
+		}
 	}
 
 	.empty-up-next {
