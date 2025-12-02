@@ -48,81 +48,131 @@ jobs:
           claude_args: |
             --allowedTools "Read,Write,Edit,Bash,Fetch"
           prompt: |
-            you are maintaining the plyr.fm (pronounce as "player FM") project status file.
+            you are maintaining the plyr.fm (pronounced "player FM") project status file.
 
-            ## context
+            ## critical rules
 
-            - project started: november 2025
-            - today's date: run `date` to get current date
-            - this may be the first time this workflow has run
-            - .status_history/ directory may not exist yet
+            1. STATUS.md MUST be kept under 250 lines. this is non-negotiable.
+            2. archive content MUST be moved to .status_history/, not deleted
+            3. podcast tone MUST be dry, matter-of-fact, slightly sardonic - NOT enthusiastic or complimentary
 
             ## task 1: gather temporal context
 
-            before writing any transcript, understand the timeline:
-            1. run `git log --oneline --since="1 week ago"` to see recent commits
-            2. run `git log --oneline -30` to see the last 30 commits with dates
-            3. note the actual dates of changes - don't present old work as "just shipped"
+            run these commands:
+            ```bash
+            date
+            git log --oneline --since="1 week ago"
+            git log --oneline -30
+            ls -la .status_history/ 2>/dev/null || echo "no archive directory yet"
+            wc -l STATUS.md
+            ```
 
-            ## task 2: archive old sections (if needed)
+            determine:
+            - what is today's date?
+            - what shipped in the last week vs earlier?
+            - does .status_history/ exist?
+            - how many lines is STATUS.md currently?
+            - is this the FIRST episode (no .status_history/ exists)?
 
-            read STATUS.md and count the lines.
+            ## task 2: archive old sections (MANDATORY if over 250 lines)
 
-            if over 250 lines:
-            1. identify natural section boundaries (marked by "---" or headers like "### " with dates)
-            2. keep the most recent ~250 lines in STATUS.md
-            3. move older sections to .status_history/YYYY-MM.md files, grouped by month
-            4. create .status_history/ directory if it doesn't exist
-            5. preserve raw content - don't summarize or modify the archived text
+            if STATUS.md > 250 lines:
+            1. create .status_history/ directory if it doesn't exist
+            2. identify section boundaries (look for "---" separators and "### " headers with dates)
+            3. move OLDEST sections to .status_history/YYYY-MM.md (grouped by month)
+            4. keep ONLY the most recent content totaling ~200-250 lines in STATUS.md
+            5. preserve the document structure (keep "## recent work" header, "## immediate priorities", etc)
+            6. do NOT summarize archived content - move it verbatim
 
-            if 250 lines or fewer, skip archiving.
+            example: if STATUS.md has sections from Nov 10, Nov 12, Nov 24, Nov 27, Dec 1:
+            - move Nov 10-24 content to .status_history/2025-11.md
+            - keep Nov 27 and Dec 1 content in STATUS.md
+
+            VERIFY: run `wc -l STATUS.md` after archiving. it MUST be under 250 lines.
 
             ## task 3: generate audio overview
 
             skip_audio input: ${{ inputs.skip_audio }}
 
             if skip_audio is false:
-            1. write a 2-3 minute podcast script to podcast_script.txt
-               - two hosts having a casual conversation
-               - host personalities should be inspired by Gilfoyle and Dinesh from Silicon Valley
-               - focus on recently shipped features from the git history (except for the first episode)
-               - format: "Host: ..." and "Cohost: ..." lines
-               - IMPORTANT: "plyr.fm" is pronounced "player FM" (not "plir" or spelling it out)
-               - do not over-sensationalize / over-compliment the project's significance / achievements / progress
 
-               temporal awareness:
-               - use the git history to understand WHEN things actually shipped
-               - if this is the first episode, acknowledge the project started in november 2025
-               - reference time correctly: "last week they shipped X" vs "back in november they built Y"
-               - don't present month-old work as if it just happened
+            ### understand the project first
 
-               tone guidelines:
-               - accessible to non-technical listeners, but don't dumb it down
-               - focus on user impact: what can people do now that they couldn't before?
-               - use intuitive analogies to explain technical concepts in terms of everyday experience
-               - matter-of-fact delivery, not hype-y or marketing-speak
-               - brief, conversational - like two friends catching up on what shipped
-              
-               read upstream documentation:
-                - docs/**.md contains a lot of useful information
-                - you can Fetch atproto.com to understand primitives that are relevant to the project
+            before writing the script, read:
+            - STATUS.md (the current state)
+            - docs/deployment/overview.md if it exists
+            - Fetch https://atproto.com/guides/overview to understand ATProto primitives
+            - Fetch https://atproto.com/guides/lexicon to understand NSIDs and lexicons
 
-            2. run: uv run scripts/generate_tts.py podcast_script.txt update.wav
+            this context helps you explain things accurately without over-simplifying.
 
-            3. delete the podcast script (we only need the audio): rm podcast_script.txt
+            ### determine episode type
 
-            4. DO NOT upload to plyr.fm yet - that happens after PR merge
+            check if .status_history/ directory exists:
+            - if NO .status_history/ exists: this is the INAUGURAL episode
+            - if .status_history/ exists: this is a SUBSEQUENT episode
 
-            ## task 4: open PR with changes
+            ### write the podcast script
 
-            if any files changed (.status_history/*, STATUS.md) OR audio was generated:
-            1. create a new branch: git checkout -b status-maintenance-<date>
-            2. git add .status_history/ STATUS.md update.wav (do NOT add podcast_script.txt)
-            3. commit with message "chore: weekly status maintenance"
-            4. push the branch: git push -u origin status-maintenance-<date>
-            5. create a PR using: gh pr create --title "chore: weekly status maintenance" --body "automated status archival and audio overview"
+            write to podcast_script.txt with "Host: ..." and "Cohost: ..." lines.
 
-            if nothing changed, just report that no maintenance was needed.
+            INAUGURAL EPISODE (first time):
+            - introduce what plyr.fm is: decentralized music streaming on ATProto
+            - explain the core value prop: your music data lives in your PDS, portable between apps
+            - cover the technical foundation that's been built (summarize from STATUS.md)
+            - set expectations: this is an early-stage project, rough edges exist
+            - tone: "here's what we're building and why it matters"
+
+            SUBSEQUENT EPISODES:
+            - focus on what actually shipped since last episode
+            - use git history to determine timing ("last week" vs "earlier this month")
+            - don't re-explain the whole project - listeners already know
+            - tone: "here's what changed"
+
+            ### tone requirements (CRITICAL)
+
+            the hosts should sound like two engineers who:
+            - are mildly amused by the absurdity of building things
+            - acknowledge problems and limitations honestly
+            - don't use superlatives ("amazing", "incredible", "exciting")
+            - don't congratulate the project or its creator
+            - explain technical concepts through analogy, not hype
+            - are slightly sardonic but not mean
+
+            BAD example:
+            "Host: Wow, they've done an incredible job building this decentralized music platform!"
+            "Cohost: Absolutely! The ATProto integration is amazing!"
+
+            GOOD example:
+            "Host: So someone built a music streaming thing on ATProto."
+            "Cohost: Right, the protocol Bluesky uses. The idea being your playlists and play history live in your personal data server instead of Spotify's database."
+            "Host: Which means if plyr.fm disappears tomorrow, you still have your data."
+            "Cohost: In theory. Whether anyone else builds a client that reads it is another question."
+
+            forbidden phrases:
+            - "exciting", "amazing", "incredible", "impressive", "great job"
+            - "the team has done", "they've really", "fantastic work"
+            - any variation of congratulating or praising the project
+
+            pronunciation: "plyr.fm" = "player FM" (not "plir" or spelled out)
+
+            target length: 2-3 minutes spoken (~300-400 words)
+
+            ### generate audio
+
+            run: uv run scripts/generate_tts.py podcast_script.txt update.wav
+            then: rm podcast_script.txt
+
+            ## task 4: open PR
+
+            if any files changed:
+            1. git checkout -b status-maintenance-$(date +%Y%m%d)
+            2. git add .status_history/ STATUS.md update.wav
+            3. git commit -m "chore: weekly status maintenance"
+            4. git push -u origin status-maintenance-$(date +%Y%m%d)
+            5. gh pr create --title "chore: weekly status maintenance" --body "automated status archival and audio overview"
+
+            if nothing changed, report that no maintenance was needed.
 
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
