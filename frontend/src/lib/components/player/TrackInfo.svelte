@@ -155,8 +155,8 @@
 		height: 56px;
 		border-radius: 4px;
 		overflow: hidden;
-		background: #1a1a1a;
-		border: 1px solid #333;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
 		display: block;
 		text-decoration: none;
 		transition: transform 0.18s ease, border-color 0.2s ease;
@@ -180,7 +180,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	.player-info {
@@ -196,7 +196,7 @@
 	.player-title-link {
 		font-size: 0.95rem;
 		font-weight: 600;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin-bottom: 0;
 		position: relative;
 		overflow: hidden;
@@ -253,7 +253,7 @@
 		flex-direction: column;
 		justify-content: center;
 		gap: 0.15rem;
-		color: #a0a0a0;
+		color: var(--text-secondary);
 		font-size: 0.82rem;
 		min-width: 0;
 		height: 32px;
@@ -303,7 +303,7 @@
 	}
 
 	.features-inline {
-		color: #b5b5b5;
+		color: var(--text-secondary);
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;

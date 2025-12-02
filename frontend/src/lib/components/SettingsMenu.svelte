@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { queue } from '$lib/queue.svelte';
-	import { preferences } from '$lib/preferences.svelte';
+	import { preferences, type Theme } from '$lib/preferences.svelte';
 
 	let showSettings = $state(false);
 
@@ -14,9 +14,16 @@
 		{ name: 'red', value: '#ef4444' }
 	];
 
+	const themes: { value: Theme; label: string; icon: string }[] = [
+		{ value: 'dark', label: 'dark', icon: 'moon' },
+		{ value: 'light', label: 'light', icon: 'sun' },
+		{ value: 'system', label: 'system', icon: 'auto' }
+	];
+
 	// derive from preferences store
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let autoAdvance = $derived(preferences.autoAdvance);
+	let currentTheme = $derived(preferences.theme);
 
 	// apply color when it changes
 	$effect(() => {
@@ -74,6 +81,10 @@
 		localStorage.setItem('autoAdvance', value ? '1' : '0');
 		await preferences.update({ auto_advance: value });
 	}
+
+	function selectTheme(theme: Theme) {
+		preferences.setTheme(theme);
+	}
 </script>
 
 <div class="settings-menu">
@@ -90,6 +101,38 @@
 				<span>settings</span>
 				<button class="close-btn" onclick={toggleSettings}>×</button>
 			</div>
+
+			<section class="settings-section">
+				<h3>theme</h3>
+				<div class="theme-buttons">
+					{#each themes as theme}
+						<button
+							class="theme-btn"
+							class:active={currentTheme === theme.value}
+							onclick={() => selectTheme(theme.value)}
+							title={theme.label}
+						>
+							{#if theme.icon === 'moon'}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+								</svg>
+							{:else if theme.icon === 'sun'}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="12" r="5" />
+									<path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+								</svg>
+							{:else}
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="12" r="9" />
+									<path d="M12 3v18" />
+									<path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" opacity="0.3" />
+								</svg>
+							{/if}
+							<span>{theme.label}</span>
+						</button>
+					{/each}
+				</div>
+			</section>
 
 			<section class="settings-section">
 				<h3>accent color</h3>
@@ -120,6 +163,7 @@
 				</label>
 				<p class="toggle-hint">when a track ends, start the next item in your queue</p>
 			</section>
+
 		</div>
 	{/if}
 </div>
@@ -155,7 +199,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: 8px;
 		padding: 1.25rem;
-		min-width: 260px;
+		min-width: 280px;
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
 		z-index: 1000;
 		display: flex;
@@ -202,6 +246,48 @@
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--text-tertiary);
+	}
+
+	.theme-buttons {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.theme-btn {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.6rem 0.5rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
+		border-radius: 6px;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.theme-btn:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.theme-btn.active {
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.theme-btn svg {
+		width: 18px;
+		height: 18px;
+	}
+
+	.theme-btn span {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
 	}
 
 	.color-picker-row {
@@ -278,6 +364,7 @@
 		cursor: pointer;
 		transition: background 0.2s, border 0.2s;
 		border: 1px solid var(--border-default);
+		flex-shrink: 0;
 	}
 
 	.toggle input::after {
@@ -315,5 +402,18 @@
 		color: var(--text-tertiary);
 		font-size: 0.8rem;
 		line-height: 1.3;
+	}
+
+	@media (max-width: 768px) {
+		.settings-panel {
+			position: fixed;
+			top: auto;
+			bottom: calc(var(--player-height, 0px) + 1rem);
+			right: 1rem;
+			left: 1rem;
+			min-width: auto;
+			max-height: 70vh;
+			overflow-y: auto;
+		}
 	}
 </style>

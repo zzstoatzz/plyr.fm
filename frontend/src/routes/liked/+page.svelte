@@ -114,7 +114,7 @@
 
 	.subtitle {
 		font-size: 0.95rem;
-		color: #888;
+		color: var(--text-tertiary);
 		margin: 0;
 	}
 
@@ -146,18 +146,18 @@
 	.empty-state {
 		text-align: center;
 		padding: 4rem 1rem;
-		color: #888;
+		color: var(--text-tertiary);
 	}
 
 	.empty-state svg {
 		margin: 0 auto 1.5rem;
-		color: #555;
+		color: var(--text-muted);
 	}
 
 	.empty-state h2 {
 		font-size: 1.5rem;
 		font-weight: 600;
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		margin: 0 0 0.5rem 0;
 	}
 

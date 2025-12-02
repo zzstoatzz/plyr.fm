@@ -1395,7 +1395,7 @@
 		align-items: center;
 		justify-content: center;
 		min-height: 100vh;
-		color: #888;
+		color: var(--text-tertiary);
 		gap: 1rem;
 	}
 
@@ -1450,9 +1450,9 @@
 		text-decoration: none;
 		font-size: 0.9rem;
 		padding: 0.4rem 0.75rem;
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		border-radius: 6px;
-		border: 1px solid #333;
+		border: 1px solid var(--border-default);
 		transition: all 0.2s;
 		white-space: nowrap;
 	}
@@ -1460,14 +1460,14 @@
 	.view-profile-link:hover {
 		border-color: var(--accent);
 		color: var(--accent);
-		background: #222;
+		background: var(--bg-hover);
 	}
 
 	form {
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		padding: 2rem;
 		border-radius: 8px;
-		border: 1px solid #2a2a2a;
+		border: 1px solid var(--border-subtle);
 	}
 
 	.form-group {
@@ -1476,7 +1476,7 @@
 
 	label {
 		display: block;
-		color: #aaa;
+		color: var(--text-secondary);
 		margin-bottom: 0.5rem;
 		font-size: 0.9rem;
 	}
@@ -1484,10 +1484,10 @@
 	input[type='text'] {
 		width: 100%;
 		padding: 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: white;
+		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
 		transition: all 0.2s;
@@ -1495,7 +1495,7 @@
 
 	input[type='text']:focus {
 		outline: none;
-		border-color: #3a7dff;
+		border-color: var(--accent);
 	}
 
 	input[type='text']:disabled {
@@ -1506,10 +1506,10 @@
 	textarea {
 		width: 100%;
 		padding: 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: white;
+		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
 		transition: all 0.2s;
@@ -1519,7 +1519,7 @@
 
 	textarea:focus {
 		outline: none;
-		border-color: #3a7dff;
+		border-color: var(--accent);
 	}
 
 	textarea:disabled {
@@ -1530,7 +1530,7 @@
 	.hint {
 		margin-top: 0.5rem;
 		font-size: 0.85rem;
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	.message {
@@ -1540,15 +1540,15 @@
 	}
 
 	.message.success {
-		background: rgba(46, 160, 67, 0.1);
-		border: 1px solid rgba(46, 160, 67, 0.3);
-		color: #5ce87b;
+		background: color-mix(in srgb, var(--success) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+		color: var(--success);
 	}
 
 	.message.error {
-		background: rgba(233, 69, 96, 0.1);
-		border: 1px solid rgba(233, 69, 96, 0.3);
-		color: #ff6b6b;
+		background: color-mix(in srgb, var(--error) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
+		color: var(--error);
 	}
 
 	.avatar-preview {
@@ -1563,16 +1563,16 @@
 		height: 64px;
 		border-radius: 50%;
 		object-fit: cover;
-		border: 2px solid #333;
+		border: 2px solid var(--border-default);
 	}
 
 	input[type='file'] {
 		width: 100%;
 		padding: 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: white;
+		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: inherit;
 		cursor: pointer;
@@ -1586,20 +1586,20 @@
 	.format-hint {
 		margin-top: 0.25rem;
 		font-size: 0.8rem;
-		color: #888;
+		color: var(--text-tertiary);
 	}
 
 	.file-info {
 		margin-top: 0.5rem;
 		font-size: 0.85rem;
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	button {
 		width: 100%;
 		padding: 0.75rem;
-		background: #3a7dff;
-		color: white;
+		background: var(--accent);
+		color: var(--text-primary);
 		border: none;
 		border-radius: 4px;
 		font-size: 1rem;
@@ -1610,9 +1610,9 @@
 	}
 
 	button:hover:not(:disabled) {
-		background: #2868e6;
+		background: var(--accent-hover);
 		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(58, 125, 255, 0.3);
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	button:disabled {
@@ -1635,12 +1635,12 @@
 	}
 
 	.empty {
-		color: #666;
+		color: var(--text-muted);
 		padding: 2rem;
 		text-align: center;
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		border-radius: 8px;
-		border: 1px solid #2a2a2a;
+		border: 1px solid var(--border-subtle);
 	}
 
 	.tracks-list {
@@ -1654,8 +1654,8 @@
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: 1rem;
-		background: #1a1a1a;
-		border: 1px solid #2a2a2a;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 6px;
 		padding: 1rem;
 		transition: all 0.2s;
@@ -1667,12 +1667,12 @@
 	}
 
 	.track-item.copyright-flagged {
-		background: rgba(233, 165, 69, 0.08);
-		border-color: rgba(233, 165, 69, 0.3);
+		background: color-mix(in srgb, var(--warning) 8%, transparent);
+		border-color: color-mix(in srgb, var(--warning) 30%, transparent);
 	}
 
 	.track-item.copyright-flagged .track-title {
-		color: #e9a545;
+		color: var(--warning);
 	}
 
 	.track-item.copyright-flagged .track-artwork img,
@@ -1686,8 +1686,8 @@
 		height: 48px;
 		border-radius: 4px;
 		overflow: hidden;
-		background: #0f0f0f;
-		border: 1px solid #282828;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-subtle);
 	}
 
 	.track-artwork img {
@@ -1702,12 +1702,12 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: #555;
+		color: var(--text-muted);
 	}
 
 	.track-item:hover {
-		background: #222;
-		border-color: #333;
+		background: var(--bg-hover);
+		border-color: var(--border-default);
 	}
 
 	.track-info {
@@ -1743,14 +1743,14 @@
 
 	.edit-label {
 		font-size: 0.85rem;
-		color: #aaa;
+		color: var(--text-secondary);
 	}
 
 	.track-title {
 		font-weight: 600;
 		font-size: 1rem;
 		margin-bottom: 0.25rem;
-		color: #fff;
+		color: var(--text-primary);
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -1759,13 +1759,13 @@
 	.copyright-flag {
 		display: inline-flex;
 		align-items: center;
-		color: #e9a545;
+		color: var(--warning);
 		flex-shrink: 0;
 		text-decoration: none;
 	}
 
 	.copyright-flag:hover {
-		color: #ffb860;
+		color: color-mix(in srgb, var(--warning) 80%, white);
 	}
 
 	a.copyright-flag {
@@ -1778,7 +1778,7 @@
 
 	.track-meta {
 		font-size: 0.9rem;
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		margin-bottom: 0.25rem;
 		display: flex;
 		flex-direction: column;
@@ -1799,23 +1799,23 @@
 	}
 
 	.features-label {
-		color: #8ab3ff;
+		color: var(--accent-hover);
 		font-weight: 600;
 	}
 
 	.features-list {
-		color: #8ab3ff;
+		color: var(--accent-hover);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
 	.meta-album {
-		color: #909090;
+		color: var(--text-tertiary);
 	}
 
 	.album-link {
-		color: #909090;
+		color: var(--text-tertiary);
 		text-decoration: none;
 		transition: color 0.2s;
 		white-space: nowrap;
@@ -1843,8 +1843,8 @@
 	.meta-tag {
 		display: inline-block;
 		padding: 0.1rem 0.4rem;
-		background: rgba(138, 179, 255, 0.15);
-		color: #8ab3ff;
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		color: var(--accent-hover);
 		border-radius: 3px;
 		font-size: 0.8rem;
 		font-weight: 500;
@@ -1853,13 +1853,13 @@
 	}
 
 	.meta-tag:hover {
-		background: rgba(138, 179, 255, 0.25);
-		color: #a8c8ff;
+		background: color-mix(in srgb, var(--accent) 25%, transparent);
+		color: var(--accent-hover);
 	}
 
 	.track-date {
 		font-size: 0.85rem;
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	.track-actions {
@@ -1875,9 +1875,9 @@
 		height: 36px;
 		padding: 0;
 		background: transparent;
-		border: 1px solid #444;
+		border: 1px solid var(--border-emphasis);
 		border-radius: 4px;
-		color: #888;
+		color: var(--text-tertiary);
 		font-size: 1.2rem;
 		line-height: 1;
 		cursor: pointer;
@@ -1885,8 +1885,8 @@
 	}
 
 	.edit-btn:hover {
-		background: rgba(106, 159, 255, 0.1);
-		border-color: rgba(106, 159, 255, 0.5);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border-color: color-mix(in srgb, var(--accent) 50%, transparent);
 		color: var(--accent);
 		transform: none;
 		box-shadow: none;
@@ -1897,25 +1897,25 @@
 	}
 
 	.delete-btn:hover {
-		background: rgba(233, 69, 96, 0.1);
-		border-color: rgba(233, 69, 96, 0.5);
-		color: #ff6b6b;
+		background: color-mix(in srgb, var(--error) 10%, transparent);
+		border-color: color-mix(in srgb, var(--error) 50%, transparent);
+		color: var(--error);
 		transform: none;
 		box-shadow: none;
 	}
 
 	.save-btn:hover {
-		background: rgba(46, 160, 67, 0.1);
-		border-color: rgba(46, 160, 67, 0.5);
-		color: #5ce87b;
+		background: color-mix(in srgb, var(--success) 10%, transparent);
+		border-color: color-mix(in srgb, var(--success) 50%, transparent);
+		color: var(--success);
 		transform: none;
 		box-shadow: none;
 	}
 
 	.cancel-btn:hover {
-		background: rgba(136, 136, 136, 0.1);
-		border-color: rgba(136, 136, 136, 0.5);
-		color: #aaa;
+		background: color-mix(in srgb, var(--text-tertiary) 10%, transparent);
+		border-color: color-mix(in srgb, var(--text-tertiary) 50%, transparent);
+		color: var(--text-secondary);
 		transform: none;
 		box-shadow: none;
 	}
@@ -1923,10 +1923,10 @@
 	.edit-input {
 		width: 100%;
 		padding: 0.5rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: white;
+		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: inherit;
 	}
@@ -1936,8 +1936,8 @@
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.5rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
 		margin-bottom: 0.5rem;
 	}
@@ -1950,7 +1950,7 @@
 	}
 
 	.current-image-label {
-		color: #888;
+		color: var(--text-tertiary);
 		font-size: 0.85rem;
 	}
 
@@ -1988,8 +1988,8 @@
 	}
 
 	.album-card {
-		background: #1a1a1a;
-		border: 1px solid #2a2a2a;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 		padding: 1rem;
 		transition: all 0.2s;
@@ -1999,7 +1999,7 @@
 	}
 
 	.album-card:hover {
-		border-color: #3a3a3a;
+		border-color: var(--border-emphasis);
 		transform: translateY(-2px);
 	}
 
@@ -2012,8 +2012,8 @@
 		aspect-ratio: 1;
 		border-radius: 6px;
 		overflow: hidden;
-		background: #0f0f0f;
-		border: 1px solid #282828;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-subtle);
 	}
 
 	.album-cover {
@@ -2029,13 +2029,13 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		color: #606060;
+		color: var(--text-muted);
 		gap: 0.5rem;
 	}
 
 	.album-cover-placeholder .file-name {
 		font-size: 0.85rem;
-		color: #888;
+		color: var(--text-tertiary);
 		text-align: center;
 		word-break: break-word;
 		padding: 0 0.5rem;
@@ -2043,7 +2043,7 @@
 
 	.album-cover-placeholder .file-size {
 		font-size: 0.75rem;
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	.album-info {
@@ -2053,7 +2053,7 @@
 	.album-title {
 		font-size: 1rem;
 		font-weight: 600;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin: 0 0 0.25rem 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -2062,7 +2062,7 @@
 
 	.album-stats {
 		font-size: 0.85rem;
-		color: #888;
+		color: var(--text-tertiary);
 		margin: 0;
 	}
 
@@ -2074,8 +2074,8 @@
 
 	.edit-cover-btn {
 		padding: 0.5rem;
-		background: #2a2a2a;
-		border: 1px solid #3a3a3a;
+		background: var(--border-subtle);
+		border: 1px solid var(--border-emphasis);
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -2085,7 +2085,7 @@
 	}
 
 	.edit-cover-btn:hover {
-		background: #3a3a3a;
+		background: var(--border-emphasis);
 		border-color: var(--accent);
 		color: var(--accent);
 	}
@@ -2101,8 +2101,8 @@
 		aspect-ratio: 1;
 		border-radius: 6px;
 		overflow: hidden;
-		background: #0f0f0f;
-		border: 1px solid #282828;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-subtle);
 	}
 
 	.album-edit-actions {
@@ -2113,23 +2113,23 @@
 
 	.file-input-label {
 		font-size: 0.85rem;
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		font-weight: 500;
 		margin-bottom: 0.25rem;
 	}
 
 	.album-edit-actions .file-input {
 		padding: 0.5rem;
-		background: #2a2a2a;
-		border: 1px solid #3a3a3a;
+		background: var(--border-subtle);
+		border: 1px solid var(--border-emphasis);
 		border-radius: 4px;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		font-size: 0.85rem;
 		cursor: pointer;
 	}
 
 	.album-edit-actions .file-input:hover {
-		background: #3a3a3a;
+		background: var(--border-emphasis);
 		border-color: var(--accent);
 	}
 
@@ -2151,8 +2151,8 @@
 
 	.data-control {
 		padding: 1.5rem;
-		background: #1a1a1a;
-		border: 1px solid #2a2a2a;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 		display: flex;
 		justify-content: space-between;
@@ -2169,19 +2169,19 @@
 		font-size: 1rem;
 		font-weight: 600;
 		margin: 0 0 0.25rem 0;
-		color: #e8e8e8;
+		color: var(--text-primary);
 	}
 
 	.control-description {
 		font-size: 0.85rem;
-		color: #888;
+		color: var(--text-tertiary);
 		margin: 0;
 	}
 
 	.export-btn {
 		padding: 0.6rem 1.25rem;
-		background: #3a7dff;
-		color: white;
+		background: var(--accent);
+		color: var(--text-primary);
 		border: none;
 		border-radius: 6px;
 		font-size: 0.9rem;
@@ -2193,9 +2193,9 @@
 	}
 
 	.export-btn:hover:not(:disabled) {
-		background: #2868e6;
+		background: var(--accent-hover);
 		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(58, 125, 255, 0.3);
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	.export-btn:disabled {
@@ -2206,30 +2206,30 @@
 
 	/* danger zone / account deletion */
 	.danger-zone {
-		border-color: #4a2020;
-		background: #1a1010;
+		border-color: color-mix(in srgb, var(--error) 30%, var(--bg-tertiary));
+		background: color-mix(in srgb, var(--error) 8%, var(--bg-tertiary));
 		flex-direction: column;
 		align-items: stretch;
 	}
 
 	.danger-zone .control-info h3 {
-		color: #ff6b6b;
+		color: var(--error);
 	}
 
 	.danger-zone .control-description a {
-		color: #888;
+		color: var(--text-tertiary);
 		text-decoration: underline;
 	}
 
 	.danger-zone .control-description a:hover {
-		color: #aaa;
+		color: var(--text-secondary);
 	}
 
 	.delete-account-btn {
 		padding: 0.6rem 1.25rem;
 		background: transparent;
-		color: #ff6b6b;
-		border: 1px solid #ff6b6b;
+		color: var(--error);
+		border: 1px solid var(--error);
 		border-radius: 6px;
 		font-size: 0.9rem;
 		font-weight: 600;
@@ -2239,18 +2239,18 @@
 	}
 
 	.delete-account-btn:hover {
-		background: #ff6b6b;
-		color: white;
+		background: var(--error);
+		color: var(--text-primary);
 	}
 
 	.delete-confirm-panel {
 		margin-top: 1rem;
 		padding-top: 1rem;
-		border-top: 1px solid #3a2020;
+		border-top: 1px solid color-mix(in srgb, var(--error) 25%, var(--bg-tertiary));
 	}
 
 	.delete-warning {
-		color: #ff8888;
+		color: color-mix(in srgb, var(--error) 80%, white);
 		font-size: 0.9rem;
 		margin: 0 0 1rem 0;
 		line-height: 1.5;
@@ -2265,7 +2265,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		font-size: 0.9rem;
-		color: #aaa;
+		color: var(--text-secondary);
 		cursor: pointer;
 	}
 
@@ -2278,46 +2278,46 @@
 	.atproto-note {
 		margin: 0.5rem 0 0 0;
 		font-size: 0.85rem;
-		color: #777;
+		color: var(--text-muted);
 	}
 
 	.atproto-note a {
-		color: #999;
+		color: var(--text-tertiary);
 		text-decoration: underline;
 	}
 
 	.atproto-note a:hover {
-		color: #bbb;
+		color: var(--text-secondary);
 	}
 
 	.atproto-warning {
 		margin: 0.75rem 0 0 0;
 		padding: 0.75rem;
-		background: rgba(255, 107, 107, 0.1);
-		border-left: 2px solid #ff6b6b;
+		background: color-mix(in srgb, var(--error) 10%, transparent);
+		border-left: 2px solid var(--error);
 		font-size: 0.85rem;
-		color: #cc8888;
+		color: color-mix(in srgb, var(--error) 70%, var(--text-secondary));
 		line-height: 1.5;
 	}
 
 	.confirm-prompt {
 		font-size: 0.9rem;
-		color: #888;
+		color: var(--text-tertiary);
 		margin: 0 0 0.5rem 0;
 	}
 
 	.confirm-prompt strong {
-		color: #e8e8e8;
+		color: var(--text-primary);
 		font-family: monospace;
 	}
 
 	.confirm-input {
 		width: 100%;
 		padding: 0.75rem;
-		background: #0a0505;
-		border: 1px solid #3a2020;
+		background: color-mix(in srgb, var(--error) 5%, var(--bg-primary));
+		border: 1px solid color-mix(in srgb, var(--error) 25%, var(--bg-tertiary));
 		border-radius: 6px;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: monospace;
 		margin-bottom: 1rem;
@@ -2325,11 +2325,11 @@
 
 	.confirm-input:focus {
 		outline: none;
-		border-color: #ff6b6b;
+		border-color: var(--error);
 	}
 
 	.confirm-input::placeholder {
-		color: #555;
+		color: var(--text-muted);
 	}
 
 	.delete-actions {
@@ -2341,8 +2341,8 @@
 	.cancel-btn {
 		padding: 0.6rem 1.25rem;
 		background: transparent;
-		color: #888;
-		border: 1px solid #444;
+		color: var(--text-tertiary);
+		border: 1px solid var(--border-emphasis);
 		border-radius: 6px;
 		font-size: 0.9rem;
 		cursor: pointer;
@@ -2350,8 +2350,8 @@
 	}
 
 	.cancel-btn:hover:not(:disabled) {
-		border-color: #666;
-		color: #aaa;
+		border-color: var(--text-muted);
+		color: var(--text-secondary);
 	}
 
 	.cancel-btn:disabled {
@@ -2361,8 +2361,8 @@
 
 	.confirm-delete-btn {
 		padding: 0.6rem 1.25rem;
-		background: #ff4444;
-		color: white;
+		background: var(--error);
+		color: var(--text-primary);
 		border: none;
 		border-radius: 6px;
 		font-size: 0.9rem;
@@ -2372,7 +2372,7 @@
 	}
 
 	.confirm-delete-btn:hover:not(:disabled) {
-		background: #ff2222;
+		background: color-mix(in srgb, var(--error) 80%, black);
 	}
 
 	.confirm-delete-btn:disabled {
@@ -2395,7 +2395,7 @@
 	.toggle-slider {
 		width: 44px;
 		height: 24px;
-		background: #333;
+		background: var(--border-default);
 		border-radius: 12px;
 		position: relative;
 		transition: background 0.2s;
@@ -2408,23 +2408,23 @@
 		left: 2px;
 		width: 20px;
 		height: 20px;
-		background: #888;
+		background: var(--text-tertiary);
 		border-radius: 50%;
 		transition: all 0.2s;
 	}
 
 	.toggle-switch input:checked + .toggle-slider {
-		background: var(--accent, #3a7dff);
+		background: var(--accent);
 	}
 
 	.toggle-switch input:checked + .toggle-slider::after {
 		left: 22px;
-		background: white;
+		background: var(--text-primary);
 	}
 
 	.toggle-label {
 		font-size: 0.85rem;
-		color: #888;
+		color: var(--text-tertiary);
 		min-width: 60px;
 	}
 
@@ -2451,15 +2451,15 @@
 		align-items: center;
 		gap: 0.5rem;
 		font-size: 0.9rem;
-		color: #888;
+		color: var(--text-tertiary);
 	}
 
 	.expires-select {
 		padding: 0.5rem 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: white;
+		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: inherit;
 		cursor: pointer;
@@ -2499,8 +2499,8 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 6px;
 		padding: 0.75rem;
 		overflow: hidden;
@@ -2510,7 +2510,7 @@
 		flex: 1;
 		font-family: monospace;
 		font-size: 0.85rem;
-		color: #5ce87b;
+		color: var(--success);
 		word-break: break-all;
 		user-select: all;
 	}
@@ -2518,10 +2518,10 @@
 	.copy-btn,
 	.dismiss-btn {
 		padding: 0.4rem 0.75rem;
-		background: #2a2a2a;
-		border: 1px solid #3a3a3a;
+		background: var(--border-subtle);
+		border: 1px solid var(--border-emphasis);
 		border-radius: 4px;
-		color: #888;
+		color: var(--text-tertiary);
 		font-size: 0.85rem;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -2529,20 +2529,20 @@
 	}
 
 	.copy-btn:hover {
-		background: #3a3a3a;
+		background: var(--border-emphasis);
 		border-color: var(--accent);
 		color: var(--accent);
 	}
 
 	.dismiss-btn:hover {
-		background: #3a3a3a;
-		border-color: #666;
-		color: #aaa;
+		background: var(--border-emphasis);
+		border-color: var(--text-muted);
+		color: var(--text-secondary);
 	}
 
 	.token-warning {
 		font-size: 0.85rem;
-		color: #e9a545;
+		color: var(--warning);
 		margin: 0;
 	}
 
@@ -2555,7 +2555,7 @@
 	.tokens-header {
 		font-size: 0.9rem;
 		font-weight: 600;
-		color: #888;
+		color: var(--text-tertiary);
 		margin: 0 0 0.75rem 0;
 	}
 
@@ -2571,8 +2571,8 @@
 		align-items: center;
 		gap: 1rem;
 		padding: 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #2a2a2a;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 6px;
 	}
 
@@ -2587,7 +2587,7 @@
 	.token-name {
 		font-family: monospace;
 		font-size: 0.9rem;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -2595,15 +2595,15 @@
 
 	.token-meta {
 		font-size: 0.8rem;
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	.revoke-btn {
 		padding: 0.4rem 0.75rem;
 		background: transparent;
-		border: 1px solid #4a2020;
+		border: 1px solid color-mix(in srgb, var(--error) 30%, var(--bg-tertiary));
 		border-radius: 4px;
-		color: #ff6b6b;
+		color: var(--error);
 		font-size: 0.85rem;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -2612,8 +2612,8 @@
 	}
 
 	.revoke-btn:hover:not(:disabled) {
-		background: rgba(255, 107, 107, 0.1);
-		border-color: #ff6b6b;
+		background: color-mix(in srgb, var(--error) 10%, transparent);
+		border-color: var(--error);
 	}
 
 	.revoke-btn:disabled {
@@ -2623,10 +2623,10 @@
 
 	.token-name-input {
 		padding: 0.5rem 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: white;
+		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: inherit;
 		min-width: 150px;
@@ -2644,7 +2644,7 @@
 
 	.loading-tokens {
 		font-size: 0.9rem;
-		color: #666;
+		color: var(--text-muted);
 		margin: 0;
 	}
 </style>

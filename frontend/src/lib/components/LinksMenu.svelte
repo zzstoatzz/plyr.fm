@@ -120,7 +120,7 @@
 		width: 32px;
 		height: 32px;
 		background: transparent;
-		border: 1px solid #333;
+		border: 1px solid var(--border-default);
 		border-radius: 6px;
 		color: var(--text-secondary);
 		cursor: pointer;
@@ -128,7 +128,7 @@
 	}
 
 	.menu-button:hover {
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		border-color: var(--accent);
 		color: var(--accent);
 	}

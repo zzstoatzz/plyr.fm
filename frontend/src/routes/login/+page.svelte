@@ -64,13 +64,13 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: #0a0a0a;
+		background: var(--bg-primary);
 		padding: 1rem;
 	}
 
 	.login-card {
-		background: #1a1a1a;
-		border: 1px solid #2a2a2a;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 		padding: 3rem;
 		max-width: 400px;
@@ -80,12 +80,12 @@
 	h1 {
 		font-size: 2.5rem;
 		margin: 0 0 0.5rem 0;
-		color: #fff;
+		color: var(--text-primary);
 		text-align: center;
 	}
 
 	p {
-		color: #888;
+		color: var(--text-tertiary);
 		text-align: center;
 		margin: 0 0 2rem 0;
 		font-size: 0.95rem;
@@ -103,7 +103,7 @@
 	}
 
 	label {
-		color: #aaa;
+		color: var(--text-secondary);
 		font-size: 0.9rem;
 	}
 
@@ -122,7 +122,7 @@
 	.input-help {
 		margin: 0.5rem 0 0 0;
 		font-size: 0.85rem;
-		color: #888;
+		color: var(--text-tertiary);
 	}
 
 	.input-help a {
@@ -139,7 +139,7 @@
 	button {
 		width: 100%;
 		padding: 0.75rem;
-		background: #3a7dff;
+		background: var(--accent);
 		color: white;
 		border: none;
 		border-radius: 4px;
@@ -151,9 +151,9 @@
 	}
 
 	button:hover:not(:disabled) {
-		background: #2868e6;
+		background: var(--accent-hover);
 		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(58, 125, 255, 0.3);
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	button:disabled {

@@ -178,12 +178,12 @@
 		width: 200px;
 		height: 200px;
 		border-radius: 8px;
-		background: #1a1a1a;
-		border: 1px solid #282828;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: #606060;
+		color: var(--text-muted);
 	}
 
 	.album-info-wrapper {
@@ -217,7 +217,7 @@
 		font-size: 0.75rem;
 		font-weight: 600;
 		letter-spacing: 0.1em;
-		color: #808080;
+		color: var(--text-tertiary);
 		margin: 0;
 	}
 
@@ -225,7 +225,7 @@
 		font-size: 3rem;
 		font-weight: 700;
 		margin: 0;
-		color: #ffffff;
+		color: var(--text-primary);
 		line-height: 1.1;
 		word-wrap: break-word;
 		overflow-wrap: break-word;
@@ -237,11 +237,11 @@
 		align-items: center;
 		gap: 0.75rem;
 		font-size: 0.95rem;
-		color: #b0b0b0;
+		color: var(--text-secondary);
 	}
 
 	.artist-link {
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		text-decoration: none;
 		font-weight: 600;
 		transition: color 0.2s;
@@ -252,7 +252,7 @@
 	}
 
 	.meta-separator {
-		color: #555;
+		color: var(--text-muted);
 		font-size: 0.7rem;
 	}
 
@@ -279,7 +279,7 @@
 
 	.play-button {
 		background: var(--accent);
-		color: #000;
+		color: var(--bg-primary);
 	}
 
 	.play-button:hover {
@@ -288,8 +288,8 @@
 
 	.queue-button {
 		background: transparent;
-		color: #e8e8e8;
-		border: 1px solid #333;
+		color: var(--text-primary);
+		border: 1px solid var(--border-default);
 	}
 
 	.queue-button:hover {
@@ -305,7 +305,7 @@
 	.section-heading {
 		font-size: 1.25rem;
 		font-weight: 600;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin-bottom: 1rem;
 		text-transform: lowercase;
 	}

@@ -157,7 +157,7 @@
 	}
 
 	.empty {
-		color: #808080;
+		color: var(--text-tertiary);
 		padding: 2rem;
 		text-align: center;
 	}

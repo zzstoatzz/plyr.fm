@@ -192,9 +192,9 @@
 		align-items: center;
 		gap: 0.35rem;
 		padding: 0.35rem 0.6rem;
-		background: rgba(138, 179, 255, 0.1);
-		border: 1px solid rgba(138, 179, 255, 0.2);
-		color: #8ab3ff;
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+		color: var(--accent-hover);
 		border-radius: 20px;
 		font-size: 0.9rem;
 		font-weight: 500;
@@ -218,7 +218,7 @@
 	}
 
 	.tag-remove:hover {
-		color: #ff6b6b;
+		color: var(--error);
 	}
 
 	.tag-remove:disabled {

@@ -14,7 +14,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	accent_color: null,
 	auto_advance: true,
 	allow_comments: true,
-	hidden_tags: ['ai']
+	hidden_tags: ['ai'],
+	theme: 'dark'
 };
 
 export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
@@ -46,7 +47,8 @@ export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
 						accent_color: data.accent_color ?? null,
 						auto_advance: data.auto_advance ?? true,
 						allow_comments: data.allow_comments ?? true,
-						hidden_tags: data.hidden_tags ?? ['ai']
+						hidden_tags: data.hidden_tags ?? ['ai'],
+						theme: data.theme ?? 'dark'
 					};
 				}
 			} catch (e) {

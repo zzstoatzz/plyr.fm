@@ -87,9 +87,10 @@
 
 <style>
 	header {
-		border-bottom: 1px solid #333;
+		border-bottom: 1px solid var(--border-default);
 		margin-bottom: 2rem;
 		position: relative;
+		z-index: 50;
 	}
 
 	.header-content {
@@ -194,8 +195,8 @@
 
 	.nav-link:hover {
 		color: var(--text-primary);
-		background: #1a1a1a;
-		border-color: #333;
+		background: var(--bg-tertiary);
+		border-color: var(--border-default);
 	}
 
 	.nav-link svg {
@@ -208,9 +209,9 @@
 		text-decoration: none;
 		font-size: 0.9rem;
 		padding: 0.4rem 0.75rem;
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		border-radius: 6px;
-		border: 1px solid #333;
+		border: 1px solid var(--border-default);
 		transition: all 0.2s;
 		white-space: nowrap;
 	}
@@ -218,7 +219,7 @@
 	.user-handle:hover {
 		border-color: var(--accent);
 		color: var(--accent);
-		background: #222;
+		background: var(--bg-hover);
 	}
 
 	.btn-primary {
@@ -241,8 +242,8 @@
 
 	.btn-logout {
 		background: transparent;
-		border: 1px solid #444;
-		color: #b0b0b0;
+		border: 1px solid var(--border-emphasis);
+		color: var(--text-secondary);
 		padding: 0.5rem 1rem;
 		border-radius: 6px;
 		font-size: 0.9rem;

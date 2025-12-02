@@ -109,14 +109,37 @@
 			document.documentElement.style.setProperty('--accent-hover', getHoverColor(savedAccent));
 		}
 
+		// apply saved theme from localStorage
+		const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | 'system' | null;
+		if (savedTheme) {
+			preferences.applyTheme(savedTheme);
+		} else {
+			// default to dark
+			document.documentElement.classList.add('theme-dark');
+		}
+
 		// restore queue visibility preference
 		const savedQueueVisibility = localStorage.getItem('showQueue');
 		if (savedQueueVisibility !== null) {
 			showQueue = savedQueueVisibility === 'true';
 		}
 
-		// add keyboard listener for queue toggle
+		// add keyboard listener for shortcuts
 		window.addEventListener('keydown', handleQueueShortcut);
+
+		// listen for system theme changes
+		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+		const handleSystemThemeChange = () => {
+			const currentTheme = localStorage.getItem('theme');
+			if (currentTheme === 'system') {
+				preferences.applyTheme('system');
+			}
+		};
+		mediaQuery.addEventListener('change', handleSystemThemeChange);
+
+		return () => {
+			mediaQuery.removeEventListener('change', handleSystemThemeChange);
+		};
 	});
 
 	onDestroy(() => {
@@ -178,16 +201,27 @@
 		// prevent flash by applying saved settings immediately
 		if (typeof window !== 'undefined') {
 			(function() {
+				const root = document.documentElement;
+
+				// apply accent color
 				const savedAccent = localStorage.getItem('accentColor');
 				if (savedAccent) {
-					document.documentElement.style.setProperty('--accent', savedAccent);
+					root.style.setProperty('--accent', savedAccent);
 					// simple lightening for hover state
 					const r = parseInt(savedAccent.slice(1, 3), 16);
 					const g = parseInt(savedAccent.slice(3, 5), 16);
 					const b = parseInt(savedAccent.slice(5, 7), 16);
 					const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
-					document.documentElement.style.setProperty('--accent-hover', hover);
+					root.style.setProperty('--accent-hover', hover);
 				}
+
+				// apply theme
+				const savedTheme = localStorage.getItem('theme') || 'dark';
+				let effectiveTheme = savedTheme;
+				if (savedTheme === 'system') {
+					effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+				}
+				root.classList.add('theme-' + effectiveTheme);
 			})();
 		}
 	</script>
@@ -239,6 +273,7 @@
 		--accent: #6a9fff;
 		--accent-hover: #8ab3ff;
 		--accent-muted: #4a7ddd;
+		--accent-rgb: 106, 159, 255;
 
 		/* backgrounds */
 		--bg-primary: #0a0a0a;
@@ -267,6 +302,57 @@
 		--success: #4ade80;
 		--warning: #fbbf24;
 		--error: #ef4444;
+	}
+
+	/* light theme overrides */
+	:global(:root.theme-light) {
+		--bg-primary: #fafafa;
+		--bg-secondary: #ffffff;
+		--bg-tertiary: #f5f5f5;
+		--bg-hover: #ebebeb;
+
+		--border-subtle: #e5e5e5;
+		--border-default: #d4d4d4;
+		--border-emphasis: #a3a3a3;
+
+		--text-primary: #171717;
+		--text-secondary: #525252;
+		--text-tertiary: #737373;
+		--text-muted: #a3a3a3;
+
+		/* accent colors preserved from user preference */
+		/* accent-muted darkened for light bg readability */
+		--accent-muted: color-mix(in srgb, var(--accent) 70%, black);
+
+		/* semantic colors adjusted for light bg */
+		--success: #16a34a;
+		--warning: #d97706;
+		--error: #dc2626;
+	}
+
+	/* light theme specific overrides for components */
+	:global(:root.theme-light) :global(.track-container) {
+		background: var(--bg-secondary);
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+	}
+
+	:global(:root.theme-light) :global(.track-container:hover) {
+		background: var(--bg-tertiary);
+	}
+
+	:global(:root.theme-light) :global(.track-container.playing) {
+		background: color-mix(in srgb, var(--accent) 8%, white);
+		border-color: color-mix(in srgb, var(--accent) 30%, white);
+	}
+
+	:global(:root.theme-light) :global(header) {
+		background: var(--bg-primary);
+		border-color: var(--border-default);
+	}
+
+	:global(:root.theme-light) :global(.tag-badge) {
+		background: color-mix(in srgb, var(--accent) 12%, white);
+		color: var(--accent-muted);
 	}
 
 	:global(body) {

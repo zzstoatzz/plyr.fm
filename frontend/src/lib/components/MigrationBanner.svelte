@@ -150,8 +150,8 @@
 
 <style>
 	.migration-banner {
-		background: var(--background-alt, #1a1a1a);
-		border: 1px solid var(--border-color, #333);
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
 		border-radius: 8px;
 		padding: 1rem;
 		margin-bottom: 1.5rem;
@@ -171,25 +171,25 @@
 
 	.migration-message strong {
 		font-size: 1.1em;
-		color: var(--text-primary, #fff);
+		color: var(--text-primary);
 	}
 
 	.migration-message p {
 		margin: 0;
-		color: var(--text-secondary, #aaa);
+		color: var(--text-secondary);
 		font-size: 0.9em;
 	}
 
 	.error {
-		color: var(--error-color, #ff6b6b);
+		color: var(--error);
 	}
 
 	.success-message {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
-		background: rgba(81, 207, 102, 0.1);
-		border: 1px solid rgba(81, 207, 102, 0.3);
+		background: color-mix(in srgb, var(--success) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
 		border-radius: 6px;
 		padding: 1rem;
 		animation: slideIn 0.3s ease-out;
@@ -197,18 +197,18 @@
 
 	.success-icon {
 		font-size: 2rem;
-		color: var(--success-color, #51cf66);
+		color: var(--success);
 		animation: checkmark 0.5s ease-out;
 	}
 
 	.success-title {
 		font-weight: 600;
-		color: var(--success-color, #51cf66);
+		color: var(--success);
 		margin: 0;
 	}
 
 	.success-detail {
-		color: var(--text-secondary, #aaa);
+		color: var(--text-secondary);
 		margin: 0.25rem 0 0 0;
 		font-size: 0.85em;
 	}
@@ -237,23 +237,23 @@
 	}
 
 	.collection-name {
-		background: rgba(255, 255, 255, 0.05);
+		background: color-mix(in srgb, var(--text-primary) 5%, transparent);
 		padding: 0.15em 0.4em;
 		border-radius: 3px;
 		font-family: monospace;
 		font-size: 0.95em;
-		color: var(--text-primary, #fff);
+		color: var(--text-primary);
 	}
 
 	.collection-link {
-		color: var(--accent, #6a9fff);
+		color: var(--accent);
 		text-decoration: none;
 		border-bottom: 1px solid transparent;
 		transition: border-color 0.2s;
 	}
 
 	.collection-link:hover {
-		border-bottom-color: var(--accent, #6a9fff);
+		border-bottom-color: var(--accent);
 	}
 
 	.migration-actions {
@@ -274,7 +274,7 @@
 	}
 
 	.migrate-button {
-		background: var(--primary-color, #007bff);
+		background: var(--accent);
 		color: white;
 	}
 
@@ -284,12 +284,12 @@
 
 	.dismiss-button {
 		background: transparent;
-		color: var(--text-secondary, #aaa);
-		border: 1px solid var(--border-color, #333);
+		color: var(--text-secondary);
+		border: 1px solid var(--border-default);
 	}
 
 	.dismiss-button:hover:not(:disabled) {
-		background: var(--background-hover, #222);
+		background: var(--bg-hover);
 	}
 
 	button:disabled {
