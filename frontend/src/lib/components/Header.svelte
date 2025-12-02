@@ -132,9 +132,10 @@
 
 	.stats-left {
 		position: absolute;
-		left: calc((100vw - 800px) / 4);
+		left: calc((100vw - var(--queue-width, 0px) - 800px) / 4);
 		top: 50%;
 		transform: translate(-50%, -50%);
+		transition: left 0.3s ease;
 	}
 
 	.bluesky-link,
