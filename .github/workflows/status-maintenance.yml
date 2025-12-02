@@ -46,7 +46,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: |
-            --allowedTools "Read,Write,Edit,Bash"
+            --allowedTools "Read,Write,Edit,Bash,Fetch"
           prompt: |
             you are maintaining the plyr.fm (pronounce as "player FM") project status file.
 
@@ -61,7 +61,7 @@ jobs:
 
             before writing any transcript, understand the timeline:
             1. run `git log --oneline --since="1 week ago"` to see recent commits
-            2. run `git log --oneline -20` to see the last 20 commits with dates
+            2. run `git log --oneline -30` to see the last 30 commits with dates
             3. note the actual dates of changes - don't present old work as "just shipped"
 
             ## task 2: archive old sections (if needed)
@@ -84,14 +84,16 @@ jobs:
             if skip_audio is false:
             1. write a 2-3 minute podcast script to podcast_script.txt
                - two hosts having a casual conversation
-               - focus on shipped features from the top of STATUS.md
+               - host personalities should be inspired by Gilfoyle and Dinesh from Silicon Valley
+               - focus on recently shipped features from the git history (except for the first episode)
                - format: "Host: ..." and "Cohost: ..." lines
                - IMPORTANT: "plyr.fm" is pronounced "player FM" (not "plir" or spelling it out)
+               - do not over-sensationalize / over-compliment the project's significance / achievements / progress
 
                temporal awareness:
                - use the git history to understand WHEN things actually shipped
                - if this is the first episode, acknowledge the project started in november 2025
-               - reference time correctly: "last week we shipped X" vs "back in november we built Y"
+               - reference time correctly: "last week they shipped X" vs "back in november they built Y"
                - don't present month-old work as if it just happened
 
                tone guidelines:
@@ -100,6 +102,10 @@ jobs:
                - use intuitive analogies to explain technical concepts in terms of everyday experience
                - matter-of-fact delivery, not hype-y or marketing-speak
                - brief, conversational - like two friends catching up on what shipped
+              
+               read upstream documentation:
+                - docs/**.md contains a lot of useful information
+                - you can Fetch atproto.com to understand primitives that are relevant to the project
 
             2. run: uv run scripts/generate_tts.py podcast_script.txt update.wav
 
