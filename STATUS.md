@@ -41,30 +41,25 @@ plyr.fm should become:
 
 ## recent work
 
-### now-playing API for teal.fm/Piper integration (PR #416, Dec 1, 2025)
+### now-playing API (PR #416, Dec 1, 2025)
 
-**motivation**: enable Piper (teal.fm) to display what users are currently listening to on plyr.fm
+**motivation**: expose what users are currently listening to via public API
 
 **what shipped**:
-- **now-playing endpoint** (`GET /now-playing/{did}`):
-  - returns currently playing track for a given user DID
-  - includes track metadata (title, artist, album, cover art)
-  - includes playback position and timestamp
-  - public endpoint (no auth required)
-  - returns 404 when user isn't playing anything
-- **playback tracking**:
-  - stores last playback state in `now_playing` table
-  - updated when users interact with player
-  - includes track_id, position, timestamp, user DID
-- **privacy considerations**:
-  - opt-in via user preferences (future enhancement)
-  - currently public for all users who play tracks
-  - DIDs are already public identifiers
+- `GET /now-playing/{did}` and `GET /now-playing/by-handle/{handle}` endpoints
+- returns track metadata, playback position, timestamp
+- 204 when nothing playing, 200 with track data otherwise
+- public endpoints (no auth required) - DIDs are already public identifiers
 
-**impact**:
-- enables cross-platform integrations (Piper can show "listening to X on plyr.fm")
-- lays groundwork for richer presence features
-- demonstrates plyr.fm as an API-first platform
+**speculative integration with teal.fm**:
+- opened draft PR to Piper (teal.fm's scrobbling service): https://github.com/teal-fm/piper/pull/27
+- adds plyr.fm as a source alongside Spotify and Last.fm
+- tested end-to-end: plyr.fm → Piper → ATProto PDS (actor.status records)
+- **status**: awaiting feedback from teal.fm team
+- **alternative approach suggested**: teal.fm team suggested plyr.fm could write directly to `fm.teal.*` lexicons
+  - concern: this couples plyr.fm to teal's internal schema - if they change lexicons, we'd need to fast-follow
+  - Piper approach keeps cleaner boundaries: plyr.fm exposes API, Piper handles teal.fm integration
+  - decision pending further discussion with teal.fm maintainers
 
 ---
 
