@@ -64,6 +64,7 @@ class TrackResponse(BaseModel):
     like_count: int
     comment_count: int
     album: AlbumSummary | None
+    tags: set[str] = set()
     copyright_flagged: bool | None = (
         None  # None = not scanned, False = clear, True = flagged
     )
@@ -78,6 +79,7 @@ class TrackResponse(BaseModel):
         like_counts: dict[int, int] | None = None,
         comment_counts: dict[int, int] | None = None,
         copyright_info: dict[int, CopyrightInfo] | None = None,
+        track_tags: dict[int, set[str]] | None = None,
     ) -> "TrackResponse":
         """build track response from Track model.
 
@@ -88,6 +90,7 @@ class TrackResponse(BaseModel):
             like_counts: optional dict of track_id -> like_count
             comment_counts: optional dict of track_id -> comment_count
             copyright_info: optional dict of track_id -> CopyrightInfo
+            track_tags: optional dict of track_id -> set of tag names
         """
         # check if user has liked this track
         is_liked = liked_track_ids is not None and track.id in liked_track_ids
@@ -128,6 +131,9 @@ class TrackResponse(BaseModel):
         copyright_flagged = track_copyright.is_flagged if track_copyright else None
         copyright_match = track_copyright.primary_match if track_copyright else None
 
+        # get tags for this track
+        tags = track_tags.get(track.id, set()) if track_tags else set()
+
         return cls(
             id=track.id,
             title=track.title,
@@ -147,6 +153,7 @@ class TrackResponse(BaseModel):
             like_count=like_count,
             comment_count=comment_count,
             album=album_data,
+            tags=tags,
             copyright_flagged=copyright_flagged,
             copyright_match=copyright_match,
         )

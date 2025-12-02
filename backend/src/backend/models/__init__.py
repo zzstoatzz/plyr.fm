@@ -11,6 +11,7 @@ from backend.models.pending_dev_token import PendingDevToken
 from backend.models.preferences import UserPreferences
 from backend.models.queue import QueueState
 from backend.models.session import UserSession
+from backend.models.tag import Tag, TrackTag
 from backend.models.track import Track
 from backend.models.track_comment import TrackComment
 from backend.models.track_like import TrackLike
@@ -27,9 +28,11 @@ __all__ = [
     "PendingDevToken",
     "QueueState",
     "ScanResolution",
+    "Tag",
     "Track",
     "TrackComment",
     "TrackLike",
+    "TrackTag",
     "UserPreferences",
     "UserSession",
     "db_session",

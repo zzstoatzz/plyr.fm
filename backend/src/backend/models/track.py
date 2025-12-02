@@ -12,6 +12,7 @@ from backend.models.database import Base
 if TYPE_CHECKING:
     from backend.models.album import Album
     from backend.models.artist import Artist
+    from backend.models.tag import TrackTag
 
 
 class Track(Base):
@@ -106,3 +107,6 @@ class Track(Base):
 
     # relationships
     album_rel: Mapped["Album | None"] = relationship("Album", back_populates="tracks")
+    track_tags: Mapped[list["TrackTag"]] = relationship(
+        "TrackTag", back_populates="track", cascade="all, delete-orphan", lazy="raise"
+    )

@@ -3,9 +3,11 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, String, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.models.database import Base
+from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 
 class UserPreferences(Base):
@@ -25,6 +27,16 @@ class UserPreferences(Base):
     # artist preferences
     allow_comments: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
+    # tag filtering preferences
+    # stores a list of tag names that should be hidden from track listings
+    # defaults to ["ai"] to hide AI-generated content by default
+    hidden_tags: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=lambda: list(DEFAULT_HIDDEN_TAGS),
+        server_default=text("'[\"ai\"]'::jsonb"),
     )
 
     # metadata

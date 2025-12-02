@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
-from backend.models import CopyrightScan, TrackComment, TrackLike
+from backend.models import CopyrightScan, Tag, TrackComment, TrackLike, TrackTag
 
 
 @dataclass
@@ -125,3 +125,35 @@ def _extract_primary_match(matches: list[dict[str, Any]]) -> str | None:
     # get the most common match
     (title, artist), _ = match_counts.most_common(1)[0]
     return f"{title} by {artist}"
+
+
+async def get_track_tags(db: AsyncSession, track_ids: list[int]) -> dict[int, set[str]]:
+    """get tags for multiple tracks in a single query.
+
+    args:
+        db: database session
+        track_ids: list of track IDs to get tags for
+
+    returns:
+        dict mapping track_id -> set of tag names
+    """
+    if not track_ids:
+        return {}
+
+    stmt = (
+        select(TrackTag.track_id, Tag.name)
+        .join(Tag, TrackTag.tag_id == Tag.id)
+        .where(TrackTag.track_id.in_(track_ids))
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    # group tags by track_id
+    tags_by_track: dict[int, set[str]] = {}
+    for track_id, tag_name in rows:
+        if track_id not in tags_by_track:
+            tags_by_track[track_id] = set()
+        tags_by_track[track_id].add(tag_name)
+
+    return tags_by_track
