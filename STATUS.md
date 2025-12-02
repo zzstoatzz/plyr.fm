@@ -47,6 +47,23 @@ plyr.fm should become:
 
 ### December 2025
 
+#### queue touch reordering and header stats fix (Dec 2)
+
+**queue mobile UX** (PR #428):
+- added 6-dot drag handle to queue items for touch-friendly reordering
+- implemented touch event handlers for mobile drag-and-drop
+- track follows finger during drag with smooth translateY transform
+- drop target highlights while dragging over other tracks
+- drag handles and remove buttons always visible on touch devices (no hover state)
+
+**header stats positioning** (PR #426):
+- fixed platform stats not adjusting when queue sidebar opens/closes
+- stats were using static viewport calculation ignoring queue width
+- added `--queue-width` CSS custom property updated dynamically
+- stats now shift left with smooth transition when queue opens
+
+---
+
 #### connection pool resilience for Neon cold starts (Dec 2)
 
 **incident**: ~5 minute API outage (01:55-02:00 UTC) - all requests returned 500 errors
