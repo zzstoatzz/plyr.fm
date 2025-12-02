@@ -18,7 +18,11 @@ from backend._internal.auth import get_session
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
-from backend.utilities.aggregations import get_comment_counts, get_like_counts
+from backend.utilities.aggregations import (
+    get_comment_counts,
+    get_like_counts,
+    get_track_tags,
+)
 from backend.utilities.hashing import CHUNK_SIZE
 
 router = APIRouter(prefix="/albums", tags=["albums"])
@@ -262,12 +266,13 @@ async def get_album(
     tracks = track_result.scalars().all()
     track_ids = [track.id for track in tracks]
     if track_ids:
-        like_counts, comment_counts = await asyncio.gather(
+        like_counts, comment_counts, track_tags = await asyncio.gather(
             get_like_counts(db, track_ids),
             get_comment_counts(db, track_ids),
+            get_track_tags(db, track_ids),
         )
     else:
-        like_counts, comment_counts = {}, {}
+        like_counts, comment_counts, track_tags = {}, {}, {}
 
     # get authenticated user's likes for this album's tracks only
     liked_track_ids: set[int] | None = None
@@ -310,6 +315,7 @@ async def get_album(
                 liked_track_ids,
                 like_counts,
                 comment_counts,
+                track_tags=track_tags,
             )
             for track in tracks
         ]

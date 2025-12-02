@@ -407,6 +407,14 @@ $effect(() => {
 						{/if}
 					</div>
 
+					{#if track.tags && track.tags.length > 0}
+						<div class="track-tags">
+							{#each track.tags as tag}
+								<a href="/tag/{encodeURIComponent(tag)}" class="tag-badge">{tag}</a>
+							{/each}
+						</div>
+					{/if}
+
 					<div class="track-stats">
 						<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
 						{#if track.like_count && track.like_count > 0}
@@ -768,6 +776,30 @@ $effect(() => {
 
 	.track-stats .separator {
 		font-size: 0.7rem;
+	}
+
+	.track-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		justify-content: center;
+	}
+
+	.tag-badge {
+		display: inline-block;
+		padding: 0.25rem 0.6rem;
+		background: rgba(138, 179, 255, 0.15);
+		color: #8ab3ff;
+		border-radius: 4px;
+		font-size: 0.85rem;
+		font-weight: 500;
+		text-decoration: none;
+		transition: all 0.15s;
+	}
+
+	.tag-badge:hover {
+		background: rgba(138, 179, 255, 0.25);
+		color: #a8c8ff;
 	}
 
 	.mobile-side-buttons {
