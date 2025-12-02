@@ -1057,7 +1057,7 @@
 						{#if track.tags && track.tags.length > 0}
 							<div class="meta-tags">
 								{#each track.tags as tag}
-									<span class="meta-tag">{tag}</span>
+									<a href="/tag/{encodeURIComponent(tag)}" class="meta-tag">{tag}</a>
 								{/each}
 							</div>
 						{/if}
@@ -1871,6 +1871,13 @@
 		border-radius: 3px;
 		font-size: 0.8rem;
 		font-weight: 500;
+		text-decoration: none;
+		transition: all 0.15s;
+	}
+
+	.meta-tag:hover {
+		background: rgba(138, 179, 255, 0.25);
+		color: #a8c8ff;
 	}
 
 	.track-date {

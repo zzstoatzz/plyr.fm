@@ -1,14 +1,22 @@
 <script lang="ts">
-	import { API_URL } from '$lib/config';
+	import { API_URL, getServerConfig } from '$lib/config';
 	import { tracksCache } from '$lib/tracks.svelte';
 	import { auth } from '$lib/auth.svelte';
 
 	let hiddenTags = $state<string[]>([]);
+	let defaultHiddenTags = $state<string[]>([]);
 	let isExpanded = $state(false);
 	let addingTag = $state(false);
 	let newTag = $state('');
 	let inputEl = $state<HTMLInputElement | null>(null);
 	let hasFetched = $state(false);
+
+	// load default hidden tags from server config on mount
+	$effect(() => {
+		getServerConfig().then((config) => {
+			defaultHiddenTags = config.default_hidden_tags;
+		});
+	});
 
 	// fetch preferences when auth becomes available
 	$effect(() => {
@@ -25,12 +33,12 @@
 			});
 			if (response.ok) {
 				const data = await response.json();
-				// use server value, falling back to default if not set
-				hiddenTags = data.hidden_tags ?? ['ai'];
+				// use server value, falling back to default from server config
+				hiddenTags = data.hidden_tags ?? defaultHiddenTags;
 			}
 		} catch (error) {
 			console.error('failed to fetch preferences:', error);
-			hiddenTags = ['ai']; // fallback to default on error
+			hiddenTags = defaultHiddenTags;
 		}
 	}
 
@@ -56,14 +64,16 @@
 
 	async function addTag(tag: string) {
 		const normalized = tag.trim().toLowerCase();
+		// clear input state immediately to avoid visual duplication
+		newTag = '';
+		addingTag = false;
+
 		if (normalized && !hiddenTags.includes(normalized)) {
 			hiddenTags = [...hiddenTags, normalized];
 			await saveHiddenTags(hiddenTags);
 			tracksCache.invalidate();
 			tracksCache.fetch(true);
 		}
-		newTag = '';
-		addingTag = false;
 	}
 
 	function handleKeydown(e: KeyboardEvent) {

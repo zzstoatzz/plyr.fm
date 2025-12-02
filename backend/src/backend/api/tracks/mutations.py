@@ -1,7 +1,6 @@
 """Track mutation endpoints (delete/update/restore)."""
 
 import contextlib
-import json
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
@@ -10,6 +9,7 @@ import logfire
 from fastapi import Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,7 +27,7 @@ from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackTag, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
-from backend.utilities.tags import normalize_tags
+from backend.utilities.tags import TagValidationError, validate_tags_json
 
 from .metadata_service import (
     apply_album_update,
@@ -37,6 +37,37 @@ from .metadata_service import (
 from .router import router
 
 logger = logging.getLogger(__name__)
+
+
+async def _get_or_create_tag(db: AsyncSession, tag_name: str, creator_did: str) -> Tag:
+    """get existing tag or create new one, handling race conditions.
+
+    uses a select-then-insert pattern with IntegrityError handling
+    to safely handle concurrent tag creation.
+    """
+    # first try to find existing tag
+    result = await db.execute(select(Tag).where(Tag.name == tag_name))
+    tag = result.scalar_one_or_none()
+    if tag:
+        return tag
+
+    # try to create new tag
+    tag = Tag(
+        name=tag_name,
+        created_by_did=creator_did,
+        created_at=datetime.now(UTC),
+    )
+    db.add(tag)
+
+    try:
+        await db.flush()
+        return tag
+    except IntegrityError:
+        # another process created the tag - rollback and fetch it
+        await db.rollback()
+        result = await db.execute(select(Tag).where(Tag.name == tag_name))
+        tag = result.scalar_one()
+        return tag
 
 
 @router.delete("/{track_id}")
@@ -182,14 +213,9 @@ async def update_track_metadata(
     updated_tags: set[str] = set()
     if tags is not None:
         try:
-            tag_names: list[str] = json.loads(tags)
-        except json.JSONDecodeError as e:
-            raise HTTPException(
-                status_code=400, detail="tags must be a JSON array"
-            ) from e
-
-        # normalize and deduplicate tag names
-        tag_names_set = normalize_tags(tag_names)
+            validated_tags = validate_tags_json(tags)
+        except TagValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
         # delete existing track_tags for this track
         existing_track_tags = await db.execute(
@@ -199,20 +225,9 @@ async def update_track_metadata(
             await db.delete(tt)
 
         # get or create tags and create track_tags
-        for tag_name in tag_names_set:
-            # try to find existing tag
-            tag_result = await db.execute(select(Tag).where(Tag.name == tag_name))
-            tag = tag_result.scalar_one_or_none()
-
-            if not tag:
-                # create new tag
-                tag = Tag(
-                    name=tag_name,
-                    created_by_did=auth_session.did,
-                    created_at=datetime.now(UTC),
-                )
-                db.add(tag)
-                await db.flush()  # get the tag.id
+        for tag_name in validated_tags:
+            # get or create tag with race condition handling
+            tag = await _get_or_create_tag(db, tag_name, auth_session.did)
 
             # create track_tag association
             track_tag = TrackTag(track_id=track_id, tag_id=tag.id)
