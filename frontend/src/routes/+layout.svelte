@@ -69,6 +69,13 @@
 		updateTitle();
 	});
 
+	// set CSS custom property for queue width adjustment
+	$effect(() => {
+		if (!browser) return;
+		const queueWidth = showQueue && !isEmbed ? '360px' : '0px';
+		document.documentElement.style.setProperty('--queue-width', queueWidth);
+	});
+
 	function handleQueueShortcut(event: KeyboardEvent) {
 		// ignore modifier keys
 		if (event.metaKey || event.ctrlKey || event.altKey) {
@@ -223,6 +230,9 @@
 	}
 
 	:global(:root) {
+		/* layout */
+		--queue-width: 0px;
+
 		/* accent colors - configurable */
 		--accent: #6a9fff;
 		--accent-hover: #8ab3ff;
