@@ -96,11 +96,12 @@ plyr.fm/
 <details>
 <summary>costs</summary>
 
-~$25-30/month:
-- fly.io backend (production): ~$10/month (shared-cpu-1x, 256MB RAM)
-- fly.io backend (staging): ~$10/month (shared-cpu-1x, 256MB RAM)
-- fly.io transcoder: TBD (not in use yet)
+~$35-40/month:
+- fly.io backend (production): ~$5/month (shared-cpu-1x, 256MB RAM)
+- fly.io backend (staging): ~$5/month (shared-cpu-1x, 256MB RAM)
+- fly.io transcoder: ~$0-5/month (auto-scales to zero when idle)
 - neon postgres: $5/month (starter plan)
+- audd audio fingerprinting: ~$10/month (enterprise API for copyright detection)
 - cloudflare pages: free (frontend hosting)
 - cloudflare r2: ~$0.16/month (6 buckets across dev/staging/prod)
 
@@ -110,7 +111,7 @@ plyr.fm/
 
 - **production**: https://plyr.fm
 - **API docs**: https://api.plyr.fm/docs
-- **python SDK**: [plyrfm](https://github.com/zzstoatzz/plyr-python-client) ([PyPI](https://pypi.org/project/plyrfm/))
+- **python SDK / MCP server**: [plyrfm](https://github.com/zzstoatzz/plyr-python-client) ([PyPI](https://pypi.org/project/plyrfm/))
 - **repository**: https://github.com/zzstoatzz/plyr.fm
 
 ## documentation
