@@ -270,24 +270,24 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		background: #141414;
-		border: 1px solid #282828;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
 		border-left: 3px solid transparent;
 		padding: 1rem;
 		transition: all 0.15s ease-in-out;
 	}
 
 	.track-container:hover {
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		border-left-color: var(--accent);
-		border-color: #333;
+		border-color: var(--border-default);
 		transform: translateX(2px);
 	}
 
 	.track-container.playing {
-		background: #1a2330;
+		background: color-mix(in srgb, var(--accent) 10%, var(--bg-tertiary));
 		border-left-color: var(--accent);
-		border-color: #2a3a4a;
+		border-color: color-mix(in srgb, var(--accent) 20%, var(--border-subtle));
 	}
 
 	.track {
@@ -314,8 +314,8 @@
 		justify-content: center;
 		border-radius: 4px;
 		overflow: hidden;
-		background: #1a1a1a;
-		border: 1px solid #282828;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
 	}
 
 	.track-avatar {
@@ -342,12 +342,12 @@
 	}
 
 	.track-image-placeholder {
-		color: #606060;
+		color: var(--text-muted);
 	}
 
 	.track-avatar img {
 		border-radius: 50%;
-		border: 2px solid #333;
+		border: 2px solid var(--border-default);
 		transition: border-color 0.2s;
 	}
 
@@ -384,7 +384,7 @@
 		font-family: inherit;
 		font-weight: 600;
 		font-size: 1.05rem;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -395,7 +395,7 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 0.15rem;
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		font-size: 0.9rem;
 		font-family: inherit;
 		min-width: 0;
@@ -420,7 +420,7 @@
 	}
 
 	.artist-link {
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		text-decoration: none;
 		transition: color 0.2s;
 		font-weight: 500;
@@ -440,18 +440,18 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		color: #b5bed1;
+		color: var(--text-secondary);
 		white-space: nowrap;
 	}
 
 	.features-label {
-		color: #8ab3ff;
+		color: var(--accent-hover);
 		font-weight: 500;
 		text-transform: lowercase;
 	}
 
 	.feature-link {
-		color: #8ab3ff;
+		color: var(--accent-hover);
 		text-decoration: none;
 		font-weight: 500;
 		transition: color 0.2s;
@@ -463,11 +463,11 @@
 	}
 
 	.feature-separator {
-		color: #8ab3ff;
+		color: var(--accent-hover);
 	}
 
 	.album {
-		color: #909090;
+		color: var(--text-tertiary);
 		display: inline-flex;
 		align-items: center;
 		gap: 0.35rem;
@@ -476,7 +476,7 @@
 	}
 
 	.album-link {
-		color: #909090;
+		color: var(--text-tertiary);
 		text-decoration: none;
 		transition: color 0.2s;
 		display: inline-block;
@@ -508,8 +508,8 @@
 	.tag-badge {
 		display: inline-block;
 		padding: 0.1rem 0.4rem;
-		background: rgba(138, 179, 255, 0.15);
-		color: #8ab3ff;
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		color: var(--accent-hover);
 		border-radius: 3px;
 		font-size: 0.75rem;
 		font-weight: 500;
@@ -518,30 +518,30 @@
 	}
 
 	.tag-badge:hover {
-		background: rgba(138, 179, 255, 0.25);
-		color: #a8c8ff;
+		background: color-mix(in srgb, var(--accent) 25%, transparent);
+		color: var(--accent);
 	}
 
 	.track-meta {
 		font-size: 0.8rem;
-		color: #808080;
+		color: var(--text-tertiary);
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 	}
 
 	.plays {
-		color: #999;
+		color: var(--text-tertiary);
 		font-family: inherit;
 	}
 
 	.meta-separator {
-		color: #555;
+		color: var(--text-muted);
 		font-size: 0.7rem;
 	}
 
 	.likes {
-		color: #999;
+		color: var(--text-tertiary);
 		font-family: inherit;
 		position: relative;
 		cursor: help;
@@ -553,7 +553,7 @@
 	}
 
 	.comments {
-		color: #999;
+		color: var(--text-tertiary);
 		font-family: inherit;
 		display: inline-flex;
 		align-items: center;
@@ -583,16 +583,16 @@
 		align-items: center;
 		justify-content: center;
 		background: transparent;
-		border: 1px solid #333;
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: #888;
+		color: var(--text-tertiary);
 		cursor: pointer;
 		transition: all 0.2s;
 		text-decoration: none;
 	}
 
 	.action-button:hover {
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		border-color: var(--accent);
 		color: var(--accent);
 	}

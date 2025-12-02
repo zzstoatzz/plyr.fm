@@ -637,9 +637,9 @@ $effect(() => {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: #1a1a1a;
-		border: 1px solid #282828;
-		color: #606060;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		color: var(--text-muted);
 	}
 
 	.track-info-wrapper {
@@ -672,7 +672,7 @@ $effect(() => {
 	.track-title {
 		font-size: 2rem;
 		font-weight: 700;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin: 0;
 		line-height: 1.2;
 		text-align: center;
@@ -684,17 +684,17 @@ $effect(() => {
 		justify-content: center;
 		gap: 0.75rem;
 		flex-wrap: wrap;
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		font-size: 1.1rem;
 	}
 
 	.separator {
-		color: #555;
+		color: var(--text-muted);
 		font-size: 0.8rem;
 	}
 
 	.artist-link {
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		text-decoration: none;
 		font-weight: 500;
 		transition: color 0.2s;
@@ -712,12 +712,12 @@ $effect(() => {
 	}
 
 	.features-label {
-		color: #8ab3ff;
+		color: var(--accent-hover);
 		font-weight: 500;
 	}
 
 	.feature-link {
-		color: #8ab3ff;
+		color: var(--accent-hover);
 		text-decoration: none;
 		font-weight: 500;
 		transition: color 0.2s;
@@ -729,11 +729,11 @@ $effect(() => {
 	}
 
 	.feature-separator {
-		color: #8ab3ff;
+		color: var(--accent-hover);
 	}
 
 	.album {
-		color: #909090;
+		color: var(--text-tertiary);
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -743,7 +743,7 @@ $effect(() => {
 
 	.album-link {
 		text-decoration: none;
-		color: #909090;
+		color: var(--text-tertiary);
 		transition: color 0.2s;
 		display: flex;
 		align-items: center;
@@ -770,7 +770,7 @@ $effect(() => {
 	}
 
 	.track-stats {
-		color: #808080;
+		color: var(--text-tertiary);
 		font-size: 0.95rem;
 		display: flex;
 		align-items: center;
@@ -792,8 +792,8 @@ $effect(() => {
 	.tag-badge {
 		display: inline-block;
 		padding: 0.25rem 0.6rem;
-		background: rgba(138, 179, 255, 0.15);
-		color: #8ab3ff;
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		color: var(--accent-hover);
 		border-radius: 4px;
 		font-size: 0.85rem;
 		font-weight: 500;
@@ -802,8 +802,8 @@ $effect(() => {
 	}
 
 	.tag-badge:hover {
-		background: rgba(138, 179, 255, 0.25);
-		color: #a8c8ff;
+		background: color-mix(in srgb, var(--accent) 25%, transparent);
+		color: var(--accent-hover);
 	}
 
 	.mobile-side-buttons {
@@ -828,7 +828,7 @@ $effect(() => {
 		gap: 0.5rem;
 		padding: 0.75rem 1.5rem;
 		background: var(--accent);
-		color: #000;
+		color: var(--bg-primary);
 		border: none;
 		border-radius: 24px;
 		font-size: 0.95rem;
@@ -853,8 +853,8 @@ $effect(() => {
 		gap: 0.5rem;
 		padding: 0.75rem 1.5rem;
 		background: transparent;
-		color: #e8e8e8;
-		border: 1px solid #404040;
+		color: var(--text-primary);
+		border: 1px solid var(--border-emphasis);
 		border-radius: 24px;
 		font-size: 0.95rem;
 		font-weight: 500;
@@ -866,7 +866,7 @@ $effect(() => {
 	.btn-queue:hover {
 		border-color: var(--accent);
 		color: var(--accent);
-		background: rgba(138, 179, 255, 0.1);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	@media (max-width: 768px) {
@@ -963,13 +963,13 @@ $effect(() => {
 		max-width: 500px;
 		margin: 1.5rem auto 0;
 		padding-top: 1.5rem;
-		border-top: 1px solid #2a2a2a;
+		border-top: 1px solid var(--border-subtle);
 	}
 
 	.comments-title {
 		font-size: 1rem;
 		font-weight: 600;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin: 0 0 0.75rem 0;
 		display: flex;
 		align-items: center;
@@ -977,7 +977,7 @@ $effect(() => {
 	}
 
 	.comment-count {
-		color: #888;
+		color: var(--text-tertiary);
 		font-weight: 400;
 	}
 
@@ -990,10 +990,10 @@ $effect(() => {
 	.comment-input {
 		flex: 1;
 		padding: 0.6rem 0.8rem;
-		background: #1a1a1a;
-		border: 1px solid #333;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
 		border-radius: 6px;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: inherit;
 	}
@@ -1004,13 +1004,13 @@ $effect(() => {
 	}
 
 	.comment-input::placeholder {
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	.comment-submit {
 		padding: 0.6rem 1rem;
 		background: var(--accent);
-		color: #000;
+		color: var(--bg-primary);
 		border: none;
 		border-radius: 6px;
 		font-size: 0.9rem;
@@ -1030,7 +1030,7 @@ $effect(() => {
 	}
 
 	.login-prompt {
-		color: #888;
+		color: var(--text-tertiary);
 		font-size: 0.9rem;
 		margin-bottom: 1rem;
 	}
@@ -1045,7 +1045,7 @@ $effect(() => {
 	}
 
 	.no-comments {
-		color: #666;
+		color: var(--text-muted);
 		font-size: 0.9rem;
 		text-align: center;
 		padding: 1rem;
@@ -1058,7 +1058,7 @@ $effect(() => {
 		max-height: 300px;
 		overflow-y: auto;
 		scrollbar-width: thin;
-		scrollbar-color: #333 #0a0a0a;
+		scrollbar-color: var(--border-default) var(--bg-primary);
 	}
 
 	.comments-list::-webkit-scrollbar {
@@ -1066,17 +1066,17 @@ $effect(() => {
 	}
 
 	.comments-list::-webkit-scrollbar-track {
-		background: #0a0a0a;
+		background: var(--bg-primary);
 		border-radius: 4px;
 	}
 
 	.comments-list::-webkit-scrollbar-thumb {
-		background: #333;
+		background: var(--border-default);
 		border-radius: 4px;
 	}
 
 	.comments-list::-webkit-scrollbar-thumb:hover {
-		background: #444;
+		background: var(--border-emphasis);
 	}
 
 	.comment {
@@ -1084,20 +1084,20 @@ $effect(() => {
 		align-items: flex-start;
 		gap: 0.6rem;
 		padding: 0.5rem 0.6rem;
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		border-radius: 6px;
 		transition: background 0.15s;
 	}
 
 	.comment:hover {
-		background: #222;
+		background: var(--bg-hover);
 	}
 
 	.comment-timestamp {
 		font-size: 0.8rem;
 		font-weight: 600;
 		color: var(--accent);
-		background: rgba(138, 179, 255, 0.1);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 		padding: 0.2rem 0.5rem;
 		border-radius: 4px;
 		white-space: nowrap;
@@ -1109,7 +1109,7 @@ $effect(() => {
 	}
 
 	.comment-timestamp:hover {
-		background: rgba(138, 179, 255, 0.25);
+		background: color-mix(in srgb, var(--accent) 25%, transparent);
 		transform: scale(1.05);
 	}
 
@@ -1127,13 +1127,13 @@ $effect(() => {
 	}
 
 	.comment-separator {
-		color: #444;
+		color: var(--border-emphasis);
 		font-size: 0.6rem;
 	}
 
 	.comment-time {
 		font-size: 0.75rem;
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	.comment-avatar {
@@ -1147,13 +1147,13 @@ $effect(() => {
 		width: 20px;
 		height: 20px;
 		border-radius: 50%;
-		background: #333;
+		background: var(--border-default);
 	}
 
 	.comment-author {
 		font-size: 0.85rem;
 		font-weight: 500;
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		text-decoration: none;
 	}
 
@@ -1163,7 +1163,7 @@ $effect(() => {
 
 	.comment-text {
 		font-size: 0.9rem;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin: 0;
 		line-height: 1.4;
 		word-break: break-word;
@@ -1180,7 +1180,7 @@ $effect(() => {
 	}
 
 	.edited-indicator {
-		color: #555;
+		color: var(--text-muted);
 		font-style: italic;
 	}
 
@@ -1201,7 +1201,7 @@ $effect(() => {
 		background: none;
 		border: none;
 		padding: 0;
-		color: #666;
+		color: var(--text-muted);
 		font-size: 0.8rem;
 		cursor: pointer;
 		transition: color 0.15s;
@@ -1213,7 +1213,7 @@ $effect(() => {
 	}
 
 	.comment-action-btn.delete:hover {
-		color: #ff6b6b;
+		color: var(--error);
 	}
 
 	/* mobile: always show actions */
@@ -1233,10 +1233,10 @@ $effect(() => {
 	.comment-edit-input {
 		width: 100%;
 		padding: 0.5rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: inherit;
 	}
@@ -1263,7 +1263,7 @@ $effect(() => {
 
 	.edit-form-btn.save {
 		background: var(--accent);
-		color: #000;
+		color: var(--bg-primary);
 		border: none;
 		font-weight: 500;
 	}
@@ -1274,13 +1274,13 @@ $effect(() => {
 
 	.edit-form-btn.cancel {
 		background: transparent;
-		color: #888;
-		border: 1px solid #444;
+		color: var(--text-tertiary);
+		border: 1px solid var(--border-emphasis);
 	}
 
 	.edit-form-btn.cancel:hover {
-		border-color: #666;
-		color: #aaa;
+		border-color: var(--text-muted);
+		color: var(--text-secondary);
 	}
 
 	/* comments container prevents layout shift during transition */
@@ -1294,15 +1294,15 @@ $effect(() => {
 	}
 
 	.comment.skeleton:hover {
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 	}
 
 	.skeleton-bar {
 		background: linear-gradient(
 			90deg,
-			#1a1a1a 0%,
-			#242424 50%,
-			#1a1a1a 100%
+			var(--bg-tertiary) 0%,
+			var(--bg-hover) 50%,
+			var(--bg-tertiary) 100%
 		);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;

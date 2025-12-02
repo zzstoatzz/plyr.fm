@@ -193,8 +193,8 @@
 	}
 
 	.tag-chip:hover {
-		border-color: rgba(255, 107, 107, 0.5);
-		color: #ff6b6b;
+		border-color: color-mix(in srgb, var(--error) 50%, transparent);
+		color: var(--error);
 	}
 
 	.tag-chip:active {

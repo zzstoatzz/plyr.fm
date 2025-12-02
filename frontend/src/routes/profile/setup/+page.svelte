@@ -191,7 +191,7 @@
 		align-items: center;
 		justify-content: center;
 		min-height: 100vh;
-		color: #888;
+		color: var(--text-tertiary);
 	}
 
 	main {
@@ -213,7 +213,7 @@
 	}
 
 	.subtitle {
-		color: #aaa;
+		color: var(--text-secondary);
 		margin-bottom: 2rem;
 		line-height: 1.5;
 	}
@@ -222,16 +222,16 @@
 		padding: 1rem;
 		border-radius: 4px;
 		margin-bottom: 1.5rem;
-		background: rgba(233, 69, 96, 0.1);
-		border: 1px solid rgba(233, 69, 96, 0.3);
-		color: #ff6b6b;
+		background: color-mix(in srgb, var(--error) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
+		color: var(--error);
 	}
 
 	form {
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		padding: 2rem;
 		border-radius: 8px;
-		border: 1px solid #2a2a2a;
+		border: 1px solid var(--border-subtle);
 	}
 
 	.form-group {
@@ -244,7 +244,7 @@
 
 	label {
 		display: block;
-		color: #aaa;
+		color: var(--text-secondary);
 		margin-bottom: 0.5rem;
 		font-size: 0.9rem;
 		font-weight: 500;
@@ -255,10 +255,10 @@
 	textarea {
 		width: 100%;
 		padding: 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: white;
+		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
 		transition: all 0.2s;
@@ -268,7 +268,7 @@
 	input[type='url']:focus,
 	textarea:focus {
 		outline: none;
-		border-color: #3a7dff;
+		border-color: var(--accent);
 	}
 
 	input[type='text']:disabled,
@@ -286,13 +286,13 @@
 	.hint {
 		margin-top: 0.5rem;
 		font-size: 0.85rem;
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	button {
 		width: 100%;
 		padding: 0.75rem;
-		background: #3a7dff;
+		background: var(--accent);
 		color: white;
 		border: none;
 		border-radius: 4px;
@@ -303,9 +303,9 @@
 	}
 
 	button:hover:not(:disabled) {
-		background: #2868e6;
+		background: var(--accent-hover);
 		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(58, 125, 255, 0.3);
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	button:disabled {

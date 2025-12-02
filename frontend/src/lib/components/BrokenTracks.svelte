@@ -192,8 +192,8 @@
 
 	.broken-tracks-section {
 		margin-bottom: 3rem;
-		background: rgba(255, 152, 0, 0.05);
-		border: 1px solid rgba(255, 152, 0, 0.2);
+		background: color-mix(in srgb, var(--warning) 5%, transparent);
+		border: 1px solid color-mix(in srgb, var(--warning) 20%, transparent);
 		border-radius: 8px;
 		padding: 1.5rem;
 	}
@@ -215,15 +215,15 @@
 	.section-header h2 {
 		font-size: 1.5rem;
 		margin: 0;
-		color: #ff9800;
+		color: var(--warning);
 	}
 
 	.restore-all-btn {
 		padding: 0.5rem 1rem;
-		background: rgba(255, 152, 0, 0.2);
-		border: 1px solid rgba(255, 152, 0, 0.5);
+		background: color-mix(in srgb, var(--warning) 20%, transparent);
+		border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent);
 		border-radius: 4px;
-		color: #ff9800;
+		color: var(--warning);
 		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 600;
@@ -233,8 +233,8 @@
 	}
 
 	.restore-all-btn:hover:not(:disabled) {
-		background: rgba(255, 152, 0, 0.3);
-		border-color: #ff9800;
+		background: color-mix(in srgb, var(--warning) 30%, transparent);
+		border-color: var(--warning);
 		transform: translateY(-1px);
 	}
 
@@ -245,8 +245,8 @@
 	}
 
 	.count-badge {
-		background: rgba(255, 152, 0, 0.2);
-		color: #ff9800;
+		background: color-mix(in srgb, var(--warning) 20%, transparent);
+		color: var(--warning);
 		padding: 0.25rem 0.6rem;
 		border-radius: 12px;
 		font-size: 0.85rem;
@@ -261,8 +261,8 @@
 	}
 
 	.broken-track-item {
-		background: #1a1a1a;
-		border: 1px solid rgba(255, 152, 0, 0.3);
+		background: var(--bg-tertiary);
+		border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
 		border-radius: 6px;
 		padding: 1rem;
 		display: flex;
@@ -293,26 +293,26 @@
 		font-weight: 600;
 		font-size: 1rem;
 		margin-bottom: 0.25rem;
-		color: #fff;
+		color: var(--text-primary);
 	}
 
 	.track-meta {
 		font-size: 0.9rem;
-		color: #aaa;
+		color: var(--text-secondary);
 		margin-bottom: 0.5rem;
 	}
 
 	.issue-description {
 		font-size: 0.85rem;
-		color: #ff9800;
+		color: var(--warning);
 	}
 
 	.restore-btn {
 		padding: 0.5rem 1rem;
-		background: rgba(255, 152, 0, 0.15);
-		border: 1px solid rgba(255, 152, 0, 0.4);
+		background: color-mix(in srgb, var(--warning) 15%, transparent);
+		border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
 		border-radius: 4px;
-		color: #ff9800;
+		color: var(--warning);
 		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 500;
@@ -323,8 +323,8 @@
 	}
 
 	.restore-btn:hover:not(:disabled) {
-		background: rgba(255, 152, 0, 0.25);
-		border-color: #ff9800;
+		background: color-mix(in srgb, var(--warning) 25%, transparent);
+		border-color: var(--warning);
 		transform: translateY(-1px);
 	}
 
@@ -335,17 +335,17 @@
 	}
 
 	.info-box {
-		background: #0a0a0a;
-		border: 1px solid #2a2a2a;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 6px;
 		padding: 1rem;
 		font-size: 0.9rem;
-		color: #aaa;
+		color: var(--text-secondary);
 	}
 
 	.info-box strong {
 		display: block;
-		color: #ff9800;
+		color: var(--warning);
 		margin-bottom: 0.5rem;
 	}
 

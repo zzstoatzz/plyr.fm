@@ -10,7 +10,7 @@ shortcuts are handled in the root layout (`frontend/src/routes/+layout.svelte`) 
 
 ### Q - toggle queue
 
-**location**: `frontend/src/routes/+layout.svelte:27-48`
+**location**: `frontend/src/routes/+layout.svelte`
 
 toggles the queue sidebar visibility.
 
@@ -79,6 +79,7 @@ potential shortcuts to consider:
 - **shift + arrow** - navigate queue
 - **/** - focus search (common pattern)
 - **esc** - close overlays/modals
+- **T** - cycle theme (dark/light/system)
 
 ## design principles
 

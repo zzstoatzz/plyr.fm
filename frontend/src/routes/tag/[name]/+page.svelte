@@ -124,7 +124,7 @@
 		gap: 0.4rem;
 		font-size: var(--text-page-heading);
 		font-weight: 700;
-		color: #8ab3ff;
+		color: var(--accent-hover);
 		margin: 0 0 0.5rem 0;
 	}
 

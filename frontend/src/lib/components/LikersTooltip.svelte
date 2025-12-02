@@ -110,8 +110,8 @@
 		left: 50%;
 		transform: translateX(-50%);
 		margin-bottom: 0.5rem;
-		background: #1a1a1a;
-		border: 1px solid #333;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-default);
 		border-radius: 8px;
 		padding: 0.75rem;
 		min-width: 240px;
@@ -124,14 +124,14 @@
 	.loading,
 	.error,
 	.empty {
-		color: #888;
+		color: var(--text-tertiary);
 		font-size: 0.85rem;
 		text-align: center;
 		padding: 0.5rem;
 	}
 
 	.error {
-		color: #e74c3c;
+		color: var(--error);
 	}
 
 	.likers-list {
@@ -151,7 +151,7 @@
 	}
 
 	.liker:hover {
-		background: #252525;
+		background: var(--bg-hover);
 	}
 
 	.avatar,
@@ -164,15 +164,15 @@
 
 	.avatar {
 		object-fit: cover;
-		border: 1px solid #333;
+		border: 1px solid var(--border-default);
 	}
 
 	.avatar-placeholder {
-		background: #333;
+		background: var(--border-default);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: #888;
+		color: var(--text-tertiary);
 		font-weight: 600;
 		font-size: 0.9rem;
 	}
@@ -183,7 +183,7 @@
 	}
 
 	.display-name {
-		color: #e8e8e8;
+		color: var(--text-primary);
 		font-weight: 500;
 		font-size: 0.9rem;
 		white-space: nowrap;
@@ -192,7 +192,7 @@
 	}
 
 	.handle {
-		color: #888;
+		color: var(--text-tertiary);
 		font-size: 0.8rem;
 		white-space: nowrap;
 		overflow: hidden;
@@ -200,7 +200,7 @@
 	}
 
 	.liked-time {
-		color: #666;
+		color: var(--text-muted);
 		font-size: 0.75rem;
 		flex-shrink: 0;
 	}
@@ -211,15 +211,15 @@
 	}
 
 	.likers-list::-webkit-scrollbar-track {
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 	}
 
 	.likers-list::-webkit-scrollbar-thumb {
-		background: #333;
+		background: var(--border-default);
 		border-radius: 3px;
 	}
 
 	.likers-list::-webkit-scrollbar-thumb:hover {
-		background: #444;
+		background: var(--border-emphasis);
 	}
 </style>

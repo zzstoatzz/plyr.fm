@@ -126,10 +126,10 @@
 	.input-wrapper input {
 		width: 100%;
 		padding: 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: white;
+		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
 		transition: border-color 0.2s;
@@ -138,7 +138,7 @@
 
 	.input-wrapper input:focus {
 		outline: none;
-		border-color: var(--accent, #3a7dff);
+		border-color: var(--accent);
 	}
 
 	.input-wrapper input:disabled {
@@ -147,7 +147,7 @@
 	}
 
 	.input-wrapper input::placeholder {
-		color: #666;
+		color: var(--text-muted);
 	}
 
 	.spinner {
@@ -155,7 +155,7 @@
 		right: 0.75rem;
 		top: 50%;
 		transform: translateY(-50%);
-		color: #666;
+		color: var(--text-muted);
 		font-size: 0.85rem;
 	}
 
@@ -165,13 +165,13 @@
 		width: 100%;
 		max-height: 240px;
 		overflow-y: auto;
-		background: #1a1a1a;
-		border: 1px solid #333;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
 		margin-top: 0.25rem;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 		scrollbar-width: thin;
-		scrollbar-color: #333 #0a0a0a;
+		scrollbar-color: var(--border-default) var(--bg-primary);
 	}
 
 	.results::-webkit-scrollbar {
@@ -179,17 +179,17 @@
 	}
 
 	.results::-webkit-scrollbar-track {
-		background: #0a0a0a;
+		background: var(--bg-primary);
 		border-radius: 4px;
 	}
 
 	.results::-webkit-scrollbar-thumb {
-		background: #333;
+		background: var(--border-default);
 		border-radius: 4px;
 	}
 
 	.results::-webkit-scrollbar-thumb:hover {
-		background: #444;
+		background: var(--border-emphasis);
 	}
 
 	.result-item {
@@ -200,8 +200,8 @@
 		padding: 0.75rem;
 		background: transparent;
 		border: none;
-		border-bottom: 1px solid #2a2a2a;
-		color: white;
+		border-bottom: 1px solid var(--border-subtle);
+		color: var(--text-primary);
 		text-align: left;
 		font-family: inherit;
 		cursor: pointer;
@@ -213,7 +213,7 @@
 	}
 
 	.result-item:hover {
-		background: #222;
+		background: var(--bg-hover);
 	}
 
 	.avatar {
@@ -221,7 +221,7 @@
 		height: 36px;
 		border-radius: 50%;
 		object-fit: cover;
-		border: 2px solid #333;
+		border: 2px solid var(--border-default);
 		flex-shrink: 0;
 	}
 
@@ -229,7 +229,7 @@
 		width: 36px;
 		height: 36px;
 		border-radius: 50%;
-		background: #333;
+		background: var(--border-default);
 		flex-shrink: 0;
 	}
 
@@ -241,7 +241,7 @@
 
 	.display-name {
 		font-weight: 500;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin-bottom: 0.125rem;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -250,7 +250,7 @@
 
 	.handle {
 		font-size: 0.85rem;
-		color: #888;
+		color: var(--text-tertiary);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

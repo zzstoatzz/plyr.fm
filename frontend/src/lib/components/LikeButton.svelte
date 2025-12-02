@@ -84,15 +84,15 @@
 		align-items: center;
 		justify-content: center;
 		background: transparent;
-		border: 1px solid #333;
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: #888;
+		color: var(--text-tertiary);
 		cursor: pointer;
 		transition: all 0.2s;
 	}
 
 	.like-button:hover {
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		border-color: var(--accent);
 		color: var(--accent);
 	}
@@ -114,14 +114,14 @@
 
 	.like-button.disabled-state {
 		opacity: 0.4;
-		border-color: #555;
-		color: #666;
+		border-color: var(--text-muted);
+		color: var(--text-muted);
 	}
 
 	.like-button.disabled-state:hover {
 		background: transparent;
-		border-color: #555;
-		color: #666;
+		border-color: var(--text-muted);
+		color: var(--text-muted);
 	}
 
 	.like-button.loading {

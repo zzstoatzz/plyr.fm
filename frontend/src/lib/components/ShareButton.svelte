@@ -37,12 +37,12 @@
 <style>
 	.share-btn {
 		background: transparent;
-		border: 1px solid #333;
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
 		width: 32px;
 		height: 32px;
 		padding: 0;
-		color: #888;
+		color: var(--text-tertiary);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -62,7 +62,7 @@
 		top: -2rem;
 		left: 50%;
 		transform: translateX(-50%);
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		border: 1px solid var(--accent);
 		color: var(--accent);
 		padding: 0.25rem 0.75rem;

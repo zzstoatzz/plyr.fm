@@ -92,20 +92,20 @@
 
 	h1 {
 		font-size: 4rem;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin: 0 0 1rem 0;
 		font-weight: 700;
 	}
 
 	.error-message {
 		font-size: 1.25rem;
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		margin: 0 0 0.5rem 0;
 	}
 
 	.error-detail {
 		font-size: 1rem;
-		color: #808080;
+		color: var(--text-tertiary);
 		margin: 0 0 2rem 0;
 	}
 
@@ -130,17 +130,17 @@
 
 	.bsky-link {
 		background: var(--accent);
-		color: #000;
+		color: var(--bg-primary);
 	}
 
 	.bsky-link:hover {
-		background: #6a9fff;
-		border-color: #6a9fff;
+		background: var(--accent-hover);
+		border-color: var(--accent-hover);
 	}
 
 	.home-link:hover {
 		background: var(--accent);
-		color: #000;
+		color: var(--bg-primary);
 	}
 
 	@media (max-width: 768px) {

@@ -100,10 +100,10 @@
 	.album-input {
 		width: 100%;
 		padding: 0.75rem;
-		background: #0a0a0a;
-		border: 1px solid #333;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: white;
+		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
 		transition: all 0.2s;
@@ -111,7 +111,7 @@
 
 	.album-input:focus {
 		outline: none;
-		border-color: #3a7dff;
+		border-color: var(--accent);
 	}
 
 	.album-input:disabled {
@@ -125,8 +125,8 @@
 		width: 100%;
 		max-height: 300px;
 		overflow-y: auto;
-		background: #1a1a1a;
-		border: 1px solid #333;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
 		margin-top: 0.25rem;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
@@ -138,23 +138,23 @@
 	}
 
 	.album-results::-webkit-scrollbar-track {
-		background: #0a0a0a;
+		background: var(--bg-primary);
 		border-radius: 4px;
 	}
 
 	.album-results::-webkit-scrollbar-thumb {
-		background: #333;
+		background: var(--border-default);
 		border-radius: 4px;
 	}
 
 	.album-results::-webkit-scrollbar-thumb:hover {
-		background: #444;
+		background: var(--border-emphasis);
 	}
 
 	/* firefox scrollbar */
 	.album-results {
 		scrollbar-width: thin;
-		scrollbar-color: #333 #0a0a0a;
+		scrollbar-color: var(--border-default) var(--bg-primary);
 	}
 
 	.album-result-item {
@@ -165,8 +165,8 @@
 		padding: 0.75rem;
 		background: transparent;
 		border: none;
-		border-bottom: 1px solid #2a2a2a;
-		color: white;
+		border-bottom: 1px solid var(--border-subtle);
+		color: var(--text-primary);
 		text-align: left;
 		font-family: inherit;
 		cursor: pointer;
@@ -179,12 +179,12 @@
 	}
 
 	.album-result-item:hover {
-		background: #222;
+		background: var(--bg-hover);
 	}
 
 	.album-result-item.exact-match {
-		background: rgba(58, 125, 255, 0.1);
-		border-left: 3px solid #3a7dff;
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border-left: 3px solid var(--accent);
 	}
 
 	.album-info {
@@ -195,7 +195,7 @@
 
 	.album-title {
 		font-weight: 500;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin-bottom: 0.125rem;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -204,7 +204,7 @@
 
 	.album-stats {
 		font-size: 0.85rem;
-		color: #888;
+		color: var(--text-tertiary);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -213,7 +213,7 @@
 	.similar-hint {
 		margin-top: 0.5rem;
 		font-size: 0.85rem;
-		color: #ff9800;
+		color: var(--warning);
 		font-style: italic;
 		margin-bottom: 0;
 	}

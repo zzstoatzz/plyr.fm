@@ -356,8 +356,8 @@ $effect(() => {
 		gap: 2rem;
 		margin-bottom: 3rem;
 		padding: 2rem;
-		background: #141414;
-		border: 1px solid #282828;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 	}
 
@@ -390,20 +390,20 @@ $effect(() => {
 		height: 120px;
 		border-radius: 50%;
 		object-fit: cover;
-		border: 3px solid #333;
+		border: 3px solid var(--border-default);
 	}
 
 	.artist-info h1 {
 		font-size: 2.5rem;
 		margin: 0 0 0.5rem 0;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		word-wrap: break-word;
 		overflow-wrap: break-word;
 		hyphens: auto;
 	}
 
 	.handle {
-		color: #909090;
+		color: var(--text-tertiary);
 		font-size: 1.1rem;
 		margin: 0 0 1rem 0;
 		text-decoration: none;
@@ -416,7 +416,7 @@ $effect(() => {
 	}
 
 	.bio {
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		line-height: 1.6;
 		margin: 0;
 	}
@@ -427,7 +427,7 @@ $effect(() => {
 
 	.analytics h2 {
 		margin-bottom: 1.5rem;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		font-size: 1.8rem;
 	}
 
@@ -448,7 +448,7 @@ $effect(() => {
 	}
 
 	.section-header span {
-		color: #808080;
+		color: var(--text-tertiary);
 		font-size: 0.9rem;
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
@@ -465,8 +465,8 @@ $effect(() => {
 		gap: 1rem;
 		align-items: center;
 		padding: 1rem;
-		background: #141414;
-		border: 1px solid #282828;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 10px;
 		color: inherit;
 		text-decoration: none;
@@ -484,8 +484,8 @@ $effect(() => {
 		border-radius: 6px;
 		overflow: hidden;
 		flex-shrink: 0;
-		background: #1a1a1a;
-		border: 1px solid #333;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -499,7 +499,7 @@ $effect(() => {
 	}
 
 	.album-cover-placeholder {
-		color: #666;
+		color: var(--text-muted);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -510,7 +510,7 @@ $effect(() => {
 	.album-card-meta h3 {
 		margin: 0 0 0.35rem 0;
 		font-size: 1.05rem;
-		color: #fafafa;
+		color: var(--text-primary);
 		text-transform: lowercase;
 		white-space: nowrap;
 		overflow: hidden;
@@ -529,7 +529,7 @@ $effect(() => {
 
 	.album-card-meta p {
 		margin: 0;
-		color: #9a9a9a;
+		color: var(--text-tertiary);
 		font-size: 0.9rem;
 		display: flex;
 		align-items: center;
@@ -538,19 +538,19 @@ $effect(() => {
 
 	.album-card-meta .dot {
 		font-size: 0.65rem;
-		color: #555;
+		color: var(--text-muted);
 	}
 
 	.stat-card {
-		background: #141414;
-		border: 1px solid #282828;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 		padding: 1.5rem;
 		transition: border-color 0.2s;
 	}
 
 	.stat-card:hover {
-		border-color: #404040;
+		border-color: var(--border-emphasis);
 	}
 
 	.stat-value {
@@ -562,7 +562,7 @@ $effect(() => {
 	}
 
 	.stat-label {
-		color: #909090;
+		color: var(--text-tertiary);
 		font-size: 0.9rem;
 		text-transform: lowercase;
 		line-height: 1;
@@ -578,12 +578,12 @@ $effect(() => {
 	.stat-card.top-item:hover {
 		border-color: var(--accent);
 		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(138, 179, 255, 0.2);
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 20%, transparent);
 	}
 
 	.top-item-title {
 		font-size: 1.2rem;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		margin: 0.5rem 0;
 		font-weight: 500;
 		line-height: 1;
@@ -605,9 +605,9 @@ $effect(() => {
 	.skeleton-bar {
 		background: linear-gradient(
 			90deg,
-			#1a1a1a 0%,
-			#242424 50%,
-			#1a1a1a 100%
+			var(--bg-tertiary) 0%,
+			var(--bg-hover) 50%,
+			var(--bg-tertiary) 100%
 		);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
@@ -652,14 +652,14 @@ $effect(() => {
 
 	.tracks h2 {
 		margin-bottom: 1.5rem;
-		color: #e8e8e8;
+		color: var(--text-primary);
 		font-size: 1.8rem;
 	}
 
 	.tracks-loading {
 		margin-left: 0.75rem;
 		font-size: 0.95rem;
-		color: #9ea5b4;
+		color: var(--text-secondary);
 		font-weight: 400;
 		text-transform: lowercase;
 	}
@@ -673,19 +673,19 @@ $effect(() => {
 	.empty-state {
 		text-align: center;
 		padding: 3rem;
-		background: #141414;
-		border: 1px solid #282828;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 	}
 
 	.empty-message {
-		color: #b0b0b0;
+		color: var(--text-secondary);
 		font-size: 1.25rem;
 		margin: 0 0 0.5rem 0;
 	}
 
 	.empty-detail {
-		color: #808080;
+		color: var(--text-tertiary);
 		margin: 0 0 1.5rem 0;
 	}
 
@@ -702,7 +702,7 @@ $effect(() => {
 
 	.bsky-link:hover {
 		background: var(--accent);
-		color: #000;
+		color: var(--bg-primary);
 	}
 
 	/* respect reduced motion preference */

@@ -153,15 +153,15 @@
 		align-items: center;
 		justify-content: center;
 		background: transparent;
-		border: 1px solid #333;
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
-		color: #888;
+		color: var(--text-tertiary);
 		cursor: pointer;
 		transition: all 0.2s;
 	}
 
 	.menu-button:hover {
-		background: #1a1a1a;
+		background: var(--bg-tertiary);
 		border-color: var(--accent);
 		color: var(--accent);
 	}

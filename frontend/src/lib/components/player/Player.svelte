@@ -350,8 +350,8 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		background: #1a1a1a;
-		border-top: 1px solid #333;
+		background: var(--bg-tertiary);
+		border-top: 1px solid var(--border-default);
 		padding: 0.75rem 2rem;
 		padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 		z-index: 100;

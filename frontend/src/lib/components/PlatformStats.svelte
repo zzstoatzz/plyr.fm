@@ -181,7 +181,7 @@
 		display: block;
 		width: 100%;
 		height: 60px;
-		background: linear-gradient(90deg, #1a1a1a 0%, #242424 50%, #1a1a1a 100%);
+		background: linear-gradient(90deg, var(--bg-tertiary) 0%, var(--bg-hover) 50%, var(--bg-tertiary) 100%);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
 		border-radius: 6px;

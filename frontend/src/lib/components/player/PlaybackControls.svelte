@@ -254,7 +254,7 @@
 
 	.control-btn:hover {
 		color: var(--accent);
-		background: rgba(106, 159, 255, 0.1);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.control-btn.play-pause:active {
@@ -311,7 +311,7 @@
 
 	.time {
 		font-size: 0.85rem;
-		color: #909090;
+		color: var(--text-tertiary);
 		min-width: 45px;
 		font-variant-numeric: tabular-nums;
 	}
@@ -325,7 +325,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		color: #909090;
+		color: var(--text-tertiary);
 		min-width: 140px;
 		position: relative;
 	}
@@ -337,7 +337,7 @@
 	}
 
 	.volume-icon.muted {
-		color: #ff6b6b;
+		color: var(--error);
 		animation: shake 0.5s ease-in-out;
 	}
 
@@ -395,7 +395,7 @@
 	}
 
 	input[type="range"].muted::-webkit-slider-thumb {
-		background: #ff6b6b;
+		background: var(--error);
 	}
 
 	input[type="range"].max::-webkit-slider-thumb {
@@ -432,7 +432,7 @@
 	}
 
 	input[type="range"].muted::-moz-range-thumb {
-		background: #ff6b6b;
+		background: var(--error);
 	}
 
 	input[type="range"].max::-moz-range-thumb {
