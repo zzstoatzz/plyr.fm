@@ -181,7 +181,7 @@ jobs:
       - name: Upload audio to plyr.fm
         run: |
           if [ -f update.wav ]; then
-            uv run --with plyrfm -- plyrfm upload update.wav "plyr.fm update - $(date +'%B %d, %Y')" --album "$(date +%Y)"
+            uv run --with plyrfm -- plyrfm upload update.wav "plyr.fm update - $(date +'%B %d, %Y')" --album "$(date +%Y)" -t ai
           else
             echo "No update.wav found, skipping upload"
           fi
