@@ -119,5 +119,5 @@ plyr.fm/
 ## documentation
 
 - [deployment guide](docs/deployment/environments.md)
-- [configuration](docs/configuration.md)
+- [configuration](docs/backend/configuration.md)
 - [full documentation](docs/README.md)
