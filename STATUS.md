@@ -68,6 +68,19 @@ plyr.fm should become:
 - updated MCP `upload_guide` prompt with tag examples
 - status maintenance workflow now tags AI-generated podcasts with `ai` (#436)
 
+**tags in detail pages** (PR #437):
+- track detail endpoint (`/tracks/{id}`) now returns tags
+- album detail endpoint (`/albums/{handle}/{slug}`) now returns tags for all tracks
+- track detail page displays clickable tag badges
+
+**bufo easter egg** (PR #438):
+- tracks tagged with `bufo` trigger animated toad GIFs on the detail page
+- uses track title as semantic search query against [find-bufo API](https://find-bufo.fly.dev/)
+- toads are semantically matched to the song's vibe (e.g., "Happy Vibes" gets happy toads)
+- results cached in localStorage (1 week TTL) to minimize API calls
+- `TagEffects` wrapper component provides extensibility for future tag-based plugins
+- respects `prefers-reduced-motion`; fails gracefully if API unavailable
+
 ---
 
 #### queue touch reordering and header stats fix (Dec 2)
