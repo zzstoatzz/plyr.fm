@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from backend._internal.auth import get_session
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
-from backend.utilities.aggregations import get_like_counts
+from backend.utilities.aggregations import get_like_counts, get_track_tags
 
 from .router import router
 
@@ -50,9 +50,13 @@ async def get_track(
         raise HTTPException(status_code=404, detail="track not found")
 
     like_counts = await get_like_counts(db, [track_id])
+    track_tags = await get_track_tags(db, [track_id])
 
     return await TrackResponse.from_track(
-        track, liked_track_ids=liked_track_ids, like_counts=like_counts
+        track,
+        liked_track_ids=liked_track_ids,
+        like_counts=like_counts,
+        track_tags=track_tags,
     )
 
 
