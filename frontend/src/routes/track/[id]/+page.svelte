@@ -7,6 +7,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import LikeButton from '$lib/components/LikeButton.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
+	import TagEffects from '$lib/components/TagEffects.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { auth } from '$lib/auth.svelte';
@@ -350,6 +351,9 @@ $effect(() => {
 </svelte:head>
 
 <div class="page-container">
+	{#if track.tags && track.tags.length > 0}
+		<TagEffects tags={track.tags} trackTitle={track.title} />
+	{/if}
 	<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 	<main>
