@@ -213,11 +213,14 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/config")
-async def get_public_config() -> dict[str, int]:
+async def get_public_config() -> dict[str, int | list[str]]:
     """expose public configuration to frontend."""
+    from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
+
     return {
         "max_upload_size_mb": settings.storage.max_upload_size_mb,
         "max_image_size_mb": 20,  # hardcoded limit for cover art
+        "default_hidden_tags": DEFAULT_HIDDEN_TAGS,
     }
 
 

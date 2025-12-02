@@ -1,9 +1,54 @@
 """tag normalization and management utilities."""
 
 import re
+from typing import Annotated
+
+from pydantic import Field, TypeAdapter, ValidationError
 
 # tags that are hidden by default for new users
 DEFAULT_HIDDEN_TAGS: list[str] = ["ai"]
+
+# tag validation constraints
+MAX_TAG_LENGTH = 50
+MAX_TAGS_PER_TRACK = 10
+
+# pydantic type adapter for parsing JSON tag arrays
+TagList = TypeAdapter(list[Annotated[str, Field(max_length=MAX_TAG_LENGTH)]])
+
+
+def parse_tags_json(tags_json: str | None) -> list[str]:
+    """parse and normalize a JSON array of tag names.
+
+    args:
+        tags_json: JSON string containing array of tag names, or None
+
+    returns:
+        list of normalized, deduplicated tag names
+
+    raises:
+        ValueError: if tags_json is malformed or exceeds limits
+    """
+    if not tags_json:
+        return []
+
+    try:
+        tag_names = TagList.validate_json(tags_json)
+    except ValidationError as e:
+        raise ValueError(f"invalid tags: {e}") from e
+
+    # normalize and deduplicate
+    seen: set[str] = set()
+    unique: list[str] = []
+    for tag in tag_names:
+        normalized = normalize_tag(tag)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            unique.append(normalized)
+
+    if len(unique) > MAX_TAGS_PER_TRACK:
+        raise ValueError(f"too many tags: {len(unique)} (maximum {MAX_TAGS_PER_TRACK})")
+
+    return unique
 
 
 def normalize_tag(tag: str) -> str:
