@@ -20,8 +20,9 @@ all settings are configurable via environment variables and defined in `src/back
 # how long a single SQL query can run before being killed (default: 10s)
 DATABASE_STATEMENT_TIMEOUT=10.0
 
-# how long to wait when establishing a new database connection (default: 3s)
-DATABASE_CONNECTION_TIMEOUT=3.0
+# how long to wait when establishing a new database connection (default: 10s)
+# set higher than Neon cold start latency (~5-10s) to allow wake-up
+DATABASE_CONNECTION_TIMEOUT=10.0
 
 # how long to wait for an available connection from the pool (default: = connection_timeout)
 # this is automatically set to match DATABASE_CONNECTION_TIMEOUT
@@ -30,17 +31,17 @@ DATABASE_CONNECTION_TIMEOUT=3.0
 **why these matter:**
 
 - **statement_timeout**: prevents runaway queries from holding connections indefinitely. set based on your slowest expected query.
-- **connection_timeout**: fails fast when the database is slow or unreachable. prevents hanging indefinitely on connection attempts.
+- **connection_timeout**: fails fast when the database is slow or unreachable. set higher than Neon cold start latency (5-10s) to allow serverless databases to wake up after idle periods.
 - **pool_timeout**: fails fast when all connections are busy. without this, requests wait forever when the pool is exhausted.
 
 ### connection pool sizing
 
 ```bash
-# number of persistent connections to maintain (default: 5)
-DATABASE_POOL_SIZE=5
+# number of persistent connections to maintain (default: 10)
+DATABASE_POOL_SIZE=10
 
-# additional connections to create on demand when pool is exhausted (default: 0)
-DATABASE_MAX_OVERFLOW=0
+# additional connections to create on demand when pool is exhausted (default: 5)
+DATABASE_MAX_OVERFLOW=5
 
 # how long before recycling a connection, in seconds (default: 7200 = 2 hours)
 DATABASE_POOL_RECYCLE=7200
@@ -51,17 +52,17 @@ DATABASE_POOL_PRE_PING=true
 
 **sizing considerations:**
 
-total max connections = `pool_size` + `max_overflow`
+total max connections = `pool_size` + `max_overflow` = 15 by default
 
 **pool_size:**
 - too small: connection contention, requests wait for available connections
 - too large: wastes memory and database resources
-- rule of thumb: start with 5, increase if seeing pool exhaustion
+- default of 10 handles Neon cold start scenarios where multiple requests arrive after idle periods
 
 **max_overflow:**
-- `0` (default): strict limit, fails fast when pool is full
-- `> 0`: creates additional connections on demand, provides burst capacity
-- tradeoff: graceful degradation vs predictable resource usage
+- provides burst capacity for traffic spikes
+- default of 5 allows 15 total connections under peak load
+- connections beyond pool_size are closed when returned (not kept idle)
 
 **pool_recycle:**
 - prevents stale connections from lingering
@@ -73,49 +74,76 @@ total max connections = `pool_size` + `max_overflow`
 - prevents using connections that were closed by the database
 - recommended for production to avoid connection errors
 
+## Neon serverless considerations
+
+plyr.fm uses Neon PostgreSQL, which scales to zero after periods of inactivity. this introduces **cold start latency** that affects connection pooling:
+
+### the cold start problem
+
+1. site is idle for several minutes → Neon scales down
+2. first request arrives → Neon needs 5-10s to wake up
+3. if pool_size is too small, all connections hang waiting for Neon
+4. new requests can't get connections → 500 errors
+
+### how we mitigate this
+
+**larger connection pool (pool_size=10, max_overflow=5):**
+- allows 15 concurrent requests to wait for Neon wake-up
+- prevents pool exhaustion during cold start
+
+**appropriate connection timeout (10s):**
+- long enough to wait for Neon cold start (~5-10s)
+- short enough to fail fast on true database outages
+
+**queue listener heartbeat:**
+- background task pings database every 5s
+- detects connection death before user requests fail
+- triggers reconnection with exponential backoff
+
+### incident history
+
+- **2025-11-17**: first pool exhaustion outage - queue listener hung indefinitely on slow database. fix: added 15s timeout to asyncpg.connect() in queue service.
+- **2025-12-02**: cold start recurrence - 5 minute idle period caused Neon to scale down. first 5 requests after wake-up hung for 3-5 minutes each, exhausting pool. fix: increased pool_size to 10, max_overflow to 5, connection_timeout to 10s.
+
 ## production best practices
 
-### small-scale (current deployment)
-
-for a single-instance deployment with moderate traffic:
+### current deployment (Neon serverless)
 
 ```bash
-# strict pool, fail fast
-DATABASE_POOL_SIZE=5
-DATABASE_MAX_OVERFLOW=0
+# pool sized for cold start scenarios
+DATABASE_POOL_SIZE=10
+DATABASE_MAX_OVERFLOW=5
 
-# conservative timeouts
+# timeout accounts for Neon wake-up latency
 DATABASE_STATEMENT_TIMEOUT=10.0
-DATABASE_CONNECTION_TIMEOUT=3.0
+DATABASE_CONNECTION_TIMEOUT=10.0
 
 # standard recycle
 DATABASE_POOL_RECYCLE=7200
 ```
 
 this configuration:
-- keeps resource usage predictable
-- fails fast under database issues
-- prevents cascading failures
+- handles 15 concurrent requests during Neon cold start
+- fails fast (10s) on true database issues
+- balances resource usage with reliability
 
-### scaling up
-
-if experiencing pool exhaustion (503 errors, connection timeouts):
+### if seeing pool exhaustion
 
 **option 1: increase pool size**
 ```bash
-DATABASE_POOL_SIZE=10
-DATABASE_MAX_OVERFLOW=0
+DATABASE_POOL_SIZE=15
+DATABASE_MAX_OVERFLOW=5
 ```
-pros: more concurrent capacity, still predictable
-cons: more memory/database connections
+pros: more concurrent capacity during cold starts
+cons: more database connections when warm
 
-**option 2: add overflow**
+**option 2: increase overflow**
 ```bash
-DATABASE_POOL_SIZE=5
-DATABASE_MAX_OVERFLOW=5  # allows 10 total under burst load
+DATABASE_POOL_SIZE=10
+DATABASE_MAX_OVERFLOW=10  # allows 20 total under burst
 ```
-pros: handles traffic spikes, efficient baseline
-cons: less predictable resource usage
+pros: higher burst capacity, same baseline
+cons: less predictable peak resource usage
 
 ### tuning statement timeout
 
