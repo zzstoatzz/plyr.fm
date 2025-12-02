@@ -797,13 +797,15 @@ Eliminated event loop blocking across backend with three critical PRs:
 
 ## cost structure
 
-current monthly costs: ~$5-6
+current monthly costs: ~$35-40/month
 
+- fly.io backend (production): ~$5/month (shared-cpu-1x, 256MB RAM)
+- fly.io backend (staging): ~$5/month (shared-cpu-1x, 256MB RAM)
+- fly.io transcoder: ~$0-5/month (auto-scales to zero when idle)
+- neon postgres: $5/month (starter plan)
+- audd audio fingerprinting: ~$10/month (enterprise API for copyright detection)
 - cloudflare pages: $0 (free tier)
-- cloudflare R2: ~$0.16 (storage + operations, no egress fees)
-- fly.io production: $5.00 (2x shared-cpu-1x VMs with auto-stop)
-- fly.io staging: $0 (auto-stop, only runs during testing)
-- neon: $0 (free tier, 0.5 CPU, 512MB RAM, 3GB storage)
+- cloudflare R2: ~$0.16/month (6 buckets across dev/staging/prod, no egress fees)
 - logfire: $0 (free tier)
 - domain: $12/year (~$1/month)
 
