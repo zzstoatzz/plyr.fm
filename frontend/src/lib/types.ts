@@ -41,6 +41,7 @@ export interface Track {
 	like_count?: number;
 	comment_count?: number;
 	features?: FeaturedArtist[];
+	tags?: string[];
 	created_at?: string;
 	image_url?: string;
 	is_liked?: boolean;

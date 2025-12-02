@@ -11,6 +11,7 @@ interface UploadTask {
 	title: string;
 	album?: string;
 	features?: FeaturedArtist[];
+	tags?: string[];
 	toastId: string;
 	eventSource?: EventSource;
 	xhr?: XMLHttpRequest;
@@ -31,7 +32,8 @@ class UploaderState {
 		title: string,
 		album: string,
 		features: FeaturedArtist[],
-		image?: File | null,
+		image: File | null | undefined,
+		tags: string[],
 		onSuccess?: () => void,
 		callbacks?: UploadProgressCallback
 	): void {
@@ -51,6 +53,9 @@ class UploaderState {
 		if (features.length > 0) {
 			const handles = features.map(a => a.handle);
 			formData.append('features', JSON.stringify(handles));
+		}
+		if (tags.length > 0) {
+			formData.append('tags', JSON.stringify(tags));
 		}
 		if (image) {
 			formData.append('image', image);
@@ -91,6 +96,7 @@ class UploaderState {
 						title,
 						album,
 						features,
+						tags,
 						toastId,
 						xhr
 					};

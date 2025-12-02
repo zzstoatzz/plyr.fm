@@ -173,6 +173,13 @@
 				</a>
 			</span>
 		{/if}
+		{#if track.tags && track.tags.length > 0}
+			<span class="tags-line">
+				{#each track.tags as tag}
+					<span class="tag-badge">{tag}</span>
+				{/each}
+			</span>
+		{/if}
 			</div>
 			<div class="track-meta">
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
@@ -489,6 +496,23 @@
 		height: 14px;
 		opacity: 0.7;
 		flex-shrink: 0;
+	}
+
+	.tags-line {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+		margin-top: 0.15rem;
+	}
+
+	.tag-badge {
+		display: inline-block;
+		padding: 0.1rem 0.4rem;
+		background: rgba(138, 179, 255, 0.15);
+		color: #8ab3ff;
+		border-radius: 3px;
+		font-size: 0.75rem;
+		font-weight: 500;
 	}
 
 	.track-meta {

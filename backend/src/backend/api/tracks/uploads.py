@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -31,13 +32,14 @@ from backend._internal.image import ImageFormat
 from backend._internal.jobs import job_service
 from backend._internal.moderation import scan_track_for_copyright
 from backend.config import settings
-from backend.models import Artist, Track
+from backend.models import Artist, Tag, Track, TrackTag
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
 from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.rate_limit import limiter
+from backend.utilities.tags import normalize_tags
 
 from .router import router
 from .services import get_or_create_album
@@ -53,6 +55,7 @@ async def _process_upload_background(
     artist_did: str,
     album: str | None,
     features: str | None,
+    tags: str | None,
     auth_session: AuthSession,
     image_path: str | None = None,
     image_filename: str | None = None,
@@ -334,6 +337,45 @@ async def _process_upload_background(
                     await db.commit()
                     await db.refresh(track)
 
+                    # handle tags if provided
+                    if tags:
+                        try:
+                            tag_names: list[str] = json.loads(tags)
+                            if isinstance(tag_names, list):
+                                # normalize and deduplicate tag names
+                                tag_names_set = normalize_tags(
+                                    [n for n in tag_names if isinstance(n, str)]
+                                )
+
+                                for tag_name in tag_names_set:
+                                    # try to find existing tag
+                                    tag_result = await db.execute(
+                                        select(Tag).where(Tag.name == tag_name)
+                                    )
+                                    tag = tag_result.scalar_one_or_none()
+
+                                    if not tag:
+                                        # create new tag
+                                        tag = Tag(
+                                            name=tag_name,
+                                            created_by_did=artist_did,
+                                            created_at=datetime.now(UTC),
+                                        )
+                                        db.add(tag)
+                                        await db.flush()
+
+                                    # create track_tag association
+                                    track_tag = TrackTag(
+                                        track_id=track.id, tag_id=tag.id
+                                    )
+                                    db.add(track_tag)
+
+                                await db.commit()
+                        except json.JSONDecodeError:
+                            pass  # ignore malformed tags
+                        except Exception as e:
+                            logger.warning(f"failed to add tags to track: {e}")
+
                     # send notification about new track
                     from backend._internal.notifications import notification_service
 
@@ -404,6 +446,7 @@ async def upload_track(
     auth_session: AuthSession = Depends(require_artist_profile),
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,
+    tags: Annotated[str | None, Form(description="JSON array of tag names")] = None,
     file: UploadFile = File(...),
     image: UploadFile | None = File(None),
 ) -> dict:
@@ -502,6 +545,7 @@ async def upload_track(
             auth_session.did,
             album,
             features,
+            tags,
             auth_session,
             image_path,
             image_filename,

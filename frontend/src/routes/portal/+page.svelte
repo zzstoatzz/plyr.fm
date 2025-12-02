@@ -7,6 +7,7 @@
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
+	import TagInput from '$lib/components/TagInput.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary } from '$lib/types';
 	import { API_URL, getServerConfig } from '$lib/config';
 	import { uploader } from '$lib/uploader.svelte';
@@ -37,6 +38,7 @@
 	let file = $state<File | null>(null);
 	let imageFile = $state<File | null>(null);
 	let featuredArtists = $state<FeaturedArtist[]>([]);
+	let uploadTags = $state<string[]>([]);
 	let hasUnresolvedFeaturesInput = $state(false);
 
 	// track editing state
@@ -44,6 +46,7 @@
 	let editTitle = $state('');
 	let editAlbum = $state('');
 	let editFeaturedArtists = $state<FeaturedArtist[]>([]);
+	let editTags = $state<string[]>([]);
 	let editImageFile = $state<File | null>(null);
 	let hasUnresolvedEditFeaturesInput = $state(false);
 
@@ -333,6 +336,7 @@
 		const uploadAlbum = albumTitle;
 		const uploadFeatures = [...featuredArtists];
 		const uploadImage = imageFile;
+		const tagsToUpload = [...uploadTags];
 
 		const clearForm = () => {
 			title = '';
@@ -340,6 +344,7 @@
 			file = null;
 			imageFile = null;
 			featuredArtists = [];
+			uploadTags = [];
 
 			const fileInput = document.getElementById('file-input') as HTMLInputElement;
 			if (fileInput) {
@@ -357,6 +362,7 @@
 			uploadAlbum,
 			uploadFeatures,
 			uploadImage,
+			tagsToUpload,
 			async () => {
 				await loadMyTracks();
 				await loadMyAlbums();
@@ -398,6 +404,7 @@
 		editTitle = track.title;
 		editAlbum = track.album?.title || '';
 		editFeaturedArtists = track.features || [];
+		editTags = track.tags || [];
 	}
 
 	function cancelEdit() {
@@ -405,8 +412,10 @@
 		editTitle = '';
 		editAlbum = '';
 		editFeaturedArtists = [];
+		editTags = [];
 		editImageFile = null;
 	}
+
 
 	async function saveTrackEdit(trackId: number) {
 		const formData = new FormData();
@@ -419,6 +428,8 @@
 			// send empty array to clear features
 			formData.append('features', JSON.stringify([]));
 		}
+		// always send tags (empty array clears them)
+		formData.append('tags', JSON.stringify(editTags));
 		if (editImageFile) {
 			formData.append('image', editImageFile);
 		}
@@ -845,6 +856,16 @@
 				</div>
 
 				<div class="form-group">
+					<label for="upload-tags">tags (optional)</label>
+					<TagInput
+						tags={uploadTags}
+						onAdd={(tag) => { uploadTags = [...uploadTags, tag]; }}
+						onRemove={(tag) => { uploadTags = uploadTags.filter(t => t !== tag); }}
+						placeholder="type to search tags..."
+					/>
+				</div>
+
+				<div class="form-group">
 					<label for="file-input">audio file</label>
 					<input
 						id="file-input"
@@ -919,6 +940,15 @@
 												bind:hasUnresolvedInput={hasUnresolvedEditFeaturesInput}
 												onAdd={(artist) => { editFeaturedArtists = [...editFeaturedArtists, artist]; }}
 												onRemove={(did) => { editFeaturedArtists = editFeaturedArtists.filter(a => a.did !== did); }}
+											/>
+										</div>
+										<div class="edit-field-group">
+											<label for="edit-tags" class="edit-label">tags (optional)</label>
+											<TagInput
+												tags={editTags}
+												onAdd={(tag) => { editTags = [...editTags, tag]; }}
+												onRemove={(tag) => { editTags = editTags.filter(t => t !== tag); }}
+												placeholder="type to search tags..."
 											/>
 										</div>
 										<div class="edit-field-group">
@@ -1022,6 +1052,13 @@
 								<a href="/u/{track.artist_handle}/album/{track.album.slug}" class="album-link">
 									{track.album.title}
 								</a>
+							</div>
+						{/if}
+						{#if track.tags && track.tags.length > 0}
+							<div class="meta-tags">
+								{#each track.tags as tag}
+									<span class="meta-tag">{tag}</span>
+								{/each}
 							</div>
 						{/if}
 					</div>
@@ -1818,6 +1855,22 @@
 		height: 14px;
 		opacity: 0.7;
 		flex-shrink: 0;
+	}
+
+	.meta-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+	}
+
+	.meta-tag {
+		display: inline-block;
+		padding: 0.1rem 0.4rem;
+		background: rgba(138, 179, 255, 0.15);
+		color: #8ab3ff;
+		border-radius: 3px;
+		font-size: 0.8rem;
+		font-weight: 500;
 	}
 
 	.track-date {

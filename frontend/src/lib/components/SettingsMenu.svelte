@@ -2,10 +2,13 @@
 	import { onMount } from 'svelte';
 	import { API_URL } from '$lib/config';
 	import { queue } from '$lib/queue.svelte';
+	import { tracksCache } from '$lib/tracks.svelte';
 
 	let showSettings = $state(false);
 	let currentColor = $state('#6a9fff');
 	let autoAdvance = $state(true);
+	let hiddenTags = $state<string[]>(['ai']);
+	let newHiddenTag = $state('');
 
 	const presetColors = [
 		{ name: 'blue', value: '#6a9fff' },
@@ -44,6 +47,10 @@
 			autoAdvance = data.auto_advance ?? true;
 			queue.setAutoAdvance(autoAdvance);
 			localStorage.setItem('autoAdvance', autoAdvance ? '1' : '0');
+
+			if (data.hidden_tags) {
+				hiddenTags = data.hidden_tags;
+			}
 		} catch (error) {
 			console.error('failed to fetch preferences:', error);
 		}
@@ -101,6 +108,31 @@
 		localStorage.setItem('autoAdvance', autoAdvance ? '1' : '0');
 		savePreferences({ auto_advance: autoAdvance });
 	}
+
+	async function addHiddenTag(tag: string) {
+		const normalized = tag.trim().toLowerCase();
+		if (normalized && !hiddenTags.includes(normalized)) {
+			hiddenTags = [...hiddenTags, normalized];
+			await savePreferences({ hidden_tags: hiddenTags });
+			tracksCache.invalidate();
+			tracksCache.fetch(true);
+		}
+		newHiddenTag = '';
+	}
+
+	async function removeHiddenTag(tag: string) {
+		hiddenTags = hiddenTags.filter((t) => t !== tag);
+		await savePreferences({ hidden_tags: hiddenTags });
+		tracksCache.invalidate();
+		tracksCache.fetch(true);
+	}
+
+	function handleHiddenTagKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' || e.key === ',') {
+			e.preventDefault();
+			addHiddenTag(newHiddenTag);
+		}
+	}
 </script>
 
 <div class="settings-menu">
@@ -146,6 +178,31 @@
 					<span class="toggle-text">auto-play next track</span>
 				</label>
 				<p class="toggle-hint">when a track ends, start the next item in your queue</p>
+			</section>
+
+			<section class="settings-section">
+				<h3>hidden tags</h3>
+				<p class="toggle-hint">tracks with these tags won't appear in latest tracks</p>
+				<div class="hidden-tags-container">
+					{#each hiddenTags as tag}
+						<span class="hidden-tag-chip">
+							{tag}
+							<button
+								type="button"
+								class="hidden-tag-remove"
+								onclick={() => removeHiddenTag(tag)}
+								title="remove {tag}"
+							>×</button>
+						</span>
+					{/each}
+					<input
+						type="text"
+						bind:value={newHiddenTag}
+						onkeydown={handleHiddenTagKeydown}
+						placeholder={hiddenTags.length === 0 ? 'add tag...' : ''}
+						class="hidden-tag-input"
+					/>
+				</div>
 			</section>
 		</div>
 	{/if}
@@ -342,5 +399,66 @@
 		color: var(--text-tertiary);
 		font-size: 0.8rem;
 		line-height: 1.3;
+	}
+
+	.hidden-tags-container {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.5rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: 4px;
+		min-height: 36px;
+	}
+
+	.hidden-tag-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.25rem 0.5rem;
+		background: #1a2330;
+		border: 1px solid #2a3a4a;
+		color: #8ab3ff;
+		border-radius: 20px;
+		font-size: 0.8rem;
+		font-weight: 500;
+	}
+
+	.hidden-tag-remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 14px;
+		height: 14px;
+		padding: 0;
+		background: none;
+		border: none;
+		color: #888;
+		cursor: pointer;
+		font-size: 1rem;
+		line-height: 1;
+		transition: color 0.2s;
+	}
+
+	.hidden-tag-remove:hover {
+		color: #ff6b6b;
+	}
+
+	.hidden-tag-input {
+		flex: 1;
+		min-width: 60px;
+		padding: 0;
+		background: transparent;
+		border: none;
+		color: var(--text-primary);
+		font-size: 0.85rem;
+		font-family: inherit;
+		outline: none;
+	}
+
+	.hidden-tag-input::placeholder {
+		color: var(--text-tertiary);
 	}
 </style>

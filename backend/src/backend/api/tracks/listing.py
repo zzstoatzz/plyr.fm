@@ -13,13 +13,23 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import require_auth
 from backend._internal.auth import get_session
-from backend.models import Artist, Track, TrackLike, get_db
+from backend.models import (
+    Artist,
+    Tag,
+    Track,
+    TrackLike,
+    TrackTag,
+    UserPreferences,
+    get_db,
+)
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
     get_comment_counts,
     get_copyright_info,
     get_like_counts,
+    get_track_tags,
 )
+from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 from .router import router
 
@@ -36,6 +46,9 @@ async def list_tracks(
 
     # get authenticated user if cookie or auth header present
     liked_track_ids: set[int] | None = None
+    hidden_tags: list[str] = list(DEFAULT_HIDDEN_TAGS)
+    auth_session = None
+
     session_id = session_id_cookie or request.headers.get("authorization", "").replace(
         "Bearer ", ""
     )
@@ -44,6 +57,14 @@ async def list_tracks(
             select(TrackLike.track_id).where(TrackLike.user_did == auth_session.did)
         )
         liked_track_ids = set(liked_result.scalars().all())
+
+        # get user's hidden tags preference
+        prefs_result = await db.execute(
+            select(UserPreferences).where(UserPreferences.did == auth_session.did)
+        )
+        prefs = prefs_result.scalar_one_or_none()
+        if prefs and prefs.hidden_tags is not None:
+            hidden_tags = prefs.hidden_tags
 
     stmt = (
         select(Track)
@@ -55,16 +76,29 @@ async def list_tracks(
     if artist_did:
         stmt = stmt.where(Track.artist_did == artist_did)
 
+    # filter out tracks with hidden tags (only for discovery feed, not artist pages)
+    if hidden_tags and not artist_did:
+        # subquery: track IDs that have any of the hidden tags
+        hidden_track_ids_subq = (
+            select(TrackTag.track_id)
+            .join(Tag, TrackTag.tag_id == Tag.id)
+            .where(Tag.name.in_(hidden_tags))
+            .distinct()
+            .scalar_subquery()
+        )
+        stmt = stmt.where(Track.id.not_in(hidden_track_ids_subq))
+
     stmt = stmt.order_by(Track.created_at.desc())
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    # batch fetch like, comment counts and copyright info for all tracks
+    # batch fetch like, comment counts, copyright info, and tags for all tracks
     track_ids = [track.id for track in tracks]
-    like_counts, comment_counts, copyright_info = await asyncio.gather(
+    like_counts, comment_counts, copyright_info, track_tags = await asyncio.gather(
         get_like_counts(db, track_ids),
         get_comment_counts(db, track_ids),
         get_copyright_info(db, track_ids),
+        get_track_tags(db, track_ids),
     )
 
     # use cached PDS URLs with fallback on failure
@@ -163,6 +197,7 @@ async def list_tracks(
                 like_counts,
                 comment_counts,
                 copyright_info,
+                track_tags,
             )
             for track in tracks
         ]
@@ -187,14 +222,19 @@ async def list_my_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    # batch fetch copyright info
+    # batch fetch copyright info and tags
     track_ids = [track.id for track in tracks]
-    copyright_info = await get_copyright_info(db, track_ids)
+    copyright_info, track_tags = await asyncio.gather(
+        get_copyright_info(db, track_ids),
+        get_track_tags(db, track_ids),
+    )
 
     # fetch all track responses concurrently
     track_responses = await asyncio.gather(
         *[
-            TrackResponse.from_track(track, copyright_info=copyright_info)
+            TrackResponse.from_track(
+                track, copyright_info=copyright_info, track_tags=track_tags
+            )
             for track in tracks
         ]
     )
@@ -231,14 +271,19 @@ async def list_broken_tracks(
     result = await db.execute(stmt)
     tracks = result.scalars().all()
 
-    # batch fetch copyright info
+    # batch fetch copyright info and tags
     track_ids = [track.id for track in tracks]
-    copyright_info = await get_copyright_info(db, track_ids)
+    copyright_info, track_tags = await asyncio.gather(
+        get_copyright_info(db, track_ids),
+        get_track_tags(db, track_ids),
+    )
 
     # fetch all track responses concurrently
     track_responses = await asyncio.gather(
         *[
-            TrackResponse.from_track(track, copyright_info=copyright_info)
+            TrackResponse.from_track(
+                track, copyright_info=copyright_info, track_tags=track_tags
+            )
             for track in tracks
         ]
     )
