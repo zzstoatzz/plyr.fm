@@ -73,23 +73,25 @@
 
 <main>
 		<section class="tracks">
-		<h2>
-			<button
-				type="button"
-				class="clickable-heading"
-				onclick={refreshTracks}
-				onkeydown={(event) => {
-					if (event.key === 'Enter' || event.key === ' ') {
-						event.preventDefault();
-						refreshTracks();
-					}
-				}}
-				title="click to refresh"
-			>
-				latest tracks
-			</button>
-		</h2>
-		<HiddenTagsFilter />
+		<div class="section-header">
+			<h2>
+				<button
+					type="button"
+					class="clickable-heading"
+					onclick={refreshTracks}
+					onkeydown={(event) => {
+						if (event.key === 'Enter' || event.key === ' ') {
+							event.preventDefault();
+							refreshTracks();
+						}
+					}}
+					title="click to refresh"
+				>
+					latest tracks
+				</button>
+			</h2>
+			<HiddenTagsFilter />
+		</div>
 		{#if showLoading}
 			<div class="loading-container">
 				<WaveLoading size="lg" message="loading tracks..." />
@@ -125,9 +127,17 @@
 		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
 	}
 
+	.section-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 1.5rem;
+		flex-wrap: wrap;
+	}
+
 	.tracks h2 {
 		font-size: var(--text-page-heading);
-		margin-bottom: 1.5rem;
+		margin: 0;
 		color: var(--text-primary);
 	}
 

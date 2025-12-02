@@ -76,7 +76,6 @@ plyr.fm should become:
 - increased `pool_size` from 5 → 10 (handle more concurrent cold start requests)
 - increased `max_overflow` from 0 → 5 (allow burst to 15 connections)
 - increased `connection_timeout` from 3s → 10s (wait for Neon wake-up)
-- disabled scale to zero on production compute (`suspend_timeout_seconds: -1`) to eliminate cold starts entirely
 
 **related**: this is a recurrence of the Nov 17 incident. that fix addressed the queue listener's asyncpg connection but not the SQLAlchemy pool connections.
 

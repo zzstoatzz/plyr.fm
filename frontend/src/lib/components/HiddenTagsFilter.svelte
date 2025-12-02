@@ -128,7 +128,6 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex-wrap: wrap;
-		padding: 0 0 0.5rem;
 		font-size: 0.8rem;
 	}
 

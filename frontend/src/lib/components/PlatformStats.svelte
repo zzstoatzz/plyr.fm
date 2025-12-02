@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { API_URL } from '$lib/config';
+	import { statsCache } from '$lib/stats.svelte';
 
 	interface Props {
 		variant?: 'header' | 'menu';
@@ -8,34 +8,16 @@
 
 	let { variant = 'header' }: Props = $props();
 
-	interface Stats {
-		total_plays: number;
-		total_tracks: number;
-		total_artists: number;
-	}
-
-	let stats = $state<Stats | null>(null);
-	let loading = $state(true);
+	// derive from cache
+	let stats = $derived(statsCache.stats);
+	let loading = $derived(statsCache.loading && !stats);
 
 	function pluralize(count: number, singular: string, plural: string): string {
 		return count === 1 ? singular : plural;
 	}
 
-	async function loadStats() {
-		try {
-			const response = await fetch(`${API_URL}/stats`);
-			if (response.ok) {
-				stats = await response.json();
-			}
-		} catch (e) {
-			console.error('failed to load platform stats:', e);
-		} finally {
-			loading = false;
-		}
-	}
-
 	onMount(() => {
-		loadStats();
+		statsCache.fetch();
 	});
 </script>
 
