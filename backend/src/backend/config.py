@@ -144,9 +144,9 @@ class DatabaseSettings(AppSettingsSection):
         description="Timeout in seconds for SQL statement execution. Prevents runaway queries from holding connections indefinitely.",
     )
     connection_timeout: float = Field(
-        default=3.0,
+        default=10.0,
         validation_alias="DATABASE_CONNECTION_TIMEOUT",
-        description="Timeout in seconds for establishing database connections. Fails fast when database is slow or unresponsive.",
+        description="Timeout in seconds for establishing database connections. Set higher than Neon cold start latency (~5-10s) to allow wake-up, but low enough to fail fast on true outages.",
     )
     queue_connect_timeout: float = Field(
         default=15.0,
@@ -155,13 +155,16 @@ class DatabaseSettings(AppSettingsSection):
     )
 
     # connection pool settings
+    # sized to handle Neon cold start scenarios where multiple requests arrive simultaneously
+    # after idle period. with pool_size=10 + max_overflow=5, we can handle 15 concurrent
+    # requests waiting for Neon to wake up without exhausting the pool.
     pool_size: int = Field(
-        default=5,
+        default=10,
         validation_alias="DATABASE_POOL_SIZE",
         description="Number of database connections to keep in the pool at all times.",
     )
     pool_max_overflow: int = Field(
-        default=0,
+        default=5,
         validation_alias="DATABASE_MAX_OVERFLOW",
         description="Maximum connections to create beyond pool_size when pool is exhausted. Total max connections = pool_size + pool_max_overflow.",
     )

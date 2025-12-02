@@ -47,6 +47,27 @@ plyr.fm should become:
 
 ### December 2025
 
+#### connection pool resilience for Neon cold starts (Dec 2)
+
+**incident**: ~5 minute API outage (01:55-02:00 UTC) - all requests returned 500 errors
+
+**root cause**: Neon serverless cold start after 5 minutes of idle traffic
+- queue listener heartbeat detected dead connection, began reconnection
+- first 5 user requests each held a connection waiting for Neon to wake up (3-5 min each)
+- with pool_size=5 and max_overflow=0, pool exhausted immediately
+- all subsequent requests got `QueuePool limit of size 5 overflow 0 reached`
+
+**fix**:
+- increased `pool_size` from 5 → 10 (handle more concurrent cold start requests)
+- increased `max_overflow` from 0 → 5 (allow burst to 15 connections)
+- increased `connection_timeout` from 3s → 10s (wait for Neon wake-up)
+
+**related**: this is a recurrence of the Nov 17 incident. that fix addressed the queue listener's asyncpg connection but not the SQLAlchemy pool connections.
+
+**documentation**: updated `docs/backend/database/connection-pooling.md` with Neon serverless considerations and incident history.
+
+---
+
 #### now-playing API (PR #416, Dec 1)
 
 **motivation**: expose what users are currently listening to via public API
@@ -907,4 +928,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-01.
+this is a living document. last updated 2025-12-02.
