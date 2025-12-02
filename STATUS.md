@@ -47,6 +47,29 @@ plyr.fm should become:
 
 ### December 2025
 
+#### tag filtering system and SDK tag support (Dec 2)
+
+**tag filtering** (PRs #431-434):
+- users can now hide tracks by tag via eye icon filter in discovery feed
+- preferences centralized in root layout (fetched once, shared across app)
+- `HiddenTagsFilter` component with expandable UI for managing hidden tags
+- default hidden tags: `["ai"]` for new users
+- tag detail pages at `/tag/[name]` with all tracks for that tag
+- clickable tag badges on tracks navigate to tag pages
+
+**navigation fix** (PR #435):
+- fixed tag links interrupting audio playback
+- root cause: `stopPropagation()` on links breaks SvelteKit's client-side router
+- documented pattern in `docs/frontend/navigation.md` to prevent recurrence
+
+**SDK tag support** (plyr-python-client v0.0.1-alpha.10):
+- added `tags: set[str]` parameter to `upload()` in SDK
+- added `-t/--tag` CLI option (can be used multiple times)
+- updated MCP `upload_guide` prompt with tag examples
+- status maintenance workflow now tags AI-generated podcasts with `ai` (#436)
+
+---
+
 #### queue touch reordering and header stats fix (Dec 2)
 
 **queue mobile UX** (PR #428):
