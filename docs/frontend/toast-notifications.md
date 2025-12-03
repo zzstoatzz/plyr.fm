@@ -125,11 +125,26 @@ uses CSS custom properties from the global theme:
 - **type-safe**: full TypeScript support with exported types
 - **consistent patterns**: matches other Svelte 5 rune-based state managers
 
+### action links
+
+toasts can include an optional action link:
+
+```typescript
+export interface ToastAction {
+  label: string;
+  href: string;
+}
+
+// usage
+toast.success('track uploaded!', 3000, { label: 'view track', href: `/track/${trackId}` });
+```
+
+action links render as styled anchor tags. internal links stay in the same tab; external links open in new tabs.
+
 ## future enhancements
 
 potential additions (not currently implemented):
 - pause on hover to prevent auto-dismiss
 - manual dismiss buttons
 - progress bars for visual timing
-- action buttons (e.g., "undo" for reversible operations)
 - toast queue limiting to prevent spam

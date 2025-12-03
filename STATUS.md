@@ -47,6 +47,33 @@ plyr.fm should become:
 
 ### December 2025
 
+#### light/dark theme and mobile UX overhaul (Dec 2-3)
+
+**theme system** (PR #441):
+- replaced hardcoded colors across 35 files with CSS custom properties
+- semantic tokens: `--bg-primary`, `--text-secondary`, `--accent`, etc.
+- theme switcher in settings: dark / light / system (follows OS preference)
+- removed zen mode feature (superseded by proper theme support)
+
+**mobile UX improvements** (PR #443):
+- new `ProfileMenu` component — collapses profile, upload, settings, logout into touch-optimized menu (44px tap targets)
+- dedicated `/upload` page — extracted from portal for cleaner mobile flow
+- portal overhaul — tighter forms, track detail links under artwork, fixed icon alignment
+- standardized section headers across home and liked tracks pages
+
+**player scroll timing fix** (PR #445):
+- reduced title scroll cycle from 10s → 8s, artist/album from 15s → 10s
+- eliminated 1.5s invisible pause at end of scroll animation
+- fixed duplicate upload toast (was firing twice on success)
+- upload success toast now includes "view track" link
+
+**CI optimization** (PR #444):
+- pre-commit hooks now skip based on changed paths
+- result: ~10s for most PRs instead of ~1m20s
+- only installs tooling (uv, bun) needed for changed directories
+
+---
+
 #### tag filtering system and SDK tag support (Dec 2)
 
 **tag filtering** (PRs #431-434):
@@ -230,6 +257,7 @@ See `.status_history/2025-11.md` for detailed November development history inclu
 - no AIFF/AIF transcoding support (#153)
 
 ### new features
+- issue #440: unified search across tracks, artists, albums, and tags
 - issue #146: content-addressable storage (hash-based deduplication)
 - issue #155: add track metadata (genres, tags, descriptions)
 - issue #334: add 'share to bluesky' option for tracks
@@ -425,4 +453,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-02.
+this is a living document. last updated 2025-12-03.
