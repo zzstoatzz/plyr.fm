@@ -64,6 +64,16 @@ plyr.fm should become:
 
 **documentation**: `docs/frontend/search.md`, `docs/frontend/keyboard-shortcuts.md`
 
+**follow-up polish** (PRs #449-463):
+- mobile search icon in header (PRs #455-456)
+- theme-aware modal styling with styled scrollbar (#450)
+- ILIKE fallback for substring matches when trigram fails (#452)
+- tag collapse with +N button (#453)
+- input focus fix: removed `visibility: hidden` so focus works on open (#457, #463)
+- album artwork fallback in player when track has no image (#458)
+- rate limiting exemption for now-playing endpoints (#460)
+- `--no-dev` flag for release command to prevent dev dep installation (#461)
+
 ---
 
 #### light/dark theme and mobile UX overhaul (Dec 2-3)
