@@ -217,7 +217,7 @@
 	.search-backdrop {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.6);
+		background: color-mix(in srgb, var(--bg-primary) 60%, transparent);
 		backdrop-filter: blur(4px);
 		-webkit-backdrop-filter: blur(4px);
 		z-index: 9999;
@@ -230,14 +230,14 @@
 	.search-modal {
 		width: 100%;
 		max-width: 560px;
-		background: rgba(18, 18, 20, 0.85);
+		background: color-mix(in srgb, var(--bg-secondary) 95%, transparent);
 		backdrop-filter: blur(20px) saturate(180%);
 		-webkit-backdrop-filter: blur(20px) saturate(180%);
-		border: 1px solid rgba(255, 255, 255, 0.08);
+		border: 1px solid var(--border-subtle);
 		border-radius: 16px;
 		box-shadow:
-			0 24px 80px rgba(0, 0, 0, 0.5),
-			0 0 1px rgba(255, 255, 255, 0.1) inset;
+			0 24px 80px color-mix(in srgb, var(--bg-primary) 50%, transparent),
+			0 0 1px var(--border-subtle) inset;
 		overflow: hidden;
 		margin: 0 1rem;
 	}
@@ -247,8 +247,8 @@
 		align-items: center;
 		gap: 0.75rem;
 		padding: 1rem 1.25rem;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-		background: rgba(255, 255, 255, 0.02);
+		border-bottom: 1px solid var(--border-subtle);
+		background: color-mix(in srgb, var(--bg-tertiary) 50%, transparent);
 	}
 
 	.search-icon {
@@ -273,8 +273,8 @@
 	.search-shortcut {
 		font-size: 0.7rem;
 		padding: 0.25rem 0.5rem;
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
 		border-radius: 5px;
 		color: var(--text-muted);
 		font-family: inherit;
@@ -299,6 +299,26 @@
 		max-height: 400px;
 		overflow-y: auto;
 		padding: 0.5rem;
+		scrollbar-width: thin;
+		scrollbar-color: var(--border-default) transparent;
+	}
+
+	.search-results::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.search-results::-webkit-scrollbar-track {
+		background: transparent;
+		border-radius: 4px;
+	}
+
+	.search-results::-webkit-scrollbar-thumb {
+		background: var(--border-default);
+		border-radius: 4px;
+	}
+
+	.search-results::-webkit-scrollbar-thumb:hover {
+		background: var(--border-emphasis);
 	}
 
 	.search-result {
@@ -319,12 +339,12 @@
 
 	.search-result:hover,
 	.search-result.selected {
-		background: rgba(255, 255, 255, 0.06);
+		background: var(--bg-hover);
 	}
 
 	.search-result.selected {
-		background: rgba(255, 255, 255, 0.08);
-		box-shadow: 0 0 0 1px rgba(var(--accent-rgb, 255, 107, 107), 0.3) inset;
+		background: var(--bg-hover);
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent) inset;
 	}
 
 	.result-icon {
@@ -333,7 +353,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: rgba(255, 255, 255, 0.05);
+		background: var(--bg-tertiary);
 		border-radius: 8px;
 		font-size: 0.9rem;
 		flex-shrink: 0;
@@ -407,7 +427,7 @@
 		letter-spacing: 0.03em;
 		color: var(--text-muted);
 		padding: 0.2rem 0.45rem;
-		background: rgba(255, 255, 255, 0.04);
+		background: var(--bg-tertiary);
 		border-radius: 4px;
 		flex-shrink: 0;
 	}
@@ -447,8 +467,8 @@
 	.hint-shortcuts kbd {
 		font-size: 0.65rem;
 		padding: 0.15rem 0.35rem;
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
 		border-radius: 4px;
 		font-family: inherit;
 	}
