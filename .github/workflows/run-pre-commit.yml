@@ -16,16 +16,32 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+            rust:
+              - 'moderation/**'
+              - 'transcoder/**'
+
       - name: install uv
+        if: steps.filter.outputs.backend == 'true'
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: "backend/uv.lock"
 
       - name: install bun
+        if: steps.filter.outputs.frontend == 'true'
         uses: oven-sh/setup-bun@v2
 
       - name: cache frontend dependencies
+        if: steps.filter.outputs.frontend == 'true'
         uses: actions/cache@v4
         with:
           path: frontend/node_modules
@@ -33,16 +49,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bun-
 
-      - name: install dependencies
+      - name: install backend dependencies
+        if: steps.filter.outputs.backend == 'true'
         run: cd backend && uv sync
 
       - name: install frontend dependencies
+        if: steps.filter.outputs.frontend == 'true'
         run: cd frontend && bun install
 
       - name: create frontend env file
+        if: steps.filter.outputs.frontend == 'true'
         run: echo "PUBLIC_API_URL=http://localhost:8001" > frontend/.env
 
       - name: check lockfile is up to date
+        if: steps.filter.outputs.backend == 'true'
         run: |
           cd backend
           if ! uv lock --check; then
@@ -52,11 +72,29 @@ jobs:
           fi
           echo "✅ lockfile is up to date"
 
+      - name: build skip list
+        id: skip
+        run: |
+          SKIP_LIST=""
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            SKIP_LIST="no-commit-to-branch"
+          fi
+          if [[ "${{ steps.filter.outputs.backend }}" != "true" ]]; then
+            SKIP_LIST="${SKIP_LIST:+$SKIP_LIST,}type-check"
+          fi
+          if [[ "${{ steps.filter.outputs.frontend }}" != "true" ]]; then
+            SKIP_LIST="${SKIP_LIST:+$SKIP_LIST,}svelte-check,eslint"
+          fi
+          if [[ "${{ steps.filter.outputs.rust }}" != "true" ]]; then
+            SKIP_LIST="${SKIP_LIST:+$SKIP_LIST,}cargo-check-moderation,cargo-check-transcoder"
+          fi
+          echo "list=$SKIP_LIST" >> $GITHUB_OUTPUT
+
       - name: run pre-commit
         uses: j178/prek-action@v1
         env:
-          SKIP: ${{ github.ref == 'refs/heads/main' && 'no-commit-to-branch' || '' }}
+          SKIP: ${{ steps.skip.outputs.list }}
 
       - name: prune uv cache
-        if: always()
+        if: always() && steps.filter.outputs.backend == 'true'
         run: uv cache prune --ci
