@@ -6,6 +6,7 @@
 	import ProfileMenu from './ProfileMenu.svelte';
 	import PlatformStats from './PlatformStats.svelte';
 	import SearchTrigger from './SearchTrigger.svelte';
+	import { search } from '$lib/search.svelte';
 	import { APP_NAME, APP_TAGLINE } from '$lib/branding';
 
 	interface Props {
@@ -76,6 +77,12 @@
 
 		<!-- Mobile: navigation icons with flex spacer -->
 		<div class="mobile-center mobile-only">
+			<button class="nav-icon" onclick={() => search.open()} title="search (⌘K)">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="11" cy="11" r="8"></circle>
+					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+				</svg>
+			</button>
 			{#if $page.url.pathname !== '/'}
 				<a href="/" class="nav-icon" title="go to feed">
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -188,9 +195,8 @@
 
 	.mobile-center {
 		flex: 1;
-		justify-content: center;
+		justify-content: space-evenly;
 		align-items: center;
-		gap: 0.25rem;
 	}
 
 	.nav-icon {
@@ -200,8 +206,12 @@
 		width: 44px;
 		height: 44px;
 		border-radius: 10px;
+		background: transparent;
+		border: none;
 		color: var(--text-secondary);
 		text-decoration: none;
+		cursor: pointer;
+		font-family: inherit;
 		transition: all 0.15s;
 		-webkit-tap-highlight-color: transparent;
 	}
