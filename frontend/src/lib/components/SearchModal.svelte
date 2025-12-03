@@ -260,16 +260,14 @@
 		align-items: flex-start;
 		justify-content: center;
 		padding-top: 15vh;
-		/* hidden by default */
+		/* hidden by default - use opacity only (not visibility) so input remains focusable for mobile keyboard */
 		opacity: 0;
-		visibility: hidden;
 		pointer-events: none;
-		transition: opacity 0.15s, visibility 0.15s;
+		transition: opacity 0.15s;
 	}
 
 	.search-backdrop.open {
 		opacity: 1;
-		visibility: visible;
 		pointer-events: auto;
 	}
 
