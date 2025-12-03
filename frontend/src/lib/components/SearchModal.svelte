@@ -6,6 +6,19 @@
 	import { onMount, onDestroy } from 'svelte';
 
 	let inputRef: HTMLInputElement | null = $state(null);
+	let isMobile = $state(false);
+
+	// detect mobile on mount
+	$effect(() => {
+		if (browser) {
+			const checkMobile = () => window.matchMedia('(max-width: 768px)').matches;
+			isMobile = checkMobile();
+			const mediaQuery = window.matchMedia('(max-width: 768px)');
+			const handler = (e: MediaQueryListEvent) => (isMobile = e.matches);
+			mediaQuery.addEventListener('change', handler);
+			return () => mediaQuery.removeEventListener('change', handler);
+		}
+	});
 
 	// focus input when modal opens
 	$effect(() => {
@@ -141,7 +154,7 @@
 				/>
 				{#if search.loading}
 					<div class="search-spinner"></div>
-				{:else}
+				{:else if !isMobile}
 					<kbd class="search-shortcut">{getShortcutHint()}</kbd>
 				{/if}
 			</div>
@@ -223,11 +236,13 @@
 			{:else if search.query.length === 0}
 				<div class="search-hints">
 					<p>start typing to search across all content</p>
-					<div class="hint-shortcuts">
-						<span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-						<span><kbd>↵</kbd> select</span>
-						<span><kbd>esc</kbd> close</span>
-					</div>
+					{#if !isMobile}
+						<div class="hint-shortcuts">
+							<span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+							<span><kbd>↵</kbd> select</span>
+							<span><kbd>esc</kbd> close</span>
+						</div>
+					{/if}
 				</div>
 			{/if}
 
@@ -522,6 +537,10 @@
 
 		.search-input {
 			font-size: 16px; /* prevents iOS zoom */
+		}
+
+		.search-input::placeholder {
+			font-size: 0.85rem;
 		}
 
 		.search-results {
