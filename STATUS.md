@@ -47,6 +47,25 @@ plyr.fm should become:
 
 ### December 2025
 
+#### unified search (PR #447, Dec 3)
+
+**what shipped**:
+- `Cmd+K` (mac) / `Ctrl+K` (windows/linux) opens search modal from anywhere
+- fuzzy matching across tracks, artists, albums, and tags using PostgreSQL `pg_trgm`
+- results grouped by type with relevance scores (0.0-1.0)
+- keyboard navigation (arrow keys, enter, esc)
+- artwork/avatars displayed with lazy loading and fallback icons
+- glassmorphism modal styling with backdrop blur
+- debounced input (150ms) with client-side validation
+
+**database**:
+- enabled `pg_trgm` extension for trigram-based similarity search
+- GIN indexes on `tracks.title`, `artists.handle`, `artists.display_name`, `albums.title`, `tags.name`
+
+**documentation**: `docs/frontend/search.md`, `docs/frontend/keyboard-shortcuts.md`
+
+---
+
 #### light/dark theme and mobile UX overhaul (Dec 2-3)
 
 **theme system** (PR #441):
@@ -257,7 +276,6 @@ See `.status_history/2025-11.md` for detailed November development history inclu
 - no AIFF/AIF transcoding support (#153)
 
 ### new features
-- issue #440: unified search across tracks, artists, albums, and tags
 - issue #146: content-addressable storage (hash-based deduplication)
 - issue #155: add track metadata (genres, tags, descriptions)
 - issue #334: add 'share to bluesky' option for tracks
@@ -313,6 +331,7 @@ See `.status_history/2025-11.md` for detailed November development history inclu
 - ✅ share tracks via URL with Open Graph previews
 - ✅ copyright moderation system with admin UI
 - ✅ ATProto labeler for copyright violations
+- ✅ unified search with Cmd/Ctrl+K (fuzzy matching via pg_trgm)
 
 **albums**
 - ✅ album database schema with track relationships
@@ -450,6 +469,8 @@ plyr.fm/
 - [queue design](docs/queue-design.md)
 - [logfire querying](docs/logfire-querying.md)
 - [moderation & labeler](docs/moderation/atproto-labeler.md)
+- [unified search](docs/frontend/search.md)
+- [keyboard shortcuts](docs/frontend/keyboard-shortcuts.md)
 
 ---
 

@@ -8,6 +8,27 @@ shortcuts are handled in the root layout (`frontend/src/routes/+layout.svelte`) 
 
 ## available shortcuts
 
+### Cmd/Ctrl+K - open search
+
+**location**: `frontend/src/routes/+layout.svelte`
+
+opens the unified search modal for searching tracks, artists, albums, and tags.
+
+**behavior**:
+- **Cmd+K** on macOS, **Ctrl+K** on windows/linux
+- works from anywhere, including input fields (uses modifier key)
+- toggles search modal open/closed
+- focuses search input automatically on open
+
+**in-modal navigation**:
+- **arrow up/down** - navigate results
+- **enter** - select highlighted result
+- **esc** - close modal
+
+see [search.md](./search.md) for full documentation.
+
+---
+
 ### Q - toggle queue
 
 **location**: `frontend/src/routes/+layout.svelte`
@@ -77,8 +98,7 @@ potential shortcuts to consider:
 - **space** - play/pause (when not focused on button)
 - **arrow keys** - skip forward/back (context-aware)
 - **shift + arrow** - navigate queue
-- **/** - focus search (common pattern)
-- **esc** - close overlays/modals
+- **/** - focus search (alternative to Cmd/Ctrl+K)
 - **T** - cycle theme (dark/light/system)
 
 ## design principles
