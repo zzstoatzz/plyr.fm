@@ -468,8 +468,8 @@ $effect(() => {
 			</div>
 		</div>
 
-		<!-- comments section - show immediately with skeleton loading -->
-		{#if commentsEnabled !== false}
+		<!-- comments section - only render when we know comments are enabled -->
+		{#if commentsEnabled === true}
 			<section class="comments-section">
 				<h2 class="comments-title">
 					comments
