@@ -5,6 +5,7 @@
 	import LinksMenu from './LinksMenu.svelte';
 	import ProfileMenu from './ProfileMenu.svelte';
 	import PlatformStats from './PlatformStats.svelte';
+	import SearchTrigger from './SearchTrigger.svelte';
 	import { APP_NAME, APP_TAGLINE } from '$lib/branding';
 
 	interface Props {
@@ -17,9 +18,16 @@
 </script>
 
 <header>
-	<!-- Stats positioned on far left, outside main header flow -->
+	<!-- Stats and search positioned on far left, splitting margin into thirds -->
 	<div class="stats-left desktop-only">
 		<PlatformStats variant="header" />
+	</div>
+	<div class="search-left desktop-only">
+		<SearchTrigger />
+	</div>
+	<!-- Logout positioned on far right, mirroring stats -->
+	<div class="logout-right desktop-only">
+		<button onclick={onLogout} class="btn-logout-outer" title="log out">logout</button>
 	</div>
 	<div class="header-content">
 		<div class="left-section">
@@ -108,9 +116,10 @@
 							<span>liked</span>
 						</a>
 					{/if}
-					<a href="/portal" class="user-handle" title="go to portal">@{user?.handle}</a>
+					{#if $page.url.pathname !== '/portal'}
+						<a href="/portal" class="user-handle" title="go to portal">@{user?.handle}</a>
+					{/if}
 					<SettingsMenu />
-					<button onclick={onLogout} class="btn-logout" title="log out">logout</button>
 				</div>
 
 				<!-- Mobile nav: just ProfileMenu -->
@@ -208,10 +217,44 @@
 
 	.stats-left {
 		position: absolute;
-		left: calc((100vw - var(--queue-width, 0px) - 800px) / 4);
+		left: calc((100vw - var(--queue-width, 0px) - 800px) / 6);
 		top: 50%;
 		transform: translate(-50%, -50%);
 		transition: left 0.3s ease;
+	}
+
+	.search-left {
+		position: absolute;
+		left: calc((100vw - var(--queue-width, 0px) - 800px) / 3);
+		top: 50%;
+		transform: translate(-50%, -50%);
+		transition: left 0.3s ease;
+	}
+
+	.logout-right {
+		position: absolute;
+		right: calc((100vw - var(--queue-width, 0px) - 800px) / 4);
+		top: 50%;
+		transform: translate(50%, -50%);
+		transition: right 0.3s ease;
+	}
+
+	.btn-logout-outer {
+		background: transparent;
+		border: 1px solid var(--border-emphasis);
+		color: var(--text-secondary);
+		padding: 0.5rem 1rem;
+		border-radius: 6px;
+		font-size: 0.9rem;
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+
+	.btn-logout-outer:hover {
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.bluesky-link,
