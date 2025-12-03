@@ -33,17 +33,17 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 <div class="page">
-	<header class="page-header">
-		<div class="header-top">
-			<div>
-				<h1>liked tracks</h1>
-				{#if data.tracks.length > 0}
-					<p class="subtitle">{data.tracks.length} {data.tracks.length === 1 ? 'track' : 'tracks'}</p>
-				{/if}
-			</div>
+	<div class="section-header">
+		<h2>
+			liked tracks
 			{#if data.tracks.length > 0}
-				<button class="btn-queue-all" onclick={queueAll} title="queue all liked tracks">
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<span class="count">{data.tracks.length}</span>
+			{/if}
+		</h2>
+		{#if data.tracks.length > 0}
+			<div class="header-actions">
+				<button class="btn-action" onclick={queueAll} title="queue all liked tracks">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="8" y1="6" x2="21" y2="6"></line>
 						<line x1="8" y1="12" x2="21" y2="12"></line>
 						<line x1="8" y1="18" x2="21" y2="18"></line>
@@ -53,9 +53,9 @@
 					</svg>
 					<span>queue all</span>
 				</button>
-			{/if}
-		</div>
-	</header>
+			</div>
+		{/if}
+	</div>
 
 	{#if data.tracks.length === 0}
 		<div class="empty-state">
@@ -93,53 +93,66 @@
 		min-height: 100vh;
 	}
 
-	.page-header {
-		margin-bottom: 1.5rem;
-	}
-
-	.header-top {
+	.section-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		gap: 1rem;
+		margin-bottom: 1.5rem;
 		flex-wrap: wrap;
 	}
 
-	.page-header h1 {
+	.section-header h2 {
 		font-size: var(--text-page-heading);
 		font-weight: 700;
 		color: var(--text-primary);
-		margin: 0 0 0.5rem 0;
-	}
-
-	.subtitle {
-		font-size: 0.95rem;
-		color: var(--text-tertiary);
 		margin: 0;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
 	}
 
-	.btn-queue-all {
+	.count {
+		font-size: 0.85rem;
+		font-weight: 500;
+		color: var(--text-tertiary);
+		background: var(--bg-tertiary);
+		padding: 0.2rem 0.55rem;
+		border-radius: 4px;
+	}
+
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.btn-action {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.6rem 1rem;
+		padding: 0.5rem 0.85rem;
 		background: transparent;
-		border: 1px solid var(--accent);
-		color: var(--accent);
+		border: 1px solid var(--border-default);
+		color: var(--text-secondary);
 		border-radius: 6px;
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 		font-family: inherit;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.15s;
 		white-space: nowrap;
 	}
 
-	.btn-queue-all:hover {
-		background: var(--accent);
-		color: var(--bg-primary);
+	.btn-action:hover {
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
-	.btn-queue-all svg {
+	.btn-action:active {
+		transform: scale(0.97);
+	}
+
+	.btn-action svg {
 		flex-shrink: 0;
 	}
 
@@ -174,11 +187,16 @@
 
 	@media (max-width: 768px) {
 		.page {
-			padding: 1.25rem 0.75rem calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px));
+			padding: 0 0.75rem calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px));
 		}
 
-		.page-header h1 {
-			font-size: 1.35rem;
+		.section-header h2 {
+			font-size: 1.25rem;
+		}
+
+		.count {
+			font-size: 0.8rem;
+			padding: 0.15rem 0.45rem;
 		}
 
 		.empty-state {
@@ -189,45 +207,12 @@
 			font-size: 1.25rem;
 		}
 
-		.btn-queue-all {
-			padding: 0.5rem 0.75rem;
-			font-size: 0.85rem;
-		}
-
-		.btn-queue-all svg {
-			width: 18px;
-			height: 18px;
-		}
-	}
-
-	@media (max-width: 480px) {
-		.page {
-			padding: 1rem 0.65rem calc(var(--player-height, 0px) + 1rem + env(safe-area-inset-bottom, 0px));
-		}
-
-		.page-header {
-			margin-bottom: 1.5rem;
-		}
-
-		.header-top {
-			gap: 0.75rem;
-		}
-
-		.page-header h1 {
-			font-size: 1.2rem;
-			margin: 0 0 0.35rem 0;
-		}
-
-		.subtitle {
-			font-size: 0.85rem;
-		}
-
-		.btn-queue-all {
-			padding: 0.45rem 0.65rem;
+		.btn-action {
+			padding: 0.45rem 0.7rem;
 			font-size: 0.8rem;
 		}
 
-		.btn-queue-all svg {
+		.btn-action svg {
 			width: 16px;
 			height: 16px;
 		}
