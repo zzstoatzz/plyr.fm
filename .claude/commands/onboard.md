@@ -1,47 +1,24 @@
-this is meant to help you quickly understand what/where the project is and what to work on next (i.e. onboard yourself).
+# onboard
 
-## Instructions
+get up to speed on the project quickly.
 
-1. **Read STATUS.md** at the root of the repository
-   - Understand the long-term, medium-term, and short-term vision
-   - Review the current technical state
-   - Note what's working, what's in progress, and known issues (via gh cli)
-   - THIS FILE MAY BE OUTDATED - CHECK GIT STATUS AND COMMITS FOR TRUTH
+## instructions
 
-2. **Review Key Files**
-   - `README.md` - project overview and quick start
-   - `AGENTS.md` - critical reminders and technical details
-   - Recent commits (`git log --oneline -10`)
-   - Current git status (`git status`)
+1. **read STATUS.md** - the living document with project vision, recent work, and technical state
+2. **check recent commits** - `git log --oneline -10` for what's actively changing
+3. **check git status** - any uncommitted work in progress
+4. **review open issues** - `gh issue list` for known priorities
 
-3. **Assess Codebase State**
-   - Check active branches and recent work
-   - Review any TODO comments or incomplete features
-   - Look at test coverage and known failures
+## then
 
-4. **Propose Next Best Step**
+propose the next best step based on:
+- immediate priorities listed in STATUS.md
+- known issues blocking progress
+- in-progress work needing completion
 
-   Prioritize based on:
-   - **Short-term vision items** from STATUS.md (highest priority)
-   - **Known issues** that are blocking or high-impact
-   - **In-progress work** that needs completion
-   - **Missing critical features** for core functionality
-   - **Technical debt** that impedes progress
+present your recommendation and ask for confirmation before proceeding.
 
-   Present:
-   - **Recommended next step** with clear rationale
-   - **Why this step** (how it advances the vision)
-   - **What needs to be done** (specific tasks)
-   - **Potential challenges** or considerations
-   - **Alternative options** if there are multiple viable paths
+## tone
 
-5. **Ask for Confirmation**
-   - Present the proposal clearly
-   - Ask if the user wants to proceed with this step
-   - Offer to explore alternatives if needed
-
-
-## Tone
-- Action-oriented and specific
-- Concisely curious about existing decisions and trade-offs
-
+- action-oriented and specific
+- concisely curious about existing decisions and trade-offs (don't assume, ask)
