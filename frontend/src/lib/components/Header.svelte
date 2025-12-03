@@ -113,10 +113,10 @@
 							<span>liked</span>
 						</a>
 					{/if}
+					<SearchTrigger />
 					{#if $page.url.pathname !== '/portal'}
 						<a href="/portal" class="user-handle" title="go to portal">@{user?.handle}</a>
 					{/if}
-					<SearchTrigger />
 					<SettingsMenu />
 				</div>
 
