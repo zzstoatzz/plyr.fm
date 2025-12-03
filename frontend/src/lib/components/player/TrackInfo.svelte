@@ -55,10 +55,10 @@
 
 <div class="player-track">
 	<a href="/track/{track.id}" class="player-artwork" aria-label={`view ${track.title}`}>
-		{#if track.image_url && !imageError}
-			<img 
-				src={track.image_url} 
-				alt="{track.title} artwork" 
+		{#if (track.image_url || track.album?.image_url) && !imageError}
+			<img
+				src={track.image_url || track.album?.image_url}
+				alt="{track.title} artwork"
 				onerror={() => imageError = true}
 			/>
 		{:else}

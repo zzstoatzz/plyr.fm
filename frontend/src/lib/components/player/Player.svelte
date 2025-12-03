@@ -16,8 +16,11 @@
 		const artwork: MediaImage[] = [];
 		if (track.image_url) {
 			artwork.push({ src: track.image_url, sizes: '512x512', type: 'image/jpeg' });
+		} else if (track.album?.image_url) {
+			// fall back to album artwork if no track artwork
+			artwork.push({ src: track.album.image_url, sizes: '512x512', type: 'image/jpeg' });
 		} else if (track.artist_avatar_url) {
-			// fall back to artist avatar if no track artwork
+			// fall back to artist avatar if no album artwork
 			artwork.push({ src: track.artist_avatar_url, sizes: '256x256', type: 'image/jpeg' });
 		}
 
