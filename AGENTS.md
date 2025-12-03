@@ -22,12 +22,11 @@
 *   **use MCPs** for access to external systems, review docs/tools when needed
 
 ## 💻 Development Commands
-*   **Setup:** `uv sync && just frontend install`
-*   **Backend:** `just run-backend` (or `uv run uvicorn backend.main:app --reload`)
-*   **Frontend:** `just frontend dev` (or `cd frontend && bun run dev`)
+*   **Backend:** `just backend run`
+*   **Frontend:** `just frontend dev`
 *   **Tests:** `just backend test`
-*   **Linting:** `just lint`
-*   **Migrations:** `just migrate "message"` (create), `just migrate-up` (apply)
+*   **Linting:** `just backend lint` (Python) / `just frontend check` (Svelte)
+*   **Migrations:** `just backend migrate "message"` (create), `just backend migrate-up` (apply)
 
 ## 📂 Project Structure
 ```
