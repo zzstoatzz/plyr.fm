@@ -9,8 +9,8 @@
 
 <button class="search-trigger" onclick={() => search.open()} title="search (⌘K)">
 	<svg
-		width="16"
-		height="16"
+		width="14"
+		height="14"
 		viewBox="0 0 24 24"
 		fill="none"
 		stroke="currentColor"
@@ -28,14 +28,14 @@
 	.search-trigger {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.4rem 0.65rem;
+		gap: 0.35rem;
+		padding: 0.3rem 0.5rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: 6px;
 		color: var(--text-tertiary);
 		font-family: inherit;
-		font-size: 0.8rem;
+		font-size: 0.75rem;
 		cursor: pointer;
 		transition: all 0.15s;
 		white-space: nowrap;
@@ -58,11 +58,11 @@
 	}
 
 	.shortcut-hint {
-		padding: 0.15rem 0.4rem;
+		padding: 0.1rem 0.3rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 4px;
-		font-size: 0.7rem;
+		border-radius: 3px;
+		font-size: 0.65rem;
 		font-weight: 500;
 		letter-spacing: 0.02em;
 	}

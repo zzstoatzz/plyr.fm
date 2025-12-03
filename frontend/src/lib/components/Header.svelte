@@ -18,9 +18,12 @@
 </script>
 
 <header>
-	<!-- Stats positioned on far left, outside main header flow -->
+	<!-- Stats and search positioned on far left, splitting margin into thirds -->
 	<div class="stats-left desktop-only">
 		<PlatformStats variant="header" />
+	</div>
+	<div class="search-left desktop-only">
+		<SearchTrigger />
 	</div>
 	<!-- Logout positioned on far right, mirroring stats -->
 	<div class="logout-right desktop-only">
@@ -113,7 +116,6 @@
 							<span>liked</span>
 						</a>
 					{/if}
-					<SearchTrigger />
 					{#if $page.url.pathname !== '/portal'}
 						<a href="/portal" class="user-handle" title="go to portal">@{user?.handle}</a>
 					{/if}
@@ -215,7 +217,15 @@
 
 	.stats-left {
 		position: absolute;
-		left: calc((100vw - var(--queue-width, 0px) - 800px) / 4);
+		left: calc((100vw - var(--queue-width, 0px) - 800px) / 6);
+		top: 50%;
+		transform: translate(-50%, -50%);
+		transition: left 0.3s ease;
+	}
+
+	.search-left {
+		position: absolute;
+		left: calc((100vw - var(--queue-width, 0px) - 800px) / 3);
 		top: 50%;
 		transform: translate(-50%, -50%);
 		transition: left 0.3s ease;
