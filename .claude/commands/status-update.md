@@ -1,85 +1,33 @@
-# Status Update
+# status update
 
-Write a comprehensive status update to `STATUS.md` at the root of the repository.
+update STATUS.md after completing significant work.
 
-## Purpose
+## when to update
 
-This command prepares the repository for a new agent/contributor by documenting the project's current state. It should be run before clearing agent memory so the next session can quickly understand the vision and technical state.
+after shipping something notable:
+- new features or endpoints
+- bug fixes worth documenting
+- architectural changes
+- deployment/infrastructure changes
+- incidents and their resolutions
 
-## Status Update Structure
+## how to update
 
-The status update should be organized into three vision layers:
+1. add a new subsection under `## recent work` with today's date
+2. describe what shipped, why it matters, and any relevant PR numbers
+3. update `## immediate priorities` if priorities changed
+4. update `## technical state` if architecture changed
 
-### 1. Long-Term Vision
-The original inspiration and ultimate goal:
-- Why this project exists
-- What problem it solves (Spotify/Apple Music walled gardens, artist distribution barriers)
-- How ATProto enables the solution (portable social networks, decentralized music distribution)
-- The dream state of the platform
+## structure
 
-### 2. Medium-Term Vision
-Where we're heading in the next few months:
-- Core features to build
-- Technical milestones
-- Integration goals with ATProto ecosystem
-- User experience improvements
+STATUS.md follows this structure:
+- **long-term vision** - why the project exists
+- **recent work** - chronological log of what shipped (newest first)
+- **immediate priorities** - what's next
+- **technical state** - architecture, what's working, known issues
 
-### 3. Short-Term Vision
-Immediate next steps and current priorities:
-- Active work streams
-- Known issues to fix
-- Performance improvements
-- Documentation needs
+old content is automatically archived to `.status_history/` - you don't need to manage this.
 
-## Technical State
+## tone
 
-Document the current implementation:
-
-### Architecture
-- Backend: language, framework, hosting, database
-- Frontend: framework, runtime, hosting, styling approach
-- Storage: where audio files live
-- Auth: ATProto OAuth implementation details
-- Deployment: CI/CD setup, automation
-
-### What's Working
-- List functioning features
-- Note deployment status (URLs, health)
-- Highlight successful integrations
-
-### What's In Progress
-- Active development areas
-- Features being built
-- Refactors underway
-
-### Known Issues
-- Technical debt
-- Bugs
-- Performance problems
-- Missing features
-
-### Technical Decisions
-Why certain choices were made:
-- Why Python/FastAPI vs alternatives (e.g., Rust)
-- Why current deployment architecture
-- Trade-offs accepted
-- Future flexibility considerations
-
-## Instructions
-
-1. Read the current `README.md`, `AGENTS.md`, recent status updates in `sandbox/`, and key source files
-2. Check `git status` and recent commits to understand current work
-3. Scan the codebase structure (`backend/src/backend/`, `frontend/src/`)
-4. Review the tech stack in `pyproject.toml` and `frontend/package.json`
-5. Synthesize into a clear, chronological narrative
-6. Write to `STATUS.md` in the root directory
-7. Update this timestamp in the file: `Status as of: YYYY-MM-DD HH:MM UTC`
-
-## Tone
-
-- Direct and technical
-- Honest about limitations and trade-offs
-- Optimistic about vision
-- Practical about current state
-- Useful for someone with no prior context
-
+direct, technical, honest about limitations. useful for someone with no prior context.
