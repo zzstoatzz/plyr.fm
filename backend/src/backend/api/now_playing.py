@@ -1,6 +1,9 @@
 """now playing API endpoints for external scrobbler integrations.
 
 exposes real-time playback state for services like teal.fm/Piper.
+
+note: these endpoints are exempt from rate limiting because they're
+already throttled client-side (10-second intervals, 1-second debounce).
 """
 
 from typing import Annotated
@@ -13,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session, now_playing_service, require_auth
 from backend.config import settings
 from backend.models import Artist, get_db
+from backend.utilities.rate_limit import limiter
 
 router = APIRouter(prefix="/now-playing", tags=["now-playing"])
 
@@ -59,6 +63,7 @@ class NowPlayingResponse(BaseModel):
 
 
 @router.post("/")
+@limiter.exempt
 async def update_now_playing(
     update: NowPlayingUpdate,
     session: Session = Depends(require_auth),
@@ -88,6 +93,7 @@ async def update_now_playing(
 
 
 @router.delete("/")
+@limiter.exempt
 async def clear_now_playing(
     session: Session = Depends(require_auth),
 ) -> dict:
@@ -100,6 +106,7 @@ async def clear_now_playing(
 
 
 @router.get("/by-handle/{handle}")
+@limiter.exempt
 async def get_now_playing_by_handle(
     handle: str,
     response: Response,
@@ -151,6 +158,7 @@ async def get_now_playing_by_handle(
 
 
 @router.get("/by-did/{did}")
+@limiter.exempt
 async def get_now_playing_by_did(
     did: str,
     response: Response,
