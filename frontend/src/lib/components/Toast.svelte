@@ -25,7 +25,12 @@
 				<span class="toast-message">
 					{item.message}
 					{#if item.action}
-						<a href={item.action.href} target="_blank" rel="noopener noreferrer" class="toast-action">
+						<a
+							href={item.action.href}
+							class="toast-action"
+							target={item.action.href.startsWith('/') ? undefined : '_blank'}
+							rel={item.action.href.startsWith('/') ? undefined : 'noopener noreferrer'}
+						>
 							{item.action.label}
 						</a>
 					{/if}

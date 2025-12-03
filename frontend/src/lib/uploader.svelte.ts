@@ -125,7 +125,11 @@ class UploaderState {
 							toast.dismiss(task.toastId);
 							this.activeUploads.delete(taskId);
 
-							toast.success('track uploaded successfully!');
+							const trackId = update.track_id;
+							toast.success('track uploaded successfully!', 5000, trackId ? {
+								label: 'view track',
+								href: `/track/${trackId}`
+							} : undefined);
 							tracksCache.invalidate();
 							tracksCache.fetch(true);
 							if (onSuccess) {

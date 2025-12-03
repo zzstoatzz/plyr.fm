@@ -104,7 +104,6 @@
 			{
 				onSuccess: () => {
 					clearForm();
-					toast.success('track uploaded successfully');
 				},
 				onError: () => {}
 			}
