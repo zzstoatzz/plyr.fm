@@ -8,12 +8,14 @@
 	import Player from '$lib/components/Player.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import Queue from '$lib/components/Queue.svelte';
+	import SearchModal from '$lib/components/SearchModal.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
 	import { player } from '$lib/player.svelte';
+	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
 	import type { LayoutData } from './$types';
 
@@ -78,8 +80,15 @@
 		document.documentElement.style.setProperty('--queue-width', queueWidth);
 	});
 
-	function handleQueueShortcut(event: KeyboardEvent) {
-		// ignore modifier keys
+	function handleKeyboardShortcuts(event: KeyboardEvent) {
+		// Cmd/Ctrl+K: toggle search
+		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+			event.preventDefault();
+			search.toggle();
+			return;
+		}
+
+		// ignore other modifier keys for remaining shortcuts
 		if (event.metaKey || event.ctrlKey || event.altKey) {
 			return;
 		}
@@ -125,7 +134,7 @@
 		}
 
 		// add keyboard listener for shortcuts
-		window.addEventListener('keydown', handleQueueShortcut);
+		window.addEventListener('keydown', handleKeyboardShortcuts);
 
 		// listen for system theme changes
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -145,7 +154,7 @@
 	onDestroy(() => {
 		// cleanup keyboard listener
 		if (browser) {
-			window.removeEventListener('keydown', handleQueueShortcut);
+			window.removeEventListener('keydown', handleKeyboardShortcuts);
 		}
 	});
 
@@ -257,6 +266,7 @@
 	<Player />
 {/if}
 <Toast />
+<SearchModal />
 
 <style>
 	:global(*),
