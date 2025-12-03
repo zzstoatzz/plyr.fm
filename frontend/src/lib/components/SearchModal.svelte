@@ -69,6 +69,19 @@
 		}
 	}
 
+	function getResultImage(result: SearchResult): string | null {
+		switch (result.type) {
+			case 'track':
+				return result.image_url;
+			case 'artist':
+				return result.avatar_url;
+			case 'album':
+				return result.image_url;
+			case 'tag':
+				return null;
+		}
+	}
+
 	function getResultTitle(result: SearchResult): string {
 		switch (result.type) {
 			case 'track':
@@ -149,13 +162,27 @@
 			{#if search.results.length > 0}
 				<div class="search-results">
 					{#each search.results as result, index (result.type + '-' + (result.type === 'track' ? result.id : result.type === 'artist' ? result.did : result.type === 'album' ? result.id : result.id))}
+						{@const imageUrl = getResultImage(result)}
 						<button
 							class="search-result"
 							class:selected={index === search.selectedIndex}
 							onclick={() => navigateToResult(result)}
 							onmouseenter={() => (search.selectedIndex = index)}
 						>
-							<span class="result-icon" data-type={result.type}>{getResultIcon(result.type)}</span>
+							<span class="result-icon" data-type={result.type}>
+								{#if imageUrl}
+									<img
+										src={imageUrl}
+										alt=""
+										class="result-image"
+										loading="lazy"
+										onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+									/>
+									<span class="result-icon-fallback">{getResultIcon(result.type)}</span>
+								{:else}
+									{getResultIcon(result.type)}
+								{/if}
+							</span>
 							<div class="result-content">
 								<span class="result-title">{getResultTitle(result)}</span>
 								<span class="result-subtitle">{getResultSubtitle(result)}</span>
@@ -310,6 +337,28 @@
 		border-radius: 8px;
 		font-size: 0.9rem;
 		flex-shrink: 0;
+		position: relative;
+		overflow: hidden;
+	}
+
+	.result-image {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		border-radius: 8px;
+	}
+
+	.result-icon-fallback {
+		/* shown behind image, visible if image fails */
+		position: relative;
+		z-index: 0;
+	}
+
+	.result-image + .result-icon-fallback {
+		/* hide fallback when image is present and loaded */
+		opacity: 0;
 	}
 
 	.result-icon[data-type='track'] {
