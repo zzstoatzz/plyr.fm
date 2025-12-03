@@ -638,22 +638,9 @@
 
 	@media (max-width: 768px) {
 		.menu-popover {
-			top: auto;
-			bottom: calc(var(--player-height, 0px) + 1rem + env(safe-area-inset-bottom, 0px));
-			transform: translateX(-50%);
-			max-height: calc(80vh - var(--player-height, 0px));
-			animation: slideInMobile 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-		}
-
-		@keyframes slideInMobile {
-			from {
-				opacity: 0;
-				transform: translateX(-50%) translateY(10px);
-			}
-			to {
-				opacity: 1;
-				transform: translateX(-50%) translateY(0);
-			}
+			/* stay centered but shift up to avoid player */
+			top: calc(50% - var(--player-height, 0px) / 2);
+			max-height: calc(100vh - var(--player-height, 0px) - 3rem - env(safe-area-inset-bottom, 0px));
 		}
 	}
 </style>
