@@ -36,6 +36,16 @@
 	let commentCount = $state(track.comment_count || 0);
 	let trackImageError = $state(false);
 	let avatarError = $state(false);
+	let tagsExpanded = $state(false);
+
+	// limit visible tags to prevent vertical sprawl (max 2 shown)
+	const MAX_VISIBLE_TAGS = 2;
+	let visibleTags = $derived(
+		tagsExpanded ? track.tags : track.tags?.slice(0, MAX_VISIBLE_TAGS)
+	);
+	let hiddenTagCount = $derived(
+		(track.tags?.length || 0) - MAX_VISIBLE_TAGS
+	);
 
 	// sync counts when track changes
 	$effect(() => {
@@ -44,6 +54,7 @@
 		// reset error states when track changes (e.g. recycled component)
 		trackImageError = false;
 		avatarError = false;
+		tagsExpanded = false;
 	});
 
 	// construct shareable URL - use /track/[id] for link previews
@@ -174,10 +185,18 @@
 			</span>
 		{/if}
 		{#if track.tags && track.tags.length > 0}
-			<span class="tags-line">
-				{#each track.tags as tag}
+			<span class="tags-line" class:expanded={tagsExpanded}>
+				{#each visibleTags as tag}
 					<a href="/tag/{encodeURIComponent(tag)}" class="tag-badge">{tag}</a>
 				{/each}
+				{#if hiddenTagCount > 0 && !tagsExpanded}
+					<button
+						class="tags-more"
+						onclick={(e) => { e.stopPropagation(); tagsExpanded = true; }}
+					>
+						+{hiddenTagCount}
+					</button>
+				{/if}
 			</span>
 		{/if}
 			</div>
@@ -500,9 +519,14 @@
 
 	.tags-line {
 		display: flex;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		gap: 0.25rem;
 		margin-top: 0.15rem;
+		overflow: hidden;
+	}
+
+	.tags-line.expanded {
+		flex-wrap: wrap;
 	}
 
 	.tag-badge {
@@ -515,11 +539,34 @@
 		font-weight: 500;
 		text-decoration: none;
 		transition: all 0.15s;
+		flex-shrink: 0;
+		white-space: nowrap;
 	}
 
 	.tag-badge:hover {
 		background: color-mix(in srgb, var(--accent) 25%, transparent);
 		color: var(--accent);
+	}
+
+	.tags-more {
+		display: inline-block;
+		padding: 0.1rem 0.4rem;
+		background: var(--bg-tertiary);
+		color: var(--text-muted);
+		border: none;
+		border-radius: 3px;
+		font-size: 0.75rem;
+		font-weight: 500;
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.15s;
+		flex-shrink: 0;
+		white-space: nowrap;
+	}
+
+	.tags-more:hover {
+		background: var(--bg-hover);
+		color: var(--text-secondary);
 	}
 
 	.track-meta {

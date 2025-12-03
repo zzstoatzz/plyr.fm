@@ -262,4 +262,13 @@
 			transform: translate(-50%, -50%) scale(1);
 		}
 	}
+
+	@media (max-width: 768px) {
+		.menu-popover {
+			/* stay centered but shift up to avoid player */
+			top: calc(50% - var(--player-height, 0px) / 2);
+			max-height: calc(100vh - var(--player-height, 0px) - 3rem - env(safe-area-inset-bottom, 0px));
+			overflow-y: auto;
+		}
+	}
 </style>
