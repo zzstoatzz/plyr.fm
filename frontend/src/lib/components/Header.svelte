@@ -5,6 +5,7 @@
 	import LinksMenu from './LinksMenu.svelte';
 	import ProfileMenu from './ProfileMenu.svelte';
 	import PlatformStats from './PlatformStats.svelte';
+	import SearchTrigger from './SearchTrigger.svelte';
 	import { APP_NAME, APP_TAGLINE } from '$lib/branding';
 
 	interface Props {
@@ -109,6 +110,7 @@
 						</a>
 					{/if}
 					<a href="/portal" class="user-handle" title="go to portal">@{user?.handle}</a>
+					<SearchTrigger />
 					<SettingsMenu />
 					<button onclick={onLogout} class="btn-logout" title="log out">logout</button>
 				</div>
