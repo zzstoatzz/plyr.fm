@@ -22,6 +22,10 @@
 	<div class="stats-left desktop-only">
 		<PlatformStats variant="header" />
 	</div>
+	<!-- Logout positioned on far right, mirroring stats -->
+	<div class="logout-right desktop-only">
+		<button onclick={onLogout} class="btn-logout-outer" title="log out">logout</button>
+	</div>
 	<div class="header-content">
 		<div class="left-section">
 			<!-- desktop: show icons inline -->
@@ -112,9 +116,8 @@
 					{#if $page.url.pathname !== '/portal'}
 						<a href="/portal" class="user-handle" title="go to portal">@{user?.handle}</a>
 					{/if}
-					<SettingsMenu />
-					<button onclick={onLogout} class="btn-logout" title="log out">logout</button>
 					<SearchTrigger />
+					<SettingsMenu />
 				</div>
 
 				<!-- Mobile nav: just ProfileMenu -->
@@ -216,6 +219,32 @@
 		top: 50%;
 		transform: translate(-50%, -50%);
 		transition: left 0.3s ease;
+	}
+
+	.logout-right {
+		position: absolute;
+		right: calc((100vw - var(--queue-width, 0px) - 800px) / 4);
+		top: 50%;
+		transform: translate(50%, -50%);
+		transition: right 0.3s ease;
+	}
+
+	.btn-logout-outer {
+		background: transparent;
+		border: 1px solid var(--border-emphasis);
+		color: var(--text-secondary);
+		padding: 0.5rem 1rem;
+		border-radius: 6px;
+		font-size: 0.9rem;
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+
+	.btn-logout-outer:hover {
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.bluesky-link,
