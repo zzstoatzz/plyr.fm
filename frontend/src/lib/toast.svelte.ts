@@ -53,8 +53,8 @@ class ToastState {
 		}
 	}
 
-	success(message: string, duration = 3000): string {
-		return this.add(message, 'success', duration);
+	success(message: string, duration = 3000, action?: ToastAction): string {
+		return this.add(message, 'success', duration, action);
 	}
 
 	error(message: string, duration = 5000): string {

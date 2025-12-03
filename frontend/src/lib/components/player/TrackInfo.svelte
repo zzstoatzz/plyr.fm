@@ -228,7 +228,7 @@
 	.player-title.scrolling span,
 	.player-title-link.scrolling span {
 		padding-right: 2rem;
-		animation: scroll-text 10s linear infinite;
+		animation: scroll-text 8s linear infinite;
 	}
 
 	.text-container.scrolling {
@@ -245,7 +245,7 @@
 
 	.text-container.scrolling > span {
 		padding-right: 3rem;
-		animation: scroll-text 15s linear infinite;
+		animation: scroll-text 10s linear infinite;
 	}
 
 	.player-metadata {
@@ -338,10 +338,10 @@
 	}
 
 	@keyframes scroll-text {
-		0%, 15% {
+		0%, 20% {
 			transform: translateX(0);
 		}
-		85%, 100% {
+		100% {
 			transform: translateX(-100%);
 		}
 	}
