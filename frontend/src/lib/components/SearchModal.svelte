@@ -56,19 +56,6 @@
 		}
 	}
 
-	function getResultIcon(type: SearchResult['type']): string {
-		switch (type) {
-			case 'track':
-				return '♪';
-			case 'artist':
-				return '◉';
-			case 'album':
-				return '◫';
-			case 'tag':
-				return '#';
-		}
-	}
-
 	function getResultImage(result: SearchResult): string | null {
 		switch (result.type) {
 			case 'track':
@@ -178,9 +165,47 @@
 										loading="lazy"
 										onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
 									/>
-									<span class="result-icon-fallback">{getResultIcon(result.type)}</span>
-								{:else}
-									{getResultIcon(result.type)}
+									<!-- fallback icon shown if image fails to load -->
+									<span class="result-icon-fallback">
+										{#if result.type === 'track'}
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+												<path d="M9 18V5l12-2v13"></path>
+												<circle cx="6" cy="18" r="3"></circle>
+												<circle cx="18" cy="16" r="3"></circle>
+											</svg>
+										{:else if result.type === 'artist'}
+											<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+												<circle cx="8" cy="5" r="3" fill="none" />
+												<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
+											</svg>
+										{:else if result.type === 'album'}
+											<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+												<rect x="2" y="2" width="12" height="12" fill="none" />
+												<circle cx="8" cy="8" r="2.5" fill="currentColor" stroke="none" />
+											</svg>
+										{/if}
+									</span>
+								{:else if result.type === 'track'}
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+										<path d="M9 18V5l12-2v13"></path>
+										<circle cx="6" cy="18" r="3"></circle>
+										<circle cx="18" cy="16" r="3"></circle>
+									</svg>
+								{:else if result.type === 'artist'}
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+										<circle cx="8" cy="5" r="3" fill="none" />
+										<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
+									</svg>
+								{:else if result.type === 'album'}
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+										<rect x="2" y="2" width="12" height="12" fill="none" />
+										<circle cx="8" cy="8" r="2.5" fill="currentColor" stroke="none" />
+									</svg>
+								{:else if result.type === 'tag'}
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+										<line x1="7" y1="7" x2="7.01" y2="7"></line>
+									</svg>
 								{/if}
 							</span>
 							<div class="result-content">
