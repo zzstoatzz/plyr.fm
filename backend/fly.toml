@@ -6,7 +6,7 @@ primary_region = 'iad'
   ignore_file = ".dockerignore"
 
 [deploy]
-  release_command = "uv run alembic upgrade head"
+  release_command = "uv run --no-dev alembic upgrade head"
 
 [http_service]
   internal_port = 8000
