@@ -96,9 +96,9 @@
 	}
 
 	function getShortcutHint(): string {
-		// detect platform
+		// detect platform - use text instead of symbols for clarity
 		if (browser && navigator.platform.toLowerCase().includes('mac')) {
-			return '⌘K';
+			return 'Cmd+K';
 		}
 		return 'Ctrl+K';
 	}
@@ -203,10 +203,14 @@
 	.search-modal {
 		width: 100%;
 		max-width: 560px;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-default);
-		border-radius: 12px;
-		box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+		background: rgba(18, 18, 20, 0.85);
+		backdrop-filter: blur(20px) saturate(180%);
+		-webkit-backdrop-filter: blur(20px) saturate(180%);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 16px;
+		box-shadow:
+			0 24px 80px rgba(0, 0, 0, 0.5),
+			0 0 1px rgba(255, 255, 255, 0.1) inset;
 		overflow: hidden;
 		margin: 0 1rem;
 	}
@@ -216,7 +220,8 @@
 		align-items: center;
 		gap: 0.75rem;
 		padding: 1rem 1.25rem;
-		border-bottom: 1px solid var(--border-subtle);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		background: rgba(255, 255, 255, 0.02);
 	}
 
 	.search-icon {
@@ -240,11 +245,11 @@
 
 	.search-shortcut {
 		font-size: 0.7rem;
-		padding: 0.2rem 0.4rem;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border-default);
-		border-radius: 4px;
-		color: var(--text-tertiary);
+		padding: 0.25rem 0.5rem;
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 5px;
+		color: var(--text-muted);
 		font-family: inherit;
 	}
 
@@ -287,12 +292,12 @@
 
 	.search-result:hover,
 	.search-result.selected {
-		background: var(--bg-hover);
+		background: rgba(255, 255, 255, 0.06);
 	}
 
 	.search-result.selected {
-		outline: 1px solid var(--accent);
-		outline-offset: -1px;
+		background: rgba(255, 255, 255, 0.08);
+		box-shadow: 0 0 0 1px rgba(var(--accent-rgb, 255, 107, 107), 0.3) inset;
 	}
 
 	.result-icon {
@@ -301,8 +306,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: var(--bg-tertiary);
-		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.05);
+		border-radius: 8px;
 		font-size: 0.9rem;
 		flex-shrink: 0;
 	}
@@ -348,11 +353,12 @@
 	}
 
 	.result-type {
-		font-size: 0.65rem;
+		font-size: 0.6rem;
 		text-transform: uppercase;
+		letter-spacing: 0.03em;
 		color: var(--text-muted);
-		padding: 0.2rem 0.4rem;
-		background: var(--bg-tertiary);
+		padding: 0.2rem 0.45rem;
+		background: rgba(255, 255, 255, 0.04);
 		border-radius: 4px;
 		flex-shrink: 0;
 	}
@@ -392,9 +398,9 @@
 	.hint-shortcuts kbd {
 		font-size: 0.65rem;
 		padding: 0.15rem 0.35rem;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border-default);
-		border-radius: 3px;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 4px;
 		font-family: inherit;
 	}
 

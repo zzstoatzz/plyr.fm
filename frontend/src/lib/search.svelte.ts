@@ -53,6 +53,8 @@ export interface SearchResponse {
 	};
 }
 
+const MAX_QUERY_LENGTH = 100;
+
 class SearchState {
 	isOpen = $state(false);
 	query = $state('');
@@ -101,6 +103,16 @@ class SearchState {
 		if (this.searchTimeout) {
 			clearTimeout(this.searchTimeout);
 		}
+
+		// validate length
+		if (value.length > MAX_QUERY_LENGTH) {
+			this.error = `query too long (max ${MAX_QUERY_LENGTH} characters)`;
+			this.results = [];
+			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0 };
+			return;
+		}
+
+		this.error = null;
 
 		// debounce search
 		if (value.length >= 2) {
