@@ -2,7 +2,6 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { search, type SearchResult } from '$lib/search.svelte';
-	import { fade } from 'svelte/transition';
 	import { onMount, onDestroy } from 'svelte';
 
 	let inputRef: HTMLInputElement | null = $state(null);
@@ -20,13 +19,10 @@
 		}
 	});
 
-	// focus input when modal opens
+	// register input ref with search state for direct focus (mobile keyboard fix)
 	$effect(() => {
-		if (search.isOpen && inputRef && browser) {
-			// small delay to ensure modal is rendered
-			window.requestAnimationFrame(() => {
-				inputRef?.focus();
-			});
+		if (inputRef) {
+			search.setInputRef(inputRef);
 		}
 	});
 
@@ -127,13 +123,13 @@
 	});
 </script>
 
-{#if search.isOpen}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div
-		class="search-backdrop"
-		onclick={handleBackdropClick}
-		transition:fade={{ duration: 150 }}
-	>
+<!-- always render for mobile keyboard focus, use CSS to show/hide -->
+<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+<div
+	class="search-backdrop"
+	class:open={search.isOpen}
+	onclick={handleBackdropClick}
+>
 		<div class="search-modal" role="dialog" aria-modal="true" aria-label="search">
 			<div class="search-input-wrapper">
 				<svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -251,7 +247,6 @@
 			{/if}
 		</div>
 	</div>
-{/if}
 
 <style>
 	.search-backdrop {
@@ -265,6 +260,17 @@
 		align-items: flex-start;
 		justify-content: center;
 		padding-top: 15vh;
+		/* hidden by default */
+		opacity: 0;
+		visibility: hidden;
+		pointer-events: none;
+		transition: opacity 0.15s, visibility 0.15s;
+	}
+
+	.search-backdrop.open {
+		opacity: 1;
+		visibility: visible;
+		pointer-events: auto;
 	}
 
 	.search-modal {

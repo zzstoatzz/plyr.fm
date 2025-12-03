@@ -64,10 +64,22 @@ class SearchState {
 	error = $state<string | null>(null);
 	selectedIndex = $state(0);
 
+	// reference to input element for direct focus (mobile keyboard workaround)
+	inputRef: HTMLInputElement | null = null;
+
 	// debounce timer
 	private searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+	setInputRef(el: HTMLInputElement | null) {
+		this.inputRef = el;
+	}
+
 	open() {
+		// focus input FIRST (before state change) for mobile keyboard to open
+		// iOS/mobile browsers only open keyboard when focus() is in direct user gesture
+		if (this.inputRef) {
+			this.inputRef.focus();
+		}
 		this.isOpen = true;
 		this.query = '';
 		this.results = [];
