@@ -88,7 +88,9 @@
 
 		{#if isExpanded}
 			<div class="tags-row">
-				<span class="filter-label">hiding:</span>
+				{#if hiddenTags.length > 0}
+					<span class="filter-label">hiding:</span>
+				{/if}
 				{#each hiddenTags as tag}
 					<button type="button" class="tag-chip" onclick={() => removeTag(tag)} title="unhide '{tag}'">
 						{tag}
@@ -109,13 +111,9 @@
 						class="add-input"
 					/>
 				{:else}
-					<button type="button" class="add-btn" onclick={startAddingTag}>
+					<button type="button" class="add-btn" onclick={startAddingTag} title="hide a tag">
 						+
 					</button>
-				{/if}
-
-				{#if hiddenTags.length === 0 && !addingTag}
-					<span class="empty-hint">none</span>
 				{/if}
 			</div>
 		{/if}
@@ -251,11 +249,6 @@
 
 	.add-input::placeholder {
 		color: var(--text-tertiary);
-	}
-
-	.empty-hint {
-		color: var(--text-tertiary);
-		font-size: 0.7rem;
 	}
 
 	/* mobile adjustments */

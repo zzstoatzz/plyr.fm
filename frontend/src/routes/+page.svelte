@@ -90,7 +90,9 @@
 					latest tracks
 				</button>
 			</h2>
-			<HiddenTagsFilter />
+			<div class="header-actions">
+				<HiddenTagsFilter />
+			</div>
 		</div>
 		{#if showLoading}
 			<div class="loading-container">
@@ -124,21 +126,29 @@
 	main {
 		max-width: 800px;
 		margin: 0 auto;
-		padding: 0 1rem calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
+		padding: 0 1rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
 	}
 
 	.section-header {
 		display: flex;
+		justify-content: space-between;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 1rem;
 		margin-bottom: 1.5rem;
 		flex-wrap: wrap;
 	}
 
-	.tracks h2 {
+	.section-header h2 {
 		font-size: var(--text-page-heading);
-		margin: 0;
+		font-weight: 700;
 		color: var(--text-primary);
+		margin: 0;
+	}
+
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
 	}
 
 	.clickable-heading {
@@ -148,7 +158,7 @@
 		font: inherit;
 		color: inherit;
 		cursor: pointer;
-		transition: color 0.2s;
+		transition: color 0.15s;
 		user-select: none;
 	}
 
@@ -166,5 +176,15 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+	}
+
+	@media (max-width: 768px) {
+		main {
+			padding: 0 0.75rem calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px));
+		}
+
+		.section-header h2 {
+			font-size: 1.25rem;
+		}
 	}
 </style>

@@ -3,6 +3,7 @@
 	import type { User } from '$lib/types';
 	import SettingsMenu from './SettingsMenu.svelte';
 	import LinksMenu from './LinksMenu.svelte';
+	import ProfileMenu from './ProfileMenu.svelte';
 	import PlatformStats from './PlatformStats.svelte';
 	import { APP_NAME, APP_TAGLINE } from '$lib/branding';
 
@@ -65,19 +66,57 @@
 			</a>
 		</div>
 
+		<!-- Mobile: navigation icons with flex spacer -->
+		<div class="mobile-center mobile-only">
+			{#if $page.url.pathname !== '/'}
+				<a href="/" class="nav-icon" title="go to feed">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="10"></circle>
+						<line x1="2" y1="12" x2="22" y2="12"></line>
+						<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+					</svg>
+				</a>
+			{/if}
+			{#if isAuthenticated && $page.url.pathname !== '/liked'}
+				<a href="/liked" class="nav-icon" title="go to liked tracks">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+					</svg>
+				</a>
+			{/if}
+		</div>
+
 		<nav>
 			{#if isAuthenticated}
-			{#if $page.url.pathname !== '/liked'}
-				<a href="/liked" class="nav-link">
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-						</svg>
-						<span>liked</span>
-					</a>
-				{/if}
-				<a href="/portal" class="user-handle">@{user?.handle}</a>
-				<SettingsMenu />
-				<button onclick={onLogout} class="btn-logout">logout</button>
+				<!-- Desktop nav -->
+				<div class="desktop-nav desktop-only">
+					{#if $page.url.pathname !== '/'}
+						<a href="/" class="nav-link" title="go to feed">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<circle cx="12" cy="12" r="10"></circle>
+								<line x1="2" y1="12" x2="22" y2="12"></line>
+								<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+							</svg>
+							<span>feed</span>
+						</a>
+					{/if}
+					{#if $page.url.pathname !== '/liked'}
+						<a href="/liked" class="nav-link" title="go to liked tracks">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+							</svg>
+							<span>liked</span>
+						</a>
+					{/if}
+					<a href="/portal" class="user-handle" title="go to portal">@{user?.handle}</a>
+					<SettingsMenu />
+					<button onclick={onLogout} class="btn-logout" title="log out">logout</button>
+				</div>
+
+				<!-- Mobile nav: just ProfileMenu -->
+				<div class="mobile-only">
+					<ProfileMenu {user} {onLogout} />
+				</div>
 			{:else}
 				<a href="/login" class="btn-primary">log in</a>
 			{/if}
@@ -101,6 +140,7 @@
 		justify-content: space-between;
 		align-items: center;
 		gap: 1rem;
+		position: relative;
 	}
 
 	.left-section {
@@ -129,6 +169,41 @@
 
 	.mobile-only {
 		display: none;
+	}
+
+	.desktop-nav {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.mobile-center {
+		flex: 1;
+		justify-content: center;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.nav-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		border-radius: 10px;
+		color: var(--text-secondary);
+		text-decoration: none;
+		transition: all 0.15s;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.nav-icon:hover {
+		color: var(--accent);
+		background: var(--bg-tertiary);
+	}
+
+	.nav-icon:active {
+		transform: scale(0.94);
 	}
 
 	.stats-left {
@@ -167,8 +242,9 @@
 
 	.brand p {
 		margin: 0;
-		font-size: 0.85rem;
+		font-size: 0.65rem;
 		color: var(--text-tertiary);
+		letter-spacing: 0.02em;
 	}
 
 	nav {
@@ -289,7 +365,7 @@
 		}
 
 		.brand p {
-			font-size: 0.7rem;
+			font-size: 0.55rem;
 		}
 
 		nav {

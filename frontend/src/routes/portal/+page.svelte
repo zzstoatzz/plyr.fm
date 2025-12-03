@@ -9,38 +9,15 @@
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary } from '$lib/types';
-	import { API_URL, getServerConfig } from '$lib/config';
-	import { uploader } from '$lib/uploader.svelte';
+	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
-
-	// browser-compatible audio formats only
-	// note: aiff/aif not supported in most browsers (safari only)
-	const ACCEPTED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a'];
-	const ACCEPTED_AUDIO_MIME_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp4'];
-	const FILE_INPUT_ACCEPT = [...ACCEPTED_AUDIO_EXTENSIONS, ...ACCEPTED_AUDIO_MIME_TYPES].join(',');
-
-	function isSupportedAudioFile(name: string): boolean {
-		const dotIndex = name.lastIndexOf('.');
-		if (dotIndex === -1) return false;
-		const ext = name.slice(dotIndex).toLowerCase();
-		return ACCEPTED_AUDIO_EXTENSIONS.includes(ext);
-	}
 
 	let loading = $state(true);
 	let error = $state('');
 	let tracks = $state<Track[]>([]);
 	let loadingTracks = $state(false);
-
-	// upload form fields
-	let title = $state('');
-	let albumTitle = $state('');
-	let file = $state<File | null>(null);
-	let imageFile = $state<File | null>(null);
-	let featuredArtists = $state<FeaturedArtist[]>([]);
-	let uploadTags = $state<string[]>([]);
-	let hasUnresolvedFeaturesInput = $state(false);
 
 	// track editing state
 	let editingTrackId = $state<number | null>(null);
@@ -304,56 +281,6 @@
 		}
 	}
 
-	function handleUpload(e: SubmitEvent) {
-		e.preventDefault();
-		if (!file) return;
-
-		const uploadFile = file;
-		const uploadTitle = title;
-		const uploadAlbum = albumTitle;
-		const uploadFeatures = [...featuredArtists];
-		const uploadImage = imageFile;
-		const tagsToUpload = [...uploadTags];
-
-		const clearForm = () => {
-			title = '';
-			albumTitle = '';
-			file = null;
-			imageFile = null;
-			featuredArtists = [];
-			uploadTags = [];
-
-			const fileInput = document.getElementById('file-input') as HTMLInputElement;
-			if (fileInput) {
-				fileInput.value = '';
-			}
-			const imageInput = document.getElementById('image-input') as HTMLInputElement;
-			if (imageInput) {
-				imageInput.value = '';
-			}
-		};
-
-		uploader.upload(
-			uploadFile,
-			uploadTitle,
-			uploadAlbum,
-			uploadFeatures,
-			uploadImage,
-			tagsToUpload,
-			async () => {
-				await loadMyTracks();
-				await loadMyAlbums();
-			},
-			{
-				onSuccess: () => {
-					clearForm();
-				},
-				onError: () => {
-				}
-			}
-		);
-	}
-
 	async function deleteTrack(trackId: number, trackTitle: string) {
 		if (!confirm(`delete "${trackTitle}"?`)) return;
 
@@ -429,64 +356,6 @@
 			}
 		} catch (e) {
 			alert(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
-		}
-	}
-
-	async function handleFileChange(e: Event) {
-		const target = e.target as HTMLInputElement;
-		if (target.files && target.files[0]) {
-			const selected = target.files[0];
-			if (!isSupportedAudioFile(selected.name)) {
-				toast.error(`unsupported file type. supported: ${ACCEPTED_AUDIO_EXTENSIONS.join(', ')}`);
-				target.value = '';
-				file = null;
-				return;
-			}
-
-			// validate file size
-			try {
-				const config = await getServerConfig();
-				const sizeMB = selected.size / (1024 * 1024);
-				if (sizeMB > config.max_upload_size_mb) {
-					toast.error(
-						`audio file too large (${sizeMB.toFixed(1)}MB). max: ${config.max_upload_size_mb}MB`
-					);
-					target.value = '';
-					file = null;
-					return;
-				}
-			} catch (_e) {
-				console.error('failed to validate file size:', _e);
-				// continue anyway - server will validate
-			}
-
-			file = selected;
-		}
-	}
-
-	async function handleImageChange(e: Event) {
-		const target = e.target as HTMLInputElement;
-		if (target.files && target.files[0]) {
-			const selected = target.files[0];
-
-			// validate image size
-			try {
-				const config = await getServerConfig();
-				const sizeMB = selected.size / (1024 * 1024);
-				if (sizeMB > config.max_image_size_mb) {
-					toast.error(
-						`image too large (${sizeMB.toFixed(1)}MB). max: ${config.max_image_size_mb}MB`
-					);
-					target.value = '';
-					imageFile = null;
-					return;
-				}
-			} catch (_e) {
-				console.error('failed to validate image size:', _e);
-				// continue anyway - server will validate
-			}
-
-			imageFile = selected;
 		}
 	}
 
@@ -799,83 +668,22 @@
 			</form>
 		</section>
 
-		<section class="upload-section">
-			<h2>upload track</h2>
-
-			<form onsubmit={handleUpload}>
-				<div class="form-group">
-					<label for="title">track title</label>
-					<input
-						id="title"
-						type="text"
-						bind:value={title}
-						required
-						placeholder="my awesome song"
-					/>
-				</div>
-
-				<div class="form-group">
-					<label for="album">album (optional)</label>
-					<AlbumSelect
-						{albums}
-						bind:value={albumTitle}
-					/>
-				</div>
-
-				<div class="form-group">
-					<label for="features">featured artists (optional)</label>
-					<HandleSearch
-						bind:selected={featuredArtists}
-						bind:hasUnresolvedInput={hasUnresolvedFeaturesInput}
-						onAdd={(artist) => { featuredArtists = [...featuredArtists, artist]; }}
-						onRemove={(did) => { featuredArtists = featuredArtists.filter(a => a.did !== did); }}
-					/>
-				</div>
-
-				<div class="form-group">
-					<label for="upload-tags">tags (optional)</label>
-					<TagInput
-						tags={uploadTags}
-						onAdd={(tag) => { uploadTags = [...uploadTags, tag]; }}
-						onRemove={(tag) => { uploadTags = uploadTags.filter(t => t !== tag); }}
-						placeholder="type to search tags..."
-					/>
-				</div>
-
-				<div class="form-group">
-					<label for="file-input">audio file</label>
-					<input
-						id="file-input"
-						type="file"
-						accept={FILE_INPUT_ACCEPT}
-						onchange={handleFileChange}
-						required
-					/>
-					<p class="format-hint">supported: mp3, wav, m4a</p>
-					{#if file}
-						<p class="file-info">{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</p>
-					{/if}
-				</div>
-
-				<div class="form-group">
-					<label for="image-input">artwork (optional)</label>
-					<input
-						id="image-input"
-						type="file"
-						accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
-						onchange={handleImageChange}
-					/>
-					<p class="format-hint">supported: jpg, png, webp, gif</p>
-					{#if imageFile}
-						<p class="file-info">{imageFile.name} ({(imageFile.size / 1024 / 1024).toFixed(2)} MB)</p>
-					{/if}
-				</div>
-
-				<button type="submit" disabled={!file || hasUnresolvedFeaturesInput} class="upload-btn" title={hasUnresolvedFeaturesInput ? "please select or clear featured artist" : ""}>
-					<span>upload track</span>
-				</button>
-			</form>
-		</section>
+		<a href="/upload" class="upload-card">
+			<div class="upload-card-icon">
+				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+					<polyline points="17 8 12 3 7 8"></polyline>
+					<line x1="12" y1="3" x2="12" y2="15"></line>
+				</svg>
+			</div>
+			<div class="upload-card-text">
+				<span class="upload-card-title">upload track</span>
+				<span class="upload-card-subtitle">add new music</span>
+			</div>
+			<svg class="upload-card-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<polyline points="9 18 15 12 9 6"></polyline>
+			</svg>
+		</a>
 
 		<section class="tracks-section">
 			<h2>your tracks</h2>
@@ -958,32 +766,40 @@
 											disabled={hasUnresolvedEditFeaturesInput}
 											title={hasUnresolvedEditFeaturesInput ? "please select or clear featured artist" : "save changes"}
 										>
-											✓
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+												<polyline points="20 6 9 17 4 12"></polyline>
+											</svg>
 										</button>
 										<button
 											class="action-btn cancel-btn"
 											onclick={cancelEdit}
 											title="cancel"
 										>
-											✕
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+												<line x1="18" y1="6" x2="6" y2="18"></line>
+												<line x1="6" y1="6" x2="18" y2="18"></line>
+											</svg>
 										</button>
 									</div>
 								</div>
 							{:else}
-								<div class="track-artwork">
-									{#if track.image_url}
-										<img src={track.image_url} alt="{track.title} artwork" />
-									{:else}
-										<div class="track-artwork-placeholder">
-											<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-												<path d="M9 18V5l12-2v13"></path>
-												<circle cx="6" cy="18" r="3"></circle>
-												<circle cx="18" cy="16" r="3"></circle>
-											</svg>
-										</div>
-									{/if}
+								<div class="track-artwork-col">
+									<div class="track-artwork">
+										{#if track.image_url}
+											<img src={track.image_url} alt="{track.title} artwork" />
+										{:else}
+											<div class="track-artwork-placeholder">
+												<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+													<path d="M9 18V5l12-2v13"></path>
+													<circle cx="6" cy="18" r="3"></circle>
+													<circle cx="18" cy="16" r="3"></circle>
+												</svg>
+											</div>
+										{/if}
+									</div>
+									<a href="/track/{track.id}" class="track-view-link" title="view track page">view</a>
 								</div>
-				<div class="track-info">
+								<div class="track-info">
 					<div class="track-title">
 						{track.title}
 						{#if track.copyright_flagged}
@@ -1051,7 +867,10 @@
 										onclick={() => startEditTrack(track)}
 										title="edit track"
 									>
-										✎
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+											<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+										</svg>
 									</button>
 									<button
 										class="action-btn delete-btn"
@@ -1061,8 +880,6 @@
 										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 											<polyline points="3 6 5 6 21 6"></polyline>
 											<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-											<line x1="10" y1="11" x2="10" y2="17"></line>
-											<line x1="14" y1="11" x2="14" y2="17"></line>
 										</svg>
 									</button>
 								</div>
@@ -1423,22 +1240,22 @@
 		margin: 0;
 	}
 
-	.profile-section,
-	.upload-section {
-		margin-bottom: 3rem;
+	.profile-section {
+		margin-bottom: 2rem;
 	}
 
-	.profile-section h2,
-	.upload-section h2 {
+	.profile-section h2 {
 		font-size: var(--text-page-heading);
-		margin-bottom: 1.5rem;
+		margin-bottom: 1rem;
 	}
 
 	.section-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 1.5rem;
+		margin-bottom: 1rem;
+		gap: 0.75rem;
+		flex-wrap: wrap;
 	}
 
 	.section-header h2 {
@@ -1448,12 +1265,12 @@
 	.view-profile-link {
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: 0.9rem;
-		padding: 0.4rem 0.75rem;
+		font-size: 0.8rem;
+		padding: 0.35rem 0.6rem;
 		background: var(--bg-tertiary);
-		border-radius: 6px;
+		border-radius: 5px;
 		border: 1px solid var(--border-default);
-		transition: all 0.2s;
+		transition: all 0.15s;
 		white-space: nowrap;
 	}
 
@@ -1463,34 +1280,103 @@
 		background: var(--bg-hover);
 	}
 
+	/* upload card */
+	.upload-card {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 1rem 1.25rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
+		border-radius: 8px;
+		text-decoration: none;
+		color: var(--text-primary);
+		transition: all 0.15s;
+		margin-bottom: 2rem;
+	}
+
+	.upload-card:hover {
+		border-color: var(--accent);
+		background: var(--bg-hover);
+	}
+
+	.upload-card:active {
+		transform: scale(0.99);
+	}
+
+	.upload-card-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		border-radius: 10px;
+		color: var(--accent);
+		flex-shrink: 0;
+	}
+
+	.upload-card-text {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.upload-card-title {
+		display: block;
+		font-weight: 600;
+		font-size: 0.95rem;
+		color: var(--text-primary);
+	}
+
+	.upload-card-subtitle {
+		display: block;
+		font-size: 0.8rem;
+		color: var(--text-tertiary);
+	}
+
+	.upload-card-chevron {
+		color: var(--text-muted);
+		flex-shrink: 0;
+		transition: transform 0.15s;
+	}
+
+	.upload-card:hover .upload-card-chevron {
+		transform: translateX(2px);
+		color: var(--accent);
+	}
+
 	form {
 		background: var(--bg-tertiary);
-		padding: 2rem;
+		padding: 1.25rem;
 		border-radius: 8px;
 		border: 1px solid var(--border-subtle);
 	}
 
 	.form-group {
-		margin-bottom: 1.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.form-group:last-of-type {
+		margin-bottom: 1.25rem;
 	}
 
 	label {
 		display: block;
 		color: var(--text-secondary);
-		margin-bottom: 0.5rem;
-		font-size: 0.9rem;
+		margin-bottom: 0.4rem;
+		font-size: 0.85rem;
 	}
 
 	input[type='text'] {
 		width: 100%;
-		padding: 0.75rem;
+		padding: 0.6rem 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
 		border-radius: 4px;
 		color: var(--text-primary);
-		font-size: 1rem;
+		font-size: 0.95rem;
 		font-family: inherit;
-		transition: all 0.2s;
+		transition: all 0.15s;
 	}
 
 	input[type='text']:focus {
@@ -1505,16 +1391,16 @@
 
 	textarea {
 		width: 100%;
-		padding: 0.75rem;
+		padding: 0.6rem 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
 		border-radius: 4px;
 		color: var(--text-primary);
-		font-size: 1rem;
+		font-size: 0.95rem;
 		font-family: inherit;
-		transition: all 0.2s;
+		transition: all 0.15s;
 		resize: vertical;
-		min-height: 100px;
+		min-height: 80px;
 	}
 
 	textarea:focus {
@@ -1528,8 +1414,8 @@
 	}
 
 	.hint {
-		margin-top: 0.5rem;
-		font-size: 0.85rem;
+		margin-top: 0.35rem;
+		font-size: 0.75rem;
 		color: var(--text-muted);
 	}
 
@@ -1581,12 +1467,6 @@
 	input[type='file']:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
-	}
-
-	.format-hint {
-		margin-top: 0.25rem;
-		font-size: 0.8rem;
-		color: var(--text-tertiary);
 	}
 
 	.file-info {
@@ -1680,8 +1560,15 @@
 		opacity: 0.6;
 	}
 
-	.track-artwork {
+	.track-artwork-col {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.35rem;
 		flex-shrink: 0;
+	}
+
+	.track-artwork {
 		width: 48px;
 		height: 48px;
 		border-radius: 4px;
@@ -1703,6 +1590,17 @@
 		align-items: center;
 		justify-content: center;
 		color: var(--text-muted);
+	}
+
+	.track-view-link {
+		font-size: 0.7rem;
+		color: var(--text-muted);
+		text-decoration: none;
+		transition: color 0.15s;
+	}
+
+	.track-view-link:hover {
+		color: var(--accent);
 	}
 
 	.track-item:hover {
@@ -1871,53 +1769,52 @@
 	}
 
 	.action-btn {
-		width: 36px;
-		height: 36px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
 		padding: 0;
 		background: transparent;
-		border: 1px solid var(--border-emphasis);
-		border-radius: 4px;
+		border: 1px solid var(--border-default);
+		border-radius: 6px;
 		color: var(--text-tertiary);
-		font-size: 1.2rem;
-		line-height: 1;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.15s;
+		flex-shrink: 0;
+	}
+
+	.action-btn svg {
+		flex-shrink: 0;
+	}
+
+	.action-btn:hover {
+		transform: none;
+		box-shadow: none;
 	}
 
 	.edit-btn:hover {
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-		border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		border-color: var(--accent);
 		color: var(--accent);
-		transform: none;
-		box-shadow: none;
-	}
-
-	.delete-btn {
-		font-size: 1.5rem;
 	}
 
 	.delete-btn:hover {
-		background: color-mix(in srgb, var(--error) 10%, transparent);
-		border-color: color-mix(in srgb, var(--error) 50%, transparent);
+		background: color-mix(in srgb, var(--error) 12%, transparent);
+		border-color: var(--error);
 		color: var(--error);
-		transform: none;
-		box-shadow: none;
 	}
 
 	.save-btn:hover {
-		background: color-mix(in srgb, var(--success) 10%, transparent);
-		border-color: color-mix(in srgb, var(--success) 50%, transparent);
+		background: color-mix(in srgb, var(--success) 12%, transparent);
+		border-color: var(--success);
 		color: var(--success);
-		transform: none;
-		box-shadow: none;
 	}
 
 	.cancel-btn:hover {
-		background: color-mix(in srgb, var(--text-tertiary) 10%, transparent);
-		border-color: color-mix(in srgb, var(--text-tertiary) 50%, transparent);
+		background: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
+		border-color: var(--text-tertiary);
 		color: var(--text-secondary);
-		transform: none;
-		box-shadow: none;
 	}
 
 	.edit-input {
@@ -1957,13 +1854,6 @@
 	.edit-input:focus {
 		outline: none;
 		border-color: var(--accent);
-	}
-
-	.upload-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
 	}
 
 	.loading-container {
@@ -2141,41 +2031,51 @@
 
 	/* your data section */
 	.data-section {
-		margin-top: 3rem;
+		margin-top: 2.5rem;
 	}
 
 	.data-section h2 {
 		font-size: var(--text-page-heading);
-		margin-bottom: 1.5rem;
+		margin-bottom: 1rem;
 	}
 
 	.data-control {
-		padding: 1.5rem;
+		padding: 1rem 1.25rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		gap: 1rem;
-		margin-bottom: 1rem;
+		gap: 0.75rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.data-control:last-child {
 		margin-bottom: 0;
 	}
 
+	.control-info {
+		flex: 1;
+		min-width: 0;
+	}
+
 	.control-info h3 {
-		font-size: 1rem;
+		font-size: 0.9rem;
 		font-weight: 600;
-		margin: 0 0 0.25rem 0;
+		margin: 0 0 0.15rem 0;
 		color: var(--text-primary);
 	}
 
 	.control-description {
-		font-size: 0.85rem;
+		font-size: 0.75rem;
 		color: var(--text-tertiary);
 		margin: 0;
+		line-height: 1.4;
+	}
+
+	.control-description a {
+		color: var(--accent);
 	}
 
 	.export-btn {
@@ -2442,8 +2342,13 @@
 	.token-form {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.75rem;
 		flex-wrap: wrap;
+		width: 100%;
+	}
+
+	.token-form .create-token-btn {
+		margin-left: auto;
 	}
 
 	.expires-label {
@@ -2646,5 +2551,332 @@
 		font-size: 0.9rem;
 		color: var(--text-muted);
 		margin: 0;
+	}
+
+	/* mobile responsive */
+	@media (max-width: 600px) {
+		main {
+			padding: 0 0.75rem calc(var(--player-height, 120px) + 1.5rem + env(safe-area-inset-bottom, 0px));
+		}
+
+		.portal-header {
+			margin-bottom: 1.25rem;
+		}
+
+		.portal-header h2 {
+			font-size: 1.25rem;
+		}
+
+		.profile-section h2,
+		.tracks-section h2,
+		.albums-section h2,
+		.data-section h2 {
+			font-size: 1.1rem;
+		}
+
+		.section-header {
+			margin-bottom: 0.75rem;
+		}
+
+		.view-profile-link {
+			font-size: 0.75rem;
+			padding: 0.3rem 0.5rem;
+		}
+
+		form {
+			padding: 1rem;
+		}
+
+		.form-group {
+			margin-bottom: 0.85rem;
+		}
+
+		label {
+			font-size: 0.8rem;
+			margin-bottom: 0.3rem;
+		}
+
+		input[type='text'],
+		input[type='url'],
+		textarea {
+			padding: 0.5rem 0.6rem;
+			font-size: 0.9rem;
+		}
+
+		textarea {
+			min-height: 70px;
+		}
+
+		.hint {
+			font-size: 0.7rem;
+		}
+
+		.avatar-preview img {
+			width: 48px;
+			height: 48px;
+		}
+
+		button[type="submit"] {
+			padding: 0.6rem;
+			font-size: 0.9rem;
+		}
+
+		/* upload card mobile */
+		.upload-card {
+			padding: 0.85rem 1rem;
+			margin-bottom: 1.5rem;
+		}
+
+		.upload-card-icon {
+			width: 40px;
+			height: 40px;
+		}
+
+		.upload-card-icon svg {
+			width: 20px;
+			height: 20px;
+		}
+
+		.upload-card-title {
+			font-size: 0.9rem;
+		}
+
+		.upload-card-subtitle {
+			font-size: 0.75rem;
+		}
+
+		/* tracks mobile */
+		.tracks-section,
+		.albums-section,
+		.data-section {
+			margin-top: 2rem;
+		}
+
+		.tracks-list {
+			gap: 0.5rem;
+		}
+
+		.track-item {
+			padding: 0.75rem;
+			gap: 0.75rem;
+		}
+
+		.track-artwork-col {
+			gap: 0.25rem;
+		}
+
+		.track-artwork {
+			width: 40px;
+			height: 40px;
+		}
+
+		.track-view-link {
+			font-size: 0.65rem;
+		}
+
+		.track-title {
+			font-size: 0.9rem;
+		}
+
+		.track-meta {
+			font-size: 0.8rem;
+		}
+
+		.track-date {
+			font-size: 0.75rem;
+		}
+
+		.track-actions {
+			margin-left: 0.5rem;
+			gap: 0.35rem;
+		}
+
+		.action-btn {
+			width: 30px;
+			height: 30px;
+		}
+
+		.action-btn svg {
+			width: 14px;
+			height: 14px;
+		}
+
+		/* edit mode mobile */
+		.edit-container {
+			gap: 0.75rem;
+		}
+
+		.edit-fields {
+			gap: 0.6rem;
+		}
+
+		.edit-label {
+			font-size: 0.8rem;
+		}
+
+		.edit-input {
+			padding: 0.45rem 0.5rem;
+			font-size: 0.85rem;
+		}
+
+		.edit-actions {
+			gap: 0.35rem;
+		}
+
+		/* data section mobile */
+		.data-control {
+			padding: 0.85rem 1rem;
+			gap: 0.6rem;
+		}
+
+		.control-info h3 {
+			font-size: 0.85rem;
+		}
+
+		.control-description {
+			font-size: 0.7rem;
+		}
+
+		.export-btn {
+			padding: 0.5rem 0.85rem;
+			font-size: 0.8rem;
+		}
+
+		.toggle-switch {
+			gap: 0.5rem;
+		}
+
+		.toggle-slider {
+			width: 40px;
+			height: 22px;
+		}
+
+		.toggle-slider::after {
+			width: 18px;
+			height: 18px;
+		}
+
+		.toggle-switch input:checked + .toggle-slider::after {
+			left: 20px;
+		}
+
+		.toggle-label {
+			font-size: 0.75rem;
+			min-width: auto;
+		}
+
+		/* developer section mobile */
+		.token-form {
+			gap: 0.75rem;
+		}
+
+		.token-name-input {
+			min-width: 100px;
+			font-size: 0.85rem;
+			padding: 0.45rem 0.6rem;
+		}
+
+		.expires-label {
+			font-size: 0.8rem;
+		}
+
+		.expires-select {
+			font-size: 0.8rem;
+			padding: 0.4rem 0.6rem;
+		}
+
+		.create-token-btn {
+			padding: 0.5rem 0.85rem;
+			font-size: 0.8rem;
+		}
+
+		.token-display {
+			gap: 0.5rem;
+		}
+
+		.token-value {
+			font-size: 0.75rem;
+			padding: 0.5rem;
+		}
+
+		.copy-btn,
+		.dismiss-btn {
+			padding: 0.35rem 0.6rem;
+			font-size: 0.75rem;
+		}
+
+		.token-warning {
+			font-size: 0.75rem;
+		}
+
+		.tokens-header {
+			font-size: 0.8rem;
+		}
+
+		.token-item {
+			padding: 0.6rem;
+			gap: 0.5rem;
+		}
+
+		.token-name {
+			font-size: 0.8rem;
+		}
+
+		.token-meta {
+			font-size: 0.7rem;
+		}
+
+		.revoke-btn {
+			padding: 0.35rem 0.6rem;
+			font-size: 0.75rem;
+		}
+
+		/* danger zone mobile */
+		.delete-account-btn {
+			padding: 0.5rem 0.85rem;
+			font-size: 0.8rem;
+		}
+
+		.delete-warning {
+			font-size: 0.8rem;
+		}
+
+		.atproto-option {
+			font-size: 0.8rem;
+		}
+
+		.atproto-note,
+		.atproto-warning {
+			font-size: 0.75rem;
+		}
+
+		.confirm-prompt {
+			font-size: 0.8rem;
+		}
+
+		.confirm-input {
+			font-size: 0.85rem;
+			padding: 0.6rem;
+		}
+
+		.delete-actions button {
+			padding: 0.5rem 0.85rem;
+			font-size: 0.8rem;
+		}
+
+		/* albums mobile */
+		.albums-grid {
+			grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+			gap: 0.75rem;
+		}
+
+		.album-card {
+			padding: 0.75rem;
+			gap: 0.5rem;
+		}
+
+		.album-title {
+			font-size: 0.85rem;
+		}
 	}
 </style>
