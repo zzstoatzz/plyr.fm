@@ -262,4 +262,26 @@
 			transform: translate(-50%, -50%) scale(1);
 		}
 	}
+
+	@media (max-width: 768px) {
+		.menu-popover {
+			top: auto;
+			bottom: calc(var(--player-height, 0px) + 1rem + env(safe-area-inset-bottom, 0px));
+			transform: translateX(-50%);
+			max-height: calc(80vh - var(--player-height, 0px));
+			overflow-y: auto;
+			animation: slideInMobile 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+		}
+
+		@keyframes slideInMobile {
+			from {
+				opacity: 0;
+				transform: translateX(-50%) translateY(10px);
+			}
+			to {
+				opacity: 1;
+				transform: translateX(-50%) translateY(0);
+			}
+		}
+	}
 </style>
