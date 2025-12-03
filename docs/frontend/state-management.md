@@ -142,12 +142,14 @@ plyr.fm uses global state managers following the Svelte 5 runes pattern for cros
 - integrates with main tracks cache for like status
 
 ### preferences
-- user preferences managed through `SettingsMenu.svelte`
+- user preferences managed through `ProfileMenu.svelte` (mobile) and `SettingsMenu.svelte` (desktop)
+- theme selection: dark / light / system (follows OS preference)
 - accent color customization
 - auto-play next track setting
+- hidden tags for discovery feed filtering
 - persisted to backend via `/preferences/` API
 - localStorage fallback for offline access
-- no dedicated state file - integrated into settings component
+- no dedicated state file - integrated into settings components
 
 ### toast (`frontend/src/lib/toast.svelte.ts`)
 - global notification system
@@ -182,12 +184,12 @@ export const globalState = new GlobalState();
 
 ### upload flow
 
-1. user clicks upload on portal page
+1. user clicks upload on dedicated `/upload` page (linked from portal or ProfileMenu)
 2. `uploader.upload()` called - returns immediately
 3. user navigates to homepage
 4. homepage renders cached tracks instantly (no blocking)
 5. upload completes in background
-6. success toast appears
+6. success toast appears with "view track" link
 7. cache refreshes, homepage updates with new track
 
 this avoids HTTP/1.1 connection pooling issues by using cached data instead of blocking on fresh fetches during long-running uploads.
