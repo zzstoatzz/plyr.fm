@@ -3,7 +3,6 @@
 	import { page } from '$app/stores';
 	import { queue } from '$lib/queue.svelte';
 	import { preferences, type Theme } from '$lib/preferences.svelte';
-	import { search } from '$lib/search.svelte';
 	import type { User } from '$lib/types';
 
 	interface Props {
@@ -105,11 +104,6 @@
 		closeMenu();
 		await onLogout();
 	}
-
-	function openSearch() {
-		closeMenu();
-		search.open();
-	}
 </script>
 
 <div class="profile-menu">
@@ -138,17 +132,6 @@
 
 			{#if !showSettings}
 				<nav class="menu-items">
-					<button class="menu-item search-item" onclick={openSearch}>
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<circle cx="11" cy="11" r="8"></circle>
-							<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-						</svg>
-						<div class="item-content">
-							<span class="item-title">search</span>
-							<span class="item-subtitle">tracks, artists, albums, tags</span>
-						</div>
-					</button>
-
 					{#if !isOnPortal}
 						<a href="/portal" class="menu-item" onclick={closeMenu}>
 							<svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
@@ -413,16 +396,6 @@
 
 	.menu-item.logout:hover svg:first-child {
 		color: var(--error);
-	}
-
-	.menu-item.search-item {
-		background: color-mix(in srgb, var(--accent) 8%, transparent);
-		border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
-	}
-
-	.menu-item.search-item:hover {
-		background: color-mix(in srgb, var(--accent) 15%, transparent);
-		border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 	}
 
 	.item-content {
