@@ -26,12 +26,9 @@
 			return;
 		}
 
-		console.log('fetching likers for track', trackId);
-
 		const fetchLikers = async () => {
 			try {
 				const url = `${API_URL}/tracks/${trackId}/likes`;
-				console.log('fetching from:', url);
 				const response = await fetch(url);
 
 				if (!response.ok) {
@@ -41,7 +38,6 @@
 				}
 
 				const data = await response.json();
-				console.log('received likers data:', data);
 				likers = data.users || [];
 			} catch (err) {
 				error = 'failed to load';
