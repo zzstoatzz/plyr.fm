@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.atproto.handles import search_handles
@@ -142,14 +142,16 @@ async def unified_search(
 async def _search_tracks(
     db: AsyncSession, query: str, limit: int
 ) -> list[TrackSearchResult]:
-    """search tracks by title using trigram similarity."""
+    """search tracks by title using trigram similarity + substring matching."""
     # use pg_trgm similarity function for fuzzy matching
     similarity = func.similarity(Track.title, query)
+    # also match substrings (e.g. "real" in "really")
+    substring_match = Track.title.ilike(f"%{query}%")
 
     stmt = (
         select(Track, Artist, similarity.label("relevance"))
         .join(Artist, Track.artist_did == Artist.did)
-        .where(similarity > 0.1)  # minimum similarity threshold
+        .where(or_(similarity > 0.1, substring_match))
         .order_by(similarity.desc())
         .limit(limit)
     )
@@ -173,15 +175,20 @@ async def _search_tracks(
 async def _search_artists(
     db: AsyncSession, query: str, limit: int
 ) -> list[ArtistSearchResult]:
-    """search artists by handle and display_name using trigram similarity."""
+    """search artists by handle and display_name using trigram similarity + substring."""
     # combine similarity scores from handle and display_name (take max)
     handle_sim = func.similarity(Artist.handle, query)
     name_sim = func.similarity(Artist.display_name, query)
     combined_sim = func.greatest(handle_sim, name_sim)
+    # also match substrings
+    substring_match = or_(
+        Artist.handle.ilike(f"%{query}%"),
+        Artist.display_name.ilike(f"%{query}%"),
+    )
 
     stmt = (
         select(Artist, combined_sim.label("relevance"))
-        .where(combined_sim > 0.1)
+        .where(or_(combined_sim > 0.1, substring_match))
         .order_by(combined_sim.desc())
         .limit(limit)
     )
@@ -204,13 +211,14 @@ async def _search_artists(
 async def _search_albums(
     db: AsyncSession, query: str, limit: int
 ) -> list[AlbumSearchResult]:
-    """search albums by title using trigram similarity."""
+    """search albums by title using trigram similarity + substring."""
     similarity = func.similarity(Album.title, query)
+    substring_match = Album.title.ilike(f"%{query}%")
 
     stmt = (
         select(Album, Artist, similarity.label("relevance"))
         .join(Artist, Album.artist_did == Artist.did)
-        .where(similarity > 0.1)
+        .where(or_(similarity > 0.1, substring_match))
         .order_by(similarity.desc())
         .limit(limit)
     )
@@ -235,8 +243,9 @@ async def _search_albums(
 async def _search_tags(
     db: AsyncSession, query: str, limit: int
 ) -> list[TagSearchResult]:
-    """search tags by name using trigram similarity."""
+    """search tags by name using trigram similarity + substring."""
     similarity = func.similarity(Tag.name, query)
+    substring_match = Tag.name.ilike(f"%{query}%")
 
     # count tracks per tag
     track_count_subq = (
@@ -252,7 +261,7 @@ async def _search_tags(
             similarity.label("relevance"),
         )
         .outerjoin(track_count_subq, Tag.id == track_count_subq.c.tag_id)
-        .where(similarity > 0.1)
+        .where(or_(similarity > 0.1, substring_match))
         .order_by(similarity.desc())
         .limit(limit)
     )
