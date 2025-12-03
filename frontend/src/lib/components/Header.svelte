@@ -109,10 +109,12 @@
 							<span>liked</span>
 						</a>
 					{/if}
-					<a href="/portal" class="user-handle" title="go to portal">@{user?.handle}</a>
-					<SearchTrigger />
+					{#if $page.url.pathname !== '/portal'}
+						<a href="/portal" class="user-handle" title="go to portal">@{user?.handle}</a>
+					{/if}
 					<SettingsMenu />
 					<button onclick={onLogout} class="btn-logout" title="log out">logout</button>
+					<SearchTrigger />
 				</div>
 
 				<!-- Mobile nav: just ProfileMenu -->
