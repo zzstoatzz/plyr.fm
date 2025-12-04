@@ -36,6 +36,7 @@ from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackTag
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
+from backend.utilities.audio import extract_duration
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
 from backend.utilities.progress import R2ProgressTracker
@@ -119,6 +120,12 @@ async def _process_upload_background(
                     error=f"unsupported file type: {ext}",
                 )
                 return
+
+            # extract duration from audio file
+            with open(file_path, "rb") as f:
+                duration = extract_duration(f)
+            if duration:
+                logfire.info("extracted duration", duration=duration)
 
             # save audio file
             await job_service.update_progress(
@@ -322,7 +329,7 @@ async def _process_upload_background(
                             audio_url=r2_url,
                             file_type=ext[1:],
                             album=album,
-                            duration=None,
+                            duration=duration,
                             features=featured_artists if featured_artists else None,
                             image_url=image_url,
                         )
@@ -345,6 +352,8 @@ async def _process_upload_background(
                     phase="database",
                 )
                 extra = {}
+                if duration:
+                    extra["duration"] = duration
                 album_record = None
                 if album:
                     extra["album"] = album
