@@ -1,5 +1,6 @@
 """Track detail and playback endpoints."""
 
+import asyncio
 import logging
 from typing import Annotated
 
@@ -8,11 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend._internal.atproto.teal import create_teal_play_record, update_teal_status
 from backend._internal.auth import get_session
 from backend.config import settings
 from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import get_like_counts, get_track_tags
+from backend.utilities.auth import get_session_id_from_request
 
 from .router import router
 
@@ -28,11 +31,8 @@ async def get_track(
 ) -> TrackResponse:
     """Get a specific track."""
     liked_track_ids: set[int] | None = None
-    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
-        "Bearer ", ""
-    )
     if (
-        session_id
+        (session_id := get_session_id_from_request(request, session_id_cookie))
         and (auth_session := await get_session(session_id))
         and await db.scalar(
             select(TrackLike.track_id).where(
@@ -48,13 +48,13 @@ async def get_track(
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.id == track_id)
     )
-    track = result.scalar_one_or_none()
-
-    if not track:
+    if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
 
-    like_counts = await get_like_counts(db, [track_id])
-    track_tags = await get_track_tags(db, [track_id])
+    like_counts, track_tags = await asyncio.gather(
+        get_like_counts(db, [track_id]),
+        get_track_tags(db, [track_id]),
+    )
 
     return await TrackResponse.from_track(
         track,
@@ -72,18 +72,12 @@ async def _scrobble_to_teal(
     duration: int | None,
     album_name: str | None,
 ) -> None:
-    """background task to scrobble a play to teal.fm."""
-    from backend._internal.atproto.teal import (
-        create_teal_play_record,
-        update_teal_status,
-    )
-
-    auth_session = await get_session(session_id)
-    if not auth_session:
+    """scrobble a play to teal.fm (creates play record + updates status)."""
+    if not (auth_session := await get_session(session_id)):
         logger.warning(f"teal scrobble failed: session {session_id[:8]}... not found")
         return
 
-    origin_url = f"https://plyr.fm/track/{track_id}"
+    origin_url = f"{settings.frontend.url}/track/{track_id}"
 
     try:
         # create play record (scrobble)
@@ -131,41 +125,35 @@ async def increment_play_count(
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.id == track_id)
     )
-    track = result.scalar_one_or_none()
 
-    if not track:
+    if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
 
     track.play_count += 1
     await db.commit()
 
     # check if user wants teal scrobbling
-    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
-        "Bearer ", ""
-    )
-
-    if session_id:
-        auth_session = await get_session(session_id)
-        if auth_session:
-            # check preferences
-            prefs_result = await db.execute(
+    if (
+        (session_id := get_session_id_from_request(request, session_id_cookie))
+        and (auth_session := await get_session(session_id))
+        and (
+            prefs := await db.scalar(
                 select(UserPreferences).where(UserPreferences.did == auth_session.did)
             )
-            prefs = prefs_result.scalar_one_or_none()
-
-            if prefs and prefs.enable_teal_scrobbling:
-                # check if session has teal scopes
-                scope = auth_session.oauth_session.get("scope", "")
-                if settings.teal.play_collection in scope:
-                    # scrobble in background
-                    background_tasks.add_task(
-                        _scrobble_to_teal,
-                        session_id=session_id,
-                        track_id=track_id,
-                        track_title=track.title,
-                        artist_name=track.artist.display_name or track.artist.handle,
-                        duration=track.duration,
-                        album_name=track.album_rel.title if track.album_rel else None,
-                    )
+        )
+        and prefs.enable_teal_scrobbling
+    ):
+        # check if session has teal scopes
+        scope = auth_session.oauth_session.get("scope", "")
+        if settings.teal.play_collection in scope:
+            background_tasks.add_task(
+                _scrobble_to_teal,
+                session_id=session_id,
+                track_id=track_id,
+                track_title=track.title,
+                artist_name=track.artist.display_name or track.artist.handle,
+                duration=track.duration,
+                album_name=track.album_rel.title if track.album_rel else None,
+            )
 
     return {"play_count": track.play_count}

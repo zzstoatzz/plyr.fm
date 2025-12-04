@@ -95,14 +95,16 @@ class NowPlayingService {
 		this.reportTimer = window.setTimeout(async () => {
 			this.reportTimer = null;
 			if (this.pendingState) {
-				await this.sendReport(
-					this.pendingState.track,
-					this.pendingState.isPlaying,
-					this.pendingState.currentTimeMs,
-					this.pendingState.durationMs
-				);
+				const { track, isPlaying, currentTimeMs, durationMs } = this.pendingState;
+				await this.sendReport(track, isPlaying, currentTimeMs, durationMs);
 				this.pendingState = null;
 				this.lastReportTime = Date.now();
+				// update fingerprint so we don't re-report the same state
+				this.lastReportedState = JSON.stringify({
+					trackId: track.id,
+					isPlaying,
+					progressBucket: Math.floor(currentTimeMs / 5000)
+				});
 			}
 		}, REPORT_DEBOUNCE_MS);
 	}

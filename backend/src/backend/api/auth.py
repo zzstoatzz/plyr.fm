@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from starlette.responses import Response
 
 from backend._internal import (
@@ -34,6 +34,27 @@ class CurrentUserResponse(BaseModel):
 
     did: str
     handle: str
+
+
+class DeveloperTokenInfo(BaseModel):
+    """info about a developer token (without the actual token)."""
+
+    session_id: str
+    name: str | None
+    created_at: str  # ISO format
+    expires_at: str | None  # ISO format or null for never
+
+    @field_validator("session_id", mode="before")
+    @classmethod
+    def truncate_session_id(cls, v: str) -> str:
+        """truncate to 8-char prefix for safe display."""
+        return v[:8] if len(v) > 8 else v
+
+
+class DeveloperTokenListResponse(BaseModel):
+    """response model for listing developer tokens."""
+
+    tokens: list[DeveloperTokenInfo]
 
 
 @router.get("/start")
@@ -206,21 +227,6 @@ async def get_current_user(
     )
 
 
-class DeveloperTokenInfo(BaseModel):
-    """info about a developer token (without the actual token)."""
-
-    session_id: str  # first 8 chars only for identification
-    name: str | None
-    created_at: str  # ISO format
-    expires_at: str | None  # ISO format or null for never
-
-
-class DeveloperTokenListResponse(BaseModel):
-    """response model for listing developer tokens."""
-
-    tokens: list[DeveloperTokenInfo]
-
-
 @router.get("/developer-tokens")
 async def get_developer_tokens(
     session: Session = Depends(require_auth),
@@ -231,7 +237,7 @@ async def get_developer_tokens(
     return DeveloperTokenListResponse(
         tokens=[
             DeveloperTokenInfo(
-                session_id=t.session_id[:8],  # only show prefix for identification
+                session_id=t.session_id,
                 name=t.token_name,
                 created_at=t.created_at.isoformat(),
                 expires_at=t.expires_at.isoformat() if t.expires_at else None,

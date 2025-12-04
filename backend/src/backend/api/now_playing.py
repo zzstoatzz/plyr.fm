@@ -58,8 +58,8 @@ class NowPlayingResponse(BaseModel):
     track_url: str
     image_url: str | None
 
-    # service identifier for Piper
-    service_base_url: str = "plyr.fm"
+    # service identifier for Piper (domain extracted from frontend URL)
+    service_base_url: str
 
 
 @router.post("/")
@@ -153,7 +153,7 @@ async def get_now_playing_by_handle(
         file_id=state.file_id,
         track_url=state.track_url,
         image_url=state.image_url,
-        service_base_url="plyr.fm",
+        service_base_url=settings.frontend.domain,
     )
 
 
@@ -184,5 +184,5 @@ async def get_now_playing_by_did(
         file_id=state.file_id,
         track_url=state.track_url,
         image_url=state.image_url,
-        service_base_url="plyr.fm",
+        service_base_url=settings.frontend.domain,
     )

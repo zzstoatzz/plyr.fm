@@ -102,6 +102,15 @@ class FrontendSettings(AppSettingsSection):
 
     @computed_field
     @property
+    def domain(self) -> str:
+        """extract domain from frontend URL (e.g., 'plyr.fm', 'stg.plyr.fm')."""
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.url)
+        return parsed.netloc or "plyr.fm"
+
+    @computed_field
+    @property
     def resolved_cors_origin_regex(self) -> str:
         """Resolved CORS origin regex pattern."""
         if self.cors_origin_regex is not None:

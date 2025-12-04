@@ -280,8 +280,7 @@ async def handle_oauth_callback(
     """
     try:
         # look up stored state to determine which scope was used
-        stored_state = await _state_store.get_state(state)
-        if stored_state:
+        if stored_state := await _state_store.get_state(state):
             client = get_oauth_client_for_scope(stored_state.scope)
             logger.info(
                 f"callback using client for scope: {stored_state.scope[:50]}..."
