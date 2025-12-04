@@ -156,7 +156,7 @@ async def increment_play_count(
             if prefs and prefs.enable_teal_scrobbling:
                 # check if session has teal scopes
                 scope = auth_session.oauth_session.get("scope", "")
-                if settings.atproto.teal_play_collection in scope:
+                if settings.teal.play_collection in scope:
                     # scrobble in background
                     background_tasks.add_task(
                         _scrobble_to_teal,

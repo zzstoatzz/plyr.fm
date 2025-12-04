@@ -81,7 +81,9 @@ oauth_client = OAuthClient(
 oauth_client_with_teal = OAuthClient(
     client_id=settings.atproto.client_id,
     redirect_uri=settings.atproto.redirect_uri,
-    scope=settings.atproto.resolved_scope_with_teal,
+    scope=settings.atproto.resolved_scope_with_teal(
+        settings.teal.play_collection, settings.teal.status_collection
+    ),
     state_store=_state_store,
     session_store=_session_store,
 )
@@ -89,7 +91,7 @@ oauth_client_with_teal = OAuthClient(
 
 def get_oauth_client_for_scope(scope: str) -> OAuthClient:
     """get the appropriate OAuth client for a given scope string."""
-    if settings.atproto.teal_play_collection in scope:
+    if settings.teal.play_collection in scope:
         return oauth_client_with_teal
     return oauth_client
 

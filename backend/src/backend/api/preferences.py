@@ -42,7 +42,7 @@ def _has_teal_scope(session: Session) -> bool:
     if not session.oauth_session:
         return False
     scope = session.oauth_session.get("scope", "")
-    return settings.atproto.teal_play_collection in scope
+    return settings.teal.play_collection in scope
 
 
 @router.get("/")

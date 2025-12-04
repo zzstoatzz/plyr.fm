@@ -33,7 +33,7 @@ def build_teal_play_record(
     now = datetime.now(UTC)
 
     record: dict[str, Any] = {
-        "$type": settings.atproto.teal_play_collection,
+        "$type": settings.teal.play_collection,
         "trackName": track_name,
         "artists": [{"artistName": artist_name}],
         "musicServiceBaseDomain": "plyr.fm",
@@ -91,7 +91,7 @@ def build_teal_status_record(
         item["originUrl"] = origin_url
 
     record: dict[str, Any] = {
-        "$type": settings.atproto.teal_status_collection,
+        "$type": settings.teal.status_collection,
         "time": now.isoformat().replace("+00:00", "Z"),
         "expiry": expiry.isoformat().replace("+00:00", "Z"),
         "item": item,
@@ -135,7 +135,7 @@ async def create_teal_play_record(
 
     payload = {
         "repo": auth_session.did,
-        "collection": settings.atproto.teal_play_collection,
+        "collection": settings.teal.play_collection,
         "record": record,
     }
 
@@ -182,7 +182,7 @@ async def update_teal_status(
 
     payload = {
         "repo": auth_session.did,
-        "collection": settings.atproto.teal_status_collection,
+        "collection": settings.teal.status_collection,
         "rkey": "self",
         "record": record,
     }

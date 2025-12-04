@@ -95,8 +95,9 @@
 						developerToken = data.session_id;
 						toast.success('developer token created - save it now!');
 					} else {
-						// regular login - initialize auth
+						// regular login - initialize auth and refresh preferences
 						await auth.initialize();
+						await preferences.fetch();
 					}
 				}
 			} catch (_e) {

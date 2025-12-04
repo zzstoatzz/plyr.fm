@@ -1,5 +1,7 @@
 """tests for preferences api endpoints."""
 
+from collections.abc import AsyncGenerator
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,14 +45,18 @@ def mock_session() -> MockSession:
 @pytest.fixture
 def mock_session_with_teal() -> MockSession:
     """mock session with teal scopes."""
-    return MockSession(scope=settings.atproto.resolved_scope_with_teal)
+    return MockSession(
+        scope=settings.atproto.resolved_scope_with_teal(
+            settings.teal.play_collection, settings.teal.status_collection
+        )
+    )
 
 
 @pytest.fixture
 async def client_no_teal(
     db_session: AsyncSession,
     mock_session: MockSession,
-) -> AsyncClient:
+) -> AsyncGenerator[AsyncClient, None]:
     """authenticated client without teal scopes."""
     app.dependency_overrides[require_auth] = lambda: mock_session
 
@@ -67,7 +73,7 @@ async def client_no_teal(
 async def client_with_teal(
     db_session: AsyncSession,
     mock_session_with_teal: MockSession,
-) -> AsyncClient:
+) -> AsyncGenerator[AsyncClient, None]:
     """authenticated client with teal scopes."""
     app.dependency_overrides[require_auth] = lambda: mock_session_with_teal
 

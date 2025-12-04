@@ -4,7 +4,7 @@ from backend._internal.atproto.teal import (
     build_teal_play_record,
     build_teal_status_record,
 )
-from backend.config import settings
+from backend.config import TealSettings, settings
 
 
 class TestBuildTealPlayRecord:
@@ -17,7 +17,7 @@ class TestBuildTealPlayRecord:
             artist_name="Test Artist",
         )
 
-        assert record["$type"] == settings.atproto.teal_play_collection
+        assert record["$type"] == settings.teal.play_collection
         assert record["trackName"] == "Test Track"
         assert record["artists"] == [{"artistName": "Test Artist"}]
         assert record["musicServiceBaseDomain"] == "plyr.fm"
@@ -49,7 +49,7 @@ class TestBuildTealStatusRecord:
             artist_name="Cool Artist",
         )
 
-        assert record["$type"] == settings.atproto.teal_status_collection
+        assert record["$type"] == settings.teal.status_collection
         assert "time" in record
         assert "expiry" in record
         assert "item" in record
@@ -69,22 +69,74 @@ class TestBuildTealStatusRecord:
         assert record["expiry"] > record["time"]
 
 
-class TestTealScopeConfig:
-    """tests for teal scope configuration."""
+class TestTealSettings:
+    """tests for teal.fm settings configuration."""
 
-    def test_teal_play_collection(self):
-        """should have correct teal play collection."""
-        assert settings.atproto.teal_play_collection == "fm.teal.alpha.feed.play"
+    def test_default_play_collection(self):
+        """should have correct default teal play collection."""
+        assert settings.teal.play_collection == "fm.teal.alpha.feed.play"
 
-    def test_teal_status_collection(self):
-        """should have correct teal status collection."""
-        assert settings.atproto.teal_status_collection == "fm.teal.alpha.actor.status"
+    def test_default_status_collection(self):
+        """should have correct default teal status collection."""
+        assert settings.teal.status_collection == "fm.teal.alpha.actor.status"
+
+    def test_default_enabled(self):
+        """should be enabled by default."""
+        assert settings.teal.enabled is True
 
     def test_resolved_scope_with_teal(self):
         """should include teal scopes in extended scope."""
-        scope = settings.atproto.resolved_scope_with_teal
+        scope = settings.atproto.resolved_scope_with_teal(
+            settings.teal.play_collection, settings.teal.status_collection
+        )
 
         assert "fm.teal.alpha.feed.play" in scope
         assert "fm.teal.alpha.actor.status" in scope
         # should also include base scopes
         assert settings.atproto.track_collection in scope
+
+    def test_env_override_play_collection(self, monkeypatch):
+        """should allow overriding play collection via environment variable.
+
+        this proves we can adapt when teal.fm changes namespaces
+        (e.g., from alpha to stable: fm.teal.feed.play).
+        """
+        monkeypatch.setenv("TEAL_PLAY_COLLECTION", "fm.teal.feed.play")
+
+        # create fresh settings to pick up env var
+        teal = TealSettings()
+        assert teal.play_collection == "fm.teal.feed.play"
+
+    def test_env_override_status_collection(self, monkeypatch):
+        """should allow overriding status collection via environment variable."""
+        monkeypatch.setenv("TEAL_STATUS_COLLECTION", "fm.teal.actor.status")
+
+        teal = TealSettings()
+        assert teal.status_collection == "fm.teal.actor.status"
+
+    def test_env_override_enabled(self, monkeypatch):
+        """should allow disabling teal integration via environment variable."""
+        monkeypatch.setenv("TEAL_ENABLED", "false")
+
+        teal = TealSettings()
+        assert teal.enabled is False
+
+    def test_scope_uses_configured_collections(self, monkeypatch):
+        """should use configured collections in OAuth scope.
+
+        when teal.fm graduates from alpha, we can update via env vars
+        without code changes.
+        """
+        monkeypatch.setenv("TEAL_PLAY_COLLECTION", "fm.teal.feed.play")
+        monkeypatch.setenv("TEAL_STATUS_COLLECTION", "fm.teal.actor.status")
+
+        teal = TealSettings()
+        scope = settings.atproto.resolved_scope_with_teal(
+            teal.play_collection, teal.status_collection
+        )
+
+        assert "fm.teal.feed.play" in scope
+        assert "fm.teal.actor.status" in scope
+        # alpha namespaces should NOT be in scope when overridden
+        assert "fm.teal.alpha.feed.play" not in scope
+        assert "fm.teal.alpha.actor.status" not in scope
