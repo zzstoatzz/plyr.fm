@@ -27,9 +27,11 @@
 		<SearchTrigger />
 	</div>
 	<!-- Logout positioned on far right, mirroring stats -->
-	<div class="logout-right desktop-only">
-		<button onclick={onLogout} class="btn-logout-outer" title="log out">logout</button>
-	</div>
+	{#if isAuthenticated}
+		<div class="logout-right desktop-only">
+			<button onclick={onLogout} class="btn-logout-outer" title="log out">logout</button>
+		</div>
+	{/if}
 	<div class="header-content">
 		<div class="left-section">
 			<!-- desktop: show icons inline -->
