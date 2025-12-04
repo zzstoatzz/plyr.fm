@@ -65,6 +65,7 @@ class TrackResponse(BaseModel):
     comment_count: int
     album: AlbumSummary | None
     tags: set[str] = set()
+    explicit_artwork: bool = False  # whether artwork is marked as explicit/NSFW
     copyright_flagged: bool | None = (
         None  # None = not scanned, False = clear, True = flagged
     )
@@ -154,6 +155,7 @@ class TrackResponse(BaseModel):
             comment_count=comment_count,
             album=album_data,
             tags=tags,
+            explicit_artwork=track.explicit_artwork,
             copyright_flagged=copyright_flagged,
             copyright_match=copyright_match,
         )

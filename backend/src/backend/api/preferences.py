@@ -23,6 +23,7 @@ class PreferencesResponse(BaseModel):
     allow_comments: bool
     hidden_tags: list[str]
     enable_teal_scrobbling: bool
+    show_explicit_artwork: bool
     # indicates if user needs to re-login to activate teal scrobbling
     teal_needs_reauth: bool = False
 
@@ -35,6 +36,7 @@ class PreferencesUpdate(BaseModel):
     allow_comments: bool | None = None
     hidden_tags: list[str] | None = None
     enable_teal_scrobbling: bool | None = None
+    show_explicit_artwork: bool | None = None
 
 
 def _has_teal_scope(session: Session) -> bool:
@@ -77,6 +79,7 @@ async def get_preferences(
         allow_comments=prefs.allow_comments,
         hidden_tags=prefs.hidden_tags or [],
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
+        show_explicit_artwork=prefs.show_explicit_artwork,
         teal_needs_reauth=teal_needs_reauth,
     )
 
@@ -110,6 +113,9 @@ async def update_preferences(
             enable_teal_scrobbling=update.enable_teal_scrobbling
             if update.enable_teal_scrobbling is not None
             else False,
+            show_explicit_artwork=update.show_explicit_artwork
+            if update.show_explicit_artwork is not None
+            else False,
         )
         db.add(prefs)
     else:
@@ -124,6 +130,8 @@ async def update_preferences(
             prefs.hidden_tags = update.hidden_tags
         if update.enable_teal_scrobbling is not None:
             prefs.enable_teal_scrobbling = update.enable_teal_scrobbling
+        if update.show_explicit_artwork is not None:
+            prefs.show_explicit_artwork = update.show_explicit_artwork
 
     await db.commit()
     await db.refresh(prefs)
@@ -138,5 +146,6 @@ async def update_preferences(
         allow_comments=prefs.allow_comments,
         hidden_tags=prefs.hidden_tags or [],
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
+        show_explicit_artwork=prefs.show_explicit_artwork,
         teal_needs_reauth=teal_needs_reauth,
     )

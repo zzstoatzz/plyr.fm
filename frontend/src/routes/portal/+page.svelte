@@ -36,6 +36,7 @@
 	let allowComments = $derived(preferences.allowComments);
 	let enableTealScrobbling = $derived(preferences.enableTealScrobbling);
 	let tealNeedsReauth = $derived(preferences.tealNeedsReauth);
+	let showExplicitArtwork = $derived(preferences.showExplicitArtwork);
 	let savingProfile = $state(false);
 	let profileSuccess = $state('');
 	let profileError = $state('');
@@ -214,6 +215,16 @@
 			await preferences.update({ enable_teal_scrobbling: enabled });
 			await preferences.fetch(); // refetch to get updated teal_needs_reauth status
 			toast.success(enabled ? 'teal.fm scrobbling enabled' : 'teal.fm scrobbling disabled');
+		} catch (_e) {
+			console.error('failed to save preference:', _e);
+			toast.error('failed to update preference');
+		}
+	}
+
+	async function saveShowExplicitArtwork(enabled: boolean) {
+		try {
+			await preferences.update({ show_explicit_artwork: enabled });
+			toast.success(enabled ? 'explicit artwork will be shown' : 'explicit artwork will be blurred');
 		} catch (_e) {
 			console.error('failed to save preference:', _e);
 			toast.error('failed to update preference');
@@ -1055,6 +1066,25 @@
 					/>
 					<span class="toggle-slider"></span>
 					<span class="toggle-label">{allowComments ? 'enabled' : 'disabled'}</span>
+				</label>
+			</div>
+
+			<div class="data-control">
+				<div class="control-info">
+					<h3>explicit artwork</h3>
+					<p class="control-description">
+						show artwork marked as explicit (nudity, etc.) instead of blurring it
+					</p>
+				</div>
+				<label class="toggle-switch">
+					<input
+						type="checkbox"
+						aria-label="Show explicit artwork"
+						checked={showExplicitArtwork}
+						onchange={(e) => saveShowExplicitArtwork((e.target as HTMLInputElement).checked)}
+					/>
+					<span class="toggle-slider"></span>
+					<span class="toggle-label">{showExplicitArtwork ? 'shown' : 'blurred'}</span>
 				</label>
 			</div>
 

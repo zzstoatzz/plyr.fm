@@ -45,6 +45,7 @@ export interface Track {
 	created_at?: string;
 	image_url?: string;
 	is_liked?: boolean;
+	explicit_artwork?: boolean; // whether artwork is marked as explicit/NSFW
 	copyright_flagged?: boolean | null; // null = not scanned, false = clear, true = flagged
 	copyright_match?: string | null; // "Title by Artist" of primary match
 }

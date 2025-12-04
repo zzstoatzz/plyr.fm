@@ -12,6 +12,7 @@
 	import { queue } from '$lib/queue.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
+	import { preferences } from '$lib/preferences.svelte';
 	import type { Track } from '$lib/types';
 
 	interface Comment {
@@ -43,6 +44,11 @@
 	// reactive check if this track is currently playing
 	let isCurrentlyPlaying = $derived(
 		player.currentTrack?.id === track.id && !player.paused
+	);
+
+	// blur explicit artwork unless user has opted in
+	let shouldBlurArtwork = $derived(
+		track.explicit_artwork && !preferences.showExplicitArtwork
 	);
 
 	// URL regex pattern for linkifying comment text
@@ -359,7 +365,7 @@ $effect(() => {
 	<main>
 		<div class="track-detail">
 			<!-- cover art -->
-			<div class="cover-art-container">
+			<div class="cover-art-container" class:explicit-blur={shouldBlurArtwork}>
 				{#if track.image_url}
 					<img src={track.image_url} alt="{track.title} artwork" class="cover-art" />
 				{:else}
@@ -369,6 +375,11 @@ $effect(() => {
 							<circle cx="6" cy="18" r="3"></circle>
 							<circle cx="18" cy="16" r="3"></circle>
 						</svg>
+					</div>
+				{/if}
+				{#if shouldBlurArtwork}
+					<div class="explicit-tooltip">
+						<span>explicit artwork - enable in <a href="/portal">portal</a> or DM <a href="https://bsky.app/profile/plyr.fm" target="_blank" rel="noopener">@plyr.fm</a></span>
 					</div>
 				{/if}
 			</div>
@@ -629,6 +640,53 @@ $effect(() => {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+	}
+
+	.cover-art-container.explicit-blur {
+		position: relative;
+	}
+
+	.cover-art-container.explicit-blur .cover-art {
+		filter: blur(20px);
+		transition: filter 0.2s;
+	}
+
+	.cover-art-container.explicit-blur:hover .cover-art {
+		filter: blur(10px);
+	}
+
+	.explicit-tooltip {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: 6px;
+		padding: 0.75rem 1rem;
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+		text-align: center;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.2s;
+		z-index: 10;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		max-width: 90%;
+	}
+
+	.cover-art-container.explicit-blur:hover .explicit-tooltip {
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	.explicit-tooltip a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.explicit-tooltip a:hover {
+		text-decoration: underline;
 	}
 
 	.cover-art-placeholder {

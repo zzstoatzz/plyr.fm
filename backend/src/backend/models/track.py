@@ -87,6 +87,11 @@ class Track(Base):
         nullable=False, default=False, server_default="false"
     )
 
+    # content moderation
+    explicit_artwork: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default="false"
+    )
+
     @property
     def album(self) -> str | None:
         """get album name from extra (for ATProto compatibility)."""
