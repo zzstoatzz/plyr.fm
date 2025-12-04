@@ -319,7 +319,7 @@ $effect(() => {
 	{#if track.album}
 		<meta property="music:album" content="{track.album.title}" />
 	{/if}
-	{#if track.image_url}
+	{#if track.image_url && !track.explicit_artwork}
 		<meta property="og:image" content="{track.image_url}" />
 		<meta property="og:image:secure_url" content="{track.image_url}" />
 		<meta property="og:image:width" content="1200" />
