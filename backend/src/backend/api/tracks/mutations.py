@@ -293,7 +293,7 @@ async def _update_atproto_record(
         audio_url=audio_url,
         file_type=track.file_type,
         album=track.album,
-        duration=None,
+        duration=track.duration,
         features=track.features if track.features else None,
         image_url=image_url_override or await track.get_image_url(),
     )
@@ -527,7 +527,7 @@ async def restore_track_record(
         audio_url=track.r2_url,
         file_type=track.file_type,
         album=track.album,
-        duration=None,
+        duration=track.duration,
         features=track.features if track.features else None,
         image_url=await track.get_image_url(),
     )
