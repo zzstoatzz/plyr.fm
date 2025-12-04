@@ -47,6 +47,34 @@ plyr.fm should become:
 
 ### December 2025
 
+#### teal.fm scrobbling integration (PR #467, Dec 4)
+
+**what shipped**:
+- native teal.fm scrobbling: when users enable the toggle, plays are recorded to their PDS using teal's ATProto lexicons
+- scrobble triggers at 30% or 30 seconds (whichever comes first) - same threshold as play counts
+- user preference stored in database, toggleable from portal → "your data"
+- settings link to pdsls.dev so users can view their scrobble records
+
+**lexicons used**:
+- `fm.teal.alpha.feed.play` - individual play records (scrobbles)
+- `fm.teal.alpha.actor.status` - now-playing status updates
+
+**configuration** (all optional, sensible defaults):
+- `TEAL_ENABLED` (default: `true`) - feature flag for entire integration
+- `TEAL_PLAY_COLLECTION` (default: `fm.teal.alpha.feed.play`)
+- `TEAL_STATUS_COLLECTION` (default: `fm.teal.alpha.actor.status`)
+
+**code quality improvements** (same PR):
+- added `settings.frontend.domain` computed property for environment-aware URLs
+- extracted `get_session_id_from_request()` utility for bearer token parsing
+- added field validator on `DeveloperTokenInfo.session_id` for auto-truncation
+- applied walrus operators throughout auth and playback code
+- fixed now-playing endpoint firing every 1 second (fingerprint update bug in scheduled reports)
+
+**documentation**: `backend/src/backend/_internal/atproto/teal.py` contains inline docs on the scrobbling flow
+
+---
+
 #### unified search (PR #447, Dec 3)
 
 **what shipped**:
@@ -180,10 +208,9 @@ plyr.fm should become:
 - returns track metadata, playback position, timestamp
 - 204 when nothing playing, 200 with track data otherwise
 
-**speculative integration with teal.fm**:
-- opened draft PR to Piper (teal.fm's scrobbling service): https://github.com/teal-fm/piper/pull/27
-- adds plyr.fm as a source alongside Spotify and Last.fm
-- **status**: awaiting feedback from teal.fm team
+**teal.fm integration**:
+- native scrobbling shipped in PR #467 (Dec 4) - plyr.fm writes directly to user's PDS
+- Piper integration (external polling) still open: https://github.com/teal-fm/piper/pull/27
 
 ---
 
@@ -342,6 +369,7 @@ See `.status_history/2025-11.md` for detailed November development history inclu
 - ✅ copyright moderation system with admin UI
 - ✅ ATProto labeler for copyright violations
 - ✅ unified search with Cmd/Ctrl+K (fuzzy matching via pg_trgm)
+- ✅ teal.fm scrobbling (records plays to user's PDS)
 
 **albums**
 - ✅ album database schema with track relationships
@@ -484,4 +512,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-03.
+this is a living document. last updated 2025-12-04.
