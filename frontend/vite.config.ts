@@ -13,6 +13,12 @@ export default defineConfig({
 				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
 				runtimeCaching: [
 					{
+						// audio streaming: bypass SW entirely to avoid iOS PWA hangs
+						// (the redirect to R2 CDN + range requests don't play well with caching)
+						urlPattern: /^https:\/\/api\.plyr\.fm\/audio\/.*/i,
+						handler: 'NetworkOnly'
+					},
+					{
 						urlPattern: /^https:\/\/api\.plyr\.fm\/.*/i,
 						handler: 'NetworkFirst',
 						options: {
