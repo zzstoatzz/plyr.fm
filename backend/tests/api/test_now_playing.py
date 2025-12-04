@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, now_playing_service
+from backend.config import settings
 from backend.main import app
 from backend.models import Artist
 
@@ -153,7 +154,7 @@ async def test_get_now_playing_by_handle(test_app: FastAPI, db_session: AsyncSes
     assert data["file_id"] == "test-file-abc"
     assert data["track_url"] == "https://plyr.fm/track/123"
     assert data["image_url"] == "https://example.com/cover.jpg"
-    assert data["service_base_url"] == "plyr.fm"
+    assert data["service_base_url"] == settings.frontend.domain
 
 
 async def test_get_now_playing_by_handle_returns_204_when_not_playing(
@@ -256,7 +257,7 @@ async def test_get_now_playing_by_did(test_app: FastAPI, db_session: AsyncSessio
     assert data["track_name"] == "Test Track"
     assert data["artist_name"] == "Test Artist"
     assert data["is_playing"] is True
-    assert data["service_base_url"] == "plyr.fm"
+    assert data["service_base_url"] == settings.frontend.domain
 
 
 async def test_get_now_playing_by_did_returns_204_when_not_playing(

@@ -34,6 +34,8 @@
 	let avatarUrl = $state('');
 	// derive from preferences store
 	let allowComments = $derived(preferences.allowComments);
+	let enableTealScrobbling = $derived(preferences.enableTealScrobbling);
+	let tealNeedsReauth = $derived(preferences.tealNeedsReauth);
 	let savingProfile = $state(false);
 	let profileSuccess = $state('');
 	let profileError = $state('');
@@ -95,8 +97,9 @@
 						developerToken = data.session_id;
 						toast.success('developer token created - save it now!');
 					} else {
-						// regular login - initialize auth
+						// regular login - initialize auth and refresh preferences
 						await auth.initialize();
+						await preferences.fetch();
 					}
 				}
 			} catch (_e) {
@@ -200,6 +203,17 @@
 		try {
 			await preferences.update({ allow_comments: enabled });
 			toast.success(enabled ? 'comments enabled on your tracks' : 'comments disabled');
+		} catch (_e) {
+			console.error('failed to save preference:', _e);
+			toast.error('failed to update preference');
+		}
+	}
+
+	async function saveTealScrobbling(enabled: boolean) {
+		try {
+			await preferences.update({ enable_teal_scrobbling: enabled });
+			await preferences.fetch(); // refetch to get updated teal_needs_reauth status
+			toast.success(enabled ? 'teal.fm scrobbling enabled' : 'teal.fm scrobbling disabled');
 		} catch (_e) {
 			console.error('failed to save preference:', _e);
 			toast.error('failed to update preference');
@@ -996,6 +1010,34 @@
 
 		<section class="data-section">
 			<h2>your data</h2>
+
+			<div class="data-control">
+				<div class="control-info">
+					<h3>teal.fm scrobbling</h3>
+					<p class="control-description">
+						track your listens as <a href="https://pdsls.dev/at://{auth.user?.did}/fm.teal.alpha.feed.play" target="_blank" rel="noopener">fm.teal.alpha.feed.play</a> records
+					</p>
+				</div>
+				<label class="toggle-switch">
+					<input
+						type="checkbox"
+						aria-label="Enable teal.fm scrobbling"
+						checked={enableTealScrobbling}
+						onchange={(e) => saveTealScrobbling((e.target as HTMLInputElement).checked)}
+					/>
+					<span class="toggle-slider"></span>
+					<span class="toggle-label">{enableTealScrobbling ? 'enabled' : 'disabled'}</span>
+				</label>
+			</div>
+			{#if tealNeedsReauth}
+				<div class="reauth-notice">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10" />
+						<path d="M12 16v-4M12 8h.01" />
+					</svg>
+					<span>please log out and back in to connect teal.fm</span>
+				</div>
+			{/if}
 
 			<div class="data-control">
 				<div class="control-info">
@@ -2076,6 +2118,23 @@
 
 	.control-description a {
 		color: var(--accent);
+	}
+
+	.reauth-notice {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.6rem 0.75rem;
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+		border-radius: 6px;
+		color: var(--accent);
+		font-size: 0.8rem;
+		margin-top: -0.5rem;
+	}
+
+	.reauth-notice svg {
+		flex-shrink: 0;
 	}
 
 	.export-btn {

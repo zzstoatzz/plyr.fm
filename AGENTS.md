@@ -2,6 +2,10 @@
 
 **music streaming on AT Protocol**
 
+## Reminders
+- i am already hot-reloading the backend and frontend. i might also have ngrok exposing 8001
+- check the justfiles. there's a root one, one for the backend, one for the frontend, and one for the transcoder etc
+
 ## 🚨 Critical Rules & Workflows
 *   **Read `STATUS.md` First:** Always check for active tasks and known issues. This file is NEVER tracked in git.
 *   **Workflow:**
@@ -20,6 +24,11 @@
 *   **Observability:** Logfire.
 *   **`just` use the justfiles!**
 *   **use MCPs** for access to external systems, review docs/tools when needed
+
+### Neon Serverless Postgres
+- `plyr-prd` (cold-butterfly-11920742) - production (us-east-1)
+- `plyr-stg` (frosty-math-37367092) - staging (us-west-2)
+- `plyr-dev` (muddy-flower-98795112) - development (us-east-2)
 
 ## 💻 Development Commands
 *   **Backend:** `just backend run`

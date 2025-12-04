@@ -38,7 +38,8 @@ class PlayerState {
 			this.playCountedForTrack = this.currentTrack.id;
 
 			fetch(`${API_URL}/tracks/${this.currentTrack.id}/play`, {
-				method: 'POST'
+				method: 'POST',
+				credentials: 'include'
 			}).catch(err => {
 				console.error('failed to increment play count:', err);
 			});

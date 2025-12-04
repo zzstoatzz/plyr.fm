@@ -102,6 +102,15 @@ class FrontendSettings(AppSettingsSection):
 
     @computed_field
     @property
+    def domain(self) -> str:
+        """extract domain from frontend URL (e.g., 'plyr.fm', 'stg.plyr.fm')."""
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.url)
+        return parsed.netloc or "plyr.fm"
+
+    @computed_field
+    @property
     def resolved_cors_origin_regex(self) -> str:
         """Resolved CORS origin regex pattern."""
         if self.cors_origin_regex is not None:
@@ -355,6 +364,48 @@ class AtprotoSettings(AppSettingsSection):
 
         return f"atproto {' '.join(scopes)}"
 
+    def resolved_scope_with_teal(self, teal_play: str, teal_status: str) -> str:
+        """OAuth scope including teal.fm scrobbling permissions.
+
+        args:
+            teal_play: teal.fm play collection NSID (e.g., fm.teal.alpha.feed.play)
+            teal_status: teal.fm status collection NSID (e.g., fm.teal.alpha.actor.status)
+        """
+        base = self.resolved_scope
+        teal_scopes = [f"repo:{teal_play}", f"repo:{teal_status}"]
+        return f"{base} {' '.join(teal_scopes)}"
+
+
+class TealSettings(AppSettingsSection):
+    """teal.fm integration settings for scrobbling.
+
+    teal.fm is a music scrobbling service built on ATProto. when users enable
+    scrobbling, plyr.fm writes play records to their PDS using teal's lexicons.
+
+    these namespaces may change as teal.fm evolves from alpha to stable.
+    configure via environment variables to adapt without code changes.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="TEAL_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable teal.fm scrobbling feature. When False, the toggle is hidden and no scrobbles are sent.",
+    )
+    play_collection: str = Field(
+        default="fm.teal.alpha.feed.play",
+        description="Lexicon NSID for teal.fm play records (scrobbles)",
+    )
+    status_collection: str = Field(
+        default="fm.teal.alpha.actor.status",
+        description="Lexicon NSID for teal.fm actor status (now playing)",
+    )
+
 
 class ObservabilitySettings(AppSettingsSection):
     """Observability configuration."""
@@ -488,6 +539,10 @@ class Settings(AppSettingsSection):
     moderation: ModerationSettings = Field(
         default_factory=ModerationSettings,
         description="Moderation service settings",
+    )
+    teal: TealSettings = Field(
+        default_factory=TealSettings,
+        description="teal.fm scrobbling integration settings",
     )
 
 
