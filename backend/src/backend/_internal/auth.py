@@ -93,6 +93,7 @@ def get_oauth_client_for_scope(scope: str) -> OAuthClient:
         return oauth_client_with_teal
     return oauth_client
 
+
 # encryption for sensitive OAuth data at rest
 # CRITICAL: encryption key must be configured and stable across restarts
 # otherwise all sessions become undecipherable after restart
@@ -252,9 +253,7 @@ async def start_oauth_flow(handle: str) -> tuple[str, str]:
             did = resolved["did"]
             wants_teal = await _check_teal_preference(did)
             client = oauth_client_with_teal if wants_teal else oauth_client
-            logger.info(
-                f"starting OAuth for {handle} (did={did}, teal={wants_teal})"
-            )
+            logger.info(f"starting OAuth for {handle} (did={did}, teal={wants_teal})")
         else:
             # fallback to base client if resolution fails
             # (OAuth flow will resolve handle again internally)
@@ -282,7 +281,9 @@ async def handle_oauth_callback(
         stored_state = await _state_store.get_state(state)
         if stored_state:
             client = get_oauth_client_for_scope(stored_state.scope)
-            logger.info(f"callback using client for scope: {stored_state.scope[:50]}...")
+            logger.info(
+                f"callback using client for scope: {stored_state.scope[:50]}..."
+            )
         else:
             # fallback to base client (state might have been cleaned up)
             client = oauth_client

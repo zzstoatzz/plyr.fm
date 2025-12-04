@@ -1,7 +1,5 @@
 """tests for teal.fm scrobbling integration."""
 
-import pytest
-
 from backend._internal.atproto.teal import (
     build_teal_play_record,
     build_teal_status_record,

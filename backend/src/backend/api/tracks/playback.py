@@ -140,9 +140,9 @@ async def increment_play_count(
     await db.commit()
 
     # check if user wants teal scrobbling
-    session_id = session_id_cookie or request.headers.get(
-        "authorization", ""
-    ).replace("Bearer ", "")
+    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
+        "Bearer ", ""
+    )
 
     if session_id:
         auth_session = await get_session(session_id)

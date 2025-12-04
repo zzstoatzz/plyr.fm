@@ -7,13 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session, require_auth
 from backend.config import settings
 from backend.main import app
-from backend.models import UserPreferences
 
 
 class MockSession(Session):
     """mock session for auth bypass in tests."""
 
-    def __init__(self, did: str = "did:test:user123", scope: str = "atproto transition:generic"):
+    def __init__(
+        self, did: str = "did:test:user123", scope: str = "atproto transition:generic"
+    ):
         self.did = did
         self.handle = "testuser.bsky.social"
         self.session_id = "test_session_id"
