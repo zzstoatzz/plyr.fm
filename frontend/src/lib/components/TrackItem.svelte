@@ -3,10 +3,10 @@
 	import LikeButton from './LikeButton.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
 	import LikersTooltip from './LikersTooltip.svelte';
+	import ExplicitArtwork from './ExplicitArtwork.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
-	import { preferences } from '$lib/preferences.svelte';
 
 	interface Props {
 		track: Track;
@@ -46,11 +46,6 @@
 	);
 	let hiddenTagCount = $derived(
 		(track.tags?.length || 0) - MAX_VISIBLE_TAGS
-	);
-
-	// blur explicit artwork unless user has opted in
-	let shouldBlurArtwork = $derived(
-		track.explicit_artwork && !preferences.showExplicitArtwork
 	);
 
 	// sync counts when track changes
@@ -116,22 +111,19 @@
 		}}
 	>
 		{#if track.image_url && !trackImageError}
-			<div class="track-image" class:explicit-blur={shouldBlurArtwork}>
-				<img
-					src={track.image_url}
-					alt="{track.title} artwork"
-					width="48"
-					height="48"
-					loading={imageLoading}
-					fetchpriority={imageFetchPriority}
-					onerror={() => trackImageError = true}
-				/>
-				{#if shouldBlurArtwork}
-					<div class="explicit-tooltip">
-						<span>explicit artwork - enable in <a href="/portal">portal</a> or DM <a href="https://bsky.app/profile/plyr.fm" target="_blank" rel="noopener">@plyr.fm</a></span>
-					</div>
-				{/if}
-			</div>
+			<ExplicitArtwork isExplicit={track.explicit_artwork}>
+				<div class="track-image">
+					<img
+						src={track.image_url}
+						alt="{track.title} artwork"
+						width="48"
+						height="48"
+						loading={imageLoading}
+						fetchpriority={imageFetchPriority}
+						onerror={() => trackImageError = true}
+					/>
+				</div>
+			</ExplicitArtwork>
 		{:else if track.artist_avatar_url && !avatarError}
 			<a
 				href="/u/{track.artist_handle}"
@@ -373,62 +365,6 @@
 
 	.track-image-placeholder {
 		color: var(--text-muted);
-	}
-
-	.track-image.explicit-blur {
-		position: relative;
-	}
-
-	.track-image.explicit-blur img {
-		filter: blur(12px);
-		transition: filter 0.2s;
-	}
-
-	.track-image.explicit-blur:hover img {
-		filter: blur(6px);
-	}
-
-	.explicit-tooltip {
-		position: absolute;
-		bottom: calc(100% + 8px);
-		left: 50%;
-		transform: translateX(-50%);
-		background: var(--bg-primary);
-		border: 1px solid var(--border-default);
-		border-radius: 6px;
-		padding: 0.5rem 0.75rem;
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		white-space: nowrap;
-		opacity: 0;
-		pointer-events: none;
-		transition: opacity 0.2s;
-		z-index: 100;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-	}
-
-	.explicit-tooltip::after {
-		content: '';
-		position: absolute;
-		top: 100%;
-		left: 50%;
-		transform: translateX(-50%);
-		border: 6px solid transparent;
-		border-top-color: var(--border-default);
-	}
-
-	.track-image.explicit-blur:hover .explicit-tooltip {
-		opacity: 1;
-		pointer-events: auto;
-	}
-
-	.explicit-tooltip a {
-		color: var(--accent);
-		text-decoration: none;
-	}
-
-	.explicit-tooltip a:hover {
-		text-decoration: underline;
 	}
 
 	.track-avatar img {

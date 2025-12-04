@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Track } from '$lib/types';
 	import { onMount } from 'svelte';
-	import { preferences } from '$lib/preferences.svelte';
+	import ExplicitArtwork from '$lib/components/ExplicitArtwork.svelte';
 
 	interface Props {
 		track: Track;
@@ -17,11 +17,6 @@
 	let artistOverflows = $state(false);
 	let albumOverflows = $state(false);
 	let imageError = $state(false);
-
-	// blur explicit artwork unless user has opted in
-	let shouldBlurArtwork = $derived(
-		track.explicit_artwork && !preferences.showExplicitArtwork
-	);
 
 	function checkOverflows() {
 		if (typeof window === 'undefined') return;
@@ -60,28 +55,25 @@
 </script>
 
 <div class="player-track">
-	<a href="/track/{track.id}" class="player-artwork" class:explicit-blur={shouldBlurArtwork} aria-label={`view ${track.title}`}>
-		{#if (track.image_url || track.album?.image_url) && !imageError}
-			<img
-				src={track.image_url || track.album?.image_url}
-				alt="{track.title} artwork"
-				onerror={() => imageError = true}
-			/>
-		{:else}
-			<div class="player-artwork-placeholder">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" width="24" height="24">
-					<path d="M9 18V5l12-2v13"></path>
-					<circle cx="6" cy="18" r="3"></circle>
-					<circle cx="18" cy="16" r="3"></circle>
-				</svg>
-			</div>
-		{/if}
-		{#if shouldBlurArtwork}
-			<div class="explicit-tooltip">
-				<span>explicit artwork - enable in <a href="/portal">portal</a> or DM <a href="https://bsky.app/profile/plyr.fm" target="_blank" rel="noopener">@plyr.fm</a></span>
-			</div>
-		{/if}
-	</a>
+	<ExplicitArtwork isExplicit={track.explicit_artwork}>
+		<a href="/track/{track.id}" class="player-artwork" aria-label={`view ${track.title}`}>
+			{#if (track.image_url || track.album?.image_url) && !imageError}
+				<img
+					src={track.image_url || track.album?.image_url}
+					alt="{track.title} artwork"
+					onerror={() => imageError = true}
+				/>
+			{:else}
+				<div class="player-artwork-placeholder">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" width="24" height="24">
+						<path d="M9 18V5l12-2v13"></path>
+						<circle cx="6" cy="18" r="3"></circle>
+						<circle cx="18" cy="16" r="3"></circle>
+					</svg>
+				</div>
+			{/if}
+		</a>
+	</ExplicitArtwork>
 	<div class="player-info">
 		{#if isOnTrackDetailPage}
 			<div class="player-title" class:scrolling={titleOverflows} bind:this={titleEl}>
@@ -183,58 +175,6 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-	}
-
-	.player-artwork.explicit-blur img {
-		filter: blur(12px);
-		transition: filter 0.2s;
-	}
-
-	.player-artwork.explicit-blur:hover img {
-		filter: blur(6px);
-	}
-
-	.explicit-tooltip {
-		position: absolute;
-		bottom: calc(100% + 8px);
-		left: 50%;
-		transform: translateX(-50%);
-		background: var(--bg-primary);
-		border: 1px solid var(--border-default);
-		border-radius: 6px;
-		padding: 0.5rem 0.75rem;
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		white-space: nowrap;
-		opacity: 0;
-		pointer-events: none;
-		transition: opacity 0.2s;
-		z-index: 100;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-	}
-
-	.explicit-tooltip::after {
-		content: '';
-		position: absolute;
-		top: 100%;
-		left: 50%;
-		transform: translateX(-50%);
-		border: 6px solid transparent;
-		border-top-color: var(--border-default);
-	}
-
-	.player-artwork.explicit-blur:hover .explicit-tooltip {
-		opacity: 1;
-		pointer-events: auto;
-	}
-
-	.explicit-tooltip a {
-		color: var(--accent);
-		text-decoration: none;
-	}
-
-	.explicit-tooltip a:hover {
-		text-decoration: underline;
 	}
 
 	.player-artwork-placeholder {
