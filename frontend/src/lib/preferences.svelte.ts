@@ -11,6 +11,8 @@ export interface Preferences {
 	allow_comments: boolean;
 	hidden_tags: string[];
 	theme: Theme;
+	enable_teal_scrobbling: boolean;
+	teal_needs_reauth: boolean;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -18,7 +20,9 @@ const DEFAULT_PREFERENCES: Preferences = {
 	auto_advance: true,
 	allow_comments: true,
 	hidden_tags: ['ai'],
-	theme: 'dark'
+	theme: 'dark',
+	enable_teal_scrobbling: false,
+	teal_needs_reauth: false
 };
 
 class PreferencesManager {
@@ -48,6 +52,14 @@ class PreferencesManager {
 
 	get theme(): Theme {
 		return this.data?.theme ?? DEFAULT_PREFERENCES.theme;
+	}
+
+	get enableTealScrobbling(): boolean {
+		return this.data?.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling;
+	}
+
+	get tealNeedsReauth(): boolean {
+		return this.data?.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth;
 	}
 
 	setTheme(theme: Theme): void {
@@ -93,7 +105,9 @@ class PreferencesManager {
 					auto_advance: data.auto_advance ?? DEFAULT_PREFERENCES.auto_advance,
 					allow_comments: data.allow_comments ?? DEFAULT_PREFERENCES.allow_comments,
 					hidden_tags: data.hidden_tags ?? DEFAULT_PREFERENCES.hidden_tags,
-					theme: data.theme ?? DEFAULT_PREFERENCES.theme
+					theme: data.theme ?? DEFAULT_PREFERENCES.theme,
+					enable_teal_scrobbling: data.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling,
+					teal_needs_reauth: data.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth
 				};
 			} else {
 				this.data = { ...DEFAULT_PREFERENCES };

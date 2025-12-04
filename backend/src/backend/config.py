@@ -355,6 +355,29 @@ class AtprotoSettings(AppSettingsSection):
 
         return f"atproto {' '.join(scopes)}"
 
+    @computed_field
+    @property
+    def teal_play_collection(self) -> str:
+        """Collection name for teal.fm play records (scrobbles)."""
+        return "fm.teal.alpha.feed.play"
+
+    @computed_field
+    @property
+    def teal_status_collection(self) -> str:
+        """Collection name for teal.fm actor status (now playing)."""
+        return "fm.teal.alpha.actor.status"
+
+    @computed_field
+    @property
+    def resolved_scope_with_teal(self) -> str:
+        """OAuth scope including teal.fm scrobbling permissions."""
+        base = self.resolved_scope
+        teal_scopes = [
+            f"repo:{self.teal_play_collection}",
+            f"repo:{self.teal_status_collection}",
+        ]
+        return f"{base} {' '.join(teal_scopes)}"
+
 
 class ObservabilitySettings(AppSettingsSection):
     """Observability configuration."""

@@ -235,7 +235,7 @@ async def client_metadata() -> dict:
         "client_name": settings.app.name,
         "client_uri": client_uri,
         "redirect_uris": [settings.atproto.redirect_uri],
-        "scope": settings.atproto.resolved_scope,
+        "scope": settings.atproto.resolved_scope_with_teal,
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
         "token_endpoint_auth_method": "none",

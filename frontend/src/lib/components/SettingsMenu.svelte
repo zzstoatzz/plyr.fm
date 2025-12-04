@@ -24,6 +24,8 @@
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let autoAdvance = $derived(preferences.autoAdvance);
 	let currentTheme = $derived(preferences.theme);
+	let enableTealScrobbling = $derived(preferences.enableTealScrobbling);
+	let tealNeedsReauth = $derived(preferences.tealNeedsReauth);
 
 	// apply color when it changes
 	$effect(() => {
@@ -84,6 +86,14 @@
 
 	function selectTheme(theme: Theme) {
 		preferences.setTheme(theme);
+	}
+
+	async function handleTealScrobblingToggle(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const value = input.checked;
+		await preferences.update({ enable_teal_scrobbling: value });
+		// refetch to get updated teal_needs_reauth status
+		await preferences.fetch();
 	}
 </script>
 
@@ -162,6 +172,25 @@
 					<span class="toggle-text">auto-play next track</span>
 				</label>
 				<p class="toggle-hint">when a track ends, start the next item in your queue</p>
+			</section>
+
+			<section class="settings-section">
+				<h3>teal.fm</h3>
+				<label class="toggle">
+					<input type="checkbox" checked={enableTealScrobbling} oninput={handleTealScrobblingToggle} />
+					<span class="toggle-indicator"></span>
+					<span class="toggle-text">scrobble to teal.fm</span>
+				</label>
+				<p class="toggle-hint">record your listening history to your ATProto PDS</p>
+				{#if tealNeedsReauth}
+					<div class="reauth-banner">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="12" cy="12" r="10" />
+							<path d="M12 16v-4M12 8h.01" />
+						</svg>
+						<span>please log out and back in to connect teal.fm</span>
+					</div>
+				{/if}
 			</section>
 
 		</div>
@@ -402,6 +431,22 @@
 		color: var(--text-tertiary);
 		font-size: 0.8rem;
 		line-height: 1.3;
+	}
+
+	.reauth-banner {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.6rem 0.75rem;
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+		border-radius: 6px;
+		color: var(--accent);
+		font-size: 0.8rem;
+	}
+
+	.reauth-banner svg {
+		flex-shrink: 0;
 	}
 
 	@media (max-width: 768px) {

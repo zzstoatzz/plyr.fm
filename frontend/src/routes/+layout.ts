@@ -15,7 +15,9 @@ const DEFAULT_PREFERENCES: Preferences = {
 	auto_advance: true,
 	allow_comments: true,
 	hidden_tags: ['ai'],
-	theme: 'dark'
+	theme: 'dark',
+	enable_teal_scrobbling: false,
+	teal_needs_reauth: false
 };
 
 export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
@@ -48,7 +50,9 @@ export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
 						auto_advance: data.auto_advance ?? true,
 						allow_comments: data.allow_comments ?? true,
 						hidden_tags: data.hidden_tags ?? ['ai'],
-						theme: data.theme ?? 'dark'
+						theme: data.theme ?? 'dark',
+						enable_teal_scrobbling: data.enable_teal_scrobbling ?? false,
+						teal_needs_reauth: data.teal_needs_reauth ?? false
 					};
 				}
 			} catch (e) {

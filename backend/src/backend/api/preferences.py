@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
+from backend.config import settings
 from backend.models import UserPreferences, get_db
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
@@ -21,6 +22,9 @@ class PreferencesResponse(BaseModel):
     auto_advance: bool
     allow_comments: bool
     hidden_tags: list[str]
+    enable_teal_scrobbling: bool
+    # indicates if user needs to re-login to activate teal scrobbling
+    teal_needs_reauth: bool = False
 
 
 class PreferencesUpdate(BaseModel):
@@ -30,6 +34,15 @@ class PreferencesUpdate(BaseModel):
     auto_advance: bool | None = None
     allow_comments: bool | None = None
     hidden_tags: list[str] | None = None
+    enable_teal_scrobbling: bool | None = None
+
+
+def _has_teal_scope(session: Session) -> bool:
+    """check if session has teal.fm scopes."""
+    if not session.oauth_session:
+        return False
+    scope = session.oauth_session.get("scope", "")
+    return settings.atproto.teal_play_collection in scope
 
 
 @router.get("/")
@@ -54,11 +67,17 @@ async def get_preferences(
         await db.commit()
         await db.refresh(prefs)
 
+    # check if user wants teal but doesn't have the scope
+    has_scope = _has_teal_scope(session)
+    teal_needs_reauth = prefs.enable_teal_scrobbling and not has_scope
+
     return PreferencesResponse(
         accent_color=prefs.accent_color,
         auto_advance=prefs.auto_advance,
         allow_comments=prefs.allow_comments,
         hidden_tags=prefs.hidden_tags or [],
+        enable_teal_scrobbling=prefs.enable_teal_scrobbling,
+        teal_needs_reauth=teal_needs_reauth,
     )
 
 
@@ -88,6 +107,9 @@ async def update_preferences(
             hidden_tags=update.hidden_tags
             if update.hidden_tags is not None
             else list(DEFAULT_HIDDEN_TAGS),
+            enable_teal_scrobbling=update.enable_teal_scrobbling
+            if update.enable_teal_scrobbling is not None
+            else False,
         )
         db.add(prefs)
     else:
@@ -100,13 +122,21 @@ async def update_preferences(
             prefs.allow_comments = update.allow_comments
         if update.hidden_tags is not None:
             prefs.hidden_tags = update.hidden_tags
+        if update.enable_teal_scrobbling is not None:
+            prefs.enable_teal_scrobbling = update.enable_teal_scrobbling
 
     await db.commit()
     await db.refresh(prefs)
+
+    # check if user wants teal but doesn't have the scope
+    has_scope = _has_teal_scope(session)
+    teal_needs_reauth = prefs.enable_teal_scrobbling and not has_scope
 
     return PreferencesResponse(
         accent_color=prefs.accent_color,
         auto_advance=prefs.auto_advance,
         allow_comments=prefs.allow_comments,
         hidden_tags=prefs.hidden_tags or [],
+        enable_teal_scrobbling=prefs.enable_teal_scrobbling,
+        teal_needs_reauth=teal_needs_reauth,
     )
