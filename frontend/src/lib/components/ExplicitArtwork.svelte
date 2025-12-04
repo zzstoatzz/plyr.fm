@@ -17,7 +17,7 @@
 	{@render children()}
 	{#if shouldBlur}
 		<div class="explicit-tooltip">
-			<span>explicit artwork - enable in <a href="/portal">portal</a> or DM <a href="https://bsky.app/profile/plyr.fm" target="_blank" rel="noopener">@plyr.fm</a></span>
+			<span>explicit - enable in portal</span>
 		</div>
 	{/if}
 </div>
@@ -53,60 +53,29 @@
 
 	.explicit-tooltip {
 		position: absolute;
-		bottom: calc(100% + 8px);
+		top: 50%;
 		left: 50%;
-		transform: translateX(-50%);
+		transform: translate(-50%, -50%);
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 6px;
-		padding: 0.5rem 0.75rem;
-		font-size: 0.75rem;
-		color: var(--text-secondary);
+		border-radius: 4px;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.7rem;
+		color: var(--text-tertiary);
 		white-space: nowrap;
 		opacity: 0;
 		pointer-events: none;
 		transition: opacity 0.2s;
 		z-index: 100;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 	}
 
-	.explicit-tooltip::after {
-		content: '';
-		position: absolute;
-		top: 100%;
-		left: 50%;
-		transform: translateX(-50%);
-		border: 6px solid transparent;
-		border-top-color: var(--border-default);
-	}
-
-	/* centered tooltip for large images */
+	/* centered tooltip for large images - slightly bigger text */
 	.tooltip-center .explicit-tooltip {
-		bottom: auto;
-		top: 50%;
-		transform: translate(-50%, -50%);
-		padding: 0.75rem 1rem;
-		font-size: 0.85rem;
-		text-align: center;
-		max-width: 90%;
-		white-space: normal;
-	}
-
-	.tooltip-center .explicit-tooltip::after {
-		display: none;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.8rem;
 	}
 
 	.explicit-wrapper.blur:hover .explicit-tooltip {
 		opacity: 1;
-		pointer-events: auto;
-	}
-
-	.explicit-tooltip a {
-		color: var(--accent);
-		text-decoration: none;
-	}
-
-	.explicit-tooltip a:hover {
-		text-decoration: underline;
 	}
 </style>
