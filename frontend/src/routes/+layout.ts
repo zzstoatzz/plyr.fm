@@ -23,16 +23,13 @@ const DEFAULT_PREFERENCES: Preferences = {
 	show_sensitive_artwork: false
 };
 
-export async function load({ fetch, parent }: LoadEvent): Promise<LayoutData> {
-	// get server-loaded data (sensitiveImages)
-	const parentData = await parent();
-
+export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
 	if (!browser) {
 		return {
 			user: null,
 			isAuthenticated: false,
 			preferences: null,
-			sensitiveImages: parentData.sensitiveImages ?? { image_ids: [], urls: [] }
+			sensitiveImages: data.sensitiveImages ?? { image_ids: [], urls: [] }
 		};
 	}
 
@@ -51,16 +48,16 @@ export async function load({ fetch, parent }: LoadEvent): Promise<LayoutData> {
 					credentials: 'include'
 				});
 				if (prefsResponse.ok) {
-					const data = await prefsResponse.json();
+					const prefsData = await prefsResponse.json();
 					preferences = {
-						accent_color: data.accent_color ?? null,
-						auto_advance: data.auto_advance ?? true,
-						allow_comments: data.allow_comments ?? true,
-						hidden_tags: data.hidden_tags ?? ['ai'],
-						theme: data.theme ?? 'dark',
-						enable_teal_scrobbling: data.enable_teal_scrobbling ?? false,
-						teal_needs_reauth: data.teal_needs_reauth ?? false,
-						show_sensitive_artwork: data.show_sensitive_artwork ?? false
+						accent_color: prefsData.accent_color ?? null,
+						auto_advance: prefsData.auto_advance ?? true,
+						allow_comments: prefsData.allow_comments ?? true,
+						hidden_tags: prefsData.hidden_tags ?? ['ai'],
+						theme: prefsData.theme ?? 'dark',
+						enable_teal_scrobbling: prefsData.enable_teal_scrobbling ?? false,
+						teal_needs_reauth: prefsData.teal_needs_reauth ?? false,
+						show_sensitive_artwork: prefsData.show_sensitive_artwork ?? false
 					};
 				}
 			} catch (e) {
@@ -71,7 +68,7 @@ export async function load({ fetch, parent }: LoadEvent): Promise<LayoutData> {
 				user,
 				isAuthenticated: true,
 				preferences,
-				sensitiveImages: parentData.sensitiveImages ?? { image_ids: [], urls: [] }
+				sensitiveImages: data.sensitiveImages ?? { image_ids: [], urls: [] }
 			};
 		}
 	} catch (e) {
@@ -82,6 +79,6 @@ export async function load({ fetch, parent }: LoadEvent): Promise<LayoutData> {
 		user: null,
 		isAuthenticated: false,
 		preferences: null,
-		sensitiveImages: parentData.sensitiveImages ?? { image_ids: [], urls: [] }
+		sensitiveImages: data.sensitiveImages ?? { image_ids: [], urls: [] }
 	};
 }
