@@ -9,17 +9,19 @@
 		children: import('svelte').Snippet;
 		/** tooltip position - 'above' for small images, 'center' for large */
 		tooltipPosition?: 'above' | 'center';
+		/** compact mode - blur only, no tooltip, preserves layout (for avatars in lists) */
+		compact?: boolean;
 	}
 
-	let { src, children, tooltipPosition = 'above' }: Props = $props();
+	let { src, children, tooltipPosition = 'above', compact = false }: Props = $props();
 
 	let isSensitive = $derived(moderation.isSensitive(src));
 	let shouldBlur = $derived(isSensitive && !preferences.showSensitiveArtwork);
 </script>
 
-<div class="sensitive-wrapper" class:blur={shouldBlur} class:tooltip-center={tooltipPosition === 'center'}>
+<div class="sensitive-wrapper" class:blur={shouldBlur} class:compact class:tooltip-center={tooltipPosition === 'center'}>
 	{@render children()}
-	{#if shouldBlur}
+	{#if shouldBlur && !compact}
 		<div class="sensitive-tooltip">
 			<span>sensitive - enable in portal</span>
 		</div>
@@ -35,6 +37,11 @@
 	.sensitive-wrapper.blur {
 		display: block;
 		position: relative;
+	}
+
+	/* compact mode: preserve layout, just blur the image */
+	.sensitive-wrapper.blur.compact {
+		display: contents;
 	}
 
 	.sensitive-wrapper.blur :global(img) {

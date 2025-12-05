@@ -47,6 +47,28 @@ plyr.fm should become:
 
 ### December 2025
 
+#### sensitive image moderation (PRs #471-482, Dec 5)
+
+**what shipped**:
+- `sensitive_images` table to flag problematic images by R2 `image_id` or external URL
+- `show_sensitive_artwork` user preference (default: hidden, toggle in portal → "your data")
+- flagged images blurred everywhere: track lists, player, artist pages, likers tooltip
+- SSR-safe filtering: link previews (og:image) exclude sensitive images
+- likers tooltip improvements: max-height with scroll, hover interaction fix
+
+**how it works**:
+- frontend fetches `/moderation/sensitive-images` and stores flagged IDs/URLs
+- `SensitiveImage` component wraps images and checks against flagged list
+- server-side check via `+layout.server.ts` for meta tag filtering
+- users can opt-in to view sensitive artwork via portal toggle
+
+**moderation workflow**:
+- admin adds row to `sensitive_images` with `image_id` (R2) or `url` (external)
+- images are blurred immediately for all users
+- users who enable `show_sensitive_artwork` see unblurred images
+
+---
+
 #### teal.fm scrobbling integration (PR #467, Dec 4)
 
 **what shipped**:
