@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal.moderation import (
     _call_moderation_service,
     _store_scan_result,
+    get_active_copyright_labels,
     scan_track_for_copyright,
 )
 from backend.models import Artist, CopyrightScan, Track
@@ -375,3 +376,90 @@ async def test_scan_track_full_flow(
 
     assert scan.is_flagged is True
     assert scan.highest_score == 85
+
+
+# tests for get_active_copyright_labels
+
+
+async def test_get_active_copyright_labels_empty_list() -> None:
+    """test that empty URI list returns empty set."""
+    result = await get_active_copyright_labels([])
+    assert result == set()
+
+
+async def test_get_active_copyright_labels_disabled() -> None:
+    """test that disabled moderation returns all URIs as active (fail closed)."""
+    uris = ["at://did:plc:test/fm.plyr.track/1", "at://did:plc:test/fm.plyr.track/2"]
+
+    with patch("backend._internal.moderation.settings") as mock_settings:
+        mock_settings.moderation.enabled = False
+
+        result = await get_active_copyright_labels(uris)
+
+    assert result == set(uris)
+
+
+async def test_get_active_copyright_labels_no_auth_token() -> None:
+    """test that missing auth token returns all URIs as active (fail closed)."""
+    uris = ["at://did:plc:test/fm.plyr.track/1"]
+
+    with patch("backend._internal.moderation.settings") as mock_settings:
+        mock_settings.moderation.enabled = True
+        mock_settings.moderation.auth_token = ""
+
+        result = await get_active_copyright_labels(uris)
+
+    assert result == set(uris)
+
+
+async def test_get_active_copyright_labels_success() -> None:
+    """test successful call to labeler returns active URIs."""
+    uris = [
+        "at://did:plc:test/fm.plyr.track/1",
+        "at://did:plc:test/fm.plyr.track/2",
+        "at://did:plc:test/fm.plyr.track/3",
+    ]
+
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        "active_uris": ["at://did:plc:test/fm.plyr.track/1"]  # only one is active
+    }
+    mock_response.raise_for_status.return_value = None
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        with patch("backend._internal.moderation.settings") as mock_settings:
+            mock_settings.moderation.enabled = True
+            mock_settings.moderation.auth_token = "test-token"
+            mock_settings.moderation.labeler_url = "https://labeler.example.com"
+            mock_settings.moderation.timeout_seconds = 10
+
+            result = await get_active_copyright_labels(uris)
+
+    # only the active URI should be in the result
+    assert result == {"at://did:plc:test/fm.plyr.track/1"}
+
+    # verify correct endpoint was called
+    call_kwargs = mock_post.call_args
+    assert "/admin/active-labels" in str(call_kwargs)
+    assert call_kwargs.kwargs["json"] == {"uris": uris}
+
+
+async def test_get_active_copyright_labels_service_error() -> None:
+    """test that service errors return all URIs as active (fail closed)."""
+    uris = ["at://did:plc:test/fm.plyr.track/1", "at://did:plc:test/fm.plyr.track/2"]
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.side_effect = httpx.ConnectError("connection failed")
+
+        with patch("backend._internal.moderation.settings") as mock_settings:
+            mock_settings.moderation.enabled = True
+            mock_settings.moderation.auth_token = "test-token"
+            mock_settings.moderation.labeler_url = "https://labeler.example.com"
+            mock_settings.moderation.timeout_seconds = 10
+
+            result = await get_active_copyright_labels(uris)
+
+    # should fail closed - all URIs treated as active
+    assert result == set(uris)

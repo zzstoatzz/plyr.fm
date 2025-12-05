@@ -469,6 +469,47 @@ impl LabelDb {
             .map(|s| s.unwrap_or(0))
     }
 
+    /// Get URIs that have active (non-negated) copyright-violation labels.
+    ///
+    /// For each URI, checks if there's a negation label. Returns only those
+    /// that are still actively flagged.
+    pub async fn get_active_labels(&self, uris: &[String]) -> Result<Vec<String>, sqlx::Error> {
+        if uris.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Get all negated URIs from our input set
+        let negated_uris: std::collections::HashSet<String> = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT DISTINCT uri
+            FROM labels
+            WHERE val = 'copyright-violation' AND neg = true AND uri = ANY($1)
+            "#,
+        )
+        .bind(uris)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .collect();
+
+        // Get URIs that have a positive label and are not negated
+        let active_uris: Vec<String> = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT DISTINCT uri
+            FROM labels
+            WHERE val = 'copyright-violation' AND neg = false AND uri = ANY($1)
+            "#,
+        )
+        .bind(uris)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .filter(|uri| !negated_uris.contains(uri))
+        .collect();
+
+        Ok(active_uris)
+    }
+
     /// Get all copyright-violation labels with their resolution status and context.
     ///
     /// A label is resolved if there's a negation label for the same uri+val.
