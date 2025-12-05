@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { API_URL } from '$lib/config';
+	import SensitiveImage from './SensitiveImage.svelte';
 
 	interface Liker {
 		did: string;
@@ -12,9 +13,11 @@
 	interface Props {
 		trackId: number;
 		likeCount: number;
+		onMouseEnter?: () => void;
+		onMouseLeave?: () => void;
 	}
 
-	let { trackId, likeCount }: Props = $props();
+	let { trackId, likeCount, onMouseEnter, onMouseLeave }: Props = $props();
 
 	let likers = $state<Liker[]>([]);
 	let loading = $state(true); // start as loading
@@ -67,6 +70,8 @@
 <div
 	class="likers-tooltip"
 	role="tooltip"
+	onmouseenter={onMouseEnter}
+	onmouseleave={onMouseLeave}
 >
 	{#if loading}
 		<div class="loading">loading...</div>
@@ -80,7 +85,9 @@
 				class="liker"
 			>
 				{#if liker.avatar_url}
-					<img src={liker.avatar_url} alt={liker.display_name} class="avatar" />
+					<SensitiveImage src={liker.avatar_url}>
+						<img src={liker.avatar_url} alt={liker.display_name} class="avatar" />
+					</SensitiveImage>
 				{:else}
 					<div class="avatar-placeholder">
 						{liker.display_name.charAt(0).toUpperCase()}
@@ -134,6 +141,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+		max-height: 240px;
+		overflow-y: auto;
 	}
 
 	.liker {
