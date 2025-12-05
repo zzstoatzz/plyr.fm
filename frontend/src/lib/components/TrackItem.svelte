@@ -224,6 +224,7 @@
 				<span class="meta-separator">•</span>
 				<span
 					class="likes"
+					class:tooltip-open={showLikersTooltip}
 					role="button"
 					tabindex="0"
 					aria-label={`${likeCount} ${likeCount === 1 ? 'like' : 'likes'} (focus to view users)`}
@@ -616,7 +617,12 @@
 		position: relative;
 		cursor: help;
 		transition: color 0.2s;
-		z-index: 100;
+	}
+
+	/* only elevate z-index when tooltip is open - this ensures the open tooltip
+	   renders above sibling track items without all tracks competing for z-index */
+	.likes.tooltip-open {
+		z-index: 10;
 	}
 
 	.likes:hover {

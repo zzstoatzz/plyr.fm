@@ -22,6 +22,22 @@
 	let likers = $state<Liker[]>([]);
 	let loading = $state(true); // start as loading
 	let error = $state<string | null>(null);
+	let tooltipElement: HTMLDivElement | null = $state(null);
+	let positionBelow = $state(false);
+
+	// check if tooltip should flip below based on viewport position
+	$effect(() => {
+		if (!tooltipElement) return;
+
+		// get the parent element's position (the .likes span)
+		const parent = tooltipElement.parentElement;
+		if (!parent) return;
+
+		const parentRect = parent.getBoundingClientRect();
+		// if less than 300px from viewport top, flip tooltip below
+		// 300px accounts for tooltip max height (~240px) plus padding
+		positionBelow = parentRect.top < 300;
+	});
 
 	$effect(() => {
 		if (likeCount === 0) {
@@ -68,7 +84,9 @@
 </script>
 
 <div
+	bind:this={tooltipElement}
 	class="likers-tooltip"
+	class:position-below={positionBelow}
 	role="tooltip"
 	onmouseenter={onMouseEnter}
 	onmouseleave={onMouseLeave}
@@ -122,6 +140,14 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 		z-index: 1000;
 		pointer-events: auto;
+	}
+
+	/* flip tooltip below when near viewport top */
+	.likers-tooltip.position-below {
+		bottom: auto;
+		top: 100%;
+		margin-bottom: 0;
+		margin-top: 0.5rem;
 	}
 
 	.loading,
