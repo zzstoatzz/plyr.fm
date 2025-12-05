@@ -22,10 +22,14 @@ class ModerationManager {
 		// check full URL match
 		if (this.data.urls.has(url)) return true;
 
-		// extract image_id from R2 URL pattern and check
-		// R2 URLs look like: https://cdn.plyr.fm/images/{image_id}.webp
-		const match = url.match(/\/images\/([^/.]+)\./);
-		if (match && this.data.image_ids.has(match[1])) return true;
+		// extract image_id from R2 URL patterns:
+		// - https://pub-*.r2.dev/{image_id}.{ext}
+		// - https://cdn.plyr.fm/images/{image_id}.{ext}
+		const r2Match = url.match(/r2\.dev\/([^/.]+)\./);
+		if (r2Match && this.data.image_ids.has(r2Match[1])) return true;
+
+		const cdnMatch = url.match(/\/images\/([^/.]+)\./);
+		if (cdnMatch && this.data.image_ids.has(cdnMatch[1])) return true;
 
 		return false;
 	}
