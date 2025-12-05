@@ -15,6 +15,7 @@ class ModerationManager {
 	/**
 	 * check if an image URL is flagged as sensitive.
 	 * checks both the full URL and extracts image_id from R2 URLs.
+	 * also flags non-R2 images as sensitive since they could be injected.
 	 */
 	isSensitive(url: string | null | undefined): boolean {
 		if (!url) return false;
@@ -22,10 +23,22 @@ class ModerationManager {
 		// check full URL match
 		if (this.data.urls.has(url)) return true;
 
-		// extract image_id from R2 URL pattern and check
-		// R2 URLs look like: https://cdn.plyr.fm/images/{image_id}.webp
-		const match = url.match(/\/images\/([^/.]+)\./);
-		if (match && this.data.image_ids.has(match[1])) return true;
+		// check if it's a known R2 URL pattern
+		const isR2 = url.includes('r2.dev/') || url.includes('cdn.plyr.fm/');
+
+		if (!isR2) {
+			// non-R2 images are treated as sensitive - could be injected
+			return true;
+		}
+
+		// extract image_id from R2 URL patterns:
+		// - https://pub-*.r2.dev/{image_id}.{ext}
+		// - https://cdn.plyr.fm/images/{image_id}.{ext}
+		const r2Match = url.match(/r2\.dev\/([^/.]+)\./);
+		if (r2Match && this.data.image_ids.has(r2Match[1])) return true;
+
+		const cdnMatch = url.match(/\/images\/([^/.]+)\./);
+		if (cdnMatch && this.data.image_ids.has(cdnMatch[1])) return true;
 
 		return false;
 	}
