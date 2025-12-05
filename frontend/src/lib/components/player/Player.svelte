@@ -238,7 +238,7 @@
 		// only load new track if it actually changed
 		if (player.currentTrack.id !== previousTrackId) {
 			previousTrackId = player.currentTrack.id;
-			player.playCountedForTrack = null;
+			player.resetPlayCount();
 			isLoadingTrack = true;
 
 			player.audioElement.src = `${API_URL}/audio/${player.currentTrack.file_id}`;

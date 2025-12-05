@@ -11,6 +11,10 @@ class PlayerState {
 	volume = $state(0.7);
 	playCountedForTrack = $state<number | null>(null);
 
+	// synchronous guard to prevent duplicate play count requests
+	// (reactive state updates are batched, so we need this to block rapid-fire calls)
+	private _playCountPending: number | null = null;
+
 	playTrack(track: Track) {
 		if (this.currentTrack?.id === track.id) {
 			// toggle play/pause for same track
@@ -31,10 +35,17 @@ class PlayerState {
 			return;
 		}
 
+		// synchronous check to prevent race condition from batched reactive updates
+		if (this._playCountPending === this.currentTrack.id) {
+			return;
+		}
+
 		// threshold: minimum of 30 seconds or 50% of track duration
 		const threshold = Math.min(30, this.duration * 0.5);
 
 		if (this.currentTime >= threshold) {
+			// set synchronous guard immediately (before async fetch)
+			this._playCountPending = this.currentTrack.id;
 			this.playCountedForTrack = this.currentTrack.id;
 
 			fetch(`${API_URL}/tracks/${this.currentTrack.id}/play`, {
@@ -44,6 +55,11 @@ class PlayerState {
 				console.error('failed to increment play count:', err);
 			});
 		}
+	}
+
+	resetPlayCount() {
+		this.playCountedForTrack = null;
+		this._playCountPending = null;
 	}
 
 	reset() {
