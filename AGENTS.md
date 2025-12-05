@@ -7,7 +7,7 @@
 - check the justfiles. there's a root one, one for the backend, one for the frontend, and one for the transcoder etc
 
 ## 🚨 Critical Rules & Workflows
-*   **Read `STATUS.md` First:** Always check for active tasks and known issues. This file is NEVER tracked in git.
+*   **Read `STATUS.md` First:** Always check for active tasks and known issues.
 *   **Workflow:**
     *   Use **GitHub Issues** (not Linear).
     *   **PRs:** Always create for review; never push to main directly.
@@ -52,7 +52,7 @@ plyr.fm/
 │   └── src/lib/      # Components & State (.svelte.ts)
 ├── scripts/          # Admin scripts (uv run scripts/...)
 ├── docs/             # Architecture & Guides
-└── STATUS.md         # Living status document (Untracked)
+└── STATUS.md         # Living status document
 ```
 
 this file ("AGENTS.md") is symlinked to `CLAUDE.md` and `GEMINI.md` for maximal compatibility.

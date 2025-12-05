@@ -15,6 +15,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
 	import { player } from '$lib/player.svelte';
+	import { queue } from '$lib/queue.svelte';
 	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
 	import type { LayoutData } from './$types';
@@ -80,6 +81,9 @@
 		document.documentElement.style.setProperty('--queue-width', queueWidth);
 	});
 
+	const SEEK_AMOUNT = 10; // seconds
+	let previousVolume = 0.7; // for mute toggle
+
 	function handleKeyboardShortcuts(event: KeyboardEvent) {
 		// Cmd/Ctrl+K: toggle search
 		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -103,10 +107,98 @@
 			return;
 		}
 
+		// ignore playback shortcuts when search modal is open
+		if (search.isOpen) {
+			return;
+		}
+
+		const key = event.key.toLowerCase();
+
 		// toggle queue on 'q' key
-		if (event.key.toLowerCase() === 'q') {
+		if (key === 'q') {
 			event.preventDefault();
 			toggleQueue();
+			return;
+		}
+
+		// playback shortcuts - only when a track is loaded
+		if (!player.currentTrack) {
+			return;
+		}
+
+		switch (event.key) {
+			case ' ': // space - play/pause
+				event.preventDefault();
+				player.togglePlayPause();
+				break;
+
+			case 'ArrowLeft': // seek backward
+				event.preventDefault();
+				seekBy(-SEEK_AMOUNT);
+				break;
+
+			case 'ArrowRight': // seek forward
+				event.preventDefault();
+				seekBy(SEEK_AMOUNT);
+				break;
+
+			case 'j': // previous track (youtube-style)
+			case 'J':
+				event.preventDefault();
+				handlePreviousTrack();
+				break;
+
+			case 'l': // next track (youtube-style)
+			case 'L':
+				event.preventDefault();
+				if (queue.hasNext) {
+					queue.next();
+				}
+				break;
+
+			case 'm': // mute/unmute
+			case 'M':
+				event.preventDefault();
+				toggleMute();
+				break;
+		}
+	}
+
+	function seekBy(seconds: number) {
+		if (!player.audioElement || !player.duration) return;
+
+		const newTime = Math.max(0, Math.min(player.duration, player.currentTime + seconds));
+		player.currentTime = newTime;
+		player.audioElement.currentTime = newTime;
+	}
+
+	function handlePreviousTrack() {
+		const RESTART_THRESHOLD = 3; // restart if more than 3 seconds in
+
+		if (player.currentTime > RESTART_THRESHOLD) {
+			// restart current track
+			player.currentTime = 0;
+			if (player.audioElement) {
+				player.audioElement.currentTime = 0;
+			}
+		} else if (queue.hasPrevious) {
+			// go to previous track
+			queue.previous();
+		} else {
+			// restart from beginning
+			player.currentTime = 0;
+			if (player.audioElement) {
+				player.audioElement.currentTime = 0;
+			}
+		}
+	}
+
+	function toggleMute() {
+		if (player.volume > 0) {
+			previousVolume = player.volume;
+			player.volume = 0;
+		} else {
+			player.volume = previousVolume || 0.7;
 		}
 	}
 
