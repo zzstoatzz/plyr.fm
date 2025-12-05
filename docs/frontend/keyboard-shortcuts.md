@@ -49,6 +49,38 @@ toggles the queue sidebar visibility.
 - `aria-label="toggle queue (Q)"` for screen readers
 - tooltip shows keyboard hint
 
+---
+
+## playback shortcuts
+
+all playback shortcuts require a track to be loaded and are disabled when the search modal is open.
+
+### Space - play/pause
+
+toggles playback of the current track.
+
+### Left Arrow - seek backward
+
+seeks backward 10 seconds in the current track.
+
+### Right Arrow - seek forward
+
+seeks forward 10 seconds in the current track.
+
+### J - previous track
+
+goes to the previous track in the queue. if more than 3 seconds into the current track, restarts it instead.
+
+### L - next track
+
+advances to the next track in the queue (if available).
+
+### M - mute/unmute
+
+toggles mute. restores previous volume level when unmuting.
+
+---
+
 ## adding new shortcuts
 
 when adding keyboard shortcuts:
@@ -95,11 +127,9 @@ onDestroy(() => {
 ## future candidates
 
 potential shortcuts to consider:
-- **space** - play/pause (when not focused on button)
-- **arrow keys** - skip forward/back (context-aware)
-- **shift + arrow** - navigate queue
 - **/** - focus search (alternative to Cmd/Ctrl+K)
 - **T** - cycle theme (dark/light/system)
+- **S** - shuffle queue
 
 ## design principles
 
