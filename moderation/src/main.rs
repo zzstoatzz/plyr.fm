@@ -83,6 +83,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/admin/resolve", post(admin::resolve_flag))
         .route("/admin/resolve-htmx", post(admin::resolve_flag_htmx))
         .route("/admin/context", post(admin::store_context))
+        .route("/admin/active-labels", post(admin::get_active_labels))
         // Static files (CSS, JS for admin UI)
         .nest_service("/static", ServeDir::new("static"))
         // ATProto XRPC endpoints (public)

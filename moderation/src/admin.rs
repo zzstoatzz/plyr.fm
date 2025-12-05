@@ -92,6 +92,18 @@ pub struct StoreContextResponse {
     pub message: String,
 }
 
+/// Request to check which URIs have active labels.
+#[derive(Debug, Deserialize)]
+pub struct ActiveLabelsRequest {
+    pub uris: Vec<String>,
+}
+
+/// Response with active (non-negated) URIs.
+#[derive(Debug, Serialize)]
+pub struct ActiveLabelsResponse {
+    pub active_uris: Vec<String>,
+}
+
 /// List all flagged tracks - returns JSON for API, HTML for htmx.
 pub async fn list_flagged(
     State(state): State<AppState>,
@@ -214,6 +226,27 @@ pub async fn resolve_flag_htmx(
         html,
     )
         .into_response())
+}
+
+/// Get which URIs have active (non-negated) copyright-violation labels.
+///
+/// Used by the backend to determine which tracks are still flagged.
+pub async fn get_active_labels(
+    State(state): State<AppState>,
+    Json(request): Json<ActiveLabelsRequest>,
+) -> Result<Json<ActiveLabelsResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    tracing::debug!(uri_count = request.uris.len(), "checking active labels");
+
+    let active_uris = db.get_active_labels(&request.uris).await?;
+
+    tracing::debug!(
+        active_count = active_uris.len(),
+        "returning active labels"
+    );
+
+    Ok(Json(ActiveLabelsResponse { active_uris }))
 }
 
 /// Store context for a label (for backfill without re-emitting labels).
