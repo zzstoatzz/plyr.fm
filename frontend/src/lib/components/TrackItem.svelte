@@ -3,6 +3,7 @@
 	import LikeButton from './LikeButton.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
 	import LikersTooltip from './LikersTooltip.svelte';
+	import ExplicitImage from './ExplicitImage.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -110,32 +111,36 @@
 		}}
 	>
 		{#if track.image_url && !trackImageError}
-			<div class="track-image">
-				<img
-					src={track.image_url}
-					alt="{track.title} artwork"
-					width="48"
-					height="48"
-					loading={imageLoading}
-					fetchpriority={imageFetchPriority}
-					onerror={() => trackImageError = true}
-				/>
-			</div>
+			<ExplicitImage src={track.image_url}>
+				<div class="track-image">
+					<img
+						src={track.image_url}
+						alt="{track.title} artwork"
+						width="48"
+						height="48"
+						loading={imageLoading}
+						fetchpriority={imageFetchPriority}
+						onerror={() => trackImageError = true}
+					/>
+				</div>
+			</ExplicitImage>
 		{:else if track.artist_avatar_url && !avatarError}
-			<a
-				href="/u/{track.artist_handle}"
-				class="track-avatar"
-			>
-				<img
-					src={track.artist_avatar_url}
-					alt={track.artist}
-					width="48"
-					height="48"
-					loading={imageLoading}
-					fetchpriority={imageFetchPriority}
-					onerror={() => avatarError = true}
-				/>
-			</a>
+			<ExplicitImage src={track.artist_avatar_url}>
+				<a
+					href="/u/{track.artist_handle}"
+					class="track-avatar"
+				>
+					<img
+						src={track.artist_avatar_url}
+						alt={track.artist}
+						width="48"
+						height="48"
+						loading={imageLoading}
+						fetchpriority={imageFetchPriority}
+						onerror={() => avatarError = true}
+					/>
+				</a>
+			</ExplicitImage>
 		{:else}
 			<div class="track-image-placeholder">
 				<svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">

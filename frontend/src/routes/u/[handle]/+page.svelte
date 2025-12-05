@@ -7,6 +7,8 @@
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import Header from '$lib/components/Header.svelte';
+	import ExplicitImage from '$lib/components/ExplicitImage.svelte';
+	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { auth } from '$lib/auth.svelte';
@@ -167,7 +169,7 @@ $effect(() => {
 		/>
 		<meta property="og:site_name" content={APP_NAME} />
 		<meta property="profile:username" content="{data.artist.handle}" />
-		{#if data.artist.avatar_url}
+		{#if data.artist.avatar_url && !moderation.isExplicit(data.artist.avatar_url)}
 			<meta property="og:image" content="{data.artist.avatar_url}" />
 			<meta property="og:image:secure_url" content="{data.artist.avatar_url}" />
 			<meta property="og:image:width" content="400" />
@@ -182,7 +184,7 @@ $effect(() => {
 			name="twitter:description"
 			content="@{data.artist.handle} on {APP_NAME}"
 		/>
-		{#if data.artist.avatar_url}
+		{#if data.artist.avatar_url && !moderation.isExplicit(data.artist.avatar_url)}
 			<meta name="twitter:image" content="{data.artist.avatar_url}" />
 		{/if}
 	{/if}
@@ -194,7 +196,9 @@ $effect(() => {
 	<main>
 		<section class="artist-header">
 			{#if artist.avatar_url}
-				<img src={artist.avatar_url} alt={artist.display_name} class="artist-avatar" />
+				<ExplicitImage src={artist.avatar_url}>
+					<img src={artist.avatar_url} alt={artist.display_name} class="artist-avatar" />
+				</ExplicitImage>
 			{/if}
 			<div class="artist-details">
 				<div class="artist-info">

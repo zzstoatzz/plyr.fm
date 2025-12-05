@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Track } from '$lib/types';
 	import { onMount } from 'svelte';
+	import ExplicitImage from '$lib/components/ExplicitImage.svelte';
 
 	interface Props {
 		track: Track;
@@ -54,23 +55,25 @@
 </script>
 
 <div class="player-track">
-	<a href="/track/{track.id}" class="player-artwork" aria-label={`view ${track.title}`}>
-		{#if (track.image_url || track.album?.image_url) && !imageError}
-			<img
-				src={track.image_url || track.album?.image_url}
-				alt="{track.title} artwork"
-				onerror={() => imageError = true}
-			/>
-		{:else}
-			<div class="player-artwork-placeholder">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" width="24" height="24">
-					<path d="M9 18V5l12-2v13"></path>
-					<circle cx="6" cy="18" r="3"></circle>
-					<circle cx="18" cy="16" r="3"></circle>
-				</svg>
-			</div>
-		{/if}
-	</a>
+	<ExplicitImage src={track.image_url || track.album?.image_url}>
+		<a href="/track/{track.id}" class="player-artwork" aria-label={`view ${track.title}`}>
+			{#if (track.image_url || track.album?.image_url) && !imageError}
+				<img
+					src={track.image_url || track.album?.image_url}
+					alt="{track.title} artwork"
+					onerror={() => imageError = true}
+				/>
+			{:else}
+				<div class="player-artwork-placeholder">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" width="24" height="24">
+						<path d="M9 18V5l12-2v13"></path>
+						<circle cx="6" cy="18" r="3"></circle>
+						<circle cx="18" cy="16" r="3"></circle>
+					</svg>
+				</div>
+			{/if}
+		</a>
+	</ExplicitImage>
 	<div class="player-info">
 		{#if isOnTrackDetailPage}
 			<div class="player-title" class:scrolling={titleOverflows} bind:this={titleEl}>

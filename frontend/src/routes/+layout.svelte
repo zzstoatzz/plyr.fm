@@ -14,6 +14,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
+	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
@@ -40,6 +41,8 @@
 			auth.isAuthenticated = data.isAuthenticated;
 			auth.loading = false;
 			preferences.data = data.preferences;
+			// fetch explicit images list (public, no auth needed)
+			moderation.initialize();
 		}
 	});
 

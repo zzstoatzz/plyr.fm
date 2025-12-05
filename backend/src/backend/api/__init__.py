@@ -5,6 +5,7 @@ from backend.api.artists import router as artists_router
 from backend.api.audio import router as audio_router
 from backend.api.auth import router as auth_router
 from backend.api.exports import router as exports_router
+from backend.api.moderation import router as moderation_router
 from backend.api.now_playing import router as now_playing_router
 from backend.api.oembed import router as oembed_router
 from backend.api.preferences import router as preferences_router
@@ -19,6 +20,7 @@ __all__ = [
     "audio_router",
     "auth_router",
     "exports_router",
+    "moderation_router",
     "now_playing_router",
     "oembed_router",
     "preferences_router",
