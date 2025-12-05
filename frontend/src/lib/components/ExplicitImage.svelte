@@ -21,7 +21,7 @@
 	{@render children()}
 	{#if shouldBlur}
 		<div class="explicit-tooltip">
-			<span>explicit - enable in portal</span>
+			<span>sensitive - enable in portal</span>
 		</div>
 	{/if}
 </div>
