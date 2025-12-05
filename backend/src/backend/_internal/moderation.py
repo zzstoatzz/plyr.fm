@@ -192,6 +192,57 @@ async def _emit_copyright_label(
         logger.warning("failed to emit copyright label for %s: %s", uri, e)
 
 
+async def get_active_copyright_labels(uris: list[str]) -> set[str]:
+    """check which URIs have active (non-negated) copyright-violation labels.
+
+    queries the moderation service's labeler to determine which tracks are
+    still actively flagged. this is the source of truth for flag status.
+
+    args:
+        uris: list of AT URIs to check
+
+    returns:
+        set of URIs that are still actively flagged
+
+    note:
+        fails closed (returns all URIs as active) if moderation service is unreachable
+        to avoid accidentally hiding real violations.
+    """
+    if not uris:
+        return set()
+
+    if not settings.moderation.enabled:
+        logger.debug("moderation disabled, treating all as active")
+        return set(uris)
+
+    if not settings.moderation.auth_token:
+        logger.warning("MODERATION_AUTH_TOKEN not set, treating all as active")
+        return set(uris)
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(settings.moderation.timeout_seconds)
+        ) as client:
+            response = await client.post(
+                f"{settings.moderation.labeler_url}/admin/active-labels",
+                json={"uris": uris},
+                headers={"X-Moderation-Key": settings.moderation.auth_token},
+            )
+            response.raise_for_status()
+            data = response.json()
+            active = set(data.get("active_uris", []))
+            logfire.debug(
+                "checked active copyright labels",
+                total_uris=len(uris),
+                active_count=len(active),
+            )
+            return active
+    except Exception as e:
+        # fail closed: if we can't confirm resolution, treat as active
+        logger.warning("failed to check active labels, treating all as active: %s", e)
+        return set(uris)
+
+
 async def _store_scan_error(track_id: int, error: str) -> None:
     """store a scan error as a clear result.
 
