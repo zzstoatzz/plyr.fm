@@ -4,6 +4,7 @@ from backend.models.album import Album
 from backend.models.artist import Artist
 from backend.models.copyright_scan import CopyrightScan, ScanResolution
 from backend.models.database import Base
+from backend.models.sensitive_image import SensitiveImage
 from backend.models.exchange_token import ExchangeToken
 from backend.models.job import Job
 from backend.models.oauth_state import OAuthStateModel
@@ -28,6 +29,7 @@ __all__ = [
     "PendingDevToken",
     "QueueState",
     "ScanResolution",
+    "SensitiveImage",
     "Tag",
     "Track",
     "TrackComment",

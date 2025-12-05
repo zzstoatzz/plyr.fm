@@ -13,6 +13,7 @@ export interface Preferences {
 	theme: Theme;
 	enable_teal_scrobbling: boolean;
 	teal_needs_reauth: boolean;
+	show_sensitive_artwork: boolean;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -22,7 +23,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	hidden_tags: ['ai'],
 	theme: 'dark',
 	enable_teal_scrobbling: false,
-	teal_needs_reauth: false
+	teal_needs_reauth: false,
+	show_sensitive_artwork: false
 };
 
 class PreferencesManager {
@@ -60,6 +62,10 @@ class PreferencesManager {
 
 	get tealNeedsReauth(): boolean {
 		return this.data?.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth;
+	}
+
+	get showSensitiveArtwork(): boolean {
+		return this.data?.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork;
 	}
 
 	setTheme(theme: Theme): void {
@@ -107,7 +113,8 @@ class PreferencesManager {
 					hidden_tags: data.hidden_tags ?? DEFAULT_PREFERENCES.hidden_tags,
 					theme: data.theme ?? DEFAULT_PREFERENCES.theme,
 					enable_teal_scrobbling: data.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling,
-					teal_needs_reauth: data.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth
+					teal_needs_reauth: data.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth,
+					show_sensitive_artwork: data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork
 				};
 			} else {
 				this.data = { ...DEFAULT_PREFERENCES };

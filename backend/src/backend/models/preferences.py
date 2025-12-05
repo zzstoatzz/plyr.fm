@@ -46,6 +46,12 @@ class UserPreferences(Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
 
+    # content preferences
+    # when enabled, sensitive artwork is shown unblurred
+    show_sensitive_artwork: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
     # metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

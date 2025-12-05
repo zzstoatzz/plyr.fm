@@ -30,6 +30,7 @@ from backend.api import (
     audio_router,
     auth_router,
     exports_router,
+    moderation_router,
     now_playing_router,
     oembed_router,
     preferences_router,
@@ -202,6 +203,7 @@ app.include_router(queue_router)
 app.include_router(now_playing_router)
 app.include_router(migration_router)
 app.include_router(exports_router)
+app.include_router(moderation_router)
 app.include_router(oembed_router)
 app.include_router(stats_router)
 
