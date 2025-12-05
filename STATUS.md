@@ -47,14 +47,15 @@ plyr.fm should become:
 
 ### December 2025
 
-#### sensitive image moderation (PRs #471-482, Dec 5)
+#### sensitive image moderation (PRs #471-485, Dec 5)
 
 **what shipped**:
 - `sensitive_images` table to flag problematic images by R2 `image_id` or external URL
 - `show_sensitive_artwork` user preference (default: hidden, toggle in portal → "your data")
 - flagged images blurred everywhere: track lists, player, artist pages, likers tooltip
 - SSR-safe filtering: link previews (og:image) exclude sensitive images
-- likers tooltip improvements: max-height with scroll, hover interaction fix
+- likers tooltip UX: max-height with scroll, hover interaction fix, viewport-aware flip positioning
+- likers tooltip z-index: elevates entire track-container when tooltip open (prevents sibling tracks bleeding through)
 
 **how it works**:
 - frontend fetches `/moderation/sensitive-images` and stores flagged IDs/URLs
