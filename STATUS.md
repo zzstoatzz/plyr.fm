@@ -311,6 +311,7 @@ See `.status_history/2025-11.md` for detailed November development history inclu
 - playback auto-start on refresh (#225) - investigating localStorage/queue state persistence
 - no ATProto records for albums yet (#221 - consciously deferred)
 - no AIFF/AIF transcoding support (#153)
+- iOS PWA audio may hang on first play after backgrounding - service worker caching interacts poorly with 307 redirects to R2 CDN. PR #466 added `NetworkOnly` for audio routes which should fix this, but iOS PWAs are slow to update service workers. workaround: delete home screen bookmark and re-add. may need further investigation if issue persists after SW propagates.
 
 ### new features
 - issue #146: content-addressable storage (hash-based deduplication)
@@ -512,4 +513,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-04.
+this is a living document. last updated 2025-12-05.
