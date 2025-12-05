@@ -112,7 +112,7 @@
 	}
 </script>
 
-<div class="track-container" class:playing={isPlaying}>
+<div class="track-container" class:playing={isPlaying} class:likers-tooltip-open={showLikersTooltip}>
 	<button
 		class="track"
 		onclick={(e) => {
@@ -224,7 +224,6 @@
 				<span class="meta-separator">•</span>
 				<span
 					class="likes"
-					class:tooltip-open={showLikersTooltip}
 					role="button"
 					tabindex="0"
 					aria-label={`${likeCount} ${likeCount === 1 ? 'like' : 'likes'} (focus to view users)`}
@@ -331,6 +330,13 @@
 		background: color-mix(in srgb, var(--accent) 10%, var(--bg-tertiary));
 		border-left-color: var(--accent);
 		border-color: color-mix(in srgb, var(--accent) 20%, var(--border-subtle));
+	}
+
+	/* elevate entire track container when likers tooltip is open
+	   z-index: 60 is above header (50) and sibling tracks */
+	.track-container.likers-tooltip-open {
+		position: relative;
+		z-index: 60;
 	}
 
 	.track {
@@ -617,12 +623,6 @@
 		position: relative;
 		cursor: help;
 		transition: color 0.2s;
-	}
-
-	/* only elevate z-index when tooltip is open - this ensures the open tooltip
-	   renders above sibling track items without all tracks competing for z-index */
-	.likes.tooltip-open {
-		z-index: 10;
 	}
 
 	.likes:hover {
