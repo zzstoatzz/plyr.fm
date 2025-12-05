@@ -2,12 +2,14 @@ import { browser } from '$app/environment';
 import { API_URL } from '$lib/config';
 import type { User } from '$lib/types';
 import type { Preferences } from '$lib/preferences.svelte';
+import type { SensitiveImagesData } from '$lib/moderation.svelte';
 import type { LoadEvent } from '@sveltejs/kit';
 
 export interface LayoutData {
 	user: User | null;
 	isAuthenticated: boolean;
 	preferences: Preferences | null;
+	sensitiveImages: SensitiveImagesData;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -21,12 +23,16 @@ const DEFAULT_PREFERENCES: Preferences = {
 	show_sensitive_artwork: false
 };
 
-export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
+export async function load({ fetch, parent }: LoadEvent): Promise<LayoutData> {
+	// get server-loaded data (sensitiveImages)
+	const parentData = await parent();
+
 	if (!browser) {
 		return {
 			user: null,
 			isAuthenticated: false,
-			preferences: null
+			preferences: null,
+			sensitiveImages: parentData.sensitiveImages ?? { image_ids: [], urls: [] }
 		};
 	}
 
@@ -64,7 +70,8 @@ export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
 			return {
 				user,
 				isAuthenticated: true,
-				preferences
+				preferences,
+				sensitiveImages: parentData.sensitiveImages ?? { image_ids: [], urls: [] }
 			};
 		}
 	} catch (e) {
@@ -74,6 +81,7 @@ export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
 	return {
 		user: null,
 		isAuthenticated: false,
-		preferences: null
+		preferences: null,
+		sensitiveImages: parentData.sensitiveImages ?? { image_ids: [], urls: [] }
 	};
 }
