@@ -77,12 +77,12 @@ plyr.fm uses **environment-based database configuration** to ensure migrations a
 │ .env file:               │    │ fly secrets:             │
 │ DATABASE_URL=            │    │ DATABASE_URL=            │
 │   postgresql+asyncpg://  │    │   postgresql://          │
-│   localhost:5432/plyr    │    │   [neon connection]      │
+│   [neon dev connection]  │    │   [neon prod connection] │
 │                          │    │                          │
 │ when you run:            │    │ when fly.io runs:        │
 │ uv run alembic upgrade   │    │ release_command:         │
 │                          │    │ uv run alembic upgrade   │
-│ → migrates LOCAL db      │    │ → migrates PROD db       │
+│ → migrates DEV db        │    │ → migrates PROD db       │
 └──────────────────────────┘    └──────────────────────────┘
 ```
 
@@ -90,26 +90,26 @@ plyr.fm uses **environment-based database configuration** to ensure migrations a
 
 1. **no shared configuration**: local and production environments have completely separate `DATABASE_URL` values
 2. **environment-specific secrets**: production database URL is stored in fly.io secrets, never in code
-3. **explicit context**: you cannot accidentally run a production migration locally because your local `DATABASE_URL` points to localhost
-4. **explicit context**: fly.io cannot run migrations against your local database because it only knows about the production `DATABASE_URL`
+3. **explicit context**: you cannot accidentally run a production migration locally because your local `DATABASE_URL` points to the Neon dev database
+4. **explicit context**: fly.io cannot run migrations against your dev database because it only knows about the production `DATABASE_URL`
 
 **concrete example:**
 
 ```bash
 # local development
 $ cat .env
-DATABASE_URL=postgresql+asyncpg://localhost:5432/plyr
+DATABASE_URL=postgresql+asyncpg://neon_user:***@ep-muddy-flower-98795112.us-east-2.aws.neon.tech/plyr-dev
 
 $ uv run alembic upgrade head
-# connects to localhost:5432/plyr
-# migrates your local dev database
+# connects to neon dev database (plyr-dev)
+# migrates your development database
 
 # production (inside fly.io release machine)
 $ echo $DATABASE_URL
-postgresql://neon_user:***@ep-cool-moon-123.us-east-2.aws.neon.tech/plyr-prod
+postgresql://neon_user:***@ep-cold-butterfly-11920742.us-east-1.aws.neon.tech/plyr-prd
 
 $ uv run alembic upgrade head
-# connects to neon production database
+# connects to neon production database (plyr-prd)
 # migrates your production database
 ```
 
@@ -119,12 +119,12 @@ local development:
 ```
 1. developer edits model in src/backend/models/
 2. runs: uv run alembic revision --autogenerate -m "description"
-3. alembic reads DATABASE_URL from .env (localhost)
+3. alembic reads DATABASE_URL from .env (neon dev)
 4. generates migration by comparing:
    - current model state (code)
-   - current database state (local postgres)
+   - current database state (neon dev database)
 5. runs: uv run alembic upgrade head
-6. migration applies to local database
+6. migration applies to dev database
 ```
 
 production deployment:
@@ -161,23 +161,27 @@ this ensures:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ three completely separate databases:                         │
+│ four separate databases (three neon instances + local test): │
 │                                                               │
-│ 1. dev (localhost:5432/plyr)                                 │
+│ 1. dev (neon: plyr-dev / muddy-flower-98795112)              │
 │    - for local development                                   │
 │    - set via .env: DATABASE_URL=postgresql+asyncpg://...     │
 │    - migrations run manually: uv run alembic upgrade head    │
 │                                                               │
-│ 2. test (localhost:5433/plyr_test)                           │
-│    - for automated tests                                     │
-│    - set via conftest.py fixture                             │
-│    - schema created by tests/conftest.py                     │
-│    - no migrations (schema created from models directly)     │
+│ 2. staging (neon: plyr-stg / frosty-math-37367092)           │
+│    - for staging environment                                 │
+│    - set via fly secrets on relay-api-staging                │
+│    - migrations run automatically via release_command        │
 │                                                               │
-│ 3. prod (neon.tech cloud)                                    │
+│ 3. prod (neon: plyr-prd / cold-butterfly-11920742)           │
 │    - for production traffic                                  │
 │    - set via fly secrets: DATABASE_URL=postgresql://...      │
 │    - migrations run automatically via release_command        │
+│                                                               │
+│ 4. test (localhost:5433/plyr_test)                           │
+│    - for automated tests only                                │
+│    - set via conftest.py fixture                             │
+│    - schema created from models directly (no migrations)     │
 │                                                               │
 │ these databases never interact or share configuration        │
 └──────────────────────────────────────────────────────────────┘
@@ -189,8 +193,8 @@ when deploying timezone support migration `31e69ba0c570`:
 
 1. **dockerfile didn't include migration files** - had to create PR #14 to add `COPY alembic.ini` and `COPY alembic ./alembic`
 2. **alembic version tracking out of sync** - production database had `user_preferences` table but alembic thought version was older, causing "relation already exists" errors
-3. **manual stamp needed** - had to run `flyctl ssh console -a plyr-api -C "uv run alembic stamp 9e8c7aa5b945"` to fix version tracking
-4. **manual migration execution** - had to run `flyctl ssh console -a plyr-api -C "uv run alembic upgrade head"` after deployment
+3. **manual stamp needed** - had to run `flyctl ssh console -a relay-api -C "uv run alembic stamp 9e8c7aa5b945"` to fix version tracking
+4. **manual migration execution** - had to run `flyctl ssh console -a relay-api -C "uv run alembic upgrade head"` after deployment
 5. **blocked deployment** - couldn't deploy until all manual steps completed
 
 this took ~30 minutes of manual intervention for what should be automatic.
@@ -384,14 +388,23 @@ use neon's branch features for zero-downtime migrations (test on branch, then pr
 - our migrations are simple and fast (~3 seconds)
 - can revisit when we have complex, long-running migrations
 
+## current capabilities
+
+**migration isolation via release_command** (already implemented):
+- fly.io's `release_command` runs migrations in a separate temporary machine before deployment
+- migrations complete before app serves traffic (no inconsistent state)
+- deployment automatically aborts if migration fails
+- this provides similar benefits to kubernetes init containers
+
+**multi-environment pipeline** (already implemented):
+- dev → staging → production progression via three neon databases
+- migrations tested locally against neon dev first
+- staging deployment validates migrations before production
+- automated via GitHub Actions
+
 ## future considerations
 
 as plyr.fm scales, we may want to explore:
-
-**migration init containers** (if we move to kubernetes/docker compose):
-- separate container for migrations before app starts
-- matches reference project N's pattern
-- better isolation and observability
 
 **neon branch-based migrations** (for complex changes):
 - test migrations on database branch first
@@ -399,11 +412,10 @@ as plyr.fm scales, we may want to explore:
 - zero downtime, instant rollback
 - useful for high-risk schema changes
 
-**multi-environment pipeline**:
-- dev → staging → production progression
-- test migrations in lower environments first
-- automated smoke tests after migration
-- canary deployments for schema changes
+**automated smoke tests**:
+- run basic API health checks after migration completes
+- verify critical queries still work
+- alert if performance degrades significantly
 
 ## migration best practices
 
@@ -415,7 +427,7 @@ as plyr.fm scales, we may want to explore:
    uv run alembic current
 
    # production
-   flyctl ssh console -a plyr-api -C "uv run alembic current"
+   flyctl ssh console -a relay-api -C "uv run alembic current"
    ```
 
 2. **ensure schemas are in sync**
@@ -522,7 +534,7 @@ as plyr.fm scales, we may want to explore:
 
    a. **downgrade and fix**:
    ```bash
-   flyctl ssh console -a plyr-api -C "uv run alembic downgrade -1"
+   flyctl ssh console -a relay-api -C "uv run alembic downgrade -1"
    # fix migration file locally
    # commit and redeploy
    ```
@@ -537,7 +549,7 @@ as plyr.fm scales, we may want to explore:
 
    c. **manual SQL fix**:
    ```bash
-   flyctl ssh console -a plyr-api
+   flyctl ssh console -a relay-api
    # connect to database
    # run manual SQL to fix state
    # stamp to correct revision
@@ -612,6 +624,6 @@ def upgrade():
 
 ---
 
-**last updated**: 2025-11-02
+**last updated**: 2025-12-05
 **status**: fully automated via fly.io release_command ✓
 **owner**: @zzstoatzz
