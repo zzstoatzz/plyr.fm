@@ -616,6 +616,7 @@
 		position: relative;
 		cursor: help;
 		transition: color 0.2s;
+		z-index: 100;
 	}
 
 	.likes:hover {

@@ -85,7 +85,7 @@
 				class="liker"
 			>
 				{#if liker.avatar_url}
-					<SensitiveImage src={liker.avatar_url}>
+					<SensitiveImage src={liker.avatar_url} compact>
 						<img src={liker.avatar_url} alt={liker.display_name} class="avatar" />
 					</SensitiveImage>
 				{:else}
