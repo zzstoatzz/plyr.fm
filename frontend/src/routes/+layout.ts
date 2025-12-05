@@ -24,12 +24,14 @@ const DEFAULT_PREFERENCES: Preferences = {
 };
 
 export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
+	const sensitiveImages = data?.sensitiveImages ?? { image_ids: [], urls: [] };
+
 	if (!browser) {
 		return {
 			user: null,
 			isAuthenticated: false,
 			preferences: null,
-			sensitiveImages: data.sensitiveImages ?? { image_ids: [], urls: [] }
+			sensitiveImages
 		};
 	}
 
@@ -68,7 +70,7 @@ export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
 				user,
 				isAuthenticated: true,
 				preferences,
-				sensitiveImages: data.sensitiveImages ?? { image_ids: [], urls: [] }
+				sensitiveImages
 			};
 		}
 	} catch (e) {
@@ -79,6 +81,6 @@ export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
 		user: null,
 		isAuthenticated: false,
 		preferences: null,
-		sensitiveImages: data.sensitiveImages ?? { image_ids: [], urls: [] }
+		sensitiveImages
 	};
 }
