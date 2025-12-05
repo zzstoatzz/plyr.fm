@@ -75,19 +75,32 @@
 		toast.success(`queued ${track.title}`, 1800);
 	}
 
+	let likersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
+
 	function handleLikesMouseEnter() {
-		// show tooltip immediately, fetch will handle its own delay
+		// cancel any pending close
+		if (likersTooltipTimeout) {
+			clearTimeout(likersTooltipTimeout);
+			likersTooltipTimeout = null;
+		}
 		showLikersTooltip = true;
 	}
 
 	function handleLikesMouseLeave() {
-		showLikersTooltip = false;
+		// delay closing to allow moving into the tooltip
+		likersTooltipTimeout = setTimeout(() => {
+			showLikersTooltip = false;
+			likersTooltipTimeout = null;
+		}, 150);
 	}
 
 	function handleLikesKeydown(event: KeyboardEvent) {
 		if (event.key === 'Enter' || event.key === ' ') {
 			event.preventDefault();
 			showLikersTooltip = true;
+		}
+		if (event.key === 'Escape') {
+			showLikersTooltip = false;
 		}
 	}
 
@@ -223,7 +236,12 @@
 				>
 					{likeCount} {likeCount === 1 ? 'like' : 'likes'}
 					{#if showLikersTooltip}
-							<LikersTooltip trackId={track.id} likeCount={likeCount} />
+							<LikersTooltip
+								trackId={track.id}
+								likeCount={likeCount}
+								onMouseEnter={handleLikesMouseEnter}
+								onMouseLeave={handleLikesMouseLeave}
+							/>
 						{/if}
 					</span>
 				{/if}
