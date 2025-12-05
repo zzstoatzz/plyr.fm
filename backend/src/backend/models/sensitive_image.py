@@ -1,4 +1,4 @@
-"""explicit image tracking for content moderation."""
+"""sensitive image tracking for content moderation."""
 
 from datetime import UTC, datetime
 
@@ -8,17 +8,17 @@ from sqlalchemy.orm import Mapped, mapped_column
 from backend.models.database import Base
 
 
-class ExplicitImage(Base):
-    """tracks images flagged as explicit.
+class SensitiveImage(Base):
+    """tracks images flagged as sensitive.
 
     images can be identified by:
     - image_id: R2 storage ID (for track/album artwork)
     - url: full URL (for external images like avatars)
 
-    at least one must be set. if both match, the image is explicit.
+    at least one must be set. if both match, the image is sensitive.
     """
 
-    __tablename__ = "explicit_images"
+    __tablename__ = "sensitive_images"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 

@@ -8,7 +8,7 @@
 	import LikeButton from '$lib/components/LikeButton.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import TagEffects from '$lib/components/TagEffects.svelte';
-	import ExplicitImage from '$lib/components/ExplicitImage.svelte';
+	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -320,7 +320,7 @@ $effect(() => {
 	{#if track.album}
 		<meta property="music:album" content="{track.album.title}" />
 	{/if}
-	{#if track.image_url && !moderation.isExplicit(track.image_url)}
+	{#if track.image_url && !moderation.isSensitive(track.image_url)}
 		<meta property="og:image" content="{track.image_url}" />
 		<meta property="og:image:secure_url" content="{track.image_url}" />
 		<meta property="og:image:width" content="1200" />
@@ -339,7 +339,7 @@ $effect(() => {
 		name="twitter:description"
 		content="{track.artist}{track.album ? ` • ${track.album.title}` : ''}"
 	/>
-	{#if track.image_url && !moderation.isExplicit(track.image_url)}
+	{#if track.image_url && !moderation.isSensitive(track.image_url)}
 		<meta name="twitter:image" content="{track.image_url}" />
 	{/if}
 
@@ -361,7 +361,7 @@ $effect(() => {
 	<main>
 		<div class="track-detail">
 			<!-- cover art -->
-			<ExplicitImage src={track.image_url} tooltipPosition="center">
+			<SensitiveImage src={track.image_url} tooltipPosition="center">
 				<div class="cover-art-container">
 					{#if track.image_url}
 						<img src={track.image_url} alt="{track.title} artwork" class="cover-art" />
@@ -375,7 +375,7 @@ $effect(() => {
 						</div>
 					{/if}
 				</div>
-			</ExplicitImage>
+			</SensitiveImage>
 
 			<!-- track info wrapper -->
 			<div class="track-info-wrapper">

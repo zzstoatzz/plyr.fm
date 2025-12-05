@@ -47,8 +47,8 @@ class UserPreferences(Base):
     )
 
     # content preferences
-    # when enabled, explicit artwork is shown unblurred
-    show_explicit_artwork: Mapped[bool] = mapped_column(
+    # when enabled, sensitive artwork is shown unblurred
+    show_sensitive_artwork: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
 

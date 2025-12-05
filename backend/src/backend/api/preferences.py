@@ -25,7 +25,7 @@ class PreferencesResponse(BaseModel):
     enable_teal_scrobbling: bool
     # indicates if user needs to re-login to activate teal scrobbling
     teal_needs_reauth: bool = False
-    show_explicit_artwork: bool = False
+    show_sensitive_artwork: bool = False
 
 
 class PreferencesUpdate(BaseModel):
@@ -36,7 +36,7 @@ class PreferencesUpdate(BaseModel):
     allow_comments: bool | None = None
     hidden_tags: list[str] | None = None
     enable_teal_scrobbling: bool | None = None
-    show_explicit_artwork: bool | None = None
+    show_sensitive_artwork: bool | None = None
 
 
 def _has_teal_scope(session: Session) -> bool:
@@ -80,7 +80,7 @@ async def get_preferences(
         hidden_tags=prefs.hidden_tags or [],
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
         teal_needs_reauth=teal_needs_reauth,
-        show_explicit_artwork=prefs.show_explicit_artwork,
+        show_sensitive_artwork=prefs.show_sensitive_artwork,
     )
 
 
@@ -113,8 +113,8 @@ async def update_preferences(
             enable_teal_scrobbling=update.enable_teal_scrobbling
             if update.enable_teal_scrobbling is not None
             else False,
-            show_explicit_artwork=update.show_explicit_artwork
-            if update.show_explicit_artwork is not None
+            show_sensitive_artwork=update.show_sensitive_artwork
+            if update.show_sensitive_artwork is not None
             else False,
         )
         db.add(prefs)
@@ -130,8 +130,8 @@ async def update_preferences(
             prefs.hidden_tags = update.hidden_tags
         if update.enable_teal_scrobbling is not None:
             prefs.enable_teal_scrobbling = update.enable_teal_scrobbling
-        if update.show_explicit_artwork is not None:
-            prefs.show_explicit_artwork = update.show_explicit_artwork
+        if update.show_sensitive_artwork is not None:
+            prefs.show_sensitive_artwork = update.show_sensitive_artwork
 
     await db.commit()
     await db.refresh(prefs)
@@ -147,5 +147,5 @@ async def update_preferences(
         hidden_tags=prefs.hidden_tags or [],
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
         teal_needs_reauth=teal_needs_reauth,
-        show_explicit_artwork=prefs.show_explicit_artwork,
+        show_sensitive_artwork=prefs.show_sensitive_artwork,
     )

@@ -1,8 +1,8 @@
-"""add explicit_images table and show_explicit_artwork preference
+"""add sensitive_images table and show_sensitive_artwork preference
 
-Revision ID: 212fe5ee7e63
+Revision ID: effe28dd977b
 Revises: d4e6457a0fe3
-Create Date: 2025-12-04 17:27:59.667270
+Create Date: 2025-12-05 10:17:09.747708
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "212fe5ee7e63"
+revision: str = "effe28dd977b"
 down_revision: str | Sequence[str] | None = "d4e6457a0fe3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -21,9 +21,9 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # create explicit_images table
+    # create sensitive_images table
     op.create_table(
-        "explicit_images",
+        "sensitive_images",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("image_id", sa.String, nullable=True, index=True),
         sa.Column("url", sa.Text, nullable=True, index=True),
@@ -37,11 +37,11 @@ def upgrade() -> None:
         sa.Column("flagged_by", sa.String, nullable=True),
     )
 
-    # add show_explicit_artwork preference
+    # add show_sensitive_artwork preference
     op.add_column(
         "user_preferences",
         sa.Column(
-            "show_explicit_artwork",
+            "show_sensitive_artwork",
             sa.Boolean,
             nullable=False,
             server_default=sa.text("false"),
@@ -51,5 +51,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_column("user_preferences", "show_explicit_artwork")
-    op.drop_table("explicit_images")
+    op.drop_column("user_preferences", "show_sensitive_artwork")
+    op.drop_table("sensitive_images")

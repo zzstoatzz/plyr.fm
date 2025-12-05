@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Track } from '$lib/types';
 	import { onMount } from 'svelte';
-	import ExplicitImage from '$lib/components/ExplicitImage.svelte';
+	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 
 	interface Props {
 		track: Track;
@@ -55,7 +55,7 @@
 </script>
 
 <div class="player-track">
-	<ExplicitImage src={track.image_url || track.album?.image_url}>
+	<SensitiveImage src={track.image_url || track.album?.image_url}>
 		<a href="/track/{track.id}" class="player-artwork" aria-label={`view ${track.title}`}>
 			{#if (track.image_url || track.album?.image_url) && !imageError}
 				<img
@@ -73,7 +73,7 @@
 				</div>
 			{/if}
 		</a>
-	</ExplicitImage>
+	</SensitiveImage>
 	<div class="player-info">
 		{#if isOnTrackDetailPage}
 			<div class="player-title" class:scrolling={titleOverflows} bind:this={titleEl}>

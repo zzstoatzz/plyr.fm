@@ -18,7 +18,7 @@ const DEFAULT_PREFERENCES: Preferences = {
 	theme: 'dark',
 	enable_teal_scrobbling: false,
 	teal_needs_reauth: false,
-	show_explicit_artwork: false
+	show_sensitive_artwork: false
 };
 
 export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
@@ -54,7 +54,7 @@ export async function load({ fetch }: LoadEvent): Promise<LayoutData> {
 						theme: data.theme ?? 'dark',
 						enable_teal_scrobbling: data.enable_teal_scrobbling ?? false,
 						teal_needs_reauth: data.teal_needs_reauth ?? false,
-						show_explicit_artwork: data.show_explicit_artwork ?? false
+						show_sensitive_artwork: data.show_sensitive_artwork ?? false
 					};
 				}
 			} catch (e) {

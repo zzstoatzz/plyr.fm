@@ -36,7 +36,7 @@
 	let allowComments = $derived(preferences.allowComments);
 	let enableTealScrobbling = $derived(preferences.enableTealScrobbling);
 	let tealNeedsReauth = $derived(preferences.tealNeedsReauth);
-	let showExplicitArtwork = $derived(preferences.showExplicitArtwork);
+	let showSensitiveArtwork = $derived(preferences.showSensitiveArtwork);
 	let savingProfile = $state(false);
 	let profileSuccess = $state('');
 	let profileError = $state('');
@@ -221,10 +221,10 @@
 		}
 	}
 
-	async function saveShowExplicitArtwork(enabled: boolean) {
+	async function saveShowSensitiveArtwork(enabled: boolean) {
 		try {
-			await preferences.update({ show_explicit_artwork: enabled });
-			toast.success(enabled ? 'explicit artwork shown' : 'explicit artwork hidden');
+			await preferences.update({ show_sensitive_artwork: enabled });
+			toast.success(enabled ? 'sensitive artwork shown' : 'sensitive artwork hidden');
 		} catch (_e) {
 			console.error('failed to save preference:', _e);
 			toast.error('failed to update preference');
@@ -1071,20 +1071,20 @@
 
 			<div class="data-control">
 				<div class="control-info">
-					<h3>explicit artwork</h3>
+					<h3>sensitive artwork</h3>
 					<p class="control-description">
-						show artwork that has been flagged as explicit (nudity, etc.)
+						show artwork that has been flagged as sensitive (nudity, etc.)
 					</p>
 				</div>
 				<label class="toggle-switch">
 					<input
 						type="checkbox"
-						aria-label="Show explicit artwork"
-						checked={showExplicitArtwork}
-						onchange={(e) => saveShowExplicitArtwork((e.target as HTMLInputElement).checked)}
+						aria-label="Show sensitive artwork"
+						checked={showSensitiveArtwork}
+						onchange={(e) => saveShowSensitiveArtwork((e.target as HTMLInputElement).checked)}
 					/>
 					<span class="toggle-slider"></span>
-					<span class="toggle-label">{showExplicitArtwork ? 'shown' : 'hidden'}</span>
+					<span class="toggle-label">{showSensitiveArtwork ? 'shown' : 'hidden'}</span>
 				</label>
 			</div>
 

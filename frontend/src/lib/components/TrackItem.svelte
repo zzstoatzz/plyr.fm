@@ -3,7 +3,7 @@
 	import LikeButton from './LikeButton.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
 	import LikersTooltip from './LikersTooltip.svelte';
-	import ExplicitImage from './ExplicitImage.svelte';
+	import SensitiveImage from './SensitiveImage.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -111,7 +111,7 @@
 		}}
 	>
 		{#if track.image_url && !trackImageError}
-			<ExplicitImage src={track.image_url}>
+			<SensitiveImage src={track.image_url}>
 				<div class="track-image">
 					<img
 						src={track.image_url}
@@ -123,9 +123,9 @@
 						onerror={() => trackImageError = true}
 					/>
 				</div>
-			</ExplicitImage>
+			</SensitiveImage>
 		{:else if track.artist_avatar_url && !avatarError}
-			<ExplicitImage src={track.artist_avatar_url}>
+			<SensitiveImage src={track.artist_avatar_url}>
 				<a
 					href="/u/{track.artist_handle}"
 					class="track-avatar"
@@ -140,7 +140,7 @@
 						onerror={() => avatarError = true}
 					/>
 				</a>
-			</ExplicitImage>
+			</SensitiveImage>
 		{:else}
 			<div class="track-image-placeholder">
 				<svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">

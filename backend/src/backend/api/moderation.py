@@ -7,13 +7,13 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models import ExplicitImage, get_db
+from backend.models import SensitiveImage, get_db
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
 
 
-class ExplicitImagesResponse(BaseModel):
-    """list of explicit image identifiers."""
+class SensitiveImagesResponse(BaseModel):
+    """list of sensitive image identifiers."""
 
     # R2 image IDs (for track/album artwork)
     image_ids: list[str]
@@ -21,19 +21,19 @@ class ExplicitImagesResponse(BaseModel):
     urls: list[str]
 
 
-@router.get("/explicit-images")
-async def get_explicit_images(
+@router.get("/sensitive-images")
+async def get_sensitive_images(
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> ExplicitImagesResponse:
-    """get all flagged explicit images.
+) -> SensitiveImagesResponse:
+    """get all flagged sensitive images.
 
     returns both image_ids (for R2-stored images) and full URLs
     (for external images like avatars). clients should check both.
     """
-    result = await db.execute(select(ExplicitImage))
+    result = await db.execute(select(SensitiveImage))
     images = result.scalars().all()
 
     image_ids = [img.image_id for img in images if img.image_id]
     urls = [img.url for img in images if img.url]
 
-    return ExplicitImagesResponse(image_ids=image_ids, urls=urls)
+    return SensitiveImagesResponse(image_ids=image_ids, urls=urls)

@@ -3,7 +3,7 @@
 	import { moderation } from '$lib/moderation.svelte';
 
 	interface Props {
-		/** image URL to check for explicit content */
+		/** image URL to check for sensitive content */
 		src: string | null | undefined;
 		/** content to render (should include the img element) */
 		children: import('svelte').Snippet;
@@ -13,50 +13,50 @@
 
 	let { src, children, tooltipPosition = 'above' }: Props = $props();
 
-	let isExplicit = $derived(moderation.isExplicit(src));
-	let shouldBlur = $derived(isExplicit && !preferences.showExplicitArtwork);
+	let isSensitive = $derived(moderation.isSensitive(src));
+	let shouldBlur = $derived(isSensitive && !preferences.showSensitiveArtwork);
 </script>
 
-<div class="explicit-wrapper" class:blur={shouldBlur} class:tooltip-center={tooltipPosition === 'center'}>
+<div class="sensitive-wrapper" class:blur={shouldBlur} class:tooltip-center={tooltipPosition === 'center'}>
 	{@render children()}
 	{#if shouldBlur}
-		<div class="explicit-tooltip">
+		<div class="sensitive-tooltip">
 			<span>sensitive - enable in portal</span>
 		</div>
 	{/if}
 </div>
 
 <style>
-	.explicit-wrapper {
+	.sensitive-wrapper {
 		position: relative;
 		display: contents;
 	}
 
-	.explicit-wrapper.blur {
+	.sensitive-wrapper.blur {
 		display: block;
 		position: relative;
 	}
 
-	.explicit-wrapper.blur :global(img) {
+	.sensitive-wrapper.blur :global(img) {
 		filter: blur(12px);
 		transition: filter 0.2s;
 	}
 
-	.explicit-wrapper.blur:hover :global(img) {
+	.sensitive-wrapper.blur:hover :global(img) {
 		filter: blur(6px);
 	}
 
 	/* larger blur for centered tooltip (detail pages) */
-	.explicit-wrapper.blur.tooltip-center :global(img) {
+	.sensitive-wrapper.blur.tooltip-center :global(img) {
 		filter: blur(20px);
 	}
 
-	.explicit-wrapper.blur.tooltip-center:hover :global(img) {
+	.sensitive-wrapper.blur.tooltip-center:hover :global(img) {
 		filter: blur(10px);
 	}
 
 	/* default: tooltip appears above the image, aligned left (for player/small images) */
-	.explicit-tooltip {
+	.sensitive-tooltip {
 		position: absolute;
 		bottom: 100%;
 		left: 0;
@@ -75,7 +75,7 @@
 	}
 
 	/* centered tooltip for large images (detail pages) */
-	.tooltip-center .explicit-tooltip {
+	.tooltip-center .sensitive-tooltip {
 		top: 50%;
 		bottom: auto;
 		left: 50%;
@@ -85,7 +85,7 @@
 		font-size: 0.8rem;
 	}
 
-	.explicit-wrapper.blur:hover .explicit-tooltip {
+	.sensitive-wrapper.blur:hover .sensitive-tooltip {
 		opacity: 1;
 	}
 </style>
