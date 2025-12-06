@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { getServerConfig } from '$lib/config';
 
 	interface Props {
 		query: string;
+		excludePatterns?: string[];
+		includePatterns?: string[];
 	}
 
 	interface Bufo {
@@ -19,7 +22,7 @@
 		animationClass: string;
 	}
 
-	let { query }: Props = $props();
+	let { query, excludePatterns = [], includePatterns = [] }: Props = $props();
 
 	let bufos = $state<Bufo[]>([]);
 	let spawnedBufos = $state<SpawnedBufo[]>([]);
@@ -63,11 +66,26 @@
 		}
 
 		try {
+			// get patterns from props or config
+			let exclude = excludePatterns;
+			let include = includePatterns;
+			if (exclude.length === 0 && include.length === 0) {
+				const config = await getServerConfig();
+				exclude = config.bufo_exclude_patterns ?? [];
+				include = config.bufo_include_patterns ?? [];
+			}
+
 			const params = new URLSearchParams({
 				query,
 				top_k: '10',
 				family_friendly: 'true'
 			});
+			if (exclude.length > 0) {
+				params.set('exclude', exclude.join(','));
+			}
+			if (include.length > 0) {
+				params.set('include', include.join(','));
+			}
 			const response = await fetch(`https://find-bufo.fly.dev/api/search?${params}`);
 			if (response.ok) {
 				const data = await response.json();
