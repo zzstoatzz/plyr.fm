@@ -47,13 +47,25 @@ plyr.fm should become:
 
 ### December 2025
 
-#### sensitive image moderation (PRs #471-485, Dec 5)
+#### mobile artwork upload fix (PR #489, Dec 6)
+
+**problem**: artwork uploads from iOS Photos library silently failed - track uploaded successfully but without artwork.
+
+**root cause**: iOS stores photos in HEIC format. when selected, iOS converts content to JPEG but often keeps the `.heic` filename. backend validated format using only filename extension → rejected as "unsupported format".
+
+**fix**:
+- backend now prefers MIME content_type over filename extension for format detection
+- added `ImageFormat.from_content_type()` method
+- frontend uses `accept="image/*"` for broader iOS compatibility
+
+#### sensitive image moderation (PRs #471-488, Dec 5-6)
 
 **what shipped**:
 - `sensitive_images` table to flag problematic images by R2 `image_id` or external URL
 - `show_sensitive_artwork` user preference (default: hidden, toggle in portal → "your data")
-- flagged images blurred everywhere: track lists, player, artist pages, likers tooltip
-- SSR-safe filtering: link previews (og:image) exclude sensitive images
+- flagged images blurred everywhere: track lists, player, artist pages, likers tooltip, search results, embeds
+- Media Session API (CarPlay, lock screen, control center) respects sensitive preference
+- SSR-safe filtering: link previews (og:image) exclude sensitive images on track, artist, and album pages
 - likers tooltip UX: max-height with scroll, hover interaction fix, viewport-aware flip positioning
 - likers tooltip z-index: elevates entire track-container when tooltip open (prevents sibling tracks bleeding through)
 
@@ -62,6 +74,15 @@ plyr.fm should become:
 - `SensitiveImage` component wraps images and checks against flagged list
 - server-side check via `+layout.server.ts` for meta tag filtering
 - users can opt-in to view sensitive artwork via portal toggle
+
+**coverage** (PR #488):
+
+| context | approach |
+|---------|----------|
+| DOM images needing blur | `SensitiveImage` component |
+| small avatars in lists | `SensitiveImage` with `compact` prop |
+| SSR meta tags (og:image) | `checkImageSensitive()` function |
+| non-DOM APIs (media session) | direct `isSensitive()` + `showSensitiveArtwork` check |
 
 **moderation workflow**:
 - admin adds row to `sensitive_images` with `image_id` (R2) or `url` (external)
@@ -536,4 +557,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-05.
+this is a living document. last updated 2025-12-06.
