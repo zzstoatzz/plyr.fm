@@ -72,3 +72,65 @@ class TestImageFormat:
         assert (
             ImageFormat.from_filename("C:\\Users\\test\\pic.webp") == ImageFormat.WEBP
         )
+
+    @pytest.mark.parametrize(
+        ("content_type", "expected_format"),
+        [
+            ("image/jpeg", ImageFormat.JPEG),
+            ("image/jpg", ImageFormat.JPEG),
+            ("image/png", ImageFormat.PNG),
+            ("image/webp", ImageFormat.WEBP),
+            ("image/gif", ImageFormat.GIF),
+            # with charset
+            ("image/jpeg; charset=utf-8", ImageFormat.JPEG),
+            # case insensitive
+            ("IMAGE/JPEG", ImageFormat.JPEG),
+            ("Image/Png", ImageFormat.PNG),
+        ],
+    )
+    def test_from_content_type_supported(
+        self, content_type: str, expected_format: ImageFormat
+    ):
+        """test supported content type recognition."""
+        assert ImageFormat.from_content_type(content_type) == expected_format
+
+    @pytest.mark.parametrize(
+        "content_type",
+        [
+            "image/heic",
+            "image/bmp",
+            "image/tiff",
+            "application/octet-stream",
+            "",
+            None,
+        ],
+    )
+    def test_from_content_type_unsupported(self, content_type: str | None):
+        """test unsupported content types return None."""
+        assert ImageFormat.from_content_type(content_type) is None
+
+    def test_validate_and_extract_prefers_content_type(self):
+        """test that content_type is preferred over filename extension.
+
+        this is the iOS HEIC case: filename is .heic but content is jpeg.
+        """
+        # HEIC filename but JPEG content type -> should return JPEG
+        image_format, is_valid = ImageFormat.validate_and_extract(
+            "IMG_1234.HEIC", "image/jpeg"
+        )
+        assert is_valid is True
+        assert image_format == ImageFormat.JPEG
+
+    def test_validate_and_extract_falls_back_to_filename(self):
+        """test fallback to filename when no content_type provided."""
+        image_format, is_valid = ImageFormat.validate_and_extract("photo.png", None)
+        assert is_valid is True
+        assert image_format == ImageFormat.PNG
+
+    def test_validate_and_extract_unsupported_both(self):
+        """test unsupported format when both filename and content_type are invalid."""
+        image_format, is_valid = ImageFormat.validate_and_extract(
+            "image.heic", "image/heic"
+        )
+        assert is_valid is False
+        assert image_format is None

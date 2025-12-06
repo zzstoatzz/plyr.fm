@@ -99,6 +99,7 @@ async def _process_upload_background(
     auth_session: AuthSession,
     image_path: str | None = None,
     image_filename: str | None = None,
+    image_content_type: str | None = None,
 ) -> None:
     """Background task to process upload."""
     with logfire.span(
@@ -216,8 +217,9 @@ async def _process_upload_background(
                     "saving image...",
                     phase="image",
                 )
+                # use content_type for format detection (more reliable on iOS)
                 image_format, is_valid = ImageFormat.validate_and_extract(
-                    image_filename
+                    image_filename, image_content_type
                 )
                 if is_valid and image_format:
                     try:
@@ -540,8 +542,10 @@ async def upload_track(
 
         # stream image to temp file if provided
         image_filename = None
+        image_content_type = None
         if image and image.filename:
             image_filename = image.filename
+            image_content_type = image.content_type
             # images have much smaller limit (20MB is generous for cover art)
             max_image_size = 20 * 1024 * 1024
             image_bytes_read = 0
@@ -584,6 +588,7 @@ async def upload_track(
             auth_session,
             image_path,
             image_filename,
+            image_content_type,
         )
     except Exception:
         if file_path:
