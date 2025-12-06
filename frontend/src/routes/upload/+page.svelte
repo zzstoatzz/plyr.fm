@@ -241,7 +241,7 @@
 				<input
 					id="image-input"
 					type="file"
-					accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
+					accept="image/*"
 					onchange={handleImageChange}
 				/>
 				<p class="format-hint">supported: jpg, png, webp, gif</p>
