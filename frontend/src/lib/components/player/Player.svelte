@@ -2,6 +2,8 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { nowPlaying } from '$lib/now-playing.svelte';
+	import { moderation } from '$lib/moderation.svelte';
+	import { preferences } from '$lib/preferences.svelte';
 	import { API_URL } from '$lib/config';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
@@ -9,19 +11,27 @@
 	import PlaybackControls from './PlaybackControls.svelte';
 	import type { Track } from '$lib/types';
 
+	// check if artwork should be shown in media session (respects sensitive content settings)
+	function shouldShowArtwork(url: string | null | undefined): boolean {
+		if (!url) return false;
+		if (!moderation.isSensitive(url)) return true;
+		return preferences.showSensitiveArtwork;
+	}
+
 	// update media session metadata for system media controls (CarPlay, lock screen, etc.)
 	function updateMediaSessionMetadata(track: Track) {
 		if (!('mediaSession' in navigator)) return;
 
+		// build artwork array, respecting sensitive content settings
 		const artwork: MediaImage[] = [];
-		if (track.image_url) {
-			artwork.push({ src: track.image_url, sizes: '512x512', type: 'image/jpeg' });
-		} else if (track.album?.image_url) {
-			// fall back to album artwork if no track artwork
-			artwork.push({ src: track.album.image_url, sizes: '512x512', type: 'image/jpeg' });
-		} else if (track.artist_avatar_url) {
-			// fall back to artist avatar if no album artwork
-			artwork.push({ src: track.artist_avatar_url, sizes: '256x256', type: 'image/jpeg' });
+		if (shouldShowArtwork(track.image_url)) {
+			artwork.push({ src: track.image_url!, sizes: '512x512', type: 'image/jpeg' });
+		} else if (shouldShowArtwork(track.album?.image_url)) {
+			// fall back to album artwork if no track artwork (or track artwork is sensitive)
+			artwork.push({ src: track.album!.image_url!, sizes: '512x512', type: 'image/jpeg' });
+		} else if (shouldShowArtwork(track.artist_avatar_url)) {
+			// fall back to artist avatar if no album artwork (or album artwork is sensitive)
+			artwork.push({ src: track.artist_avatar_url!, sizes: '256x256', type: 'image/jpeg' });
 		}
 
 		navigator.mediaSession.metadata = new MediaMetadata({
