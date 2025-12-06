@@ -62,6 +62,8 @@ plyr.fm should become:
 
 **context**: bigbufo tiles are 4x4 grid fragments that looked weird floating individually. now excluded by default, with two specific tiles allowed through.
 
+**thread**: https://bsky.app/profile/zzstoatzzdevlog.bsky.social/post/3m7e3ndmgwl2m
+
 ---
 
 #### mobile artwork upload fix (PR #489, Dec 6)
