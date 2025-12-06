@@ -547,7 +547,9 @@ $effect(() => {
 										<div class="comment-content">
 											<div class="comment-header">
 												{#if comment.user_avatar_url}
-													<img src={comment.user_avatar_url} alt="" class="comment-avatar" />
+													<SensitiveImage src={comment.user_avatar_url} compact>
+														<img src={comment.user_avatar_url} alt="" class="comment-avatar" />
+													</SensitiveImage>
 												{:else}
 													<div class="comment-avatar-placeholder"></div>
 												{/if}

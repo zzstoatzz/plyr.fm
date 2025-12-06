@@ -3,6 +3,7 @@
 	import { browser } from '$app/environment';
 	import { search, type SearchResult } from '$lib/search.svelte';
 	import { onMount, onDestroy } from 'svelte';
+	import SensitiveImage from './SensitiveImage.svelte';
 
 	let inputRef: HTMLInputElement | null = $state(null);
 	let isMobile = $state(false);
@@ -167,13 +168,15 @@
 						>
 							<span class="result-icon" data-type={result.type}>
 								{#if imageUrl}
-									<img
-										src={imageUrl}
-										alt=""
-										class="result-image"
-										loading="lazy"
-										onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-									/>
+									<SensitiveImage src={imageUrl} compact>
+										<img
+											src={imageUrl}
+											alt=""
+											class="result-image"
+											loading="lazy"
+											onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+										/>
+									</SensitiveImage>
 									<!-- fallback icon shown if image fails to load -->
 									<span class="result-icon-fallback">
 										{#if result.type === 'track'}

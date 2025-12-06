@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { API_URL } from '$lib/config';
+	import SensitiveImage from './SensitiveImage.svelte';
 	import type { FeaturedArtist } from '$lib/types';
 
 	interface Props {
@@ -113,7 +114,9 @@
 						disabled={selected.some(a => a.did === result.did) || selected.length >= maxFeatures}
 					>
 						{#if result.avatar_url}
-							<img src={result.avatar_url} alt={result.display_name} class="result-avatar" />
+							<SensitiveImage src={result.avatar_url} compact>
+								<img src={result.avatar_url} alt={result.display_name} class="result-avatar" />
+							</SensitiveImage>
 						{/if}
 						<div class="result-info">
 							<div class="result-name">{result.display_name}</div>
@@ -136,7 +139,9 @@
 			{#each selected as artist}
 				<div class="selected-artist-chip">
 					{#if artist.avatar_url}
-						<img src={artist.avatar_url} alt={artist.display_name} class="chip-avatar" />
+						<SensitiveImage src={artist.avatar_url} compact>
+							<img src={artist.avatar_url} alt={artist.display_name} class="chip-avatar" />
+						</SensitiveImage>
 					{/if}
 					<span class="chip-name">{artist.display_name}</span>
 					<button

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { API_URL } from '$lib/config';
+	import SensitiveImage from './SensitiveImage.svelte';
 
 	interface HandleResult {
 		did: string;
@@ -99,7 +100,9 @@
 					onclick={() => selectHandle(result)}
 				>
 					{#if result.avatar_url}
-						<img src={result.avatar_url} alt="" class="avatar" />
+						<SensitiveImage src={result.avatar_url} compact>
+							<img src={result.avatar_url} alt="" class="avatar" />
+						</SensitiveImage>
 					{:else}
 						<div class="avatar-placeholder"></div>
 					{/if}

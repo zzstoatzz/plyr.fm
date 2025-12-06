@@ -3,6 +3,8 @@
 	import Header from '$lib/components/Header.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
+	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import { checkImageSensitive } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -14,6 +16,12 @@
 
 	const album = $derived(data.album);
 	const isAuthenticated = $derived(auth.isAuthenticated);
+
+	// SSR-safe check for sensitive images (for og:image meta tags)
+	function isImageSensitiveSSR(url: string | null | undefined): boolean {
+		if (!url) return false;
+		return checkImageSensitive(url, data.sensitiveImages);
+	}
 
 	function playTrack(track: typeof album.tracks[0]) {
 		queue.playNow(track);
@@ -54,7 +62,7 @@
 	<meta property="og:url" content="{APP_CANONICAL_URL}/u/{album.metadata.artist_handle}/album/{album.metadata.slug}" />
 	<meta property="og:site_name" content={APP_NAME} />
 	<meta property="music:musician" content="{album.metadata.artist_handle}" />
-	{#if album.metadata.image_url}
+	{#if album.metadata.image_url && !isImageSensitiveSSR(album.metadata.image_url)}
 		<meta property="og:image" content="{album.metadata.image_url}" />
 		<meta property="og:image:secure_url" content="{album.metadata.image_url}" />
 		<meta property="og:image:width" content="1200" />
@@ -66,7 +74,7 @@
 	<meta name="twitter:card" content="summary" />
 	<meta name="twitter:title" content="{album.metadata.title} by {album.metadata.artist}" />
 	<meta name="twitter:description" content="{album.metadata.track_count} tracks • {album.metadata.total_plays} plays" />
-	{#if album.metadata.image_url}
+	{#if album.metadata.image_url && !isImageSensitiveSSR(album.metadata.image_url)}
 		<meta name="twitter:image" content="{album.metadata.image_url}" />
 	{/if}
 </svelte:head>
@@ -76,7 +84,9 @@
 	<main>
 		<div class="album-hero">
 			{#if album.metadata.image_url}
-				<img src={album.metadata.image_url} alt="{album.metadata.title} artwork" class="album-art" />
+				<SensitiveImage src={album.metadata.image_url} tooltipPosition="center">
+					<img src={album.metadata.image_url} alt="{album.metadata.title} artwork" class="album-art" />
+				</SensitiveImage>
 			{:else}
 				<div class="album-art-placeholder">
 					<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">

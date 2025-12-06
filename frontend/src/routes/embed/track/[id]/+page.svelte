@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
+	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -47,14 +48,18 @@
 <div class="embed-container">
 	<!-- background image for mobile layout -->
 	{#if track.image_url}
-		<div class="bg-image" style="background-image: url({track.image_url})"></div>
+		<SensitiveImage src={track.image_url}>
+			<div class="bg-image" style="background-image: url({track.image_url})"></div>
+		</SensitiveImage>
 	{/if}
 	<div class="bg-overlay"></div>
 
 	<!-- desktop: side art -->
 	<div class="art-container">
 		{#if track.image_url}
-			<img src={track.image_url} alt={track.title} class="art" />
+			<SensitiveImage src={track.image_url}>
+				<img src={track.image_url} alt={track.title} class="art" />
+			</SensitiveImage>
 		{:else}
 			<div class="art-placeholder">♪</div>
 		{/if}
