@@ -58,13 +58,6 @@
 	}
 
 	async function fetchBufos() {
-		// check cache first
-		const cached = getCached(query);
-		if (cached) {
-			bufos = cached;
-			return;
-		}
-
 		try {
 			// get patterns from props or config
 			let exclude = excludePatterns;
@@ -73,6 +66,14 @@
 				const config = await getServerConfig();
 				exclude = config.bufo_exclude_patterns ?? [];
 				include = config.bufo_include_patterns ?? [];
+			}
+
+			// cache key includes patterns so config changes invalidate cache
+			const cacheKey = `${query}|${exclude.sort().join(',')}|${include.sort().join(',')}`;
+			const cached = getCached(cacheKey);
+			if (cached) {
+				bufos = cached;
+				return;
 			}
 
 			const params = new URLSearchParams({
@@ -91,7 +92,7 @@
 				const data = await response.json();
 				bufos = data.results || [];
 				if (bufos.length > 0) {
-					setCache(query, bufos);
+					setCache(cacheKey, bufos);
 				}
 			}
 		} catch (e) {
