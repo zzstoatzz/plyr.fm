@@ -2,13 +2,48 @@
 
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
+from typing import Annotated, Any, TypeVar
 from urllib.parse import urlparse
 
-from pydantic import Field, computed_field
+from pydantic import BeforeValidator, Field, TypeAdapter, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]
+
+T = TypeVar("T")
+
+
+def validate_set_T_from_delim_string(
+    value: str | T | set[T] | None, type_: Any, delim: str | None = None
+) -> set[T]:
+    """Parse comma-delimited string into a set.
+
+    e.g. `BUFO_EXCLUDE_PATTERNS=bigbufo*,other*` -> `{"bigbufo*", "other*"}`
+    """
+    if not value:
+        return set()
+
+    adapter = TypeAdapter(type_)
+    delim = delim or ","
+    if isinstance(value, str):
+        return {adapter.validate_strings(s.strip()) for s in value.split(delim)}
+    try:
+        return {adapter.validate_python(value)}
+    except Exception:
+        pass
+    try:
+        return TypeAdapter(set[type_]).validate_python(value)
+    except Exception:
+        pass
+    raise ValueError(f"invalid set[{type_}]: {value}")
+
+
+CommaSeparatedStringSet = Annotated[
+    str | set[str],
+    BeforeValidator(partial(validate_set_T_from_delim_string, type_=str)),
+]
 
 
 class AppSettingsSection(BaseSettings):
@@ -407,6 +442,26 @@ class TealSettings(AppSettingsSection):
     )
 
 
+class BufoSettings(AppSettingsSection):
+    """Bufo easter egg configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="BUFO_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    exclude_patterns: CommaSeparatedStringSet = Field(
+        default={"^bigbufo_"},
+        description="Regex patterns for bufo names to exclude from the easter egg animation",
+    )
+    include_patterns: CommaSeparatedStringSet = Field(
+        default={"bigbufo_0_0", "bigbufo_2_1"},
+        description="Regex patterns to override exclusions (allowlist)",
+    )
+
+
 class ObservabilitySettings(AppSettingsSection):
     """Observability configuration."""
 
@@ -543,6 +598,10 @@ class Settings(AppSettingsSection):
     teal: TealSettings = Field(
         default_factory=TealSettings,
         description="teal.fm scrobbling integration settings",
+    )
+    bufo: BufoSettings = Field(
+        default_factory=BufoSettings,
+        description="bufo easter egg settings",
     )
 
 

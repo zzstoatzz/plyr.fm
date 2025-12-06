@@ -223,6 +223,8 @@ async def get_public_config() -> dict[str, int | list[str]]:
         "max_upload_size_mb": settings.storage.max_upload_size_mb,
         "max_image_size_mb": 20,  # hardcoded limit for cover art
         "default_hidden_tags": DEFAULT_HIDDEN_TAGS,
+        "bufo_exclude_patterns": list(settings.bufo.exclude_patterns),
+        "bufo_include_patterns": list(settings.bufo.include_patterns),
     }
 
 
