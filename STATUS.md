@@ -47,6 +47,23 @@ plyr.fm should become:
 
 ### December 2025
 
+#### bufo easter egg improvements (PRs #491-492, Dec 6)
+
+**what shipped**:
+- configurable exclude/include patterns via env vars for bufo easter egg
+- `BUFO_EXCLUDE_PATTERNS`: regex patterns to filter out (default: `^bigbufo_`)
+- `BUFO_INCLUDE_PATTERNS`: allowlist that overrides exclude (default: `bigbufo_0_0`, `bigbufo_2_1`)
+- cache key now includes patterns so config changes take effect immediately
+
+**reusable type**:
+- added `CommaSeparatedStringSet` type for parsing comma-delimited env vars into sets
+- uses pydantic `BeforeValidator` with `Annotated` pattern (not class-coupled validators)
+- handles: `VAR=a,b,c` → `{"a", "b", "c"}`
+
+**context**: bigbufo tiles are 4x4 grid fragments that looked weird floating individually. now excluded by default, with two specific tiles allowed through.
+
+---
+
 #### mobile artwork upload fix (PR #489, Dec 6)
 
 **problem**: artwork uploads from iOS Photos library silently failed - track uploaded successfully but without artwork.
@@ -201,13 +218,14 @@ plyr.fm should become:
 - album detail endpoint (`/albums/{handle}/{slug}`) now returns tags for all tracks
 - track detail page displays clickable tag badges
 
-**bufo easter egg** (PR #438):
+**bufo easter egg** (PR #438, improved in #491-492):
 - tracks tagged with `bufo` trigger animated toad GIFs on the detail page
 - uses track title as semantic search query against [find-bufo API](https://find-bufo.fly.dev/)
 - toads are semantically matched to the song's vibe (e.g., "Happy Vibes" gets happy toads)
 - results cached in localStorage (1 week TTL) to minimize API calls
 - `TagEffects` wrapper component provides extensibility for future tag-based plugins
 - respects `prefers-reduced-motion`; fails gracefully if API unavailable
+- configurable exclude/include patterns via env vars (see Dec 6 entry above)
 
 ---
 
@@ -557,4 +575,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-06.
+this is a living document. last updated 2025-12-06 (release 2025.1206.222902).
