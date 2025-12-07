@@ -196,9 +196,19 @@
 		</h2>
 		{#if tracks.length > 0}
 			<div class="header-actions">
-				{#if auth.isAuthenticated}
+				<button class="queue-button" onclick={queueAll} title="add all liked tracks to queue">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+						<line x1="5" y1="15" x2="5" y2="21"></line>
+						<line x1="2" y1="18" x2="8" y2="18"></line>
+						<line x1="9" y1="6" x2="21" y2="6"></line>
+						<line x1="9" y1="12" x2="21" y2="12"></line>
+						<line x1="9" y1="18" x2="21" y2="18"></line>
+					</svg>
+					add to queue
+				</button>
+				{#if auth.isAuthenticated && tracks.length > 1}
 					<button
-						class="btn-action"
+						class="reorder-button"
 						class:active={isEditMode}
 						onclick={toggleEditMode}
 						disabled={isSaving}
@@ -209,12 +219,12 @@
 								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
 									<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
 								</svg>
-								<span>saving...</span>
+								saving...
 							{:else}
 								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 									<polyline points="20 6 9 17 4 12"></polyline>
 								</svg>
-								<span>done</span>
+								done
 							{/if}
 						{:else}
 							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -222,21 +232,10 @@
 								<line x1="3" y1="6" x2="21" y2="6"></line>
 								<line x1="3" y1="18" x2="21" y2="18"></line>
 							</svg>
-							<span>reorder</span>
+							reorder
 						{/if}
 					</button>
 				{/if}
-				<button class="btn-action" onclick={queueAll} title="queue all liked tracks">
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<line x1="8" y1="6" x2="21" y2="6"></line>
-						<line x1="8" y1="12" x2="21" y2="12"></line>
-						<line x1="8" y1="18" x2="21" y2="18"></line>
-						<line x1="3" y1="6" x2="3.01" y2="6"></line>
-						<line x1="3" y1="12" x2="3.01" y2="12"></line>
-						<line x1="3" y1="18" x2="3.01" y2="18"></line>
-					</svg>
-					<span>queue all</span>
-				</button>
 			</div>
 		{/if}
 	</div>
@@ -356,47 +355,42 @@
 	.header-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 1rem;
 	}
 
-	.btn-action {
+	.queue-button,
+	.reorder-button {
+		padding: 0.75rem 1.5rem;
+		border-radius: 24px;
+		font-weight: 600;
+		font-size: 0.95rem;
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.2s;
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.5rem 0.85rem;
+		border: none;
 		background: transparent;
+		color: var(--text-primary);
 		border: 1px solid var(--border-default);
-		color: var(--text-secondary);
-		border-radius: 6px;
-		font-size: 0.85rem;
-		font-family: inherit;
-		cursor: pointer;
-		transition: all 0.15s;
-		white-space: nowrap;
 	}
 
-	.btn-action:hover {
+	.queue-button:hover,
+	.reorder-button:hover {
 		border-color: var(--accent);
 		color: var(--accent);
 	}
 
-	.btn-action:active {
-		transform: scale(0.97);
-	}
-
-	.btn-action:disabled {
+	.reorder-button:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
 	}
 
-	.btn-action.active {
+	.reorder-button.active {
 		border-color: var(--accent);
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
-	}
-
-	.btn-action svg {
-		flex-shrink: 0;
 	}
 
 	.spinner {
@@ -526,12 +520,18 @@
 			font-size: 1.25rem;
 		}
 
-		.btn-action {
-			padding: 0.45rem 0.7rem;
-			font-size: 0.8rem;
+		.header-actions {
+			gap: 0.75rem;
 		}
 
-		.btn-action svg {
+		.queue-button,
+		.reorder-button {
+			padding: 0.6rem 1rem;
+			font-size: 0.85rem;
+		}
+
+		.queue-button svg,
+		.reorder-button svg {
 			width: 16px;
 			height: 16px;
 		}

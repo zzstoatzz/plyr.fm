@@ -47,46 +47,57 @@ plyr.fm should become:
 
 ### December 2025
 
-#### playlists / lists infrastructure (feat/playlists branch, Dec 6 - ongoing)
+#### playlists, ATProto sync, and library hub (feat/playlists branch, PR #499, Dec 6-7)
 
-**status**: long-lived branch, not yet merged. backend and frontend progress.
+**status**: feature-complete, ready for final review. ~8k lines changed.
 
-**what's done**:
-- **phase 1 - profile records**: `fm.plyr.profile` syncs on login (fire-and-forget)
-- **phase 2 - list records**:
-  - `fm.plyr.list` lexicon - minimal design (5 fields):
-    - required: `items` (array of strongRefs), `createdAt`
-    - optional: `name`, `listType` (knownValues: album, playlist, liked), `updatedAt`
-  - backend functions: `create_list_record()`, `update_list_record()`, `upsert_album_list_record()`, `upsert_liked_list_record()`
-  - albums sync as list records on login (fire-and-forget background tasks)
-  - liked tracks sync as list record on login
-  - migration for `liked_list_uri`/`liked_list_cid` on user_preferences
-  - tests for list sync behavior
-- **UI progress**:
-  - artist page shows "collections" section with liked tracks link card
-  - `/liked/[handle]` public liked tracks page
-  - `/library` hub page showing liked tracks + placeholder for playlists
-  - nav changed from "liked" → "library" (heart icon goes to `/library`)
-  - `/liked` kept for direct access
-- OAuth scopes updated to include list collection
+**playlists** (full CRUD):
+- `playlists` and `playlist_tracks` tables with Alembic migration
+- `POST /lists/playlists` - create playlist
+- `PUT /lists/playlists/{id}` - rename playlist
+- `DELETE /lists/playlists/{id}` - delete playlist
+- `POST /lists/playlists/{id}/tracks` - add track to playlist
+- `DELETE /lists/playlists/{id}/tracks/{track_id}` - remove track
+- `PUT /lists/playlists/{id}/tracks/reorder` - reorder tracks
+- `POST /lists/playlists/{id}/cover` - upload cover art
+- playlist detail page (`/playlist/[id]`) with edit modal, drag-and-drop reordering
+- playlists in global search results
+- "add to playlist" menu on tracks (filters out current playlist when on playlist page)
+- "create new playlist" link in add-to menu → `/library?create=playlist`
+- playlist sharing with OpenGraph link previews
+
+**ATProto integration**:
+- `fm.plyr.list` lexicon for syncing playlists and albums to user PDSes
+- `fm.plyr.actor.profile` lexicon for syncing artist profiles
+- automatic sync of albums, liked tracks, and profile on login (fire-and-forget)
+- scope upgrade OAuth flow for teal.fm integration (#503)
+
+**library hub** (`/library`):
+- unified page with tabs: liked, playlists, albums
+- create playlist modal (accessible via `/library?create=playlist` deep link)
+- consistent card layouts across sections
+- nav changed from "liked" → "library"
+
+**user experience**:
+- public liked pages for any user (`/liked/[handle]`)
 - `show_liked_on_profile` preference
-- `get_optional_session` dependency for optional auth
-
-**what's NOT done**:
-- no playlist creation UI yet (only liked tracks list)
+- portal album/playlist section visual consistency
+- z-index fixes for dropdown menus
 
 **design decisions**:
-- lists are generic ordered collections of any ATProto records (tracks, albums, other lists)
+- lists are generic ordered collections of any ATProto records
 - `listType` semantically categorizes (album, playlist, liked) but doesn't restrict content
 - array order = display order, reorder via `putRecord`
 - strongRef (uri + cid) for content-addressable item references
-- minimal lexicon per ATProto style guide - can add fields later, can't remove
-- "library" = umbrella term for personal collections (liked tracks + future playlists)
+- "library" = umbrella term for personal collections
 
-**related issues**: #221 (ATProto records for albums), #146 (content-addressable storage), #498 (playlists)
+**file size audit** (candidates for future modularization):
+- `portal/+page.svelte`: 2,436 lines (58% CSS)
+- `playlist/[id]/+page.svelte`: 1,644 lines (48% CSS)
+- `api/lists.py`: 855 lines
+- CSS-heavy files could benefit from shared style extraction in future
 
-**next steps**:
-1. playlist creation UI in library
+**related issues**: #221, #146, #498
 
 ---
 
