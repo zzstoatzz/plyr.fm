@@ -24,6 +24,7 @@
 	// developer token state
 	let creatingToken = $state(false);
 	let developerToken = $state<string | null>(null);
+	let showTokenOverlay = $state(false); // full-page overlay for new tokens
 	let tokenExpiresDays = $state(90);
 	let tokenName = $state('');
 	let tokenCopied = $state(false);
@@ -67,7 +68,7 @@
 
 					if (isDevToken) {
 						developerToken = data.session_id;
-						toast.success('developer token created - save it now!');
+						showTokenOverlay = true; // show full-page overlay immediately
 					} else if (isScopeUpgrade) {
 						// reload auth state with new session
 						await auth.initialize();
@@ -300,11 +301,47 @@
 		}
 	}
 
+	function dismissTokenOverlay() {
+		showTokenOverlay = false;
+		// also clear the token after dismissing since they won't see it again
+		developerToken = null;
+		// reload tokens to show the new one in the list
+		loadDeveloperTokens();
+	}
+
 	async function logout() {
 		await auth.logout();
 		window.location.href = '/';
 	}
 </script>
+
+{#if showTokenOverlay && developerToken}
+	<div class="token-overlay">
+		<div class="token-overlay-content">
+			<div class="token-overlay-icon">
+				<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+				</svg>
+			</div>
+			<h2>your developer token</h2>
+			<p class="token-overlay-warning">
+				copy this token now - you won't be able to see it again after closing this dialog
+			</p>
+			<div class="token-overlay-display">
+				<code>{developerToken}</code>
+				<button class="token-overlay-copy" onclick={copyToken}>
+					{tokenCopied ? 'copied!' : 'copy'}
+				</button>
+			</div>
+			<p class="token-overlay-hint">
+				use this token with the <a href="https://github.com/zzstoatzz/plyr-python-client" target="_blank" rel="noopener">python SDK</a> for programmatic API access
+			</p>
+			<button class="token-overlay-dismiss" onclick={dismissTokenOverlay}>
+				i've saved my token
+			</button>
+		</div>
+	</div>
+{/if}
 
 {#if loading}
 	<div class="loading">
@@ -533,18 +570,19 @@
 					</div>
 				{/if}
 
-				{#if developerToken}
+				{#if developerToken && !showTokenOverlay}
+					<!-- inline display only shown if overlay was somehow bypassed -->
 					<div class="token-display">
 						<code class="token-value">{developerToken}</code>
 						<button class="copy-btn" onclick={copyToken} title="copy token">
 							{tokenCopied ? '✓' : 'copy'}
 						</button>
-						<button class="dismiss-btn" onclick={() => developerToken = null} title="dismiss">
+						<button class="dismiss-btn" onclick={dismissTokenOverlay} title="dismiss">
 							✕
 						</button>
 					</div>
 					<p class="token-warning">save this token now - you won't be able to see it again</p>
-				{:else}
+				{:else if !developerToken}
 					<div class="token-form">
 						<input
 							type="text"
@@ -578,6 +616,116 @@
 {/if}
 
 <style>
+	/* token overlay - full page modal for newly created tokens */
+	.token-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.85);
+		backdrop-filter: blur(8px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 9999;
+		padding: 1rem;
+	}
+
+	.token-overlay-content {
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-default);
+		border-radius: 16px;
+		padding: 2rem;
+		max-width: 500px;
+		width: 100%;
+		text-align: center;
+	}
+
+	.token-overlay-icon {
+		color: var(--accent);
+		margin-bottom: 1rem;
+	}
+
+	.token-overlay-content h2 {
+		margin: 0 0 0.75rem;
+		font-size: 1.5rem;
+		color: var(--text-primary);
+	}
+
+	.token-overlay-warning {
+		color: var(--warning);
+		font-size: 0.9rem;
+		margin: 0 0 1.5rem;
+		line-height: 1.5;
+	}
+
+	.token-overlay-display {
+		display: flex;
+		gap: 0.5rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: 8px;
+		padding: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	.token-overlay-display code {
+		flex: 1;
+		font-size: 0.85rem;
+		word-break: break-all;
+		color: var(--accent);
+		text-align: left;
+		font-family: monospace;
+	}
+
+	.token-overlay-copy {
+		padding: 0.5rem 1rem;
+		background: var(--accent);
+		border: none;
+		border-radius: 6px;
+		color: var(--text-primary);
+		font-family: inherit;
+		font-size: 0.85rem;
+		font-weight: 600;
+		cursor: pointer;
+		white-space: nowrap;
+		transition: background 0.15s;
+	}
+
+	.token-overlay-copy:hover {
+		background: var(--accent-hover);
+	}
+
+	.token-overlay-hint {
+		font-size: 0.8rem;
+		color: var(--text-tertiary);
+		margin: 0 0 1.5rem;
+	}
+
+	.token-overlay-hint a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.token-overlay-hint a:hover {
+		text-decoration: underline;
+	}
+
+	.token-overlay-dismiss {
+		padding: 0.75rem 2rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
+		border-radius: 8px;
+		color: var(--text-secondary);
+		font-family: inherit;
+		font-size: 0.9rem;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.token-overlay-dismiss:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
 	.loading {
 		display: flex;
 		flex-direction: column;
