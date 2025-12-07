@@ -1,0 +1,43 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.comment",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A timed comment on a plyr.fm track, anchored to a playback position.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["subject", "text", "timestampMs", "createdAt"],
+        "properties": {
+          "subject": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "Reference to the track being commented on (uri + cid)."
+          },
+          "text": {
+            "type": "string",
+            "description": "The comment text content.",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "timestampMs": {
+            "type": "integer",
+            "description": "Playback position in milliseconds when the comment was made.",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the comment was created."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the comment was last edited."
+          }
+        }
+      }
+    }
+  }
+}

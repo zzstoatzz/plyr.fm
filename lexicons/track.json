@@ -1,0 +1,91 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.track",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A music track published to the AT Protocol network.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["title", "artist", "audioUrl", "fileType", "createdAt"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the track.",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "artist": {
+            "type": "string",
+            "description": "The artist name (display name of the uploader).",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "audioUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to the audio file (currently R2 CDN URL)."
+          },
+          "fileType": {
+            "type": "string",
+            "description": "Audio file format extension (e.g., mp3, wav, flac).",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "album": {
+            "type": "string",
+            "description": "Album name this track belongs to.",
+            "maxLength": 256
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Duration in seconds.",
+            "minimum": 0
+          },
+          "features": {
+            "type": "array",
+            "description": "Featured artists on this track.",
+            "items": {
+              "type": "ref",
+              "ref": "#featuredArtist"
+            },
+            "maxLength": 10
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to cover artwork image."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the track was uploaded."
+          }
+        }
+      }
+    },
+    "featuredArtist": {
+      "type": "object",
+      "description": "A featured artist on a track.",
+      "required": ["did", "handle"],
+      "properties": {
+        "did": {
+          "type": "string",
+          "format": "did",
+          "description": "The DID of the featured artist."
+        },
+        "handle": {
+          "type": "string",
+          "format": "handle",
+          "description": "The handle of the featured artist."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the featured artist.",
+          "maxLength": 256
+        }
+      }
+    }
+  }
+}
