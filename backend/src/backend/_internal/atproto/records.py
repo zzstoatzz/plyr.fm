@@ -490,6 +490,7 @@ def build_list_record(
     name: str | None = None,
     list_type: str | None = None,
     created_at: datetime | None = None,
+    updated_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Build a list record dict for ATProto.
 
@@ -497,25 +498,28 @@ def build_list_record(
         items: list of record references, each with {"uri": str, "cid": str}
         name: optional display name
         list_type: optional semantic type (e.g., "album", "playlist", "liked")
-        created_at: optional creation timestamp (defaults to now)
+        created_at: creation timestamp (defaults to now)
+        updated_at: optional last modification timestamp
 
     returns:
         record dict ready for ATProto
     """
-    now = (created_at or datetime.now(UTC)).isoformat().replace("+00:00", "Z")
-
     record: dict[str, Any] = {
         "$type": settings.atproto.list_collection,
         "items": [
             {"subject": {"uri": item["uri"], "cid": item["cid"]}} for item in items
         ],
-        "createdAt": now,
+        "createdAt": (created_at or datetime.now(UTC))
+        .isoformat()
+        .replace("+00:00", "Z"),
     }
 
     if name:
         record["name"] = name
     if list_type:
         record["listType"] = list_type
+    if updated_at:
+        record["updatedAt"] = updated_at.isoformat().replace("+00:00", "Z")
 
     return record
 
@@ -573,7 +577,11 @@ async def update_list_record(
         tuple of (record_uri, new_record_cid)
     """
     record = build_list_record(
-        items=items, name=name, list_type=list_type, created_at=created_at
+        items=items,
+        name=name,
+        list_type=list_type,
+        created_at=created_at,
+        updated_at=datetime.now(UTC),
     )
 
     return await update_record(
