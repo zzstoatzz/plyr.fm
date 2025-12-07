@@ -269,6 +269,7 @@
 						class:drag-over={dragOverIndex === i && touchDragIndex !== i}
 						class:is-dragging={touchDragIndex === i || draggedIndex === i}
 						data-index={i}
+						role="listitem"
 						draggable="true"
 						ondragstart={(e) => handleDragStart(e, i)}
 						ondragover={(e) => handleDragOver(e, i)}

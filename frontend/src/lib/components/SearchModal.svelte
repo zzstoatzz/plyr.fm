@@ -135,6 +135,7 @@
 <div
 	class="search-backdrop"
 	class:open={search.isOpen}
+	role="presentation"
 	onclick={handleBackdropClick}
 >
 		<div class="search-modal" role="dialog" aria-modal="true" aria-label="search">
@@ -409,17 +410,6 @@
 		height: 100%;
 		object-fit: cover;
 		border-radius: 8px;
-	}
-
-	.result-icon-fallback {
-		/* shown behind image, visible if image fails */
-		position: relative;
-		z-index: 0;
-	}
-
-	.result-image + .result-icon-fallback {
-		/* hide fallback when image is present and loaded */
-		opacity: 0;
 	}
 
 	.result-icon[data-type='track'] {

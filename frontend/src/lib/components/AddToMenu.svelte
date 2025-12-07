@@ -183,7 +183,8 @@
 	</button>
 
 	{#if menuOpen}
-		<div class="menu-dropdown" onclick={(e) => e.stopPropagation()}>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="menu-dropdown" role="menu" tabindex="-1" onclick={(e) => e.stopPropagation()}>
 			{#if !showPlaylistPicker}
 				<button class="menu-item" onclick={handleLike} disabled={loading}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">

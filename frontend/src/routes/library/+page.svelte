@@ -172,11 +172,13 @@
 </div>
 
 {#if showCreateModal}
-	<div class="modal-overlay" onclick={() => { showCreateModal = false; newPlaylistName = ''; error = ''; }}>
-		<div class="modal" onclick={(e) => e.stopPropagation()}>
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="modal-overlay" role="presentation" onclick={() => { showCreateModal = false; newPlaylistName = ''; error = ''; }}>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="modal" role="dialog" aria-modal="true" aria-labelledby="create-playlist-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
-				<h3>create playlist</h3>
-				<button class="close-btn" onclick={() => { showCreateModal = false; newPlaylistName = ''; error = ''; }}>
+				<h3 id="create-playlist-title">create playlist</h3>
+				<button class="close-btn" aria-label="close" onclick={() => { showCreateModal = false; newPlaylistName = ''; error = ''; }}>
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>
@@ -185,6 +187,7 @@
 			</div>
 			<div class="modal-body">
 				<label for="playlist-name">name</label>
+				<!-- svelte-ignore a11y_autofocus -->
 				<input
 					id="playlist-name"
 					type="text"

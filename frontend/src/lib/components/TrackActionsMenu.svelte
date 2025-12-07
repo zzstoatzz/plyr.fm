@@ -187,10 +187,10 @@
 	</button>
 
 	{#if showMenu}
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="menu-backdrop" onclick={closeMenu}></div>
-		<div class="menu-panel" onclick={(e) => e.stopPropagation()}>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="menu-backdrop" role="presentation" onclick={closeMenu}></div>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="menu-panel" role="menu" tabindex="-1" onclick={(e) => e.stopPropagation()}>
 			{#if !showPlaylistPicker}
 				{#if isAuthenticated}
 					<button class="menu-item" onclick={handleLike} disabled={loading || likeDisabled} class:disabled={likeDisabled}>

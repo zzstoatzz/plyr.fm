@@ -215,12 +215,15 @@
 					<a href="/tag/{encodeURIComponent(tag)}" class="tag-badge">{tag}</a>
 				{/each}
 				{#if hiddenTagCount > 0 && !tagsExpanded}
-					<button
+					<span
 						class="tags-more"
+						role="button"
+						tabindex="0"
 						onclick={(e) => { e.stopPropagation(); tagsExpanded = true; }}
+						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); tagsExpanded = true; } }}
 					>
 						+{hiddenTagCount}
-					</button>
+					</span>
 				{/if}
 			</span>
 		{/if}

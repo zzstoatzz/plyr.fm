@@ -628,6 +628,7 @@
 						class:drag-over={dragOverIndex === i && touchDragIndex !== i}
 						class:is-dragging={touchDragIndex === i || draggedIndex === i}
 						data-index={i}
+						role="listitem"
 						draggable="true"
 						ondragstart={(e) => handleDragStart(e, i)}
 						ondragover={(e) => handleDragOver(e, i)}
@@ -683,11 +684,13 @@
 </div>
 
 {#if showSearch}
-	<div class="modal-overlay" onclick={() => { showSearch = false; searchQuery = ''; searchResults = []; }}>
-		<div class="modal search-modal" onclick={(e) => e.stopPropagation()}>
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="modal-overlay" role="presentation" onclick={() => { showSearch = false; searchQuery = ''; searchResults = []; }}>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="modal search-modal" role="dialog" aria-modal="true" aria-labelledby="add-tracks-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
-				<h3>add tracks</h3>
-				<button class="close-btn" onclick={() => { showSearch = false; searchQuery = ''; searchResults = []; }}>
+				<h3 id="add-tracks-title">add tracks</h3>
+				<button class="close-btn" aria-label="close" onclick={() => { showSearch = false; searchQuery = ''; searchResults = []; }}>
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>
@@ -699,6 +702,7 @@
 					<circle cx="11" cy="11" r="8"></circle>
 					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
 				</svg>
+				<!-- svelte-ignore a11y_autofocus -->
 				<input
 					type="text"
 					bind:value={searchQuery}
@@ -754,10 +758,12 @@
 {/if}
 
 {#if showDeleteConfirm}
-	<div class="modal-overlay" onclick={() => showDeleteConfirm = false}>
-		<div class="modal" onclick={(e) => e.stopPropagation()}>
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="modal-overlay" role="presentation" onclick={() => showDeleteConfirm = false}>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-confirm-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
-				<h3>delete playlist?</h3>
+				<h3 id="delete-confirm-title">delete playlist?</h3>
 			</div>
 			<div class="modal-body">
 				<p>are you sure you want to delete "{playlist.name}"? this action cannot be undone.</p>
@@ -775,11 +781,13 @@
 {/if}
 
 {#if showEdit}
-	<div class="modal-overlay" onclick={() => { showEdit = false; if (editImagePreview) { URL.revokeObjectURL(editImagePreview); editImagePreview = null; } }}>
-		<div class="modal edit-modal" onclick={(e) => e.stopPropagation()}>
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="modal-overlay" role="presentation" onclick={() => { showEdit = false; if (editImagePreview) { URL.revokeObjectURL(editImagePreview); editImagePreview = null; } }}>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="modal edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-playlist-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
-				<h3>edit playlist</h3>
-				<button class="close-btn" onclick={() => { showEdit = false; if (editImagePreview) { URL.revokeObjectURL(editImagePreview); editImagePreview = null; } }}>
+				<h3 id="edit-playlist-title">edit playlist</h3>
+				<button class="close-btn" aria-label="close" onclick={() => { showEdit = false; if (editImagePreview) { URL.revokeObjectURL(editImagePreview); editImagePreview = null; } }}>
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>

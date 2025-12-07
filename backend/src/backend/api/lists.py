@@ -19,7 +19,7 @@ from backend._internal.atproto.records import (
     create_list_record,
     update_list_record,
 )
-from backend.models import Artist, Playlist, Track, UserPreferences, get_db
+from backend.models import Artist, Playlist, Track, TrackLike, UserPreferences, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
@@ -422,6 +422,17 @@ async def get_playlist(
         like_counts = await get_like_counts(db, track_ids) if track_ids else {}
         comment_counts = await get_comment_counts(db, track_ids) if track_ids else {}
 
+        # get authenticated user's liked tracks
+        liked_track_ids: set[int] = set()
+        if track_ids:
+            liked_result = await db.execute(
+                select(TrackLike.track_id).where(
+                    TrackLike.user_did == session.did,
+                    TrackLike.track_id.in_(track_ids),
+                )
+            )
+            liked_track_ids = set(liked_result.scalars().all())
+
         # maintain ATProto ordering
         for uri in track_uris:
             if uri in track_by_uri:
@@ -429,6 +440,7 @@ async def get_playlist(
                 track_response = await TrackResponse.from_track(
                     track,
                     pds_url=oauth_data.get("pds_url"),
+                    liked_track_ids=liked_track_ids,
                     like_counts=like_counts,
                     comment_counts=comment_counts,
                 )
