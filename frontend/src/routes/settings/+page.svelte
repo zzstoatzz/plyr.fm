@@ -954,6 +954,7 @@
 		border: 1px solid var(--border-emphasis);
 		border-radius: 4px;
 		color: var(--text-secondary);
+		font-family: inherit;
 		font-size: 0.8rem;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -995,6 +996,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: 4px;
 		color: var(--text-secondary);
+		font-family: inherit;
 		font-size: 0.8rem;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -1066,6 +1068,7 @@
 		border: none;
 		border-radius: 6px;
 		color: var(--text-primary);
+		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 600;
 		cursor: pointer;
@@ -1098,6 +1101,7 @@
 		border: 1px solid var(--error);
 		border-radius: 6px;
 		color: var(--error);
+		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 500;
 		cursor: pointer;
@@ -1204,6 +1208,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: 6px;
 		color: var(--text-secondary);
+		font-family: inherit;
 		font-size: 0.9rem;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -1225,6 +1230,7 @@
 		border: none;
 		border-radius: 6px;
 		color: white;
+		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 600;
 		cursor: pointer;
