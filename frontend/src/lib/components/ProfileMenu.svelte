@@ -134,12 +134,14 @@
 				<nav class="menu-items">
 					{#if !isOnPortal}
 						<a href="/portal" class="menu-item" onclick={closeMenu}>
-							<svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-								<circle cx="8" cy="5" r="3" fill="none" />
-								<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" />
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<rect x="3" y="3" width="7" height="7"></rect>
+								<rect x="14" y="3" width="7" height="7"></rect>
+								<rect x="14" y="14" width="7" height="7"></rect>
+								<rect x="3" y="14" width="7" height="7"></rect>
 							</svg>
 							<div class="item-content">
-								<span class="item-title">profile</span>
+								<span class="item-title">portal</span>
 								<span class="item-subtitle">@{user?.handle}</span>
 							</div>
 						</a>
@@ -250,6 +252,10 @@
 							<span class="toggle-text">auto-play next</span>
 						</label>
 					</section>
+
+					<a href="/settings" class="all-settings-link" onclick={closeMenu}>
+						all settings →
+					</a>
 				</div>
 			{/if}
 		</div>
@@ -618,6 +624,22 @@
 
 	.toggle-text {
 		white-space: nowrap;
+	}
+
+	.all-settings-link {
+		display: block;
+		text-align: center;
+		padding: 1rem;
+		margin-top: 0.5rem;
+		border-top: 1px solid var(--border-subtle);
+		color: var(--text-secondary);
+		text-decoration: none;
+		font-size: 0.9rem;
+		transition: color 0.15s;
+	}
+
+	.all-settings-link:hover {
+		color: var(--accent);
 	}
 
 	@keyframes fadeIn {

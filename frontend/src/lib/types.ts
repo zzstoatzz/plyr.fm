@@ -92,3 +92,10 @@ export interface Analytics {
 
 export interface ArtistAlbumSummary extends AlbumSummary {}
 
+export interface TokenInfo {
+	session_id: string;
+	name: string | null;
+	created_at: string;
+	expires_at: string | null;
+}
+

@@ -164,6 +164,9 @@
 				<p class="toggle-hint">when a track ends, start the next item in your queue</p>
 			</section>
 
+			<a href="/settings" class="all-settings-link" onclick={toggleSettings}>
+				all settings →
+			</a>
 		</div>
 	{/if}
 </div>
@@ -402,6 +405,22 @@
 		color: var(--text-tertiary);
 		font-size: 0.8rem;
 		line-height: 1.3;
+	}
+
+	.all-settings-link {
+		display: block;
+		text-align: center;
+		padding: 0.75rem;
+		margin-top: 0.5rem;
+		border-top: 1px solid var(--border-subtle);
+		color: var(--text-secondary);
+		text-decoration: none;
+		font-size: 0.85rem;
+		transition: color 0.15s;
+	}
+
+	.all-settings-link:hover {
+		color: var(--accent);
 	}
 
 	@media (max-width: 768px) {
