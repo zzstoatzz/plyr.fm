@@ -93,7 +93,7 @@ plyr.fm should become:
 
 ---
 
-#### scope upgrade OAuth flow (feat/scope-invalidation branch, Dec 7)
+#### scope upgrade OAuth flow (feat/scope-invalidation branch, Dec 7) - merged to feat/playlists
 
 **problem**: when users enabled teal.fm scrobbling, the app showed a passive "please log out and back in" message because the session lacked the required OAuth scopes. this was confusing UX.
 
@@ -112,7 +112,19 @@ plyr.fm should become:
 - at ~17 OAuth flows/day, instantiation cost is negligible
 - explicit scope selection at call site instead of module-level state
 
-**tests**: 4 new tests for scope upgrade flow
+**developer token UX**:
+- full-page overlay when returning from OAuth after creating a developer token
+- token displayed prominently with warning that it won't be shown again
+- copy button with success feedback, link to python SDK docs
+- prevents users from missing their token (was buried at bottom of page)
+
+**test fixes**:
+- fixed connection pool exhaustion in tests (was hitting Neon's connection limit)
+- added `DATABASE_POOL_SIZE=2`, `DATABASE_MAX_OVERFLOW=0` to pytest env vars
+- dispose cached engines after each test to prevent connection accumulation
+- fixed mock function signatures for `refresh_session` tests
+
+**tests**: 4 new tests for scope upgrade flow, all 281 tests passing
 
 ---
 
