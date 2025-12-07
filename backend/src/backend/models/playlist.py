@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.database import Base
@@ -32,6 +32,8 @@ class Playlist(Base):
         index=True,
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
+    image_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_uri: Mapped[str] = mapped_column(
         String,
         nullable=False,
@@ -40,6 +42,9 @@ class Playlist(Base):
     )
     atproto_record_cid: Mapped[str] = mapped_column(String, nullable=False)
     track_count: Mapped[int] = mapped_column(default=0)
+    show_on_profile: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -53,3 +58,11 @@ class Playlist(Base):
     )
 
     owner = relationship("Artist", back_populates="playlists")
+
+    async def get_image_url(self) -> str | None:
+        """resolve image URL from storage."""
+        if not self.image_id:
+            return None
+        from backend.storage import storage
+
+        return await storage.get_url(self.image_id, file_type="image")

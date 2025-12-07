@@ -9,11 +9,10 @@
 		trackTitle: string;
 		trackUri?: string;
 		trackCid?: string;
-		initialLiked: boolean;
-		shareUrl: string;
-		onQueue: () => void;
-		isAuthenticated: boolean;
-		likeDisabled?: boolean;
+		initialLiked?: boolean;
+		disabled?: boolean;
+		disabledReason?: string;
+		onLikeChange?: (_liked: boolean) => void;
 		excludePlaylistId?: string;
 	}
 
@@ -22,18 +21,17 @@
 		trackTitle,
 		trackUri,
 		trackCid,
-		initialLiked,
-		shareUrl,
-		onQueue,
-		isAuthenticated,
-		likeDisabled = false,
+		initialLiked = false,
+		disabled = false,
+		disabledReason,
+		onLikeChange,
 		excludePlaylistId
 	}: Props = $props();
 
-	let showMenu = $state(false);
-	let showPlaylistPicker = $state(false);
 	let liked = $state(initialLiked);
 	let loading = $state(false);
+	let menuOpen = $state(false);
+	let showPlaylistPicker = $state(false);
 	let playlists = $state<Playlist[]>([]);
 	let loadingPlaylists = $state(false);
 	let addingToPlaylist = $state<string | null>(null);
@@ -48,45 +46,34 @@
 		liked = initialLiked;
 	});
 
-	function toggleMenu(e: Event) {
-		e.stopPropagation();
-		showMenu = !showMenu;
-		if (!showMenu) {
+	// close menu when clicking outside
+	function handleClickOutside(event: MouseEvent) {
+		const target = event.target as HTMLElement;
+		if (!target.closest('.add-to-menu')) {
+			menuOpen = false;
 			showPlaylistPicker = false;
 		}
 	}
 
-	function closeMenu() {
-		showMenu = false;
-		showPlaylistPicker = false;
-	}
+	$effect(() => {
+		if (menuOpen) {
+			document.addEventListener('click', handleClickOutside);
+			return () => document.removeEventListener('click', handleClickOutside);
+		}
+	});
 
-	function handleQueue(e: Event) {
+	function toggleMenu(e: Event) {
 		e.stopPropagation();
-		onQueue();
-		closeMenu();
-	}
-
-	async function handleShare(e: Event) {
-		e.stopPropagation();
-		try {
-			await navigator.clipboard.writeText(shareUrl);
-			toast.success('link copied');
-			closeMenu();
-		} catch {
-			toast.error('failed to copy link');
+		if (disabled) return;
+		menuOpen = !menuOpen;
+		if (!menuOpen) {
+			showPlaylistPicker = false;
 		}
 	}
 
 	async function handleLike(e: Event) {
 		e.stopPropagation();
-
-		if (loading || likeDisabled) {
-			if (likeDisabled) {
-				toast.error("track's record is unavailable");
-			}
-			return;
-		}
+		if (loading || disabled) return;
 
 		loading = true;
 		const previousState = liked;
@@ -101,18 +88,19 @@
 				liked = previousState;
 				toast.error('failed to update like');
 			} else {
+				onLikeChange?.(liked);
 				if (liked) {
 					toast.success(`liked ${trackTitle}`);
 				} else {
 					toast.info(`unliked ${trackTitle}`);
 				}
 			}
-			closeMenu();
 		} catch {
 			liked = previousState;
 			toast.error('failed to update like');
 		} finally {
 			loading = false;
+			menuOpen = false;
 		}
 	}
 
@@ -159,7 +147,8 @@
 
 			if (response.ok) {
 				toast.success(`added to ${playlist.name}`);
-				closeMenu();
+				menuOpen = false;
+				showPlaylistPicker = false;
 			} else {
 				const data = await response.json().catch(() => ({}));
 				toast.error(data.detail || 'failed to add to playlist');
@@ -177,65 +166,47 @@
 	}
 </script>
 
-<div class="actions-menu">
-	<button class="menu-button" onclick={toggleMenu} title="actions">
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-			<circle cx="12" cy="5" r="1"></circle>
-			<circle cx="12" cy="12" r="1"></circle>
-			<circle cx="12" cy="19" r="1"></circle>
+<div class="add-to-menu">
+	<button
+		class="trigger-button"
+		class:liked
+		class:loading
+		class:disabled-state={disabled}
+		class:menu-open={menuOpen}
+		onclick={toggleMenu}
+		title={disabled && disabledReason ? disabledReason : 'add to...'}
+		{disabled}
+	>
+		<svg width="16" height="16" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
 		</svg>
 	</button>
 
-	{#if showMenu}
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="menu-backdrop" onclick={closeMenu}></div>
-		<div class="menu-panel" onclick={(e) => e.stopPropagation()}>
+	{#if menuOpen}
+		<div class="menu-dropdown" onclick={(e) => e.stopPropagation()}>
 			{#if !showPlaylistPicker}
-				{#if isAuthenticated}
-					<button class="menu-item" onclick={handleLike} disabled={loading || likeDisabled} class:disabled={likeDisabled}>
-						<svg width="18" height="18" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+				<button class="menu-item" onclick={handleLike} disabled={loading}>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+						<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+					</svg>
+					<span>{liked ? 'remove from liked' : 'add to liked'}</span>
+				</button>
+				{#if trackUri && trackCid}
+					<button class="menu-item" onclick={showPlaylists}>
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<line x1="8" y1="6" x2="21" y2="6"></line>
+							<line x1="8" y1="12" x2="21" y2="12"></line>
+							<line x1="8" y1="18" x2="21" y2="18"></line>
+							<line x1="3" y1="6" x2="3.01" y2="6"></line>
+							<line x1="3" y1="12" x2="3.01" y2="12"></line>
+							<line x1="3" y1="18" x2="3.01" y2="18"></line>
 						</svg>
-						<span>{liked ? 'remove from liked' : 'add to liked'}</span>
+						<span>add to playlist</span>
+						<svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M9 18l6-6-6-6"/>
+						</svg>
 					</button>
-					{#if trackUri && trackCid}
-						<button class="menu-item" onclick={showPlaylists}>
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<line x1="8" y1="6" x2="21" y2="6"></line>
-								<line x1="8" y1="12" x2="21" y2="12"></line>
-								<line x1="8" y1="18" x2="21" y2="18"></line>
-								<line x1="3" y1="6" x2="3.01" y2="6"></line>
-								<line x1="3" y1="12" x2="3.01" y2="12"></line>
-								<line x1="3" y1="18" x2="3.01" y2="18"></line>
-							</svg>
-							<span>add to playlist</span>
-							<svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M9 18l6-6-6-6"/>
-							</svg>
-						</button>
-					{/if}
 				{/if}
-				<button class="menu-item" onclick={handleQueue}>
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-						<line x1="5" y1="15" x2="5" y2="21"></line>
-						<line x1="2" y1="18" x2="8" y2="18"></line>
-						<line x1="9" y1="6" x2="21" y2="6"></line>
-						<line x1="9" y1="12" x2="21" y2="12"></line>
-						<line x1="9" y1="18" x2="21" y2="18"></line>
-					</svg>
-					<span>add to queue</span>
-				</button>
-				<button class="menu-item" onclick={handleShare}>
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<circle cx="18" cy="5" r="3"></circle>
-						<circle cx="6" cy="12" r="3"></circle>
-						<circle cx="18" cy="19" r="3"></circle>
-						<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-						<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-					</svg>
-					<span>share</span>
-				</button>
 			{:else}
 				<div class="playlist-picker">
 					<button class="back-button" onclick={goBack}>
@@ -248,11 +219,11 @@
 						{#if loadingPlaylists}
 							<div class="loading-state">
 								<span class="spinner"></span>
-								<span>loading...</span>
+								<span>loading playlists...</span>
 							</div>
 						{:else if filteredPlaylists.length === 0}
 							<div class="empty-state">
-								<span>no playlists</span>
+								<span>no playlists yet</span>
 							</div>
 						{:else}
 							{#each filteredPlaylists as playlist}
@@ -265,7 +236,7 @@
 										<img src={playlist.image_url} alt="" class="playlist-thumb" />
 									{:else}
 										<div class="playlist-thumb-placeholder">
-											<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 												<line x1="8" y1="6" x2="21" y2="6"></line>
 												<line x1="8" y1="12" x2="21" y2="12"></line>
 												<line x1="8" y1="18" x2="21" y2="18"></line>
@@ -282,7 +253,7 @@
 								</button>
 							{/each}
 						{/if}
-						<a href="/library?create=playlist" class="create-playlist-link" onclick={closeMenu}>
+						<a href="/library?create=playlist" class="create-playlist-link" onclick={() => { menuOpen = false; showPlaylistPicker = false; }}>
 							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<line x1="12" y1="5" x2="12" y2="19"></line>
 								<line x1="5" y1="12" x2="19" y2="12"></line>
@@ -297,11 +268,11 @@
 </div>
 
 <style>
-	.actions-menu {
+	.add-to-menu {
 		position: relative;
 	}
 
-	.menu-button {
+	.trigger-button {
 		width: 32px;
 		height: 32px;
 		display: flex;
@@ -315,90 +286,84 @@
 		transition: all 0.2s;
 	}
 
-	.menu-button:hover {
+	.trigger-button:hover,
+	.trigger-button.menu-open {
 		background: var(--bg-tertiary);
 		border-color: var(--accent);
 		color: var(--accent);
 	}
 
-	.menu-backdrop {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		z-index: 100;
-		background: rgba(0, 0, 0, 0.4);
+	.trigger-button.liked {
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 
-	.menu-panel {
-		position: fixed;
-		bottom: 0;
-		left: 0;
+	.trigger-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.trigger-button.disabled-state {
+		opacity: 0.4;
+		border-color: var(--text-muted);
+		color: var(--text-muted);
+	}
+
+	.trigger-button.loading {
+		animation: pulse 1s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.5; }
+	}
+
+	.trigger-button svg {
+		width: 16px;
+		height: 16px;
+		transition: transform 0.2s;
+	}
+
+	.menu-dropdown {
+		position: absolute;
+		top: calc(100% + 4px);
 		right: 0;
+		min-width: 200px;
 		background: var(--bg-secondary);
-		border-radius: 16px 16px 0 0;
-		box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
-		z-index: 101;
-		animation: slideUp 0.2s ease-out;
-		padding-bottom: env(safe-area-inset-bottom, 0);
-		max-height: 70vh;
-		overflow-y: auto;
-	}
-
-	@keyframes slideUp {
-		from {
-			transform: translateY(100%);
-		}
-		to {
-			transform: translateY(0);
-		}
+		border: 1px solid var(--border-default);
+		border-radius: 8px;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		overflow: hidden;
+		z-index: 10;
 	}
 
 	.menu-item {
+		width: 100%;
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+		padding: 0.75rem 1rem;
 		background: transparent;
 		border: none;
 		color: var(--text-primary);
-		cursor: pointer;
-		padding: 1rem 1.25rem;
-		transition: all 0.15s;
+		font-size: 0.9rem;
 		font-family: inherit;
-		width: 100%;
+		cursor: pointer;
+		transition: background 0.15s;
 		text-align: left;
-		border-bottom: 1px solid var(--border-subtle);
 	}
 
-	.menu-item:last-child {
-		border-bottom: none;
-	}
-
-	.menu-item:hover,
-	.menu-item:active {
+	.menu-item:hover {
 		background: var(--bg-tertiary);
-	}
-
-	.menu-item span {
-		font-size: 1rem;
-		font-weight: 400;
-		flex: 1;
-	}
-
-	.menu-item svg {
-		width: 20px;
-		height: 20px;
-		flex-shrink: 0;
-	}
-
-	.menu-item .chevron {
-		color: var(--text-muted);
 	}
 
 	.menu-item:disabled {
 		opacity: 0.5;
-		cursor: not-allowed;
+	}
+
+	.menu-item .chevron {
+		margin-left: auto;
+		color: var(--text-muted);
 	}
 
 	.playlist-picker {
@@ -410,24 +375,23 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 1rem 1.25rem;
+		padding: 0.75rem 1rem;
 		background: transparent;
 		border: none;
-		border-bottom: 1px solid var(--border-default);
+		border-bottom: 1px solid var(--border-subtle);
 		color: var(--text-secondary);
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 		font-family: inherit;
 		cursor: pointer;
 		transition: background 0.15s;
 	}
 
-	.back-button:hover,
-	.back-button:active {
+	.back-button:hover {
 		background: var(--bg-tertiary);
 	}
 
 	.playlist-list {
-		max-height: 50vh;
+		max-height: 240px;
 		overflow-y: auto;
 	}
 
@@ -436,24 +400,18 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		padding: 0.875rem 1.25rem;
+		padding: 0.625rem 1rem;
 		background: transparent;
 		border: none;
-		border-bottom: 1px solid var(--border-subtle);
 		color: var(--text-primary);
-		font-size: 1rem;
+		font-size: 0.9rem;
 		font-family: inherit;
 		cursor: pointer;
 		transition: background 0.15s;
 		text-align: left;
 	}
 
-	.playlist-item:last-child {
-		border-bottom: none;
-	}
-
-	.playlist-item:hover,
-	.playlist-item:active {
+	.playlist-item:hover {
 		background: var(--bg-tertiary);
 	}
 
@@ -463,8 +421,8 @@
 
 	.playlist-thumb,
 	.playlist-thumb-placeholder {
-		width: 36px;
-		height: 36px;
+		width: 32px;
+		height: 32px;
 		border-radius: 4px;
 		flex-shrink: 0;
 	}
@@ -495,32 +453,31 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
-		padding: 2rem 1rem;
+		padding: 1.5rem 1rem;
 		color: var(--text-tertiary);
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 	}
 
 	.create-playlist-link {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		padding: 0.875rem 1.25rem;
+		padding: 0.625rem 1rem;
 		color: var(--accent);
-		font-size: 1rem;
+		font-size: 0.9rem;
 		font-family: inherit;
 		text-decoration: none;
 		border-top: 1px solid var(--border-subtle);
 		transition: background 0.15s;
 	}
 
-	.create-playlist-link:hover,
-	.create-playlist-link:active {
+	.create-playlist-link:hover {
 		background: var(--bg-tertiary);
 	}
 
 	.spinner {
-		width: 18px;
-		height: 18px;
+		width: 16px;
+		height: 16px;
 		border: 2px solid var(--border-default);
 		border-top-color: var(--accent);
 		border-radius: 50%;
@@ -528,81 +485,62 @@
 	}
 
 	.spinner.small {
-		width: 16px;
-		height: 16px;
+		width: 14px;
+		height: 14px;
 	}
 
 	@keyframes spin {
 		to { transform: rotate(360deg); }
 	}
 
-	/* desktop: show as dropdown instead of bottom sheet */
-	@media (min-width: 769px) {
-		.menu-backdrop {
-			background: transparent;
+	/* mobile: show as bottom sheet */
+	@media (max-width: 768px) {
+		.trigger-button {
+			width: 28px;
+			height: 28px;
 		}
 
-		.menu-panel {
-			position: absolute;
-			bottom: auto;
-			left: auto;
-			right: 100%;
-			top: 50%;
-			transform: translateY(-50%);
-			margin-right: 0.5rem;
-			border-radius: 8px;
-			min-width: 180px;
-			max-height: none;
-			animation: slideIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-			padding-bottom: 0;
+		.trigger-button svg {
+			width: 14px;
+			height: 14px;
 		}
 
-		@keyframes slideIn {
+		.menu-dropdown {
+			position: fixed;
+			top: auto;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			min-width: 100%;
+			border-radius: 16px 16px 0 0;
+			padding-bottom: env(safe-area-inset-bottom, 0);
+			animation: slideUp 0.2s ease-out;
+		}
+
+		@keyframes slideUp {
 			from {
-				opacity: 0;
-				transform: translateY(-50%) scale(0.95);
+				transform: translateY(100%);
 			}
 			to {
-				opacity: 1;
-				transform: translateY(-50%) scale(1);
+				transform: translateY(0);
 			}
 		}
 
 		.menu-item {
-			padding: 0.75rem 1rem;
-		}
-
-		.menu-item span {
-			font-size: 0.9rem;
-		}
-
-		.menu-item svg {
-			width: 18px;
-			height: 18px;
+			padding: 1rem 1.25rem;
+			font-size: 1rem;
 		}
 
 		.back-button {
-			padding: 0.75rem 1rem;
+			padding: 1rem 1.25rem;
 		}
 
 		.playlist-item {
-			padding: 0.625rem 1rem;
-			font-size: 0.9rem;
-		}
-
-		.playlist-thumb,
-		.playlist-thumb-placeholder {
-			width: 32px;
-			height: 32px;
+			padding: 0.875rem 1.25rem;
 		}
 
 		.playlist-list {
-			max-height: 200px;
-		}
-
-		.loading-state,
-		.empty-state {
-			padding: 1.5rem 1rem;
+			max-height: 50vh;
 		}
 	}
 </style>

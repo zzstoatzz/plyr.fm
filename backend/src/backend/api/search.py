@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.atproto.handles import search_handles
-from backend.models import Album, Artist, Tag, Track, TrackTag, get_db
+from backend.models import Album, Artist, Playlist, Tag, Track, TrackTag, get_db
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -60,8 +60,25 @@ class TagSearchResult(BaseModel):
     relevance: float
 
 
+class PlaylistSearchResult(BaseModel):
+    """playlist search result."""
+
+    type: Literal["playlist"] = "playlist"
+    id: str
+    name: str
+    owner_handle: str
+    owner_display_name: str
+    image_url: str | None
+    track_count: int
+    relevance: float
+
+
 SearchResult = (
-    TrackSearchResult | ArtistSearchResult | AlbumSearchResult | TagSearchResult
+    TrackSearchResult
+    | ArtistSearchResult
+    | AlbumSearchResult
+    | TagSearchResult
+    | PlaylistSearchResult
 )
 
 
@@ -104,10 +121,16 @@ async def unified_search(
     if type:
         types = {t.strip().lower() for t in type.split(",")}
     else:
-        types = {"tracks", "artists", "albums", "tags"}
+        types = {"tracks", "artists", "albums", "tags", "playlists"}
 
     results: list[SearchResult] = []
-    counts: dict[str, int] = {"tracks": 0, "artists": 0, "albums": 0, "tags": 0}
+    counts: dict[str, int] = {
+        "tracks": 0,
+        "artists": 0,
+        "albums": 0,
+        "tags": 0,
+        "playlists": 0,
+    }
 
     # search tracks
     if "tracks" in types:
@@ -132,6 +155,12 @@ async def unified_search(
         tag_results = await _search_tags(db, q, limit)
         results.extend(tag_results)
         counts["tags"] = len(tag_results)
+
+    # search playlists
+    if "playlists" in types:
+        playlist_results = await _search_playlists(db, q, limit)
+        results.extend(playlist_results)
+        counts["playlists"] = len(playlist_results)
 
     # sort all results by relevance (highest first)
     results.sort(key=lambda x: x.relevance, reverse=True)
@@ -277,4 +306,36 @@ async def _search_tags(
             relevance=round(relevance, 3),
         )
         for tag, track_count, relevance in rows
+    ]
+
+
+async def _search_playlists(
+    db: AsyncSession, query: str, limit: int
+) -> list[PlaylistSearchResult]:
+    """search playlists by name using trigram similarity + substring."""
+    similarity = func.similarity(Playlist.name, query)
+    substring_match = Playlist.name.ilike(f"%{query}%")
+
+    stmt = (
+        select(Playlist, Artist, similarity.label("relevance"))
+        .join(Artist, Playlist.owner_did == Artist.did)
+        .where(or_(similarity > 0.1, substring_match))
+        .order_by(similarity.desc())
+        .limit(limit)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return [
+        PlaylistSearchResult(
+            id=playlist.id,
+            name=playlist.name,
+            owner_handle=artist.handle,
+            owner_display_name=artist.display_name,
+            image_url=playlist.image_url,
+            track_count=playlist.track_count,
+            relevance=round(relevance, 3),
+        )
+        for playlist, artist, relevance in rows
     ]

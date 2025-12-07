@@ -76,6 +76,8 @@
 				return result.image_url;
 			case 'tag':
 				return null;
+			case 'playlist':
+				return result.image_url;
 		}
 	}
 
@@ -88,6 +90,8 @@
 			case 'album':
 				return result.title;
 			case 'tag':
+				return result.name;
+			case 'playlist':
 				return result.name;
 		}
 	}
@@ -102,6 +106,8 @@
 				return `by ${result.artist_display_name}`;
 			case 'tag':
 				return `${result.track_count} track${result.track_count === 1 ? '' : 's'}`;
+			case 'playlist':
+				return `by ${result.owner_display_name} · ${result.track_count} track${result.track_count === 1 ? '' : 's'}`;
 		}
 	}
 
@@ -141,7 +147,7 @@
 					bind:this={inputRef}
 					type="text"
 					class="search-input"
-					placeholder="search tracks, artists, albums, tags..."
+					placeholder="search tracks, artists, albums, playlists..."
 					value={search.query}
 					oninput={(e) => search.setQuery(e.currentTarget.value)}
 					autocomplete="off"
@@ -158,7 +164,7 @@
 
 			{#if search.results.length > 0}
 				<div class="search-results">
-					{#each search.results as result, index (result.type + '-' + (result.type === 'track' ? result.id : result.type === 'artist' ? result.did : result.type === 'album' ? result.id : result.id))}
+					{#each search.results as result, index (result.type + '-' + (result.type === 'track' ? result.id : result.type === 'artist' ? result.did : result.type === 'album' ? result.id : result.type === 'playlist' ? result.id : result.id))}
 						{@const imageUrl = getResultImage(result)}
 						<button
 							class="search-result"
@@ -174,29 +180,8 @@
 											alt=""
 											class="result-image"
 											loading="lazy"
-											onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
 										/>
 									</SensitiveImage>
-									<!-- fallback icon shown if image fails to load -->
-									<span class="result-icon-fallback">
-										{#if result.type === 'track'}
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-												<path d="M9 18V5l12-2v13"></path>
-												<circle cx="6" cy="18" r="3"></circle>
-												<circle cx="18" cy="16" r="3"></circle>
-											</svg>
-										{:else if result.type === 'artist'}
-											<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-												<circle cx="8" cy="5" r="3" fill="none" />
-												<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
-											</svg>
-										{:else if result.type === 'album'}
-											<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-												<rect x="2" y="2" width="12" height="12" fill="none" />
-												<circle cx="8" cy="8" r="2.5" fill="currentColor" stroke="none" />
-											</svg>
-										{/if}
-									</span>
 								{:else if result.type === 'track'}
 									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 										<path d="M9 18V5l12-2v13"></path>
@@ -217,6 +202,15 @@
 									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 										<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
 										<line x1="7" y1="7" x2="7.01" y2="7"></line>
+									</svg>
+								{:else if result.type === 'playlist'}
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+										<line x1="8" y1="6" x2="21" y2="6"></line>
+										<line x1="8" y1="12" x2="21" y2="12"></line>
+										<line x1="8" y1="18" x2="21" y2="18"></line>
+										<line x1="3" y1="6" x2="3.01" y2="6"></line>
+										<line x1="3" y1="12" x2="3.01" y2="12"></line>
+										<line x1="3" y1="18" x2="3.01" y2="18"></line>
 									</svg>
 								{/if}
 							</span>
@@ -442,6 +436,10 @@
 
 	.result-icon[data-type='tag'] {
 		color: #fbbf24;
+	}
+
+	.result-icon[data-type='playlist'] {
+		color: #f472b6;
 	}
 
 	.result-content {

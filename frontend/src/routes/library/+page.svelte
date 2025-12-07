@@ -2,6 +2,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
 	import type { PageData } from './$types';
 	import type { Playlist } from '$lib/types';
@@ -12,6 +13,17 @@
 	let newPlaylistName = $state('');
 	let creating = $state(false);
 	let error = $state('');
+
+	// open create modal if ?create=playlist query param is present
+	$effect(() => {
+		if ($page.url.searchParams.get('create') === 'playlist') {
+			showCreateModal = true;
+			// clear the query param from URL without navigation
+			const url = new URL($page.url);
+			url.searchParams.delete('create');
+			window.history.replaceState({}, '', url.pathname);
+		}
+	});
 
 	async function handleLogout() {
 		await auth.logout();
@@ -129,16 +141,20 @@
 			<div class="playlists-list">
 				{#each playlists as playlist}
 					<a href="/playlist/{playlist.id}" class="collection-card">
-						<div class="collection-icon playlist">
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<line x1="8" y1="6" x2="21" y2="6"></line>
-								<line x1="8" y1="12" x2="21" y2="12"></line>
-								<line x1="8" y1="18" x2="21" y2="18"></line>
-								<line x1="3" y1="6" x2="3.01" y2="6"></line>
-								<line x1="3" y1="12" x2="3.01" y2="12"></line>
-								<line x1="3" y1="18" x2="3.01" y2="18"></line>
-							</svg>
-						</div>
+						{#if playlist.image_url}
+							<img src={playlist.image_url} alt="" class="playlist-artwork" />
+						{:else}
+							<div class="collection-icon playlist">
+								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<line x1="8" y1="6" x2="21" y2="6"></line>
+									<line x1="8" y1="12" x2="21" y2="12"></line>
+									<line x1="8" y1="18" x2="21" y2="18"></line>
+									<line x1="3" y1="6" x2="3.01" y2="6"></line>
+									<line x1="3" y1="12" x2="3.01" y2="12"></line>
+									<line x1="3" y1="18" x2="3.01" y2="18"></line>
+								</svg>
+							</div>
+						{/if}
 						<div class="collection-info">
 							<h3>{playlist.name}</h3>
 							<p>{playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}</p>
@@ -266,6 +282,14 @@
 	.collection-icon.playlist {
 		background: linear-gradient(135deg, rgba(var(--accent-rgb, 139, 92, 246), 0.15), rgba(var(--accent-rgb, 139, 92, 246), 0.05));
 		color: var(--accent);
+	}
+
+	.playlist-artwork {
+		width: 48px;
+		height: 48px;
+		border-radius: 10px;
+		object-fit: cover;
+		flex-shrink: 0;
 	}
 
 	.collection-info {

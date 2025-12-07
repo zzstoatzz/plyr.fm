@@ -375,6 +375,7 @@
 								<TrackItem
 									{track}
 									index={i}
+									showIndex={true}
 									isPlaying={player.currentTrack?.id === track.id}
 									onPlay={playTrack}
 									{isAuthenticated}
@@ -387,6 +388,7 @@
 						<TrackItem
 							{track}
 							index={i}
+							showIndex={true}
 							isPlaying={player.currentTrack?.id === track.id}
 							onPlay={playTrack}
 							{isAuthenticated}

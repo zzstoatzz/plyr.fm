@@ -109,23 +109,13 @@ export interface Playlist {
 	owner_did: string;
 	owner_handle: string;
 	track_count: number;
+	image_url?: string;
+	show_on_profile: boolean;
 	atproto_record_uri: string;
 	created_at: string;
 }
 
 export interface PlaylistWithTracks extends Playlist {
-	tracks: PlaylistTrack[];
-}
-
-export interface PlaylistTrack {
-	id: number;
-	title: string;
-	artist_name: string;
-	artist_handle: string;
-	artist_did: string;
-	duration?: number;
-	image_url?: string;
-	atproto_record_uri: string;
-	atproto_record_cid: string;
+	tracks: Track[];
 }
 

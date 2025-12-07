@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ShareButton from './ShareButton.svelte';
-	import LikeButton from './LikeButton.svelte';
+	import AddToMenu from './AddToMenu.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
 	import LikersTooltip from './LikersTooltip.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
@@ -16,6 +16,8 @@
 		hideAlbum?: boolean;
 		hideArtist?: boolean;
 		index?: number;
+		showIndex?: boolean;
+		excludePlaylistId?: string;
 	}
 
 	let {
@@ -25,7 +27,9 @@
 		isAuthenticated = false,
 		hideAlbum = false,
 		hideArtist = false,
-		index = 0
+		index = 0,
+		showIndex = false,
+		excludePlaylistId
 	}: Props = $props();
 
 	// optimize image loading: eager for first 3, lazy for rest
@@ -113,6 +117,9 @@
 </script>
 
 <div class="track-container" class:playing={isPlaying} class:likers-tooltip-open={showLikersTooltip}>
+	{#if showIndex}
+		<span class="track-index">{index + 1}</span>
+	{/if}
 	<button
 		class="track"
 		onclick={(e) => {
@@ -265,13 +272,16 @@
 		<!-- desktop: show individual buttons -->
 		<div class="desktop-actions">
 			{#if isAuthenticated}
-				<LikeButton
+				<AddToMenu
 					trackId={track.id}
 					trackTitle={track.title}
+					trackUri={track.atproto_record_uri}
+					trackCid={track.atproto_record_cid}
 					initialLiked={track.is_liked || false}
 					disabled={!track.atproto_record_uri}
-					disabledReason={!track.atproto_record_uri ? "track's record is unavailable and cannot be liked" : undefined}
+					disabledReason={!track.atproto_record_uri ? "track's record is unavailable" : undefined}
 					onLikeChange={handleLikeChange}
+					{excludePlaylistId}
 				/>
 			{/if}
 			<button
@@ -297,11 +307,14 @@
 			<TrackActionsMenu
 				trackId={track.id}
 				trackTitle={track.title}
+				trackUri={track.atproto_record_uri}
+				trackCid={track.atproto_record_cid}
 				initialLiked={track.is_liked || false}
 				shareUrl={shareUrl}
 				onQueue={handleQueue}
 				isAuthenticated={isAuthenticated}
 				likeDisabled={!track.atproto_record_uri}
+				{excludePlaylistId}
 			/>
 		</div>
 	</div>
@@ -319,11 +332,19 @@
 		transition: all 0.15s ease-in-out;
 	}
 
+	.track-index {
+		width: 24px;
+		font-size: 0.85rem;
+		color: var(--text-muted);
+		text-align: center;
+		flex-shrink: 0;
+		font-variant-numeric: tabular-nums;
+	}
+
 	.track-container:hover {
 		background: var(--bg-tertiary);
 		border-left-color: var(--accent);
 		border-color: var(--border-default);
-		transform: translateX(2px);
 	}
 
 	.track-container.playing {
@@ -691,6 +712,10 @@
 		.track-container {
 			padding: 0.65rem 0.75rem;
 			gap: 0.5rem;
+		}
+
+		.track-index {
+			display: none;
 		}
 
 		.track {

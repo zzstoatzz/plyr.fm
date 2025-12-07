@@ -1,7 +1,7 @@
 // global search state using Svelte 5 runes
 import { API_URL } from '$lib/config';
 
-export type SearchResultType = 'track' | 'artist' | 'album' | 'tag';
+export type SearchResultType = 'track' | 'artist' | 'album' | 'tag' | 'playlist';
 
 export interface TrackSearchResult {
 	type: 'track';
@@ -41,7 +41,23 @@ export interface TagSearchResult {
 	relevance: number;
 }
 
-export type SearchResult = TrackSearchResult | ArtistSearchResult | AlbumSearchResult | TagSearchResult;
+export interface PlaylistSearchResult {
+	type: 'playlist';
+	id: string;
+	name: string;
+	owner_handle: string;
+	owner_display_name: string;
+	image_url: string | null;
+	track_count: number;
+	relevance: number;
+}
+
+export type SearchResult =
+	| TrackSearchResult
+	| ArtistSearchResult
+	| AlbumSearchResult
+	| TagSearchResult
+	| PlaylistSearchResult;
 
 export interface SearchResponse {
 	results: SearchResult[];
@@ -50,6 +66,7 @@ export interface SearchResponse {
 		artists: number;
 		albums: number;
 		tags: number;
+		playlists: number;
 	};
 }
 
@@ -59,7 +76,7 @@ class SearchState {
 	isOpen = $state(false);
 	query = $state('');
 	results = $state<SearchResult[]>([]);
-	counts = $state<SearchResponse['counts']>({ tracks: 0, artists: 0, albums: 0, tags: 0 });
+	counts = $state<SearchResponse['counts']>({ tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 });
 	loading = $state(false);
 	error = $state<string | null>(null);
 	selectedIndex = $state(0);
@@ -83,7 +100,7 @@ class SearchState {
 		this.isOpen = true;
 		this.query = '';
 		this.results = [];
-		this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0 };
+		this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
 		this.error = null;
 		this.selectedIndex = 0;
 	}
@@ -120,7 +137,7 @@ class SearchState {
 		if (value.length > MAX_QUERY_LENGTH) {
 			this.error = `query too long (max ${MAX_QUERY_LENGTH} characters)`;
 			this.results = [];
-			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0 };
+			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
 			return;
 		}
 
@@ -133,7 +150,7 @@ class SearchState {
 			}, 150);
 		} else {
 			this.results = [];
-			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0 };
+			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
 		}
 	}
 
@@ -191,6 +208,8 @@ class SearchState {
 				return `/u/${result.artist_handle}/album/${result.slug}`;
 			case 'tag':
 				return `/tag/${result.name}`;
+			case 'playlist':
+				return `/playlist/${result.id}`;
 		}
 	}
 }

@@ -1,8 +1,12 @@
 """lists api endpoints for ATProto list records."""
 
+import contextlib
 import logging
+from io import BytesIO
+from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +20,10 @@ from backend._internal.atproto.records import (
     update_list_record,
 )
 from backend.models import Artist, Playlist, Track, UserPreferences, get_db
+from backend.schemas import TrackResponse
+from backend.storage import storage
+from backend.utilities.aggregations import get_comment_counts, get_like_counts
+from backend.utilities.hashing import CHUNK_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +46,8 @@ class PlaylistResponse(BaseModel):
     owner_did: str
     owner_handle: str
     track_count: int
+    image_url: str | None
+    show_on_profile: bool
     atproto_record_uri: str
     created_at: str
 
@@ -45,7 +55,7 @@ class PlaylistResponse(BaseModel):
 class PlaylistWithTracksResponse(PlaylistResponse):
     """playlist with full track details."""
 
-    tracks: list[dict]
+    tracks: list[TrackResponse]
     """ordered list of track details."""
 
 
@@ -228,6 +238,8 @@ async def create_playlist(
         owner_did=playlist.owner_did,
         owner_handle=owner_handle,
         track_count=playlist.track_count,
+        image_url=playlist.image_url,
+        show_on_profile=playlist.show_on_profile,
         atproto_record_uri=playlist.atproto_record_uri,
         created_at=playlist.created_at.isoformat(),
     )
@@ -254,6 +266,43 @@ async def list_playlists(
             owner_did=playlist.owner_did,
             owner_handle=artist.handle,
             track_count=playlist.track_count,
+            image_url=playlist.image_url,
+            show_on_profile=playlist.show_on_profile,
+            atproto_record_uri=playlist.atproto_record_uri,
+            created_at=playlist.created_at.isoformat(),
+        )
+        for playlist, artist in rows
+    ]
+
+
+@router.get("/playlists/by-artist/{artist_did}", response_model=list[PlaylistResponse])
+async def list_artist_public_playlists(
+    artist_did: str,
+    db: AsyncSession = Depends(get_db),
+) -> list[PlaylistResponse]:
+    """list public playlists for an artist (no auth required).
+
+    returns playlists where show_on_profile is true.
+    used to display collections on artist profile pages.
+    """
+    result = await db.execute(
+        select(Playlist, Artist)
+        .join(Artist, Playlist.owner_did == Artist.did)
+        .where(Playlist.owner_did == artist_did)
+        .where(Playlist.show_on_profile == True)  # noqa: E712
+        .order_by(Playlist.created_at.desc())
+    )
+    rows = result.all()
+
+    return [
+        PlaylistResponse(
+            id=playlist.id,
+            name=playlist.name,
+            owner_did=playlist.owner_did,
+            owner_handle=artist.handle,
+            track_count=playlist.track_count,
+            image_url=playlist.image_url,
+            show_on_profile=playlist.show_on_profile,
             atproto_record_uri=playlist.atproto_record_uri,
             created_at=playlist.created_at.isoformat(),
         )
@@ -288,6 +337,8 @@ async def get_playlist_meta(
         owner_did=playlist.owner_did,
         owner_handle=artist.handle,
         track_count=playlist.track_count,
+        image_url=playlist.image_url,
+        show_on_profile=playlist.show_on_profile,
         atproto_record_uri=playlist.atproto_record_uri,
         created_at=playlist.created_at.isoformat(),
     )
@@ -354,32 +405,34 @@ async def get_playlist(
     track_uris = [uri for uri in track_uris if uri]
 
     # hydrate track metadata from database
-    tracks = []
+    tracks: list[TrackResponse] = []
     if track_uris:
+        from sqlalchemy.orm import selectinload
+
         track_result = await db.execute(
-            select(Track, Artist)
-            .join(Artist, Track.artist_did == Artist.did)
+            select(Track)
+            .options(selectinload(Track.artist), selectinload(Track.album_rel))
             .where(Track.atproto_record_uri.in_(track_uris))
         )
-        track_rows = {t.atproto_record_uri: (t, a) for t, a in track_result.all()}
+        all_tracks = track_result.scalars().all()
+        track_by_uri = {t.atproto_record_uri: t for t in all_tracks}
+
+        # get track IDs for aggregation queries
+        track_ids = [t.id for t in all_tracks]
+        like_counts = await get_like_counts(db, track_ids) if track_ids else {}
+        comment_counts = await get_comment_counts(db, track_ids) if track_ids else {}
 
         # maintain ATProto ordering
         for uri in track_uris:
-            if uri in track_rows:
-                track, track_artist = track_rows[uri]
-                tracks.append(
-                    {
-                        "id": track.id,
-                        "title": track.title,
-                        "artist_name": track_artist.display_name,
-                        "artist_handle": track_artist.handle,
-                        "artist_did": track_artist.did,
-                        "duration": track.duration,
-                        "image_url": track.image_url,
-                        "atproto_record_uri": track.atproto_record_uri,
-                        "atproto_record_cid": track.atproto_record_cid,
-                    }
+            if uri in track_by_uri:
+                track = track_by_uri[uri]
+                track_response = await TrackResponse.from_track(
+                    track,
+                    pds_url=oauth_data.get("pds_url"),
+                    like_counts=like_counts,
+                    comment_counts=comment_counts,
                 )
+                tracks.append(track_response)
 
     return PlaylistWithTracksResponse(
         id=playlist.id,
@@ -387,6 +440,8 @@ async def get_playlist(
         owner_did=playlist.owner_did,
         owner_handle=artist.handle,
         track_count=len(tracks),
+        image_url=playlist.image_url,
+        show_on_profile=playlist.show_on_profile,
         atproto_record_uri=playlist.atproto_record_uri,
         created_at=playlist.created_at.isoformat(),
         tracks=tracks,
@@ -486,6 +541,8 @@ async def add_track_to_playlist(
         owner_did=playlist.owner_did,
         owner_handle=artist.handle,
         track_count=playlist.track_count,
+        image_url=playlist.image_url,
+        show_on_profile=playlist.show_on_profile,
         atproto_record_uri=playlist.atproto_record_uri,
         created_at=playlist.created_at.isoformat(),
     )
@@ -578,6 +635,8 @@ async def remove_track_from_playlist(
         owner_did=playlist.owner_did,
         owner_handle=artist.handle,
         track_count=playlist.track_count,
+        image_url=playlist.image_url,
+        show_on_profile=playlist.show_on_profile,
         atproto_record_uri=playlist.atproto_record_uri,
         created_at=playlist.created_at.isoformat(),
     )
@@ -617,3 +676,180 @@ async def delete_playlist(
     await db.commit()
 
     return {"deleted": True}
+
+
+@router.post("/playlists/{playlist_id}/cover")
+async def upload_playlist_cover(
+    playlist_id: str,
+    session: AuthSession = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+    image: UploadFile = File(...),
+) -> dict[str, str | None]:
+    """upload cover art for a playlist (requires authentication).
+
+    accepts jpg, jpeg, png, webp images up to 20MB.
+    """
+    # verify playlist exists and belongs to the authenticated user
+    result = await db.execute(
+        select(Playlist, Artist)
+        .join(Artist, Playlist.owner_did == Artist.did)
+        .where(Playlist.id == playlist_id)
+    )
+    row = result.first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="playlist not found")
+
+    playlist, _artist = row
+
+    if playlist.owner_did != session.did:
+        raise HTTPException(
+            status_code=403,
+            detail="you can only upload cover art for your own playlists",
+        )
+
+    if not image.filename:
+        raise HTTPException(status_code=400, detail="no filename provided")
+
+    # validate it's an image by extension
+    ext = Path(image.filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported image type: {ext}. supported: .jpg, .jpeg, .png, .webp",
+        )
+
+    # read image data (enforcing size limit)
+    try:
+        max_image_size = 20 * 1024 * 1024  # 20MB max
+        image_data = bytearray()
+
+        while chunk := await image.read(CHUNK_SIZE):
+            if len(image_data) + len(chunk) > max_image_size:
+                raise HTTPException(
+                    status_code=413,
+                    detail="image too large (max 20MB)",
+                )
+            image_data.extend(chunk)
+
+        image_obj = BytesIO(image_data)
+        # save returns the file_id (hash)
+        image_id = await storage.save(image_obj, image.filename)
+
+        # construct R2 URL directly (images are stored under images/ prefix)
+        image_url = f"{storage.public_image_bucket_url}/images/{image_id}{ext}"
+
+        # delete old image if exists (prevent R2 object leaks)
+        if playlist.image_id:
+            with contextlib.suppress(Exception):
+                await storage.delete(playlist.image_id)
+
+        # update playlist with new image
+        playlist.image_id = image_id
+        playlist.image_url = image_url
+        await db.commit()
+
+        return {"image_url": image_url, "image_id": image_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"failed to upload playlist cover: {e}")
+        raise HTTPException(
+            status_code=500, detail="failed to upload cover image"
+        ) from e
+
+
+@router.patch("/playlists/{playlist_id}")
+async def update_playlist(
+    playlist_id: str,
+    name: Annotated[str | None, Form()] = None,
+    show_on_profile: Annotated[bool | None, Form()] = None,
+    session: AuthSession = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+) -> PlaylistResponse:
+    """update playlist metadata (name, show_on_profile).
+
+    use POST /playlists/{id}/cover to update cover art separately.
+    """
+    # verify playlist exists and belongs to the authenticated user
+    result = await db.execute(
+        select(Playlist, Artist)
+        .join(Artist, Playlist.owner_did == Artist.did)
+        .where(Playlist.id == playlist_id)
+    )
+    row = result.first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="playlist not found")
+
+    playlist, artist = row
+
+    if playlist.owner_did != session.did:
+        raise HTTPException(status_code=403, detail="not playlist owner")
+
+    # update show_on_profile if provided
+    if show_on_profile is not None:
+        playlist.show_on_profile = show_on_profile
+
+    # update name if provided
+    if name is not None and name.strip():
+        playlist.name = name.strip()
+
+        # also update the ATProto record with new name
+        try:
+            # fetch current list record to preserve items
+            oauth_data = session.oauth_session
+            if oauth_data and "access_token" in oauth_data:
+                from backend._internal import get_oauth_client
+
+                oauth_session = _reconstruct_oauth_session(oauth_data)
+
+                parts = playlist.atproto_record_uri.replace("at://", "").split("/")
+                repo, collection, rkey = parts
+
+                url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
+                params = {"repo": repo, "collection": collection, "rkey": rkey}
+
+                response = await get_oauth_client().make_authenticated_request(
+                    session=oauth_session,
+                    method="GET",
+                    url=url,
+                    params=params,
+                )
+
+                if response.status_code == 200:
+                    record_data = response.json()
+                    current_items = record_data.get("value", {}).get("items", [])
+
+                    # update list record with new name
+                    items = [
+                        {"uri": item["subject"]["uri"], "cid": item["subject"]["cid"]}
+                        for item in current_items
+                    ]
+                    _, cid = await update_list_record(
+                        auth_session=session,
+                        list_uri=playlist.atproto_record_uri,
+                        items=items,
+                        name=playlist.name,
+                        list_type="playlist",
+                    )
+                    playlist.atproto_record_cid = cid
+        except Exception as e:
+            logger.warning(f"failed to update ATProto record name: {e}")
+            # continue - local update is still valid
+
+    await db.commit()
+    await db.refresh(playlist)
+
+    return PlaylistResponse(
+        id=playlist.id,
+        name=playlist.name,
+        owner_did=playlist.owner_did,
+        owner_handle=artist.handle,
+        track_count=playlist.track_count,
+        image_url=playlist.image_url,
+        show_on_profile=playlist.show_on_profile,
+        atproto_record_uri=playlist.atproto_record_uri,
+        created_at=playlist.created_at.isoformat(),
+    )
