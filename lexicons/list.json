@@ -4,64 +4,43 @@
   "defs": {
     "main": {
       "type": "record",
-      "description": "An ordered collection of ATProto records. Can reference tracks, albums, artists, other lists, or any record type. The purpose field indicates the intended content type.",
+      "description": "An ordered collection of ATProto records.",
       "key": "tid",
       "record": {
         "type": "object",
-        "required": ["title", "purpose", "items", "createdAt"],
+        "required": ["items", "createdAt"],
         "properties": {
-          "title": {
+          "name": {
             "type": "string",
-            "description": "The title of the list.",
-            "minLength": 1,
-            "maxLength": 256
+            "maxLength": 256,
+            "maxGraphemes": 64
           },
-          "description": {
+          "listType": {
             "type": "string",
-            "description": "Optional description of the list.",
-            "maxLength": 2048
-          },
-          "purpose": {
-            "type": "string",
-            "description": "The type of content this list contains. Known values indicate common use cases, but any string is valid for extensibility.",
-            "knownValues": ["album", "playlist", "collection", "discography", "favorites"]
+            "knownValues": ["album", "playlist", "liked"]
           },
           "items": {
             "type": "array",
-            "description": "Ordered references to records in this list. Each item is a content-addressable reference (strongRef) to any ATProto record.",
             "items": {
               "type": "ref",
-              "ref": "#listItem"
+              "ref": "#item"
             },
             "maxLength": 500
           },
-          "imageUrl": {
-            "type": "string",
-            "format": "uri",
-            "description": "URL to cover artwork image."
-          },
           "createdAt": {
             "type": "string",
-            "format": "datetime",
-            "description": "Timestamp when the list was created."
+            "format": "datetime"
           }
         }
       }
     },
-    "listItem": {
+    "item": {
       "type": "object",
-      "description": "A reference to a record within a list. Uses strongRef for content-addressability.",
       "required": ["subject"],
       "properties": {
         "subject": {
           "type": "ref",
-          "ref": "com.atproto.repo.strongRef",
-          "description": "Content-addressable reference to the record (uri + cid). The uri indicates the record type (e.g., fm.plyr.track, fm.plyr.list)."
-        },
-        "addedAt": {
-          "type": "string",
-          "format": "datetime",
-          "description": "When this item was added to the list."
+          "ref": "com.atproto.repo.strongRef"
         }
       }
     }

@@ -486,22 +486,17 @@ async def create_comment_record(
 
 
 def build_list_record(
-    title: str,
-    purpose: str,
     items: list[dict[str, str]],
-    description: str | None = None,
-    image_url: str | None = None,
+    name: str | None = None,
+    list_type: str | None = None,
     created_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Build a list record dict for ATProto.
 
     args:
-        title: list title
-        purpose: type of list ("album", "playlist", "collection", "discography", "favorites")
         items: list of record references, each with {"uri": str, "cid": str}
-               uri indicates the record type (e.g., fm.plyr.track, fm.plyr.list)
-        description: optional list description
-        image_url: optional cover art image URL
+        name: optional display name
+        list_type: optional semantic type (e.g., "album", "playlist", "liked")
         created_at: optional creation timestamp (defaults to now)
 
     returns:
@@ -511,60 +506,38 @@ def build_list_record(
 
     record: dict[str, Any] = {
         "$type": settings.atproto.list_collection,
-        "title": title,
-        "purpose": purpose,
         "items": [
-            {
-                "subject": {"uri": item["uri"], "cid": item["cid"]},
-                "addedAt": item.get("addedAt", now),
-            }
-            for item in items
+            {"subject": {"uri": item["uri"], "cid": item["cid"]}} for item in items
         ],
         "createdAt": now,
     }
 
-    if description:
-        record["description"] = description
-    if image_url:
-        settings.storage.validate_image_url(image_url)
-        record["imageUrl"] = image_url
+    if name:
+        record["name"] = name
+    if list_type:
+        record["listType"] = list_type
 
     return record
 
 
 async def create_list_record(
     auth_session: AuthSession,
-    title: str,
-    purpose: str,
     items: list[dict[str, str]],
-    description: str | None = None,
-    image_url: str | None = None,
+    name: str | None = None,
+    list_type: str | None = None,
 ) -> tuple[str, str]:
     """Create a list record on the user's PDS.
 
     args:
         auth_session: authenticated user session
-        title: list title
-        purpose: type of list (e.g., "album", "playlist", "collection", "discography")
         items: list of record references, each with {"uri": str, "cid": str}
-               can reference tracks, albums, artists, other lists, or any record
-        description: optional list description
-        image_url: optional cover art image URL
+        name: optional display name
+        list_type: optional semantic type (e.g., "album", "playlist", "liked")
 
     returns:
         tuple of (record_uri, record_cid)
-
-    raises:
-        ValueError: if session is invalid
-        Exception: if record creation fails
     """
-    record = build_list_record(
-        title=title,
-        purpose=purpose,
-        items=items,
-        description=description,
-        image_url=image_url,
-    )
+    record = build_list_record(items=items, name=name, list_type=list_type)
 
     payload = {
         "repo": auth_session.did,
@@ -581,42 +554,26 @@ async def create_list_record(
 async def update_list_record(
     auth_session: AuthSession,
     list_uri: str,
-    title: str,
-    purpose: str,
     items: list[dict[str, str]],
-    description: str | None = None,
-    image_url: str | None = None,
+    name: str | None = None,
+    list_type: str | None = None,
     created_at: datetime | None = None,
 ) -> tuple[str, str]:
     """Update an existing list record on the user's PDS.
 
-    Use this for reordering items, adding/removing items, or updating metadata.
-
     args:
         auth_session: authenticated user session
         list_uri: AT URI of the list record to update
-        title: list title
-        purpose: type of list (e.g., "album", "playlist", "collection", "discography")
-        items: updated list of record references (array order determines display order)
-               can reference tracks, albums, artists, other lists, or any record
-        description: optional list description
-        image_url: optional cover art image URL
+        items: list of record references (array order = display order)
+        name: optional display name
+        list_type: optional semantic type (e.g., "album", "playlist", "liked")
         created_at: original creation timestamp (preserved on updates)
 
     returns:
         tuple of (record_uri, new_record_cid)
-
-    raises:
-        ValueError: if session is invalid
-        Exception: if record update fails
     """
     record = build_list_record(
-        title=title,
-        purpose=purpose,
-        items=items,
-        description=description,
-        image_url=image_url,
-        created_at=created_at,
+        items=items, name=name, list_type=list_type, created_at=created_at
     )
 
     return await update_record(
