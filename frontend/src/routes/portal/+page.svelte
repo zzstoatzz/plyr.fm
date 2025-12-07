@@ -32,11 +32,6 @@
 	let displayName = $state('');
 	let bio = $state('');
 	let avatarUrl = $state('');
-	// derive from preferences store
-	let allowComments = $derived(preferences.allowComments);
-	let enableTealScrobbling = $derived(preferences.enableTealScrobbling);
-	let tealNeedsReauth = $derived(preferences.tealNeedsReauth);
-	let showSensitiveArtwork = $derived(preferences.showSensitiveArtwork);
 	let savingProfile = $state(false);
 	let profileSuccess = $state('');
 	let profileError = $state('');
@@ -50,38 +45,20 @@
 	// export state
 	let exportingMedia = $state(false);
 
-	// account deletion state
-	let showDeleteConfirm = $state(false);
-	let deleteConfirmText = $state('');
-	let deleteAtprotoRecords = $state(false);
-	let deleting = $state(false);
-
-	// developer token state
-	let creatingToken = $state(false);
-	let developerToken = $state<string | null>(null);
-	let tokenExpiresDays = $state(90);
-	let tokenName = $state('');
-	let tokenCopied = $state(false);
-
-	// existing tokens list
-	interface TokenInfo {
-		session_id: string;
-		name: string | null;
-		created_at: string;
-		expires_at: string | null;
-	}
-	let existingTokens = $state<TokenInfo[]>([]);
-	let loadingTokens = $state(false);
-	let revokingToken = $state<string | null>(null);
-
 	onMount(async () => {
-		// check if exchange_token is in URL (from OAuth callback)
+		// check if exchange_token is in URL (from OAuth callback for regular login)
 		const params = new URLSearchParams(window.location.search);
 		const exchangeToken = params.get('exchange_token');
 		const isDevToken = params.get('dev_token') === 'true';
 
+		// redirect dev token callbacks to settings page
+		if (exchangeToken && isDevToken) {
+			window.location.href = `/settings?exchange_token=${exchangeToken}&dev_token=true`;
+			return;
+		}
+
 		if (exchangeToken) {
-			// exchange token for session_id
+			// regular login - exchange token for session
 			try {
 				const exchangeResponse = await fetch(`${API_URL}/auth/exchange`, {
 					method: 'POST',
@@ -91,27 +68,17 @@
 				});
 
 				if (exchangeResponse.ok) {
-					const data = await exchangeResponse.json();
-
-					if (isDevToken) {
-						// this is a developer token - display it to the user
-						developerToken = data.session_id;
-						toast.success('developer token created - save it now!');
-					} else {
-						// regular login - initialize auth and refresh preferences
-						await auth.initialize();
-						await preferences.fetch();
-					}
+					await auth.initialize();
+					await preferences.fetch();
 				}
 			} catch (_e) {
 				console.error('failed to exchange token:', _e);
 			}
 
-			// remove exchange_token from URL
 			replaceState('/portal', {});
 		}
 
-		// wait for auth to finish loading (synced from layout)
+		// wait for auth to finish loading
 		while (auth.loading) {
 			await new Promise(resolve => setTimeout(resolve, 50));
 		}
@@ -125,7 +92,6 @@
 			await loadMyTracks();
 			await loadArtistProfile();
 			await loadMyAlbums();
-			await loadDeveloperTokens();
 		} catch (_e) {
 			console.error('error loading portal data:', _e);
 			error = 'failed to load portal data';
@@ -133,23 +99,6 @@
 			loading = false;
 		}
 	});
-
-	async function loadDeveloperTokens() {
-		loadingTokens = true;
-		try {
-			const response = await fetch(`${API_URL}/auth/developer-tokens`, {
-				credentials: 'include'
-			});
-			if (response.ok) {
-				const data = await response.json();
-				existingTokens = data.tokens;
-			}
-		} catch (_e) {
-			console.error('failed to load developer tokens:', _e);
-		} finally {
-			loadingTokens = false;
-		}
-	}
 
 	async function loadMyTracks() {
 		loadingTracks = true;
@@ -197,37 +146,6 @@
 			console.error('failed to load albums:', _e);
 		} finally {
 			loadingAlbums = false;
-		}
-	}
-
-	async function saveAllowComments(enabled: boolean) {
-		try {
-			await preferences.update({ allow_comments: enabled });
-			toast.success(enabled ? 'comments enabled on your tracks' : 'comments disabled');
-		} catch (_e) {
-			console.error('failed to save preference:', _e);
-			toast.error('failed to update preference');
-		}
-	}
-
-	async function saveTealScrobbling(enabled: boolean) {
-		try {
-			await preferences.update({ enable_teal_scrobbling: enabled });
-			await preferences.fetch(); // refetch to get updated teal_needs_reauth status
-			toast.success(enabled ? 'teal.fm scrobbling enabled' : 'teal.fm scrobbling disabled');
-		} catch (_e) {
-			console.error('failed to save preference:', _e);
-			toast.error('failed to update preference');
-		}
-	}
-
-	async function saveShowSensitiveArtwork(enabled: boolean) {
-		try {
-			await preferences.update({ show_sensitive_artwork: enabled });
-			toast.success(enabled ? 'sensitive artwork shown' : 'sensitive artwork hidden');
-		} catch (_e) {
-			console.error('failed to save preference:', _e);
-			toast.error('failed to update preference');
 		}
 	}
 
@@ -482,135 +400,6 @@
 		}
 	}
 
-	async function createDeveloperToken() {
-		creatingToken = true;
-		developerToken = null;
-		tokenCopied = false;
-
-		try {
-			// start OAuth flow for dev token - this returns an auth URL
-			const response = await fetch(`${API_URL}/auth/developer-token/start`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({
-					name: tokenName || null,
-					expires_in_days: tokenExpiresDays
-				})
-			});
-
-			if (!response.ok) {
-				const error = await response.json();
-				toast.error(error.detail || 'failed to start token creation');
-				creatingToken = false;
-				return;
-			}
-
-			const result = await response.json();
-			tokenName = ''; // clear the name field
-
-			// redirect to PDS for authorization
-			// on callback, user will return with dev_token=true and the token will be displayed
-			window.location.href = result.auth_url;
-		} catch (e) {
-			console.error('failed to create token:', e);
-			toast.error('failed to create token');
-			creatingToken = false;
-		}
-		// note: we don't set creatingToken = false here because we're redirecting
-	}
-
-	async function revokeToken(tokenId: string, name: string | null) {
-		if (!confirm(`revoke token "${name || tokenId}"?`)) return;
-
-		revokingToken = tokenId;
-		try {
-			const response = await fetch(`${API_URL}/auth/developer-tokens/${tokenId}`, {
-				method: 'DELETE',
-				credentials: 'include'
-			});
-
-			if (!response.ok) {
-				const error = await response.json();
-				toast.error(error.detail || 'failed to revoke token');
-				return;
-			}
-
-			toast.success('token revoked');
-			await loadDeveloperTokens();
-		} catch (e) {
-			console.error('failed to revoke token:', e);
-			toast.error('failed to revoke token');
-		} finally {
-			revokingToken = null;
-		}
-	}
-
-	async function copyToken() {
-		if (!developerToken) return;
-		try {
-			await navigator.clipboard.writeText(developerToken);
-			tokenCopied = true;
-			toast.success('token copied to clipboard');
-			setTimeout(() => { tokenCopied = false; }, 2000);
-		} catch (e) {
-			console.error('failed to copy:', e);
-			toast.error('failed to copy token');
-		}
-	}
-
-	async function deleteAccount() {
-		if (!auth.user || deleteConfirmText !== auth.user.handle) return;
-
-		deleting = true;
-		const toastId = toast.info('deleting account...', 0);
-
-		try {
-			const response = await fetch(`${API_URL}/account/`, {
-				method: 'DELETE',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({
-					confirmation: deleteConfirmText,
-					delete_atproto_records: deleteAtprotoRecords
-				})
-			});
-
-			if (!response.ok) {
-				const error = await response.json();
-				toast.dismiss(toastId);
-				toast.error(error.detail || 'failed to delete account');
-				deleting = false;
-				return;
-			}
-
-			const result = await response.json();
-			toast.dismiss(toastId);
-
-			// show summary of what was deleted
-			const { deleted } = result;
-			const summary = [
-				deleted.tracks && `${deleted.tracks} tracks`,
-				deleted.albums && `${deleted.albums} albums`,
-				deleted.likes && `${deleted.likes} likes`,
-				deleted.comments && `${deleted.comments} comments`,
-				deleted.atproto_records && `${deleted.atproto_records} ATProto records`
-			].filter(Boolean).join(', ');
-
-			toast.success(`account deleted: ${summary || 'all data removed'}`);
-
-			// redirect to home after a moment
-			setTimeout(() => {
-				window.location.href = '/';
-			}, 2000);
-
-		} catch (e) {
-			console.error('delete failed:', e);
-			toast.dismiss(toastId);
-			toast.error('failed to delete account');
-			deleting = false;
-		}
-	}
 </script>
 
 {#if loading}
@@ -1020,72 +809,9 @@
 		</section>
 
 		<section class="data-section">
-			<h2>your data</h2>
-
-			<div class="data-control">
-				<div class="control-info">
-					<h3>teal.fm scrobbling</h3>
-					<p class="control-description">
-						track your listens as <a href="https://pdsls.dev/at://{auth.user?.did}/fm.teal.alpha.feed.play" target="_blank" rel="noopener">fm.teal.alpha.feed.play</a> records
-					</p>
-				</div>
-				<label class="toggle-switch">
-					<input
-						type="checkbox"
-						aria-label="Enable teal.fm scrobbling"
-						checked={enableTealScrobbling}
-						onchange={(e) => saveTealScrobbling((e.target as HTMLInputElement).checked)}
-					/>
-					<span class="toggle-slider"></span>
-					<span class="toggle-label">{enableTealScrobbling ? 'enabled' : 'disabled'}</span>
-				</label>
-			</div>
-			{#if tealNeedsReauth}
-				<div class="reauth-notice">
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<circle cx="12" cy="12" r="10" />
-						<path d="M12 16v-4M12 8h.01" />
-					</svg>
-					<span>please log out and back in to connect teal.fm</span>
-				</div>
-			{/if}
-
-			<div class="data-control">
-				<div class="control-info">
-					<h3>timed comments</h3>
-					<p class="control-description">
-						allow other users to leave comments on your tracks
-					</p>
-				</div>
-				<label class="toggle-switch">
-					<input
-						type="checkbox"
-						aria-label="Allow timed comments on your tracks"
-						checked={allowComments}
-						onchange={(e) => saveAllowComments((e.target as HTMLInputElement).checked)}
-					/>
-					<span class="toggle-slider"></span>
-					<span class="toggle-label">{allowComments ? 'enabled' : 'disabled'}</span>
-				</label>
-			</div>
-
-			<div class="data-control">
-				<div class="control-info">
-					<h3>sensitive artwork</h3>
-					<p class="control-description">
-						show artwork that has been flagged as sensitive (nudity, etc.)
-					</p>
-				</div>
-				<label class="toggle-switch">
-					<input
-						type="checkbox"
-						aria-label="Show sensitive artwork"
-						checked={showSensitiveArtwork}
-						onchange={(e) => saveShowSensitiveArtwork((e.target as HTMLInputElement).checked)}
-					/>
-					<span class="toggle-slider"></span>
-					<span class="toggle-label">{showSensitiveArtwork ? 'shown' : 'hidden'}</span>
-				</label>
+			<div class="section-header">
+				<h2>your data</h2>
+				<a href="/settings" class="settings-link">all settings →</a>
 			</div>
 
 			{#if tracks.length > 0}
@@ -1105,173 +831,6 @@
 					</button>
 				</div>
 			{/if}
-
-			<div class="data-control developer-section">
-				<div class="control-info">
-					<h3>developer tokens</h3>
-					<p class="control-description">
-						create tokens for programmatic API access (uploads, track management).
-						use with the <a href="https://github.com/zzstoatzz/plyr-python-client" target="_blank" rel="noopener">python SDK</a>
-					</p>
-				</div>
-
-				{#if loadingTokens}
-					<p class="loading-tokens">loading tokens...</p>
-				{:else if existingTokens.length > 0}
-					<div class="existing-tokens">
-						<h4 class="tokens-header">active tokens</h4>
-						<div class="tokens-list">
-							{#each existingTokens as token}
-								<div class="token-item">
-									<div class="token-info">
-										<span class="token-name">{token.name || `token_${token.session_id}`}</span>
-										<span class="token-meta">
-											created {new Date(token.created_at).toLocaleDateString()}
-											{#if token.expires_at}
-												· expires {new Date(token.expires_at).toLocaleDateString()}
-											{:else}
-												· never expires
-											{/if}
-										</span>
-									</div>
-									<button
-										class="revoke-btn"
-										onclick={() => revokeToken(token.session_id, token.name)}
-										disabled={revokingToken === token.session_id}
-										title="revoke token"
-									>
-										{revokingToken === token.session_id ? '...' : 'revoke'}
-									</button>
-								</div>
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				{#if developerToken}
-					<div class="token-display">
-						<code class="token-value">{developerToken}</code>
-						<button
-							class="copy-btn"
-							onclick={copyToken}
-							title="copy token"
-						>
-							{tokenCopied ? '✓' : 'copy'}
-						</button>
-						<button
-							class="dismiss-btn"
-							onclick={() => developerToken = null}
-							title="dismiss"
-						>
-							✕
-						</button>
-					</div>
-					<p class="token-warning">
-						save this token now - you won't be able to see it again
-					</p>
-				{:else}
-					<div class="token-form">
-						<input
-							type="text"
-							class="token-name-input"
-							bind:value={tokenName}
-							placeholder="token name (optional)"
-							disabled={creatingToken}
-						/>
-						<label class="expires-label">
-							<span>expires in</span>
-							<select bind:value={tokenExpiresDays} class="expires-select">
-								<option value={30}>30 days</option>
-								<option value={90}>90 days</option>
-								<option value={180}>180 days</option>
-								<option value={365}>1 year</option>
-								<option value={0}>never</option>
-							</select>
-						</label>
-						<button
-							class="create-token-btn"
-							onclick={createDeveloperToken}
-							disabled={creatingToken}
-						>
-							{creatingToken ? 'creating...' : 'create token'}
-						</button>
-					</div>
-				{/if}
-			</div>
-
-			<div class="data-control danger-zone">
-				<div class="control-info">
-					<h3>delete account</h3>
-					<p class="control-description">
-						permanently delete all your data from plyr.fm.
-						<a href="https://github.com/zzstoatzz/plyr.fm/blob/main/docs/offboarding.md#account-deletion" target="_blank" rel="noopener">learn more</a>
-					</p>
-				</div>
-				{#if !showDeleteConfirm}
-					<button
-						class="delete-account-btn"
-						onclick={() => showDeleteConfirm = true}
-					>
-						delete account
-					</button>
-				{:else}
-					<div class="delete-confirm-panel">
-						<p class="delete-warning">
-							this will permanently delete all your tracks, albums, likes, and comments from plyr.fm. this cannot be undone.
-						</p>
-
-						<div class="atproto-section">
-							<label class="atproto-option">
-								<input
-									type="checkbox"
-									bind:checked={deleteAtprotoRecords}
-								/>
-								<span>also delete records from my ATProto repo</span>
-							</label>
-							<p class="atproto-note">
-								you can manage your PDS records directly via <a href="https://pdsls.dev/at://{auth.user?.did}" target="_blank" rel="noopener">pdsls.dev</a>, or let us clean them up for you.
-							</p>
-							{#if deleteAtprotoRecords}
-								<p class="atproto-warning">
-									this removes track, like, and comment records from your PDS. other users' likes and comments that reference your tracks will become orphaned (pointing to records that no longer exist).
-								</p>
-							{/if}
-						</div>
-
-						<p class="confirm-prompt">
-							type <strong>{auth.user?.handle}</strong> to confirm:
-						</p>
-						<input
-							type="text"
-							class="confirm-input"
-							bind:value={deleteConfirmText}
-							placeholder={auth.user?.handle}
-							disabled={deleting}
-						/>
-
-						<div class="delete-actions">
-							<button
-								class="cancel-btn"
-								onclick={() => {
-									showDeleteConfirm = false;
-									deleteConfirmText = '';
-									deleteAtprotoRecords = false;
-								}}
-								disabled={deleting}
-							>
-								cancel
-							</button>
-							<button
-								class="confirm-delete-btn"
-								onclick={deleteAccount}
-								disabled={deleting || deleteConfirmText !== auth.user?.handle}
-							>
-								{deleting ? 'deleting...' : 'delete everything'}
-							</button>
-						</div>
-					</div>
-				{/if}
-			</div>
 		</section>
 	</main>
 {/if}
@@ -1347,6 +906,24 @@
 	}
 
 	.view-profile-link:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+		background: var(--bg-hover);
+	}
+
+	.settings-link {
+		color: var(--text-secondary);
+		text-decoration: none;
+		font-size: 0.8rem;
+		padding: 0.35rem 0.6rem;
+		background: var(--bg-tertiary);
+		border-radius: 5px;
+		border: 1px solid var(--border-default);
+		transition: all 0.15s;
+		white-space: nowrap;
+	}
+
+	.settings-link:hover {
 		border-color: var(--accent);
 		color: var(--accent);
 		background: var(--bg-hover);
@@ -2146,27 +1723,6 @@
 		line-height: 1.4;
 	}
 
-	.control-description a {
-		color: var(--accent);
-	}
-
-	.reauth-notice {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.6rem 0.75rem;
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
-		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-		border-radius: 6px;
-		color: var(--accent);
-		font-size: 0.8rem;
-		margin-top: -0.5rem;
-	}
-
-	.reauth-notice svg {
-		flex-shrink: 0;
-	}
-
 	.export-btn {
 		padding: 0.6rem 1.25rem;
 		background: var(--accent);
@@ -2191,455 +1747,6 @@
 		opacity: 0.5;
 		cursor: not-allowed;
 		transform: none;
-	}
-
-	/* danger zone / account deletion */
-	.danger-zone {
-		border-color: color-mix(in srgb, var(--error) 30%, var(--bg-tertiary));
-		background: color-mix(in srgb, var(--error) 8%, var(--bg-tertiary));
-		flex-direction: column;
-		align-items: stretch;
-	}
-
-	.danger-zone .control-info h3 {
-		color: var(--error);
-	}
-
-	.danger-zone .control-description a {
-		color: var(--text-tertiary);
-		text-decoration: underline;
-	}
-
-	.danger-zone .control-description a:hover {
-		color: var(--text-secondary);
-	}
-
-	.delete-account-btn {
-		padding: 0.6rem 1.25rem;
-		background: transparent;
-		color: var(--error);
-		border: 1px solid var(--error);
-		border-radius: 6px;
-		font-size: 0.9rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s;
-		align-self: flex-end;
-	}
-
-	.delete-account-btn:hover {
-		background: var(--error);
-		color: var(--text-primary);
-	}
-
-	.delete-confirm-panel {
-		margin-top: 1rem;
-		padding-top: 1rem;
-		border-top: 1px solid color-mix(in srgb, var(--error) 25%, var(--bg-tertiary));
-	}
-
-	.delete-warning {
-		color: color-mix(in srgb, var(--error) 80%, white);
-		font-size: 0.9rem;
-		margin: 0 0 1rem 0;
-		line-height: 1.5;
-	}
-
-	.atproto-section {
-		margin-bottom: 1rem;
-	}
-
-	.atproto-option {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.9rem;
-		color: var(--text-secondary);
-		cursor: pointer;
-	}
-
-	.atproto-option input {
-		width: 16px;
-		height: 16px;
-		cursor: pointer;
-	}
-
-	.atproto-note {
-		margin: 0.5rem 0 0 0;
-		font-size: 0.85rem;
-		color: var(--text-muted);
-	}
-
-	.atproto-note a {
-		color: var(--text-tertiary);
-		text-decoration: underline;
-	}
-
-	.atproto-note a:hover {
-		color: var(--text-secondary);
-	}
-
-	.atproto-warning {
-		margin: 0.75rem 0 0 0;
-		padding: 0.75rem;
-		background: color-mix(in srgb, var(--error) 10%, transparent);
-		border-left: 2px solid var(--error);
-		font-size: 0.85rem;
-		color: color-mix(in srgb, var(--error) 70%, var(--text-secondary));
-		line-height: 1.5;
-	}
-
-	.confirm-prompt {
-		font-size: 0.9rem;
-		color: var(--text-tertiary);
-		margin: 0 0 0.5rem 0;
-	}
-
-	.confirm-prompt strong {
-		color: var(--text-primary);
-		font-family: monospace;
-	}
-
-	.confirm-input {
-		width: 100%;
-		padding: 0.75rem;
-		background: color-mix(in srgb, var(--error) 5%, var(--bg-primary));
-		border: 1px solid color-mix(in srgb, var(--error) 25%, var(--bg-tertiary));
-		border-radius: 6px;
-		color: var(--text-primary);
-		font-size: 0.9rem;
-		font-family: monospace;
-		margin-bottom: 1rem;
-	}
-
-	.confirm-input:focus {
-		outline: none;
-		border-color: var(--error);
-	}
-
-	.confirm-input::placeholder {
-		color: var(--text-muted);
-	}
-
-	.delete-actions {
-		display: flex;
-		gap: 0.75rem;
-		justify-content: flex-end;
-	}
-
-	.cancel-btn {
-		padding: 0.6rem 1.25rem;
-		background: transparent;
-		color: var(--text-tertiary);
-		border: 1px solid var(--border-emphasis);
-		border-radius: 6px;
-		font-size: 0.9rem;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.cancel-btn:hover:not(:disabled) {
-		border-color: var(--text-muted);
-		color: var(--text-secondary);
-	}
-
-	.cancel-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.confirm-delete-btn {
-		padding: 0.6rem 1.25rem;
-		background: var(--error);
-		color: var(--text-primary);
-		border: none;
-		border-radius: 6px;
-		font-size: 0.9rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.confirm-delete-btn:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--error) 80%, black);
-	}
-
-	.confirm-delete-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.toggle-switch {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		cursor: pointer;
-		flex-shrink: 0;
-	}
-
-	.toggle-switch input {
-		display: none;
-	}
-
-	.toggle-slider {
-		width: 44px;
-		height: 24px;
-		background: var(--border-default);
-		border-radius: 12px;
-		position: relative;
-		transition: background 0.2s;
-	}
-
-	.toggle-slider::after {
-		content: '';
-		position: absolute;
-		top: 2px;
-		left: 2px;
-		width: 20px;
-		height: 20px;
-		background: var(--text-tertiary);
-		border-radius: 50%;
-		transition: all 0.2s;
-	}
-
-	.toggle-switch input:checked + .toggle-slider {
-		background: var(--accent);
-	}
-
-	.toggle-switch input:checked + .toggle-slider::after {
-		left: 22px;
-		background: var(--text-primary);
-	}
-
-	.toggle-label {
-		font-size: 0.85rem;
-		color: var(--text-tertiary);
-		min-width: 60px;
-	}
-
-	/* developer token section */
-	.developer-section {
-		flex-direction: column;
-		align-items: stretch;
-		gap: 1rem;
-	}
-
-	.developer-section .control-info h3 {
-		color: var(--accent);
-	}
-
-	.token-form {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-		width: 100%;
-	}
-
-	.token-form .create-token-btn {
-		margin-left: auto;
-	}
-
-	.expires-label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.9rem;
-		color: var(--text-tertiary);
-	}
-
-	.expires-select {
-		padding: 0.5rem 0.75rem;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-default);
-		border-radius: 4px;
-		color: var(--text-primary);
-		font-size: 0.9rem;
-		font-family: inherit;
-		cursor: pointer;
-	}
-
-	.expires-select:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-
-	.create-token-btn {
-		padding: 0.6rem 1.25rem;
-		background: var(--accent);
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-size: 0.9rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s;
-		white-space: nowrap;
-		width: auto;
-	}
-
-	.create-token-btn:hover:not(:disabled) {
-		filter: brightness(1.1);
-		transform: translateY(-1px);
-	}
-
-	.create-token-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-		transform: none;
-	}
-
-	.token-display {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-default);
-		border-radius: 6px;
-		padding: 0.75rem;
-		overflow: hidden;
-	}
-
-	.token-value {
-		flex: 1;
-		font-family: monospace;
-		font-size: 0.85rem;
-		color: var(--success);
-		word-break: break-all;
-		user-select: all;
-	}
-
-	.copy-btn,
-	.dismiss-btn {
-		padding: 0.4rem 0.75rem;
-		background: var(--border-subtle);
-		border: 1px solid var(--border-emphasis);
-		border-radius: 4px;
-		color: var(--text-tertiary);
-		font-size: 0.85rem;
-		cursor: pointer;
-		transition: all 0.2s;
-		width: auto;
-	}
-
-	.copy-btn:hover {
-		background: var(--border-emphasis);
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
-	.dismiss-btn:hover {
-		background: var(--border-emphasis);
-		border-color: var(--text-muted);
-		color: var(--text-secondary);
-	}
-
-	.token-warning {
-		font-size: 0.85rem;
-		color: var(--warning);
-		margin: 0;
-	}
-
-	/* existing tokens list */
-	.existing-tokens {
-		width: 100%;
-		margin-bottom: 1rem;
-	}
-
-	.tokens-header {
-		font-size: 0.9rem;
-		font-weight: 600;
-		color: var(--text-tertiary);
-		margin: 0 0 0.75rem 0;
-	}
-
-	.tokens-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.token-item {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 1rem;
-		padding: 0.75rem;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-subtle);
-		border-radius: 6px;
-	}
-
-	.token-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		min-width: 0;
-		flex: 1;
-	}
-
-	.token-name {
-		font-family: monospace;
-		font-size: 0.9rem;
-		color: var(--text-primary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.token-meta {
-		font-size: 0.8rem;
-		color: var(--text-muted);
-	}
-
-	.revoke-btn {
-		padding: 0.4rem 0.75rem;
-		background: transparent;
-		border: 1px solid color-mix(in srgb, var(--error) 30%, var(--bg-tertiary));
-		border-radius: 4px;
-		color: var(--error);
-		font-size: 0.85rem;
-		cursor: pointer;
-		transition: all 0.2s;
-		width: auto;
-		flex-shrink: 0;
-	}
-
-	.revoke-btn:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--error) 10%, transparent);
-		border-color: var(--error);
-	}
-
-	.revoke-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.token-name-input {
-		padding: 0.5rem 0.75rem;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-default);
-		border-radius: 4px;
-		color: var(--text-primary);
-		font-size: 0.9rem;
-		font-family: inherit;
-		min-width: 150px;
-	}
-
-	.token-name-input:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-
-	.token-name-input:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.loading-tokens {
-		font-size: 0.9rem;
-		color: var(--text-muted);
-		margin: 0;
 	}
 
 	/* mobile responsive */
@@ -2827,128 +1934,6 @@
 		}
 
 		.export-btn {
-			padding: 0.5rem 0.85rem;
-			font-size: 0.8rem;
-		}
-
-		.toggle-switch {
-			gap: 0.5rem;
-		}
-
-		.toggle-slider {
-			width: 40px;
-			height: 22px;
-		}
-
-		.toggle-slider::after {
-			width: 18px;
-			height: 18px;
-		}
-
-		.toggle-switch input:checked + .toggle-slider::after {
-			left: 20px;
-		}
-
-		.toggle-label {
-			font-size: 0.75rem;
-			min-width: auto;
-		}
-
-		/* developer section mobile */
-		.token-form {
-			gap: 0.75rem;
-		}
-
-		.token-name-input {
-			min-width: 100px;
-			font-size: 0.85rem;
-			padding: 0.45rem 0.6rem;
-		}
-
-		.expires-label {
-			font-size: 0.8rem;
-		}
-
-		.expires-select {
-			font-size: 0.8rem;
-			padding: 0.4rem 0.6rem;
-		}
-
-		.create-token-btn {
-			padding: 0.5rem 0.85rem;
-			font-size: 0.8rem;
-		}
-
-		.token-display {
-			gap: 0.5rem;
-		}
-
-		.token-value {
-			font-size: 0.75rem;
-			padding: 0.5rem;
-		}
-
-		.copy-btn,
-		.dismiss-btn {
-			padding: 0.35rem 0.6rem;
-			font-size: 0.75rem;
-		}
-
-		.token-warning {
-			font-size: 0.75rem;
-		}
-
-		.tokens-header {
-			font-size: 0.8rem;
-		}
-
-		.token-item {
-			padding: 0.6rem;
-			gap: 0.5rem;
-		}
-
-		.token-name {
-			font-size: 0.8rem;
-		}
-
-		.token-meta {
-			font-size: 0.7rem;
-		}
-
-		.revoke-btn {
-			padding: 0.35rem 0.6rem;
-			font-size: 0.75rem;
-		}
-
-		/* danger zone mobile */
-		.delete-account-btn {
-			padding: 0.5rem 0.85rem;
-			font-size: 0.8rem;
-		}
-
-		.delete-warning {
-			font-size: 0.8rem;
-		}
-
-		.atproto-option {
-			font-size: 0.8rem;
-		}
-
-		.atproto-note,
-		.atproto-warning {
-			font-size: 0.75rem;
-		}
-
-		.confirm-prompt {
-			font-size: 0.8rem;
-		}
-
-		.confirm-input {
-			font-size: 0.85rem;
-			padding: 0.6rem;
-		}
-
-		.delete-actions button {
 			padding: 0.5rem 0.85rem;
 			font-size: 0.8rem;
 		}

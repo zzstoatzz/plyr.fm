@@ -23,7 +23,7 @@
 	{@render children()}
 	{#if shouldBlur && !compact}
 		<div class="sensitive-tooltip">
-			<span>sensitive - enable in portal</span>
+			<span>sensitive - enable in settings</span>
 		</div>
 	{/if}
 </div>

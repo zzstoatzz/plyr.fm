@@ -250,6 +250,10 @@
 							<span class="toggle-text">auto-play next</span>
 						</label>
 					</section>
+
+					<a href="/settings" class="all-settings-link" onclick={closeMenu}>
+						all settings →
+					</a>
 				</div>
 			{/if}
 		</div>
@@ -618,6 +622,22 @@
 
 	.toggle-text {
 		white-space: nowrap;
+	}
+
+	.all-settings-link {
+		display: block;
+		text-align: center;
+		padding: 1rem;
+		margin-top: 0.5rem;
+		border-top: 1px solid var(--border-subtle);
+		color: var(--text-secondary);
+		text-decoration: none;
+		font-size: 0.9rem;
+		transition: color 0.15s;
+	}
+
+	.all-settings-link:hover {
+		color: var(--accent);
 	}
 
 	@keyframes fadeIn {
