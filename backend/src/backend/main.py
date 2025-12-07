@@ -38,6 +38,7 @@ from backend.api import (
     search_router,
     stats_router,
     tracks_router,
+    users_router,
 )
 from backend.api.albums import router as albums_router
 from backend.api.migration import router as migration_router
@@ -206,6 +207,7 @@ app.include_router(exports_router)
 app.include_router(moderation_router)
 app.include_router(oembed_router)
 app.include_router(stats_router)
+app.include_router(users_router)
 
 
 @app.get("/health")

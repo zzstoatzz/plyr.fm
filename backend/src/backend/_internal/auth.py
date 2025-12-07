@@ -453,6 +453,28 @@ async def require_auth(
     return session
 
 
+async def get_optional_session(
+    authorization: Annotated[str | None, Header()] = None,
+    session_id: Annotated[str | None, Cookie(alias="session_id")] = None,
+) -> Session | None:
+    """fastapi dependency to optionally get the current session.
+
+    returns None if not authenticated, otherwise returns the session.
+    useful for public endpoints that show additional info for logged-in users.
+    """
+    session_id_value = None
+
+    if session_id:
+        session_id_value = session_id
+    elif authorization and authorization.startswith("Bearer "):
+        session_id_value = authorization.removeprefix("Bearer ")
+
+    if not session_id_value:
+        return None
+
+    return await get_session(session_id_value)
+
+
 async def require_artist_profile(
     authorization: Annotated[str | None, Header()] = None,
     session_id: Annotated[str | None, Cookie(alias="session_id")] = None,
