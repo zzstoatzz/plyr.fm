@@ -670,46 +670,6 @@ def build_profile_record(
     return record
 
 
-async def check_profile_record_sync_needed(
-    auth_session: AuthSession,
-    bio: str | None = None,
-) -> bool:
-    """Check if profile record needs to be synced to ATProto.
-
-    returns True if:
-    - record doesn't exist yet, or
-    - record exists but bio differs
-
-    returns False if record exists with same bio (no sync needed).
-    """
-    try:
-        oauth_data = auth_session.oauth_session
-        if oauth_data and "pds_url" in oauth_data:
-            oauth_session = _reconstruct_oauth_session(oauth_data)
-            url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
-            params = {
-                "repo": auth_session.did,
-                "collection": settings.atproto.profile_collection,
-                "rkey": "self",
-            }
-            response = await oauth_client.make_authenticated_request(
-                session=oauth_session,
-                method="GET",
-                url=url,
-                params=params,
-            )
-            if response.status_code == 200:
-                existing = response.json()
-                existing_bio = existing.get("value", {}).get("bio")
-                # record exists - check if bio matches
-                return existing_bio != bio
-    except Exception:
-        pass
-
-    # record doesn't exist or error - sync needed
-    return True
-
-
 async def upsert_profile_record(
     auth_session: AuthSession,
     bio: str | None = None,
