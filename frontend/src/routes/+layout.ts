@@ -20,7 +20,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	theme: 'dark',
 	enable_teal_scrobbling: false,
 	teal_needs_reauth: false,
-	show_sensitive_artwork: false
+	show_sensitive_artwork: false,
+	show_liked_on_profile: false
 };
 
 export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
@@ -59,7 +60,8 @@ export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
 						theme: prefsData.theme ?? 'dark',
 						enable_teal_scrobbling: prefsData.enable_teal_scrobbling ?? false,
 						teal_needs_reauth: prefsData.teal_needs_reauth ?? false,
-						show_sensitive_artwork: prefsData.show_sensitive_artwork ?? false
+						show_sensitive_artwork: prefsData.show_sensitive_artwork ?? false,
+						show_liked_on_profile: prefsData.show_liked_on_profile ?? false
 					};
 				}
 			} catch (e) {

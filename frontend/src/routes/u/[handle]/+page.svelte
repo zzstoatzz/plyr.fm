@@ -12,7 +12,7 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { fetchLikedTracks } from '$lib/tracks.svelte';
+	import { fetchLikedTracks, fetchUserLikes } from '$lib/tracks.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
@@ -49,6 +49,11 @@ $effect(() => {
 	let tracksHydrated = $state(false);
 	let tracksLoading = $state(false);
 
+	// liked tracks section (shown if artist has show_liked_on_profile enabled)
+	let likedTracks = $state<Track[]>([]);
+	let likedTracksLoading = $state(false);
+	let likedTracksLoaded = $state(false);
+
 
 	async function handleLogout() {
 		await auth.logout();
@@ -84,12 +89,31 @@ $effect(() => {
 		}
 	}
 
+	async function loadLikedTracks() {
+		if (!artist?.handle || !artist.show_liked_on_profile || likedTracksLoaded) return;
+
+		likedTracksLoading = true;
+		try {
+			const response = await fetchUserLikes(artist.handle);
+			if (response) {
+				likedTracks = response.tracks;
+			}
+		} catch (_e) {
+			console.error('failed to load liked tracks:', _e);
+		} finally {
+			likedTracksLoading = false;
+			likedTracksLoaded = true;
+		}
+	}
+
 	onMount(() => {
 		// load analytics in background without blocking page render
 		loadAnalytics();
 		primeLikesFromCache();
 		// immediately hydrate tracks client-side for liked state
 		void hydrateTracksWithLikes();
+		// load liked tracks if artist has show_liked_on_profile enabled
+		void loadLikedTracks();
 	});
 
 	async function hydrateTracksWithLikes() {
@@ -343,6 +367,43 @@ $effect(() => {
 						</a>
 					{/each}
 				</div>
+			</section>
+		{/if}
+
+		{#if artist.show_liked_on_profile}
+			<section class="liked-tracks">
+				<div class="section-header">
+					<h2>liked tracks</h2>
+					{#if likedTracksLoading}
+						<span class="tracks-loading">loading…</span>
+					{:else if likedTracks.length > 0}
+						<span>{likedTracks.length} {likedTracks.length === 1 ? 'track' : 'tracks'}</span>
+					{/if}
+				</div>
+				{#if likedTracksLoading}
+					<div class="empty-state">
+						<p class="empty-message">loading liked tracks...</p>
+					</div>
+				{:else if likedTracks.length === 0}
+					<div class="empty-state">
+						<p class="empty-message">no liked tracks yet</p>
+						<p class="empty-detail">
+							{artist.display_name} hasn't liked any tracks on {APP_NAME}.
+						</p>
+					</div>
+				{:else}
+					<div class="track-list">
+						{#each likedTracks as track, i}
+							<TrackItem
+								{track}
+								index={i}
+								isPlaying={player.currentTrack?.id === track.id}
+								onPlay={(t) => queue.playNow(t)}
+								isAuthenticated={auth.isAuthenticated}
+							/>
+						{/each}
+					</div>
+				{/if}
 			</section>
 		{/if}
 	</main>
@@ -777,5 +838,25 @@ $effect(() => {
 		.album-grid {
 			grid-template-columns: 1fr;
 		}
+	}
+
+	.liked-tracks {
+		margin-top: 2rem;
+	}
+
+	.liked-tracks h2 {
+		margin-bottom: 1.5rem;
+		color: var(--text-primary);
+		font-size: 1.8rem;
+	}
+
+	.albums {
+		margin-top: 2rem;
+	}
+
+	.albums h2 {
+		margin-bottom: 1.5rem;
+		color: var(--text-primary);
+		font-size: 1.8rem;
 	}
 </style>

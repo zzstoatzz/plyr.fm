@@ -60,6 +60,7 @@ export interface Artist {
 	display_name: string;
 	avatar_url?: string;
 	bio?: string;
+	show_liked_on_profile?: boolean;
 }
 
 export interface QueueState {

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend._internal.atproto import fetch_user_avatar, normalize_avatar_url
-from backend.models import Artist, Track, TrackLike, get_db
+from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,7 @@ class ArtistResponse(BaseModel):
     avatar_url: str | None
     created_at: datetime
     updated_at: datetime
+    show_liked_on_profile: bool = False
 
     @field_validator("avatar_url", mode="before")
     @classmethod
@@ -182,7 +183,17 @@ async def get_artist_profile_by_handle(
     artist = result.scalar_one_or_none()
     if not artist:
         raise HTTPException(status_code=404, detail="artist not found")
-    return ArtistResponse.model_validate(artist)
+
+    # fetch user preference for showing liked tracks
+    prefs_result = await db.execute(
+        select(UserPreferences).where(UserPreferences.did == artist.did)
+    )
+    prefs = prefs_result.scalar_one_or_none()
+    show_liked = prefs.show_liked_on_profile if prefs else False
+
+    response = ArtistResponse.model_validate(artist)
+    response.show_liked_on_profile = show_liked
+    return response
 
 
 @router.get("/{did}")
@@ -194,7 +205,17 @@ async def get_artist_profile_by_did(
     artist = result.scalar_one_or_none()
     if not artist:
         raise HTTPException(status_code=404, detail="artist not found")
-    return ArtistResponse.model_validate(artist)
+
+    # fetch user preference for showing liked tracks
+    prefs_result = await db.execute(
+        select(UserPreferences).where(UserPreferences.did == artist.did)
+    )
+    prefs = prefs_result.scalar_one_or_none()
+    show_liked = prefs.show_liked_on_profile if prefs else False
+
+    response = ArtistResponse.model_validate(artist)
+    response.show_liked_on_profile = show_liked
+    return response
 
 
 @router.get("/{artist_did}/analytics")

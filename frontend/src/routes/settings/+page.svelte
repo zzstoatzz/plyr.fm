@@ -16,6 +16,7 @@
 	let enableTealScrobbling = $derived(preferences.enableTealScrobbling);
 	let tealNeedsReauth = $derived(preferences.tealNeedsReauth);
 	let showSensitiveArtwork = $derived(preferences.showSensitiveArtwork);
+	let showLikedOnProfile = $derived(preferences.showLikedOnProfile);
 	let currentTheme = $derived(preferences.theme);
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let autoAdvance = $derived(preferences.autoAdvance);
@@ -167,6 +168,16 @@
 		try {
 			await preferences.update({ show_sensitive_artwork: enabled });
 			toast.success(enabled ? 'sensitive artwork shown' : 'sensitive artwork hidden');
+		} catch (_e) {
+			console.error('failed to save preference:', _e);
+			toast.error('failed to update preference');
+		}
+	}
+
+	async function saveShowLikedOnProfile(enabled: boolean) {
+		try {
+			await preferences.update({ show_liked_on_profile: enabled });
+			toast.success(enabled ? 'liked tracks shown on profile' : 'liked tracks hidden from profile');
 		} catch (_e) {
 			console.error('failed to save preference:', _e);
 			toast.error('failed to update preference');
@@ -373,6 +384,21 @@
 							type="checkbox"
 							checked={allowComments}
 							onchange={(e) => saveAllowComments((e.target as HTMLInputElement).checked)}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>show liked on profile</h3>
+						<p>display your liked tracks on your artist page for others to see</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={showLikedOnProfile}
+							onchange={(e) => saveShowLikedOnProfile((e.target as HTMLInputElement).checked)}
 						/>
 						<span class="toggle-slider"></span>
 					</label>
