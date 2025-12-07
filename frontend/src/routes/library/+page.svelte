@@ -2,6 +2,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { goto } from '$app/navigation';
+	import { API_URL } from '$lib/config';
 	import type { PageData } from './$types';
 	import type { Playlist } from '$lib/types';
 
@@ -27,7 +28,7 @@
 		error = '';
 
 		try {
-			const response = await fetch('/api/lists/playlists', {
+			const response = await fetch(`${API_URL}/lists/playlists`, {
 				method: 'POST',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json' },
@@ -492,6 +493,7 @@
 	.confirm-btn {
 		padding: 0.625rem 1.25rem;
 		border-radius: 8px;
+		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 500;
 		cursor: pointer;

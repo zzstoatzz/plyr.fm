@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { redirect, error } from '@sveltejs/kit';
+import { API_URL } from '$lib/config';
 import type { LoadEvent } from '@sveltejs/kit';
 import type { PlaylistWithTracks } from '$lib/types';
 
@@ -20,7 +21,7 @@ export async function load({ params, parent }: LoadEvent): Promise<PageData> {
 		throw redirect(302, '/');
 	}
 
-	const response = await fetch(`/api/lists/playlists/${params.id}`, {
+	const response = await fetch(`${API_URL}/lists/playlists/${params.id}`, {
 		credentials: 'include'
 	});
 

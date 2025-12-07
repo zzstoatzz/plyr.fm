@@ -2,6 +2,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { goto } from '$app/navigation';
+	import { API_URL } from '$lib/config';
 	import type { PageData } from './$types';
 	import type { PlaylistWithTracks, PlaylistTrack } from '$lib/types';
 
@@ -37,7 +38,7 @@
 		searchError = '';
 
 		try {
-			const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&type=tracks&limit=10`, {
+			const response = await fetch(`${API_URL}/search?q=${encodeURIComponent(searchQuery)}&type=tracks&limit=10`, {
 				credentials: 'include'
 			});
 
@@ -62,7 +63,7 @@
 
 		try {
 			// first fetch full track details to get ATProto URI and CID
-			const trackResponse = await fetch(`/api/tracks/${track.id}`, {
+			const trackResponse = await fetch(`${API_URL}/tracks/${track.id}`, {
 				credentials: 'include'
 			});
 
@@ -77,7 +78,7 @@
 			}
 
 			// add to playlist
-			const response = await fetch(`/api/lists/playlists/${playlist.id}/tracks`, {
+			const response = await fetch(`${API_URL}/lists/playlists/${playlist.id}/tracks`, {
 				method: 'POST',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json' },
@@ -121,7 +122,7 @@
 		removingTrack = trackUri;
 
 		try {
-			const response = await fetch(`/api/lists/playlists/${playlist.id}/tracks/${encodeURIComponent(trackUri)}`, {
+			const response = await fetch(`${API_URL}/lists/playlists/${playlist.id}/tracks/${encodeURIComponent(trackUri)}`, {
 				method: 'DELETE',
 				credentials: 'include'
 			});
@@ -145,7 +146,7 @@
 		deleting = true;
 
 		try {
-			const response = await fetch(`/api/lists/playlists/${playlist.id}`, {
+			const response = await fetch(`${API_URL}/lists/playlists/${playlist.id}`, {
 				method: 'DELETE',
 				credentials: 'include'
 			});
@@ -468,6 +469,7 @@
 		color: white;
 		border: none;
 		border-radius: 8px;
+		font-family: inherit;
 		font-size: 0.875rem;
 		font-weight: 500;
 		cursor: pointer;
@@ -634,6 +636,7 @@
 		color: white;
 		border: none;
 		border-radius: 8px;
+		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 500;
 		cursor: pointer;
@@ -854,6 +857,7 @@
 	.confirm-btn {
 		padding: 0.625rem 1.25rem;
 		border-radius: 8px;
+		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 500;
 		cursor: pointer;

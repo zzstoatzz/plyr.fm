@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
 import { redirect } from '@sveltejs/kit';
 import { fetchLikedTracks } from '$lib/tracks.svelte';
+import { API_URL } from '$lib/config';
 import type { LoadEvent } from '@sveltejs/kit';
 import type { Playlist } from '$lib/types';
 
@@ -12,7 +13,7 @@ export interface PageData {
 export const ssr = false;
 
 async function fetchPlaylists(): Promise<Playlist[]> {
-	const response = await fetch('/api/lists/playlists', {
+	const response = await fetch(`${API_URL}/lists/playlists`, {
 		credentials: 'include'
 	});
 	if (!response.ok) {
