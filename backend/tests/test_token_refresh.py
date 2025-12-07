@@ -83,7 +83,7 @@ class TestConcurrentTokenRefresh:
         refresh_call_count = 0
         new_token = "new-refreshed-token"
 
-        async def mock_refresh_session(session: OAuthSession) -> OAuthSession:
+        async def mock_refresh_session(self, session: OAuthSession) -> OAuthSession:
             """mock OAuth client refresh with delay to simulate race."""
             nonlocal refresh_call_count
             refresh_call_count += 1
@@ -108,10 +108,15 @@ class TestConcurrentTokenRefresh:
             """mock session update."""
             mock_auth_session.oauth_session.update(oauth_session_data)
 
+        # create a mock OAuth client with the refresh method
+        mock_oauth_client = type(
+            "MockOAuthClient", (), {"refresh_session": mock_refresh_session}
+        )()
+
         with (
             patch(
-                "backend._internal.atproto.records.oauth_client.refresh_session",
-                side_effect=mock_refresh_session,
+                "backend._internal.atproto.records.get_oauth_client",
+                return_value=mock_oauth_client,
             ),
             patch(
                 "backend._internal.atproto.records.get_session",
@@ -142,7 +147,9 @@ class TestConcurrentTokenRefresh:
         new_token = "new-refreshed-token"
         refresh_called = False
 
-        async def mock_refresh_session_fails(session: OAuthSession) -> OAuthSession:
+        async def mock_refresh_session_fails(
+            self, session: OAuthSession
+        ) -> OAuthSession:
             """mock refresh that always fails."""
             nonlocal refresh_called
             refresh_called = True
@@ -168,10 +175,15 @@ class TestConcurrentTokenRefresh:
             """mock session update."""
             mock_auth_session.oauth_session.update(oauth_session_data)
 
+        # create a mock OAuth client with the failing refresh method
+        mock_oauth_client = type(
+            "MockOAuthClient", (), {"refresh_session": mock_refresh_session_fails}
+        )()
+
         with (
             patch(
-                "backend._internal.atproto.records.oauth_client.refresh_session",
-                side_effect=mock_refresh_session_fails,
+                "backend._internal.atproto.records.get_oauth_client",
+                return_value=mock_oauth_client,
             ),
             patch(
                 "backend._internal.atproto.records.get_session",
@@ -200,7 +212,7 @@ class TestConcurrentTokenRefresh:
         refresh_call_count = 0
         new_token = "already-refreshed-token"
 
-        async def mock_refresh_session(session: OAuthSession) -> OAuthSession:
+        async def mock_refresh_session(self, session: OAuthSession) -> OAuthSession:
             """mock OAuth client refresh."""
             nonlocal refresh_call_count
             refresh_call_count += 1
@@ -227,10 +239,15 @@ class TestConcurrentTokenRefresh:
             """mock session update."""
             mock_auth_session.oauth_session.update(oauth_session_data)
 
+        # create a mock OAuth client with the refresh method
+        mock_oauth_client = type(
+            "MockOAuthClient", (), {"refresh_session": mock_refresh_session}
+        )()
+
         with (
             patch(
-                "backend._internal.atproto.records.oauth_client.refresh_session",
-                side_effect=mock_refresh_session,
+                "backend._internal.atproto.records.get_oauth_client",
+                return_value=mock_oauth_client,
             ),
             patch(
                 "backend._internal.atproto.records.get_session",
