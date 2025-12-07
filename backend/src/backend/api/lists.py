@@ -52,11 +52,22 @@ class PlaylistResponse(BaseModel):
     created_at: str
 
 
+class UnavailableTrack(BaseModel):
+    """placeholder for a track that no longer exists."""
+
+    uri: str
+    """ATProto URI of the unavailable track."""
+    unavailable: bool = True
+    """marker indicating this track is unavailable."""
+
+
 class PlaylistWithTracksResponse(PlaylistResponse):
     """playlist with full track details."""
 
     tracks: list[TrackResponse]
     """ordered list of track details."""
+    unavailable_tracks: list[UnavailableTrack] = []
+    """tracks referenced in the list but no longer available."""
 
 
 class AddTrackRequest(BaseModel):
@@ -406,6 +417,7 @@ async def get_playlist(
 
     # hydrate track metadata from database
     tracks: list[TrackResponse] = []
+    unavailable_tracks: list[UnavailableTrack] = []
     if track_uris:
         from sqlalchemy.orm import selectinload
 
@@ -433,7 +445,7 @@ async def get_playlist(
             )
             liked_track_ids = set(liked_result.scalars().all())
 
-        # maintain ATProto ordering
+        # maintain ATProto ordering, track unavailable references
         for uri in track_uris:
             if uri in track_by_uri:
                 track = track_by_uri[uri]
@@ -445,6 +457,9 @@ async def get_playlist(
                     comment_counts=comment_counts,
                 )
                 tracks.append(track_response)
+            else:
+                # track exists in PDS list but not in our database (deleted)
+                unavailable_tracks.append(UnavailableTrack(uri=uri))
 
     return PlaylistWithTracksResponse(
         id=playlist.id,
@@ -457,6 +472,7 @@ async def get_playlist(
         atproto_record_uri=playlist.atproto_record_uri,
         created_at=playlist.created_at.isoformat(),
         tracks=tracks,
+        unavailable_tracks=unavailable_tracks,
     )
 
 

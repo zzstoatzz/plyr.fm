@@ -12,11 +12,12 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import type { PageData } from './$types';
-	import type { PlaylistWithTracks, Track } from '$lib/types';
+	import type { PlaylistWithTracks, Track, UnavailableTrack } from '$lib/types';
 
 	let { data }: { data: PageData } = $props();
 	let playlist = $state<PlaylistWithTracks>(data.playlist);
 	let tracks = $state<Track[]>(data.playlist.tracks);
+	let unavailableTracks = $state<UnavailableTrack[]>(data.playlist.unavailable_tracks ?? []);
 
 	// search state
 	let showSearch = $state(false);
@@ -683,6 +684,21 @@
 						excludePlaylistId={playlist.id}
 					/>
 				{/if}
+			{/each}
+			{#each unavailableTracks as unavailable (unavailable.uri)}
+				<div class="unavailable-track">
+					<div class="unavailable-icon">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<circle cx="12" cy="12" r="10"></circle>
+							<line x1="12" y1="8" x2="12" y2="12"></line>
+							<line x1="12" y1="16" x2="12.01" y2="16"></line>
+						</svg>
+					</div>
+					<div class="unavailable-info">
+						<span class="unavailable-title">track unavailable</span>
+						<span class="unavailable-reason">this track has been removed</span>
+					</div>
+				</div>
 			{/each}
 			</div>
 			{/if}
@@ -1655,5 +1671,46 @@
 			font-size: 0.8rem;
 			flex-wrap: wrap;
 		}
+	}
+
+	/* unavailable track */
+	.unavailable-track {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.75rem 1rem;
+		background: var(--bg-secondary);
+		border-radius: 8px;
+		opacity: 0.5;
+	}
+
+	.unavailable-icon {
+		width: 40px;
+		height: 40px;
+		border-radius: 6px;
+		background: var(--bg-tertiary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-muted);
+		flex-shrink: 0;
+	}
+
+	.unavailable-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+
+	.unavailable-title {
+		font-size: 0.9rem;
+		font-weight: 500;
+		color: var(--text-tertiary);
+		font-style: italic;
+	}
+
+	.unavailable-reason {
+		font-size: 0.8rem;
+		color: var(--text-muted);
 	}
 </style>
