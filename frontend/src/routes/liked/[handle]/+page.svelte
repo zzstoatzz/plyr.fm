@@ -52,7 +52,7 @@
 		{/if}
 		<div class="user-info">
 			<h1>{displayName}'s liked tracks</h1>
-			<a href="https://bsky.app/profile/{user?.handle}" target="_blank" rel="noopener" class="handle">
+			<a href="/u/{user?.handle}" class="handle">
 				@{user?.handle}
 			</a>
 		</div>

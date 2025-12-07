@@ -58,6 +58,10 @@ class UserPreferences(Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
 
+    # ATProto liked list record (fm.plyr.list with listType="liked")
+    liked_list_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+    liked_list_cid: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

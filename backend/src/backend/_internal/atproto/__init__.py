@@ -13,6 +13,8 @@ from backend._internal.atproto.records import (
     delete_record_by_uri,
     update_comment_record,
     update_list_record,
+    upsert_album_list_record,
+    upsert_liked_list_record,
     upsert_profile_record,
 )
 
@@ -27,5 +29,7 @@ __all__ = [
     "normalize_avatar_url",
     "update_comment_record",
     "update_list_record",
+    "upsert_album_list_record",
+    "upsert_liked_list_record",
     "upsert_profile_record",
 ]

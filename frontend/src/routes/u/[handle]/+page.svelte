@@ -49,10 +49,8 @@ $effect(() => {
 	let tracksHydrated = $state(false);
 	let tracksLoading = $state(false);
 
-	// liked tracks section (shown if artist has show_liked_on_profile enabled)
-	let likedTracks = $state<Track[]>([]);
-	let likedTracksLoading = $state(false);
-	let likedTracksLoaded = $state(false);
+	// liked tracks count (shown if artist has show_liked_on_profile enabled)
+	let likedTracksCount = $state<number | null>(null);
 
 
 	async function handleLogout() {
@@ -89,20 +87,16 @@ $effect(() => {
 		}
 	}
 
-	async function loadLikedTracks() {
-		if (!artist?.handle || !artist.show_liked_on_profile || likedTracksLoaded) return;
+	async function loadLikedTracksCount() {
+		if (!artist?.handle || !artist.show_liked_on_profile || likedTracksCount !== null) return;
 
-		likedTracksLoading = true;
 		try {
 			const response = await fetchUserLikes(artist.handle);
 			if (response) {
-				likedTracks = response.tracks;
+				likedTracksCount = response.tracks.length;
 			}
 		} catch (_e) {
-			console.error('failed to load liked tracks:', _e);
-		} finally {
-			likedTracksLoading = false;
-			likedTracksLoaded = true;
+			console.error('failed to load liked tracks count:', _e);
 		}
 	}
 
@@ -112,8 +106,8 @@ $effect(() => {
 		primeLikesFromCache();
 		// immediately hydrate tracks client-side for liked state
 		void hydrateTracksWithLikes();
-		// load liked tracks if artist has show_liked_on_profile enabled
-		void loadLikedTracks();
+		// load liked tracks count if artist has show_liked_on_profile enabled
+		void loadLikedTracksCount();
 	});
 
 	async function hydrateTracksWithLikes() {
@@ -371,39 +365,30 @@ $effect(() => {
 		{/if}
 
 		{#if artist.show_liked_on_profile}
-			<section class="liked-tracks">
+			<section class="liked-section">
 				<div class="section-header">
-					<h2>liked tracks</h2>
-					{#if likedTracksLoading}
-						<span class="tracks-loading">loading…</span>
-					{:else if likedTracks.length > 0}
-						<span>{likedTracks.length} {likedTracks.length === 1 ? 'track' : 'tracks'}</span>
-					{/if}
+					<h2>collections</h2>
 				</div>
-				{#if likedTracksLoading}
-					<div class="empty-state">
-						<p class="empty-message">loading liked tracks...</p>
+				<a href="/liked/{artist.handle}" class="liked-link">
+					<div class="liked-icon">
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+						</svg>
 					</div>
-				{:else if likedTracks.length === 0}
-					<div class="empty-state">
-						<p class="empty-message">no liked tracks yet</p>
-						<p class="empty-detail">
-							{artist.display_name} hasn't liked any tracks on {APP_NAME}.
-						</p>
+					<div class="liked-info">
+						<h3>liked tracks</h3>
+						{#if likedTracksCount !== null}
+							<p>{likedTracksCount} {likedTracksCount === 1 ? 'track' : 'tracks'}</p>
+						{:else}
+							<p>view collection</p>
+						{/if}
 					</div>
-				{:else}
-					<div class="track-list">
-						{#each likedTracks as track, i}
-							<TrackItem
-								{track}
-								index={i}
-								isPlaying={player.currentTrack?.id === track.id}
-								onPlay={(t) => queue.playNow(t)}
-								isAuthenticated={auth.isAuthenticated}
-							/>
-						{/each}
+					<div class="liked-arrow">
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M9 18l6-6-6-6"/>
+						</svg>
 					</div>
-				{/if}
+				</a>
 			</section>
 		{/if}
 	</main>
@@ -840,14 +825,71 @@ $effect(() => {
 		}
 	}
 
-	.liked-tracks {
+	.liked-section {
 		margin-top: 2rem;
 	}
 
-	.liked-tracks h2 {
-		margin-bottom: 1.5rem;
+	.liked-section h2 {
+		margin-bottom: 1.25rem;
 		color: var(--text-primary);
 		font-size: 1.8rem;
+	}
+
+	.liked-link {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 1.25rem 1.5rem;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 10px;
+		color: inherit;
+		text-decoration: none;
+		transition: transform 0.15s ease, border-color 0.15s ease;
+	}
+
+	.liked-link:hover {
+		transform: translateY(-2px);
+		border-color: var(--accent);
+	}
+
+	.liked-icon {
+		width: 48px;
+		height: 48px;
+		border-radius: 8px;
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--accent);
+		flex-shrink: 0;
+	}
+
+	.liked-info {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.liked-info h3 {
+		margin: 0 0 0.25rem 0;
+		font-size: 1.1rem;
+		color: var(--text-primary);
+	}
+
+	.liked-info p {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--text-tertiary);
+	}
+
+	.liked-arrow {
+		color: var(--text-muted);
+		transition: transform 0.15s ease, color 0.15s ease;
+	}
+
+	.liked-link:hover .liked-arrow {
+		color: var(--accent);
+		transform: translateX(4px);
 	}
 
 	.albums {

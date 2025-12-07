@@ -745,3 +745,97 @@ async def upsert_profile_record(
         auth_session, "POST", "com.atproto.repo.putRecord", payload
     )
     return result["uri"], result["cid"]
+
+
+async def upsert_album_list_record(
+    auth_session: AuthSession,
+    album_id: str,
+    album_title: str,
+    track_refs: list[dict[str, str]],
+    existing_uri: str | None = None,
+    existing_created_at: datetime | None = None,
+) -> tuple[str, str] | None:
+    """Create or update an album as a list record.
+
+    args:
+        auth_session: authenticated user session
+        album_id: internal album ID (for logging)
+        album_title: album display name
+        track_refs: list of track references [{"uri": str, "cid": str}, ...]
+        existing_uri: existing ATProto record URI if updating
+        existing_created_at: original creation timestamp to preserve
+
+    returns:
+        tuple of (record_uri, record_cid) or None if no tracks to sync
+    """
+    if not track_refs:
+        logger.debug(f"album {album_id} has no tracks with ATProto records, skipping")
+        return None
+
+    if existing_uri:
+        # update existing record
+        uri, cid = await update_list_record(
+            auth_session=auth_session,
+            list_uri=existing_uri,
+            items=track_refs,
+            name=album_title,
+            list_type="album",
+            created_at=existing_created_at,
+        )
+        logger.info(f"updated album list record for {album_id}: {uri}")
+        return uri, cid
+    else:
+        # create new record
+        uri, cid = await create_list_record(
+            auth_session=auth_session,
+            items=track_refs,
+            name=album_title,
+            list_type="album",
+        )
+        logger.info(f"created album list record for {album_id}: {uri}")
+        return uri, cid
+
+
+async def upsert_liked_list_record(
+    auth_session: AuthSession,
+    track_refs: list[dict[str, str]],
+    existing_uri: str | None = None,
+    existing_created_at: datetime | None = None,
+) -> tuple[str, str] | None:
+    """Create or update the user's liked tracks list record.
+
+    args:
+        auth_session: authenticated user session
+        track_refs: list of liked track references [{"uri": str, "cid": str}, ...]
+        existing_uri: existing ATProto record URI if updating
+        existing_created_at: original creation timestamp to preserve
+
+    returns:
+        tuple of (record_uri, record_cid) or None if no likes to sync
+    """
+    if not track_refs:
+        logger.debug(f"user {auth_session.did} has no liked tracks to sync")
+        return None
+
+    if existing_uri:
+        # update existing record
+        uri, cid = await update_list_record(
+            auth_session=auth_session,
+            list_uri=existing_uri,
+            items=track_refs,
+            name="Liked Tracks",
+            list_type="liked",
+            created_at=existing_created_at,
+        )
+        logger.info(f"updated liked list record for {auth_session.did}: {uri}")
+        return uri, cid
+    else:
+        # create new record
+        uri, cid = await create_list_record(
+            auth_session=auth_session,
+            items=track_refs,
+            name="Liked Tracks",
+            list_type="liked",
+        )
+        logger.info(f"created liked list record for {auth_session.did}: {uri}")
+        return uri, cid
