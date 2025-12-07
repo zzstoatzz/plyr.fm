@@ -52,6 +52,12 @@ class UserPreferences(Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
 
+    # profile preferences
+    # when enabled, liked tracks are displayed on the user's artist page
+    show_liked_on_profile: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
     # metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
