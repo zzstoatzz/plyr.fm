@@ -94,8 +94,8 @@
 					</svg>
 				</a>
 			{/if}
-			{#if isAuthenticated && $page.url.pathname !== '/liked'}
-				<a href="/liked" class="nav-icon" title="go to liked tracks">
+			{#if isAuthenticated && !$page.url.pathname.startsWith('/library')}
+				<a href="/library" class="nav-icon" title="go to library">
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
 					</svg>
@@ -117,12 +117,12 @@
 							<span>feed</span>
 						</a>
 					{/if}
-					{#if $page.url.pathname !== '/liked'}
-						<a href="/liked" class="nav-link" title="go to liked tracks">
+					{#if !$page.url.pathname.startsWith('/library')}
+						<a href="/library" class="nav-link" title="go to library">
 							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 								<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
 							</svg>
-							<span>liked</span>
+							<span>library</span>
 						</a>
 					{/if}
 					{#if $page.url.pathname !== '/portal'}
@@ -371,24 +371,6 @@
 		color: var(--bg-primary);
 	}
 
-	.btn-logout {
-		background: transparent;
-		border: 1px solid var(--border-emphasis);
-		color: var(--text-secondary);
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		font-size: 0.9rem;
-		font-family: inherit;
-		cursor: pointer;
-		transition: all 0.2s;
-		white-space: nowrap;
-	}
-
-	.btn-logout:hover {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
 	/* Show LinksMenu (with stats) when sidebar is hidden */
 	@media (max-width: 1299px) {
 		.desktop-only {
@@ -441,7 +423,6 @@
 			padding: 0.3rem 0.5rem;
 		}
 
-		.btn-logout,
 		.btn-primary {
 			font-size: 0.8rem;
 			padding: 0.3rem 0.65rem;
