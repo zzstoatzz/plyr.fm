@@ -47,6 +47,44 @@ plyr.fm should become:
 
 ### December 2025
 
+#### playlists / lists infrastructure (feat/playlists branch, Dec 6 - ongoing)
+
+**status**: long-lived branch, not yet merged. backend infrastructure only, no UI.
+
+**what's done**:
+- `fm.plyr.list` lexicon - minimal design (5 fields):
+  - required: `items` (array of strongRefs), `createdAt`
+  - optional: `name`, `listType` (knownValues: album, playlist, liked), `updatedAt`
+- backend functions: `create_list_record()`, `update_list_record()`
+- OAuth scopes updated to include list collection
+- public liked pages at `/u/{handle}/likes` (precursor feature)
+- `show_liked_on_profile` preference
+- `get_optional_session` dependency for optional auth
+
+**what's NOT done**:
+- no list records created yet (infrastructure only)
+- no UI for lists (no artist page lists, no portal lists, no /lists page)
+- no album→list migration
+- no liked→list migration
+- no session invalidation for new scopes
+- no on-login record creation hook
+
+**design decisions**:
+- lists are generic ordered collections of any ATProto records (tracks, albums, other lists)
+- `listType` semantically categorizes (album, playlist, liked) but doesn't restrict content
+- array order = display order, reorder via `putRecord`
+- strongRef (uri + cid) for content-addressable item references
+- minimal lexicon per ATProto style guide - can add fields later, can't remove
+
+**related issues**: #221 (ATProto records for albums), #146 (content-addressable storage)
+
+**next steps when ready**:
+1. session invalidation mechanism (force re-auth for list scope)
+2. on-login hook to create list records for existing albums/likes
+3. UI: show lists on artist page, portal, dedicated /lists route
+
+---
+
 #### settings consolidation (PR #496, Dec 6)
 
 **problem**: user preferences were scattered across multiple locations with confusing terminology:
