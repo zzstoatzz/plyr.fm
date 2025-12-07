@@ -638,3 +638,98 @@ async def update_comment_record(
         record=record,
     )
     return new_cid
+
+
+def build_profile_record(
+    bio: str | None = None,
+    created_at: datetime | None = None,
+    updated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Build a profile record dict for ATProto.
+
+    args:
+        bio: artist bio/description
+        created_at: creation timestamp (defaults to now)
+        updated_at: optional last modification timestamp
+
+    returns:
+        record dict ready for ATProto
+    """
+    record: dict[str, Any] = {
+        "$type": settings.atproto.profile_collection,
+        "createdAt": (created_at or datetime.now(UTC))
+        .isoformat()
+        .replace("+00:00", "Z"),
+    }
+
+    if bio:
+        record["bio"] = bio
+    if updated_at:
+        record["updatedAt"] = updated_at.isoformat().replace("+00:00", "Z")
+
+    return record
+
+
+async def upsert_profile_record(
+    auth_session: AuthSession,
+    bio: str | None = None,
+) -> tuple[str, str]:
+    """Create or update the user's plyr.fm profile record.
+
+    uses putRecord with rkey="self" for upsert semantics - creates if
+    doesn't exist, updates if it does.
+
+    args:
+        auth_session: authenticated user session
+        bio: artist bio/description
+
+    returns:
+        tuple of (record_uri, record_cid)
+    """
+    # check if profile already exists to preserve createdAt
+    existing_created_at = None
+
+    try:
+        # try to get existing record
+        oauth_data = auth_session.oauth_session
+        if oauth_data and "pds_url" in oauth_data:
+            oauth_session = _reconstruct_oauth_session(oauth_data)
+            url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
+            params = {
+                "repo": auth_session.did,
+                "collection": settings.atproto.profile_collection,
+                "rkey": "self",
+            }
+            response = await oauth_client.make_authenticated_request(
+                session=oauth_session,
+                method="GET",
+                url=url,
+                params=params,
+            )
+            if response.status_code == 200:
+                existing = response.json()
+                if "value" in existing and "createdAt" in existing["value"]:
+                    existing_created_at = datetime.fromisoformat(
+                        existing["value"]["createdAt"].replace("Z", "+00:00")
+                    )
+    except Exception:
+        # record doesn't exist yet, that's fine
+        pass
+
+    record = build_profile_record(
+        bio=bio,
+        created_at=existing_created_at,
+        updated_at=datetime.now(UTC) if existing_created_at else None,
+    )
+
+    payload = {
+        "repo": auth_session.did,
+        "collection": settings.atproto.profile_collection,
+        "rkey": "self",
+        "record": record,
+    }
+
+    result = await _make_pds_request(
+        auth_session, "POST", "com.atproto.repo.putRecord", payload
+    )
+    return result["uri"], result["cid"]
