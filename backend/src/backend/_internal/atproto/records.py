@@ -673,21 +673,25 @@ def build_profile_record(
 async def upsert_profile_record(
     auth_session: AuthSession,
     bio: str | None = None,
-) -> tuple[str, str]:
+) -> tuple[str, str] | None:
     """Create or update the user's plyr.fm profile record.
 
     uses putRecord with rkey="self" for upsert semantics - creates if
-    doesn't exist, updates if it does.
+    doesn't exist, updates if it does. skips write if record already
+    exists with the same bio (no-op for unchanged data).
 
     args:
         auth_session: authenticated user session
         bio: artist bio/description
 
     returns:
-        tuple of (record_uri, record_cid)
+        tuple of (record_uri, record_cid) or None if skipped (unchanged)
     """
-    # check if profile already exists to preserve createdAt
+    # check if profile already exists to preserve createdAt and skip if unchanged
     existing_created_at = None
+    existing_bio = None
+    existing_uri = None
+    existing_cid = None
 
     try:
         # try to get existing record
@@ -708,13 +712,21 @@ async def upsert_profile_record(
             )
             if response.status_code == 200:
                 existing = response.json()
-                if "value" in existing and "createdAt" in existing["value"]:
-                    existing_created_at = datetime.fromisoformat(
-                        existing["value"]["createdAt"].replace("Z", "+00:00")
-                    )
+                existing_uri = existing.get("uri")
+                existing_cid = existing.get("cid")
+                if "value" in existing:
+                    existing_bio = existing["value"].get("bio")
+                    if "createdAt" in existing["value"]:
+                        existing_created_at = datetime.fromisoformat(
+                            existing["value"]["createdAt"].replace("Z", "+00:00")
+                        )
     except Exception:
         # record doesn't exist yet, that's fine
         pass
+
+    # skip write if record exists with same bio (no changes needed)
+    if existing_uri and existing_cid and existing_bio == bio:
+        return None
 
     record = build_profile_record(
         bio=bio,

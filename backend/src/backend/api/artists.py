@@ -1,5 +1,6 @@
 """artist profile API endpoints."""
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
@@ -20,6 +21,17 @@ from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/artists", tags=["artists"])
+
+# hold references to background tasks to prevent GC before completion
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
+def _create_background_task(coro) -> asyncio.Task:
+    """Create a background task with proper lifecycle management."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 # request/response models
@@ -156,6 +168,26 @@ async def get_my_artist_profile(
             status_code=404,
             detail="artist profile not found - please create one first",
         )
+
+    # fire-and-forget sync of ATProto profile record if user has a bio
+    # this ensures existing users get their profile record created on login
+    # without blocking the response
+    if artist.bio:
+
+        async def _sync_profile():
+            try:
+                result = await upsert_profile_record(auth_session, bio=artist.bio)
+                if result:
+                    logger.debug(
+                        f"synced ATProto profile record for {auth_session.did}"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"failed to sync ATProto profile record for {auth_session.did}: {e}"
+                )
+
+        _create_background_task(_sync_profile())
+
     return ArtistResponse.model_validate(artist)
 
 
