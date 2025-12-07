@@ -150,8 +150,11 @@
 
 			// remove from search results
 			searchResults = searchResults.filter(r => r.id !== track.id);
+
+			toast.success(`added "${trackData.title}" to playlist`);
 		} catch (e) {
 			console.error('failed to add track:', e);
+			toast.error(e instanceof Error ? e.message : 'failed to add track');
 		} finally {
 			addingTrack = null;
 		}
@@ -306,9 +309,11 @@
 				throw new Error('failed to delete playlist');
 			}
 
+			toast.success('playlist deleted');
 			goto('/library');
 		} catch (e) {
 			console.error('failed to delete playlist:', e);
+			toast.error(e instanceof Error ? e.message : 'failed to delete playlist');
 			deleting = false;
 			showDeleteConfirm = false;
 		}
@@ -395,8 +400,10 @@
 			}
 
 			showEdit = false;
+			toast.success('playlist updated');
 		} catch (e) {
 			console.error('failed to save playlist:', e);
+			toast.error(e instanceof Error ? e.message : 'failed to save playlist');
 		} finally {
 			saving = false;
 			uploadingCover = false;

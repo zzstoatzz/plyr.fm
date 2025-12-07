@@ -6,6 +6,7 @@
 	import { API_URL } from '$lib/config';
 	import type { PageData } from './$types';
 	import type { Playlist } from '$lib/types';
+	import { toast } from '$lib/toast.svelte';
 
 	let { data }: { data: PageData } = $props();
 	let playlists = $state<Playlist[]>(data.playlists);
@@ -57,10 +58,13 @@
 			showCreateModal = false;
 			newPlaylistName = '';
 
+			toast.success(`created "${playlist.name}"`);
+
 			// navigate to new playlist
 			goto(`/playlist/${playlist.id}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'failed to create playlist';
+			toast.error(error);
 		} finally {
 			creating = false;
 		}

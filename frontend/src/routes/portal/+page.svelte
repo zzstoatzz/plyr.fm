@@ -34,8 +34,6 @@
 	let bio = $state('');
 	let avatarUrl = $state('');
 	let savingProfile = $state(false);
-	let profileSuccess = $state('');
-	let profileError = $state('');
 
 	// album management state
 	let albums = $state<AlbumSummary[]>([]);
@@ -221,8 +219,6 @@
 	async function saveProfile(e: SubmitEvent) {
 		e.preventDefault();
 		savingProfile = true;
-		profileError = '';
-		profileSuccess = '';
 
 		try {
 			const response = await fetch(`${API_URL}/artists/me`, {
@@ -239,14 +235,13 @@
 			});
 
 			if (response.ok) {
-				profileSuccess = 'profile updated successfully!';
-				setTimeout(() => { profileSuccess = ''; }, 3000);
+				toast.success('profile updated');
 			} else {
 				const errorData = await response.json();
-				profileError = errorData.detail || 'failed to update profile';
+				toast.error(errorData.detail || 'failed to update profile');
 			}
 		} catch (e) {
-			profileError = `network error: ${e instanceof Error ? e.message : 'unknown error'}`;
+			toast.error(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
 		} finally {
 			savingProfile = false;
 		}
@@ -505,14 +500,6 @@
 				<h2>profile settings</h2>
 				<a href="/u/{auth.user.handle}" class="view-profile-link">view public profile</a>
 			</div>
-
-			{#if profileSuccess}
-				<div class="message success">{profileSuccess}</div>
-			{/if}
-
-			{#if profileError}
-				<div class="message error">{profileError}</div>
-			{/if}
 
 			<form onsubmit={saveProfile}>
 				<div class="form-group">
@@ -1258,24 +1245,6 @@
 		margin-top: 0.35rem;
 		font-size: 0.75rem;
 		color: var(--text-muted);
-	}
-
-	.message {
-		padding: 1rem;
-		border-radius: 4px;
-		margin-bottom: 1.5rem;
-	}
-
-	.message.success {
-		background: color-mix(in srgb, var(--success) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
-		color: var(--success);
-	}
-
-	.message.error {
-		background: color-mix(in srgb, var(--error) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
-		color: var(--error);
 	}
 
 	.avatar-preview {
