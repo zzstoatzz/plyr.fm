@@ -4,18 +4,18 @@ import asyncio
 import logging
 from typing import Annotated
 
-from fastapi import BackgroundTasks, Cookie, Depends, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend._internal import Session, get_optional_session
 from backend._internal.atproto.teal import create_teal_play_record, update_teal_status
 from backend._internal.auth import get_session
 from backend.config import settings
 from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import get_like_counts, get_track_tags
-from backend.utilities.auth import get_session_id_from_request
 
 from .router import router
 
@@ -26,18 +26,13 @@ logger = logging.getLogger(__name__)
 async def get_track(
     track_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
-    request: Request,
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
+    session: Session | None = Depends(get_optional_session),
 ) -> TrackResponse:
     """Get a specific track."""
     liked_track_ids: set[int] | None = None
-    if (
-        (session_id := get_session_id_from_request(request, session_id_cookie))
-        and (auth_session := await get_session(session_id))
-        and await db.scalar(
-            select(TrackLike.track_id).where(
-                TrackLike.user_did == auth_session.did, TrackLike.track_id == track_id
-            )
+    if session and await db.scalar(
+        select(TrackLike.track_id).where(
+            TrackLike.user_did == session.did, TrackLike.track_id == track_id
         )
     ):
         liked_track_ids = {track_id}
@@ -110,9 +105,8 @@ async def _scrobble_to_teal(
 async def increment_play_count(
     track_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
-    request: Request,
     background_tasks: BackgroundTasks,
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
+    session: Session | None = Depends(get_optional_session),
 ) -> dict:
     """Increment play count for a track (called after 30 seconds of playback).
 
@@ -133,27 +127,22 @@ async def increment_play_count(
     await db.commit()
 
     # check if user wants teal scrobbling
-    if (
-        (session_id := get_session_id_from_request(request, session_id_cookie))
-        and (auth_session := await get_session(session_id))
-        and (
-            prefs := await db.scalar(
-                select(UserPreferences).where(UserPreferences.did == auth_session.did)
-            )
+    if session:
+        prefs = await db.scalar(
+            select(UserPreferences).where(UserPreferences.did == session.did)
         )
-        and prefs.enable_teal_scrobbling
-    ):
-        # check if session has teal scopes
-        scope = auth_session.oauth_session.get("scope", "")
-        if settings.teal.play_collection in scope:
-            background_tasks.add_task(
-                _scrobble_to_teal,
-                session_id=session_id,
-                track_id=track_id,
-                track_title=track.title,
-                artist_name=track.artist.display_name or track.artist.handle,
-                duration=track.duration,
-                album_name=track.album_rel.title if track.album_rel else None,
-            )
+        if prefs and prefs.enable_teal_scrobbling:
+            # check if session has teal scopes
+            scope = session.oauth_session.get("scope", "")
+            if settings.teal.play_collection in scope:
+                background_tasks.add_task(
+                    _scrobble_to_teal,
+                    session_id=session.session_id,
+                    track_id=track_id,
+                    track_title=track.title,
+                    artist_name=track.artist.display_name or track.artist.handle,
+                    duration=track.duration,
+                    album_name=track.album_rel.title if track.album_rel else None,
+                )
 
     return {"play_count": track.play_count}
