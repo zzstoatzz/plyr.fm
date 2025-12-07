@@ -6,6 +6,7 @@ from backend._internal.atproto.profile import (
     normalize_avatar_url,
 )
 from backend._internal.atproto.records import (
+    check_profile_record_sync_needed,
     create_comment_record,
     create_like_record,
     create_list_record,
@@ -17,6 +18,7 @@ from backend._internal.atproto.records import (
 )
 
 __all__ = [
+    "check_profile_record_sync_needed",
     "create_comment_record",
     "create_like_record",
     "create_list_record",

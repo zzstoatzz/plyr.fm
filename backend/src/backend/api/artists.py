@@ -170,17 +170,14 @@ async def get_my_artist_profile(
         )
 
     # fire-and-forget sync of ATProto profile record if user has a bio
-    # this ensures existing users get their profile record created on login
-    # without blocking the response
+    # skips if record already exists with same bio
     if artist.bio:
 
         async def _sync_profile():
             try:
                 result = await upsert_profile_record(auth_session, bio=artist.bio)
                 if result:
-                    logger.debug(
-                        f"synced ATProto profile record for {auth_session.did}"
-                    )
+                    logger.info(f"synced ATProto profile record for {auth_session.did}")
             except Exception as e:
                 logger.warning(
                     f"failed to sync ATProto profile record for {auth_session.did}: {e}"
