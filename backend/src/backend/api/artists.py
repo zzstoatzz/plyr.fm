@@ -169,21 +169,19 @@ async def get_my_artist_profile(
             detail="artist profile not found - please create one first",
         )
 
-    # fire-and-forget sync of ATProto profile record if user has a bio
-    # skips if record already exists with same bio
-    if artist.bio:
+    # fire-and-forget sync of ATProto profile record
+    # creates record if doesn't exist, skips if unchanged
+    async def _sync_profile():
+        try:
+            result = await upsert_profile_record(auth_session, bio=artist.bio)
+            if result:
+                logger.info(f"synced ATProto profile record for {auth_session.did}")
+        except Exception as e:
+            logger.warning(
+                f"failed to sync ATProto profile record for {auth_session.did}: {e}"
+            )
 
-        async def _sync_profile():
-            try:
-                result = await upsert_profile_record(auth_session, bio=artist.bio)
-                if result:
-                    logger.info(f"synced ATProto profile record for {auth_session.did}")
-            except Exception as e:
-                logger.warning(
-                    f"failed to sync ATProto profile record for {auth_session.did}: {e}"
-                )
-
-        _create_background_task(_sync_profile())
+    _create_background_task(_sync_profile())
 
     return ArtistResponse.model_validate(artist)
 
