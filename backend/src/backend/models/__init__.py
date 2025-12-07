@@ -10,6 +10,7 @@ from backend.models.job import Job
 from backend.models.oauth_state import OAuthStateModel
 from backend.models.pending_dev_token import PendingDevToken
 from backend.models.pending_scope_upgrade import PendingScopeUpgrade
+from backend.models.playlist import Playlist
 from backend.models.preferences import UserPreferences
 from backend.models.queue import QueueState
 from backend.models.session import UserSession
@@ -29,6 +30,7 @@ __all__ = [
     "OAuthStateModel",
     "PendingDevToken",
     "PendingScopeUpgrade",
+    "Playlist",
     "QueueState",
     "ScanResolution",
     "SensitiveImage",

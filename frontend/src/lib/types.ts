@@ -18,6 +18,8 @@ export interface AlbumMetadata extends AlbumSummary {
 	description?: string | null;
 	artist: string;
 	artist_handle: string;
+	artist_did: string;
+	list_uri?: string | null;
 }
 
 export interface AlbumResponse {
@@ -36,6 +38,7 @@ export interface Track {
 	artist_avatar_url?: string;
 	r2_url?: string;
 	atproto_record_uri?: string;
+	atproto_record_cid?: string;
 	atproto_record_url?: string;
 	play_count: number;
 	like_count?: number;
@@ -98,5 +101,31 @@ export interface TokenInfo {
 	name: string | null;
 	created_at: string;
 	expires_at: string | null;
+}
+
+export interface Playlist {
+	id: string;
+	name: string;
+	owner_did: string;
+	owner_handle: string;
+	track_count: number;
+	atproto_record_uri: string;
+	created_at: string;
+}
+
+export interface PlaylistWithTracks extends Playlist {
+	tracks: PlaylistTrack[];
+}
+
+export interface PlaylistTrack {
+	id: number;
+	title: string;
+	artist_name: string;
+	artist_handle: string;
+	artist_did: string;
+	duration?: number;
+	image_url?: string;
+	atproto_record_uri: string;
+	atproto_record_cid: string;
 }
 

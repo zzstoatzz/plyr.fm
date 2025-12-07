@@ -9,7 +9,9 @@
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { API_URL } from '$lib/config';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
+	import type { Track } from '$lib/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -17,29 +19,191 @@
 	const album = $derived(data.album);
 	const isAuthenticated = $derived(auth.isAuthenticated);
 
+	// check if current user owns this album
+	const isOwner = $derived(auth.user?.did === album.metadata.artist_did);
+	// can only reorder if owner and album has an ATProto list
+	const canReorder = $derived(isOwner && !!album.metadata.list_uri);
+
+	// local mutable copy of tracks for reordering
+	let tracks = $state<Track[]>([...data.album.tracks]);
+
+	// sync when data changes (e.g., navigation)
+	$effect(() => {
+		tracks = [...data.album.tracks];
+	});
+
+	// edit mode state
+	let isEditMode = $state(false);
+	let isSaving = $state(false);
+
+	// drag state
+	let draggedIndex = $state<number | null>(null);
+	let dragOverIndex = $state<number | null>(null);
+
+	// touch drag state
+	let touchDragIndex = $state<number | null>(null);
+	let touchStartY = $state(0);
+	let touchDragElement = $state<HTMLElement | null>(null);
+	let tracksListElement = $state<HTMLElement | null>(null);
+
 	// SSR-safe check for sensitive images (for og:image meta tags)
 	function isImageSensitiveSSR(url: string | null | undefined): boolean {
 		if (!url) return false;
 		return checkImageSensitive(url, data.sensitiveImages);
 	}
 
-	function playTrack(track: typeof album.tracks[0]) {
+	function playTrack(track: Track) {
 		queue.playNow(track);
 	}
 
 	function playNow() {
-		if (album.tracks.length > 0) {
-			queue.setQueue(album.tracks);
-			queue.playNow(album.tracks[0]);
+		if (tracks.length > 0) {
+			queue.setQueue(tracks);
+			queue.playNow(tracks[0]);
 			toast.success(`playing ${album.metadata.title}`, 1800);
 		}
 	}
 
 	function addToQueue() {
-		if (album.tracks.length > 0) {
-			queue.addTracks(album.tracks);
+		if (tracks.length > 0) {
+			queue.addTracks(tracks);
 			toast.success(`added ${album.metadata.title} to queue`, 1800);
 		}
+	}
+
+	function toggleEditMode() {
+		if (isEditMode) {
+			saveOrder();
+		}
+		isEditMode = !isEditMode;
+	}
+
+	async function saveOrder() {
+		if (!album.metadata.list_uri) return;
+
+		// extract rkey from list URI (at://did/collection/rkey)
+		const rkey = album.metadata.list_uri.split('/').pop();
+		if (!rkey) return;
+
+		// build strongRefs from current track order
+		const items = tracks
+			.filter((t) => t.atproto_record_uri && t.atproto_record_cid)
+			.map((t) => ({
+				uri: t.atproto_record_uri!,
+				cid: t.atproto_record_cid!
+			}));
+
+		if (items.length === 0) return;
+
+		isSaving = true;
+		try {
+			const response = await fetch(`${API_URL}/lists/${rkey}/reorder`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({ items })
+			});
+
+			if (!response.ok) {
+				const error = await response.json().catch(() => ({ detail: 'unknown error' }));
+				throw new Error(error.detail || 'failed to save order');
+			}
+
+			toast.success('order saved');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'failed to save order');
+		} finally {
+			isSaving = false;
+		}
+	}
+
+	// move track from one index to another
+	function moveTrack(fromIndex: number, toIndex: number) {
+		if (fromIndex === toIndex) return;
+		const newTracks = [...tracks];
+		const [moved] = newTracks.splice(fromIndex, 1);
+		newTracks.splice(toIndex, 0, moved);
+		tracks = newTracks;
+	}
+
+	// desktop drag and drop
+	function handleDragStart(event: DragEvent, index: number) {
+		draggedIndex = index;
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+		}
+	}
+
+	function handleDragOver(event: DragEvent, index: number) {
+		event.preventDefault();
+		dragOverIndex = index;
+	}
+
+	function handleDrop(event: DragEvent, index: number) {
+		event.preventDefault();
+		if (draggedIndex !== null && draggedIndex !== index) {
+			moveTrack(draggedIndex, index);
+		}
+		draggedIndex = null;
+		dragOverIndex = null;
+	}
+
+	function handleDragEnd() {
+		draggedIndex = null;
+		dragOverIndex = null;
+	}
+
+	// touch drag and drop
+	function handleTouchStart(event: TouchEvent, index: number) {
+		const touch = event.touches[0];
+		touchDragIndex = index;
+		touchStartY = touch.clientY;
+		touchDragElement = event.currentTarget as HTMLElement;
+		touchDragElement.classList.add('touch-dragging');
+	}
+
+	function handleTouchMove(event: TouchEvent) {
+		if (touchDragIndex === null || !touchDragElement || !tracksListElement) return;
+
+		event.preventDefault();
+		const touch = event.touches[0];
+		const offset = touch.clientY - touchStartY;
+		touchDragElement.style.transform = `translateY(${offset}px)`;
+
+		const trackElements = tracksListElement.querySelectorAll('.track-row');
+		for (let i = 0; i < trackElements.length; i++) {
+			const trackEl = trackElements[i] as HTMLElement;
+			const rect = trackEl.getBoundingClientRect();
+			const midY = rect.top + rect.height / 2;
+
+			if (touch.clientY < midY && i > 0) {
+				const targetIndex = parseInt(trackEl.dataset.index || '0');
+				if (targetIndex !== touchDragIndex) {
+					dragOverIndex = targetIndex;
+				}
+				break;
+			} else if (touch.clientY >= midY) {
+				const targetIndex = parseInt(trackEl.dataset.index || '0');
+				if (targetIndex !== touchDragIndex) {
+					dragOverIndex = targetIndex;
+				}
+			}
+		}
+	}
+
+	function handleTouchEnd() {
+		if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
+			moveTrack(touchDragIndex, dragOverIndex);
+		}
+
+		if (touchDragElement) {
+			touchDragElement.classList.remove('touch-dragging');
+			touchDragElement.style.transform = '';
+		}
+
+		touchDragIndex = null;
+		dragOverIndex = null;
+		touchDragElement = null;
 	}
 
 	let shareUrl = $state('');
@@ -133,6 +297,36 @@
 				</svg>
 				add to queue
 			</button>
+			{#if canReorder}
+				<button
+					class="reorder-button"
+					class:active={isEditMode}
+					onclick={toggleEditMode}
+					disabled={isSaving}
+					title={isEditMode ? 'save order' : 'reorder tracks'}
+				>
+					{#if isEditMode}
+						{#if isSaving}
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
+								<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+							</svg>
+							saving...
+						{:else}
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<polyline points="20 6 9 17 4 12"></polyline>
+							</svg>
+							done
+						{/if}
+					{:else}
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<line x1="3" y1="12" x2="21" y2="12"></line>
+							<line x1="3" y1="6" x2="21" y2="6"></line>
+							<line x1="3" y1="18" x2="21" y2="18"></line>
+						</svg>
+						reorder
+					{/if}
+				</button>
+			{/if}
 			<div class="mobile-share-button">
 				<ShareButton url={shareUrl} title="share album" />
 			</div>
@@ -140,17 +334,66 @@
 
 		<div class="tracks-section">
 			<h2 class="section-heading">tracks</h2>
-			<div class="tracks-list">
-				{#each album.tracks as track, i}
-					<TrackItem
-						{track}
-						index={i}
-						isPlaying={player.currentTrack?.id === track.id}
-						onPlay={playTrack}
-						{isAuthenticated}
-						hideAlbum={true}
-						hideArtist={true}
-					/>
+			<div
+				class="tracks-list"
+				class:edit-mode={isEditMode}
+				bind:this={tracksListElement}
+				ontouchmove={isEditMode ? handleTouchMove : undefined}
+				ontouchend={isEditMode ? handleTouchEnd : undefined}
+				ontouchcancel={isEditMode ? handleTouchEnd : undefined}
+			>
+				{#each tracks as track, i (track.id)}
+					{#if isEditMode}
+						<div
+							class="track-row"
+							class:drag-over={dragOverIndex === i && touchDragIndex !== i}
+							class:is-dragging={touchDragIndex === i || draggedIndex === i}
+							data-index={i}
+							draggable="true"
+							ondragstart={(e) => handleDragStart(e, i)}
+							ondragover={(e) => handleDragOver(e, i)}
+							ondrop={(e) => handleDrop(e, i)}
+							ondragend={handleDragEnd}
+						>
+							<button
+								class="drag-handle"
+								ontouchstart={(e) => handleTouchStart(e, i)}
+								onclick={(e) => e.stopPropagation()}
+								aria-label="drag to reorder"
+								title="drag to reorder"
+							>
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+									<circle cx="5" cy="3" r="1.5"></circle>
+									<circle cx="11" cy="3" r="1.5"></circle>
+									<circle cx="5" cy="8" r="1.5"></circle>
+									<circle cx="11" cy="8" r="1.5"></circle>
+									<circle cx="5" cy="13" r="1.5"></circle>
+									<circle cx="11" cy="13" r="1.5"></circle>
+								</svg>
+							</button>
+							<div class="track-content">
+								<TrackItem
+									{track}
+									index={i}
+									isPlaying={player.currentTrack?.id === track.id}
+									onPlay={playTrack}
+									{isAuthenticated}
+									hideAlbum={true}
+									hideArtist={true}
+								/>
+							</div>
+						</div>
+					{:else}
+						<TrackItem
+							{track}
+							index={i}
+							isPlaying={player.currentTrack?.id === track.id}
+							onPlay={playTrack}
+							{isAuthenticated}
+							hideAlbum={true}
+							hideArtist={true}
+						/>
+					{/if}
 				{/each}
 			</div>
 		</div>
@@ -307,6 +550,51 @@
 		color: var(--accent);
 	}
 
+	.reorder-button {
+		padding: 0.75rem 1.5rem;
+		border-radius: 24px;
+		font-weight: 600;
+		font-size: 0.95rem;
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.2s;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: transparent;
+		color: var(--text-primary);
+		border: 1px solid var(--border-default);
+	}
+
+	.reorder-button:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.reorder-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.reorder-button.active {
+		border-color: var(--accent);
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.spinner {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
 	.tracks-section {
 		margin-top: 2rem;
 		padding-bottom: calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
@@ -324,6 +612,69 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+	}
+
+	/* edit mode styles */
+	.track-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		border-radius: 8px;
+		transition: all 0.2s;
+		position: relative;
+	}
+
+	.track-row.drag-over {
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		outline: 2px dashed var(--accent);
+		outline-offset: -2px;
+	}
+
+	.track-row.is-dragging {
+		opacity: 0.9;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		z-index: 10;
+	}
+
+	:global(.track-row.touch-dragging) {
+		z-index: 100;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+	}
+
+	.drag-handle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.5rem;
+		background: transparent;
+		border: none;
+		color: var(--text-muted);
+		cursor: grab;
+		touch-action: none;
+		border-radius: 4px;
+		transition: all 0.2s;
+		flex-shrink: 0;
+	}
+
+	.drag-handle:hover {
+		color: var(--text-secondary);
+		background: var(--bg-tertiary);
+	}
+
+	.drag-handle:active {
+		cursor: grabbing;
+		color: var(--accent);
+	}
+
+	@media (pointer: coarse) {
+		.drag-handle {
+			color: var(--text-tertiary);
+		}
+	}
+
+	.track-content {
+		flex: 1;
+		min-width: 0;
 	}
 
 	@media (max-width: 768px) {
@@ -370,7 +721,8 @@
 		}
 
 		.play-button,
-		.queue-button {
+		.queue-button,
+		.reorder-button {
 			width: 100%;
 			justify-content: center;
 		}

@@ -74,7 +74,6 @@ plyr.fm should become:
 
 **what's NOT done**:
 - no playlist creation UI yet (only liked tracks list)
-- no reordering UI for lists
 
 **design decisions**:
 - lists are generic ordered collections of any ATProto records (tracks, albums, other lists)
@@ -88,7 +87,29 @@ plyr.fm should become:
 
 **next steps**:
 1. playlist creation UI in library
-2. list reordering UI
+
+---
+
+#### list reordering UI (feat/playlists branch, Dec 7)
+
+**what's done**:
+- `PUT /lists/liked/reorder` endpoint - reorder user's liked tracks list
+- `PUT /lists/{rkey}/reorder` endpoint - reorder any list by ATProto rkey
+- both endpoints take `items` array of strongRefs (uri + cid) in desired order
+- liked tracks page (`/liked`) now has "reorder" button for authenticated users
+- album page has "reorder" button for album owner (if album has ATProto list record)
+- drag-and-drop reordering on desktop (HTML5 drag API)
+- touch reordering on mobile (6-dot grip handle, same pattern as queue)
+- visual feedback during drag: `.drag-over` and `.is-dragging` states
+- saves order to ATProto via `putRecord` when user clicks "done"
+- added `atproto_record_cid` to TrackResponse schema (needed for strongRefs)
+- added `artist_did` and `list_uri` to AlbumMetadata response
+
+**UX design**:
+- button toggles between "reorder" and "done" states
+- in edit mode, drag handles appear next to each track
+- saving shows spinner, success/error toast on completion
+- only owners can see/use reorder button (liked list = current user, album = artist)
 
 ---
 

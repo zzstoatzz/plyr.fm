@@ -151,7 +151,7 @@ async def test_get_profile_syncs_albums(
     test_album_with_tracks: tuple[Album, list[Track]],
 ):
     """test that GET /artists/me triggers album list record sync."""
-    album, tracks = test_album_with_tracks
+    album, _ = test_album_with_tracks
 
     with (
         patch(
