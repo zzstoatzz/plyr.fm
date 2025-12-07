@@ -261,6 +261,38 @@ async def list_playlists(
     ]
 
 
+@router.get("/playlists/{playlist_id}/meta", response_model=PlaylistResponse)
+async def get_playlist_meta(
+    playlist_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> PlaylistResponse:
+    """get playlist metadata (public, no auth required).
+
+    used for link previews and og tags.
+    """
+    result = await db.execute(
+        select(Playlist, Artist)
+        .join(Artist, Playlist.owner_did == Artist.did)
+        .where(Playlist.id == playlist_id)
+    )
+    row = result.first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="playlist not found")
+
+    playlist, artist = row
+
+    return PlaylistResponse(
+        id=playlist.id,
+        name=playlist.name,
+        owner_did=playlist.owner_did,
+        owner_handle=artist.handle,
+        track_count=playlist.track_count,
+        atproto_record_uri=playlist.atproto_record_uri,
+        created_at=playlist.created_at.isoformat(),
+    )
+
+
 @router.get("/playlists/{playlist_id}", response_model=PlaylistWithTracksResponse)
 async def get_playlist(
     playlist_id: str,

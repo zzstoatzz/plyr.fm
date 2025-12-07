@@ -1,8 +1,11 @@
 <script lang="ts">
 	import Header from '$lib/components/Header.svelte';
+	import ShareButton from '$lib/components/ShareButton.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
+	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 	import type { PlaylistWithTracks, PlaylistTrack } from '$lib/types';
 
@@ -195,6 +198,28 @@
 
 <svelte:head>
 	<title>{playlist.name} • plyr</title>
+	<meta
+		name="description"
+		content="playlist by @{playlist.owner_handle} • {playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'} on {APP_NAME}"
+	/>
+
+	<!-- Open Graph / Facebook -->
+	<meta property="og:type" content="music.playlist" />
+	<meta property="og:title" content="{playlist.name}" />
+	<meta
+		property="og:description"
+		content="playlist by @{playlist.owner_handle} • {playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}"
+	/>
+	<meta property="og:url" content="{APP_CANONICAL_URL}/playlist/{playlist.id}" />
+	<meta property="og:site_name" content={APP_NAME} />
+
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content="{playlist.name}" />
+	<meta
+		name="twitter:description"
+		content="playlist by @{playlist.owner_handle} • {playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}"
+	/>
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
@@ -225,8 +250,9 @@
 			</div>
 		</div>
 
-		{#if isOwner}
-			<div class="actions">
+		<div class="actions">
+			<ShareButton url={$page.url.href} title="share playlist" />
+			{#if isOwner}
 				<button class="add-btn" onclick={() => showSearch = true}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="12" y1="5" x2="12" y2="19"></line>
@@ -234,7 +260,7 @@
 					</svg>
 					add tracks
 				</button>
-				<button class="delete-btn" onclick={() => showDeleteConfirm = true}>
+				<button class="delete-btn" onclick={() => showDeleteConfirm = true} aria-label="delete playlist">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<polyline points="3 6 5 6 21 6"></polyline>
 						<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"></path>
@@ -243,8 +269,8 @@
 						<path d="m9 6 .5-2h5l.5 2"></path>
 					</svg>
 				</button>
-			</div>
-		{/if}
+			{/if}
+		</div>
 	</div>
 
 	{#if tracks.length === 0}
@@ -725,6 +751,7 @@
 		flex: 1;
 		background: transparent;
 		border: none;
+		font-family: inherit;
 		font-size: 1rem;
 		color: var(--text-primary);
 		outline: none;

@@ -462,6 +462,7 @@
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
 		border-radius: 8px;
+		font-family: inherit;
 		font-size: 1rem;
 		color: var(--text-primary);
 		transition: border-color 0.15s;
