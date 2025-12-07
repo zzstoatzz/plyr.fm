@@ -4,7 +4,7 @@
   "defs": {
     "main": {
       "type": "record",
-      "description": "An ordered collection of tracks. Used for playlists, albums, and other curated lists.",
+      "description": "An ordered collection of ATProto records. Can reference tracks, albums, artists, other lists, or any record type. The purpose field indicates the intended content type.",
       "key": "tid",
       "record": {
         "type": "object",
@@ -23,12 +23,12 @@
           },
           "purpose": {
             "type": "string",
-            "description": "The type of list: album, playlist, or collection.",
-            "knownValues": ["album", "playlist", "collection"]
+            "description": "The type of content this list contains. Known values indicate common use cases, but any string is valid for extensibility.",
+            "knownValues": ["album", "playlist", "collection", "discography", "favorites"]
           },
           "items": {
             "type": "array",
-            "description": "Ordered references to tracks in this list.",
+            "description": "Ordered references to records in this list. Each item is a content-addressable reference (strongRef) to any ATProto record.",
             "items": {
               "type": "ref",
               "ref": "#listItem"
@@ -50,18 +50,18 @@
     },
     "listItem": {
       "type": "object",
-      "description": "A reference to a track within a list.",
-      "required": ["track"],
+      "description": "A reference to a record within a list. Uses strongRef for content-addressability.",
+      "required": ["subject"],
       "properties": {
-        "track": {
+        "subject": {
           "type": "ref",
           "ref": "com.atproto.repo.strongRef",
-          "description": "Content-addressable reference to the track (uri + cid)."
+          "description": "Content-addressable reference to the record (uri + cid). The uri indicates the record type (e.g., fm.plyr.track, fm.plyr.list)."
         },
         "addedAt": {
           "type": "string",
           "format": "datetime",
-          "description": "When this track was added to the list."
+          "description": "When this item was added to the list."
         }
       }
     }

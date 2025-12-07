@@ -497,8 +497,9 @@ def build_list_record(
 
     args:
         title: list title
-        purpose: type of list ("album", "playlist", "collection")
-        items: list of track references, each with {"uri": str, "cid": str}
+        purpose: type of list ("album", "playlist", "collection", "discography", "favorites")
+        items: list of record references, each with {"uri": str, "cid": str}
+               uri indicates the record type (e.g., fm.plyr.track, fm.plyr.list)
         description: optional list description
         image_url: optional cover art image URL
         created_at: optional creation timestamp (defaults to now)
@@ -514,7 +515,7 @@ def build_list_record(
         "purpose": purpose,
         "items": [
             {
-                "track": {"uri": item["uri"], "cid": item["cid"]},
+                "subject": {"uri": item["uri"], "cid": item["cid"]},
                 "addedAt": item.get("addedAt", now),
             }
             for item in items
@@ -544,8 +545,9 @@ async def create_list_record(
     args:
         auth_session: authenticated user session
         title: list title
-        purpose: type of list ("album", "playlist", "collection")
-        items: list of track references, each with {"uri": str, "cid": str}
+        purpose: type of list (e.g., "album", "playlist", "collection", "discography")
+        items: list of record references, each with {"uri": str, "cid": str}
+               can reference tracks, albums, artists, other lists, or any record
         description: optional list description
         image_url: optional cover art image URL
 
@@ -588,14 +590,15 @@ async def update_list_record(
 ) -> tuple[str, str]:
     """Update an existing list record on the user's PDS.
 
-    Use this for reordering tracks, adding/removing tracks, or updating metadata.
+    Use this for reordering items, adding/removing items, or updating metadata.
 
     args:
         auth_session: authenticated user session
         list_uri: AT URI of the list record to update
         title: list title
-        purpose: type of list ("album", "playlist", "collection")
-        items: updated list of track references (order determines display order)
+        purpose: type of list (e.g., "album", "playlist", "collection", "discography")
+        items: updated list of record references (array order determines display order)
+               can reference tracks, albums, artists, other lists, or any record
         description: optional list description
         image_url: optional cover art image URL
         created_at: original creation timestamp (preserved on updates)
