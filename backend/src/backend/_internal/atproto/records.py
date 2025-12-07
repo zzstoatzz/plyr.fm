@@ -9,7 +9,7 @@ from typing import Any
 from atproto_oauth.models import OAuthSession
 
 from backend._internal import Session as AuthSession
-from backend._internal import get_session, oauth_client, update_session_tokens
+from backend._internal import get_oauth_client, get_session, update_session_tokens
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ async def _refresh_session_tokens(
 
         try:
             # use OAuth client to refresh tokens
-            refreshed_session = await oauth_client.refresh_session(
+            refreshed_session = await get_oauth_client().refresh_session(
                 current_oauth_session
             )
 
@@ -183,7 +183,7 @@ async def _make_pds_request(
     url = f"{oauth_data['pds_url']}/xrpc/{endpoint}"
 
     for attempt in range(2):
-        response = await oauth_client.make_authenticated_request(
+        response = await get_oauth_client().make_authenticated_request(
             session=oauth_session,
             method=method,
             url=url,
@@ -704,7 +704,7 @@ async def upsert_profile_record(
                 "collection": settings.atproto.profile_collection,
                 "rkey": "self",
             }
-            response = await oauth_client.make_authenticated_request(
+            response = await get_oauth_client().make_authenticated_request(
                 session=oauth_session,
                 method="GET",
                 url=url,

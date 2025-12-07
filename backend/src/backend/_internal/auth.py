@@ -69,31 +69,36 @@ class Session:
 _state_store = PostgresStateStore()
 _session_store = MemorySessionStore()
 
-# OAuth clients - base client for normal auth, teal client for users who want scrobbling
-oauth_client = OAuthClient(
-    client_id=settings.atproto.client_id,
-    redirect_uri=settings.atproto.redirect_uri,
-    scope=settings.atproto.resolved_scope,
-    state_store=_state_store,
-    session_store=_session_store,
-)
 
-oauth_client_with_teal = OAuthClient(
-    client_id=settings.atproto.client_id,
-    redirect_uri=settings.atproto.redirect_uri,
-    scope=settings.atproto.resolved_scope_with_teal(
-        settings.teal.play_collection, settings.teal.status_collection
-    ),
-    state_store=_state_store,
-    session_store=_session_store,
-)
+def get_oauth_client(include_teal: bool = False) -> OAuthClient:
+    """create an OAuth client with the appropriate scopes.
+
+    at ~17 OAuth flows/day, instantiation cost is negligible.
+    this eliminates the need for pre-instantiated bifurcated clients.
+    """
+    scope = (
+        settings.atproto.resolved_scope_with_teal(
+            settings.teal.play_collection, settings.teal.status_collection
+        )
+        if include_teal
+        else settings.atproto.resolved_scope
+    )
+    return OAuthClient(
+        client_id=settings.atproto.client_id,
+        redirect_uri=settings.atproto.redirect_uri,
+        scope=scope,
+        state_store=_state_store,
+        session_store=_session_store,
+    )
 
 
 def get_oauth_client_for_scope(scope: str) -> OAuthClient:
-    """get the appropriate OAuth client for a given scope string."""
-    if settings.teal.play_collection in scope:
-        return oauth_client_with_teal
-    return oauth_client
+    """get an OAuth client matching a given scope string.
+
+    used during callback to match the scope that was used during authorization.
+    """
+    include_teal = settings.teal.play_collection in scope
+    return get_oauth_client(include_teal=include_teal)
 
 
 # encryption for sensitive OAuth data at rest
@@ -254,14 +259,34 @@ async def start_oauth_flow(handle: str) -> tuple[str, str]:
         if resolved:
             did = resolved["did"]
             wants_teal = await _check_teal_preference(did)
-            client = oauth_client_with_teal if wants_teal else oauth_client
+            client = get_oauth_client(include_teal=wants_teal)
             logger.info(f"starting OAuth for {handle} (did={did}, teal={wants_teal})")
         else:
             # fallback to base client if resolution fails
             # (OAuth flow will resolve handle again internally)
-            client = oauth_client
+            client = get_oauth_client(include_teal=False)
             logger.info(f"starting OAuth for {handle} (resolution failed, using base)")
 
+        auth_url, state = await client.start_authorization(handle)
+        return auth_url, state
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"failed to start OAuth flow: {e}",
+        ) from e
+
+
+async def start_oauth_flow_with_scopes(
+    handle: str, include_teal: bool
+) -> tuple[str, str]:
+    """start OAuth flow with explicit scope selection.
+
+    unlike start_oauth_flow which checks user preferences, this explicitly
+    requests the specified scopes. used for scope upgrade flows.
+    """
+    try:
+        client = get_oauth_client(include_teal=include_teal)
+        logger.info(f"starting scope upgrade OAuth for {handle} (teal={include_teal})")
         auth_url, state = await client.start_authorization(handle)
         return auth_url, state
     except Exception as e:
@@ -287,7 +312,7 @@ async def handle_oauth_callback(
             )
         else:
             # fallback to base client (state might have been cleaned up)
-            client = oauth_client
+            client = get_oauth_client(include_teal=False)
             logger.warning(f"state {state[:8]}... not found, using base client")
 
         oauth_session = await client.handle_callback(
@@ -613,6 +638,79 @@ async def delete_pending_dev_token(state: str) -> None:
     async with db_session() as db:
         result = await db.execute(
             select(PendingDevToken).where(PendingDevToken.state == state)
+        )
+        if pending := result.scalar_one_or_none():
+            await db.delete(pending)
+            await db.commit()
+
+
+# scope upgrade flow helpers
+
+
+@dataclass
+class PendingScopeUpgradeData:
+    """metadata for a pending scope upgrade OAuth flow."""
+
+    state: str
+    did: str
+    old_session_id: str
+    requested_scopes: str
+
+
+async def save_pending_scope_upgrade(
+    state: str,
+    did: str,
+    old_session_id: str,
+    requested_scopes: str,
+) -> None:
+    """save pending scope upgrade metadata keyed by OAuth state."""
+    from backend.models import PendingScopeUpgrade
+
+    async with db_session() as db:
+        pending = PendingScopeUpgrade(
+            state=state,
+            did=did,
+            old_session_id=old_session_id,
+            requested_scopes=requested_scopes,
+        )
+        db.add(pending)
+        await db.commit()
+
+
+async def get_pending_scope_upgrade(state: str) -> PendingScopeUpgradeData | None:
+    """get pending scope upgrade metadata by OAuth state."""
+    from backend.models import PendingScopeUpgrade
+
+    async with db_session() as db:
+        result = await db.execute(
+            select(PendingScopeUpgrade).where(PendingScopeUpgrade.state == state)
+        )
+        pending = result.scalar_one_or_none()
+
+        if not pending:
+            return None
+
+        # check if expired
+        if datetime.now(UTC) > pending.expires_at:
+            await db.delete(pending)
+            await db.commit()
+            return None
+
+        return PendingScopeUpgradeData(
+            state=pending.state,
+            did=pending.did,
+            old_session_id=pending.old_session_id,
+            requested_scopes=pending.requested_scopes,
+        )
+
+
+async def delete_pending_scope_upgrade(state: str) -> None:
+    """delete pending scope upgrade metadata after use."""
+    from backend.models import PendingScopeUpgrade
+
+    async with db_session() as db:
+        result = await db.execute(
+            select(PendingScopeUpgrade).where(PendingScopeUpgrade.state == state)
         )
         if pending := result.scalar_one_or_none():
             await db.delete(pending)

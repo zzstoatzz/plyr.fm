@@ -14,14 +14,18 @@ from backend._internal import (
     create_exchange_token,
     create_session,
     delete_pending_dev_token,
+    delete_pending_scope_upgrade,
     delete_session,
     get_pending_dev_token,
+    get_pending_scope_upgrade,
     handle_oauth_callback,
     list_developer_tokens,
     require_auth,
     revoke_developer_token,
     save_pending_dev_token,
+    save_pending_scope_upgrade,
     start_oauth_flow,
+    start_oauth_flow_with_scopes,
 )
 from backend.config import settings
 from backend.utilities.rate_limit import limiter
@@ -76,8 +80,10 @@ async def oauth_callback(
     returns exchange token in URL which frontend will exchange for session_id.
     exchange token is short-lived (60s) and one-time use for security.
 
-    if this is a developer token flow (state exists in pending_dev_tokens),
-    creates a dev token session and redirects with dev_token=true flag.
+    handles three flow types based on pending state:
+    1. developer token flow - creates dev token session, redirects with dev_token=true
+    2. scope upgrade flow - replaces old session with new one, redirects to settings
+    3. regular login flow - creates session, redirects to portal or profile setup
     """
     did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
 
@@ -109,7 +115,35 @@ async def oauth_callback(
         exchange_token = await create_exchange_token(session_id, is_dev_token=True)
 
         return RedirectResponse(
-            url=f"{settings.frontend.url}/portal?exchange_token={exchange_token}&dev_token=true",
+            url=f"{settings.frontend.url}/settings?exchange_token={exchange_token}&dev_token=true",
+            status_code=303,
+        )
+
+    # check if this is a scope upgrade OAuth flow
+    pending_scope_upgrade = await get_pending_scope_upgrade(state)
+
+    if pending_scope_upgrade:
+        # verify the DID matches (user must be the one who started the flow)
+        if pending_scope_upgrade.did != did:
+            raise HTTPException(
+                status_code=403,
+                detail="scope upgrade flow was started by a different user",
+            )
+
+        # delete the old session
+        await delete_session(pending_scope_upgrade.old_session_id)
+
+        # create new session with upgraded scopes
+        session_id = await create_session(did, handle, oauth_session)
+
+        # clean up pending record
+        await delete_pending_scope_upgrade(state)
+
+        # create exchange token - NOT marked as dev token so cookie gets set
+        exchange_token = await create_exchange_token(session_id)
+
+        return RedirectResponse(
+            url=f"{settings.frontend.url}/settings?exchange_token={exchange_token}&scope_upgraded=true",
             status_code=303,
         )
 
@@ -328,3 +362,53 @@ async def start_developer_token_flow(
     )
 
     return DevTokenStartResponse(auth_url=auth_url)
+
+
+class ScopeUpgradeStartRequest(BaseModel):
+    """request model for starting scope upgrade OAuth flow."""
+
+    # for now, only teal scopes are supported
+    include_teal: bool = True
+
+
+class ScopeUpgradeStartResponse(BaseModel):
+    """response model with OAuth authorization URL."""
+
+    auth_url: str
+
+
+@router.post("/scope-upgrade/start")
+@limiter.limit(settings.rate_limit.auth_limit)
+async def start_scope_upgrade_flow(
+    request: Request,
+    body: ScopeUpgradeStartRequest,
+    session: Session = Depends(require_auth),
+) -> ScopeUpgradeStartResponse:
+    """start OAuth flow to upgrade session scopes.
+
+    this initiates a new OAuth authorization flow with expanded scopes.
+    the user will be redirected to authorize, and on callback the old session
+    will be replaced with a new session that has the requested scopes.
+
+    use this when a user enables a feature that requires additional OAuth scopes
+    (e.g., enabling teal.fm scrobbling which needs fm.teal.alpha.* scopes).
+
+    returns the authorization URL that the frontend should redirect to.
+    """
+    # start OAuth flow with the requested scopes
+    auth_url, state = await start_oauth_flow_with_scopes(
+        session.handle, include_teal=body.include_teal
+    )
+
+    # build the requested scopes string for logging/tracking
+    requested_scopes = "teal" if body.include_teal else "base"
+
+    # save pending scope upgrade metadata keyed by state
+    await save_pending_scope_upgrade(
+        state=state,
+        did=session.did,
+        old_session_id=session.session_id,
+        requested_scopes=requested_scopes,
+    )
+
+    return ScopeUpgradeStartResponse(auth_url=auth_url)

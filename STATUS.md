@@ -73,7 +73,6 @@ plyr.fm should become:
 - `get_optional_session` dependency for optional auth
 
 **what's NOT done**:
-- no session invalidation for new scopes (existing users need re-auth)
 - no playlist creation UI yet (only liked tracks list)
 - no album→list migration for existing albums (syncs on login now)
 - no reordering UI for lists
@@ -89,9 +88,31 @@ plyr.fm should become:
 **related issues**: #221 (ATProto records for albums), #146 (content-addressable storage), #498 (playlists)
 
 **next steps**:
-1. session invalidation mechanism (force re-auth for list scope)
-2. playlist creation UI in library
-3. list reordering UI
+1. playlist creation UI in library
+2. list reordering UI
+
+---
+
+#### scope upgrade OAuth flow (feat/scope-invalidation branch, Dec 7)
+
+**problem**: when users enabled teal.fm scrobbling, the app showed a passive "please log out and back in" message because the session lacked the required OAuth scopes. this was confusing UX.
+
+**solution**: immediate OAuth handshake when enabling features that require new scopes (same pattern as developer tokens).
+
+**what's done**:
+- `POST /auth/scope-upgrade/start` endpoint initiates OAuth with expanded scopes
+- `pending_scope_upgrades` table tracks in-flight upgrades (10min TTL)
+- callback replaces old session with new one, redirects to `/settings?scope_upgraded=true`
+- frontend shows spinner during redirect, success toast on return
+- fixed preferences bug where toggling settings reset theme to dark mode
+
+**code quality**:
+- eliminated bifurcated OAuth clients (`oauth_client` vs `oauth_client_with_teal`)
+- replaced with `get_oauth_client(include_teal=False)` factory function
+- at ~17 OAuth flows/day, instantiation cost is negligible
+- explicit scope selection at call site instead of module-level state
+
+**tests**: 4 new tests for scope upgrade flow
 
 ---
 
