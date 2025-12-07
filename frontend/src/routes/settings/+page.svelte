@@ -47,12 +47,13 @@
 	];
 
 	onMount(async () => {
-		// check if exchange_token is in URL (from OAuth callback for dev token)
+		// check if exchange_token is in URL (from OAuth callback)
 		const params = new URLSearchParams(window.location.search);
 		const exchangeToken = params.get('exchange_token');
 		const isDevToken = params.get('dev_token') === 'true';
+		const isScopeUpgrade = params.get('scope_upgraded') === 'true';
 
-		if (exchangeToken && isDevToken) {
+		if (exchangeToken) {
 			try {
 				const exchangeResponse = await fetch(`${API_URL}/auth/exchange`, {
 					method: 'POST',
@@ -63,8 +64,16 @@
 
 				if (exchangeResponse.ok) {
 					const data = await exchangeResponse.json();
-					developerToken = data.session_id;
-					toast.success('developer token created - save it now!');
+
+					if (isDevToken) {
+						developerToken = data.session_id;
+						toast.success('developer token created - save it now!');
+					} else if (isScopeUpgrade) {
+						// reload auth state with new session
+						await auth.initialize();
+						await preferences.fetch();
+						toast.success('teal.fm scrobbling connected!');
+					}
 				}
 			} catch (_e) {
 				console.error('failed to exchange token:', _e);
@@ -153,14 +162,48 @@
 		}
 	}
 
+	// teal scrobbling toggle state
+	let enablingTeal = $state(false);
+
 	async function saveTealScrobbling(enabled: boolean) {
-		try {
-			await preferences.update({ enable_teal_scrobbling: enabled });
-			await preferences.fetch();
-			toast.success(enabled ? 'teal.fm scrobbling enabled' : 'teal.fm scrobbling disabled');
-		} catch (_e) {
-			console.error('failed to save preference:', _e);
-			toast.error('failed to update preference');
+		if (enabled) {
+			// enabling teal - start scope upgrade flow
+			enablingTeal = true;
+			try {
+				const response = await fetch(`${API_URL}/auth/scope-upgrade/start`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					credentials: 'include',
+					body: JSON.stringify({ include_teal: true })
+				});
+
+				if (!response.ok) {
+					const error = await response.json();
+					toast.error(error.detail || 'failed to start teal connection');
+					enablingTeal = false;
+					return;
+				}
+
+				// update the preference first
+				await preferences.update({ enable_teal_scrobbling: true });
+
+				// redirect to OAuth
+				const result = await response.json();
+				window.location.href = result.auth_url;
+			} catch (_e) {
+				console.error('failed to enable teal scrobbling:', _e);
+				toast.error('failed to connect teal.fm');
+				enablingTeal = false;
+			}
+		} else {
+			// disabling teal - just update preference
+			try {
+				await preferences.update({ enable_teal_scrobbling: false });
+				toast.success('teal.fm scrobbling disabled');
+			} catch (_e) {
+				console.error('failed to save preference:', _e);
+				toast.error('failed to update preference');
+			}
 		}
 	}
 
@@ -420,18 +463,27 @@
 						<input
 							type="checkbox"
 							checked={enableTealScrobbling}
+							disabled={enablingTeal}
 							onchange={(e) => saveTealScrobbling((e.target as HTMLInputElement).checked)}
 						/>
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
-				{#if tealNeedsReauth}
+				{#if enablingTeal}
+					<div class="reauth-notice connecting">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="12" cy="12" r="10" />
+							<path d="M12 6v6l4 2" />
+						</svg>
+						<span>connecting to teal.fm...</span>
+					</div>
+				{:else if tealNeedsReauth}
 					<div class="reauth-notice">
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<circle cx="12" cy="12" r="10" />
 							<path d="M12 16v-4M12 8h.01" />
 						</svg>
-						<span>please log out and back in to connect teal.fm</span>
+						<span>toggle on to connect teal.fm scrobbling</span>
 					</div>
 				{/if}
 			</div>
@@ -787,6 +839,21 @@
 		margin-top: 0.75rem;
 		font-size: 0.8rem;
 		color: var(--warning);
+	}
+
+	.reauth-notice.connecting {
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+		color: var(--accent);
+	}
+
+	.reauth-notice.connecting svg {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from { transform: rotate(0deg); }
+		to { transform: rotate(360deg); }
 	}
 
 	/* developer tokens */

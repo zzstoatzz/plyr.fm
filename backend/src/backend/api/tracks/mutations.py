@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
-from backend._internal import oauth_client, require_auth
+from backend._internal import get_oauth_client, require_auth
 from backend._internal.atproto import delete_record_by_uri
 from backend._internal.atproto.records import (
     _reconstruct_oauth_session,
@@ -346,7 +346,7 @@ async def _check_old_namespace_records(
 
     # try request with token refresh
     for attempt in range(2):
-        response = await oauth_client.make_authenticated_request(
+        response = await get_oauth_client().make_authenticated_request(
             session=oauth_session,
             method="GET",
             url=url,
@@ -404,7 +404,7 @@ async def _create_atproto_record(
 
     # try create with token refresh
     for attempt in range(2):
-        response = await oauth_client.make_authenticated_request(
+        response = await get_oauth_client().make_authenticated_request(
             session=oauth_session,
             method="POST",
             url=create_url,
