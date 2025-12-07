@@ -47,6 +47,31 @@ plyr.fm should become:
 
 ### December 2025
 
+#### settings consolidation (PR #496, Dec 6)
+
+**problem**: user preferences were scattered across multiple locations with confusing terminology:
+- SensitiveImage tooltip said "enable in portal" but mobile menu said "profile"
+- clicking gear icon (SettingsMenu) only showed appearance/playback, not all settings
+- portal mixed content management with preferences
+
+**solution**: clear separation between **settings** (preferences) and **portal** (content & data):
+
+| page | purpose |
+|------|---------|
+| `/settings` | preferences: theme, accent color, auto-advance, sensitive artwork, timed comments, teal.fm, developer tokens |
+| `/portal` | your content & data: profile, tracks, albums, export, delete account |
+
+**changes**:
+- created dedicated `/settings` route consolidating all user preferences
+- slimmed portal to focus on content management
+- added "all settings →" link to SettingsMenu and ProfileMenu
+- renamed mobile menu "profile" → "portal" to match route
+- moved delete account to portal's "your data" section (it's about data, not preferences)
+- fixed `font-family: inherit` on all settings page buttons
+- updated SensitiveImage tooltip: "enable in settings"
+
+---
+
 #### bufo easter egg improvements (PRs #491-492, Dec 6)
 
 **what shipped**:
@@ -577,4 +602,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-06 (release 2025.1206.222902).
+this is a living document. last updated 2025-12-06.
