@@ -74,7 +74,6 @@ plyr.fm should become:
 
 **what's NOT done**:
 - no playlist creation UI yet (only liked tracks list)
-- no album→list migration for existing albums (syncs on login now)
 - no reordering UI for lists
 
 **design decisions**:
