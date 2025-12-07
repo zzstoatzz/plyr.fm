@@ -1,0 +1,33 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.actor.profile",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A plyr.fm artist profile with music-specific metadata.",
+      "key": "literal:self",
+      "record": {
+        "type": "object",
+        "required": ["createdAt"],
+        "properties": {
+          "bio": {
+            "type": "string",
+            "description": "Artist bio or description.",
+            "maxLength": 2560,
+            "maxGraphemes": 256
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the profile was created."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the profile was last updated."
+          }
+        }
+      }
+    }
+  }
+}

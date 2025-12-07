@@ -1,5 +1,6 @@
 """artist profile API endpoints."""
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
@@ -10,12 +11,27 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
-from backend._internal.atproto import fetch_user_avatar, normalize_avatar_url
+from backend._internal.atproto import (
+    fetch_user_avatar,
+    normalize_avatar_url,
+    upsert_profile_record,
+)
 from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/artists", tags=["artists"])
+
+# hold references to background tasks to prevent GC before completion
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
+def _create_background_task(coro) -> asyncio.Task:
+    """Create a background task with proper lifecycle management."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 # request/response models
@@ -124,6 +140,18 @@ async def create_artist(
     logger.info(
         f"created artist profile for {auth_session.did} (@{auth_session.handle})"
     )
+
+    # create ATProto profile record if bio was provided
+    if request.bio:
+        try:
+            await upsert_profile_record(auth_session, bio=request.bio)
+            logger.info(f"created ATProto profile record for {auth_session.did}")
+        except Exception as e:
+            # don't fail the request if ATProto record creation fails
+            logger.warning(
+                f"failed to create ATProto profile record for {auth_session.did}: {e}"
+            )
+
     return ArtistResponse.model_validate(artist)
 
 
@@ -140,6 +168,21 @@ async def get_my_artist_profile(
             status_code=404,
             detail="artist profile not found - please create one first",
         )
+
+    # fire-and-forget sync of ATProto profile record
+    # creates record if doesn't exist, skips if unchanged
+    async def _sync_profile():
+        try:
+            result = await upsert_profile_record(auth_session, bio=artist.bio)
+            if result:
+                logger.info(f"synced ATProto profile record for {auth_session.did}")
+        except Exception as e:
+            logger.warning(
+                f"failed to sync ATProto profile record for {auth_session.did}: {e}"
+            )
+
+    _create_background_task(_sync_profile())
+
     return ArtistResponse.model_validate(artist)
 
 
@@ -171,6 +214,18 @@ async def update_my_artist_profile(
     await db.refresh(artist)
 
     logger.info(f"updated artist profile for {auth_session.did}")
+
+    # update ATProto profile record if bio was changed
+    if request.bio is not None:
+        try:
+            await upsert_profile_record(auth_session, bio=request.bio)
+            logger.info(f"updated ATProto profile record for {auth_session.did}")
+        except Exception as e:
+            # don't fail the request if ATProto record update fails
+            logger.warning(
+                f"failed to update ATProto profile record for {auth_session.did}: {e}"
+            )
+
     return ArtistResponse.model_validate(artist)
 
 

@@ -378,6 +378,13 @@ class AtprotoSettings(AppSettingsSection):
 
     @computed_field
     @property
+    def profile_collection(self) -> str:
+        """Collection name for artist profile records."""
+
+        return f"{self.app_namespace}.actor.profile"
+
+    @computed_field
+    @property
     def old_track_collection(self) -> str | None:
         """Collection name for old namespace, if migration is active."""
 
@@ -393,12 +400,13 @@ class AtprotoSettings(AppSettingsSection):
         if self.scope_override:
             return self.scope_override
 
-        # base scopes: our track, like, comment, and list collections
+        # base scopes: our track, like, comment, list, and profile collections
         scopes = [
             f"repo:{self.track_collection}",
             f"repo:{self.like_collection}",
             f"repo:{self.comment_collection}",
             f"repo:{self.list_collection}",
+            f"repo:{self.profile_collection}",
         ]
 
         # if we have an old namespace, add old track collection too
