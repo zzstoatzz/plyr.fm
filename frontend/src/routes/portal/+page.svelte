@@ -874,9 +874,9 @@
 										onclick={() => startEditingAlbum(album.id)}
 										title="edit cover art"
 									>
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<path d="M12 20h9"></path>
-											<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+											<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
 										</svg>
 									</button>
 								</div>
@@ -909,7 +909,7 @@
 								</SensitiveImage>
 							{:else}
 								<div class="playlist-cover-placeholder">
-									<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+									<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 										<line x1="8" y1="6" x2="21" y2="6"></line>
 										<line x1="8" y1="12" x2="21" y2="12"></line>
 										<line x1="8" y1="18" x2="21" y2="18"></line>
@@ -1900,15 +1900,15 @@
 
 	.playlists-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-		gap: 1rem;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: 1.5rem;
 	}
 
 	.playlist-card {
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
-		padding: 0.75rem;
+		padding: 1rem;
 		transition: all 0.2s;
 		display: flex;
 		flex-direction: column;
@@ -1942,20 +1942,21 @@
 
 	.playlist-info {
 		min-width: 0;
+		flex: 1;
 	}
 
 	.playlist-title {
-		font-size: 0.9rem;
+		font-size: 1rem;
 		font-weight: 600;
 		color: var(--text-primary);
-		margin: 0 0 0.15rem 0;
+		margin: 0 0 0.25rem 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.playlist-stats {
-		font-size: 0.8rem;
+		font-size: 0.85rem;
 		color: var(--text-tertiary);
 		margin: 0;
 	}
@@ -2415,16 +2416,16 @@
 		}
 
 		.playlist-card {
-			padding: 0.6rem;
+			padding: 0.75rem;
 			gap: 0.5rem;
 		}
 
 		.playlist-title {
-			font-size: 0.8rem;
+			font-size: 0.85rem;
 		}
 
 		.playlist-stats {
-			font-size: 0.7rem;
+			font-size: 0.75rem;
 		}
 
 		.view-playlists-link {
