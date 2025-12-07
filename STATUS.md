@@ -49,25 +49,34 @@ plyr.fm should become:
 
 #### playlists / lists infrastructure (feat/playlists branch, Dec 6 - ongoing)
 
-**status**: long-lived branch, not yet merged. backend infrastructure only, no UI.
+**status**: long-lived branch, not yet merged. backend and frontend progress.
 
 **what's done**:
-- `fm.plyr.list` lexicon - minimal design (5 fields):
-  - required: `items` (array of strongRefs), `createdAt`
-  - optional: `name`, `listType` (knownValues: album, playlist, liked), `updatedAt`
-- backend functions: `create_list_record()`, `update_list_record()`
+- **phase 1 - profile records**: `fm.plyr.profile` syncs on login (fire-and-forget)
+- **phase 2 - list records**:
+  - `fm.plyr.list` lexicon - minimal design (5 fields):
+    - required: `items` (array of strongRefs), `createdAt`
+    - optional: `name`, `listType` (knownValues: album, playlist, liked), `updatedAt`
+  - backend functions: `create_list_record()`, `update_list_record()`, `upsert_album_list_record()`, `upsert_liked_list_record()`
+  - albums sync as list records on login (fire-and-forget background tasks)
+  - liked tracks sync as list record on login
+  - migration for `liked_list_uri`/`liked_list_cid` on user_preferences
+  - tests for list sync behavior
+- **UI progress**:
+  - artist page shows "collections" section with liked tracks link card
+  - `/liked/[handle]` public liked tracks page
+  - `/library` hub page showing liked tracks + placeholder for playlists
+  - nav changed from "liked" → "library" (heart icon goes to `/library`)
+  - `/liked` kept for direct access
 - OAuth scopes updated to include list collection
-- public liked pages at `/u/{handle}/likes` (precursor feature)
 - `show_liked_on_profile` preference
 - `get_optional_session` dependency for optional auth
 
 **what's NOT done**:
-- no list records created yet (infrastructure only)
-- no UI for lists (no artist page lists, no portal lists, no /lists page)
-- no album→list migration
-- no liked→list migration
-- no session invalidation for new scopes
-- no on-login record creation hook
+- no session invalidation for new scopes (existing users need re-auth)
+- no playlist creation UI yet (only liked tracks list)
+- no album→list migration for existing albums (syncs on login now)
+- no reordering UI for lists
 
 **design decisions**:
 - lists are generic ordered collections of any ATProto records (tracks, albums, other lists)
@@ -75,13 +84,14 @@ plyr.fm should become:
 - array order = display order, reorder via `putRecord`
 - strongRef (uri + cid) for content-addressable item references
 - minimal lexicon per ATProto style guide - can add fields later, can't remove
+- "library" = umbrella term for personal collections (liked tracks + future playlists)
 
-**related issues**: #221 (ATProto records for albums), #146 (content-addressable storage)
+**related issues**: #221 (ATProto records for albums), #146 (content-addressable storage), #498 (playlists)
 
-**next steps when ready**:
+**next steps**:
 1. session invalidation mechanism (force re-auth for list scope)
-2. on-login hook to create list records for existing albums/likes
-3. UI: show lists on artist page, portal, dedicated /lists route
+2. playlist creation UI in library
+3. list reordering UI
 
 ---
 
@@ -640,4 +650,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-06.
+this is a living document. last updated 2025-12-07.
