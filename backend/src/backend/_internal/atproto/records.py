@@ -485,6 +485,144 @@ async def create_comment_record(
     return result["uri"]
 
 
+def build_list_record(
+    title: str,
+    purpose: str,
+    items: list[dict[str, str]],
+    description: str | None = None,
+    image_url: str | None = None,
+    created_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Build a list record dict for ATProto.
+
+    args:
+        title: list title
+        purpose: type of list ("album", "playlist", "collection")
+        items: list of track references, each with {"uri": str, "cid": str}
+        description: optional list description
+        image_url: optional cover art image URL
+        created_at: optional creation timestamp (defaults to now)
+
+    returns:
+        record dict ready for ATProto
+    """
+    now = (created_at or datetime.now(UTC)).isoformat().replace("+00:00", "Z")
+
+    record: dict[str, Any] = {
+        "$type": settings.atproto.list_collection,
+        "title": title,
+        "purpose": purpose,
+        "items": [
+            {
+                "track": {"uri": item["uri"], "cid": item["cid"]},
+                "addedAt": item.get("addedAt", now),
+            }
+            for item in items
+        ],
+        "createdAt": now,
+    }
+
+    if description:
+        record["description"] = description
+    if image_url:
+        settings.storage.validate_image_url(image_url)
+        record["imageUrl"] = image_url
+
+    return record
+
+
+async def create_list_record(
+    auth_session: AuthSession,
+    title: str,
+    purpose: str,
+    items: list[dict[str, str]],
+    description: str | None = None,
+    image_url: str | None = None,
+) -> tuple[str, str]:
+    """Create a list record on the user's PDS.
+
+    args:
+        auth_session: authenticated user session
+        title: list title
+        purpose: type of list ("album", "playlist", "collection")
+        items: list of track references, each with {"uri": str, "cid": str}
+        description: optional list description
+        image_url: optional cover art image URL
+
+    returns:
+        tuple of (record_uri, record_cid)
+
+    raises:
+        ValueError: if session is invalid
+        Exception: if record creation fails
+    """
+    record = build_list_record(
+        title=title,
+        purpose=purpose,
+        items=items,
+        description=description,
+        image_url=image_url,
+    )
+
+    payload = {
+        "repo": auth_session.did,
+        "collection": settings.atproto.list_collection,
+        "record": record,
+    }
+
+    result = await _make_pds_request(
+        auth_session, "POST", "com.atproto.repo.createRecord", payload
+    )
+    return result["uri"], result["cid"]
+
+
+async def update_list_record(
+    auth_session: AuthSession,
+    list_uri: str,
+    title: str,
+    purpose: str,
+    items: list[dict[str, str]],
+    description: str | None = None,
+    image_url: str | None = None,
+    created_at: datetime | None = None,
+) -> tuple[str, str]:
+    """Update an existing list record on the user's PDS.
+
+    Use this for reordering tracks, adding/removing tracks, or updating metadata.
+
+    args:
+        auth_session: authenticated user session
+        list_uri: AT URI of the list record to update
+        title: list title
+        purpose: type of list ("album", "playlist", "collection")
+        items: updated list of track references (order determines display order)
+        description: optional list description
+        image_url: optional cover art image URL
+        created_at: original creation timestamp (preserved on updates)
+
+    returns:
+        tuple of (record_uri, new_record_cid)
+
+    raises:
+        ValueError: if session is invalid
+        Exception: if record update fails
+    """
+    record = build_list_record(
+        title=title,
+        purpose=purpose,
+        items=items,
+        description=description,
+        image_url=image_url,
+        created_at=created_at,
+    )
+
+    return await update_record(
+        auth_session=auth_session,
+        record_uri=list_uri,
+        record=record,
+    )
+
+
 async def update_comment_record(
     auth_session: AuthSession,
     comment_uri: str,

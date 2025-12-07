@@ -1,0 +1,69 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.list",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "An ordered collection of tracks. Used for playlists, albums, and other curated lists.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["title", "purpose", "items", "createdAt"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the list.",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description of the list.",
+            "maxLength": 2048
+          },
+          "purpose": {
+            "type": "string",
+            "description": "The type of list: album, playlist, or collection.",
+            "knownValues": ["album", "playlist", "collection"]
+          },
+          "items": {
+            "type": "array",
+            "description": "Ordered references to tracks in this list.",
+            "items": {
+              "type": "ref",
+              "ref": "#listItem"
+            },
+            "maxLength": 500
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to cover artwork image."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the list was created."
+          }
+        }
+      }
+    },
+    "listItem": {
+      "type": "object",
+      "description": "A reference to a track within a list.",
+      "required": ["track"],
+      "properties": {
+        "track": {
+          "type": "ref",
+          "ref": "com.atproto.repo.strongRef",
+          "description": "Content-addressable reference to the track (uri + cid)."
+        },
+        "addedAt": {
+          "type": "string",
+          "format": "datetime",
+          "description": "When this track was added to the list."
+        }
+      }
+    }
+  }
+}
