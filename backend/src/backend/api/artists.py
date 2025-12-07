@@ -10,7 +10,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
-from backend._internal.atproto import fetch_user_avatar, normalize_avatar_url
+from backend._internal.atproto import (
+    fetch_user_avatar,
+    normalize_avatar_url,
+    upsert_profile_record,
+)
 from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
 
 logger = logging.getLogger(__name__)
@@ -124,6 +128,18 @@ async def create_artist(
     logger.info(
         f"created artist profile for {auth_session.did} (@{auth_session.handle})"
     )
+
+    # create ATProto profile record if bio was provided
+    if request.bio:
+        try:
+            await upsert_profile_record(auth_session, bio=request.bio)
+            logger.info(f"created ATProto profile record for {auth_session.did}")
+        except Exception as e:
+            # don't fail the request if ATProto record creation fails
+            logger.warning(
+                f"failed to create ATProto profile record for {auth_session.did}: {e}"
+            )
+
     return ArtistResponse.model_validate(artist)
 
 
@@ -171,6 +187,18 @@ async def update_my_artist_profile(
     await db.refresh(artist)
 
     logger.info(f"updated artist profile for {auth_session.did}")
+
+    # update ATProto profile record if bio was changed
+    if request.bio is not None:
+        try:
+            await upsert_profile_record(auth_session, bio=request.bio)
+            logger.info(f"updated ATProto profile record for {auth_session.did}")
+        except Exception as e:
+            # don't fail the request if ATProto record update fails
+            logger.warning(
+                f"failed to update ATProto profile record for {auth_session.did}: {e}"
+            )
+
     return ArtistResponse.model_validate(artist)
 
 
