@@ -65,6 +65,15 @@
 					<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
 				</svg>
 			</a>
+			<a
+				href="https://tangled.org/@zzstoatzz.io/plyr.fm"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="tangled-link desktop-only"
+				title="View source on Tangled"
+			>
+				<img src="https://cdn.bsky.app/img/avatar/plain/did:plc:wshs7t2adsemcrrd4snkeqli/bafkreif6z53z4ukqmdgwstspwh5asmhxheblcd2adisoccl4fflozc3kva@jpeg" alt="Tangled" width="20" height="20" class="tangled-icon" />
+			</a>
 
 			<!-- mobile: show menu button -->
 			<div class="mobile-only">
@@ -237,7 +246,7 @@
 
 	.search-left {
 		position: absolute;
-		left: calc((100vw - var(--queue-width, 0px) - 800px) / 3);
+		left: calc((100vw - var(--queue-width, 0px) - 800px) / 3 + 20px);
 		top: 50%;
 		transform: translate(-50%, -50%);
 		transition: left 0.3s ease;
@@ -270,12 +279,13 @@
 	}
 
 	.bluesky-link,
-	.status-link {
+	.status-link,
+	.tangled-link {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		color: var(--text-secondary);
-		transition: color 0.2s;
+		transition: color 0.2s, opacity 0.2s;
 		text-decoration: none;
 		flex-shrink: 0;
 	}
@@ -286,6 +296,17 @@
 
 	.status-link:hover {
 		color: var(--accent);
+	}
+
+	.tangled-icon {
+		border-radius: 4px;
+		opacity: 0.7;
+		transition: opacity 0.2s, box-shadow 0.2s;
+	}
+
+	.tangled-link:hover .tangled-icon {
+		opacity: 1;
+		box-shadow: 0 0 0 2px var(--accent);
 	}
 
 	h1 {
@@ -325,7 +346,7 @@
 	}
 
 	.nav-link:hover {
-		color: var(--text-primary);
+		color: var(--accent);
 		background: var(--bg-tertiary);
 		border-color: var(--border-default);
 	}
@@ -371,8 +392,14 @@
 		color: var(--bg-primary);
 	}
 
-	/* Show LinksMenu (with stats) when sidebar is hidden */
-	@media (max-width: 1299px) {
+	/* Hide margin-positioned elements and switch to mobile layout at the same breakpoint */
+	@media (max-width: 1399px) {
+		.stats-left,
+		.search-left,
+		.logout-right {
+			display: none !important;
+		}
+
 		.desktop-only {
 			display: none !important;
 		}

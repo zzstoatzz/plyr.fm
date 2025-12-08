@@ -102,6 +102,24 @@
 						<span class="link-title">status page</span>
 					</div>
 				</a>
+				<a
+					href="https://tangled.org/@zzstoatzz.io/plyr.fm"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="menu-link"
+				>
+					<img
+						src="https://cdn.bsky.app/img/avatar/plain/did:plc:wshs7t2adsemcrrd4snkeqli/bafkreif6z53z4ukqmdgwstspwh5asmhxheblcd2adisoccl4fflozc3kva@jpeg"
+						alt="Tangled"
+						width="24"
+						height="24"
+						class="tangled-menu-icon"
+					/>
+					<div class="link-info">
+						<span class="link-title">source code</span>
+						<span class="link-subtitle">tangled.org</span>
+					</div>
+				</a>
 			</nav>
 			<PlatformStats variant="menu" />
 		</div>
@@ -223,6 +241,17 @@
 
 	.menu-link:hover svg {
 		color: var(--accent);
+	}
+
+	.tangled-menu-icon {
+		border-radius: 4px;
+		opacity: 0.7;
+		transition: opacity 0.2s, box-shadow 0.2s;
+	}
+
+	.menu-link:hover .tangled-menu-icon {
+		opacity: 1;
+		box-shadow: 0 0 0 2px var(--accent);
 	}
 
 	.link-info {
