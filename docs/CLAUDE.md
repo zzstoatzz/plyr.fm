@@ -6,7 +6,7 @@ structure:
 - **frontend/** - svelte 5 state patterns, ui components
 - **backend/** - config system, features, transcoder service
 - **deployment/** - environments, migrations, fly.io
-- **tools/** - logfire queries, neon mcp, pdsx cli
+- **tools/** - logfire queries, neon mcp, pdsx mcp
 - **local-development/** - setup guide for new contributors
 
 when you solve a problem or make a design choice, document it here with as much detail as needed
