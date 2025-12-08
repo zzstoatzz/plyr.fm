@@ -169,11 +169,12 @@ jobs:
             ## task 4: open PR
 
             if any files changed:
-            1. git checkout -b status-maintenance-$(date +%Y%m%d)
-            2. git add .status_history/ STATUS.md update.wav
-            3. git commit -m "chore: status maintenance"
-            4. git push -u origin status-maintenance-$(date +%Y%m%d)
-            5. gh pr create with a title and body you craft:
+            1. first, generate a unique branch name: BRANCH="status-maintenance-$(date +%Y%m%d-%H%M%S)"
+            2. git checkout -b $BRANCH
+            3. git add .status_history/ STATUS.md update.wav
+            4. git commit -m "chore: status maintenance"
+            5. git push -u origin $BRANCH
+            6. gh pr create with a title and body you craft:
                - title should be descriptive of what this status update covers (e.g. "chore: status maintenance - playlist fast-follow fixes" or "chore: status maintenance - December updates")
                - make it clear this is an automated status maintenance PR from the GitHub Action
                - body should summarize what changed (archival, audio generation, etc.)
