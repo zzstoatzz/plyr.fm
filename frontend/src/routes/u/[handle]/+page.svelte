@@ -3,7 +3,7 @@
 	import { fade } from 'svelte/transition';
 	import { API_URL } from '$lib/config';
 	import { browser } from '$app/environment';
-	import type { Analytics, Track } from '$lib/types';
+	import type { Analytics, Track, Playlist } from '$lib/types';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import Header from '$lib/components/Header.svelte';
@@ -12,7 +12,7 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { fetchLikedTracks } from '$lib/tracks.svelte';
+	import { fetchLikedTracks, fetchUserLikes } from '$lib/tracks.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
@@ -49,6 +49,11 @@ $effect(() => {
 	let tracksHydrated = $state(false);
 	let tracksLoading = $state(false);
 
+	// liked tracks count (shown if artist has show_liked_on_profile enabled)
+	let likedTracksCount = $state<number | null>(null);
+
+	// public playlists for collections section
+	let publicPlaylists = $state<Playlist[]>([]);
 
 	async function handleLogout() {
 		await auth.logout();
@@ -84,12 +89,42 @@ $effect(() => {
 		}
 	}
 
+	async function loadLikedTracksCount() {
+		if (!artist?.handle || !artist.show_liked_on_profile || likedTracksCount !== null) return;
+
+		try {
+			const response = await fetchUserLikes(artist.handle);
+			if (response) {
+				likedTracksCount = response.tracks.length;
+			}
+		} catch (_e) {
+			console.error('failed to load liked tracks count:', _e);
+		}
+	}
+
+	async function loadPublicPlaylists() {
+		if (!artist?.did) return;
+
+		try {
+			const response = await fetch(`${API_URL}/lists/playlists/by-artist/${artist.did}`);
+			if (response.ok) {
+				publicPlaylists = await response.json();
+			}
+		} catch (_e) {
+			console.error('failed to load public playlists:', _e);
+		}
+	}
+
 	onMount(() => {
 		// load analytics in background without blocking page render
 		loadAnalytics();
 		primeLikesFromCache();
 		// immediately hydrate tracks client-side for liked state
 		void hydrateTracksWithLikes();
+		// load liked tracks count if artist has show_liked_on_profile enabled
+		void loadLikedTracksCount();
+		// load public playlists for collections section
+		void loadPublicPlaylists();
 	});
 
 	async function hydrateTracksWithLikes() {
@@ -339,6 +374,62 @@ $effect(() => {
 									<span class="dot">•</span>
 									{album.total_plays.toLocaleString()} {album.total_plays === 1 ? 'play' : 'plays'}
 								</p>
+							</div>
+						</a>
+					{/each}
+				</div>
+			</section>
+		{/if}
+
+		{#if artist.show_liked_on_profile || publicPlaylists.length > 0}
+			<section class="collections-section">
+				<div class="section-header">
+					<h2>collections</h2>
+				</div>
+				<div class="collections-list">
+					{#if artist.show_liked_on_profile}
+						<a href="/liked/{artist.handle}" class="collection-link">
+							<div class="collection-icon liked">
+								<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+									<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+								</svg>
+							</div>
+							<div class="collection-info">
+								<h3>liked tracks</h3>
+								{#if likedTracksCount !== null}
+									<p>{likedTracksCount} {likedTracksCount === 1 ? 'track' : 'tracks'}</p>
+								{:else}
+									<p>view collection</p>
+								{/if}
+							</div>
+							<div class="collection-arrow">
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M9 18l6-6-6-6"/>
+								</svg>
+							</div>
+						</a>
+					{/if}
+					{#each publicPlaylists as playlist}
+						<a href="/playlist/{playlist.id}" class="collection-link">
+							<div class="collection-icon playlist">
+								{#if playlist.image_url}
+									<img src={playlist.image_url} alt="{playlist.name} cover" />
+								{:else}
+									<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M9 18V5l12-2v13"/>
+										<circle cx="6" cy="18" r="3"/>
+										<circle cx="18" cy="16" r="3"/>
+									</svg>
+								{/if}
+							</div>
+							<div class="collection-info">
+								<h3>{playlist.name}</h3>
+								<p>{playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}</p>
+							</div>
+							<div class="collection-arrow">
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M9 18l6-6-6-6"/>
+								</svg>
 							</div>
 						</a>
 					{/each}
@@ -777,5 +868,103 @@ $effect(() => {
 		.album-grid {
 			grid-template-columns: 1fr;
 		}
+	}
+
+	.collections-section {
+		margin-top: 2rem;
+	}
+
+	.collections-section h2 {
+		margin-bottom: 1.25rem;
+		color: var(--text-primary);
+		font-size: 1.8rem;
+	}
+
+	.collections-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.collection-link {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 1.25rem 1.5rem;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 10px;
+		color: inherit;
+		text-decoration: none;
+		transition: transform 0.15s ease, border-color 0.15s ease;
+	}
+
+	.collection-link:hover {
+		transform: translateY(-2px);
+		border-color: var(--accent);
+	}
+
+	.collection-icon {
+		width: 48px;
+		height: 48px;
+		border-radius: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		overflow: hidden;
+	}
+
+	.collection-icon.liked {
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		color: var(--accent);
+	}
+
+	.collection-icon.playlist {
+		background: var(--bg-tertiary);
+		color: var(--text-secondary);
+	}
+
+	.collection-icon.playlist img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.collection-info {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.collection-info h3 {
+		margin: 0 0 0.25rem 0;
+		font-size: 1.1rem;
+		color: var(--text-primary);
+	}
+
+	.collection-info p {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--text-tertiary);
+	}
+
+	.collection-arrow {
+		color: var(--text-muted);
+		transition: transform 0.15s ease, color 0.15s ease;
+	}
+
+	.collection-link:hover .collection-arrow {
+		color: var(--accent);
+		transform: translateX(4px);
+	}
+
+	.albums {
+		margin-top: 2rem;
+	}
+
+	.albums h2 {
+		margin-bottom: 1.5rem;
+		color: var(--text-primary);
+		font-size: 1.8rem;
 	}
 </style>

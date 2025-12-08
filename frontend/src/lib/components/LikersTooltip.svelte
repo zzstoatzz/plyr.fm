@@ -99,8 +99,9 @@
 	<div class="likers-list">
 		{#each likers as liker}
 			<a
-				href="/u/{liker.handle}"
+				href="/liked/{liker.handle}"
 				class="liker"
+				title="view {liker.display_name}'s liked tracks"
 			>
 				{#if liker.avatar_url}
 					<SensitiveImage src={liker.avatar_url} compact>

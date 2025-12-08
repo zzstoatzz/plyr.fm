@@ -185,6 +185,13 @@ async def _engine(
         yield engine
     finally:
         await engine.dispose()
+        # also dispose any engines cached by production code (database.py)
+        # to prevent connection accumulation across tests
+        from backend.utilities.database import ENGINES
+
+        for cached_engine in list(ENGINES.values()):
+            await cached_engine.dispose()
+        ENGINES.clear()
 
 
 @pytest.fixture()

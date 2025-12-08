@@ -47,6 +47,129 @@ plyr.fm should become:
 
 ### December 2025
 
+#### playlists, ATProto sync, and library hub (feat/playlists branch, PR #499, Dec 6-7)
+
+**status**: feature-complete, ready for final review. ~8k lines changed.
+
+**playlists** (full CRUD):
+- `playlists` and `playlist_tracks` tables with Alembic migration
+- `POST /lists/playlists` - create playlist
+- `PUT /lists/playlists/{id}` - rename playlist
+- `DELETE /lists/playlists/{id}` - delete playlist
+- `POST /lists/playlists/{id}/tracks` - add track to playlist
+- `DELETE /lists/playlists/{id}/tracks/{track_id}` - remove track
+- `PUT /lists/playlists/{id}/tracks/reorder` - reorder tracks
+- `POST /lists/playlists/{id}/cover` - upload cover art
+- playlist detail page (`/playlist/[id]`) with edit modal, drag-and-drop reordering
+- playlists in global search results
+- "add to playlist" menu on tracks (filters out current playlist when on playlist page)
+- "create new playlist" link in add-to menu → `/library?create=playlist`
+- playlist sharing with OpenGraph link previews
+
+**ATProto integration**:
+- `fm.plyr.list` lexicon for syncing playlists and albums to user PDSes
+- `fm.plyr.actor.profile` lexicon for syncing artist profiles
+- automatic sync of albums, liked tracks, and profile on login (fire-and-forget)
+- scope upgrade OAuth flow for teal.fm integration (#503)
+
+**library hub** (`/library`):
+- unified page with tabs: liked, playlists, albums
+- create playlist modal (accessible via `/library?create=playlist` deep link)
+- consistent card layouts across sections
+- nav changed from "liked" → "library"
+
+**user experience**:
+- public liked pages for any user (`/liked/[handle]`)
+- `show_liked_on_profile` preference
+- portal album/playlist section visual consistency
+- toast notifications for all mutations (playlist CRUD, profile updates)
+- z-index fixes for dropdown menus
+
+**accessibility fixes**:
+- fixed 32 svelte-check warnings (ARIA roles, button nesting, unused CSS)
+- proper roles on modals, menus, and drag-drop elements
+
+**design decisions**:
+- lists are generic ordered collections of any ATProto records
+- `listType` semantically categorizes (album, playlist, liked) but doesn't restrict content
+- array order = display order, reorder via `putRecord`
+- strongRef (uri + cid) for content-addressable item references
+- "library" = umbrella term for personal collections
+
+**sync architecture**:
+- **profile, albums, liked tracks**: synced on login via `GET /artists/me` (fire-and-forget background tasks)
+- **playlists**: synced on create/modify (not at login) - avoids N playlist syncs on every login
+- sync tasks don't block the response (~300-500ms for the endpoint, PDS calls happen in background)
+- putRecord calls take ~50-100ms each, with automatic DPoP nonce retry on 401
+
+**file size audit** (candidates for future modularization):
+- `portal/+page.svelte`: 2,436 lines (58% CSS)
+- `playlist/[id]/+page.svelte`: 1,644 lines (48% CSS)
+- `api/lists.py`: 855 lines
+- CSS-heavy files could benefit from shared style extraction in future
+
+**related issues**: #221, #146, #498
+
+---
+
+#### list reordering UI (feat/playlists branch, Dec 7)
+
+**what's done**:
+- `PUT /lists/liked/reorder` endpoint - reorder user's liked tracks list
+- `PUT /lists/{rkey}/reorder` endpoint - reorder any list by ATProto rkey
+- both endpoints take `items` array of strongRefs (uri + cid) in desired order
+- liked tracks page (`/liked`) now has "reorder" button for authenticated users
+- album page has "reorder" button for album owner (if album has ATProto list record)
+- drag-and-drop reordering on desktop (HTML5 drag API)
+- touch reordering on mobile (6-dot grip handle, same pattern as queue)
+- visual feedback during drag: `.drag-over` and `.is-dragging` states
+- saves order to ATProto via `putRecord` when user clicks "done"
+- added `atproto_record_cid` to TrackResponse schema (needed for strongRefs)
+- added `artist_did` and `list_uri` to AlbumMetadata response
+
+**UX design**:
+- button toggles between "reorder" and "done" states
+- in edit mode, drag handles appear next to each track
+- saving shows spinner, success/error toast on completion
+- only owners can see/use reorder button (liked list = current user, album = artist)
+
+---
+
+#### scope upgrade OAuth flow (feat/scope-invalidation branch, Dec 7) - merged to feat/playlists
+
+**problem**: when users enabled teal.fm scrobbling, the app showed a passive "please log out and back in" message because the session lacked the required OAuth scopes. this was confusing UX.
+
+**solution**: immediate OAuth handshake when enabling features that require new scopes (same pattern as developer tokens).
+
+**what's done**:
+- `POST /auth/scope-upgrade/start` endpoint initiates OAuth with expanded scopes
+- `pending_scope_upgrades` table tracks in-flight upgrades (10min TTL)
+- callback replaces old session with new one, redirects to `/settings?scope_upgraded=true`
+- frontend shows spinner during redirect, success toast on return
+- fixed preferences bug where toggling settings reset theme to dark mode
+
+**code quality**:
+- eliminated bifurcated OAuth clients (`oauth_client` vs `oauth_client_with_teal`)
+- replaced with `get_oauth_client(include_teal=False)` factory function
+- at ~17 OAuth flows/day, instantiation cost is negligible
+- explicit scope selection at call site instead of module-level state
+
+**developer token UX**:
+- full-page overlay when returning from OAuth after creating a developer token
+- token displayed prominently with warning that it won't be shown again
+- copy button with success feedback, link to python SDK docs
+- prevents users from missing their token (was buried at bottom of page)
+
+**test fixes**:
+- fixed connection pool exhaustion in tests (was hitting Neon's connection limit)
+- added `DATABASE_POOL_SIZE=2`, `DATABASE_MAX_OVERFLOW=0` to pytest env vars
+- dispose cached engines after each test to prevent connection accumulation
+- fixed mock function signatures for `refresh_session` tests
+
+**tests**: 4 new tests for scope upgrade flow, all 281 tests passing
+
+---
+
 #### settings consolidation (PR #496, Dec 6)
 
 **problem**: user preferences were scattered across multiple locations with confusing terminology:
@@ -398,7 +521,6 @@ See `.status_history/2025-11.md` for detailed November development history inclu
 
 ### known issues
 - playback auto-start on refresh (#225) - investigating localStorage/queue state persistence
-- no ATProto records for albums yet (#221 - consciously deferred)
 - no AIFF/AIF transcoding support (#153)
 - iOS PWA audio may hang on first play after backgrounding - service worker caching interacts poorly with 307 redirects to R2 CDN. PR #466 added `NetworkOnly` for audio routes which should fix this, but iOS PWAs are slow to update service workers. workaround: delete home screen bookmark and re-add. may need further investigation if issue persists after SW propagates.
 
@@ -466,7 +588,15 @@ See `.status_history/2025-11.md` for detailed November development history inclu
 - ✅ album browsing and detail pages
 - ✅ album cover art upload and display
 - ✅ server-side rendering for SEO
-- ⏸ ATProto records for albums (deferred, see issue #221)
+- ✅ ATProto list records for albums (auto-synced on login)
+
+**playlists**
+- ✅ full CRUD (create, rename, delete, reorder tracks)
+- ✅ playlist detail pages with drag-and-drop reordering
+- ✅ playlist cover art upload
+- ✅ ATProto list records (synced on create/modify)
+- ✅ "add to playlist" menu on tracks
+- ✅ playlists in global search results
 
 **deployment (fully automated)**
 - **production**:
@@ -602,4 +732,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-06.
+this is a living document. last updated 2025-12-07.

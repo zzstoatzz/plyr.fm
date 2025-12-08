@@ -14,6 +14,7 @@ export interface Preferences {
 	enable_teal_scrobbling: boolean;
 	teal_needs_reauth: boolean;
 	show_sensitive_artwork: boolean;
+	show_liked_on_profile: boolean;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -24,7 +25,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	theme: 'dark',
 	enable_teal_scrobbling: false,
 	teal_needs_reauth: false,
-	show_sensitive_artwork: false
+	show_sensitive_artwork: false,
+	show_liked_on_profile: false
 };
 
 class PreferencesManager {
@@ -68,6 +70,10 @@ class PreferencesManager {
 		return this.data?.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork;
 	}
 
+	get showLikedOnProfile(): boolean {
+		return this.data?.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile;
+	}
+
 	setTheme(theme: Theme): void {
 		if (browser) {
 			localStorage.setItem('theme', theme);
@@ -101,6 +107,10 @@ class PreferencesManager {
 
 		this.loading = true;
 		try {
+			// preserve theme from localStorage (theme is client-side only)
+			const storedTheme = localStorage.getItem('theme') as Theme | null;
+			const currentTheme = storedTheme ?? this.data?.theme ?? DEFAULT_PREFERENCES.theme;
+
 			const response = await fetch(`${API_URL}/preferences/`, {
 				credentials: 'include'
 			});
@@ -111,13 +121,14 @@ class PreferencesManager {
 					auto_advance: data.auto_advance ?? DEFAULT_PREFERENCES.auto_advance,
 					allow_comments: data.allow_comments ?? DEFAULT_PREFERENCES.allow_comments,
 					hidden_tags: data.hidden_tags ?? DEFAULT_PREFERENCES.hidden_tags,
-					theme: data.theme ?? DEFAULT_PREFERENCES.theme,
+					theme: currentTheme,
 					enable_teal_scrobbling: data.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling,
 					teal_needs_reauth: data.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth,
-					show_sensitive_artwork: data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork
+					show_sensitive_artwork: data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork,
+					show_liked_on_profile: data.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile
 				};
 			} else {
-				this.data = { ...DEFAULT_PREFERENCES };
+				this.data = { ...DEFAULT_PREFERENCES, theme: currentTheme };
 			}
 			// apply theme after fetching
 			if (browser) {
@@ -125,7 +136,9 @@ class PreferencesManager {
 			}
 		} catch (error) {
 			console.error('failed to fetch preferences:', error);
-			this.data = { ...DEFAULT_PREFERENCES };
+			// preserve theme on error too
+			const storedTheme = localStorage.getItem('theme') as Theme | null;
+			this.data = { ...DEFAULT_PREFERENCES, theme: storedTheme ?? DEFAULT_PREFERENCES.theme };
 		} finally {
 			this.loading = false;
 		}

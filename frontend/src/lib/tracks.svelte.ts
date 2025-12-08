@@ -128,3 +128,35 @@ export async function fetchLikedTracks(): Promise<Track[]> {
 		return [];
 	}
 }
+
+export interface UserLikesResponse {
+	user: {
+		did: string;
+		handle: string;
+		display_name: string | null;
+		avatar_url: string | null;
+	};
+	tracks: Track[];
+	count: number;
+}
+
+export async function fetchUserLikes(handle: string): Promise<UserLikesResponse | null> {
+	try {
+		const response = await fetch(`${API_URL}/users/${handle}/likes`, {
+			credentials: 'include'
+		});
+
+		if (response.status === 404) {
+			return null;
+		}
+
+		if (!response.ok) {
+			throw new Error(`failed to fetch user likes: ${response.statusText}`);
+		}
+
+		return await response.json();
+	} catch (e) {
+		console.error('failed to fetch user likes:', e);
+		return null;
+	}
+}

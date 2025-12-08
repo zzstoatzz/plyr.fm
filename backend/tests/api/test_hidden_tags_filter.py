@@ -1,14 +1,13 @@
 """tests for hidden tags filtering on track listing endpoints."""
 
 from collections.abc import Generator
-from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session, require_auth
+from backend._internal import Session, get_optional_session, require_auth
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackTag, UserPreferences, get_db
 
@@ -125,19 +124,17 @@ def test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
     async def mock_require_auth() -> Session:
         return MockSession()
 
-    async def mock_get_session(session_id: str) -> Session | None:
-        if session_id == "test_session":
-            return MockSession()
-        return None
+    async def mock_get_optional_session() -> Session | None:
+        return MockSession()
 
     async def mock_get_db():
         yield db_session
 
     app.dependency_overrides[require_auth] = mock_require_auth
+    app.dependency_overrides[get_optional_session] = mock_get_optional_session
     app.dependency_overrides[get_db] = mock_get_db
 
-    with patch("backend.api.tracks.listing.get_session", mock_get_session):
-        yield app
+    yield app
 
     app.dependency_overrides.clear()
 

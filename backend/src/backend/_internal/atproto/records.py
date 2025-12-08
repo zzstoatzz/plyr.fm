@@ -9,7 +9,7 @@ from typing import Any
 from atproto_oauth.models import OAuthSession
 
 from backend._internal import Session as AuthSession
-from backend._internal import get_session, oauth_client, update_session_tokens
+from backend._internal import get_oauth_client, get_session, update_session_tokens
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ async def _refresh_session_tokens(
 
         try:
             # use OAuth client to refresh tokens
-            refreshed_session = await oauth_client.refresh_session(
+            refreshed_session = await get_oauth_client().refresh_session(
                 current_oauth_session
             )
 
@@ -183,7 +183,7 @@ async def _make_pds_request(
     url = f"{oauth_data['pds_url']}/xrpc/{endpoint}"
 
     for attempt in range(2):
-        response = await oauth_client.make_authenticated_request(
+        response = await get_oauth_client().make_authenticated_request(
             session=oauth_session,
             method=method,
             url=url,
@@ -485,6 +485,112 @@ async def create_comment_record(
     return result["uri"]
 
 
+def build_list_record(
+    items: list[dict[str, str]],
+    name: str | None = None,
+    list_type: str | None = None,
+    created_at: datetime | None = None,
+    updated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Build a list record dict for ATProto.
+
+    args:
+        items: list of record references, each with {"uri": str, "cid": str}
+        name: optional display name
+        list_type: optional semantic type (e.g., "album", "playlist", "liked")
+        created_at: creation timestamp (defaults to now)
+        updated_at: optional last modification timestamp
+
+    returns:
+        record dict ready for ATProto
+    """
+    record: dict[str, Any] = {
+        "$type": settings.atproto.list_collection,
+        "items": [
+            {"subject": {"uri": item["uri"], "cid": item["cid"]}} for item in items
+        ],
+        "createdAt": (created_at or datetime.now(UTC))
+        .isoformat()
+        .replace("+00:00", "Z"),
+    }
+
+    if name:
+        record["name"] = name
+    if list_type:
+        record["listType"] = list_type
+    if updated_at:
+        record["updatedAt"] = updated_at.isoformat().replace("+00:00", "Z")
+
+    return record
+
+
+async def create_list_record(
+    auth_session: AuthSession,
+    items: list[dict[str, str]],
+    name: str | None = None,
+    list_type: str | None = None,
+) -> tuple[str, str]:
+    """Create a list record on the user's PDS.
+
+    args:
+        auth_session: authenticated user session
+        items: list of record references, each with {"uri": str, "cid": str}
+        name: optional display name
+        list_type: optional semantic type (e.g., "album", "playlist", "liked")
+
+    returns:
+        tuple of (record_uri, record_cid)
+    """
+    record = build_list_record(items=items, name=name, list_type=list_type)
+
+    payload = {
+        "repo": auth_session.did,
+        "collection": settings.atproto.list_collection,
+        "record": record,
+    }
+
+    result = await _make_pds_request(
+        auth_session, "POST", "com.atproto.repo.createRecord", payload
+    )
+    return result["uri"], result["cid"]
+
+
+async def update_list_record(
+    auth_session: AuthSession,
+    list_uri: str,
+    items: list[dict[str, str]],
+    name: str | None = None,
+    list_type: str | None = None,
+    created_at: datetime | None = None,
+) -> tuple[str, str]:
+    """Update an existing list record on the user's PDS.
+
+    args:
+        auth_session: authenticated user session
+        list_uri: AT URI of the list record to update
+        items: list of record references (array order = display order)
+        name: optional display name
+        list_type: optional semantic type (e.g., "album", "playlist", "liked")
+        created_at: original creation timestamp (preserved on updates)
+
+    returns:
+        tuple of (record_uri, new_record_cid)
+    """
+    record = build_list_record(
+        items=items,
+        name=name,
+        list_type=list_type,
+        created_at=created_at,
+        updated_at=datetime.now(UTC),
+    )
+
+    return await update_record(
+        auth_session=auth_session,
+        record_uri=list_uri,
+        record=record,
+    )
+
+
 async def update_comment_record(
     auth_session: AuthSession,
     comment_uri: str,
@@ -532,3 +638,204 @@ async def update_comment_record(
         record=record,
     )
     return new_cid
+
+
+def build_profile_record(
+    bio: str | None = None,
+    created_at: datetime | None = None,
+    updated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Build a profile record dict for ATProto.
+
+    args:
+        bio: artist bio/description
+        created_at: creation timestamp (defaults to now)
+        updated_at: optional last modification timestamp
+
+    returns:
+        record dict ready for ATProto
+    """
+    record: dict[str, Any] = {
+        "$type": settings.atproto.profile_collection,
+        "createdAt": (created_at or datetime.now(UTC))
+        .isoformat()
+        .replace("+00:00", "Z"),
+    }
+
+    if bio:
+        record["bio"] = bio
+    if updated_at:
+        record["updatedAt"] = updated_at.isoformat().replace("+00:00", "Z")
+
+    return record
+
+
+async def upsert_profile_record(
+    auth_session: AuthSession,
+    bio: str | None = None,
+) -> tuple[str, str] | None:
+    """Create or update the user's plyr.fm profile record.
+
+    uses putRecord with rkey="self" for upsert semantics - creates if
+    doesn't exist, updates if it does. skips write if record already
+    exists with the same bio (no-op for unchanged data).
+
+    args:
+        auth_session: authenticated user session
+        bio: artist bio/description
+
+    returns:
+        tuple of (record_uri, record_cid) or None if skipped (unchanged)
+    """
+    # check if profile already exists to preserve createdAt and skip if unchanged
+    existing_created_at = None
+    existing_bio = None
+    existing_uri = None
+    existing_cid = None
+
+    try:
+        # try to get existing record
+        oauth_data = auth_session.oauth_session
+        if oauth_data and "pds_url" in oauth_data:
+            oauth_session = _reconstruct_oauth_session(oauth_data)
+            url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
+            params = {
+                "repo": auth_session.did,
+                "collection": settings.atproto.profile_collection,
+                "rkey": "self",
+            }
+            response = await get_oauth_client().make_authenticated_request(
+                session=oauth_session,
+                method="GET",
+                url=url,
+                params=params,
+            )
+            if response.status_code == 200:
+                existing = response.json()
+                existing_uri = existing.get("uri")
+                existing_cid = existing.get("cid")
+                if "value" in existing:
+                    existing_bio = existing["value"].get("bio")
+                    if "createdAt" in existing["value"]:
+                        existing_created_at = datetime.fromisoformat(
+                            existing["value"]["createdAt"].replace("Z", "+00:00")
+                        )
+    except Exception:
+        # record doesn't exist yet, that's fine
+        pass
+
+    # skip write if record exists with same bio (no changes needed)
+    if existing_uri and existing_cid and existing_bio == bio:
+        return None
+
+    record = build_profile_record(
+        bio=bio,
+        created_at=existing_created_at,
+        updated_at=datetime.now(UTC) if existing_created_at else None,
+    )
+
+    payload = {
+        "repo": auth_session.did,
+        "collection": settings.atproto.profile_collection,
+        "rkey": "self",
+        "record": record,
+    }
+
+    result = await _make_pds_request(
+        auth_session, "POST", "com.atproto.repo.putRecord", payload
+    )
+    return result["uri"], result["cid"]
+
+
+async def upsert_album_list_record(
+    auth_session: AuthSession,
+    album_id: str,
+    album_title: str,
+    track_refs: list[dict[str, str]],
+    existing_uri: str | None = None,
+    existing_created_at: datetime | None = None,
+) -> tuple[str, str] | None:
+    """Create or update an album as a list record.
+
+    args:
+        auth_session: authenticated user session
+        album_id: internal album ID (for logging)
+        album_title: album display name
+        track_refs: list of track references [{"uri": str, "cid": str}, ...]
+        existing_uri: existing ATProto record URI if updating
+        existing_created_at: original creation timestamp to preserve
+
+    returns:
+        tuple of (record_uri, record_cid) or None if no tracks to sync
+    """
+    if not track_refs:
+        logger.debug(f"album {album_id} has no tracks with ATProto records, skipping")
+        return None
+
+    if existing_uri:
+        # update existing record
+        uri, cid = await update_list_record(
+            auth_session=auth_session,
+            list_uri=existing_uri,
+            items=track_refs,
+            name=album_title,
+            list_type="album",
+            created_at=existing_created_at,
+        )
+        logger.info(f"updated album list record for {album_id}: {uri}")
+        return uri, cid
+    else:
+        # create new record
+        uri, cid = await create_list_record(
+            auth_session=auth_session,
+            items=track_refs,
+            name=album_title,
+            list_type="album",
+        )
+        logger.info(f"created album list record for {album_id}: {uri}")
+        return uri, cid
+
+
+async def upsert_liked_list_record(
+    auth_session: AuthSession,
+    track_refs: list[dict[str, str]],
+    existing_uri: str | None = None,
+    existing_created_at: datetime | None = None,
+) -> tuple[str, str] | None:
+    """Create or update the user's liked tracks list record.
+
+    args:
+        auth_session: authenticated user session
+        track_refs: list of liked track references [{"uri": str, "cid": str}, ...]
+        existing_uri: existing ATProto record URI if updating
+        existing_created_at: original creation timestamp to preserve
+
+    returns:
+        tuple of (record_uri, record_cid) or None if no likes to sync
+    """
+    if not track_refs:
+        logger.debug(f"user {auth_session.did} has no liked tracks to sync")
+        return None
+
+    if existing_uri:
+        # update existing record
+        uri, cid = await update_list_record(
+            auth_session=auth_session,
+            list_uri=existing_uri,
+            items=track_refs,
+            name="Liked Tracks",
+            list_type="liked",
+            created_at=existing_created_at,
+        )
+        logger.info(f"updated liked list record for {auth_session.did}: {uri}")
+        return uri, cid
+    else:
+        # create new record
+        uri, cid = await create_list_record(
+            auth_session=auth_session,
+            items=track_refs,
+            name="Liked Tracks",
+            list_type="liked",
+        )
+        logger.info(f"created liked list record for {auth_session.did}: {uri}")
+        return uri, cid

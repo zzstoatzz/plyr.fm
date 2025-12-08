@@ -52,6 +52,16 @@ class UserPreferences(Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
 
+    # profile preferences
+    # when enabled, liked tracks are displayed on the user's artist page
+    show_liked_on_profile: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
+    # ATProto liked list record (fm.plyr.list with listType="liked")
+    liked_list_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+    liked_list_cid: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

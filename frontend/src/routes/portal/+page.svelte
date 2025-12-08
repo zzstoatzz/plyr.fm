@@ -8,7 +8,8 @@
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
-	import type { Track, FeaturedArtist, AlbumSummary } from '$lib/types';
+	import type { Track, FeaturedArtist, AlbumSummary, Playlist } from '$lib/types';
+	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
@@ -33,14 +34,16 @@
 	let bio = $state('');
 	let avatarUrl = $state('');
 	let savingProfile = $state(false);
-	let profileSuccess = $state('');
-	let profileError = $state('');
 
 	// album management state
 	let albums = $state<AlbumSummary[]>([]);
 	let loadingAlbums = $state(false);
 	let editingAlbumId = $state<string | null>(null);
 	let editAlbumCoverFile = $state<File | null>(null);
+
+	// playlist management state
+	let playlists = $state<Playlist[]>([]);
+	let loadingPlaylists = $state(false);
 
 	// export state
 	let exportingMedia = $state(false);
@@ -98,6 +101,7 @@
 			await loadMyTracks();
 			await loadArtistProfile();
 			await loadMyAlbums();
+			await loadMyPlaylists();
 		} catch (_e) {
 			console.error('error loading portal data:', _e);
 			error = 'failed to load portal data';
@@ -155,6 +159,22 @@
 		}
 	}
 
+	async function loadMyPlaylists() {
+		loadingPlaylists = true;
+		try {
+			const response = await fetch(`${API_URL}/lists/playlists`, {
+				credentials: 'include'
+			});
+			if (response.ok) {
+				playlists = await response.json();
+			}
+		} catch (_e) {
+			console.error('failed to load playlists:', _e);
+		} finally {
+			loadingPlaylists = false;
+		}
+	}
+
 	async function uploadAlbumCover(albumId: string) {
 		if (!editAlbumCoverFile) {
 			toast.error('no cover art selected');
@@ -199,8 +219,6 @@
 	async function saveProfile(e: SubmitEvent) {
 		e.preventDefault();
 		savingProfile = true;
-		profileError = '';
-		profileSuccess = '';
 
 		try {
 			const response = await fetch(`${API_URL}/artists/me`, {
@@ -217,14 +235,13 @@
 			});
 
 			if (response.ok) {
-				profileSuccess = 'profile updated successfully!';
-				setTimeout(() => { profileSuccess = ''; }, 3000);
+				toast.success('profile updated');
 			} else {
 				const errorData = await response.json();
-				profileError = errorData.detail || 'failed to update profile';
+				toast.error(errorData.detail || 'failed to update profile');
 			}
 		} catch (e) {
-			profileError = `network error: ${e instanceof Error ? e.message : 'unknown error'}`;
+			toast.error(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
 		} finally {
 			savingProfile = false;
 		}
@@ -483,14 +500,6 @@
 				<h2>profile settings</h2>
 				<a href="/u/{auth.user.handle}" class="view-profile-link">view public profile</a>
 			</div>
-
-			{#if profileSuccess}
-				<div class="message success">{profileSuccess}</div>
-			{/if}
-
-			{#if profileError}
-				<div class="message error">{profileError}</div>
-			{/if}
 
 			<form onsubmit={saveProfile}>
 				<div class="form-group">
@@ -852,14 +861,56 @@
 										onclick={() => startEditingAlbum(album.id)}
 										title="edit cover art"
 									>
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<path d="M12 20h9"></path>
-											<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+											<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
 										</svg>
 									</button>
 								</div>
 							{/if}
 						</div>
+					{/each}
+				</div>
+			{/if}
+		</section>
+
+		<section class="playlists-section">
+			<div class="section-header">
+				<h2>your playlists</h2>
+				<a href="/library" class="view-playlists-link">manage playlists →</a>
+			</div>
+
+			{#if loadingPlaylists}
+				<div class="loading-container">
+					<WaveLoading size="lg" message="loading playlists..." />
+				</div>
+			{:else if playlists.length === 0}
+				<p class="empty">no playlists yet - <a href="/library?create=playlist">create a new playlist</a></p>
+			{:else}
+				<div class="playlists-grid">
+					{#each playlists as playlist}
+						<a href="/playlist/{playlist.id}" class="playlist-card">
+							{#if playlist.image_url}
+								<SensitiveImage src={playlist.image_url} compact tooltipPosition="above">
+									<img src={playlist.image_url} alt="{playlist.name} cover" class="playlist-cover" />
+								</SensitiveImage>
+							{:else}
+								<div class="playlist-cover-placeholder">
+									<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+										<line x1="8" y1="6" x2="21" y2="6"></line>
+										<line x1="8" y1="12" x2="21" y2="12"></line>
+										<line x1="8" y1="18" x2="21" y2="18"></line>
+										<line x1="3" y1="6" x2="3.01" y2="6"></line>
+										<line x1="3" y1="12" x2="3.01" y2="12"></line>
+										<line x1="3" y1="18" x2="3.01" y2="18"></line>
+									</svg>
+								</div>
+							{/if}
+							<div class="playlist-info">
+								<h3 class="playlist-title">{playlist.name}</h3>
+								<p class="playlist-stats">{playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}</p>
+							</div>
+						</a>
 					{/each}
 				</div>
 			{/if}
@@ -1194,24 +1245,6 @@
 		margin-top: 0.35rem;
 		font-size: 0.75rem;
 		color: var(--text-muted);
-	}
-
-	.message {
-		padding: 1rem;
-		border-radius: 4px;
-		margin-bottom: 1.5rem;
-	}
-
-	.message.success {
-		background: color-mix(in srgb, var(--success) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
-		color: var(--success);
-	}
-
-	.message.error {
-		background: color-mix(in srgb, var(--error) 10%, transparent);
-		border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
-		color: var(--error);
 	}
 
 	.avatar-preview {
@@ -1806,6 +1839,97 @@
 		justify-content: flex-end;
 	}
 
+	/* playlists section */
+	.playlists-section {
+		margin-top: 3rem;
+	}
+
+	.playlists-section h2 {
+		font-size: var(--text-page-heading);
+		margin-bottom: 1.5rem;
+	}
+
+	.view-playlists-link {
+		color: var(--text-secondary);
+		text-decoration: none;
+		font-size: 0.8rem;
+		padding: 0.35rem 0.6rem;
+		background: var(--bg-tertiary);
+		border-radius: 5px;
+		border: 1px solid var(--border-default);
+		transition: all 0.15s;
+		white-space: nowrap;
+	}
+
+	.view-playlists-link:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+		background: var(--bg-hover);
+	}
+
+	.playlists-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: 1.5rem;
+	}
+
+	.playlist-card {
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 8px;
+		padding: 1rem;
+		transition: all 0.2s;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		text-decoration: none;
+		color: inherit;
+	}
+
+	.playlist-card:hover {
+		border-color: var(--accent);
+		transform: translateY(-2px);
+	}
+
+	.playlist-cover {
+		width: 100%;
+		aspect-ratio: 1;
+		border-radius: 6px;
+		object-fit: cover;
+	}
+
+	.playlist-cover-placeholder {
+		width: 100%;
+		aspect-ratio: 1;
+		border-radius: 6px;
+		background: linear-gradient(135deg, rgba(var(--accent-rgb, 139, 92, 246), 0.15), rgba(var(--accent-rgb, 139, 92, 246), 0.05));
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--accent);
+	}
+
+	.playlist-info {
+		min-width: 0;
+		flex: 1;
+	}
+
+	.playlist-title {
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--text-primary);
+		margin: 0 0 0.25rem 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.playlist-stats {
+		font-size: 0.85rem;
+		color: var(--text-tertiary);
+		margin: 0;
+	}
+
 	/* your data section */
 	.data-section {
 		margin-top: 2.5rem;
@@ -2065,6 +2189,7 @@
 		.profile-section h2,
 		.tracks-section h2,
 		.albums-section h2,
+		.playlists-section h2,
 		.data-section h2 {
 			font-size: 1.1rem;
 		}
@@ -2143,6 +2268,7 @@
 		/* tracks mobile */
 		.tracks-section,
 		.albums-section,
+		.playlists-section,
 		.data-section {
 			margin-top: 2rem;
 		}
@@ -2250,6 +2376,30 @@
 
 		.album-title {
 			font-size: 0.85rem;
+		}
+
+		/* playlists mobile */
+		.playlists-grid {
+			grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+			gap: 0.75rem;
+		}
+
+		.playlist-card {
+			padding: 0.75rem;
+			gap: 0.5rem;
+		}
+
+		.playlist-title {
+			font-size: 0.85rem;
+		}
+
+		.playlist-stats {
+			font-size: 0.75rem;
+		}
+
+		.view-playlists-link {
+			font-size: 0.75rem;
+			padding: 0.3rem 0.5rem;
 		}
 	}
 </style>

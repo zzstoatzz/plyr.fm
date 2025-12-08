@@ -13,6 +13,7 @@ from backend.api.queue import router as queue_router
 from backend.api.search import router as search_router
 from backend.api.stats import router as stats_router
 from backend.api.tracks import router as tracks_router
+from backend.api.users import router as users_router
 
 __all__ = [
     "account_router",
@@ -28,4 +29,5 @@ __all__ = [
     "search_router",
     "stats_router",
     "tracks_router",
+    "users_router",
 ]

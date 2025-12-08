@@ -38,9 +38,11 @@ class AlbumMetadata(BaseModel):
     description: str | None = None
     artist: str
     artist_handle: str
+    artist_did: str
     track_count: int
     total_plays: int
     image_url: str | None
+    list_uri: str | None = None  # ATProto list record URI for reordering
 
 
 class AlbumResponse(BaseModel):
@@ -158,9 +160,11 @@ async def _album_metadata(
         description=album.description,
         artist=artist.display_name,
         artist_handle=artist.handle,
+        artist_did=artist.did,
         track_count=track_count,
         total_plays=total_plays,
         image_url=image_url,
+        list_uri=album.atproto_record_uri,
     )
 
 

@@ -38,8 +38,10 @@ from backend.api import (
     search_router,
     stats_router,
     tracks_router,
+    users_router,
 )
 from backend.api.albums import router as albums_router
+from backend.api.lists import router as lists_router
 from backend.api.migration import router as migration_router
 from backend.config import settings
 from backend.models import init_db
@@ -196,6 +198,7 @@ app.include_router(account_router)
 app.include_router(artists_router)
 app.include_router(tracks_router)
 app.include_router(albums_router)
+app.include_router(lists_router)
 app.include_router(audio_router)
 app.include_router(search_router)
 app.include_router(preferences_router)
@@ -206,6 +209,7 @@ app.include_router(exports_router)
 app.include_router(moderation_router)
 app.include_router(oembed_router)
 app.include_router(stats_router)
+app.include_router(users_router)
 
 
 @app.get("/health")

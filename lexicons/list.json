@@ -1,0 +1,52 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.list",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "An ordered collection of ATProto records.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["items", "createdAt"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 256,
+            "maxGraphemes": 64
+          },
+          "listType": {
+            "type": "string",
+            "knownValues": ["album", "playlist", "liked"]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "ref",
+              "ref": "#item"
+            },
+            "maxLength": 500
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["subject"],
+      "properties": {
+        "subject": {
+          "type": "ref",
+          "ref": "com.atproto.repo.strongRef"
+        }
+      }
+    }
+  }
+}

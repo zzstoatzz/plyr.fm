@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend._internal import Session as AuthSession
-from backend._internal import oauth_client, require_auth
+from backend._internal import get_oauth_client, require_auth
 from backend._internal.atproto.records import (
     _reconstruct_oauth_session,
     _refresh_session_tokens,
@@ -76,7 +76,7 @@ async def check_migration_needed(
 
         # try request, refresh token if expired
         for attempt in range(2):
-            response = await oauth_client.make_authenticated_request(
+            response = await get_oauth_client().make_authenticated_request(
                 session=oauth_session,
                 method="GET",
                 url=url,
@@ -175,7 +175,7 @@ async def migrate_records(
 
         # fetch old records (with token refresh if needed)
         for attempt in range(2):
-            response = await oauth_client.make_authenticated_request(
+            response = await get_oauth_client().make_authenticated_request(
                 session=oauth_session,
                 method="GET",
                 url=url,
@@ -258,11 +258,13 @@ async def migrate_records(
 
                 # try creating the record, refresh token if expired
                 for create_attempt in range(2):
-                    create_response = await oauth_client.make_authenticated_request(
-                        session=oauth_session,
-                        method="POST",
-                        url=create_url,
-                        json=payload,
+                    create_response = (
+                        await get_oauth_client().make_authenticated_request(
+                            session=oauth_session,
+                            method="POST",
+                            url=create_url,
+                            json=payload,
+                        )
                     )
 
                     if create_response.status_code in (200, 201):
@@ -285,7 +287,7 @@ async def migrate_records(
                             # try deleting with token refresh
                             for delete_attempt in range(2):
                                 delete_response = (
-                                    await oauth_client.make_authenticated_request(
+                                    await get_oauth_client().make_authenticated_request(
                                         session=oauth_session,
                                         method="POST",
                                         url=delete_url,

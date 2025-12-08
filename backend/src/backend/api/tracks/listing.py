@@ -4,15 +4,14 @@ import asyncio
 from typing import Annotated
 
 import logfire
-from fastapi import Cookie, Depends, Request
+from fastapi import Depends
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
-from backend._internal import require_auth
-from backend._internal.auth import get_session
+from backend._internal import get_optional_session, require_auth
 from backend.models import (
     Artist,
     Tag,
@@ -37,10 +36,9 @@ from .router import router
 @router.get("/")
 async def list_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
-    request: Request,
     artist_did: str | None = None,
     filter_hidden_tags: bool | None = None,
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
+    session: AuthSession | None = Depends(get_optional_session),
 ) -> dict:
     """List all tracks, optionally filtered by artist DID.
 
@@ -54,23 +52,19 @@ async def list_tracks(
     """
     from atproto_identity.did.resolver import AsyncDidResolver
 
-    # get authenticated user if cookie or auth header present
+    # get authenticated user's liked tracks and preferences
     liked_track_ids: set[int] | None = None
     hidden_tags: list[str] = list(DEFAULT_HIDDEN_TAGS)
-    auth_session = None
 
-    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
-        "Bearer ", ""
-    )
-    if session_id and (auth_session := await get_session(session_id)):
+    if session:
         liked_result = await db.execute(
-            select(TrackLike.track_id).where(TrackLike.user_did == auth_session.did)
+            select(TrackLike.track_id).where(TrackLike.user_did == session.did)
         )
         liked_track_ids = set(liked_result.scalars().all())
 
         # get user's hidden tags preference
         prefs_result = await db.execute(
-            select(UserPreferences).where(UserPreferences.did == auth_session.did)
+            select(UserPreferences).where(UserPreferences.did == session.did)
         )
         prefs = prefs_result.scalar_one_or_none()
         if prefs and prefs.hidden_tags is not None:
@@ -185,18 +179,18 @@ async def list_tracks(
                         track.image_url = url
                     else:
                         # image_id exists but file not found in R2
-                        # clear image_id to prevent future lookups
-                        logfire.warn(
-                            "clearing invalid image_id",
+                        # log error but don't clear - this indicates a bug (e.g. extension mismatch)
+                        # clearing would destroy the reference and make debugging harder
+                        logfire.error(
+                            "image_id exists but file not found in R2",
                             track_id=track.id,
                             image_id=track.image_id,
                         )
-                        track.image_id = None
-                        track.image_url = None
                 except Exception as e:
-                    logfire.warn(
+                    logfire.error(
                         "failed to resolve image",
                         track_id=track.id,
+                        image_id=track.image_id,
                         error=str(e),
                     )
 

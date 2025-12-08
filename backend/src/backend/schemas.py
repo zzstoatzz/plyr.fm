@@ -56,6 +56,7 @@ class TrackResponse(BaseModel):
     features: list[dict[str, Any]]
     r2_url: str | None
     atproto_record_uri: str | None
+    atproto_record_cid: str | None
     atproto_record_url: str | None
     play_count: int
     created_at: str
@@ -145,6 +146,7 @@ class TrackResponse(BaseModel):
             features=track.features,
             r2_url=track.r2_url,
             atproto_record_uri=track.atproto_record_uri,
+            atproto_record_cid=track.atproto_record_cid,
             atproto_record_url=atproto_record_url,
             play_count=track.play_count,
             created_at=track.created_at.isoformat(),

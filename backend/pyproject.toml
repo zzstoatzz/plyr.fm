@@ -76,6 +76,9 @@ env = [
     "RELAY_TEST_MODE=1",
     "OAUTH_ENCRYPTION_KEY=hnSkDmgbbuK0rt7Ab3eJHAktb18gmebsdwKdTmq9mes=",
     "LOGFIRE_IGNORE_NO_CONFIG=1",
+    # reduce connection pool for tests to avoid exhausting Neon's connection limit
+    "DATABASE_POOL_SIZE=2",
+    "DATABASE_MAX_OVERFLOW=0",
 ]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",

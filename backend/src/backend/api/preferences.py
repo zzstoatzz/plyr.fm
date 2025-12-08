@@ -26,6 +26,7 @@ class PreferencesResponse(BaseModel):
     # indicates if user needs to re-login to activate teal scrobbling
     teal_needs_reauth: bool = False
     show_sensitive_artwork: bool = False
+    show_liked_on_profile: bool = False
 
 
 class PreferencesUpdate(BaseModel):
@@ -37,6 +38,7 @@ class PreferencesUpdate(BaseModel):
     hidden_tags: list[str] | None = None
     enable_teal_scrobbling: bool | None = None
     show_sensitive_artwork: bool | None = None
+    show_liked_on_profile: bool | None = None
 
 
 def _has_teal_scope(session: Session) -> bool:
@@ -81,6 +83,7 @@ async def get_preferences(
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
         teal_needs_reauth=teal_needs_reauth,
         show_sensitive_artwork=prefs.show_sensitive_artwork,
+        show_liked_on_profile=prefs.show_liked_on_profile,
     )
 
 
@@ -116,6 +119,9 @@ async def update_preferences(
             show_sensitive_artwork=update.show_sensitive_artwork
             if update.show_sensitive_artwork is not None
             else False,
+            show_liked_on_profile=update.show_liked_on_profile
+            if update.show_liked_on_profile is not None
+            else False,
         )
         db.add(prefs)
     else:
@@ -132,6 +138,8 @@ async def update_preferences(
             prefs.enable_teal_scrobbling = update.enable_teal_scrobbling
         if update.show_sensitive_artwork is not None:
             prefs.show_sensitive_artwork = update.show_sensitive_artwork
+        if update.show_liked_on_profile is not None:
+            prefs.show_liked_on_profile = update.show_liked_on_profile
 
     await db.commit()
     await db.refresh(prefs)
@@ -148,4 +156,5 @@ async def update_preferences(
         enable_teal_scrobbling=prefs.enable_teal_scrobbling,
         teal_needs_reauth=teal_needs_reauth,
         show_sensitive_artwork=prefs.show_sensitive_artwork,
+        show_liked_on_profile=prefs.show_liked_on_profile,
     )

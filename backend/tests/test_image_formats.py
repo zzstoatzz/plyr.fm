@@ -134,3 +134,18 @@ class TestImageFormat:
         )
         assert is_valid is False
         assert image_format is None
+
+    def test_enum_iteration_includes_jpeg_extension(self):
+        """test that iterating over ImageFormat includes both jpg and jpeg.
+
+        regression test: files uploaded as .jpeg were not found by get_url()
+        because the enum only had JPEG="jpg", so iteration only checked .jpg files.
+        """
+        extensions = [fmt.value for fmt in ImageFormat]
+        assert "jpg" in extensions
+        assert "jpeg" in extensions
+
+    def test_jpeg_alt_media_type(self):
+        """test that JPEG_ALT has the same media type as JPEG."""
+        assert ImageFormat.JPEG_ALT.media_type == "image/jpeg"
+        assert ImageFormat.JPEG_ALT.media_type == ImageFormat.JPEG.media_type
