@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
+	import { browser } from '$app/environment';
 	import type { PageData } from './$types';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { API_URL } from '$lib/config';
@@ -285,11 +285,37 @@
 		}
 	}
 
-onMount(async () => {
-	if (auth.isAuthenticated) {
-		await loadLikedState();
+// track which track we've loaded data for to detect navigation
+let loadedForTrackId = $state<number | null>(null);
+
+// reload data when navigating between track pages
+// watch data.track.id (from server) not track.id (local state)
+$effect(() => {
+	const currentId = data.track?.id;
+	if (!currentId || !browser) return;
+
+	// check if we navigated to a different track
+	if (loadedForTrackId !== currentId) {
+		// reset state for new track
+		comments = [];
+		loadingComments = true;
+		commentsEnabled = null;
+		newCommentText = '';
+		editingCommentId = null;
+		editingCommentText = '';
+
+		// sync track from server data
+		track = data.track;
+
+		// mark as loaded for this track
+		loadedForTrackId = currentId;
+
+		// load fresh data
+		if (auth.isAuthenticated) {
+			void loadLikedState();
+		}
+		void loadComments();
 	}
-	await loadComments();
 });
 
 let shareUrl = $state('');

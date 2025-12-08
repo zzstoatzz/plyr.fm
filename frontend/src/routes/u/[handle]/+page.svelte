@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import { API_URL } from '$lib/config';
 	import { browser } from '$app/environment';
@@ -55,6 +54,9 @@ $effect(() => {
 
 	// public playlists for collections section
 	let publicPlaylists = $state<Playlist[]>([]);
+
+	// track which artist we've loaded data for to detect navigation
+	let loadedForDid = $state<string | null>(null);
 
 	async function handleLogout() {
 		await auth.logout();
@@ -116,16 +118,33 @@ $effect(() => {
 		}
 	}
 
-	onMount(() => {
-		// load analytics in background without blocking page render
-		loadAnalytics();
-		primeLikesFromCache();
-		// immediately hydrate tracks client-side for liked state
-		void hydrateTracksWithLikes();
-		// load liked tracks count if artist has show_liked_on_profile enabled
-		void loadLikedTracksCount();
-		// load public playlists for collections section
-		void loadPublicPlaylists();
+	// reload data when navigating between artist pages
+	// watch data.artist?.did (from server) not artist?.did (local derived)
+	$effect(() => {
+		const currentDid = data.artist?.did;
+		if (!currentDid || !browser) return;
+
+		// check if we navigated to a different artist
+		if (loadedForDid !== currentDid) {
+			// reset state for new artist
+			analytics = null;
+			tracksHydrated = false;
+			likedTracksCount = null;
+			publicPlaylists = [];
+
+			// sync tracks from server data
+			tracks = data.tracks ?? [];
+
+			// mark as loaded for this artist
+			loadedForDid = currentDid;
+
+			// load fresh data
+			loadAnalytics();
+			primeLikesFromCache();
+			void hydrateTracksWithLikes();
+			void loadLikedTracksCount();
+			void loadPublicPlaylists();
+		}
 	});
 
 	async function hydrateTracksWithLikes() {
