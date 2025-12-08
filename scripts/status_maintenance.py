@@ -12,8 +12,11 @@
 """letta-backed status maintenance for plyr.fm.
 
 this script replaces the claude-code-action in the status maintenance workflow.
-it uses letta's learning SDK to maintain persistent memory across runs, so the
-agent remembers previous status updates, architectural decisions, and patterns.
+it uses letta's learning SDK to maintain persistent memory across runs.
+
+the memory is about PROJECT UNDERSTANDING (architecture, patterns, context),
+NOT about processing history. github is the source of truth for what needs
+processing (last merged PR date → now).
 
 usage:
     # full maintenance run (archive, generate script, create audio)
@@ -43,7 +46,13 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AGENT_NAME = "plyr-status-maintenance"
-MEMORY_BLOCKS = ["project_overview", "recent_updates", "architectural_decisions"]
+# memory blocks are about PROJECT UNDERSTANDING, not processing history
+# the agent should remember architecture, patterns, and context - NOT what it processed
+MEMORY_BLOCKS = [
+    "project_architecture",  # how plyr.fm is built, key design decisions
+    "atproto_context",  # understanding of ATProto, lexicons, NSIDs
+    "recurring_patterns",  # themes that come up repeatedly in development
+]
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
@@ -77,7 +86,7 @@ class MaintenanceReport(BaseModel):
         description="new content to add to the '## recent work' section of STATUS.md"
     )
     podcast_script: str = Field(
-        description="2-3 minute podcast script with 'Host:' and 'Cohost:' lines. dry, matter-of-fact tone. use 'player FM' pronunciation."
+        description="2-3 minute podcast script with 'Host:' and 'Cohost:' lines following the tone and structure guidelines"
     )
 
 
@@ -88,7 +97,11 @@ def run_cmd(cmd: list[str], capture: bool = True) -> str:
 
 
 def get_last_maintenance_date() -> str | None:
-    """get the merge date of the last status-maintenance PR."""
+    """get the merge date of the last status-maintenance PR.
+
+    this is the SOURCE OF TRUTH for what time window to process.
+    NOT the agent's memory - github is authoritative.
+    """
     try:
         result = run_cmd(
             [
@@ -168,6 +181,11 @@ def read_status_md() -> str:
     return ""
 
 
+def check_status_history_exists() -> bool:
+    """check if .status_history/ directory exists (implies not first episode)."""
+    return (PROJECT_ROOT / ".status_history").exists()
+
+
 def generate_maintenance_report(
     settings: Settings,
     last_maintenance: str | None,
@@ -200,60 +218,159 @@ def generate_maintenance_report(
 
     # gather context - read the FULL STATUS.md, not truncated
     today = datetime.now().strftime("%Y-%m-%d")
+    today_human = datetime.now().strftime("%B %d, %Y")
     commits = get_recent_commits(since=last_maintenance)
     prs = get_merged_prs(since=last_maintenance)
-    status_content = read_status_md()  # full content
+    status_content = read_status_md()
     line_count = get_status_md_line_count()
+    has_history = check_status_history_exists()
+    is_first_episode = not has_history
 
-    time_window = f"since {last_maintenance}" if last_maintenance else "all time"
+    if last_maintenance:
+        time_window = f"since {last_maintenance}"
+        time_window_human = f"from {last_maintenance} to {today}"
+    else:
+        time_window = "all time (first run)"
+        time_window_human = f"up to {today}"
 
+    # comprehensive system prompt with all the original guidance
     system_prompt = f"""you are maintaining STATUS.md for plyr.fm (pronounced "player FM"), a decentralized
 music streaming platform built on AT Protocol.
 
 ## your persistent memory
 
-you have letta-backed memory that persists across runs. use it to:
-- remember architectural decisions and why they were made
-- track recurring patterns and themes in development
-- maintain continuity between status updates
-- avoid re-explaining things you've covered before
+you have letta-backed memory that persists across runs. use it to remember:
+- how plyr.fm is architected and key design decisions
+- ATProto concepts (lexicons, NSIDs, PDS, etc.) and how they apply here
+- recurring patterns and themes in development
 
-## today's context
+DO NOT use memory to track what you've processed - github is the source of truth for that.
+the time window comes from the last merged status-maintenance PR, not your memory.
 
-date: {today}
-time window: {time_window}
+## critical rules
+
+1. STATUS.md MUST be kept under 500 lines. this is non-negotiable.
+2. archive content MUST be moved to .status_history/, not deleted
+3. podcast tone MUST be dry, matter-of-fact, slightly sardonic - NOT enthusiastic or complimentary
+
+## temporal context
+
+today's date: {today_human}
+last status-maintenance PR merged: {last_maintenance or "none (first run)"}
+time window for this run: {time_window_human}
 STATUS.md line count: {line_count} (must stay under 500 lines)
+.status_history/ exists: {has_history} (first episode: {is_first_episode})
 
-### recent commits ({time_window}):
+IMPORTANT: focus on what shipped {time_window}. if the last PR was merged on Dec 2nd
+and today is Dec 8th, focus on everything from Dec 3rd onwards, NOT just "the last week".
+
+## recent commits ({time_window}):
 {commits}
 
-### merged PRs ({time_window}):
+## merged PRs ({time_window}):
 {prs}
 
-### current STATUS.md (full content):
+## current STATUS.md (full content):
 {status_content}
 
-## your task
+## task 1: archival
 
-analyze what shipped {time_window} and produce the maintenance report.
+if STATUS.md > 400 lines, set archive_needed=true and include the OLDEST sections
+verbatim in archive_content. these will go to .status_history/YYYY-MM.md.
 
-### archival rules
-- set archive_needed=true if STATUS.md > 400 lines
-- archive_content should contain the OLDEST sections verbatim (to move to .status_history/YYYY-MM.md)
-- preserve document structure after archival
+archive file naming:
+- organized BY MONTH: .status_history/YYYY-MM.md
+- if today is December 2025, archived December content goes to .status_history/2025-12.md
+- each month gets ONE file - content is appended to existing month files
 
-### status_updates rules
-- new content to add under "## recent work"
-- be concise and technical
-- focus on what shipped and why it matters
+after archival, STATUS.md should be:
+- the living overview, slightly recency biased
+- a good general overview of the project
+- under 500 lines
 
-### podcast_script rules
-- 2-3 minute script with "Host:" and "Cohost:" lines
-- dry, matter-of-fact, slightly sardonic tone
-- NOT enthusiastic or complimentary
-- technically accurate, explain the "why" not just "what"
-- use specific dates, never "last week" or "recently"
-- CRITICAL: write "player FM" or "player dot FM" for pronunciation, NEVER "plyr.fm" literally
+## task 2: status_updates
+
+new content for the "## recent work" section. be concise and technical.
+focus on what shipped and why it matters.
+
+## task 3: podcast_script
+
+write a podcast script with "Host:" and "Cohost:" lines.
+
+### narrative structure (CRITICAL)
+
+the script must tell a coherent story of the time period:
+
+1. **opening** (10 seconds): set the scene - what's the date range, what was the focus?
+
+2. **the main story** (60-90 seconds): the biggest thing that shipped
+   - what problem did it solve?
+   - how was it designed? (explain the architecture accessibly)
+   - what's interesting about the implementation?
+   - the hosts should have a back-and-forth discussing the design
+
+3. **secondary feature** (30-45 seconds, if applicable): another significant change
+   - lighter treatment than the main story
+   - still explain the "why" not just the "what"
+
+4. **rapid fire** (20-30 seconds): the smaller changes
+   - "we also saw..." or "a few other things landed..."
+   - quick hits: bug fixes, polish, minor improvements
+   - don't dwell, just acknowledge
+
+5. **closing** (10 seconds): looking ahead or wrapping up
+
+the narrative should flow like you're telling a friend what happened on the project.
+use transitions: "but before that landed...", "meanwhile...", "and then to tie it together..."
+
+### tone requirements (CRITICAL)
+
+the hosts should sound like two engineers who:
+- are skeptical, amused and somewhat intrigued by the absurdity of building things
+- acknowledge problems and limitations honestly
+- don't over-use superlatives ("amazing", "incredible", "exciting")
+- explain technical concepts through analogy, not hypey jargon
+- genuinely find the technical details interesting (not performatively enthusiastic)
+
+AVOID these phrases:
+- "exciting", "amazing", "incredible", "impressive", "great job"
+- "the team has done", "they've really", "fantastic work"
+- any over-congratulating or over-sensationalizing
+
+### pronunciation (CRITICAL - READ THIS CAREFULLY)
+
+the project name "plyr.fm" is pronounced "player FM" (like "music player").
+
+**in your script, ALWAYS write "player FM" or "player dot FM" - NEVER write "plyr.fm" or "plyr".**
+
+the TTS engine will mispronounce "plyr" as "plir" or "p-l-y-r" if you write it that way.
+write phonetically for correct pronunciation.
+
+### time references (CRITICAL)
+
+NEVER say "last week", "this week", "recently", or vague time references.
+
+ALWAYS use specific date ranges:
+- "since December 2nd" or "from December 3rd to today"
+- "in the past six days" (if that's accurate)
+- "since the last update"
+
+the listener doesn't know when "last week" was - be specific.
+
+### identifying what actually shipped
+
+read the commit messages and PR bodies carefully.
+
+- if something is completely NEW (didn't exist before), say it "shipped" or "launched"
+- if something existing got improved or fixed, call it what it is: fixes, improvements, polish
+
+don't rely on commit message prefixes like `feat:` or `fix:` - they're not always accurate.
+read the actual content to understand the scope of what changed.
+
+### length
+
+target: 2-3 minutes spoken (~300-400 words)
+if this is the first episode: 4-5 minutes (~500-600 words)
 """
 
     print(f"generating maintenance report for {time_window}...")
@@ -268,7 +385,10 @@ analyze what shipped {time_window} and produce the maintenance report.
             messages=[
                 {
                     "role": "user",
-                    "content": f"analyze and generate the status maintenance report for {time_window}. remember key insights for future runs.",
+                    "content": f"""analyze what shipped {time_window} and generate the maintenance report.
+
+remember key architectural insights and patterns for future runs - but do NOT
+remember "what you processed" since github is the source of truth for that.""",
                 }
             ],
             output_format=MaintenanceReport,
@@ -420,7 +540,7 @@ def main() -> None:
         print("  GOOGLE_API_KEY (optional, for audio)")
         sys.exit(1)
 
-    # determine time window
+    # determine time window from GITHUB (source of truth), not agent memory
     last_maintenance = get_last_maintenance_date()
     if last_maintenance:
         print(f"last maintenance PR merged: {last_maintenance}")
