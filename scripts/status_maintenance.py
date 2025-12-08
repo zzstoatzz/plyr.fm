@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     letta_api_key: str = Field(validation_alias="LETTA_API_KEY")
     anthropic_api_key: str = Field(validation_alias="ANTHROPIC_API_KEY")
     google_api_key: str = Field(default="", validation_alias="GOOGLE_API_KEY")
+    model: str = Field(
+        default="claude-opus-4-5-20251101", validation_alias="ANTHROPIC_MODEL"
+    )
 
 
 class MaintenanceReport(BaseModel):
@@ -191,7 +194,7 @@ def generate_maintenance_report(
         letta_client.agents.create(
             agent=AGENT_NAME,
             memory=MEMORY_BLOCKS,
-            model="anthropic/claude-sonnet-4-20250514",
+            model=f"anthropic/{settings.model}",
         )
         print(f"✓ agent created with memory blocks: {MEMORY_BLOCKS}")
 
@@ -258,7 +261,7 @@ analyze what shipped {time_window} and produce the maintenance report.
     with learning(agent=AGENT_NAME, client=letta_client, memory=MEMORY_BLOCKS):
         # use structured outputs beta for guaranteed schema compliance
         response = anthropic_client.beta.messages.parse(
-            model="claude-sonnet-4-20250514",
+            model=settings.model,
             max_tokens=8192,
             betas=["structured-outputs-2025-11-13"],
             system=system_prompt,
