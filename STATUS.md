@@ -47,9 +47,25 @@ plyr.fm should become:
 
 ### December 2025
 
+#### playlist release fast-follow fixes (PRs #507-510, Dec 7)
+
+**what shipped** (all merged to main):
+- **PR #507**: include `image_url` in playlist SSR data for og:image link previews
+- **PR #508**: invalidate layout data after token exchange - fixes stale auth state after login
+- **PR #509**: playlist menus and link previews - fixed stopPropagation blocking links, added `/playlist/` to hasPageMetadata
+- **PR #510**: inline playlist creation - replaced navigation-based create with inline form to avoid playback interruption
+
+**the navigation bug** (PR #510):
+- clicking "create new playlist" from AddToMenu/TrackActionsMenu previously navigated to `/library?create=playlist`
+- this caused SvelteKit to reinitialize the layout, destroying the audio element and stopping playback
+- fix: added inline create form that creates playlist and adds track in one action without navigation
+- same pattern applied to TrackActionsMenu (mobile bottom sheet menu)
+
+---
+
 #### playlists, ATProto sync, and library hub (feat/playlists branch, PR #499, Dec 6-7)
 
-**status**: feature-complete, ready for final review. ~8k lines changed.
+**status**: shipped and deployed.
 
 **playlists** (full CRUD):
 - `playlists` and `playlist_tracks` tables with Alembic migration
@@ -63,7 +79,7 @@ plyr.fm should become:
 - playlist detail page (`/playlist/[id]`) with edit modal, drag-and-drop reordering
 - playlists in global search results
 - "add to playlist" menu on tracks (filters out current playlist when on playlist page)
-- "create new playlist" link in add-to menu → `/library?create=playlist`
+- inline "create new playlist" in add-to menu (creates playlist and adds track in one action)
 - playlist sharing with OpenGraph link previews
 
 **ATProto integration**:
@@ -74,7 +90,7 @@ plyr.fm should become:
 
 **library hub** (`/library`):
 - unified page with tabs: liked, playlists, albums
-- create playlist modal (accessible via `/library?create=playlist` deep link)
+- create playlist modal with inline form
 - consistent card layouts across sections
 - nav changed from "liked" → "library"
 
