@@ -2,7 +2,6 @@
 	import Header from '$lib/components/Header.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
 	import type { PageData } from './$types';
 	import type { Playlist } from '$lib/types';
@@ -14,17 +13,6 @@
 	let newPlaylistName = $state('');
 	let creating = $state(false);
 	let error = $state('');
-
-	// open create modal if ?create=playlist query param is present
-	$effect(() => {
-		if ($page.url.searchParams.get('create') === 'playlist') {
-			showCreateModal = true;
-			// clear the query param from URL without navigation
-			const url = new URL($page.url);
-			url.searchParams.delete('create');
-			window.history.replaceState({}, '', url.pathname);
-		}
-	});
 
 	async function handleLogout() {
 		await auth.logout();

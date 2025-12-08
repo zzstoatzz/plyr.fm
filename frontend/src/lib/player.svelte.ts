@@ -6,6 +6,7 @@ class PlayerState {
 	currentTrack = $state<Track | null>(null);
 	audioElement = $state<HTMLAudioElement | undefined>(undefined);
 	paused = $state(true);
+
 	currentTime = $state(0);
 	duration = $state(0);
 	volume = $state(0.7);

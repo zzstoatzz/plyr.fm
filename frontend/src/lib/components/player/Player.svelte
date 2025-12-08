@@ -337,12 +337,8 @@
 			bind:currentTime={player.currentTime}
 			bind:duration={player.duration}
 			bind:volume={player.volume}
-			onplay={() => {
-				player.paused = false;
-			}}
-			onpause={() => {
-				player.paused = true;
-			}}
+			onplay={() => player.paused = false}
+			onpause={() => player.paused = true}
 			onended={handleTrackEnded}
 		></audio>
 

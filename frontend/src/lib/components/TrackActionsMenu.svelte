@@ -32,6 +32,9 @@
 
 	let showMenu = $state(false);
 	let showPlaylistPicker = $state(false);
+	let showCreateForm = $state(false);
+	let newPlaylistName = $state('');
+	let creatingPlaylist = $state(false);
 	let liked = $state(initialLiked);
 	let loading = $state(false);
 	let playlists = $state<Playlist[]>([]);
@@ -59,6 +62,8 @@
 	function closeMenu() {
 		showMenu = false;
 		showPlaylistPicker = false;
+		showCreateForm = false;
+		newPlaylistName = '';
 	}
 
 	function handleQueue(e: Event) {
@@ -173,7 +178,58 @@
 
 	function goBack(e: Event) {
 		e.stopPropagation();
-		showPlaylistPicker = false;
+		if (showCreateForm) {
+			showCreateForm = false;
+			newPlaylistName = '';
+		} else {
+			showPlaylistPicker = false;
+		}
+	}
+
+	async function createPlaylist(e: Event) {
+		e.stopPropagation();
+		if (!newPlaylistName.trim() || !trackUri || !trackCid) return;
+
+		creatingPlaylist = true;
+		try {
+			// create the playlist
+			const createResponse = await fetch(`${API_URL}/lists/playlists`, {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name: newPlaylistName.trim() })
+			});
+
+			if (!createResponse.ok) {
+				const data = await createResponse.json().catch(() => ({}));
+				throw new Error(data.detail || 'failed to create playlist');
+			}
+
+			const playlist = await createResponse.json();
+
+			// add the track to the new playlist
+			const addResponse = await fetch(`${API_URL}/lists/playlists/${playlist.id}/tracks`, {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					track_uri: trackUri,
+					track_cid: trackCid
+				})
+			});
+
+			if (addResponse.ok) {
+				toast.success(`created "${playlist.name}" and added track`);
+			} else {
+				toast.success(`created "${playlist.name}"`);
+			}
+
+			closeMenu();
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'failed to create playlist');
+		} finally {
+			creatingPlaylist = false;
+		}
 	}
 </script>
 
@@ -250,52 +306,79 @@
 						</svg>
 						<span>back</span>
 					</button>
-					<div class="playlist-list">
-						{#if loadingPlaylists}
-							<div class="loading-state">
-								<span class="spinner"></span>
-								<span>loading...</span>
-							</div>
-						{:else if filteredPlaylists.length === 0}
-							<div class="empty-state">
-								<span>no playlists</span>
-							</div>
-						{:else}
-							{#each filteredPlaylists as playlist}
-								<button
-									class="playlist-item"
-									onclick={(e) => addToPlaylist(playlist, e)}
-									disabled={addingToPlaylist === playlist.id}
-								>
-									{#if playlist.image_url}
-										<img src={playlist.image_url} alt="" class="playlist-thumb" />
-									{:else}
-										<div class="playlist-thumb-placeholder">
-											<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-												<line x1="8" y1="6" x2="21" y2="6"></line>
-												<line x1="8" y1="12" x2="21" y2="12"></line>
-												<line x1="8" y1="18" x2="21" y2="18"></line>
-												<line x1="3" y1="6" x2="3.01" y2="6"></line>
-												<line x1="3" y1="12" x2="3.01" y2="12"></line>
-												<line x1="3" y1="18" x2="3.01" y2="18"></line>
-											</svg>
-										</div>
-									{/if}
-									<span class="playlist-name">{playlist.name}</span>
-									{#if addingToPlaylist === playlist.id}
-										<span class="spinner small"></span>
-									{/if}
-								</button>
-							{/each}
-						{/if}
-						<a href="/library?create=playlist" class="create-playlist-link" onclick={closeMenu}>
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<line x1="12" y1="5" x2="12" y2="19"></line>
-								<line x1="5" y1="12" x2="19" y2="12"></line>
-							</svg>
-							<span>create new playlist</span>
-						</a>
-					</div>
+					{#if showCreateForm}
+						<div class="create-form">
+							<input
+								type="text"
+								bind:value={newPlaylistName}
+								placeholder="playlist name"
+								disabled={creatingPlaylist}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' && newPlaylistName.trim()) {
+										createPlaylist(e);
+									}
+								}}
+							/>
+							<button
+								class="create-btn"
+								onclick={createPlaylist}
+								disabled={creatingPlaylist || !newPlaylistName.trim()}
+							>
+								{#if creatingPlaylist}
+									<span class="spinner small"></span>
+								{:else}
+									create & add
+								{/if}
+							</button>
+						</div>
+					{:else}
+						<div class="playlist-list">
+							{#if loadingPlaylists}
+								<div class="loading-state">
+									<span class="spinner"></span>
+									<span>loading...</span>
+								</div>
+							{:else if filteredPlaylists.length === 0}
+								<div class="empty-state">
+									<span>no playlists</span>
+								</div>
+							{:else}
+								{#each filteredPlaylists as playlist}
+									<button
+										class="playlist-item"
+										onclick={(e) => addToPlaylist(playlist, e)}
+										disabled={addingToPlaylist === playlist.id}
+									>
+										{#if playlist.image_url}
+											<img src={playlist.image_url} alt="" class="playlist-thumb" />
+										{:else}
+											<div class="playlist-thumb-placeholder">
+												<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+													<line x1="8" y1="6" x2="21" y2="6"></line>
+													<line x1="8" y1="12" x2="21" y2="12"></line>
+													<line x1="8" y1="18" x2="21" y2="18"></line>
+													<line x1="3" y1="6" x2="3.01" y2="6"></line>
+													<line x1="3" y1="12" x2="3.01" y2="12"></line>
+													<line x1="3" y1="18" x2="3.01" y2="18"></line>
+												</svg>
+											</div>
+										{/if}
+										<span class="playlist-name">{playlist.name}</span>
+										{#if addingToPlaylist === playlist.id}
+											<span class="spinner small"></span>
+										{/if}
+									</button>
+								{/each}
+							{/if}
+							<button class="create-playlist-btn" onclick={(e) => { e.stopPropagation(); showCreateForm = true; }}>
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<line x1="12" y1="5" x2="12" y2="19"></line>
+									<line x1="5" y1="12" x2="19" y2="12"></line>
+								</svg>
+								<span>create new playlist</span>
+							</button>
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -506,22 +589,79 @@
 		font-size: 0.9rem;
 	}
 
-	.create-playlist-link {
+	.create-playlist-btn {
+		width: 100%;
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.875rem 1.25rem;
+		background: transparent;
+		border: none;
+		border-top: 1px solid var(--border-subtle);
 		color: var(--accent);
 		font-size: 1rem;
 		font-family: inherit;
-		text-decoration: none;
-		border-top: 1px solid var(--border-subtle);
+		cursor: pointer;
 		transition: background 0.15s;
+		text-align: left;
 	}
 
-	.create-playlist-link:hover,
-	.create-playlist-link:active {
+	.create-playlist-btn:hover,
+	.create-playlist-btn:active {
 		background: var(--bg-tertiary);
+	}
+
+	.create-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 1rem 1.25rem;
+	}
+
+	.create-form input {
+		width: 100%;
+		padding: 0.75rem 1rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
+		border-radius: 8px;
+		color: var(--text-primary);
+		font-family: inherit;
+		font-size: 1rem;
+	}
+
+	.create-form input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.create-form input::placeholder {
+		color: var(--text-muted);
+	}
+
+	.create-form .create-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		background: var(--accent);
+		border: none;
+		border-radius: 8px;
+		color: white;
+		font-family: inherit;
+		font-size: 1rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: opacity 0.15s;
+	}
+
+	.create-form .create-btn:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+
+	.create-form .create-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.spinner {
