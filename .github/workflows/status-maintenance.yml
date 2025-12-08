@@ -1,4 +1,4 @@
-# weekly status maintenance via claude code
+# status maintenance via claude code
 #
 # two-phase workflow:
 # 1. workflow_dispatch: archives old STATUS.md sections, generates audio, opens PR
@@ -58,20 +58,26 @@ jobs:
 
             ## task 1: gather temporal context
 
+            CRITICAL: you must determine the correct time window by finding when the LAST status maintenance PR was MERGED (not opened).
+
             run these commands:
             ```bash
             date
-            git log --oneline --since="1 week ago"
-            git log --oneline -30
+            # get the most recently merged status-maintenance PR (filter by branch name, sort by merge date)
+            gh pr list --state merged --search "status-maintenance" --limit 20 --json number,title,mergedAt,headRefName | jq '[.[] | select(.headRefName | startswith("status-maintenance-"))] | sort_by(.mergedAt) | reverse | .[0]'
+            git log --oneline -50
             ls -la .status_history/ 2>/dev/null || echo "no archive directory yet"
             wc -l STATUS.md
             ```
 
             determine:
             - what is today's date?
-            - what shipped in the last week vs earlier?
+            - when was the last status-maintenance PR MERGED? (use the mergedAt field from the jq output - it's the most recent PR with a branch starting with "status-maintenance-")
+            - what shipped SINCE that merge date? (this is your focus window - NOT "last week")
             - does .status_history/ exist? (this implies whether or not this is the first episode)
             - how many lines is STATUS.md currently?
+
+            IMPORTANT: the time window for this maintenance run is from the last merged status-maintenance PR until now. if the last PR was merged on Dec 2nd and today is Dec 8th, you should focus on everything from Dec 3rd onwards, NOT just "the last week".
 
             ## task 2: archive old sections (MANDATORY if over 250 lines)
 
@@ -83,9 +89,16 @@ jobs:
             5. generally preserve the document structure (keep "## recent work" header, "## immediate priorities", etc)
             6. do NOT summarize archived content - move it verbatim and organize it chronologically
 
+            ARCHIVE FILE NAMING - CRITICAL:
+            - archive files are organized BY MONTH: .status_history/YYYY-MM.md
+            - if today is December 2025, archived December content goes to .status_history/2025-12.md
+            - if today is January 2026, archived January content goes to .status_history/2026-01.md
+            - check what files already exist in .status_history/ and ADD to the appropriate month file if it exists
+            - each month gets ONE file - append to existing month files, don't create duplicates
+
             so STATUS.md is the living overview, slightly recency biased, but a good general overview of the project.
 
-            .status_history/ is the archive of temporally specific sections of STATUS.md that are worth preserving for historical context, but not significant enought to be stated literally in STATUS.md in perpetuity.
+            .status_history/ is the archive of temporally specific sections of STATUS.md that are worth preserving for historical context, but not significant enough to be stated literally in STATUS.md in perpetuity.
 
             VERIFY: run `wc -l STATUS.md` after archiving. it MUST be under 500 lines.
 
@@ -125,8 +138,9 @@ jobs:
             - work chronologically from beginning to end, don't heavily bias towards nascent or recent work
 
             SUBSEQUENT EPISODES (ignore this if its the first episode):
-            - focus on what actually shipped since last episode
-            - use git history to determine timing ("last week" vs "earlier this month")
+            - focus on what actually shipped since the last status-maintenance PR was MERGED
+            - use the mergedAt date from task 1 as your starting point, NOT "last week"
+            - reference git commits since that merge date to determine what shipped
             - don't re-explain the whole project - listeners already know
             - tone: "here's what changed since last time"
 
@@ -157,11 +171,13 @@ jobs:
             if any files changed:
             1. git checkout -b status-maintenance-$(date +%Y%m%d)
             2. git add .status_history/ STATUS.md update.wav
-            3. git commit -m "chore: weekly status maintenance"
+            3. git commit -m "chore: status maintenance"
             4. git push -u origin status-maintenance-$(date +%Y%m%d)
-            5. gh pr create --title "chore: weekly status maintenance" --body "automated status archival and audio overview"
+            5. gh pr create with a title and body you craft:
+               - title should be descriptive of what this status update covers (e.g. "chore: status maintenance - playlist fast-follow fixes" or "chore: status maintenance - December updates")
+               - make it clear this is an automated status maintenance PR from the GitHub Action
+               - body should summarize what changed (archival, audio generation, etc.)
 
-            add detail as desired to the PR body and title.
             add a label like "ai-generated" to the PR (create the label if it doesn't exist)
             if nothing changed, report that no maintenance was needed.
 
