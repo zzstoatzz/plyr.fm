@@ -271,11 +271,27 @@ $effect(() => {
 						<p class="bio">{artist.bio}</p>
 					{/if}
 				</div>
-				<div class="artist-share-desktop">
+				<div class="artist-actions-desktop">
+					{#if artist.support_url}
+						<a href={artist.support_url} target="_blank" rel="noopener" class="support-btn">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+							</svg>
+							support
+						</a>
+					{/if}
 					<ShareButton url={shareUrl} title="share artist" />
 				</div>
 			</div>
-			<div class="artist-share-mobile">
+			<div class="artist-actions-mobile">
+				{#if artist.support_url}
+					<a href={artist.support_url} target="_blank" rel="noopener" class="support-btn">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+						</svg>
+						support
+					</a>
+				{/if}
 				<ShareButton url={shareUrl} title="share artist" />
 			</div>
 		</section>
@@ -498,17 +514,43 @@ $effect(() => {
 		flex: 1;
 	}
 
-	.artist-share-desktop {
+	.artist-actions-desktop {
 		display: flex;
 		align-items: flex-start;
 		justify-content: center;
+		gap: 0.75rem;
 	}
 
-	.artist-share-mobile {
+	.artist-actions-mobile {
 		display: none;
 		width: 100%;
 		justify-content: center;
+		gap: 0.75rem;
 		margin-top: 0.5rem;
+	}
+
+	.support-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.5rem 0.9rem;
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+		border-radius: 6px;
+		color: var(--accent);
+		font-size: 0.9rem;
+		text-decoration: none;
+		transition: all 0.2s ease;
+	}
+
+	.support-btn:hover {
+		background: color-mix(in srgb, var(--accent) 25%, transparent);
+		border-color: var(--accent);
+		transform: translateY(-1px);
+	}
+
+	.support-btn svg {
+		flex-shrink: 0;
 	}
 
 	.artist-avatar {
@@ -868,11 +910,11 @@ $effect(() => {
 			text-align: center;
 		}
 
-		.artist-share-desktop {
+		.artist-actions-desktop {
 			display: none;
 		}
 
-		.artist-share-mobile {
+		.artist-actions-mobile {
 			display: flex;
 		}
 

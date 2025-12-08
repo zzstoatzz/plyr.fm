@@ -15,6 +15,7 @@ export interface Preferences {
 	teal_needs_reauth: boolean;
 	show_sensitive_artwork: boolean;
 	show_liked_on_profile: boolean;
+	support_url: string | null;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -26,7 +27,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	enable_teal_scrobbling: false,
 	teal_needs_reauth: false,
 	show_sensitive_artwork: false,
-	show_liked_on_profile: false
+	show_liked_on_profile: false,
+	support_url: null
 };
 
 class PreferencesManager {
@@ -72,6 +74,10 @@ class PreferencesManager {
 
 	get showLikedOnProfile(): boolean {
 		return this.data?.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile;
+	}
+
+	get supportUrl(): string | null {
+		return this.data?.support_url ?? DEFAULT_PREFERENCES.support_url;
 	}
 
 	setTheme(theme: Theme): void {
@@ -125,7 +131,8 @@ class PreferencesManager {
 					enable_teal_scrobbling: data.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling,
 					teal_needs_reauth: data.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth,
 					show_sensitive_artwork: data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork,
-					show_liked_on_profile: data.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile
+					show_liked_on_profile: data.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile,
+					support_url: data.support_url ?? DEFAULT_PREFERENCES.support_url
 				};
 			} else {
 				this.data = { ...DEFAULT_PREFERENCES, theme: currentTheme };

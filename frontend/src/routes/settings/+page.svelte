@@ -21,6 +21,14 @@
 	let currentTheme = $derived(preferences.theme);
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let autoAdvance = $derived(preferences.autoAdvance);
+	let supportUrl = $state(preferences.supportUrl ?? '');
+
+	// sync supportUrl when preferences load
+	$effect(() => {
+		if (preferences.loaded) {
+			supportUrl = preferences.supportUrl ?? '';
+		}
+	});
 
 	// developer token state
 	let creatingToken = $state(false);
@@ -229,6 +237,35 @@
 		} catch (_e) {
 			console.error('failed to save preference:', _e);
 			toast.error('failed to update preference');
+		}
+	}
+
+	// support url - sync with preferences when they load
+	$effect(() => {
+		if (preferences.loaded) {
+			supportUrl = preferences.supportUrl ?? '';
+		}
+	});
+
+	let savingSupportUrl = $state(false);
+
+	async function saveSupportUrl() {
+		// basic URL validation
+		const url = supportUrl.trim();
+		if (url && !url.startsWith('https://')) {
+			toast.error('support link must start with https://');
+			return;
+		}
+
+		savingSupportUrl = true;
+		try {
+			await preferences.update({ support_url: url || '' });
+			toast.success(url ? 'support link saved' : 'support link removed');
+		} catch (_e) {
+			console.error('failed to save support link:', _e);
+			toast.error('failed to update support link');
+		} finally {
+			savingSupportUrl = false;
 		}
 	}
 
@@ -486,6 +523,28 @@
 						/>
 						<span class="toggle-slider"></span>
 					</label>
+				</div>
+
+				<div class="setting-row support-url-row">
+					<div class="setting-info">
+						<h3>support link</h3>
+						<p>optional link for fans to support you (Ko-fi, Patreon, etc.)</p>
+					</div>
+					<div class="support-url-input">
+						<input
+							type="url"
+							bind:value={supportUrl}
+							placeholder="https://ko-fi.com/yourname"
+							class="url-input"
+						/>
+						<button
+							class="save-btn"
+							onclick={saveSupportUrl}
+							disabled={savingSupportUrl}
+						>
+							{savingSupportUrl ? 'saving...' : 'save'}
+						</button>
+					</div>
 				</div>
 			</div>
 		</section>
@@ -837,6 +896,62 @@
 
 	.setting-info a:hover {
 		text-decoration: underline;
+	}
+
+	/* support url input */
+	.support-url-row {
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.support-url-input {
+		display: flex;
+		gap: 0.5rem;
+		width: 100%;
+	}
+
+	.url-input {
+		flex: 1;
+		padding: 0.6rem 0.75rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: 6px;
+		color: var(--text-primary);
+		font-family: inherit;
+		font-size: 0.9rem;
+		transition: border-color 0.15s;
+	}
+
+	.url-input::placeholder {
+		color: var(--text-muted);
+	}
+
+	.url-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.save-btn {
+		padding: 0.6rem 1rem;
+		background: var(--accent);
+		border: none;
+		border-radius: 6px;
+		color: var(--bg-primary);
+		font-family: inherit;
+		font-size: 0.85rem;
+		font-weight: 600;
+		cursor: pointer;
+		white-space: nowrap;
+		transition: opacity 0.15s;
+	}
+
+	.save-btn:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+
+	.save-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	/* theme buttons */

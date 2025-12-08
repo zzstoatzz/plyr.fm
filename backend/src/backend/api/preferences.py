@@ -27,6 +27,7 @@ class PreferencesResponse(BaseModel):
     teal_needs_reauth: bool = False
     show_sensitive_artwork: bool = False
     show_liked_on_profile: bool = False
+    support_url: str | None = None
 
 
 class PreferencesUpdate(BaseModel):
@@ -39,6 +40,7 @@ class PreferencesUpdate(BaseModel):
     enable_teal_scrobbling: bool | None = None
     show_sensitive_artwork: bool | None = None
     show_liked_on_profile: bool | None = None
+    support_url: str | None = None
 
 
 def _has_teal_scope(session: Session) -> bool:
@@ -84,6 +86,7 @@ async def get_preferences(
         teal_needs_reauth=teal_needs_reauth,
         show_sensitive_artwork=prefs.show_sensitive_artwork,
         show_liked_on_profile=prefs.show_liked_on_profile,
+        support_url=prefs.support_url,
     )
 
 
@@ -122,6 +125,7 @@ async def update_preferences(
             show_liked_on_profile=update.show_liked_on_profile
             if update.show_liked_on_profile is not None
             else False,
+            support_url=update.support_url,
         )
         db.add(prefs)
     else:
@@ -140,6 +144,9 @@ async def update_preferences(
             prefs.show_sensitive_artwork = update.show_sensitive_artwork
         if update.show_liked_on_profile is not None:
             prefs.show_liked_on_profile = update.show_liked_on_profile
+        if update.support_url is not None:
+            # allow clearing by setting to empty string
+            prefs.support_url = update.support_url if update.support_url else None
 
     await db.commit()
     await db.refresh(prefs)
@@ -157,4 +164,5 @@ async def update_preferences(
         teal_needs_reauth=teal_needs_reauth,
         show_sensitive_artwork=prefs.show_sensitive_artwork,
         show_liked_on_profile=prefs.show_liked_on_profile,
+        support_url=prefs.support_url,
     )
