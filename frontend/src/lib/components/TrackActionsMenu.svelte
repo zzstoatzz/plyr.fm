@@ -190,7 +190,13 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 		<div class="menu-backdrop" role="presentation" onclick={closeMenu}></div>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="menu-panel" role="menu" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+		<div class="menu-panel" role="menu" tabindex="-1" onclick={(e) => {
+			// don't stop propagation for links - let SvelteKit handle navigation
+			if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
+				return;
+			}
+			e.stopPropagation();
+		}}>
 			{#if !showPlaylistPicker}
 				{#if isAuthenticated}
 					<button class="menu-item" onclick={handleLike} disabled={loading || likeDisabled} class:disabled={likeDisabled}>

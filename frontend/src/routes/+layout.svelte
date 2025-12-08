@@ -28,6 +28,7 @@
 	let hasPageMetadata = $derived(
 		$page.url.pathname === '/' || // homepage
 		$page.url.pathname.startsWith('/track/') || // track detail
+		$page.url.pathname.startsWith('/playlist/') || // playlist detail
 		$page.url.pathname === '/liked' || // liked tracks
 		$page.url.pathname.match(/^\/u\/[^/]+$/) || // artist detail
 		$page.url.pathname.match(/^\/u\/[^/]+\/album\/[^/]+/) // album detail
