@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { replaceState } from '$app/navigation';
+	import { invalidateAll, replaceState } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
 	import AlbumSelect from '$lib/components/AlbumSelect.svelte';
@@ -77,6 +77,8 @@
 				});
 
 				if (exchangeResponse.ok) {
+					// invalidate all load functions so they rerun with the new session cookie
+					await invalidateAll();
 					await auth.initialize();
 					await preferences.fetch();
 				}

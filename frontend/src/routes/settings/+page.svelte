@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import type { TokenInfo } from '$lib/types';
@@ -65,6 +66,9 @@
 
 				if (exchangeResponse.ok) {
 					const data = await exchangeResponse.json();
+
+					// invalidate all load functions so they rerun with the new session cookie
+					await invalidateAll();
 
 					if (isDevToken) {
 						developerToken = data.session_id;
