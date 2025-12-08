@@ -23,6 +23,7 @@ export async function load({ params, parent, data }: LoadEvent): Promise<PageDat
 				owner_did: serverData?.playlistMeta?.owner_did ?? '',
 				owner_handle: serverData?.playlistMeta?.owner_handle ?? '',
 				track_count: serverData?.playlistMeta?.track_count ?? 0,
+				image_url: serverData?.playlistMeta?.image_url,
 				show_on_profile: serverData?.playlistMeta?.show_on_profile ?? false,
 				atproto_record_uri: serverData?.playlistMeta?.atproto_record_uri ?? '',
 				created_at: serverData?.playlistMeta?.created_at ?? '',
