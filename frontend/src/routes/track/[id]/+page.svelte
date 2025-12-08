@@ -385,18 +385,6 @@ $effect(() => {
 
 			<!-- track info wrapper -->
 			<div class="track-info-wrapper">
-				<div class="side-button-left">
-					{#if auth.isAuthenticated}
-						<AddToMenu
-							trackId={track.id}
-							trackTitle={track.title}
-							trackUri={track.atproto_record_uri}
-							trackCid={track.atproto_record_cid}
-							initialLiked={track.is_liked || false}
-						/>
-					{/if}
-				</div>
-
 				<div class="track-info">
 					<h1 class="track-title">{track.title}</h1>
 					<div class="track-metadata">
@@ -443,7 +431,7 @@ $effect(() => {
 						{/if}
 					</div>
 
-					<div class="mobile-side-buttons">
+					<div class="side-buttons">
 						{#if auth.isAuthenticated}
 							<AddToMenu
 								trackId={track.id}
@@ -482,10 +470,6 @@ $effect(() => {
 							add to queue
 						</button>
 					</div>
-				</div>
-
-				<div class="side-button-right">
-					<ShareButton url={shareUrl} title="share track" />
 				</div>
 			</div>
 		</div>
@@ -671,17 +655,7 @@ $effect(() => {
 		max-width: 600px;
 		display: flex;
 		align-items: flex-start;
-		gap: 1rem;
 		justify-content: center;
-	}
-
-	.side-button-left,
-	.side-button-right {
-		flex-shrink: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding-top: 0.5rem;
 	}
 
 	.track-info {
@@ -830,8 +804,8 @@ $effect(() => {
 		color: var(--accent-hover);
 	}
 
-	.mobile-side-buttons {
-		display: none;
+	.side-buttons {
+		display: flex;
 		gap: 0.75rem;
 		justify-content: center;
 		align-items: center;
@@ -916,15 +890,6 @@ $effect(() => {
 			flex-direction: column;
 			align-items: center;
 			gap: 0.75rem;
-		}
-
-		.side-button-left,
-		.side-button-right {
-			display: none;
-		}
-
-		.mobile-side-buttons {
-			display: flex;
 		}
 
 		.track-info {

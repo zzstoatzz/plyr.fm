@@ -38,6 +38,8 @@
 	let playlists = $state<Playlist[]>([]);
 	let loadingPlaylists = $state(false);
 	let addingToPlaylist = $state<string | null>(null);
+	let openUpward = $state(false);
+	let triggerRef = $state<HTMLButtonElement | null>(null);
 
 	// filter out the excluded playlist (must be after playlists state declaration)
 	let filteredPlaylists = $derived(
@@ -68,6 +70,16 @@
 	function toggleMenu(e: Event) {
 		e.stopPropagation();
 		if (disabled) return;
+
+		if (!menuOpen && triggerRef) {
+			// check if there's enough space below (accounting for player height ~150px)
+			const rect = triggerRef.getBoundingClientRect();
+			const spaceBelow = window.innerHeight - rect.bottom;
+			const menuHeight = 300; // approximate menu height
+			const playerHeight = 150; // approximate player height
+			openUpward = spaceBelow < menuHeight + playerHeight;
+		}
+
 		menuOpen = !menuOpen;
 		if (!menuOpen) {
 			showPlaylistPicker = false;
@@ -226,6 +238,7 @@
 
 <div class="add-to-menu">
 	<button
+		bind:this={triggerRef}
 		class="trigger-button"
 		class:liked
 		class:loading
@@ -242,7 +255,7 @@
 
 	{#if menuOpen}
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="menu-dropdown" role="menu" tabindex="-1" onclick={(e) => {
+		<div class="menu-dropdown" class:open-upward={openUpward} role="menu" tabindex="-1" onclick={(e) => {
 			// don't stop propagation for links - let SvelteKit handle navigation
 			if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
 				return;
@@ -427,6 +440,11 @@
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 		overflow: hidden;
 		z-index: 10;
+	}
+
+	.menu-dropdown.open-upward {
+		top: auto;
+		bottom: calc(100% + 4px);
 	}
 
 	.menu-item {

@@ -596,8 +596,25 @@
 				</button>
 			{/if}
 			{/if}
-			<div class="mobile-share-button">
+			<div class="mobile-buttons">
 				<ShareButton url={$page.url.href} title="share playlist" />
+				{#if isOwner}
+					<button class="icon-btn" onclick={openEditModal} aria-label="edit playlist metadata" title="edit playlist metadata">
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+							<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+						</svg>
+					</button>
+					<button class="icon-btn danger" onclick={() => showDeleteConfirm = true} aria-label="delete playlist" title="delete playlist">
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<polyline points="3 6 5 6 21 6"></polyline>
+							<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"></path>
+							<path d="M10 11v6"></path>
+							<path d="M14 11v6"></path>
+							<path d="m9 6 .5-2h5l.5 2"></path>
+						</svg>
+					</button>
+				{/if}
 			</div>
 		</div>
 
@@ -920,7 +937,7 @@
 		padding-bottom: 0.5rem;
 	}
 
-	.mobile-share-button {
+	.mobile-buttons {
 		display: none;
 	}
 
@@ -1607,10 +1624,11 @@
 			display: none;
 		}
 
-		.mobile-share-button {
+		.mobile-buttons {
 			display: flex;
-			width: 100%;
+			gap: 0.5rem;
 			justify-content: center;
+			align-items: center;
 		}
 
 		.playlist-title {
