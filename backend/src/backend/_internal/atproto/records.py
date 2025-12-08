@@ -335,6 +335,46 @@ def _parse_at_uri(uri: str) -> tuple[str, str, str]:
     return parts[0], parts[1], parts[2]
 
 
+async def get_record_public(
+    record_uri: str,
+    pds_url: str | None = None,
+) -> dict[str, Any]:
+    """fetch an ATProto record without authentication.
+
+    ATProto records are public by design - any client can read them.
+    uses the owner's PDS URL if provided, otherwise falls back to
+    bsky.network relay which indexes all public records.
+
+    args:
+        record_uri: AT URI of the record (at://did/collection/rkey)
+        pds_url: optional PDS URL to use (falls back to bsky.network)
+
+    returns:
+        the record value dict
+
+    raises:
+        ValueError: if URI is malformed
+        Exception: if fetch fails
+    """
+    import httpx
+
+    repo, collection, rkey = _parse_at_uri(record_uri)
+
+    base_url = pds_url or "https://bsky.network"
+    url = f"{base_url}/xrpc/com.atproto.repo.getRecord"
+    params = {"repo": repo, "collection": collection, "rkey": rkey}
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, params=params, timeout=10.0)
+
+    if response.status_code != 200:
+        raise Exception(
+            f"failed to fetch record: {response.status_code} {response.text}"
+        )
+
+    return response.json()
+
+
 async def update_record(
     auth_session: AuthSession,
     record_uri: str,
