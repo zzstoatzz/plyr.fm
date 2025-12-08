@@ -532,13 +532,15 @@ $effect(() => {
 	.support-btn {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: 0.4rem;
-		padding: 0.5rem 0.9rem;
+		height: 32px;
+		padding: 0 0.75rem;
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
-		border-radius: 6px;
+		border-radius: 4px;
 		color: var(--accent);
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 		text-decoration: none;
 		transition: all 0.2s ease;
 	}
@@ -916,6 +918,17 @@ $effect(() => {
 
 		.artist-actions-mobile {
 			display: flex;
+		}
+
+		.support-btn {
+			height: 28px;
+			font-size: 0.8rem;
+			padding: 0 0.6rem;
+		}
+
+		.support-btn svg {
+			width: 14px;
+			height: 14px;
 		}
 
 		.artist-avatar {
