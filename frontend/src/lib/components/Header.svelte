@@ -392,7 +392,7 @@
 	}
 
 	/* Hide margin-positioned elements and switch to mobile layout at the same breakpoint */
-	@media (max-width: 1299px) {
+	@media (max-width: 1399px) {
 		.stats-left,
 		.search-left,
 		.logout-right {
