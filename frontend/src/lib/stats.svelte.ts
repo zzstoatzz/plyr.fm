@@ -6,6 +6,24 @@ export interface PlatformStats {
 	total_plays: number;
 	total_tracks: number;
 	total_artists: number;
+	total_duration_seconds: number;
+}
+
+/**
+ * format seconds into human-readable duration string.
+ * examples: "25h 32m", "3h 45m", "45m", "1h"
+ */
+export function formatDuration(totalSeconds: number): string {
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+	if (hours === 0) {
+		return `${minutes}m`;
+	}
+	if (minutes === 0) {
+		return `${hours}h`;
+	}
+	return `${hours}h ${minutes}m`;
 }
 
 class StatsCache {

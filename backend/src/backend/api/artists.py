@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
@@ -73,6 +73,7 @@ class AnalyticsResponse(BaseModel):
 
     total_plays: int
     total_items: int
+    total_duration_seconds: int
     top_item: TopItemResponse | None
     top_liked: TopItemResponse | None
 
@@ -256,15 +257,18 @@ async def get_artist_analytics(
 
     returns zeros if artist has no tracks.
     """
-    # get total plays and item count in one query
+    # get total plays, item count, and duration in one query
     result = await db.execute(
-        select(func.sum(Track.play_count), func.count(Track.id)).where(
-            Track.artist_did == artist_did
-        )
+        select(
+            func.sum(Track.play_count),
+            func.count(Track.id),
+            func.coalesce(func.sum(text("(extra->>'duration')::int")), 0),
+        ).where(Track.artist_did == artist_did)
     )
-    total_plays, total_items = result.one()
+    total_plays, total_items, total_duration = result.one()
     total_plays = total_plays or 0  # handle None when no tracks
     total_items = total_items or 0
+    total_duration = total_duration or 0
 
     # get top item by plays (only if artist has tracks)
     top_item = None
@@ -305,6 +309,7 @@ async def get_artist_analytics(
     return AnalyticsResponse(
         total_plays=total_plays,
         total_items=total_items,
+        total_duration_seconds=total_duration,
         top_item=top_item,
         top_liked=top_liked,
     )
