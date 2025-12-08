@@ -2,7 +2,7 @@
 <script lang="ts">
 	import { APP_NAME } from '$lib/branding';
 	import { onMount } from 'svelte';
-	import { replaceState } from '$app/navigation';
+	import { invalidateAll, replaceState } from '$app/navigation';
 	import { API_URL } from '$lib/config';
 	import { auth } from '$lib/auth.svelte';
 
@@ -32,6 +32,8 @@
 				});
 
 				if (exchangeResponse.ok) {
+					// invalidate all load functions so they rerun with the new session cookie
+					await invalidateAll();
 					await auth.initialize();
 				}
 			} catch (_e) {
