@@ -1,18 +1,18 @@
 <script lang="ts">
-	import Header from '$lib/components/Header.svelte';
-	import ShareButton from '$lib/components/ShareButton.svelte';
-	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
-	import TrackItem from '$lib/components/TrackItem.svelte';
-	import { auth } from '$lib/auth.svelte';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { API_URL } from '$lib/config';
-	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
-	import { toast } from '$lib/toast.svelte';
-	import { player } from '$lib/player.svelte';
-	import { queue } from '$lib/queue.svelte';
-	import type { PageData } from './$types';
-	import type { PlaylistWithTracks, Track } from '$lib/types';
+	import Header from "$lib/components/Header.svelte";
+	import ShareButton from "$lib/components/ShareButton.svelte";
+	import SensitiveImage from "$lib/components/SensitiveImage.svelte";
+	import TrackItem from "$lib/components/TrackItem.svelte";
+	import { auth } from "$lib/auth.svelte";
+	import { goto } from "$app/navigation";
+	import { page } from "$app/stores";
+	import { API_URL } from "$lib/config";
+	import { APP_NAME, APP_CANONICAL_URL } from "$lib/branding";
+	import { toast } from "$lib/toast.svelte";
+	import { player } from "$lib/player.svelte";
+	import { queue } from "$lib/queue.svelte";
+	import type { PageData } from "./$types";
+	import type { PlaylistWithTracks, Track } from "$lib/types";
 
 	let { data }: { data: PageData } = $props();
 	let playlist = $state<PlaylistWithTracks>(data.playlist);
@@ -20,28 +20,29 @@
 
 	// search state
 	let showSearch = $state(false);
-	let searchQuery = $state('');
+	let searchQuery = $state("");
 	let searchResults = $state<any[]>([]);
 	let searching = $state(false);
-	let searchError = $state('');
+	let searchError = $state("");
 
 	// UI state
 	let deleting = $state(false);
 	let addingTrack = $state<number | null>(null);
 	let showDeleteConfirm = $state(false);
+	let removingTrackId = $state<number | null>(null);
+
+	// unified edit mode state
+	let isEditMode = $state(false);
+	let isSavingOrder = $state(false);
 
 	// edit modal state
-	let showEdit = $state(false);
-	let editName = $state('');
+	let showEditModal = $state(false);
+	let editName = $state("");
 	let editShowOnProfile = $state(false);
 	let editImageFile = $state<File | null>(null);
 	let editImagePreview = $state<string | null>(null);
 	let saving = $state(false);
 	let uploadingCover = $state(false);
-
-	// reorder state
-	let isEditMode = $state(false);
-	let isSavingOrder = $state(false);
 
 	// drag state
 	let draggedIndex = $state<number | null>(null);
@@ -55,7 +56,7 @@
 
 	async function handleLogout() {
 		await auth.logout();
-		window.location.href = '/';
+		window.location.href = "/";
 	}
 
 	function playTrack(track: Track) {
@@ -84,23 +85,32 @@
 		}
 
 		searching = true;
-		searchError = '';
+		searchError = "";
 
 		try {
-			const response = await fetch(`${API_URL}/search/?q=${encodeURIComponent(searchQuery)}&type=tracks&limit=10`, {
-				credentials: 'include'
-			});
+			const response = await fetch(
+				`${API_URL}/search/?q=${encodeURIComponent(searchQuery)}&type=tracks&limit=10`,
+				{
+					credentials: "include",
+				},
+			);
 
 			if (!response.ok) {
-				throw new Error('search failed');
+				throw new Error("search failed");
 			}
 
 			const data = await response.json();
 			// filter out tracks already in playlist
-			const existingUris = new Set(tracks.map(t => t.atproto_record_uri));
-			searchResults = data.results.filter((r: any) => r.type === 'track' && !existingUris.has(r.atproto_record_uri));
+			const existingUris = new Set(
+				tracks.map((t) => t.atproto_record_uri),
+			);
+			searchResults = data.results.filter(
+				(r: any) =>
+					r.type === "track" &&
+					!existingUris.has(r.atproto_record_uri),
+			);
 		} catch (e) {
-			searchError = 'failed to search tracks';
+			searchError = "failed to search tracks";
 			searchResults = [];
 		} finally {
 			searching = false;
@@ -113,33 +123,39 @@
 		try {
 			// first fetch full track details to get ATProto URI and CID
 			const trackResponse = await fetch(`${API_URL}/tracks/${track.id}`, {
-				credentials: 'include'
+				credentials: "include",
 			});
 
 			if (!trackResponse.ok) {
-				throw new Error('failed to fetch track details');
+				throw new Error("failed to fetch track details");
 			}
 
 			const trackData = await trackResponse.json();
 
-			if (!trackData.atproto_record_uri || !trackData.atproto_record_cid) {
-				throw new Error('track does not have ATProto record');
+			if (
+				!trackData.atproto_record_uri ||
+				!trackData.atproto_record_cid
+			) {
+				throw new Error("track does not have ATProto record");
 			}
 
 			// add to playlist
-			const response = await fetch(`${API_URL}/lists/playlists/${playlist.id}/tracks`, {
-				method: 'POST',
-				credentials: 'include',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					track_uri: trackData.atproto_record_uri,
-					track_cid: trackData.atproto_record_cid
-				})
-			});
+			const response = await fetch(
+				`${API_URL}/lists/playlists/${playlist.id}/tracks`,
+				{
+					method: "POST",
+					credentials: "include",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						track_uri: trackData.atproto_record_uri,
+						track_cid: trackData.atproto_record_cid,
+					}),
+				},
+			);
 
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.detail || 'failed to add track');
+				throw new Error(data.detail || "failed to add track");
 			}
 
 			// add full track to local state
@@ -149,18 +165,53 @@
 			playlist.track_count = tracks.length;
 
 			// remove from search results
-			searchResults = searchResults.filter(r => r.id !== track.id);
+			searchResults = searchResults.filter((r) => r.id !== track.id);
 
 			toast.success(`added "${trackData.title}" to playlist`);
 		} catch (e) {
-			console.error('failed to add track:', e);
-			toast.error(e instanceof Error ? e.message : 'failed to add track');
+			console.error("failed to add track:", e);
+			toast.error(e instanceof Error ? e.message : "failed to add track");
 		} finally {
 			addingTrack = null;
 		}
 	}
 
-	// reorder functions
+	async function removeTrack(track: Track) {
+		if (!track.atproto_record_uri) {
+			toast.error("track does not have ATProto record");
+			return;
+		}
+
+		removingTrackId = track.id;
+
+		try {
+			const response = await fetch(
+				`${API_URL}/lists/playlists/${playlist.id}/tracks/${encodeURIComponent(track.atproto_record_uri)}`,
+				{
+					method: "DELETE",
+					credentials: "include",
+				},
+			);
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.detail || "failed to remove track");
+			}
+
+			tracks = tracks.filter((t) => t.id !== track.id);
+			playlist.track_count = tracks.length;
+
+			toast.success(`removed "${track.title}" from playlist`);
+		} catch (e) {
+			console.error("failed to remove track:", e);
+			toast.error(
+				e instanceof Error ? e.message : "failed to remove track",
+			);
+		} finally {
+			removingTrackId = null;
+		}
+	}
+
 	function toggleEditMode() {
 		if (isEditMode) {
 			saveOrder();
@@ -168,11 +219,19 @@
 		isEditMode = !isEditMode;
 	}
 
+	function openEditModal() {
+		editName = playlist.name;
+		editShowOnProfile = playlist.show_on_profile;
+		editImageFile = null;
+		editImagePreview = null;
+		showEditModal = true;
+	}
+
 	async function saveOrder() {
 		if (!playlist.atproto_record_uri) return;
 
 		// extract rkey from list URI (at://did/collection/rkey)
-		const rkey = playlist.atproto_record_uri.split('/').pop();
+		const rkey = playlist.atproto_record_uri.split("/").pop();
 		if (!rkey) return;
 
 		// build strongRefs from current track order
@@ -180,7 +239,7 @@
 			.filter((t) => t.atproto_record_uri && t.atproto_record_cid)
 			.map((t) => ({
 				uri: t.atproto_record_uri!,
-				cid: t.atproto_record_cid!
+				cid: t.atproto_record_cid!,
 			}));
 
 		if (items.length === 0) return;
@@ -188,20 +247,24 @@
 		isSavingOrder = true;
 		try {
 			const response = await fetch(`${API_URL}/lists/${rkey}/reorder`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({ items })
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ items }),
 			});
 
 			if (!response.ok) {
-				const error = await response.json().catch(() => ({ detail: 'unknown error' }));
-				throw new Error(error.detail || 'failed to save order');
+				const error = await response
+					.json()
+					.catch(() => ({ detail: "unknown error" }));
+				throw new Error(error.detail || "failed to save order");
 			}
 
-			toast.success('order saved');
+			toast.success("order saved");
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'failed to save order');
+			toast.error(
+				e instanceof Error ? e.message : "failed to save order",
+			);
 		} finally {
 			isSavingOrder = false;
 		}
@@ -220,7 +283,7 @@
 	function handleDragStart(event: DragEvent, index: number) {
 		draggedIndex = index;
 		if (event.dataTransfer) {
-			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.effectAllowed = "move";
 		}
 	}
 
@@ -249,31 +312,32 @@
 		touchDragIndex = index;
 		touchStartY = touch.clientY;
 		touchDragElement = event.currentTarget as HTMLElement;
-		touchDragElement.classList.add('touch-dragging');
+		touchDragElement.classList.add("touch-dragging");
 	}
 
 	function handleTouchMove(event: TouchEvent) {
-		if (touchDragIndex === null || !touchDragElement || !tracksListElement) return;
+		if (touchDragIndex === null || !touchDragElement || !tracksListElement)
+			return;
 
 		event.preventDefault();
 		const touch = event.touches[0];
 		const offset = touch.clientY - touchStartY;
 		touchDragElement.style.transform = `translateY(${offset}px)`;
 
-		const trackElements = tracksListElement.querySelectorAll('.track-row');
+		const trackElements = tracksListElement.querySelectorAll(".track-row");
 		for (let i = 0; i < trackElements.length; i++) {
 			const trackEl = trackElements[i] as HTMLElement;
 			const rect = trackEl.getBoundingClientRect();
 			const midY = rect.top + rect.height / 2;
 
 			if (touch.clientY < midY && i > 0) {
-				const targetIndex = parseInt(trackEl.dataset.index || '0');
+				const targetIndex = parseInt(trackEl.dataset.index || "0");
 				if (targetIndex !== touchDragIndex) {
 					dragOverIndex = targetIndex;
 				}
 				break;
 			} else if (touch.clientY >= midY) {
-				const targetIndex = parseInt(trackEl.dataset.index || '0');
+				const targetIndex = parseInt(trackEl.dataset.index || "0");
 				if (targetIndex !== touchDragIndex) {
 					dragOverIndex = targetIndex;
 				}
@@ -282,13 +346,17 @@
 	}
 
 	function handleTouchEnd() {
-		if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
+		if (
+			touchDragIndex !== null &&
+			dragOverIndex !== null &&
+			touchDragIndex !== dragOverIndex
+		) {
 			moveTrack(touchDragIndex, dragOverIndex);
 		}
 
 		if (touchDragElement) {
-			touchDragElement.classList.remove('touch-dragging');
-			touchDragElement.style.transform = '';
+			touchDragElement.classList.remove("touch-dragging");
+			touchDragElement.style.transform = "";
 		}
 
 		touchDragIndex = null;
@@ -300,32 +368,30 @@
 		deleting = true;
 
 		try {
-			const response = await fetch(`${API_URL}/lists/playlists/${playlist.id}`, {
-				method: 'DELETE',
-				credentials: 'include'
-			});
+			const response = await fetch(
+				`${API_URL}/lists/playlists/${playlist.id}`,
+				{
+					method: "DELETE",
+					credentials: "include",
+				},
+			);
 
 			if (!response.ok) {
-				throw new Error('failed to delete playlist');
+				throw new Error("failed to delete playlist");
 			}
 
-			toast.success('playlist deleted');
-			goto('/library');
+			toast.success("playlist deleted");
+			goto("/library");
 		} catch (e) {
-			console.error('failed to delete playlist:', e);
-			toast.error(e instanceof Error ? e.message : 'failed to delete playlist');
+			console.error("failed to delete playlist:", e);
+			toast.error(
+				e instanceof Error ? e.message : "failed to delete playlist",
+			);
 			deleting = false;
 			showDeleteConfirm = false;
 		}
 	}
 
-	function openEditModal() {
-		editName = playlist.name;
-		editShowOnProfile = playlist.show_on_profile;
-		editImageFile = null;
-		editImagePreview = null;
-		showEdit = true;
-	}
 
 	function handleEditImageSelect(event: Event) {
 		const input = event.target as HTMLInputElement;
@@ -333,7 +399,7 @@
 		if (!file) return;
 
 		// validate file type
-		if (!file.type.startsWith('image/')) {
+		if (!file.type.startsWith("image/")) {
 			return;
 		}
 
@@ -351,26 +417,34 @@
 
 		try {
 			// update name and/or show_on_profile if changed
-			const nameChanged = editName.trim() && editName.trim() !== playlist.name;
-			const showOnProfileChanged = editShowOnProfile !== playlist.show_on_profile;
+			const nameChanged =
+				editName.trim() && editName.trim() !== playlist.name;
+			const showOnProfileChanged =
+				editShowOnProfile !== playlist.show_on_profile;
 
 			if (nameChanged || showOnProfileChanged) {
 				const formData = new FormData();
 				if (nameChanged) {
-					formData.append('name', editName.trim());
+					formData.append("name", editName.trim());
 				}
 				if (showOnProfileChanged) {
-					formData.append('show_on_profile', String(editShowOnProfile));
+					formData.append(
+						"show_on_profile",
+						String(editShowOnProfile),
+					);
 				}
 
-				const response = await fetch(`${API_URL}/lists/playlists/${playlist.id}`, {
-					method: 'PATCH',
-					credentials: 'include',
-					body: formData
-				});
+				const response = await fetch(
+					`${API_URL}/lists/playlists/${playlist.id}`,
+					{
+						method: "PATCH",
+						credentials: "include",
+						body: formData,
+					},
+				);
 
 				if (!response.ok) {
-					throw new Error('failed to update playlist');
+					throw new Error("failed to update playlist");
 				}
 
 				const updated = await response.json();
@@ -382,16 +456,19 @@
 			if (editImageFile) {
 				uploadingCover = true;
 				const formData = new FormData();
-				formData.append('image', editImageFile);
+				formData.append("image", editImageFile);
 
-				const response = await fetch(`${API_URL}/lists/playlists/${playlist.id}/cover`, {
-					method: 'POST',
-					credentials: 'include',
-					body: formData
-				});
+				const response = await fetch(
+					`${API_URL}/lists/playlists/${playlist.id}/cover`,
+					{
+						method: "POST",
+						credentials: "include",
+						body: formData,
+					},
+				);
 
 				if (!response.ok) {
-					throw new Error('failed to upload cover');
+					throw new Error("failed to upload cover");
 				}
 
 				const result = await response.json();
@@ -400,10 +477,12 @@
 			}
 
 			showEdit = false;
-			toast.success('playlist updated');
+			toast.success("playlist updated");
 		} catch (e) {
-			console.error('failed to save playlist:', e);
-			toast.error(e instanceof Error ? e.message : 'failed to save playlist');
+			console.error("failed to save playlist:", e);
+			toast.error(
+				e instanceof Error ? e.message : "failed to save playlist",
+			);
 		} finally {
 			saving = false;
 			uploadingCover = false;
@@ -415,21 +494,24 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape') {
+		if (event.key === "Escape") {
 			if (showSearch) {
 				showSearch = false;
-				searchQuery = '';
+				searchQuery = "";
 				searchResults = [];
 			}
 			if (showDeleteConfirm) {
 				showDeleteConfirm = false;
 			}
-			if (showEdit) {
-				showEdit = false;
+			if (showEditModal) {
+				showEditModal = false;
 				if (editImagePreview) {
 					URL.revokeObjectURL(editImagePreview);
 					editImagePreview = null;
 				}
+			}
+			if (isEditMode) {
+				isEditMode = false;
 			}
 		}
 	}
@@ -455,46 +537,79 @@
 	<title>{playlist.name} • plyr</title>
 	<meta
 		name="description"
-		content="playlist by @{playlist.owner_handle} • {playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'} on {APP_NAME}"
+		content="playlist by @{playlist.owner_handle} • {playlist.track_count} {playlist.track_count ===
+		1
+			? 'track'
+			: 'tracks'} on {APP_NAME}"
 	/>
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="music.playlist" />
-	<meta property="og:title" content="{playlist.name}" />
+	<meta property="og:title" content={playlist.name} />
 	<meta
 		property="og:description"
-		content="playlist by @{playlist.owner_handle} • {playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}"
+		content="playlist by @{playlist.owner_handle} • {playlist.track_count} {playlist.track_count ===
+		1
+			? 'track'
+			: 'tracks'}"
 	/>
-	<meta property="og:url" content="{APP_CANONICAL_URL}/playlist/{playlist.id}" />
+	<meta
+		property="og:url"
+		content="{APP_CANONICAL_URL}/playlist/{playlist.id}"
+	/>
 	<meta property="og:site_name" content={APP_NAME} />
 	{#if playlist.image_url}
 		<meta property="og:image" content={playlist.image_url} />
 	{/if}
 
 	<!-- Twitter -->
-	<meta name="twitter:card" content={playlist.image_url ? "summary_large_image" : "summary"} />
-	<meta name="twitter:title" content="{playlist.name}" />
+	<meta
+		name="twitter:card"
+		content={playlist.image_url ? "summary_large_image" : "summary"}
+	/>
+	<meta name="twitter:title" content={playlist.name} />
 	<meta
 		name="twitter:description"
-		content="playlist by @{playlist.owner_handle} • {playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}"
+		content="playlist by @{playlist.owner_handle} • {playlist.track_count} {playlist.track_count ===
+		1
+			? 'track'
+			: 'tracks'}"
 	/>
 	{#if playlist.image_url}
 		<meta name="twitter:image" content={playlist.image_url} />
 	{/if}
 </svelte:head>
 
-<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
+<Header
+	user={auth.user}
+	isAuthenticated={auth.isAuthenticated}
+	onLogout={handleLogout}
+/>
 
 <div class="container">
 	<main>
 		<div class="playlist-hero">
 			{#if playlist.image_url}
-				<SensitiveImage src={playlist.image_url} tooltipPosition="center">
-					<img src={playlist.image_url} alt="{playlist.name} artwork" class="playlist-art" />
+				<SensitiveImage
+					src={playlist.image_url}
+					tooltipPosition="center"
+				>
+					<img
+						src={playlist.image_url}
+						alt="{playlist.name} artwork"
+						class="playlist-art"
+					/>
 				</SensitiveImage>
 			{:else}
 				<div class="playlist-art-placeholder">
-					<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+					<svg
+						width="64"
+						height="64"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+					>
 						<line x1="8" y1="6" x2="21" y2="6"></line>
 						<line x1="8" y1="12" x2="21" y2="12"></line>
 						<line x1="8" y1="18" x2="21" y2="18"></line>
@@ -513,23 +628,79 @@
 							{playlist.owner_handle}
 						</a>
 						<span class="meta-separator">•</span>
-						<span>{playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}</span>
+						<span
+							>{playlist.track_count}
+							{playlist.track_count === 1
+								? "track"
+								: "tracks"}</span
+						>
 					</div>
 				</div>
 
 				<div class="side-buttons">
 					<ShareButton url={$page.url.href} title="share playlist" />
 					{#if isOwner}
-						<button class="icon-btn" onclick={openEditModal} aria-label="edit playlist metadata" title="edit playlist metadata">
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-								<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-							</svg>
+						<button
+							class="icon-btn"
+							class:active={isEditMode}
+							onclick={toggleEditMode}
+							aria-label={isEditMode ? "exit edit mode" : "edit playlist"}
+							title={isEditMode ? "exit edit mode" : "edit playlist"}
+						>
+							{#if isEditMode}
+								<svg
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<line x1="18" y1="6" x2="6" y2="18"></line>
+									<line x1="6" y1="6" x2="18" y2="18"></line>
+								</svg>
+							{:else}
+								<svg
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path
+										d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+									></path>
+									<path
+										d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+									></path>
+								</svg>
+							{/if}
 						</button>
-						<button class="icon-btn danger" onclick={() => showDeleteConfirm = true} aria-label="delete playlist" title="delete playlist">
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<button
+							class="icon-btn danger"
+							onclick={() => (showDeleteConfirm = true)}
+							aria-label="delete playlist"
+							title="delete playlist"
+						>
+							<svg
+								width="18"
+								height="18"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
 								<polyline points="3 6 5 6 21 6"></polyline>
-								<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"></path>
+								<path
+									d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"
+								></path>
 								<path d="M10 11v6"></path>
 								<path d="M14 11v6"></path>
 								<path d="m9 6 .5-2h5l.5 2"></path>
@@ -542,13 +713,26 @@
 
 		<div class="playlist-actions">
 			<button class="play-button" onclick={playNow}>
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-					<path d="M8 5v14l11-7z"/>
+				<svg
+					width="20"
+					height="20"
+					viewBox="0 0 24 24"
+					fill="currentColor"
+				>
+					<path d="M8 5v14l11-7z" />
 				</svg>
 				play now
 			</button>
 			<button class="queue-button" onclick={addToQueue}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+				>
 					<line x1="5" y1="15" x2="5" y2="21"></line>
 					<line x1="2" y1="18" x2="8" y2="18"></line>
 					<line x1="9" y1="6" x2="21" y2="6"></line>
@@ -558,57 +742,135 @@
 				add to queue
 			</button>
 			{#if isOwner}
-				<button class="add-tracks-button" onclick={() => showSearch = true}>
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<line x1="12" y1="5" x2="12" y2="19"></line>
-						<line x1="5" y1="12" x2="19" y2="12"></line>
-					</svg>
-					add tracks
-				</button>
-				{#if tracks.length > 1}
+				{#if isEditMode}
 					<button
-						class="reorder-button"
-						class:active={isEditMode}
-						onclick={toggleEditMode}
-						disabled={isSavingOrder}
-						title={isEditMode ? 'save order' : 'reorder tracks'}
+						class="edit-metadata-button"
+						onclick={openEditModal}
 					>
-						{#if isEditMode}
-							{#if isSavingOrder}
-								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
-									<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
-								</svg>
-								saving...
-						{:else}
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<polyline points="20 6 9 17 4 12"></polyline>
-							</svg>
-							done
-						{/if}
-					{:else}
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<line x1="3" y1="12" x2="21" y2="12"></line>
-							<line x1="3" y1="6" x2="21" y2="6"></line>
-							<line x1="3" y1="18" x2="21" y2="18"></line>
+						<svg
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path
+								d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+							></path>
+							<path
+								d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+							></path>
 						</svg>
-						reorder
+						edit details
+					</button>
+					<button
+						class="add-tracks-button"
+						onclick={() => (showSearch = true)}
+					>
+						<svg
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<line x1="12" y1="5" x2="12" y2="19"></line>
+							<line x1="5" y1="12" x2="19" y2="12"></line>
+						</svg>
+						add tracks
+					</button>
+					{#if isSavingOrder}
+						<button class="save-order-button" disabled>
+							<svg
+								width="18"
+								height="18"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								class="spinner"
+							>
+								<circle
+									cx="12"
+									cy="12"
+									r="10"
+									stroke-dasharray="31.4"
+									stroke-dashoffset="10"
+								></circle>
+							</svg>
+							saving...
+						</button>
 					{/if}
-				</button>
-			{/if}
+				{:else}
+					<button
+						class="add-tracks-button"
+						onclick={() => (showSearch = true)}
+					>
+						<svg
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<line x1="12" y1="5" x2="12" y2="19"></line>
+							<line x1="5" y1="12" x2="19" y2="12"></line>
+						</svg>
+						add tracks
+					</button>
+				{/if}
 			{/if}
 			<div class="mobile-buttons">
 				<ShareButton url={$page.url.href} title="share playlist" />
 				{#if isOwner}
-					<button class="icon-btn" onclick={openEditModal} aria-label="edit playlist metadata" title="edit playlist metadata">
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-							<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-						</svg>
+					<button
+						class="icon-btn"
+						class:active={isEditMode}
+						onclick={toggleEditMode}
+						aria-label={isEditMode ? "exit edit mode" : "edit playlist"}
+						title={isEditMode ? "exit edit mode" : "edit playlist"}
+					>
+						{#if isEditMode}
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<line x1="18" y1="6" x2="6" y2="18"></line>
+								<line x1="6" y1="6" x2="18" y2="18"></line>
+							</svg>
+						{:else}
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+								<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+							</svg>
+						{/if}
 					</button>
-					<button class="icon-btn danger" onclick={() => showDeleteConfirm = true} aria-label="delete playlist" title="delete playlist">
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<button
+						class="icon-btn danger"
+						onclick={() => (showDeleteConfirm = true)}
+						aria-label="delete playlist"
+						title="delete playlist"
+					>
+						<svg
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
 							<polyline points="3 6 5 6 21 6"></polyline>
-							<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"></path>
+							<path
+								d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"
+							></path>
 							<path d="M10 11v6"></path>
 							<path d="M14 11v6"></path>
 							<path d="m9 6 .5-2h5l.5 2"></path>
@@ -621,61 +883,143 @@
 		<div class="tracks-section">
 			<h2 class="section-heading">tracks</h2>
 			{#if tracks.length === 0}
-		<div class="empty-state">
-			<div class="empty-icon">
-				<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-					<circle cx="11" cy="11" r="8"></circle>
-					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-				</svg>
-			</div>
-			<p>no tracks yet</p>
-			<span>search for tracks to add to your playlist</span>
-			{#if isOwner}
-				<button class="empty-add-btn" onclick={() => showSearch = true}>
-					add tracks
-				</button>
-			{/if}
-		</div>
-	{:else}
-		<div
-			class="tracks-list"
-			class:edit-mode={isEditMode}
-			bind:this={tracksListElement}
-			ontouchmove={isEditMode ? handleTouchMove : undefined}
-			ontouchend={isEditMode ? handleTouchEnd : undefined}
-			ontouchcancel={isEditMode ? handleTouchEnd : undefined}
-		>
-			{#each tracks as track, i (track.id)}
-				{#if isEditMode}
-					<div
-						class="track-row"
-						class:drag-over={dragOverIndex === i && touchDragIndex !== i}
-						class:is-dragging={touchDragIndex === i || draggedIndex === i}
-						data-index={i}
-						role="listitem"
-						draggable="true"
-						ondragstart={(e) => handleDragStart(e, i)}
-						ondragover={(e) => handleDragOver(e, i)}
-						ondrop={(e) => handleDrop(e, i)}
-						ondragend={handleDragEnd}
-					>
-						<button
-							class="drag-handle"
-							ontouchstart={(e) => handleTouchStart(e, i)}
-							onclick={(e) => e.stopPropagation()}
-							aria-label="drag to reorder"
-							title="drag to reorder"
+				<div class="empty-state">
+					<div class="empty-icon">
+						<svg
+							width="32"
+							height="32"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
 						>
-							<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-								<circle cx="5" cy="3" r="1.5"></circle>
-								<circle cx="11" cy="3" r="1.5"></circle>
-								<circle cx="5" cy="8" r="1.5"></circle>
-								<circle cx="11" cy="8" r="1.5"></circle>
-								<circle cx="5" cy="13" r="1.5"></circle>
-								<circle cx="11" cy="13" r="1.5"></circle>
-							</svg>
+							<circle cx="11" cy="11" r="8"></circle>
+							<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+						</svg>
+					</div>
+					<p>no tracks yet</p>
+					<span>search for tracks to add to your playlist</span>
+					{#if isOwner}
+						<button
+							class="empty-add-btn"
+							onclick={() => (showSearch = true)}
+						>
+							add tracks
 						</button>
-						<div class="track-content">
+					{/if}
+				</div>
+			{:else}
+				<div
+					class="tracks-list"
+					class:edit-mode={isEditMode}
+					bind:this={tracksListElement}
+					ontouchmove={isEditMode ? handleTouchMove : undefined}
+					ontouchend={isEditMode ? handleTouchEnd : undefined}
+					ontouchcancel={isEditMode ? handleTouchEnd : undefined}
+				>
+					{#each tracks as track, i (track.id)}
+						{#if isEditMode}
+							<div
+								class="track-row"
+								class:drag-over={dragOverIndex === i &&
+									touchDragIndex !== i}
+								class:is-dragging={touchDragIndex === i ||
+									draggedIndex === i}
+								data-index={i}
+								role="listitem"
+								draggable="true"
+								ondragstart={(e) => handleDragStart(e, i)}
+								ondragover={(e) => handleDragOver(e, i)}
+								ondrop={(e) => handleDrop(e, i)}
+								ondragend={handleDragEnd}
+							>
+								<button
+									class="drag-handle"
+									ontouchstart={(e) => handleTouchStart(e, i)}
+									onclick={(e) => e.stopPropagation()}
+									aria-label="drag to reorder"
+									title="drag to reorder"
+								>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 16 16"
+										fill="currentColor"
+									>
+										<circle cx="5" cy="3" r="1.5"></circle>
+										<circle cx="11" cy="3" r="1.5"></circle>
+										<circle cx="5" cy="8" r="1.5"></circle>
+										<circle cx="11" cy="8" r="1.5"></circle>
+										<circle cx="5" cy="13" r="1.5"></circle>
+										<circle cx="11" cy="13" r="1.5"
+										></circle>
+									</svg>
+								</button>
+								<div class="track-content">
+									<TrackItem
+										{track}
+										index={i}
+										showIndex={true}
+										isPlaying={player.currentTrack?.id ===
+											track.id}
+										onPlay={playTrack}
+										isAuthenticated={auth.isAuthenticated}
+										hideAlbum={true}
+										excludePlaylistId={playlist.id}
+									/>
+								</div>
+								<button
+									class="remove-track-btn"
+									onclick={(e) => {
+										e.stopPropagation();
+										removeTrack(track);
+									}}
+									disabled={removingTrackId === track.id}
+									aria-label="remove track from playlist"
+									title="remove track"
+								>
+									{#if removingTrackId === track.id}
+										<svg
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											class="spinner"
+										>
+											<circle
+												cx="12"
+												cy="12"
+												r="10"
+												stroke-dasharray="31.4"
+												stroke-dashoffset="10"
+											></circle>
+										</svg>
+									{:else}
+										<svg
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<line x1="18" y1="6" x2="6" y2="18"
+											></line>
+											<line x1="6" y1="6" x2="18" y2="18"
+											></line>
+										</svg>
+									{/if}
+								</button>
+							</div>
+						{:else}
 							<TrackItem
 								{track}
 								index={i}
@@ -686,22 +1030,9 @@
 								hideAlbum={true}
 								excludePlaylistId={playlist.id}
 							/>
-						</div>
-					</div>
-				{:else}
-					<TrackItem
-						{track}
-						index={i}
-						showIndex={true}
-						isPlaying={player.currentTrack?.id === track.id}
-						onPlay={playTrack}
-						isAuthenticated={auth.isAuthenticated}
-						hideAlbum={true}
-						excludePlaylistId={playlist.id}
-					/>
-				{/if}
-			{/each}
-			</div>
+						{/if}
+					{/each}
+				</div>
 			{/if}
 		</div>
 	</main>
@@ -709,20 +1040,61 @@
 
 {#if showSearch}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="modal-overlay" role="presentation" onclick={() => { showSearch = false; searchQuery = ''; searchResults = []; }}>
+	<div
+		class="modal-overlay"
+		role="presentation"
+		onclick={() => {
+			showSearch = false;
+			searchQuery = "";
+			searchResults = [];
+		}}
+	>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="modal search-modal" role="dialog" aria-modal="true" aria-labelledby="add-tracks-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+		<div
+			class="modal search-modal"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="add-tracks-title"
+			tabindex="-1"
+			onclick={(e) => e.stopPropagation()}
+		>
 			<div class="modal-header">
 				<h3 id="add-tracks-title">add tracks</h3>
-				<button class="close-btn" aria-label="close" onclick={() => { showSearch = false; searchQuery = ''; searchResults = []; }}>
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<button
+					class="close-btn"
+					aria-label="close"
+					onclick={() => {
+						showSearch = false;
+						searchQuery = "";
+						searchResults = [];
+					}}
+				>
+					<svg
+						width="20"
+						height="20"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>
 					</svg>
 				</button>
 			</div>
 			<div class="search-input-wrapper">
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
 					<circle cx="11" cy="11" r="8"></circle>
 					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
 				</svg>
@@ -746,10 +1118,23 @@
 					{#each searchResults as result}
 						<div class="search-result-item">
 							{#if result.image_url}
-								<img src={result.image_url} alt="" class="result-image" />
+								<img
+									src={result.image_url}
+									alt=""
+									class="result-image"
+								/>
 							{:else}
 								<div class="result-image-placeholder">
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
 										<circle cx="12" cy="12" r="10"></circle>
 										<circle cx="12" cy="12" r="3"></circle>
 									</svg>
@@ -757,7 +1142,9 @@
 							{/if}
 							<div class="result-info">
 								<span class="result-title">{result.title}</span>
-								<span class="result-artist">{result.artist_display_name}</span>
+								<span class="result-artist"
+									>{result.artist_display_name}</span
+								>
 							</div>
 							<button
 								class="add-result-btn"
@@ -767,9 +1154,20 @@
 								{#if addingTrack === result.id}
 									<span class="spinner"></span>
 								{:else}
-									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-										<line x1="12" y1="5" x2="12" y2="19"></line>
-										<line x1="5" y1="12" x2="19" y2="12"></line>
+									<svg
+										width="18"
+										height="18"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<line x1="12" y1="5" x2="12" y2="19"
+										></line>
+										<line x1="5" y1="12" x2="19" y2="12"
+										></line>
 									</svg>
 								{/if}
 							</button>
@@ -783,36 +1181,94 @@
 
 {#if showDeleteConfirm}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="modal-overlay" role="presentation" onclick={() => showDeleteConfirm = false}>
+	<div
+		class="modal-overlay"
+		role="presentation"
+		onclick={() => (showDeleteConfirm = false)}
+	>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-confirm-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+		<div
+			class="modal"
+			role="alertdialog"
+			aria-modal="true"
+			aria-labelledby="delete-confirm-title"
+			tabindex="-1"
+			onclick={(e) => e.stopPropagation()}
+		>
 			<div class="modal-header">
 				<h3 id="delete-confirm-title">delete playlist?</h3>
 			</div>
 			<div class="modal-body">
-				<p>are you sure you want to delete "{playlist.name}"? this action cannot be undone.</p>
+				<p>
+					are you sure you want to delete "{playlist.name}"? this
+					action cannot be undone.
+				</p>
 			</div>
 			<div class="modal-footer">
-				<button class="cancel-btn" onclick={() => showDeleteConfirm = false} disabled={deleting}>
+				<button
+					class="cancel-btn"
+					onclick={() => (showDeleteConfirm = false)}
+					disabled={deleting}
+				>
 					cancel
 				</button>
-				<button class="confirm-btn danger" onclick={deletePlaylist} disabled={deleting}>
-					{deleting ? 'deleting...' : 'delete'}
+				<button
+					class="confirm-btn danger"
+					onclick={deletePlaylist}
+					disabled={deleting}
+				>
+					{deleting ? "deleting..." : "delete"}
 				</button>
 			</div>
 		</div>
 	</div>
 {/if}
 
-{#if showEdit}
+{#if showEditModal}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="modal-overlay" role="presentation" onclick={() => { showEdit = false; if (editImagePreview) { URL.revokeObjectURL(editImagePreview); editImagePreview = null; } }}>
+	<div
+		class="modal-overlay"
+		role="presentation"
+		onclick={() => {
+			showEdit = false;
+			if (editImagePreview) {
+				URL.revokeObjectURL(editImagePreview);
+				editImagePreview = null;
+			}
+		}}
+	>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="modal edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-playlist-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+		<div
+			class="modal edit-modal"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="edit-playlist-title"
+			tabindex="-1"
+			onclick={(e) => e.stopPropagation()}
+		>
 			<div class="modal-header">
 				<h3 id="edit-playlist-title">edit playlist</h3>
-				<button class="close-btn" aria-label="close" onclick={() => { showEdit = false; if (editImagePreview) { URL.revokeObjectURL(editImagePreview); editImagePreview = null; } }}>
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<button
+					class="close-btn"
+					aria-label="close"
+					onclick={() => {
+						showEdit = false;
+						if (editImagePreview) {
+							URL.revokeObjectURL(editImagePreview);
+							editImagePreview = null;
+						}
+					}}
+				>
+					<svg
+						width="20"
+						height="20"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>
 					</svg>
@@ -822,22 +1278,55 @@
 				<div class="edit-cover-section">
 					<label class="cover-picker">
 						{#if editImagePreview}
-							<img src={editImagePreview} alt="preview" class="cover-preview" />
+							<img
+								src={editImagePreview}
+								alt="preview"
+								class="cover-preview"
+							/>
 						{:else if playlist.image_url}
-							<SensitiveImage src={playlist.image_url} tooltipPosition="center">
-								<img src={playlist.image_url} alt="current cover" class="cover-preview" />
+							<SensitiveImage
+								src={playlist.image_url}
+								tooltipPosition="center"
+							>
+								<img
+									src={playlist.image_url}
+									alt="current cover"
+									class="cover-preview"
+								/>
 							</SensitiveImage>
 						{:else}
 							<div class="cover-placeholder">
-								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-									<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+								<svg
+									width="24"
+									height="24"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<rect
+										x="3"
+										y="3"
+										width="18"
+										height="18"
+										rx="2"
+										ry="2"
+									></rect>
 									<circle cx="8.5" cy="8.5" r="1.5"></circle>
-									<polyline points="21 15 16 10 5 21"></polyline>
+									<polyline points="21 15 16 10 5 21"
+									></polyline>
 								</svg>
 								<span>add cover</span>
 							</div>
 						{/if}
-						<input type="file" accept="image/jpeg,image/png,image/webp" onchange={handleEditImageSelect} hidden />
+						<input
+							type="file"
+							accept="image/jpeg,image/png,image/webp"
+							onchange={handleEditImageSelect}
+							hidden
+						/>
 					</label>
 					<span class="cover-hint">click to change cover art</span>
 				</div>
@@ -858,16 +1347,36 @@
 						/>
 						<span class="toggle-label">show on profile</span>
 					</label>
-					<span class="toggle-hint">when enabled, this playlist will appear in your public collections</span>
+					<span class="toggle-hint"
+						>when enabled, this playlist will appear in your public
+						collections</span
+					>
 				</div>
 			</div>
 			<div class="modal-footer">
-				<button class="cancel-btn" onclick={() => { showEdit = false; if (editImagePreview) { URL.revokeObjectURL(editImagePreview); editImagePreview = null; } }} disabled={saving}>
+				<button
+					class="cancel-btn"
+					onclick={() => {
+						showEdit = false;
+						if (editImagePreview) {
+							URL.revokeObjectURL(editImagePreview);
+							editImagePreview = null;
+						}
+					}}
+					disabled={saving}
+				>
 					cancel
 				</button>
-				<button class="confirm-btn" onclick={savePlaylistChanges} disabled={saving || (!editImageFile && editName.trim() === playlist.name && editShowOnProfile === playlist.show_on_profile)}>
+				<button
+					class="confirm-btn"
+					onclick={savePlaylistChanges}
+					disabled={saving ||
+						(!editImageFile &&
+							editName.trim() === playlist.name &&
+							editShowOnProfile === playlist.show_on_profile)}
+				>
 					{#if saving}
-						{uploadingCover ? 'uploading cover...' : 'saving...'}
+						{uploadingCover ? "uploading cover..." : "saving..."}
 					{:else}
 						save
 					{/if}
@@ -881,7 +1390,12 @@
 	.container {
 		max-width: 1200px;
 		margin: 0 auto;
-		padding: 0 1rem calc(var(--player-height, 120px) + 2rem + env(safe-area-inset-bottom, 0px)) 1rem;
+		padding: 0 1rem
+			calc(
+				var(--player-height, 120px) + 2rem +
+					env(safe-area-inset-bottom, 0px)
+			)
+			1rem;
 	}
 
 	main {
@@ -1009,6 +1523,12 @@
 		color: #ef4444;
 	}
 
+	.icon-btn.active {
+		border-color: var(--accent);
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
 	/* playlist actions */
 	.playlist-actions {
 		display: flex;
@@ -1019,7 +1539,8 @@
 	.play-button,
 	.queue-button,
 	.add-tracks-button,
-	.reorder-button {
+	.edit-metadata-button,
+	.save-order-button {
 		padding: 0.75rem 1.5rem;
 		border-radius: 24px;
 		font-weight: 600;
@@ -1044,7 +1565,8 @@
 
 	.queue-button,
 	.add-tracks-button,
-	.reorder-button {
+	.edit-metadata-button,
+	.save-order-button {
 		background: transparent;
 		color: var(--text-primary);
 		border: 1px solid var(--border-default);
@@ -1052,20 +1574,14 @@
 
 	.queue-button:hover,
 	.add-tracks-button:hover,
-	.reorder-button:hover {
+	.edit-metadata-button:hover {
 		border-color: var(--accent);
 		color: var(--accent);
 	}
 
-	.reorder-button:disabled {
+	.save-order-button:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
-	}
-
-	.reorder-button.active {
-		border-color: var(--accent);
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.spinner {
@@ -1084,7 +1600,9 @@
 	/* tracks section */
 	.tracks-section {
 		margin-top: 2rem;
-		padding-bottom: calc(var(--player-height, 120px) + env(safe-area-inset-bottom, 0px));
+		padding-bottom: calc(
+			var(--player-height, 120px) + env(safe-area-inset-bottom, 0px)
+		);
 	}
 
 	.section-heading {
@@ -1163,6 +1681,37 @@
 	.track-content {
 		flex: 1;
 		min-width: 0;
+	}
+
+	.remove-track-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.5rem;
+		background: transparent;
+		border: 1px solid var(--border-default);
+		border-radius: 4px;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all 0.2s;
+		flex-shrink: 0;
+		width: 36px;
+		height: 36px;
+	}
+
+	.remove-track-btn:hover:not(:disabled) {
+		border-color: #ef4444;
+		color: #ef4444;
+		background: color-mix(in srgb, #ef4444 10%, transparent);
+	}
+
+	.remove-track-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.remove-track-btn .spinner {
+		animation: spin 1s linear infinite;
 	}
 
 	/* empty state */
@@ -1648,7 +2197,8 @@
 		.play-button,
 		.queue-button,
 		.add-tracks-button,
-		.reorder-button {
+		.edit-metadata-button,
+		.save-order-button {
 			width: 100%;
 			justify-content: center;
 		}
@@ -1674,5 +2224,4 @@
 			flex-wrap: wrap;
 		}
 	}
-
 </style>
