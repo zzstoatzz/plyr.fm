@@ -46,7 +46,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: |
-            --allowedTools "Read,Write,Edit,Bash,Fetch"
+            --model opus
+            --allowedTools "Read,Write,Edit,Bash,Fetch,Task"
           prompt: |
             you are maintaining the plyr.fm (pronounced "player FM") project status file.
 
@@ -108,41 +109,83 @@ jobs:
 
             if skip_audio is false:
 
-            ### understand the project first
+            ### deep investigation phase
 
-            before writing the script, read:
-            - STATUS.md (the current state)
-            - docs/deployment/overview.md if it exists
-            - Fetch https://atproto.com/guides/overview to understand ATProto primitives
-            - Fetch https://atproto.com/guides/lexicon to understand NSIDs and lexicons
-            - fetch and read: https://overreacted.io/open-social/ to understand the vision of open social
+            before writing anything, you need to deeply understand what happened in the time window.
+            use subagents liberally to investigate in parallel:
 
-            this context helps you explain things accurately, and accessibly without over-simplifying.
+            1. **get the full picture of PRs merged in the time window**:
+               ```bash
+               gh pr list --state merged --search "merged:>={mergedAt date}" --limit 50 --json number,title,body,mergedAt,additions,deletions,files
+               ```
+
+            2. **for each significant PR, read its body and understand the design decisions**:
+               - what problem was being solved?
+               - what approach was taken and why?
+               - what are the key files changed?
+
+            3. **read the actual code changes** for the top 2-3 most significant PRs:
+               - use `gh pr diff {number}` or read the changed files directly
+               - understand the architecture, not just the commit messages
+
+            4. **read background context**:
+               - STATUS.md (the current state)
+               - docs/deployment/overview.md if it exists
+               - Fetch https://atproto.com/guides/overview to understand ATProto primitives
+               - Fetch https://atproto.com/guides/lexicon to understand NSIDs and lexicons
+
+            ### identify the narrative structure
+
+            after investigating, categorize what shipped:
+
+            **big ticket items** (1-3 major features or architectural changes):
+            - these get the most airtime (60-70% of the script)
+            - explain HOW they were designed, not just WHAT they do
+            - discuss interesting technical decisions or tradeoffs
+
+            **smaller but notable changes** (3-6 fixes, improvements, polish):
+            - these get rapid-fire coverage (20-30% of the script)
+            - one or two sentences each
+            - acknowledge they happened without belaboring them
 
             ### write the podcast script
 
             write to podcast_script.txt with "Host: ..." and "Cohost: ..." lines.
 
-            focus on what shipped since the last status-maintenance PR was MERGED (the mergedAt date from task 1).
-            that merge date is when the last podcast was generated, so everything after that is new.
+            **CHRONOLOGICAL NARRATIVE STRUCTURE** (CRITICAL):
 
-            use `git log --since="{mergedAt date}" --reverse` to see commits in CHRONOLOGICAL order (oldest first).
+            the script must tell a coherent story of the time period, structured as:
 
-            **narrative structure**: tell the story chronologically - start with what shipped first in the time period,
-            then work forward to the most recent changes. this creates a natural narrative arc.
-            (note: STATUS.md is reverse-chronological, but your script should be chronological)
+            1. **opening** (10 seconds): set the scene - what's the date range, what was the focus?
 
-            - don't re-explain the whole project - listeners already know what player FM is
-            - focus on what's new: features that launched, bugs that got fixed, improvements that shipped
-            - tone: "here's what changed since last time"
+            2. **the main story** (60-90 seconds): the biggest thing that shipped
+               - what problem did it solve?
+               - how was it designed? (explain the architecture accessibly)
+               - what's interesting about the implementation?
+               - the hosts should have a back-and-forth discussing the design
+
+            3. **secondary feature** (30-45 seconds, if applicable): another significant change
+               - lighter treatment than the main story
+               - still explain the "why" not just the "what"
+
+            4. **rapid fire** (20-30 seconds): the smaller changes
+               - "we also saw..." or "a few other things landed..."
+               - quick hits: bug fixes, polish, minor improvements
+               - don't dwell, just acknowledge
+
+            5. **closing** (10 seconds): looking ahead or wrapping up
+
+            the narrative should flow like you're telling a friend what happened on the project this week.
+            use transitions: "but before that landed...", "meanwhile...", "and then to tie it together..."
 
             ### tone requirements (CRITICAL)
 
             the hosts should sound like two engineers who:
-            - are skeptical, amused and somewhat intruiged by the absurdity of building things
+            - are skeptical, amused and somewhat intrigued by the absurdity of building things
             - acknowledge problems and limitations honestly
             - don't over-use superlatives ("amazing", "incredible", "exciting")
             - explain technical concepts through analogy, not hypey jargon
+            - genuinely find the technical details interesting (not performatively enthusiastic)
 
             avoid excessive phrasing:
             - "exciting", "amazing", "incredible", "impressive", "great job"
@@ -160,7 +203,7 @@ jobs:
 
             ### identifying what actually shipped
 
-            read the commit messages and STATUS.md carefully to understand what changed.
+            read the commit messages and PR bodies carefully to understand what changed.
 
             - if something is completely NEW (didn't exist before), say it "shipped" or "launched"
             - if something existing got improved or fixed, call it what it is: fixes, improvements, polish
