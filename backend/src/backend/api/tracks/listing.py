@@ -179,18 +179,18 @@ async def list_tracks(
                         track.image_url = url
                     else:
                         # image_id exists but file not found in R2
-                        # clear image_id to prevent future lookups
-                        logfire.warn(
-                            "clearing invalid image_id",
+                        # log error but don't clear - this indicates a bug (e.g. extension mismatch)
+                        # clearing would destroy the reference and make debugging harder
+                        logfire.error(
+                            "image_id exists but file not found in R2",
                             track_id=track.id,
                             image_id=track.image_id,
                         )
-                        track.image_id = None
-                        track.image_url = None
                 except Exception as e:
-                    logfire.warn(
+                    logfire.error(
                         "failed to resolve image",
                         track_id=track.id,
+                        image_id=track.image_id,
                         error=str(e),
                     )
 

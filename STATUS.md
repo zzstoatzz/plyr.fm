@@ -82,7 +82,12 @@ plyr.fm should become:
 - public liked pages for any user (`/liked/[handle]`)
 - `show_liked_on_profile` preference
 - portal album/playlist section visual consistency
+- toast notifications for all mutations (playlist CRUD, profile updates)
 - z-index fixes for dropdown menus
+
+**accessibility fixes**:
+- fixed 32 svelte-check warnings (ARIA roles, button nesting, unused CSS)
+- proper roles on modals, menus, and drag-drop elements
 
 **design decisions**:
 - lists are generic ordered collections of any ATProto records
@@ -90,6 +95,12 @@ plyr.fm should become:
 - array order = display order, reorder via `putRecord`
 - strongRef (uri + cid) for content-addressable item references
 - "library" = umbrella term for personal collections
+
+**sync architecture**:
+- **profile, albums, liked tracks**: synced on login via `GET /artists/me` (fire-and-forget background tasks)
+- **playlists**: synced on create/modify (not at login) - avoids N playlist syncs on every login
+- sync tasks don't block the response (~300-500ms for the endpoint, PDS calls happen in background)
+- putRecord calls take ~50-100ms each, with automatic DPoP nonce retry on 401
 
 **file size audit** (candidates for future modularization):
 - `portal/+page.svelte`: 2,436 lines (58% CSS)
@@ -510,7 +521,6 @@ See `.status_history/2025-11.md` for detailed November development history inclu
 
 ### known issues
 - playback auto-start on refresh (#225) - investigating localStorage/queue state persistence
-- no ATProto records for albums yet (#221 - consciously deferred)
 - no AIFF/AIF transcoding support (#153)
 - iOS PWA audio may hang on first play after backgrounding - service worker caching interacts poorly with 307 redirects to R2 CDN. PR #466 added `NetworkOnly` for audio routes which should fix this, but iOS PWAs are slow to update service workers. workaround: delete home screen bookmark and re-add. may need further investigation if issue persists after SW propagates.
 
@@ -578,7 +588,15 @@ See `.status_history/2025-11.md` for detailed November development history inclu
 - ✅ album browsing and detail pages
 - ✅ album cover art upload and display
 - ✅ server-side rendering for SEO
-- ⏸ ATProto records for albums (deferred, see issue #221)
+- ✅ ATProto list records for albums (auto-synced on login)
+
+**playlists**
+- ✅ full CRUD (create, rename, delete, reorder tracks)
+- ✅ playlist detail pages with drag-and-drop reordering
+- ✅ playlist cover art upload
+- ✅ ATProto list records (synced on create/modify)
+- ✅ "add to playlist" menu on tracks
+- ✅ playlists in global search results
 
 **deployment (fully automated)**
 - **production**:

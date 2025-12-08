@@ -8,7 +8,7 @@ plyr.fm's liked tracks feature allows users to like tracks, with likes stored as
 
 ### fm.plyr.like namespace
 
-likes are stored as ATProto records using the `fm.plyr.like` collection:
+individual likes are stored as ATProto records using the `fm.plyr.like` collection:
 
 ```json
 {
@@ -25,6 +25,41 @@ likes are stored as ATProto records using the `fm.plyr.like` collection:
 - `subject.uri` - AT-URI of the liked track
 - `subject.cid` - CID of the track record at time of like
 - `createdAt` - ISO 8601 timestamp
+
+### fm.plyr.list namespace (liked list)
+
+in addition to individual like records, users have a single aggregated "liked tracks" list record:
+
+```json
+{
+  "$type": "fm.plyr.list",
+  "name": "Liked Tracks",
+  "listType": "liked",
+  "items": [
+    { "subject": { "uri": "at://did:plc:.../fm.plyr.track/abc", "cid": "bafy..." } },
+    { "subject": { "uri": "at://did:plc:.../fm.plyr.track/def", "cid": "bafy..." } }
+  ],
+  "createdAt": "2025-12-07T00:00:00.000Z",
+  "updatedAt": "2025-12-07T12:00:00.000Z"
+}
+```
+
+**fields**:
+- `name` - always "Liked Tracks"
+- `listType` - always "liked"
+- `items` - ordered array of strongRefs (uri + cid) to liked tracks
+- `createdAt` - when the list was first created
+- `updatedAt` - when the list was last modified
+
+**sync behavior**:
+- the liked list record is synced automatically on login (via `GET /artists/me`)
+- sync happens as a fire-and-forget background task, doesn't block the response
+- the list URI/CID are stored in `user_preferences.liked_list_uri` and `liked_list_cid`
+- liking/unliking a track also triggers a list update via the backend
+
+**reordering**:
+- users can reorder their liked tracks via `PUT /lists/liked/reorder`
+- the reordered list is written to the PDS via `putRecord`
 
 ### record lifecycle
 

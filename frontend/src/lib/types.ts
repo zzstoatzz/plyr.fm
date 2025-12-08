@@ -115,13 +115,7 @@ export interface Playlist {
 	created_at: string;
 }
 
-export interface UnavailableTrack {
-	uri: string;
-	unavailable: true;
-}
-
 export interface PlaylistWithTracks extends Playlist {
 	tracks: Track[];
-	unavailable_tracks?: UnavailableTrack[];
 }
 

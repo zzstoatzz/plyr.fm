@@ -7,6 +7,7 @@ class ImageFormat(str, Enum):
     """supported image formats."""
 
     JPEG = "jpg"
+    JPEG_ALT = "jpeg"
     PNG = "png"
     WEBP = "webp"
     GIF = "gif"
@@ -16,6 +17,7 @@ class ImageFormat(str, Enum):
         """get HTTP media type for this format."""
         return {
             "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
             "png": "image/png",
             "webp": "image/webp",
             "gif": "image/gif",
