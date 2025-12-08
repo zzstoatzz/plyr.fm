@@ -143,6 +143,7 @@ async def test_get_artist_analytics_with_likes(
     # verify total metrics
     assert data["total_plays"] == 160  # 100 + 50 + 10
     assert data["total_items"] == 3
+    assert data["total_duration_seconds"] == 0  # no duration set on tracks
 
     # verify top played track
     assert data["top_item"]["title"] == "Most Played"
@@ -176,6 +177,7 @@ async def test_get_artist_analytics_no_tracks(
 
     assert data["total_plays"] == 0
     assert data["total_items"] == 0
+    assert data["total_duration_seconds"] == 0
     assert data["top_item"] is None
     assert data["top_liked"] is None
 
@@ -214,5 +216,63 @@ async def test_get_artist_analytics_no_likes(
 
     assert data["total_plays"] == 50
     assert data["total_items"] == 1
+    assert data["total_duration_seconds"] == 0  # no duration set
     assert data["top_item"]["title"] == "Unloved Track"
     assert data["top_liked"] is None  # no likes
+
+
+async def test_get_artist_analytics_with_duration(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test analytics returns total duration from tracks."""
+    artist = Artist(
+        did="did:plc:artist_duration",
+        handle="duration-artist.bsky.social",
+        display_name="Duration Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create tracks with duration in extra field
+    tracks = [
+        Track(
+            title="Short Track",
+            artist_did=artist.did,
+            file_id="short_1",
+            file_type="mp3",
+            play_count=10,
+            extra={"duration": 180},  # 3 minutes
+        ),
+        Track(
+            title="Long Track",
+            artist_did=artist.did,
+            file_id="long_1",
+            file_type="mp3",
+            play_count=5,
+            extra={"duration": 3600},  # 1 hour
+        ),
+        Track(
+            title="No Duration Track",
+            artist_did=artist.did,
+            file_id="no_dur_1",
+            file_type="mp3",
+            play_count=3,
+            extra={},  # no duration
+        ),
+    ]
+    for track in tracks:
+        db_session.add(track)
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/artists/{artist.did}/analytics")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total_plays"] == 18  # 10 + 5 + 3
+    assert data["total_items"] == 3
+    # duration should sum only tracks that have it: 180 + 3600 = 3780
+    assert data["total_duration_seconds"] == 3780

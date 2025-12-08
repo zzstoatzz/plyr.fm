@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { statsCache } from '$lib/stats.svelte';
+	import { statsCache, formatDuration } from '$lib/stats.svelte';
 
 	interface Props {
 		variant?: 'header' | 'menu';
@@ -44,6 +44,13 @@
 					<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 				</svg>
 				<span class="header-value">{stats.total_artists.toLocaleString()}</span>
+			</div>
+			<div class="header-stat" title="{formatDuration(stats.total_duration_seconds)} of music">
+				<svg class="header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="12" cy="12" r="10"></circle>
+					<polyline points="12 6 12 12 16 14"></polyline>
+				</svg>
+				<span class="header-value">{formatDuration(stats.total_duration_seconds)}</span>
 			</div>
 		{/if}
 	</div>
@@ -95,6 +102,14 @@
 					</svg>
 					<span class="stats-menu-value">{stats.total_artists.toLocaleString()}</span>
 					<span class="stats-menu-label">{pluralize(stats.total_artists, 'artist', 'artists')}</span>
+				</div>
+				<div class="stats-menu-item">
+					<svg class="menu-stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="10"></circle>
+						<polyline points="12 6 12 12 16 14"></polyline>
+					</svg>
+					<span class="stats-menu-value">{formatDuration(stats.total_duration_seconds)}</span>
+					<span class="stats-menu-label">of music</span>
 				</div>
 			</div>
 		{/if}
@@ -189,7 +204,7 @@
 
 	.stats-menu-grid {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(2, 1fr);
 		gap: 0.5rem;
 	}
 

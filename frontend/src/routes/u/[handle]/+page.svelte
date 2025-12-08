@@ -4,6 +4,7 @@
 	import { API_URL } from '$lib/config';
 	import { browser } from '$app/environment';
 	import type { Analytics, Track, Playlist } from '$lib/types';
+	import { formatDuration } from '$lib/stats.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import Header from '$lib/components/Header.svelte';
@@ -286,6 +287,9 @@ $effect(() => {
 						<div class="stat-card" transition:fade={{ duration: 200 }}>
 							<div class="stat-value">{analytics.total_items}</div>
 							<div class="stat-label">total tracks</div>
+							{#if analytics.total_duration_seconds > 0}
+								<div class="stat-duration">{formatDuration(analytics.total_duration_seconds)}</div>
+							{/if}
 						</div>
 						{#if analytics.top_item}
 							<a href="/track/{analytics.top_item.id}" class="stat-card top-item" transition:fade={{ duration: 200 }}>
@@ -669,6 +673,13 @@ $effect(() => {
 		font-size: 0.9rem;
 		text-transform: lowercase;
 		line-height: 1;
+	}
+
+	.stat-duration {
+		margin-top: 0.5rem;
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.stat-card.top-item {

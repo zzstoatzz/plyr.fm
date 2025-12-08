@@ -90,6 +90,7 @@ export interface TopItem {
 export interface Analytics {
 	total_plays: number;
 	total_items: number;
+	total_duration_seconds: number;
 	top_item: TopItem | null;
 	top_liked: TopItem | null;
 }
