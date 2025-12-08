@@ -47,6 +47,37 @@ plyr.fm should become:
 
 ### December 2025
 
+#### artist support links & inline playlist editing (PRs #520-532, Dec 8)
+
+**artist support link** (PR #532):
+- artists can set a support URL (Ko-fi, Patreon, etc.) in their portal profile
+- support link displays as a button on artist profile pages next to the share button
+- URLs validated to require https:// prefix
+
+**inline playlist editing** (PR #531):
+- edit playlist name and description directly on playlist detail page
+- click-to-upload cover art replacement without modal
+- cleaner UX - no more edit modal popup
+
+**platform stats enhancements** (PRs #522, #528):
+- total duration displayed in platform stats (e.g., "42h 15m of music")
+- duration shown per artist in analytics section
+- combined stats and search into single centered container for cleaner layout
+
+**navigation & data loading fixes** (PR #527):
+- fixed stale data when navigating between detail pages of the same type
+- e.g., clicking from one artist to another now properly reloads data
+
+**copyright moderation improvements** (PR #480):
+- enhanced moderation workflow for copyright claims
+- improved labeler integration
+
+**letta-backed status maintenance** (PR #529):
+- automated status maintenance using Letta AI agent
+- agent reviews merged PRs and updates STATUS.md narratively
+
+---
+
 #### playlist fast-follow fixes (PRs #507-519, Dec 7-8)
 
 **public playlist viewing** (PR #519):
