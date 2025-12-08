@@ -476,7 +476,7 @@
 				uploadingCover = false;
 			}
 
-			showEdit = false;
+			showEditModal = false;
 			toast.success("playlist updated");
 		} catch (e) {
 			console.error("failed to save playlist:", e);
@@ -588,35 +588,84 @@
 
 <div class="container">
 	<main>
-		<div class="playlist-hero">
-			{#if playlist.image_url}
-				<SensitiveImage
-					src={playlist.image_url}
-					tooltipPosition="center"
+		<div class="playlist-hero" class:edit-mode={isEditMode && isOwner}>
+			{#if isEditMode && isOwner}
+				<button
+					class="playlist-art-wrapper clickable"
+					onclick={openEditModal}
+					type="button"
+					aria-label="edit playlist details"
 				>
-					<img
-						src={playlist.image_url}
-						alt="{playlist.name} artwork"
-						class="playlist-art"
-					/>
-				</SensitiveImage>
+					{#if playlist.image_url}
+						<SensitiveImage
+							src={playlist.image_url}
+							tooltipPosition="center"
+						>
+							<img
+								src={playlist.image_url}
+								alt="{playlist.name} artwork"
+								class="playlist-art"
+							/>
+						</SensitiveImage>
+					{:else}
+						<div class="playlist-art-placeholder">
+							<svg
+								width="64"
+								height="64"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+							>
+								<line x1="8" y1="6" x2="21" y2="6"></line>
+								<line x1="8" y1="12" x2="21" y2="12"></line>
+								<line x1="8" y1="18" x2="21" y2="18"></line>
+								<line x1="3" y1="6" x2="3.01" y2="6"></line>
+								<line x1="3" y1="12" x2="3.01" y2="12"></line>
+								<line x1="3" y1="18" x2="3.01" y2="18"></line>
+							</svg>
+						</div>
+					{/if}
+					<div class="art-edit-overlay">
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+							<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+						</svg>
+						<span>edit details</span>
+					</div>
+				</button>
 			{:else}
-				<div class="playlist-art-placeholder">
-					<svg
-						width="64"
-						height="64"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.5"
-					>
-						<line x1="8" y1="6" x2="21" y2="6"></line>
-						<line x1="8" y1="12" x2="21" y2="12"></line>
-						<line x1="8" y1="18" x2="21" y2="18"></line>
-						<line x1="3" y1="6" x2="3.01" y2="6"></line>
-						<line x1="3" y1="12" x2="3.01" y2="12"></line>
-						<line x1="3" y1="18" x2="3.01" y2="18"></line>
-					</svg>
+				<div class="playlist-art-wrapper">
+					{#if playlist.image_url}
+						<SensitiveImage
+							src={playlist.image_url}
+							tooltipPosition="center"
+						>
+							<img
+								src={playlist.image_url}
+								alt="{playlist.name} artwork"
+								class="playlist-art"
+							/>
+						</SensitiveImage>
+					{:else}
+						<div class="playlist-art-placeholder">
+							<svg
+								width="64"
+								height="64"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+							>
+								<line x1="8" y1="6" x2="21" y2="6"></line>
+								<line x1="8" y1="12" x2="21" y2="12"></line>
+								<line x1="8" y1="18" x2="21" y2="18"></line>
+								<line x1="3" y1="6" x2="3.01" y2="6"></line>
+								<line x1="3" y1="12" x2="3.01" y2="12"></line>
+								<line x1="3" y1="18" x2="3.01" y2="18"></line>
+							</svg>
+						</div>
+					{/if}
 				</div>
 			{/if}
 			<div class="playlist-info-wrapper">
@@ -644,23 +693,19 @@
 							class="icon-btn"
 							class:active={isEditMode}
 							onclick={toggleEditMode}
-							aria-label={isEditMode ? "exit edit mode" : "edit playlist"}
-							title={isEditMode ? "exit edit mode" : "edit playlist"}
+							aria-label={isEditMode ? "done editing" : "edit playlist"}
+							title={isEditMode ? "done editing" : "edit playlist"}
 						>
 							{#if isEditMode}
-								<svg
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<line x1="18" y1="6" x2="6" y2="18"></line>
-									<line x1="6" y1="6" x2="18" y2="18"></line>
-								</svg>
+								{#if isSavingOrder}
+									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
+										<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+									</svg>
+								{:else}
+									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>
+								{/if}
 							{:else}
 								<svg
 									width="18"
@@ -741,94 +786,6 @@
 				</svg>
 				add to queue
 			</button>
-			{#if isOwner}
-				{#if isEditMode}
-					<button
-						class="edit-metadata-button"
-						onclick={openEditModal}
-					>
-						<svg
-							width="18"
-							height="18"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path
-								d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-							></path>
-							<path
-								d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-							></path>
-						</svg>
-						edit details
-					</button>
-					<button
-						class="add-tracks-button"
-						onclick={() => (showSearch = true)}
-					>
-						<svg
-							width="18"
-							height="18"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<line x1="12" y1="5" x2="12" y2="19"></line>
-							<line x1="5" y1="12" x2="19" y2="12"></line>
-						</svg>
-						add tracks
-					</button>
-					{#if isSavingOrder}
-						<button class="save-order-button" disabled>
-							<svg
-								width="18"
-								height="18"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								class="spinner"
-							>
-								<circle
-									cx="12"
-									cy="12"
-									r="10"
-									stroke-dasharray="31.4"
-									stroke-dashoffset="10"
-								></circle>
-							</svg>
-							saving...
-						</button>
-					{/if}
-				{:else}
-					<button
-						class="add-tracks-button"
-						onclick={() => (showSearch = true)}
-					>
-						<svg
-							width="18"
-							height="18"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<line x1="12" y1="5" x2="12" y2="19"></line>
-							<line x1="5" y1="12" x2="19" y2="12"></line>
-						</svg>
-						add tracks
-					</button>
-				{/if}
-			{/if}
 			<div class="mobile-buttons">
 				<ShareButton url={$page.url.href} title="share playlist" />
 				{#if isOwner}
@@ -836,14 +793,19 @@
 						class="icon-btn"
 						class:active={isEditMode}
 						onclick={toggleEditMode}
-						aria-label={isEditMode ? "exit edit mode" : "edit playlist"}
-						title={isEditMode ? "exit edit mode" : "edit playlist"}
+						aria-label={isEditMode ? "done editing" : "edit playlist"}
+						title={isEditMode ? "done editing" : "edit playlist"}
 					>
 						{#if isEditMode}
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<line x1="18" y1="6" x2="6" y2="18"></line>
-								<line x1="6" y1="6" x2="18" y2="18"></line>
-							</svg>
+							{#if isSavingOrder}
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
+									<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+								</svg>
+							{:else}
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<polyline points="20 6 9 17 4 12"></polyline>
+								</svg>
+							{/if}
 						{:else}
 							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 								<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -1032,6 +994,27 @@
 							/>
 						{/if}
 					{/each}
+					{#if isEditMode && isOwner}
+						<button
+							class="add-track-row"
+							onclick={() => (showSearch = true)}
+						>
+							<svg
+								width="18"
+								height="18"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<line x1="12" y1="5" x2="12" y2="19"></line>
+								<line x1="5" y1="12" x2="19" y2="12"></line>
+							</svg>
+							add tracks
+						</button>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -1230,7 +1213,7 @@
 		class="modal-overlay"
 		role="presentation"
 		onclick={() => {
-			showEdit = false;
+			showEditModal = false;
 			if (editImagePreview) {
 				URL.revokeObjectURL(editImagePreview);
 				editImagePreview = null;
@@ -1252,7 +1235,7 @@
 					class="close-btn"
 					aria-label="close"
 					onclick={() => {
-						showEdit = false;
+						showEditModal = false;
 						if (editImagePreview) {
 							URL.revokeObjectURL(editImagePreview);
 							editImagePreview = null;
@@ -1357,7 +1340,7 @@
 				<button
 					class="cancel-btn"
 					onclick={() => {
-						showEdit = false;
+						showEditModal = false;
 						if (editImagePreview) {
 							URL.revokeObjectURL(editImagePreview);
 							editImagePreview = null;
@@ -1427,6 +1410,49 @@
 		align-items: center;
 		justify-content: center;
 		color: var(--text-muted);
+	}
+
+	.playlist-art-wrapper {
+		position: relative;
+		width: 200px;
+		height: 200px;
+		flex-shrink: 0;
+	}
+
+	button.playlist-art-wrapper {
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+	}
+
+	button.playlist-art-wrapper.clickable:hover .art-edit-overlay {
+		opacity: 1;
+	}
+
+	button.playlist-art-wrapper.clickable:hover .playlist-art,
+	button.playlist-art-wrapper.clickable:hover .playlist-art-placeholder {
+		filter: brightness(0.7);
+	}
+
+	.art-edit-overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		color: white;
+		opacity: 0;
+		transition: opacity 0.2s;
+		pointer-events: none;
+		border-radius: 8px;
+	}
+
+	.art-edit-overlay span {
+		font-size: 0.85rem;
+		font-weight: 500;
 	}
 
 	.playlist-info-wrapper {
@@ -1537,10 +1563,7 @@
 	}
 
 	.play-button,
-	.queue-button,
-	.add-tracks-button,
-	.edit-metadata-button,
-	.save-order-button {
+	.queue-button {
 		padding: 0.75rem 1.5rem;
 		border-radius: 24px;
 		font-weight: 600;
@@ -1563,25 +1586,15 @@
 		transform: scale(1.05);
 	}
 
-	.queue-button,
-	.add-tracks-button,
-	.edit-metadata-button,
-	.save-order-button {
+	.queue-button {
 		background: transparent;
 		color: var(--text-primary);
 		border: 1px solid var(--border-default);
 	}
 
-	.queue-button:hover,
-	.add-tracks-button:hover,
-	.edit-metadata-button:hover {
+	.queue-button:hover {
 		border-color: var(--accent);
 		color: var(--accent);
-	}
-
-	.save-order-button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
 	}
 
 	.spinner {
@@ -1712,6 +1725,29 @@
 
 	.remove-track-btn .spinner {
 		animation: spin 1s linear infinite;
+	}
+
+	.add-track-row {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		margin-top: 0.5rem;
+		background: transparent;
+		border: 1px dashed var(--border-default);
+		border-radius: 8px;
+		color: var(--text-tertiary);
+		font-family: inherit;
+		font-size: 0.9rem;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.add-track-row:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 5%, transparent);
 	}
 
 	/* empty state */
@@ -2195,12 +2231,14 @@
 		}
 
 		.play-button,
-		.queue-button,
-		.add-tracks-button,
-		.edit-metadata-button,
-		.save-order-button {
+		.queue-button {
 			width: 100%;
 			justify-content: center;
+		}
+
+		.playlist-art-wrapper {
+			width: 160px;
+			height: 160px;
 		}
 	}
 
@@ -2211,6 +2249,11 @@
 
 		.playlist-art,
 		.playlist-art-placeholder {
+			width: 140px;
+			height: 140px;
+		}
+
+		.playlist-art-wrapper {
 			width: 140px;
 			height: 140px;
 		}
