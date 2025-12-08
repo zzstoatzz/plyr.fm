@@ -87,7 +87,7 @@
 		searchError = '';
 
 		try {
-			const response = await fetch(`${API_URL}/search?q=${encodeURIComponent(searchQuery)}&type=tracks&limit=10`, {
+			const response = await fetch(`${API_URL}/search/?q=${encodeURIComponent(searchQuery)}&type=tracks&limit=10`, {
 				credentials: 'include'
 			});
 

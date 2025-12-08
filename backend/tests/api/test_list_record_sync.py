@@ -144,23 +144,25 @@ async def test_liked_tracks(
     return tracks
 
 
-async def test_get_profile_syncs_albums(
-    test_app: FastAPI,
+async def test_sync_atproto_records_syncs_albums(
     db_session: AsyncSession,
     test_artist: Artist,
     test_album_with_tracks: tuple[Album, list[Track]],
 ):
-    """test that GET /artists/me triggers album list record sync."""
+    """test that sync_atproto_records syncs album list records."""
+    from backend._internal.atproto import sync_atproto_records
+
     album, _ = test_album_with_tracks
+    mock_session = MockSession(did="did:plc:testartist123")
 
     with (
         patch(
-            "backend.api.artists.upsert_profile_record",
+            "backend._internal.atproto.records.upsert_profile_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend.api.artists.upsert_album_list_record",
+            "backend._internal.atproto.records.upsert_album_list_record",
             new_callable=AsyncMock,
             return_value=(
                 "at://did:plc:testartist123/fm.plyr.list/album123",
@@ -168,20 +170,12 @@ async def test_get_profile_syncs_albums(
             ),
         ) as mock_album_sync,
         patch(
-            "backend.api.artists.upsert_liked_list_record",
+            "backend._internal.atproto.records.upsert_liked_list_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
     ):
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app), base_url="http://test"
-        ) as client:
-            response = await client.get("/artists/me")
-
-        # give background tasks time to run
-        await asyncio.sleep(0.1)
-
-    assert response.status_code == 200
+        await sync_atproto_records(mock_session, "did:plc:testartist123")
 
     # verify album sync was called with correct track refs
     mock_album_sync.assert_called_once()
@@ -191,26 +185,29 @@ async def test_get_profile_syncs_albums(
     assert len(call_args.kwargs["track_refs"]) == 3
 
 
-async def test_get_profile_syncs_liked_list(
-    test_app: FastAPI,
+async def test_sync_atproto_records_syncs_liked_list(
     db_session: AsyncSession,
     test_artist: Artist,
     test_liked_tracks: list[Track],
 ):
-    """test that GET /artists/me triggers liked list record sync."""
+    """test that sync_atproto_records syncs liked list record."""
+    from backend._internal.atproto import sync_atproto_records
+
+    mock_session = MockSession(did="did:plc:testartist123")
+
     with (
         patch(
-            "backend.api.artists.upsert_profile_record",
+            "backend._internal.atproto.records.upsert_profile_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend.api.artists.upsert_album_list_record",
+            "backend._internal.atproto.records.upsert_album_list_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend.api.artists.upsert_liked_list_record",
+            "backend._internal.atproto.records.upsert_liked_list_record",
             new_callable=AsyncMock,
             return_value=(
                 "at://did:plc:testartist123/fm.plyr.list/liked456",
@@ -218,15 +215,7 @@ async def test_get_profile_syncs_liked_list(
             ),
         ) as mock_liked_sync,
     ):
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app), base_url="http://test"
-        ) as client:
-            response = await client.get("/artists/me")
-
-        # give background tasks time to run
-        await asyncio.sleep(0.1)
-
-    assert response.status_code == 200
+        await sync_atproto_records(mock_session, "did:plc:testartist123")
 
     # verify liked sync was called with correct track refs
     mock_liked_sync.assert_called_once()
@@ -234,10 +223,12 @@ async def test_get_profile_syncs_liked_list(
     assert len(call_args.kwargs["track_refs"]) == 2
 
 
-async def test_get_profile_skips_albums_without_atproto_tracks(
-    test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
+async def test_sync_atproto_records_skips_albums_without_atproto_tracks(
+    db_session: AsyncSession, test_artist: Artist
 ):
     """test that albums with no ATProto-enabled tracks are skipped."""
+    from backend._internal.atproto import sync_atproto_records
+
     # create album with tracks that have no ATProto records
     album = Album(
         artist_did=test_artist.did,
@@ -259,101 +250,173 @@ async def test_get_profile_skips_albums_without_atproto_tracks(
     db_session.add(track)
     await db_session.commit()
 
+    mock_session = MockSession(did="did:plc:testartist123")
+
     with (
         patch(
-            "backend.api.artists.upsert_profile_record",
+            "backend._internal.atproto.records.upsert_profile_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend.api.artists.upsert_album_list_record",
+            "backend._internal.atproto.records.upsert_album_list_record",
             new_callable=AsyncMock,
         ) as mock_album_sync,
         patch(
-            "backend.api.artists.upsert_liked_list_record",
+            "backend._internal.atproto.records.upsert_liked_list_record",
             new_callable=AsyncMock,
         ),
     ):
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app), base_url="http://test"
-        ) as client:
-            response = await client.get("/artists/me")
-
-        await asyncio.sleep(0.1)
-
-    assert response.status_code == 200
+        await sync_atproto_records(mock_session, "did:plc:testartist123")
 
     # album sync should NOT be called for albums without ATProto tracks
     mock_album_sync.assert_not_called()
 
 
-async def test_get_profile_continues_on_album_sync_failure(
-    test_app: FastAPI,
+async def test_sync_atproto_records_continues_on_album_sync_failure(
     db_session: AsyncSession,
     test_artist: Artist,
     test_album_with_tracks: tuple[Album, list[Track]],
+    test_liked_tracks: list[Track],
 ):
-    """test that profile fetch succeeds even if album sync fails."""
+    """test that sync continues even if album sync fails."""
+    from backend._internal.atproto import sync_atproto_records
+
+    mock_session = MockSession(did="did:plc:testartist123")
+
     with (
         patch(
-            "backend.api.artists.upsert_profile_record",
+            "backend._internal.atproto.records.upsert_profile_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend.api.artists.upsert_album_list_record",
+            "backend._internal.atproto.records.upsert_album_list_record",
             side_effect=Exception("PDS error"),
         ),
         patch(
-            "backend.api.artists.upsert_liked_list_record",
+            "backend._internal.atproto.records.upsert_liked_list_record",
             new_callable=AsyncMock,
             return_value=None,
-        ),
+        ) as mock_liked_sync,
     ):
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app), base_url="http://test"
-        ) as client:
-            response = await client.get("/artists/me")
+        # should not raise
+        await sync_atproto_records(mock_session, "did:plc:testartist123")
 
-        await asyncio.sleep(0.1)
-
-    # request should still succeed
-    assert response.status_code == 200
-    data = response.json()
-    assert data["did"] == "did:plc:testartist123"
+    # liked sync should still be attempted (user has liked tracks)
+    mock_liked_sync.assert_called_once()
 
 
-async def test_get_profile_continues_on_liked_sync_failure(
-    test_app: FastAPI,
+async def test_sync_atproto_records_continues_on_liked_sync_failure(
     db_session: AsyncSession,
     test_artist: Artist,
     test_liked_tracks: list[Track],
 ):
-    """test that profile fetch succeeds even if liked sync fails."""
+    """test that sync completes even if liked sync fails."""
+    from backend._internal.atproto import sync_atproto_records
+
+    mock_session = MockSession(did="did:plc:testartist123")
+
     with (
         patch(
-            "backend.api.artists.upsert_profile_record",
+            "backend._internal.atproto.records.upsert_profile_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend.api.artists.upsert_album_list_record",
+            "backend._internal.atproto.records.upsert_album_list_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend.api.artists.upsert_liked_list_record",
+            "backend._internal.atproto.records.upsert_liked_list_record",
             side_effect=Exception("PDS error"),
         ),
+    ):
+        # should not raise
+        await sync_atproto_records(mock_session, "did:plc:testartist123")
+
+
+async def test_login_callback_triggers_background_sync(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    test_artist: Artist,
+):
+    """test that OAuth callback triggers ATProto sync in background."""
+    mock_oauth_session = {
+        "did": "did:plc:testartist123",
+        "handle": "testartist.bsky.social",
+        "pds_url": "https://test.pds",
+        "authserver_iss": "https://auth.test",
+        "scope": "atproto transition:generic",
+        "access_token": "test_token",
+        "refresh_token": "test_refresh",
+        "dpop_private_key_pem": "fake_key",
+        "dpop_authserver_nonce": "",
+        "dpop_pds_nonce": "",
+    }
+
+    with (
+        patch(
+            "backend.api.auth.handle_oauth_callback",
+            new_callable=AsyncMock,
+            return_value=(
+                "did:plc:testartist123",
+                "testartist.bsky.social",
+                mock_oauth_session,
+            ),
+        ),
+        patch(
+            "backend.api.auth.get_pending_dev_token",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "backend.api.auth.get_pending_scope_upgrade",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "backend.api.auth.create_session",
+            new_callable=AsyncMock,
+            return_value="test_session_id",
+        ),
+        patch(
+            "backend.api.auth.create_exchange_token",
+            new_callable=AsyncMock,
+            return_value="test_exchange_token",
+        ),
+        patch(
+            "backend.api.auth.check_artist_profile_exists",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch(
+            "backend.api.auth.sync_atproto_records",
+            new_callable=AsyncMock,
+        ) as mock_sync,
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.get("/artists/me")
+            response = await client.get(
+                "/auth/callback",
+                params={
+                    "code": "test_code",
+                    "state": "test_state",
+                    "iss": "https://auth.test",
+                },
+                follow_redirects=False,
+            )
 
+        # give background tasks time to run
         await asyncio.sleep(0.1)
 
-    # request should still succeed
-    assert response.status_code == 200
-    data = response.json()
-    assert data["did"] == "did:plc:testartist123"
+    assert response.status_code == 303
+    assert "exchange_token=test_exchange_token" in response.headers["location"]
+
+    # verify sync was triggered in background
+    mock_sync.assert_called_once()
+    call_args = mock_sync.call_args
+    # first arg is the session, second is the DID
+    assert call_args[0][1] == "did:plc:testartist123"
