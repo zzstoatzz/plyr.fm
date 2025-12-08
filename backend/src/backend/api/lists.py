@@ -19,7 +19,7 @@ from backend._internal.atproto.records import (
     create_list_record,
     update_list_record,
 )
-from backend.models import Artist, Playlist, Track, TrackLike, UserPreferences, get_db
+from backend.models import Artist, Playlist, Track, UserPreferences, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
@@ -347,14 +347,15 @@ async def get_playlist_meta(
 @router.get("/playlists/{playlist_id}", response_model=PlaylistWithTracksResponse)
 async def get_playlist(
     playlist_id: str,
-    session: AuthSession = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ) -> PlaylistWithTracksResponse:
-    """get a playlist with full track details.
+    """get a playlist with full track details (public, no auth required).
 
     fetches the ATProto list record to get track ordering, then hydrates
     track metadata from the database.
     """
+    from backend._internal.atproto.records import get_record_public
+
     # get playlist from database
     result = await db.execute(
         select(Playlist, Artist)
@@ -368,36 +369,17 @@ async def get_playlist(
 
     playlist, artist = row
 
-    # fetch ATProto list record to get track ordering
-    oauth_data = session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise HTTPException(status_code=401, detail="invalid session")
+    # fetch ATProto record (public - no auth needed)
+    try:
+        record_data = await get_record_public(
+            record_uri=playlist.atproto_record_uri,
+            pds_url=artist.pds_url,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"failed to fetch playlist record: {e}"
+        ) from e
 
-    oauth_session = _reconstruct_oauth_session(oauth_data)
-    from backend._internal import get_oauth_client
-
-    # parse the AT URI to get repo and rkey
-    parts = playlist.atproto_record_uri.replace("at://", "").split("/")
-    if len(parts) != 3:
-        raise HTTPException(status_code=500, detail="invalid playlist URI")
-
-    repo, collection, rkey = parts
-
-    # get the list record from PDS
-    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
-    params = {"repo": repo, "collection": collection, "rkey": rkey}
-
-    response = await get_oauth_client().make_authenticated_request(
-        session=oauth_session,
-        method="GET",
-        url=url,
-        params=params,
-    )
-
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail="failed to fetch playlist record")
-
-    record_data = response.json()
     items = record_data.get("value", {}).get("items", [])
 
     # extract track URIs in order
@@ -422,16 +404,8 @@ async def get_playlist(
         like_counts = await get_like_counts(db, track_ids) if track_ids else {}
         comment_counts = await get_comment_counts(db, track_ids) if track_ids else {}
 
-        # get authenticated user's liked tracks
+        # no authenticated user for public endpoint - liked status not available
         liked_track_ids: set[int] = set()
-        if track_ids:
-            liked_result = await db.execute(
-                select(TrackLike.track_id).where(
-                    TrackLike.user_did == session.did,
-                    TrackLike.track_id.in_(track_ids),
-                )
-            )
-            liked_track_ids = set(liked_result.scalars().all())
 
         # maintain ATProto ordering, skip unavailable tracks
         for uri in track_uris:
@@ -439,7 +413,6 @@ async def get_playlist(
                 track = track_by_uri[uri]
                 track_response = await TrackResponse.from_track(
                     track,
-                    pds_url=oauth_data.get("pds_url"),
                     liked_track_ids=liked_track_ids,
                     like_counts=like_counts,
                     comment_counts=comment_counts,

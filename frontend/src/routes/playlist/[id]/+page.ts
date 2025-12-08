@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { redirect, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import { API_URL } from '$lib/config';
 import type { LoadEvent } from '@sveltejs/kit';
 import type { PlaylistWithTracks, Playlist } from '$lib/types';
@@ -9,7 +9,7 @@ export interface PageData {
 	playlistMeta: Playlist | null;
 }
 
-export async function load({ params, parent, data }: LoadEvent): Promise<PageData> {
+export async function load({ params, data }: LoadEvent): Promise<PageData> {
 	// server data for OG tags
 	const serverData = data as { playlistMeta: Playlist | null } | undefined;
 
@@ -33,12 +33,7 @@ export async function load({ params, parent, data }: LoadEvent): Promise<PageDat
 		};
 	}
 
-	// check auth from parent layout data
-	const { isAuthenticated } = await parent();
-	if (!isAuthenticated) {
-		throw redirect(302, '/');
-	}
-
+	// playlist endpoint is public - no auth required
 	const response = await fetch(`${API_URL}/lists/playlists/${params.id}`, {
 		credentials: 'include'
 	});
