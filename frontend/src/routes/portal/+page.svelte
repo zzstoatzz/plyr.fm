@@ -33,7 +33,9 @@
 	let displayName = $state('');
 	let bio = $state('');
 	let avatarUrl = $state('');
+	let supportUrl = $state('');
 	let savingProfile = $state(false);
+	let savingSupportUrl = $state(false);
 
 	// album management state
 	let albums = $state<AlbumSummary[]>([]);
@@ -131,14 +133,21 @@
 
 	async function loadArtistProfile() {
 		try {
-			const response = await fetch(`${API_URL}/artists/me`, {
-				credentials: 'include'
-			});
-			if (response.ok) {
-				const artist = await response.json();
+			const [artistRes, prefsRes] = await Promise.all([
+				fetch(`${API_URL}/artists/me`, { credentials: 'include' }),
+				fetch(`${API_URL}/preferences/`, { credentials: 'include' })
+			]);
+
+			if (artistRes.ok) {
+				const artist = await artistRes.json();
 				displayName = artist.display_name;
 				bio = artist.bio || '';
 				avatarUrl = artist.avatar_url || '';
+			}
+
+			if (prefsRes.ok) {
+				const prefs = await prefsRes.json();
+				supportUrl = prefs.support_url || '';
 			}
 		} catch (_e) {
 			console.error('failed to load artist profile:', _e);
@@ -223,24 +232,41 @@
 		savingProfile = true;
 
 		try {
-			const response = await fetch(`${API_URL}/artists/me`, {
-				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				credentials: 'include',
-				body: JSON.stringify({
-					display_name: displayName,
-					bio: bio || null,
-					avatar_url: avatarUrl || null
-				})
-			});
+			// validate support URL
+			const trimmedSupportUrl = supportUrl.trim();
+			if (trimmedSupportUrl && !trimmedSupportUrl.startsWith('https://')) {
+				toast.error('support link must start with https://');
+				savingProfile = false;
+				return;
+			}
 
-			if (response.ok) {
+			// save artist profile and support URL in parallel
+			const [artistRes, prefsRes] = await Promise.all([
+				fetch(`${API_URL}/artists/me`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					credentials: 'include',
+					body: JSON.stringify({
+						display_name: displayName,
+						bio: bio || null,
+						avatar_url: avatarUrl || null
+					})
+				}),
+				fetch(`${API_URL}/preferences/`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					credentials: 'include',
+					body: JSON.stringify({ support_url: trimmedSupportUrl || '' })
+				})
+			]);
+
+			if (artistRes.ok && prefsRes.ok) {
 				toast.success('profile updated');
-			} else {
-				const errorData = await response.json();
+			} else if (!artistRes.ok) {
+				const errorData = await artistRes.json();
 				toast.error(errorData.detail || 'failed to update profile');
+			} else {
+				toast.error('failed to update support link');
 			}
 		} catch (e) {
 			toast.error(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
@@ -499,7 +525,7 @@
 
 		<section class="profile-section">
 			<div class="section-header">
-				<h2>profile settings</h2>
+				<h2>profile</h2>
 				<a href="/u/{auth.user.handle}" class="view-profile-link">view public profile</a>
 			</div>
 
@@ -542,6 +568,18 @@
 							<img src={avatarUrl} alt="avatar preview" />
 						</div>
 					{/if}
+				</div>
+
+				<div class="form-group">
+					<label for="support-url">support link (optional)</label>
+					<input
+						id="support-url"
+						type="url"
+						bind:value={supportUrl}
+						disabled={savingSupportUrl}
+						placeholder="https://ko-fi.com/yourname"
+					/>
+					<p class="hint">link to Ko-fi, Patreon, or similar - shown on your profile</p>
 				</div>
 
 				<button type="submit" disabled={savingProfile || !displayName}>

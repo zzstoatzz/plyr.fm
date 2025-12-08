@@ -21,7 +21,6 @@
 	let currentTheme = $derived(preferences.theme);
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let autoAdvance = $derived(preferences.autoAdvance);
-
 	// developer token state
 	let creatingToken = $state(false);
 	let developerToken = $state<string | null>(null);
@@ -487,6 +486,7 @@
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
+
 			</div>
 		</section>
 

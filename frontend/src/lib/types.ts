@@ -64,6 +64,7 @@ export interface Artist {
 	avatar_url?: string;
 	bio?: string;
 	show_liked_on_profile?: boolean;
+	support_url?: string;
 }
 
 export interface QueueState {

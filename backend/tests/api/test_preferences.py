@@ -150,3 +150,74 @@ async def test_teal_no_reauth_needed_with_scope(
     assert data["enable_teal_scrobbling"] is True
     # should NOT need reauth since session has teal scopes
     assert data["teal_needs_reauth"] is False
+
+
+async def test_get_preferences_includes_support_url(
+    client_no_teal: AsyncClient,
+):
+    """should return support_url field in preferences response."""
+    response = await client_no_teal.get("/preferences/")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "support_url" in data
+    # default should be None
+    assert data["support_url"] is None
+
+
+async def test_set_support_url(
+    client_no_teal: AsyncClient,
+):
+    """should update support_url preference."""
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={"support_url": "https://ko-fi.com/testartist"},
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["support_url"] == "https://ko-fi.com/testartist"
+
+
+async def test_clear_support_url_with_empty_string(
+    client_no_teal: AsyncClient,
+):
+    """should clear support_url when set to empty string."""
+    # first set a URL
+    await client_no_teal.post(
+        "/preferences/",
+        json={"support_url": "https://ko-fi.com/testartist"},
+    )
+
+    # then clear it with empty string
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={"support_url": ""},
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["support_url"] is None
+
+
+async def test_support_url_persists_after_update(
+    client_no_teal: AsyncClient,
+):
+    """support_url should persist when updating other preferences."""
+    # set support_url
+    await client_no_teal.post(
+        "/preferences/",
+        json={"support_url": "https://patreon.com/testartist"},
+    )
+
+    # update a different preference
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={"auto_advance": False},
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    # support_url should still be set
+    assert data["support_url"] == "https://patreon.com/testartist"
+    assert data["auto_advance"] is False

@@ -52,6 +52,7 @@ class ArtistResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     show_liked_on_profile: bool = False
+    support_url: str | None = None
 
     @field_validator("avatar_url", mode="before")
     @classmethod
@@ -214,15 +215,15 @@ async def get_artist_profile_by_handle(
     if not artist:
         raise HTTPException(status_code=404, detail="artist not found")
 
-    # fetch user preference for showing liked tracks
+    # fetch user preferences for public profile fields
     prefs_result = await db.execute(
         select(UserPreferences).where(UserPreferences.did == artist.did)
     )
     prefs = prefs_result.scalar_one_or_none()
-    show_liked = prefs.show_liked_on_profile if prefs else False
 
     response = ArtistResponse.model_validate(artist)
-    response.show_liked_on_profile = show_liked
+    response.show_liked_on_profile = prefs.show_liked_on_profile if prefs else False
+    response.support_url = prefs.support_url if prefs else None
     return response
 
 
@@ -236,15 +237,15 @@ async def get_artist_profile_by_did(
     if not artist:
         raise HTTPException(status_code=404, detail="artist not found")
 
-    # fetch user preference for showing liked tracks
+    # fetch user preferences for public profile fields
     prefs_result = await db.execute(
         select(UserPreferences).where(UserPreferences.did == artist.did)
     )
     prefs = prefs_result.scalar_one_or_none()
-    show_liked = prefs.show_liked_on_profile if prefs else False
 
     response = ArtistResponse.model_validate(artist)
-    response.show_liked_on_profile = show_liked
+    response.show_liked_on_profile = prefs.show_liked_on_profile if prefs else False
+    response.support_url = prefs.support_url if prefs else None
     return response
 
 
