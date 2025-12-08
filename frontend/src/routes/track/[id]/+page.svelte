@@ -5,7 +5,7 @@
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { API_URL } from '$lib/config';
 	import Header from '$lib/components/Header.svelte';
-	import LikeButton from '$lib/components/LikeButton.svelte';
+	import AddToMenu from '$lib/components/AddToMenu.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import TagEffects from '$lib/components/TagEffects.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
@@ -387,7 +387,13 @@ $effect(() => {
 			<div class="track-info-wrapper">
 				<div class="side-button-left">
 					{#if auth.isAuthenticated}
-						<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
+						<AddToMenu
+							trackId={track.id}
+							trackTitle={track.title}
+							trackUri={track.atproto_record_uri}
+							trackCid={track.atproto_record_cid}
+							initialLiked={track.is_liked || false}
+						/>
 					{/if}
 				</div>
 
@@ -439,7 +445,13 @@ $effect(() => {
 
 					<div class="mobile-side-buttons">
 						{#if auth.isAuthenticated}
-							<LikeButton trackId={track.id} trackTitle={track.title} initialLiked={track.is_liked || false} />
+							<AddToMenu
+								trackId={track.id}
+								trackTitle={track.title}
+								trackUri={track.atproto_record_uri}
+								trackCid={track.atproto_record_cid}
+								initialLiked={track.is_liked || false}
+							/>
 						{/if}
 						<ShareButton url={shareUrl} title="share track" />
 					</div>
