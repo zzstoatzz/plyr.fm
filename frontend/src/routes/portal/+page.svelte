@@ -887,7 +887,7 @@
 					<WaveLoading size="lg" message="loading playlists..." />
 				</div>
 			{:else if playlists.length === 0}
-				<p class="empty">no playlists yet - <a href="/library?create=playlist">create a new playlist</a></p>
+				<p class="empty">no playlists yet - <a href="/library">create a new playlist</a></p>
 			{:else}
 				<div class="playlists-grid">
 					{#each playlists as playlist}
