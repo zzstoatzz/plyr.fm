@@ -45,6 +45,45 @@ plyr.fm should become:
 
 ## recent work
 
+### December 8, 2025
+
+#### letta-backed status maintenance (PR #529, Dec 8)
+
+replaced Claude API with Letta for STATUS.md maintenance:
+- persistent memory across runs for architecture context and ATProto concepts
+- structured JSON output for reliable parsing
+- podcast script generation with host/cohost dialogue
+
+#### inline playlist editing (PR #531, Dec 8)
+
+- direct cover upload from playlist detail page edit modal
+- removed navigation to separate edit page
+- keeps playback uninterrupted during playlist management
+
+#### UI consistency fixes (PRs #527-528, Dec 8)
+
+- combined stats and search into single centered margin container
+- fixed data reload when navigating between detail pages of same type (e.g., track → track)
+- SvelteKit reuses layout components, so reactive data fetching needed explicit invalidation
+
+#### analytics additions (PR #522, Dec 7)
+
+- total duration stat on platform stats page
+- artist analytics page shows cumulative track duration
+
+#### copyright moderation improvements (PR #480, Dec 5)
+
+- better handling of DMCA takedown workflow
+- improved labeler integration for confirmed takedowns
+
+#### status maintenance refinements (PRs #513-526, Dec 7-8)
+
+- unique branch names prevent conflicts on concurrent runs
+- JSON array format for tags in structured output
+- improved prompt clarity for narrative structure
+- time window detection fixes for accurate date ranges
+
+
 ### December 2025
 
 #### playlist fast-follow fixes (PRs #507-519, Dec 7-8)
