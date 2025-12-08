@@ -260,10 +260,28 @@ jobs:
 
       - name: Upload audio to plyr.fm
         run: |
-          if [ -f update.wav ]; then
-            uv run --with plyrfm -- plyrfm upload update.wav "plyr.fm update - $(date +'%B %d, %Y')" --album "$(date +%Y)" -t ai
-          else
+          if [ ! -f update.wav ]; then
             echo "No update.wav found, skipping upload"
+            exit 0
           fi
+
+          # check existing tracks to determine episode number
+          EXISTING=$(uv run --with plyrfm -- plyrfm my-tracks --limit 50 2>/dev/null || echo "")
+          TODAY=$(date +'%B %d, %Y')
+          YEAR=$(date +%Y)
+
+          # count how many "plyr.fm update - {date}" tracks exist for today
+          TODAY_COUNT=$(echo "$EXISTING" | grep -c "plyr.fm update - $TODAY" || echo "0")
+
+          if [ "$TODAY_COUNT" -gt 0 ]; then
+            # already have one today, add episode number
+            EPISODE=$((TODAY_COUNT + 1))
+            TITLE="plyr.fm update - $TODAY (#$EPISODE)"
+          else
+            TITLE="plyr.fm update - $TODAY"
+          fi
+
+          echo "Uploading as: $TITLE"
+          uv run --with plyrfm -- plyrfm upload update.wav "$TITLE" --album "$YEAR" -t '["ai"]'
         env:
           PLYR_TOKEN: ${{ secrets.PLYR_BOT_TOKEN }}
