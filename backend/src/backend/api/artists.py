@@ -1,6 +1,5 @@
 """artist profile API endpoints."""
 
-import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
@@ -14,27 +13,13 @@ from backend._internal import Session, require_auth
 from backend._internal.atproto import (
     fetch_user_avatar,
     normalize_avatar_url,
-    upsert_album_list_record,
-    upsert_liked_list_record,
     upsert_profile_record,
 )
-from backend.models import Album, Artist, Track, TrackLike, UserPreferences, get_db
-from backend.utilities.database import db_session
+from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/artists", tags=["artists"])
-
-# hold references to background tasks to prevent GC before completion
-_background_tasks: set[asyncio.Task[None]] = set()
-
-
-def _create_background_task(coro) -> asyncio.Task:
-    """Create a background task with proper lifecycle management."""
-    task = asyncio.create_task(coro)
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return task
 
 
 # request/response models
@@ -171,127 +156,6 @@ async def get_my_artist_profile(
             status_code=404,
             detail="artist profile not found - please create one first",
         )
-
-    # fire-and-forget: sync all ATProto records in background
-    # moves all sync-related queries out of the request path
-    artist_bio = artist.bio
-    user_did = auth_session.did
-
-    async def _sync_all_records():
-        """sync profile, albums, and liked tracks to ATProto in background."""
-        try:
-            # sync profile record
-            try:
-                profile_result = await upsert_profile_record(
-                    auth_session, bio=artist_bio
-                )
-                if profile_result:
-                    logger.info(f"synced ATProto profile record for {user_did}")
-            except Exception as e:
-                logger.warning(
-                    f"failed to sync ATProto profile record for {user_did}: {e}"
-                )
-
-            # query and sync album list records
-            async with db_session() as session:
-                albums_result = await session.execute(
-                    select(Album).where(Album.artist_did == user_did)
-                )
-                albums = albums_result.scalars().all()
-
-                for album in albums:
-                    tracks_result = await session.execute(
-                        select(Track)
-                        .where(
-                            Track.album_id == album.id,
-                            Track.atproto_record_uri.isnot(None),
-                            Track.atproto_record_cid.isnot(None),
-                        )
-                        .order_by(Track.created_at.asc())
-                    )
-                    tracks = tracks_result.scalars().all()
-
-                    if tracks:
-                        track_refs = [
-                            {"uri": t.atproto_record_uri, "cid": t.atproto_record_cid}
-                            for t in tracks
-                        ]
-                        try:
-                            album_result = await upsert_album_list_record(
-                                auth_session,
-                                album_id=album.id,
-                                album_title=album.title,
-                                track_refs=track_refs,
-                                existing_uri=album.atproto_record_uri,
-                            )
-                            if album_result:
-                                album.atproto_record_uri = album_result[0]
-                                album.atproto_record_cid = album_result[1]
-                                await session.commit()
-                                logger.info(
-                                    f"synced album list record for {album.id}: {album_result[0]}"
-                                )
-                        except Exception as e:
-                            logger.warning(
-                                f"failed to sync album list record for {album.id}: {e}"
-                            )
-
-            # query and sync liked tracks list record
-            async with db_session() as session:
-                prefs_result = await session.execute(
-                    select(UserPreferences).where(UserPreferences.did == user_did)
-                )
-                prefs = prefs_result.scalar_one_or_none()
-
-                likes_result = await session.execute(
-                    select(Track)
-                    .join(TrackLike, TrackLike.track_id == Track.id)
-                    .where(
-                        TrackLike.user_did == user_did,
-                        Track.atproto_record_uri.isnot(None),
-                        Track.atproto_record_cid.isnot(None),
-                    )
-                    .order_by(TrackLike.created_at.desc())
-                )
-                liked_tracks = likes_result.scalars().all()
-
-                if liked_tracks:
-                    liked_refs = [
-                        {"uri": t.atproto_record_uri, "cid": t.atproto_record_cid}
-                        for t in liked_tracks
-                    ]
-                    existing_liked_uri = prefs.liked_list_uri if prefs else None
-
-                    try:
-                        liked_result = await upsert_liked_list_record(
-                            auth_session,
-                            track_refs=liked_refs,
-                            existing_uri=existing_liked_uri,
-                        )
-                        if liked_result:
-                            if prefs:
-                                prefs.liked_list_uri = liked_result[0]
-                                prefs.liked_list_cid = liked_result[1]
-                            else:
-                                prefs = UserPreferences(
-                                    did=user_did,
-                                    liked_list_uri=liked_result[0],
-                                    liked_list_cid=liked_result[1],
-                                )
-                                session.add(prefs)
-                            await session.commit()
-                            logger.info(
-                                f"synced liked list record for {user_did}: {liked_result[0]}"
-                            )
-                    except Exception as e:
-                        logger.warning(
-                            f"failed to sync liked list record for {user_did}: {e}"
-                        )
-
-        except Exception as e:
-            logger.error(f"background sync failed for {user_did}: {e}", exc_info=True)
-
-    _create_background_task(_sync_all_records())
 
     return ArtistResponse.model_validate(artist)
 
