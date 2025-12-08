@@ -39,7 +39,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AGENT_NAME = "plyr-status-maintenance"
@@ -59,6 +59,23 @@ class Settings(BaseSettings):
     letta_api_key: str = Field(validation_alias="LETTA_API_KEY")
     anthropic_api_key: str = Field(validation_alias="ANTHROPIC_API_KEY")
     google_api_key: str = Field(default="", validation_alias="GOOGLE_API_KEY")
+
+
+class MaintenanceReport(BaseModel):
+    """structured output for status maintenance report."""
+
+    archive_needed: bool = Field(
+        description="true if STATUS.md > 400 lines and old content should be archived"
+    )
+    archive_content: str = Field(
+        description="content to move to .status_history/YYYY-MM.md (verbatim, oldest sections). empty string if no archival needed."
+    )
+    status_updates: str = Field(
+        description="new content to add to the '## recent work' section of STATUS.md"
+    )
+    podcast_script: str = Field(
+        description="2-3 minute podcast script with 'Host:' and 'Cohost:' lines. dry, matter-of-fact tone. use 'player FM' pronunciation."
+    )
 
 
 def run_cmd(cmd: list[str], capture: bool = True) -> str:
@@ -152,13 +169,10 @@ def generate_maintenance_report(
     settings: Settings,
     last_maintenance: str | None,
     dry_run: bool = False,
-) -> dict:
-    """generate the maintenance report using letta-backed claude.
+) -> MaintenanceReport:
+    """generate the maintenance report using letta-backed claude with structured outputs.
 
-    returns a dict with:
-        - archive_content: content to archive (if any)
-        - status_updates: updates for STATUS.md
-        - podcast_script: script for TTS generation
+    uses anthropic's structured outputs beta for guaranteed schema compliance.
     """
     # SDK's capture() reads from os.environ
     os.environ["LETTA_API_KEY"] = settings.letta_api_key
@@ -181,11 +195,11 @@ def generate_maintenance_report(
         )
         print(f"✓ agent created with memory blocks: {MEMORY_BLOCKS}")
 
-    # gather context
+    # gather context - read the FULL STATUS.md, not truncated
     today = datetime.now().strftime("%Y-%m-%d")
     commits = get_recent_commits(since=last_maintenance)
     prs = get_merged_prs(since=last_maintenance)
-    status_content = read_status_md()
+    status_content = read_status_md()  # full content
     line_count = get_status_md_line_count()
 
     time_window = f"since {last_maintenance}" if last_maintenance else "all time"
@@ -213,40 +227,40 @@ STATUS.md line count: {line_count} (must stay under 500 lines)
 ### merged PRs ({time_window}):
 {prs}
 
-### current STATUS.md:
-{status_content[:3000]}...
+### current STATUS.md (full content):
+{status_content}
 
 ## your task
 
-analyze what shipped {time_window} and produce a JSON response with:
+analyze what shipped {time_window} and produce the maintenance report.
 
-1. **archive_needed**: boolean - true if STATUS.md > 400 lines and old content should be archived
-2. **archive_content**: string - content to move to .status_history/YYYY-MM.md (verbatim, oldest sections)
-3. **status_updates**: string - new content to add to "## recent work" section
-4. **podcast_script**: string - 2-3 minute script with "Host:" and "Cohost:" lines
+### archival rules
+- set archive_needed=true if STATUS.md > 400 lines
+- archive_content should contain the OLDEST sections verbatim (to move to .status_history/YYYY-MM.md)
+- preserve document structure after archival
 
-## podcast tone
+### status_updates rules
+- new content to add under "## recent work"
+- be concise and technical
+- focus on what shipped and why it matters
 
-the hosts should be:
-- dry, matter-of-fact, slightly sardonic
+### podcast_script rules
+- 2-3 minute script with "Host:" and "Cohost:" lines
+- dry, matter-of-fact, slightly sardonic tone
 - NOT enthusiastic or complimentary
-- technically accurate, explaining the "why" not just "what"
-- using specific dates, not "last week" or "recently"
-
-CRITICAL: write "player FM" or "player dot FM" for pronunciation, never "plyr.fm" literally.
-
-## response format
-
-respond with ONLY valid JSON, no markdown code blocks:
-{{"archive_needed": false, "archive_content": "", "status_updates": "...", "podcast_script": "..."}}
+- technically accurate, explain the "why" not just "what"
+- use specific dates, never "last week" or "recently"
+- CRITICAL: write "player FM" or "player dot FM" for pronunciation, NEVER "plyr.fm" literally
 """
 
     print(f"generating maintenance report for {time_window}...")
 
     with learning(agent=AGENT_NAME, client=letta_client, memory=MEMORY_BLOCKS):
-        response = anthropic_client.messages.create(
+        # use structured outputs beta for guaranteed schema compliance
+        response = anthropic_client.beta.messages.parse(
             model="claude-sonnet-4-20250514",
             max_tokens=8192,
+            betas=["structured-outputs-2025-11-13"],
             system=system_prompt,
             messages=[
                 {
@@ -254,42 +268,21 @@ respond with ONLY valid JSON, no markdown code blocks:
                     "content": f"analyze and generate the status maintenance report for {time_window}. remember key insights for future runs.",
                 }
             ],
+            output_format=MaintenanceReport,
         )
 
-    # parse response
-    response_text = ""
-    for block in response.content:
-        if hasattr(block, "text"):
-            response_text = block.text
-            break
-
-    # try to parse as JSON
-    try:
-        # strip markdown code blocks if present
-        if response_text.startswith("```"):
-            response_text = response_text.split("```")[1]
-            if response_text.startswith("json"):
-                response_text = response_text[4:]
-        result = json.loads(response_text.strip())
-    except json.JSONDecodeError as e:
-        print(f"warning: failed to parse response as JSON: {e}")
-        print(f"raw response:\n{response_text[:500]}...")
-        result = {
-            "archive_needed": False,
-            "archive_content": "",
-            "status_updates": response_text,
-            "podcast_script": "",
-        }
+    # structured outputs gives us the parsed model directly
+    report = response.parsed_output
 
     print("✓ report generated")
-    print(f"  archive needed: {result.get('archive_needed', False)}")
-    print(f"  status updates: {len(result.get('status_updates', ''))} chars")
-    print(f"  podcast script: {len(result.get('podcast_script', ''))} chars")
+    print(f"  archive needed: {report.archive_needed}")
+    print(f"  status updates: {len(report.status_updates)} chars")
+    print(f"  podcast script: {len(report.podcast_script)} chars")
 
-    return result
+    return report
 
 
-def apply_maintenance(report: dict, dry_run: bool = False) -> list[str]:
+def apply_maintenance(report: MaintenanceReport, dry_run: bool = False) -> list[str]:
     """apply the maintenance report to files.
 
     returns list of modified files.
@@ -297,7 +290,7 @@ def apply_maintenance(report: dict, dry_run: bool = False) -> list[str]:
     modified_files = []
 
     # handle archival
-    if report.get("archive_needed") and report.get("archive_content"):
+    if report.archive_needed and report.archive_content:
         archive_dir = PROJECT_ROOT / ".status_history"
         archive_file = archive_dir / f"{datetime.now().strftime('%Y-%m')}.md"
 
@@ -310,12 +303,12 @@ def apply_maintenance(report: dict, dry_run: bool = False) -> list[str]:
             with open(archive_file, mode) as f:
                 if mode == "a":
                     f.write("\n\n---\n\n")
-                f.write(report["archive_content"])
+                f.write(report.archive_content)
             modified_files.append(str(archive_file))
             print(f"✓ archived content to {archive_file}")
 
     # update STATUS.md
-    if report.get("status_updates"):
+    if report.status_updates:
         status_file = PROJECT_ROOT / "STATUS.md"
         if dry_run:
             print(f"[dry-run] would update {status_file}")
@@ -335,7 +328,7 @@ def apply_maintenance(report: dict, dry_run: bool = False) -> list[str]:
                     + "## recent work"
                     + lines[0]
                     + "\n\n"
-                    + report["status_updates"]
+                    + report.status_updates
                     + "\n"
                     + (lines[1] if len(lines) > 1 else "")
                 )
@@ -343,18 +336,18 @@ def apply_maintenance(report: dict, dry_run: bool = False) -> list[str]:
             else:
                 # no recent work section, append to end
                 with open(status_file, "a") as f:
-                    f.write(f"\n## recent work\n\n{report['status_updates']}\n")
+                    f.write(f"\n## recent work\n\n{report.status_updates}\n")
 
             modified_files.append(str(status_file))
             print(f"✓ updated {status_file}")
 
     # write podcast script
-    if report.get("podcast_script"):
+    if report.podcast_script:
         script_file = PROJECT_ROOT / "podcast_script.txt"
         if dry_run:
             print(f"[dry-run] would write {script_file}")
         else:
-            script_file.write_text(report["podcast_script"])
+            script_file.write_text(report.podcast_script)
             modified_files.append(str(script_file))
             print(f"✓ wrote podcast script to {script_file}")
 
