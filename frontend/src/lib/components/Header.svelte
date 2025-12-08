@@ -246,7 +246,7 @@
 
 	.search-left {
 		position: absolute;
-		left: calc((100vw - var(--queue-width, 0px) - 800px) / 3);
+		left: calc((100vw - var(--queue-width, 0px) - 800px) / 3 + 20px);
 		top: 50%;
 		transform: translate(-50%, -50%);
 		transition: left 0.3s ease;
@@ -301,11 +301,12 @@
 	.tangled-icon {
 		border-radius: 4px;
 		opacity: 0.7;
-		transition: opacity 0.2s;
+		transition: opacity 0.2s, box-shadow 0.2s;
 	}
 
 	.tangled-link:hover .tangled-icon {
 		opacity: 1;
+		box-shadow: 0 0 0 2px var(--accent);
 	}
 
 	h1 {
@@ -345,7 +346,7 @@
 	}
 
 	.nav-link:hover {
-		color: var(--text-primary);
+		color: var(--accent);
 		background: var(--bg-tertiary);
 		border-color: var(--border-default);
 	}

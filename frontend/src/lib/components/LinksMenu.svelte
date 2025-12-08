@@ -246,11 +246,12 @@
 	.tangled-menu-icon {
 		border-radius: 4px;
 		opacity: 0.7;
-		transition: opacity 0.2s;
+		transition: opacity 0.2s, box-shadow 0.2s;
 	}
 
 	.menu-link:hover .tangled-menu-icon {
 		opacity: 1;
+		box-shadow: 0 0 0 2px var(--accent);
 	}
 
 	.link-info {
