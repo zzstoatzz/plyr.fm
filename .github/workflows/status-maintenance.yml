@@ -119,29 +119,21 @@ jobs:
 
             this context helps you explain things accurately, and accessibly without over-simplifying.
 
-            ### determine episode type
-
-            check if .status_history/ directory exists:
-            - if NO .status_history/ exists: this is the INAUGURAL episode
-            - if .status_history/ exists: this is a SUBSEQUENT episode
-
             ### write the podcast script
 
             write to podcast_script.txt with "Host: ..." and "Cohost: ..." lines.
 
-            INAUGURAL EPISODE (ignore this if its not the first episode):
-            - introduce what plyr.fm is: decentralized music streaming on ATProto
-            - explain the core value prop: your music data lives in your PDS, portable between apps (open social)
-            - cover the technical foundation that's been built (summarize from STATUS.md)
-            - set expectations: this is an early-stage project, rough edges exist
-            - tone: "here's what is being built and why it could matter"
-            - work chronologically from beginning to end, don't heavily bias towards nascent or recent work
+            focus on what shipped since the last status-maintenance PR was MERGED (the mergedAt date from task 1).
+            that merge date is when the last podcast was generated, so everything after that is new.
 
-            SUBSEQUENT EPISODES (ignore this if its the first episode):
-            - focus on what actually shipped since the last status-maintenance PR was MERGED
-            - use the mergedAt date from task 1 as your starting point, NOT "last week"
-            - reference git commits since that merge date to determine what shipped
-            - don't re-explain the whole project - listeners already know
+            use `git log --since="{mergedAt date}" --reverse` to see commits in CHRONOLOGICAL order (oldest first).
+
+            **narrative structure**: tell the story chronologically - start with what shipped first in the time period,
+            then work forward to the most recent changes. this creates a natural narrative arc.
+            (note: STATUS.md is reverse-chronological, but your script should be chronological)
+
+            - don't re-explain the whole project - listeners already know what player FM is
+            - focus on what's new: features that launched, bugs that got fixed, improvements that shipped
             - tone: "here's what changed since last time"
 
             ### tone requirements (CRITICAL)
@@ -157,7 +149,35 @@ jobs:
             - "the team has done", "they've really", "fantastic work"
             - any variation of over-congratulating or over-sensationalizing the project
 
-            pronunciation: "plyr.fm" is pronounced "player FM" (not "plir" or spelled out)
+            ### pronunciation (CRITICAL - READ THIS CAREFULLY)
+
+            the project name "plyr.fm" is pronounced "player FM" (like "music player").
+
+            **in your script, ALWAYS write "player FM" or "player dot FM" - NEVER write "plyr.fm" or "plyr".**
+
+            the TTS engine will mispronounce "plyr" as "plir" or "p-l-y-r" if you write it that way.
+            write phonetically for correct pronunciation: "player FM", "player dot FM".
+
+            ### identifying what actually shipped
+
+            read the commit messages and STATUS.md carefully to understand what changed.
+
+            - if something is completely NEW (didn't exist before), say it "shipped" or "launched"
+            - if something existing got improved or fixed, call it what it is: fixes, improvements, polish
+
+            don't rely on commit message prefixes like `feat:` or `fix:` - they're not always accurate.
+            read the actual content to understand the scope of what changed.
+
+            ### time references (CRITICAL)
+
+            NEVER say "last week", "this week", "recently", or vague time references.
+
+            ALWAYS use specific date ranges based on the mergedAt date from task 1:
+            - "since December 2nd" or "from December 3rd to today"
+            - "in the past six days" (if that's accurate)
+            - "since the last update"
+
+            the listener doesn't know when "last week" was - be specific.
 
             target length: 2-3 minutes spoken (~300-400 words) (it should be 4-5 if its the first episode)
 
