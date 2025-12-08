@@ -19,14 +19,12 @@
 </script>
 
 <header>
-	<!-- Stats and search positioned on far left, splitting margin into thirds -->
-	<div class="stats-left desktop-only">
+	<!-- Stats and search together in left margin, centered as a group -->
+	<div class="margin-left desktop-only">
 		<PlatformStats variant="header" />
-	</div>
-	<div class="search-left desktop-only">
 		<SearchTrigger />
 	</div>
-	<!-- Logout positioned on far right, mirroring stats -->
+	<!-- Logout positioned on far right, centered in right margin -->
 	{#if isAuthenticated}
 		<div class="logout-right desktop-only">
 			<button onclick={onLogout} class="btn-logout-outer" title="log out">logout</button>
@@ -236,20 +234,18 @@
 		transform: scale(0.94);
 	}
 
-	.stats-left {
+	.margin-left {
 		position: absolute;
-		left: calc((100vw - var(--queue-width, 0px) - 800px) / 6);
+		/* Center in the left margin: halfway between left edge and content area */
+		left: calc((100vw - var(--queue-width, 0px) - 800px) / 4);
 		top: 50%;
 		transform: translate(-50%, -50%);
 		transition: left 0.3s ease;
-	}
-
-	.search-left {
-		position: absolute;
-		left: calc((100vw - var(--queue-width, 0px) - 800px) / 3 + 20px);
-		top: 50%;
-		transform: translate(-50%, -50%);
-		transition: left 0.3s ease;
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		/* Constrain width to prevent overflow into content area */
+		max-width: calc((100vw - var(--queue-width, 0px) - 800px) / 2 - 2rem);
 	}
 
 	.logout-right {
@@ -392,10 +388,10 @@
 		color: var(--bg-primary);
 	}
 
-	/* Hide margin-positioned elements and switch to mobile layout at the same breakpoint */
-	@media (max-width: 1399px) {
-		.stats-left,
-		.search-left,
+	/* Hide margin-positioned elements and switch to mobile layout at the same breakpoint.
+	   Account for queue panel (320px) potentially being open - need extra headroom */
+	@media (max-width: 1599px) {
+		.margin-left,
 		.logout-right {
 			display: none !important;
 		}
