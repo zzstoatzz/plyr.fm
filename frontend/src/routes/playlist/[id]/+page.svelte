@@ -35,13 +35,9 @@
 	let isEditMode = $state(false);
 	let isSavingOrder = $state(false);
 
-	// edit modal state
-	let showEditModal = $state(false);
+	// inline edit state
 	let editName = $state("");
-	let editShowOnProfile = $state(false);
-	let editImageFile = $state<File | null>(null);
-	let editImagePreview = $state<string | null>(null);
-	let saving = $state(false);
+	let coverInputElement = $state<HTMLInputElement | null>(null);
 	let uploadingCover = $state(false);
 
 	// drag state
@@ -214,17 +210,101 @@
 
 	function toggleEditMode() {
 		if (isEditMode) {
-			saveOrder();
+			// exiting edit mode - save changes
+			saveAllChanges();
+		} else {
+			// entering edit mode - initialize edit state
+			editName = playlist.name;
 		}
 		isEditMode = !isEditMode;
 	}
 
-	function openEditModal() {
-		editName = playlist.name;
-		editShowOnProfile = playlist.show_on_profile;
-		editImageFile = null;
-		editImagePreview = null;
-		showEditModal = true;
+	async function saveAllChanges() {
+		// save track order
+		await saveOrder();
+
+		// save name if changed
+		if (editName.trim() && editName.trim() !== playlist.name) {
+			await saveNameChange();
+		}
+	}
+
+	async function saveNameChange() {
+		if (!editName.trim() || editName.trim() === playlist.name) return;
+
+		try {
+			const formData = new FormData();
+			formData.append("name", editName.trim());
+
+			const response = await fetch(
+				`${API_URL}/lists/playlists/${playlist.id}`,
+				{
+					method: "PATCH",
+					credentials: "include",
+					body: formData,
+				},
+			);
+
+			if (!response.ok) {
+				throw new Error("failed to update name");
+			}
+
+			const updated = await response.json();
+			playlist.name = updated.name;
+		} catch (e) {
+			console.error("failed to save name:", e);
+			toast.error(e instanceof Error ? e.message : "failed to save name");
+			// revert to original name
+			editName = playlist.name;
+		}
+	}
+
+	function handleCoverSelect(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		if (!file.type.startsWith("image/")) {
+			toast.error("please select an image file");
+			return;
+		}
+
+		if (file.size > 20 * 1024 * 1024) {
+			toast.error("image must be under 20MB");
+			return;
+		}
+
+		uploadCover(file);
+	}
+
+	async function uploadCover(file: File) {
+		uploadingCover = true;
+		try {
+			const formData = new FormData();
+			formData.append("image", file);
+
+			const response = await fetch(
+				`${API_URL}/lists/playlists/${playlist.id}/cover`,
+				{
+					method: "POST",
+					credentials: "include",
+					body: formData,
+				},
+			);
+
+			if (!response.ok) {
+				throw new Error("failed to upload cover");
+			}
+
+			const result = await response.json();
+			playlist.image_url = result.image_url;
+			toast.success("cover updated");
+		} catch (e) {
+			console.error("failed to upload cover:", e);
+			toast.error(e instanceof Error ? e.message : "failed to upload cover");
+		} finally {
+			uploadingCover = false;
+		}
 	}
 
 	async function saveOrder() {
@@ -393,106 +473,6 @@
 	}
 
 
-	function handleEditImageSelect(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-
-		// validate file type
-		if (!file.type.startsWith("image/")) {
-			return;
-		}
-
-		// validate file size (20MB max)
-		if (file.size > 20 * 1024 * 1024) {
-			return;
-		}
-
-		editImageFile = file;
-		editImagePreview = URL.createObjectURL(file);
-	}
-
-	async function savePlaylistChanges() {
-		saving = true;
-
-		try {
-			// update name and/or show_on_profile if changed
-			const nameChanged =
-				editName.trim() && editName.trim() !== playlist.name;
-			const showOnProfileChanged =
-				editShowOnProfile !== playlist.show_on_profile;
-
-			if (nameChanged || showOnProfileChanged) {
-				const formData = new FormData();
-				if (nameChanged) {
-					formData.append("name", editName.trim());
-				}
-				if (showOnProfileChanged) {
-					formData.append(
-						"show_on_profile",
-						String(editShowOnProfile),
-					);
-				}
-
-				const response = await fetch(
-					`${API_URL}/lists/playlists/${playlist.id}`,
-					{
-						method: "PATCH",
-						credentials: "include",
-						body: formData,
-					},
-				);
-
-				if (!response.ok) {
-					throw new Error("failed to update playlist");
-				}
-
-				const updated = await response.json();
-				playlist.name = updated.name;
-				playlist.show_on_profile = updated.show_on_profile;
-			}
-
-			// upload cover if selected
-			if (editImageFile) {
-				uploadingCover = true;
-				const formData = new FormData();
-				formData.append("image", editImageFile);
-
-				const response = await fetch(
-					`${API_URL}/lists/playlists/${playlist.id}/cover`,
-					{
-						method: "POST",
-						credentials: "include",
-						body: formData,
-					},
-				);
-
-				if (!response.ok) {
-					throw new Error("failed to upload cover");
-				}
-
-				const result = await response.json();
-				playlist.image_url = result.image_url;
-				uploadingCover = false;
-			}
-
-			showEditModal = false;
-			toast.success("playlist updated");
-		} catch (e) {
-			console.error("failed to save playlist:", e);
-			toast.error(
-				e instanceof Error ? e.message : "failed to save playlist",
-			);
-		} finally {
-			saving = false;
-			uploadingCover = false;
-			if (editImagePreview) {
-				URL.revokeObjectURL(editImagePreview);
-				editImagePreview = null;
-			}
-		}
-	}
-
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.key === "Escape") {
 			if (showSearch) {
@@ -503,14 +483,9 @@
 			if (showDeleteConfirm) {
 				showDeleteConfirm = false;
 			}
-			if (showEditModal) {
-				showEditModal = false;
-				if (editImagePreview) {
-					URL.revokeObjectURL(editImagePreview);
-					editImagePreview = null;
-				}
-			}
 			if (isEditMode) {
+				// revert name change and exit edit mode
+				editName = playlist.name;
 				isEditMode = false;
 			}
 		}
@@ -589,24 +564,28 @@
 <div class="container">
 	<main>
 		<div class="playlist-hero" class:edit-mode={isEditMode && isOwner}>
+			<!-- hidden file input for cover upload -->
+			<input
+				type="file"
+				accept="image/jpeg,image/png,image/webp"
+				bind:this={coverInputElement}
+				onchange={handleCoverSelect}
+				hidden
+			/>
 			{#if isEditMode && isOwner}
 				<button
 					class="playlist-art-wrapper clickable"
-					onclick={openEditModal}
+					onclick={() => coverInputElement?.click()}
 					type="button"
-					aria-label="edit playlist details"
+					aria-label="change cover image"
+					disabled={uploadingCover}
 				>
 					{#if playlist.image_url}
-						<SensitiveImage
+						<img
 							src={playlist.image_url}
-							tooltipPosition="center"
-						>
-							<img
-								src={playlist.image_url}
-								alt="{playlist.name} artwork"
-								class="playlist-art"
-							/>
-						</SensitiveImage>
+							alt="{playlist.name} artwork"
+							class="playlist-art"
+						/>
 					{:else}
 						<div class="playlist-art-placeholder">
 							<svg
@@ -626,12 +605,20 @@
 							</svg>
 						</div>
 					{/if}
-					<div class="art-edit-overlay">
-						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-							<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-						</svg>
-						<span>edit details</span>
+					<div class="art-edit-overlay" class:uploading={uploadingCover}>
+						{#if uploadingCover}
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
+								<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+							</svg>
+							<span>uploading...</span>
+						{:else}
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+								<circle cx="8.5" cy="8.5" r="1.5"></circle>
+								<polyline points="21 15 16 10 5 21"></polyline>
+							</svg>
+							<span>change cover</span>
+						{/if}
 					</div>
 				</button>
 			{:else}
@@ -671,7 +658,16 @@
 			<div class="playlist-info-wrapper">
 				<div class="playlist-info">
 					<p class="playlist-type">playlist</p>
-					<h1 class="playlist-title">{playlist.name}</h1>
+					{#if isEditMode && isOwner}
+						<input
+							type="text"
+							class="playlist-title-input"
+							bind:value={editName}
+							placeholder="playlist name"
+						/>
+					{:else}
+						<h1 class="playlist-title">{playlist.name}</h1>
+					{/if}
 					<div class="playlist-meta">
 						<a href="/u/{playlist.owner_handle}" class="owner-link">
 							{playlist.owner_handle}
@@ -1207,168 +1203,6 @@
 	</div>
 {/if}
 
-{#if showEditModal}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div
-		class="modal-overlay"
-		role="presentation"
-		onclick={() => {
-			showEditModal = false;
-			if (editImagePreview) {
-				URL.revokeObjectURL(editImagePreview);
-				editImagePreview = null;
-			}
-		}}
-	>
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div
-			class="modal edit-modal"
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="edit-playlist-title"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<div class="modal-header">
-				<h3 id="edit-playlist-title">edit playlist</h3>
-				<button
-					class="close-btn"
-					aria-label="close"
-					onclick={() => {
-						showEditModal = false;
-						if (editImagePreview) {
-							URL.revokeObjectURL(editImagePreview);
-							editImagePreview = null;
-						}
-					}}
-				>
-					<svg
-						width="20"
-						height="20"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<line x1="18" y1="6" x2="6" y2="18"></line>
-						<line x1="6" y1="6" x2="18" y2="18"></line>
-					</svg>
-				</button>
-			</div>
-			<div class="modal-body">
-				<div class="edit-cover-section">
-					<label class="cover-picker">
-						{#if editImagePreview}
-							<img
-								src={editImagePreview}
-								alt="preview"
-								class="cover-preview"
-							/>
-						{:else if playlist.image_url}
-							<SensitiveImage
-								src={playlist.image_url}
-								tooltipPosition="center"
-							>
-								<img
-									src={playlist.image_url}
-									alt="current cover"
-									class="cover-preview"
-								/>
-							</SensitiveImage>
-						{:else}
-							<div class="cover-placeholder">
-								<svg
-									width="24"
-									height="24"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<rect
-										x="3"
-										y="3"
-										width="18"
-										height="18"
-										rx="2"
-										ry="2"
-									></rect>
-									<circle cx="8.5" cy="8.5" r="1.5"></circle>
-									<polyline points="21 15 16 10 5 21"
-									></polyline>
-								</svg>
-								<span>add cover</span>
-							</div>
-						{/if}
-						<input
-							type="file"
-							accept="image/jpeg,image/png,image/webp"
-							onchange={handleEditImageSelect}
-							hidden
-						/>
-					</label>
-					<span class="cover-hint">click to change cover art</span>
-				</div>
-				<div class="edit-name-section">
-					<label for="edit-name">playlist name</label>
-					<input
-						id="edit-name"
-						type="text"
-						bind:value={editName}
-						placeholder="playlist name"
-					/>
-				</div>
-				<div class="edit-toggle-section">
-					<label class="toggle-row">
-						<input
-							type="checkbox"
-							bind:checked={editShowOnProfile}
-						/>
-						<span class="toggle-label">show on profile</span>
-					</label>
-					<span class="toggle-hint"
-						>when enabled, this playlist will appear in your public
-						collections</span
-					>
-				</div>
-			</div>
-			<div class="modal-footer">
-				<button
-					class="cancel-btn"
-					onclick={() => {
-						showEditModal = false;
-						if (editImagePreview) {
-							URL.revokeObjectURL(editImagePreview);
-							editImagePreview = null;
-						}
-					}}
-					disabled={saving}
-				>
-					cancel
-				</button>
-				<button
-					class="confirm-btn"
-					onclick={savePlaylistChanges}
-					disabled={saving ||
-						(!editImageFile &&
-							editName.trim() === playlist.name &&
-							editShowOnProfile === playlist.show_on_profile)}
-				>
-					{#if saving}
-						{uploadingCover ? "uploading cover..." : "saving..."}
-					{:else}
-						save
-					{/if}
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
-
 <style>
 	.container {
 		max-width: 1200px;
@@ -1424,6 +1258,7 @@
 		border: none;
 		padding: 0;
 		cursor: pointer;
+		font-family: inherit;
 	}
 
 	button.playlist-art-wrapper.clickable:hover .art-edit-overlay {
@@ -1448,9 +1283,11 @@
 		transition: opacity 0.2s;
 		pointer-events: none;
 		border-radius: 8px;
+		font-family: inherit;
 	}
 
 	.art-edit-overlay span {
+		font-family: inherit;
 		font-size: 0.85rem;
 		font-weight: 500;
 	}
@@ -1499,6 +1336,25 @@
 		word-wrap: break-word;
 		overflow-wrap: break-word;
 		hyphens: auto;
+	}
+
+	.playlist-title-input {
+		font-size: 3rem;
+		font-weight: 700;
+		font-family: inherit;
+		margin: 0;
+		color: var(--text-primary);
+		line-height: 1.1;
+		background: transparent;
+		border: none;
+		border-bottom: 2px solid var(--accent);
+		outline: none;
+		width: 100%;
+		padding: 0;
+	}
+
+	.playlist-title-input::placeholder {
+		color: var(--text-muted);
 	}
 
 	.playlist-meta {
@@ -2067,125 +1923,6 @@
 		}
 	}
 
-	/* edit modal */
-	.edit-modal {
-		max-width: 400px;
-	}
-
-	.edit-cover-section {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 1.5rem;
-	}
-
-	.cover-picker {
-		width: 120px;
-		height: 120px;
-		border-radius: 12px;
-		overflow: hidden;
-		cursor: pointer;
-		border: 2px dashed var(--border-default);
-		transition: border-color 0.15s;
-	}
-
-	.cover-picker:hover {
-		border-color: var(--accent);
-	}
-
-	.cover-preview {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.cover-placeholder {
-		width: 100%;
-		height: 100%;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		background: var(--bg-secondary);
-		color: var(--text-muted);
-	}
-
-	.cover-placeholder span {
-		font-size: 0.8rem;
-	}
-
-	.cover-hint {
-		font-size: 0.75rem;
-		color: var(--text-muted);
-	}
-
-	.edit-name-section {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.edit-name-section label {
-		font-size: 0.85rem;
-		color: var(--text-secondary);
-	}
-
-	.edit-name-section input {
-		width: 100%;
-		padding: 0.75rem 1rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-default);
-		border-radius: 8px;
-		font-family: inherit;
-		font-size: 1rem;
-		color: var(--text-primary);
-		outline: none;
-		transition: border-color 0.15s;
-		box-sizing: border-box;
-	}
-
-	.edit-name-section input:focus {
-		border-color: var(--accent);
-	}
-
-	.edit-name-section input::placeholder {
-		color: var(--text-muted);
-	}
-
-	.edit-toggle-section {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		margin-top: 0.5rem;
-	}
-
-	.toggle-row {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		cursor: pointer;
-	}
-
-	.toggle-row input[type="checkbox"] {
-		width: 18px;
-		height: 18px;
-		accent-color: var(--accent);
-		cursor: pointer;
-	}
-
-	.toggle-label {
-		font-size: 0.95rem;
-		color: var(--text-primary);
-	}
-
-	.toggle-hint {
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		padding-left: calc(18px + 0.75rem);
-	}
-
 	@media (max-width: 768px) {
 		.playlist-hero {
 			flex-direction: column;
@@ -2216,7 +1953,8 @@
 			align-items: center;
 		}
 
-		.playlist-title {
+		.playlist-title,
+		.playlist-title-input {
 			font-size: 2rem;
 		}
 
@@ -2258,7 +1996,8 @@
 			height: 140px;
 		}
 
-		.playlist-title {
+		.playlist-title,
+		.playlist-title-input {
 			font-size: 1.75rem;
 		}
 
