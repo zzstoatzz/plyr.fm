@@ -622,3 +622,209 @@ async def test_get_album_fallback_to_created_at_without_atproto(
     assert data["tracks"][0]["title"] == "First Track"
     assert data["tracks"][1]["title"] == "Second Track"
     assert data["tracks"][2]["title"] == "Third Track"
+
+
+async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
+    """test updating album title via PATCH endpoint.
+
+    verifies that:
+    1. album title is updated in database
+    2. track extra["album"] is updated for all tracks
+    3. ATProto records are updated for tracks that have them
+    """
+    # create artist matching mock session
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album
+    album = Album(
+        artist_did=artist.did,
+        slug="test-album",
+        title="Original Title",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create track with ATProto record
+    track = Track(
+        title="Test Track",
+        file_id="test-file-update",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        extra={"album": "Original Title"},
+        atproto_record_uri="at://did:test:user123/fm.plyr.track/track123",
+        atproto_record_cid="original_cid",
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    album_id = album.id
+    track_id = track.id
+
+    # mock ATProto update_record
+    with patch(
+        "backend._internal.atproto.records.fm_plyr.track.update_record",
+        new_callable=AsyncMock,
+        return_value=("at://did:test:user123/fm.plyr.track/track123", "new_cid"),
+    ) as mock_update:
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.patch(f"/albums/{album_id}?title=Updated%20Title")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Updated Title"
+    assert data["id"] == album_id
+
+    # verify ATProto update was called
+    mock_update.assert_called_once()
+    call_kwargs = mock_update.call_args.kwargs
+    assert call_kwargs["record"]["album"] == "Updated Title"
+
+    # verify track extra["album"] was updated in database
+    from backend.utilities.database import get_engine
+
+    engine = get_engine()
+    async with AsyncSession(engine, expire_on_commit=False) as fresh_session:
+        result = await fresh_session.execute(select(Track).where(Track.id == track_id))
+        updated_track = result.scalar_one()
+        assert updated_track.extra["album"] == "Updated Title"
+        assert updated_track.atproto_record_cid == "new_cid"
+
+
+async def test_update_album_forbidden_for_non_owner(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test that users cannot update albums they don't own."""
+    # create a different artist
+    other_artist = Artist(
+        did="did:other:artist999",
+        handle="other.artist",
+        display_name="Other Artist",
+    )
+    db_session.add(other_artist)
+    await db_session.flush()
+
+    # create album owned by other artist
+    album = Album(
+        artist_did=other_artist.did,
+        slug="other-album",
+        title="Other Album",
+    )
+    db_session.add(album)
+    await db_session.commit()
+
+    album_id = album.id
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.patch(f"/albums/{album_id}?title=Hacked%20Title")
+
+    assert response.status_code == 403
+    assert "your own albums" in response.json()["detail"]
+
+
+async def test_remove_track_from_album(test_app: FastAPI, db_session: AsyncSession):
+    """test removing a track from an album (orphaning it)."""
+    # create artist matching mock session
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album
+    album = Album(
+        artist_did=artist.did,
+        slug="test-album",
+        title="Test Album",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create track in album
+    track = Track(
+        title="Track to Remove",
+        file_id="remove-file-1",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    album_id = album.id
+    track_id = track.id
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.delete(f"/albums/{album_id}/tracks/{track_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["removed"] is True
+    assert data["track_id"] == track_id
+
+    # verify track is orphaned (album_id = null)
+    from backend.utilities.database import get_engine
+
+    engine = get_engine()
+    async with AsyncSession(engine, expire_on_commit=False) as fresh_session:
+        result = await fresh_session.execute(select(Track).where(Track.id == track_id))
+        track_after = result.scalar_one_or_none()
+        assert track_after is not None
+        assert track_after.album_id is None
+
+
+async def test_remove_track_not_in_album(test_app: FastAPI, db_session: AsyncSession):
+    """test that removing a track not in the album returns 400."""
+    # create artist
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album
+    album = Album(
+        artist_did=artist.did,
+        slug="test-album",
+        title="Test Album",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create track NOT in this album (orphaned)
+    track = Track(
+        title="Orphan Track",
+        file_id="orphan-file-1",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=None,  # not in any album
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    album_id = album.id
+    track_id = track.id
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.delete(f"/albums/{album_id}/tracks/{track_id}")
+
+    assert response.status_code == 400
+    assert "not in this album" in response.json()["detail"]

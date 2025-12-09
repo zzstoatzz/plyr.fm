@@ -460,6 +460,124 @@ async def upload_album_cover(
         ) from e
 
 
+@router.patch("/{album_id}")
+async def update_album(
+    album_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Annotated[AuthSession, Depends(require_artist_profile)],
+    title: Annotated[str | None, Query(description="new album title")] = None,
+    description: Annotated[
+        str | None, Query(description="new album description")
+    ] = None,
+) -> AlbumMetadata:
+    """update album metadata (title, description).
+
+    when title changes, all tracks in the album have their ATProto records
+    updated to reflect the new album name.
+    """
+    from backend._internal.atproto.records.fm_plyr.track import (
+        build_track_record,
+        update_record,
+    )
+
+    result = await db.execute(
+        select(Album)
+        .where(Album.id == album_id)
+        .options(selectinload(Album.tracks).selectinload(Track.artist))
+    )
+    album = result.scalar_one_or_none()
+    if not album:
+        raise HTTPException(status_code=404, detail="album not found")
+    if album.artist_did != auth_session.did:
+        raise HTTPException(
+            status_code=403, detail="you can only update your own albums"
+        )
+
+    old_title = album.title
+    title_changed = title is not None and title.strip() != old_title
+
+    if title is not None:
+        album.title = title.strip()
+    if description is not None:
+        album.description = description.strip() if description.strip() else None
+
+    # if title changed, update all tracks' extra["album"] and ATProto records
+    if title_changed and title is not None:
+        new_title = title.strip()
+
+        for track in album.tracks:
+            # update the track's extra["album"] field
+            if track.extra is None:
+                track.extra = {}
+            track.extra = {**track.extra, "album": new_title}
+
+            # update ATProto record
+            updated_record = build_track_record(
+                title=track.title,
+                artist=track.artist.display_name,
+                audio_url=track.r2_url,
+                file_type=track.file_type,
+                album=new_title,
+                duration=track.duration,
+                features=track.features if track.features else None,
+                image_url=await track.get_image_url(),
+            )
+
+            _, new_cid = await update_record(
+                auth_session=auth_session,
+                record_uri=track.atproto_record_uri,
+                record=updated_record,
+            )
+            track.atproto_record_cid = new_cid
+
+    await db.commit()
+
+    # fetch artist for response
+    artist_result = await db.execute(
+        select(Artist).where(Artist.did == album.artist_did)
+    )
+    artist = artist_result.scalar_one()
+    track_count, total_plays = await _album_stats(db, album_id)
+
+    return await _album_metadata(album, artist, track_count, total_plays)
+
+
+@router.delete("/{album_id}/tracks/{track_id}")
+async def remove_track_from_album(
+    album_id: str,
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Annotated[AuthSession, Depends(require_artist_profile)],
+) -> dict:
+    """remove a track from an album (orphan it, don't delete).
+
+    the track remains available as a standalone track.
+    """
+    # verify album exists and belongs to the authenticated artist
+    album_result = await db.execute(select(Album).where(Album.id == album_id))
+    album = album_result.scalar_one_or_none()
+    if not album:
+        raise HTTPException(status_code=404, detail="album not found")
+    if album.artist_did != auth_session.did:
+        raise HTTPException(
+            status_code=403, detail="you can only modify your own albums"
+        )
+
+    # verify track exists and is in this album
+    track_result = await db.execute(select(Track).where(Track.id == track_id))
+    track = track_result.scalar_one_or_none()
+    if not track:
+        raise HTTPException(status_code=404, detail="track not found")
+    if track.album_id != album_id:
+        raise HTTPException(status_code=400, detail="track is not in this album")
+
+    # orphan the track
+    track.album_id = None
+    await db.commit()
+
+    return {"removed": True, "track_id": track_id}
+
+
 @router.delete("/{album_id}")
 async def delete_album(
     album_id: str,

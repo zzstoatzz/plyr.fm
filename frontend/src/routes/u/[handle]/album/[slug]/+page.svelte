@@ -16,25 +16,39 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const album = $derived(data.album);
+	// local mutable album metadata for editing
+	let albumMetadata = $state({ ...data.album.metadata });
 	const isAuthenticated = $derived(auth.isAuthenticated);
 
+	// sync when data changes (e.g., navigation)
+	$effect(() => {
+		albumMetadata = { ...data.album.metadata };
+		tracks = [...data.album.tracks];
+	});
+
 	// check if current user owns this album
-	const isOwner = $derived(auth.user?.did === album.metadata.artist_did);
+	const isOwner = $derived(auth.user?.did === albumMetadata.artist_did);
 	// can only reorder if owner and album has an ATProto list
-	const canReorder = $derived(isOwner && !!album.metadata.list_uri);
+	const canReorder = $derived(isOwner && !!albumMetadata.list_uri);
 
 	// local mutable copy of tracks for reordering
 	let tracks = $state<Track[]>([...data.album.tracks]);
 
-	// sync when data changes (e.g., navigation)
-	$effect(() => {
-		tracks = [...data.album.tracks];
-	});
-
 	// edit mode state
 	let isEditMode = $state(false);
 	let isSaving = $state(false);
+	let editTitle = $state('');
+
+	// delete confirmation modal
+	let showDeleteConfirm = $state(false);
+	let deleting = $state(false);
+
+	// cover upload
+	let coverInputElement = $state<HTMLInputElement | null>(null);
+	let uploadingCover = $state(false);
+
+	// track removal
+	let removingTrackId = $state<number | null>(null);
 
 	// drag state
 	let draggedIndex = $state<number | null>(null);
@@ -60,29 +74,178 @@
 		if (tracks.length > 0) {
 			queue.setQueue(tracks);
 			queue.playNow(tracks[0]);
-			toast.success(`playing ${album.metadata.title}`, 1800);
+			toast.success(`playing ${albumMetadata.title}`, 1800);
 		}
 	}
 
 	function addToQueue() {
 		if (tracks.length > 0) {
 			queue.addTracks(tracks);
-			toast.success(`added ${album.metadata.title} to queue`, 1800);
+			toast.success(`added ${albumMetadata.title} to queue`, 1800);
 		}
 	}
 
 	function toggleEditMode() {
 		if (isEditMode) {
-			saveOrder();
+			// exiting edit mode - save changes
+			saveAllChanges();
+		} else {
+			// entering edit mode - initialize edit state
+			editTitle = albumMetadata.title;
 		}
 		isEditMode = !isEditMode;
 	}
 
+	async function saveAllChanges() {
+		// save track order if album has ATProto list
+		if (canReorder) {
+			await saveOrder();
+		}
+
+		// save title if changed
+		if (editTitle.trim() && editTitle.trim() !== albumMetadata.title) {
+			await saveTitleChange();
+		}
+	}
+
+	async function saveTitleChange() {
+		if (!editTitle.trim() || editTitle.trim() === albumMetadata.title) return;
+
+		try {
+			const response = await fetch(
+				`${API_URL}/albums/${albumMetadata.id}?title=${encodeURIComponent(editTitle.trim())}`,
+				{
+					method: 'PATCH',
+					credentials: 'include'
+				}
+			);
+
+			if (!response.ok) {
+				throw new Error('failed to update title');
+			}
+
+			const updated = await response.json();
+			albumMetadata.title = updated.title;
+			toast.success('title updated');
+		} catch (e) {
+			console.error('failed to save title:', e);
+			toast.error(e instanceof Error ? e.message : 'failed to save title');
+			// revert to original title
+			editTitle = albumMetadata.title;
+		}
+	}
+
+	function handleCoverSelect(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		if (!file.type.startsWith('image/')) {
+			toast.error('please select an image file');
+			return;
+		}
+
+		if (file.size > 20 * 1024 * 1024) {
+			toast.error('image must be under 20MB');
+			return;
+		}
+
+		uploadCover(file);
+	}
+
+	async function uploadCover(file: File) {
+		uploadingCover = true;
+		try {
+			const formData = new FormData();
+			formData.append('image', file);
+
+			const response = await fetch(`${API_URL}/albums/${albumMetadata.id}/cover`, {
+				method: 'POST',
+				credentials: 'include',
+				body: formData
+			});
+
+			if (!response.ok) {
+				throw new Error('failed to upload cover');
+			}
+
+			const result = await response.json();
+			albumMetadata.image_url = result.image_url;
+			toast.success('cover updated');
+		} catch (e) {
+			console.error('failed to upload cover:', e);
+			toast.error(e instanceof Error ? e.message : 'failed to upload cover');
+		} finally {
+			uploadingCover = false;
+		}
+	}
+
+	async function removeTrack(track: Track) {
+		removingTrackId = track.id;
+
+		try {
+			const response = await fetch(`${API_URL}/albums/${albumMetadata.id}/tracks/${track.id}`, {
+				method: 'DELETE',
+				credentials: 'include'
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.detail || 'failed to remove track');
+			}
+
+			tracks = tracks.filter((t) => t.id !== track.id);
+			albumMetadata.track_count = tracks.length;
+
+			toast.success(`removed "${track.title}" from album`);
+		} catch (e) {
+			console.error('failed to remove track:', e);
+			toast.error(e instanceof Error ? e.message : 'failed to remove track');
+		} finally {
+			removingTrackId = null;
+		}
+	}
+
+	async function deleteAlbum() {
+		deleting = true;
+
+		try {
+			const response = await fetch(`${API_URL}/albums/${albumMetadata.id}`, {
+				method: 'DELETE',
+				credentials: 'include'
+			});
+
+			if (!response.ok) {
+				throw new Error('failed to delete album');
+			}
+
+			toast.success('album deleted');
+			goto(`/u/${albumMetadata.artist_handle}`);
+		} catch (e) {
+			console.error('failed to delete album:', e);
+			toast.error(e instanceof Error ? e.message : 'failed to delete album');
+			deleting = false;
+			showDeleteConfirm = false;
+		}
+	}
+
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			if (showDeleteConfirm) {
+				showDeleteConfirm = false;
+			} else if (isEditMode) {
+				// revert title change and exit edit mode
+				editTitle = albumMetadata.title;
+				isEditMode = false;
+			}
+		}
+	}
+
 	async function saveOrder() {
-		if (!album.metadata.list_uri) return;
+		if (!albumMetadata.list_uri) return;
 
 		// extract rkey from list URI (at://did/collection/rkey)
-		const rkey = album.metadata.list_uri.split('/').pop();
+		const rkey = albumMetadata.list_uri.split('/').pop();
 		if (!rkey) return;
 
 		// build strongRefs from current track order
@@ -210,46 +373,91 @@
 
 	$effect(() => {
 		if (typeof window !== 'undefined') {
-			shareUrl = `${window.location.origin}/u/${album.metadata.artist_handle}/album/${album.metadata.slug}`;
+			shareUrl = `${window.location.origin}/u/${albumMetadata.artist_handle}/album/${albumMetadata.slug}`;
 		}
 	});
 </script>
 
+<svelte:window on:keydown={handleKeydown} />
+
 <svelte:head>
-	<title>{album.metadata.title} by {album.metadata.artist} - plyr.fm</title>
-	<meta name="description" content="{album.metadata.title} by {album.metadata.artist} - {album.metadata.track_count} tracks on plyr.fm" />
+	<title>{albumMetadata.title} by {albumMetadata.artist} - plyr.fm</title>
+	<meta name="description" content="{albumMetadata.title} by {albumMetadata.artist} - {albumMetadata.track_count} tracks on plyr.fm" />
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="music.album" />
-	<meta property="og:title" content="{album.metadata.title} by {album.metadata.artist}" />
-	<meta property="og:description" content="{album.metadata.track_count} tracks • {album.metadata.total_plays} plays" />
-	<meta property="og:url" content="{APP_CANONICAL_URL}/u/{album.metadata.artist_handle}/album/{album.metadata.slug}" />
+	<meta property="og:title" content="{albumMetadata.title} by {albumMetadata.artist}" />
+	<meta property="og:description" content="{albumMetadata.track_count} tracks • {albumMetadata.total_plays} plays" />
+	<meta property="og:url" content="{APP_CANONICAL_URL}/u/{albumMetadata.artist_handle}/album/{albumMetadata.slug}" />
 	<meta property="og:site_name" content={APP_NAME} />
-	<meta property="music:musician" content="{album.metadata.artist_handle}" />
-	{#if album.metadata.image_url && !isImageSensitiveSSR(album.metadata.image_url)}
-		<meta property="og:image" content="{album.metadata.image_url}" />
-		<meta property="og:image:secure_url" content="{album.metadata.image_url}" />
+	<meta property="music:musician" content="{albumMetadata.artist_handle}" />
+	{#if albumMetadata.image_url && !isImageSensitiveSSR(albumMetadata.image_url)}
+		<meta property="og:image" content="{albumMetadata.image_url}" />
+		<meta property="og:image:secure_url" content="{albumMetadata.image_url}" />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="1200" />
-		<meta property="og:image:alt" content="{album.metadata.title} by {album.metadata.artist}" />
+		<meta property="og:image:alt" content="{albumMetadata.title} by {albumMetadata.artist}" />
 	{/if}
 
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary" />
-	<meta name="twitter:title" content="{album.metadata.title} by {album.metadata.artist}" />
-	<meta name="twitter:description" content="{album.metadata.track_count} tracks • {album.metadata.total_plays} plays" />
-	{#if album.metadata.image_url && !isImageSensitiveSSR(album.metadata.image_url)}
-		<meta name="twitter:image" content="{album.metadata.image_url}" />
+	<meta name="twitter:title" content="{albumMetadata.title} by {albumMetadata.artist}" />
+	<meta name="twitter:description" content="{albumMetadata.track_count} tracks • {albumMetadata.total_plays} plays" />
+	{#if albumMetadata.image_url && !isImageSensitiveSSR(albumMetadata.image_url)}
+		<meta name="twitter:image" content="{albumMetadata.image_url}" />
 	{/if}
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={() => goto('/login')} />
 <div class="container">
 	<main>
-		<div class="album-hero">
-			{#if album.metadata.image_url}
-				<SensitiveImage src={album.metadata.image_url} tooltipPosition="center">
-					<img src={album.metadata.image_url} alt="{album.metadata.title} artwork" class="album-art" />
+		<!-- hidden file input for cover upload -->
+		<input
+			type="file"
+			accept="image/jpeg,image/png,image/webp"
+			bind:this={coverInputElement}
+			onchange={handleCoverSelect}
+			hidden
+		/>
+
+		<div class="album-hero" class:edit-mode={isEditMode && isOwner}>
+			{#if isEditMode && isOwner}
+				<button
+					class="album-art-wrapper clickable"
+					onclick={() => coverInputElement?.click()}
+					type="button"
+					aria-label="change cover image"
+					disabled={uploadingCover}
+				>
+					{#if albumMetadata.image_url}
+						<img src={albumMetadata.image_url} alt="{albumMetadata.title} artwork" class="album-art" />
+					{:else}
+						<div class="album-art-placeholder">
+							<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+								<rect x="3" y="3" width="18" height="18" stroke="currentColor" stroke-width="1.5" fill="none"/>
+								<circle cx="12" cy="12" r="4" fill="currentColor"/>
+							</svg>
+						</div>
+					{/if}
+					<div class="art-edit-overlay" class:uploading={uploadingCover}>
+						{#if uploadingCover}
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
+								<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+							</svg>
+							<span>uploading...</span>
+						{:else}
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+								<circle cx="8.5" cy="8.5" r="1.5"></circle>
+								<polyline points="21 15 16 10 5 21"></polyline>
+							</svg>
+							<span>change cover</span>
+						{/if}
+					</div>
+				</button>
+			{:else if albumMetadata.image_url}
+				<SensitiveImage src={albumMetadata.image_url} tooltipPosition="center">
+					<img src={albumMetadata.image_url} alt="{albumMetadata.title} artwork" class="album-art" />
 				</SensitiveImage>
 			{:else}
 				<div class="album-art-placeholder">
@@ -262,20 +470,69 @@
 			<div class="album-info-wrapper">
 				<div class="album-info">
 					<p class="album-type">album</p>
-					<h1 class="album-title">{album.metadata.title}</h1>
+					{#if isEditMode && isOwner}
+						<input
+							type="text"
+							class="album-title-input"
+							bind:value={editTitle}
+							placeholder="album title"
+						/>
+					{:else}
+						<h1 class="album-title">{albumMetadata.title}</h1>
+					{/if}
 					<div class="album-meta">
-						<a href="/u/{album.metadata.artist_handle}" class="artist-link">
-							{album.metadata.artist}
+						<a href="/u/{albumMetadata.artist_handle}" class="artist-link">
+							{albumMetadata.artist}
 						</a>
 						<span class="meta-separator">•</span>
-						<span>{album.metadata.track_count} {album.metadata.track_count === 1 ? 'track' : 'tracks'}</span>
+						<span>{albumMetadata.track_count} {albumMetadata.track_count === 1 ? 'track' : 'tracks'}</span>
 						<span class="meta-separator">•</span>
-						<span>{album.metadata.total_plays} {album.metadata.total_plays === 1 ? 'play' : 'plays'}</span>
+						<span>{albumMetadata.total_plays} {albumMetadata.total_plays === 1 ? 'play' : 'plays'}</span>
 					</div>
 				</div>
 
-				<div class="side-button-right">
+				<div class="side-buttons">
 					<ShareButton url={shareUrl} title="share album" />
+					{#if isOwner}
+						<button
+							class="icon-btn"
+							class:active={isEditMode}
+							onclick={toggleEditMode}
+							aria-label={isEditMode ? 'done editing' : 'edit album'}
+							title={isEditMode ? 'done editing' : 'edit album'}
+						>
+							{#if isEditMode}
+								{#if isSaving}
+									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
+										<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+									</svg>
+								{:else}
+									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>
+								{/if}
+							{:else}
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+									<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+								</svg>
+							{/if}
+						</button>
+						<button
+							class="icon-btn danger"
+							onclick={() => (showDeleteConfirm = true)}
+							aria-label="delete album"
+							title="delete album"
+						>
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<polyline points="3 6 5 6 21 6"></polyline>
+								<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"></path>
+								<path d="M10 11v6"></path>
+								<path d="M14 11v6"></path>
+								<path d="m9 6 .5-2h5l.5 2"></path>
+							</svg>
+						</button>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -297,38 +554,48 @@
 				</svg>
 				add to queue
 			</button>
-			{#if canReorder}
-				<button
-					class="reorder-button"
-					class:active={isEditMode}
-					onclick={toggleEditMode}
-					disabled={isSaving}
-					title={isEditMode ? 'save order' : 'reorder tracks'}
-				>
-					{#if isEditMode}
-						{#if isSaving}
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
-								<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
-							</svg>
-							saving...
+			<div class="mobile-buttons">
+				<ShareButton url={shareUrl} title="share album" />
+				{#if isOwner}
+					<button
+						class="icon-btn"
+						class:active={isEditMode}
+						onclick={toggleEditMode}
+						aria-label={isEditMode ? 'done editing' : 'edit album'}
+						title={isEditMode ? 'done editing' : 'edit album'}
+					>
+						{#if isEditMode}
+							{#if isSaving}
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
+									<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+								</svg>
+							{:else}
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<polyline points="20 6 9 17 4 12"></polyline>
+								</svg>
+							{/if}
 						{:else}
 							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<polyline points="20 6 9 17 4 12"></polyline>
+								<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+								<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
 							</svg>
-							done
 						{/if}
-					{:else}
+					</button>
+					<button
+						class="icon-btn danger"
+						onclick={() => (showDeleteConfirm = true)}
+						aria-label="delete album"
+						title="delete album"
+					>
 						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<line x1="3" y1="12" x2="21" y2="12"></line>
-							<line x1="3" y1="6" x2="21" y2="6"></line>
-							<line x1="3" y1="18" x2="21" y2="18"></line>
+							<polyline points="3 6 5 6 21 6"></polyline>
+							<path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"></path>
+							<path d="M10 11v6"></path>
+							<path d="M14 11v6"></path>
+							<path d="m9 6 .5-2h5l.5 2"></path>
 						</svg>
-						reorder
-					{/if}
-				</button>
-			{/if}
-			<div class="mobile-share-button">
-				<ShareButton url={shareUrl} title="share album" />
+					</button>
+				{/if}
 			</div>
 		</div>
 
@@ -356,22 +623,24 @@
 							ondrop={(e) => handleDrop(e, i)}
 							ondragend={handleDragEnd}
 						>
-							<button
-								class="drag-handle"
-								ontouchstart={(e) => handleTouchStart(e, i)}
-								onclick={(e) => e.stopPropagation()}
-								aria-label="drag to reorder"
-								title="drag to reorder"
-							>
-								<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-									<circle cx="5" cy="3" r="1.5"></circle>
-									<circle cx="11" cy="3" r="1.5"></circle>
-									<circle cx="5" cy="8" r="1.5"></circle>
-									<circle cx="11" cy="8" r="1.5"></circle>
-									<circle cx="5" cy="13" r="1.5"></circle>
-									<circle cx="11" cy="13" r="1.5"></circle>
-								</svg>
-							</button>
+							{#if canReorder}
+								<button
+									class="drag-handle"
+									ontouchstart={(e) => handleTouchStart(e, i)}
+									onclick={(e) => e.stopPropagation()}
+									aria-label="drag to reorder"
+									title="drag to reorder"
+								>
+									<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+										<circle cx="5" cy="3" r="1.5"></circle>
+										<circle cx="11" cy="3" r="1.5"></circle>
+										<circle cx="5" cy="8" r="1.5"></circle>
+										<circle cx="11" cy="8" r="1.5"></circle>
+										<circle cx="5" cy="13" r="1.5"></circle>
+										<circle cx="11" cy="13" r="1.5"></circle>
+									</svg>
+								</button>
+							{/if}
 							<div class="track-content">
 								<TrackItem
 									{track}
@@ -384,6 +653,27 @@
 									hideArtist={true}
 								/>
 							</div>
+							<button
+								class="remove-track-btn"
+								onclick={(e) => {
+									e.stopPropagation();
+									removeTrack(track);
+								}}
+								disabled={removingTrackId === track.id}
+								aria-label="remove track from album"
+								title="remove track"
+							>
+								{#if removingTrackId === track.id}
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spinner">
+										<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+									</svg>
+								{:else}
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<line x1="18" y1="6" x2="6" y2="18"></line>
+										<line x1="6" y1="6" x2="18" y2="18"></line>
+									</svg>
+								{/if}
+							</button>
 						</div>
 					{:else}
 						<TrackItem
@@ -402,6 +692,50 @@
 		</div>
 	</main>
 </div>
+
+{#if showDeleteConfirm}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div
+		class="modal-overlay"
+		role="presentation"
+		onclick={() => (showDeleteConfirm = false)}
+	>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div
+			class="modal"
+			role="alertdialog"
+			aria-modal="true"
+			aria-labelledby="delete-confirm-title"
+			tabindex="-1"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<div class="modal-header">
+				<h3 id="delete-confirm-title">delete album?</h3>
+			</div>
+			<div class="modal-body">
+				<p>
+					are you sure you want to delete "{albumMetadata.title}"? the tracks will remain as standalone tracks.
+				</p>
+			</div>
+			<div class="modal-footer">
+				<button
+					class="cancel-btn"
+					onclick={() => (showDeleteConfirm = false)}
+					disabled={deleting}
+				>
+					cancel
+				</button>
+				<button
+					class="confirm-btn danger"
+					onclick={deleteAlbum}
+					disabled={deleting}
+				>
+					{deleting ? 'deleting...' : 'delete'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.container {
@@ -456,16 +790,98 @@
 		gap: 0.5rem;
 	}
 
-	.side-button-right {
+	.side-buttons {
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		gap: 0.5rem;
 		padding-bottom: 0.5rem;
 	}
 
-	.mobile-share-button {
+	.mobile-buttons {
 		display: none;
+	}
+
+	.icon-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		background: transparent;
+		border: 1px solid var(--border-default);
+		border-radius: 4px;
+		color: var(--text-tertiary);
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.icon-btn:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.icon-btn.danger:hover {
+		border-color: var(--error);
+		color: var(--error);
+	}
+
+	.icon-btn.active {
+		border-color: var(--accent);
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.album-art-wrapper {
+		position: relative;
+		border: none;
+		padding: 0;
+		background: none;
+	}
+
+	.album-art-wrapper.clickable {
+		cursor: pointer;
+	}
+
+	.album-art-wrapper.clickable:hover .art-edit-overlay {
+		opacity: 1;
+	}
+
+	.art-edit-overlay {
+		position: absolute;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.6);
+		border-radius: 8px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		color: white;
+		font-size: 0.85rem;
+		opacity: 0;
+		transition: opacity 0.2s;
+	}
+
+	.art-edit-overlay.uploading {
+		opacity: 1;
+	}
+
+	.album-title-input {
+		font-size: 2.5rem;
+		font-weight: 700;
+		background: transparent;
+		border: none;
+		border-bottom: 2px solid var(--accent);
+		color: var(--text-primary);
+		padding: 0.25rem 0;
+		width: 100%;
+		outline: none;
+		font-family: inherit;
+	}
+
+	.album-title-input::placeholder {
+		color: var(--text-muted);
 	}
 
 	.album-type {
@@ -551,38 +967,6 @@
 	.queue-button:hover {
 		border-color: var(--accent);
 		color: var(--accent);
-	}
-
-	.reorder-button {
-		padding: 0.75rem 1.5rem;
-		border-radius: 24px;
-		font-weight: 600;
-		font-size: 0.95rem;
-		font-family: inherit;
-		cursor: pointer;
-		transition: all 0.2s;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		background: transparent;
-		color: var(--text-primary);
-		border: 1px solid var(--border-default);
-	}
-
-	.reorder-button:hover {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
-	.reorder-button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.reorder-button.active {
-		border-color: var(--accent);
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.spinner {
@@ -699,14 +1083,13 @@
 			width: 100%;
 		}
 
-		.side-button-right {
+		.side-buttons {
 			display: none;
 		}
 
-		.mobile-share-button {
+		.mobile-buttons {
 			display: flex;
-			width: 100%;
-			justify-content: center;
+			gap: 0.5rem;
 		}
 
 		.album-title {
@@ -724,8 +1107,7 @@
 		}
 
 		.play-button,
-		.queue-button,
-		.reorder-button {
+		.queue-button {
 			width: 100%;
 			justify-content: center;
 		}
@@ -750,5 +1132,124 @@
 			font-size: 0.8rem;
 			flex-wrap: wrap;
 		}
+	}
+
+	/* remove track button */
+	.remove-track-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		background: transparent;
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all 0.2s;
+		flex-shrink: 0;
+	}
+
+	.remove-track-btn:hover {
+		color: var(--error);
+		background: color-mix(in srgb, var(--error) 10%, transparent);
+	}
+
+	.remove-track-btn:disabled {
+		cursor: not-allowed;
+		opacity: 0.5;
+	}
+
+	/* modal styles */
+	.modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.7);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+		backdrop-filter: blur(4px);
+	}
+
+	.modal {
+		background: var(--bg-secondary);
+		border-radius: 12px;
+		padding: 1.5rem;
+		max-width: 400px;
+		width: calc(100% - 2rem);
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+		border: 1px solid var(--border-subtle);
+	}
+
+	.modal-header {
+		margin-bottom: 1rem;
+	}
+
+	.modal-header h3 {
+		margin: 0;
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: var(--text-primary);
+	}
+
+	.modal-body {
+		margin-bottom: 1.5rem;
+	}
+
+	.modal-body p {
+		margin: 0;
+		color: var(--text-secondary);
+		line-height: 1.5;
+	}
+
+	.modal-footer {
+		display: flex;
+		gap: 0.75rem;
+		justify-content: flex-end;
+	}
+
+	.cancel-btn,
+	.confirm-btn {
+		padding: 0.625rem 1.25rem;
+		border-radius: 8px;
+		font-weight: 500;
+		font-size: 0.9rem;
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.2s;
+		border: none;
+	}
+
+	.cancel-btn {
+		background: var(--bg-tertiary);
+		color: var(--text-primary);
+	}
+
+	.cancel-btn:hover {
+		background: var(--bg-hover);
+	}
+
+	.cancel-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.confirm-btn {
+		background: var(--accent);
+		color: var(--bg-primary);
+	}
+
+	.confirm-btn:hover {
+		filter: brightness(1.1);
+	}
+
+	.confirm-btn.danger {
+		background: var(--error);
+	}
+
+	.confirm-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>
