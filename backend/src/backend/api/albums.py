@@ -472,9 +472,11 @@ async def update_album(
 ) -> AlbumMetadata:
     """update album metadata (title, description).
 
-    when title changes, all tracks in the album have their ATProto records
-    updated to reflect the new album name.
+    when title changes:
+    - all tracks in the album have their ATProto records updated
+    - the album's ATProto list record name is updated
     """
+    from backend._internal.atproto.records.fm_plyr.list import update_list_record
     from backend._internal.atproto.records.fm_plyr.track import (
         build_track_record,
         update_record,
@@ -529,6 +531,23 @@ async def update_album(
                 record=updated_record,
             )
             track.atproto_record_cid = new_cid
+
+        # update the album's ATProto list record name
+        if album.atproto_record_uri:
+            track_refs = [
+                {"uri": t.atproto_record_uri, "cid": t.atproto_record_cid}
+                for t in album.tracks
+                if t.atproto_record_uri and t.atproto_record_cid
+            ]
+            _, new_list_cid = await update_list_record(
+                auth_session=auth_session,
+                list_uri=album.atproto_record_uri,
+                items=track_refs,
+                name=new_title,
+                list_type="album",
+                created_at=album.created_at,
+            )
+            album.atproto_record_cid = new_list_cid
 
     await db.commit()
 
