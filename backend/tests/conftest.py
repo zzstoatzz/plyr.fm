@@ -3,7 +3,9 @@
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from urllib.parse import urlsplit, urlunsplit
 
+import asyncpg
 import pytest
 import sqlalchemy as sa
 from fastapi import FastAPI
@@ -43,6 +45,20 @@ def pytest_configure(config):
 
     # set _storage directly to prevent R2Storage initialization
     backend.storage._storage = MockStorage()  # type: ignore[assignment]
+
+
+def _database_from_url(url: str) -> str:
+    """extract database name from connection URL."""
+    _, _, path, _, _ = urlsplit(url)
+    return path.strip("/")
+
+
+def _postgres_admin_url(database_url: str) -> str:
+    """convert async database URL to sync postgres URL for admin operations."""
+    scheme, netloc, _, query, fragment = urlsplit(database_url)
+    # asyncpg -> postgres for direct connection
+    scheme = scheme.replace("+asyncpg", "").replace("postgresql", "postgres")
+    return urlunsplit((scheme, netloc, "/postgres", query, fragment))
 
 
 @asynccontextmanager
@@ -134,25 +150,141 @@ async def _truncate_tables(connection: AsyncConnection) -> None:
     await connection.execute(sa.text(stmt))
 
 
+async def _setup_template_database(template_url: str) -> None:
+    """initialize database schema and helper procedure on template database."""
+    engine = create_async_engine(template_url, echo=False)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            await _truncate_tables(conn)
+            await _create_clear_database_procedure(conn)
+    finally:
+        await engine.dispose()
+
+
+async def _ensure_template_database(base_url: str) -> str:
+    """ensure template database exists and is migrated.
+
+    uses advisory lock to coordinate between xdist workers.
+    returns the template database name.
+    """
+    base_db_name = _database_from_url(base_url)
+    template_db_name = f"{base_db_name}_template"
+    postgres_url = _postgres_admin_url(base_url)
+
+    conn = await asyncpg.connect(postgres_url)
+    try:
+        # advisory lock prevents race condition between workers
+        await conn.execute("SELECT pg_advisory_lock(hashtext($1))", template_db_name)
+
+        # check if template exists
+        exists = await conn.fetchval(
+            "SELECT 1 FROM pg_database WHERE datname = $1", template_db_name
+        )
+
+        if not exists:
+            # create template database
+            await conn.execute(f'CREATE DATABASE "{template_db_name}"')
+
+            # build URL for template and set it up
+            scheme, netloc, _, query, fragment = urlsplit(base_url)
+            template_url = urlunsplit(
+                (scheme, netloc, f"/{template_db_name}", query, fragment)
+            )
+            await _setup_template_database(template_url)
+
+        # release lock (other workers waiting will see template exists)
+        await conn.execute("SELECT pg_advisory_unlock(hashtext($1))", template_db_name)
+
+        return template_db_name
+    finally:
+        await conn.close()
+
+
+async def _create_worker_database_from_template(
+    base_url: str, worker_id: str, template_db_name: str
+) -> str:
+    """create worker database by cloning the template (instant file copy)."""
+    base_db_name = _database_from_url(base_url)
+    worker_db_name = f"{base_db_name}_{worker_id}"
+    postgres_url = _postgres_admin_url(base_url)
+
+    conn = await asyncpg.connect(postgres_url)
+    try:
+        # kill connections to worker db (if it exists from previous run)
+        await conn.execute(
+            """
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE datname = $1 AND pid <> pg_backend_pid()
+            """,
+            worker_db_name,
+        )
+
+        # kill connections to template db (required for cloning)
+        await conn.execute(
+            """
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE datname = $1 AND pid <> pg_backend_pid()
+            """,
+            template_db_name,
+        )
+
+        # drop and recreate from template (instant - just file copy)
+        await conn.execute(f'DROP DATABASE IF EXISTS "{worker_db_name}"')
+        await conn.execute(
+            f'CREATE DATABASE "{worker_db_name}" WITH TEMPLATE "{template_db_name}"'
+        )
+
+        return worker_db_name
+    finally:
+        await conn.close()
+
+
 @pytest.fixture(scope="session")
 def test_database_url(worker_id: str) -> str:
     """generate a unique test database URL for each pytest worker.
 
-    reads from settings.database.url and appends worker suffix if needed.
+    uses template database pattern for fast parallel test execution:
+    1. first worker creates template db with migrations (once)
+    2. each worker clones from template (instant file copy)
+
+    also patches settings.database.url so all production code uses test db.
     """
+    import asyncio
+    import os
+
     base_url = settings.database.url
 
-    # for parallel test execution, append worker id to database name
+    # single worker - just use base database
     if worker_id == "master":
+        asyncio.run(_setup_database_direct(base_url))
         return base_url
 
-    # worker_id will be "gw0", "gw1", etc for xdist workers
-    return f"{base_url}_{worker_id}"
+    # xdist workers - use template pattern
+    template_db_name = asyncio.run(_ensure_template_database(base_url))
+    asyncio.run(
+        _create_worker_database_from_template(base_url, worker_id, template_db_name)
+    )
+
+    # build URL for worker database
+    scheme, netloc, _, query, fragment = urlsplit(base_url)
+    base_db_name = _database_from_url(base_url)
+    worker_db_name = f"{base_db_name}_{worker_id}"
+    worker_url = urlunsplit((scheme, netloc, f"/{worker_db_name}", query, fragment))
+
+    # patch settings so all production code uses this URL
+    # this is safe because each xdist worker is a separate process
+    settings.database.url = worker_url
+    os.environ["DATABASE_URL"] = worker_url
+
+    return worker_url
 
 
-async def _setup_database(test_database_url: str) -> None:
-    """initialize database schema and helper procedure."""
-    engine = create_async_engine(test_database_url, echo=False)
+async def _setup_database_direct(database_url: str) -> None:
+    """set up database directly (for single worker mode)."""
+    engine = create_async_engine(database_url, echo=False)
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -164,10 +296,8 @@ async def _setup_database(test_database_url: str) -> None:
 
 @pytest.fixture(scope="session")
 def _database_setup(test_database_url: str) -> None:
-    """create tables and stored procedures once per test session."""
-    import asyncio
-
-    asyncio.run(_setup_database(test_database_url))
+    """marker fixture - database is set up by test_database_url fixture."""
+    _ = test_database_url  # ensure dependency chain
 
 
 @pytest.fixture()
@@ -175,6 +305,13 @@ async def _engine(
     test_database_url: str, _database_setup: None
 ) -> AsyncGenerator[AsyncEngine, None]:
     """create a database engine for each test (to avoid event loop issues)."""
+    from backend.utilities.database import ENGINES
+
+    # clear any cached engines from previous tests
+    for cached_engine in list(ENGINES.values()):
+        await cached_engine.dispose()
+    ENGINES.clear()
+
     engine = create_async_engine(
         test_database_url,
         echo=False,
@@ -185,10 +322,7 @@ async def _engine(
         yield engine
     finally:
         await engine.dispose()
-        # also dispose any engines cached by production code (database.py)
-        # to prevent connection accumulation across tests
-        from backend.utilities.database import ENGINES
-
+        # clean up cached engines
         for cached_engine in list(ENGINES.values()):
             await cached_engine.dispose()
         ENGINES.clear()
