@@ -1,0 +1,49 @@
+# export platform costs to R2 for public dashboard
+#
+# runs daily at 6am UTC to update the costs.json file in R2
+# the frontend /costs page fetches this static JSON
+#
+# required secrets:
+#   NEON_DATABASE_URL_PRD - production database URL
+#   AWS_ACCESS_KEY_ID - R2 access key
+#   AWS_SECRET_ACCESS_KEY - R2 secret key
+#   R2_ENDPOINT_URL - R2 endpoint
+#   R2_BUCKET - R2 bucket name
+#   R2_PUBLIC_BUCKET_URL - public R2 URL
+
+name: export costs
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily at 6am UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "dry run (print JSON, don't upload)"
+        type: boolean
+        default: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Export costs to R2
+        run: |
+          ARGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="--dry-run"
+          fi
+
+          uv run scripts/costs/export_costs.py $ARGS
+        env:
+          NEON_DATABASE_URL_PRD: ${{ secrets.NEON_DATABASE_URL_PRD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_BUCKET_URL: ${{ secrets.R2_PUBLIC_BUCKET_URL }}
