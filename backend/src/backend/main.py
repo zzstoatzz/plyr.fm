@@ -73,8 +73,8 @@ else:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-# # reduce noise from verbose loggers
-# logging.getLogger("httpx").setLevel(logging.WARNING)
+# reduce noise from verbose loggers
+logging.getLogger("docket").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 

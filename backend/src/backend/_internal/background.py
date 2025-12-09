@@ -16,7 +16,6 @@ usage:
 """
 
 import asyncio
-import contextlib
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -73,7 +72,7 @@ async def background_worker_lifespan() -> AsyncGenerator[Docket | None, None]:
     _docket_enabled = True
     logger.info(
         "initializing docket",
-        extra={"name": settings.docket.name, "url": settings.docket.url},
+        extra={"docket_name": settings.docket.name, "url": settings.docket.url},
     )
 
     async with Docket(
@@ -102,10 +101,14 @@ async def background_worker_lifespan() -> AsyncGenerator[Docket | None, None]:
                 )
                 yield docket
         finally:
+            # cancel the worker task and wait for it to finish
             if worker_task:
                 worker_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                try:
                     await worker_task
+                except asyncio.CancelledError:
+                    logger.debug("docket worker task cancelled")
+            # clear globals after worker is fully stopped
             _docket = None
             _docket_enabled = False
             logger.info("docket worker stopped")
