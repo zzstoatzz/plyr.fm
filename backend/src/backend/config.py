@@ -530,6 +530,34 @@ class ModerationSettings(AppSettingsSection):
     )
 
 
+class DocketSettings(AppSettingsSection):
+    """Background task queue configuration using pydocket.
+
+    By default uses in-memory mode (no Redis required). Set DOCKET_URL to a Redis
+    URL for durable task execution that survives server restarts.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="DOCKET_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    name: str = Field(
+        default="plyr",
+        description="Name of the docket instance (shared across workers)",
+    )
+    url: str = Field(
+        default="memory://plyr",
+        description="Redis URL for docket. Use 'memory://' for in-memory mode (default)",
+    )
+    worker_concurrency: int = Field(
+        default=10,
+        description="Number of concurrent tasks per worker",
+    )
+
+
 class RateLimitSettings(AppSettingsSection):
     """Rate limiting configuration."""
 
@@ -618,6 +646,10 @@ class Settings(AppSettingsSection):
     bufo: BufoSettings = Field(
         default_factory=BufoSettings,
         description="bufo easter egg settings",
+    )
+    docket: DocketSettings = Field(
+        default_factory=DocketSettings,
+        description="Background task queue settings",
     )
 
 

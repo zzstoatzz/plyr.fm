@@ -27,6 +27,7 @@ dependencies = [
     "slowapi @ git+https://github.com/zzstoatzz/slowapi.git@fix-deprecation",
     "orjson>=3.11.4",
     "mutagen>=1.47.0",
+    "pydocket>=0.15.2",
 ]
 
 requires-python = ">=3.11"

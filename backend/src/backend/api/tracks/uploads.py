@@ -29,9 +29,9 @@ from backend._internal import require_artist_profile
 from backend._internal.atproto import create_track_record
 from backend._internal.atproto.handles import resolve_handle
 from backend._internal.audio import AudioFormat
+from backend._internal.background import get_docket
 from backend._internal.image import ImageFormat
 from backend._internal.jobs import job_service
-from backend._internal.moderation import scan_track_for_copyright
 from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackTag
 from backend.models.job import JobStatus, JobType
@@ -421,14 +421,26 @@ async def _process_upload_background(
                             f"failed to send notification for track {track.id}: {e}"
                         )
 
-                    # kick off copyright scan in background (fire-and-forget)
+                    # kick off copyright scan via docket background task
                     # this runs independently and doesn't affect the upload result
+                    # using docket provides durability and retries vs asyncio.create_task
                     if r2_url:
-                        # intentionally not storing reference - scan failures are logged
-                        # but shouldn't affect the upload result
-                        asyncio.create_task(  # noqa: RUF006
-                            scan_track_for_copyright(track.id, r2_url)
-                        )
+                        from backend._internal.background_tasks import scan_copyright
+
+                        try:
+                            docket = get_docket()
+                            await docket.add(scan_copyright)(track.id, r2_url)
+                            logfire.info(
+                                "scheduled copyright scan",
+                                track_id=track.id,
+                            )
+                        except Exception as e:
+                            # don't fail upload if scan scheduling fails
+                            logfire.warning(
+                                "failed to schedule copyright scan",
+                                track_id=track.id,
+                                error=str(e),
+                            )
 
                     await job_service.update_progress(
                         upload_id,

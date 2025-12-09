@@ -13,3 +13,9 @@ services:
       - postgres
       - -c
       - max_connections=100
+
+  test-redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly no --save ""

@@ -24,6 +24,7 @@ warnings.filterwarnings(
 )
 
 from backend._internal import notification_service, queue_service
+from backend._internal.background import background_worker_lifespan
 from backend.api import (
     account_router,
     artists_router,
@@ -155,7 +156,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await notification_service.setup()
     await queue_service.setup()
 
-    yield
+    # start background task worker (docket)
+    async with background_worker_lifespan() as docket:
+        # store docket on app state for access in routes if needed
+        app.state.docket = docket
+        yield
 
     # shutdown: cleanup resources
     await notification_service.shutdown()
