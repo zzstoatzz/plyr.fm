@@ -267,14 +267,12 @@ class StorageSettings(AppSettingsSection):
         validation_alias="R2_PUBLIC_IMAGE_BUCKET_URL",
         description="R2 public bucket URL for image files",
     )
-
-    @computed_field
-    @property
-    def costs_json_url(self) -> str:
-        """URL for the public costs dashboard JSON."""
-        if self.r2_public_bucket_url:
-            return f"{self.r2_public_bucket_url.rstrip('/')}/stats/costs.json"
-        return ""
+    # dedicated stats bucket - shared across all environments
+    costs_json_url: str = Field(
+        default="https://pub-68f2c7379f204d81bdf65152b0ff0207.r2.dev/costs.json",
+        validation_alias="COSTS_JSON_URL",
+        description="URL for public costs dashboard JSON",
+    )
 
     @computed_field
     @property
