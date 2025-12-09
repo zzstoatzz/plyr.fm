@@ -1,0 +1,9 @@
+# dev services for local development
+# usage: docker compose up -d
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly no --save ""

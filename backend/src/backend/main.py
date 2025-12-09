@@ -24,6 +24,7 @@ warnings.filterwarnings(
 )
 
 from backend._internal import notification_service, queue_service
+from backend._internal.background import background_worker_lifespan
 from backend.api import (
     account_router,
     artists_router,
@@ -72,8 +73,9 @@ else:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-# # reduce noise from verbose loggers
-# logging.getLogger("httpx").setLevel(logging.WARNING)
+# reduce noise from verbose loggers
+for logger_name in settings.observability.suppressed_loggers:
+    logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +157,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await notification_service.setup()
     await queue_service.setup()
 
-    yield
+    # start background task worker (docket)
+    async with background_worker_lifespan() as docket:
+        # store docket on app state for access in routes if needed
+        app.state.docket = docket
+        yield
 
     # shutdown: cleanup resources
     await notification_service.shutdown()

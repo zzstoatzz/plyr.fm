@@ -496,6 +496,11 @@ class ObservabilitySettings(AppSettingsSection):
         validation_alias="LOGFIRE_ENVIRONMENT",
         description="Logfire environment (local/production)",
     )
+    suppressed_loggers: CommaSeparatedStringSet = Field(
+        default={"docket"},
+        validation_alias="LOGFIRE_SUPPRESSED_LOGGERS",
+        description="Logger names to suppress (set to WARNING level)",
+    )
 
 
 class ModerationSettings(AppSettingsSection):
@@ -527,6 +532,39 @@ class ModerationSettings(AppSettingsSection):
     labeler_url: str = Field(
         default="https://moderation.plyr.fm",
         description="URL of the ATProto labeler service for emitting labels",
+    )
+
+
+class DocketSettings(AppSettingsSection):
+    """Background task queue configuration using pydocket.
+
+    By default uses in-memory mode (no Redis required). Set DOCKET_URL to a Redis
+    URL for durable task execution that survives server restarts.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="DOCKET_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    name: str = Field(
+        default="plyr",
+        description="Name of the docket instance (shared across workers)",
+    )
+    url: str = Field(
+        default="",
+        validation_alias="DOCKET_URL",
+        description="Redis URL for docket (required in production). Empty disables docket.",
+    )
+    enabled: bool = Field(
+        default=False,
+        description="Enable docket background tasks. Auto-enabled when url is set.",
+    )
+    worker_concurrency: int = Field(
+        default=10,
+        description="Number of concurrent tasks per worker",
     )
 
 
@@ -618,6 +656,10 @@ class Settings(AppSettingsSection):
     bufo: BufoSettings = Field(
         default_factory=BufoSettings,
         description="bufo easter egg settings",
+    )
+    docket: DocketSettings = Field(
+        default_factory=DocketSettings,
+        description="Background task queue settings",
     )
 
 

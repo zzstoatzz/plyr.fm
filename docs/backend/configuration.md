@@ -57,6 +57,11 @@ settings.notify.enabled                        # from NOTIFY_ENABLED
 settings.notify.recipient_handle               # from NOTIFY_RECIPIENT_HANDLE
 settings.notify.bot.handle                     # from NOTIFY_BOT_HANDLE
 settings.notify.bot.password                   # from NOTIFY_BOT_PASSWORD
+
+# background task settings (docket/redis)
+settings.docket.name                           # "plyr" (queue namespace)
+settings.docket.url                            # from DOCKET_URL (empty = disabled)
+settings.docket.worker_concurrency             # 10 (concurrent tasks)
 ```
 
 ## environment variables
@@ -102,6 +107,11 @@ NOTIFY_ENABLED=true
 NOTIFY_RECIPIENT_HANDLE=your.handle
 NOTIFY_BOT_HANDLE=bot.handle
 NOTIFY_BOT_PASSWORD=app-password
+
+# background tasks (docket/redis)
+DOCKET_URL=redis://localhost:6379  # or rediss:// for TLS
+DOCKET_NAME=plyr                   # queue namespace (default: plyr)
+DOCKET_WORKER_CONCURRENCY=10       # concurrent task limit (default: 10)
 ```
 
 ## computed fields
