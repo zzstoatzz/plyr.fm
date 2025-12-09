@@ -681,7 +681,6 @@ $effect(() => {
 		margin: 0 0 0.35rem 0;
 		font-size: 1.05rem;
 		color: var(--text-primary);
-		text-transform: lowercase;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
