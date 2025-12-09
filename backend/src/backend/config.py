@@ -119,6 +119,10 @@ class AppSettings(AppSettingsSection):
         default="plyr",
         description="Prefix used for browser BroadcastChannel identifiers",
     )
+    default_page_size: int = Field(
+        default=50,
+        description="Default page size for paginated endpoints",
+    )
 
 
 class FrontendSettings(AppSettingsSection):

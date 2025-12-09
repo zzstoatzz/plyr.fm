@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Annotated
 
 import logfire
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, require_auth
+from backend.config import settings
 from backend.models import (
     Artist,
     Tag,
@@ -33,9 +34,6 @@ from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 from .router import router
 
-# default page size for track listing
-DEFAULT_PAGE_SIZE = 50
-
 
 class TracksListResponse(BaseModel):
     """Response for paginated track listing."""
@@ -51,7 +49,7 @@ async def list_tracks(
     artist_did: str | None = None,
     filter_hidden_tags: bool | None = None,
     cursor: str | None = None,
-    limit: int = DEFAULT_PAGE_SIZE,
+    limit: int | None = None,
     session: AuthSession | None = Depends(get_optional_session),
 ) -> TracksListResponse:
     """List tracks with cursor-based pagination.
@@ -65,9 +63,11 @@ async def list_tracks(
             - False: never filter hidden tags
         cursor: ISO timestamp cursor from previous response's next_cursor.
             Pass this to get the next page of results.
-        limit: Maximum number of tracks to return (default 50, max 100).
+        limit: Maximum number of tracks to return (default from settings, max 100).
     """
-    # clamp limit to reasonable bounds
+    # use settings default if not provided, clamp to reasonable bounds
+    if limit is None:
+        limit = settings.app.default_page_size
     limit = max(1, min(limit, 100))
     from atproto_identity.did.resolver import AsyncDidResolver
 
@@ -122,24 +122,20 @@ async def list_tracks(
         try:
             cursor_time = datetime.fromisoformat(cursor)
             stmt = stmt.where(Track.created_at < cursor_time)
-        except ValueError:
-            # invalid cursor format, ignore it
-            pass
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="invalid cursor format") from e
 
     # order by created_at desc and fetch one extra to check if there's more
     stmt = stmt.order_by(Track.created_at.desc()).limit(limit + 1)
     result = await db.execute(stmt)
     tracks = list(result.scalars().all())
 
-    # check if there are more results
-    has_more = len(tracks) > limit
-    if has_more:
-        tracks = tracks[:limit]  # trim to requested limit
+    # check if there are more results and trim to requested limit
+    if has_more := len(tracks) > limit:
+        tracks = tracks[:limit]
 
     # generate next cursor from the last track's created_at
-    next_cursor: str | None = None
-    if has_more and tracks:
-        next_cursor = tracks[-1].created_at.isoformat()
+    next_cursor = tracks[-1].created_at.isoformat() if has_more and tracks else None
 
     # batch fetch like, comment counts, copyright info, and tags for all tracks
     track_ids = [track.id for track in tracks]
