@@ -104,35 +104,39 @@
 
 		// save title if changed
 		if (editTitle.trim() && editTitle.trim() !== albumMetadata.title) {
-			await saveTitleChange();
+			saveTitleChange();
 		}
 	}
 
-	async function saveTitleChange() {
-		if (!editTitle.trim() || editTitle.trim() === albumMetadata.title) return;
+	function saveTitleChange() {
+		const newTitle = editTitle.trim();
+		if (!newTitle || newTitle === albumMetadata.title) return;
 
-		try {
-			const response = await fetch(
-				`${API_URL}/albums/${albumMetadata.id}?title=${encodeURIComponent(editTitle.trim())}`,
-				{
-					method: 'PATCH',
-					credentials: 'include'
-				}
-			);
+		// optimistic update - UI updates immediately
+		const oldTitle = albumMetadata.title;
+		albumMetadata.title = newTitle;
 
-			if (!response.ok) {
-				throw new Error('failed to update title');
+		// fire off backend call without blocking UI
+		fetch(
+			`${API_URL}/albums/${albumMetadata.id}?title=${encodeURIComponent(newTitle)}`,
+			{
+				method: 'PATCH',
+				credentials: 'include'
 			}
-
-			const updated = await response.json();
-			albumMetadata.title = updated.title;
-			toast.success('title updated');
-		} catch (e) {
-			console.error('failed to save title:', e);
-			toast.error(e instanceof Error ? e.message : 'failed to save title');
-			// revert to original title
-			editTitle = albumMetadata.title;
-		}
+		)
+			.then(async (response) => {
+				if (!response.ok) {
+					throw new Error('failed to update title');
+				}
+				toast.success('title updated');
+			})
+			.catch((e) => {
+				console.error('failed to save title:', e);
+				toast.error(e instanceof Error ? e.message : 'failed to save title');
+				// revert on failure
+				albumMetadata.title = oldTitle;
+				editTitle = oldTitle;
+			});
 	}
 
 	function handleCoverSelect(event: Event) {
