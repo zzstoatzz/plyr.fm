@@ -47,6 +47,31 @@ plyr.fm should become:
 
 ### December 2025
 
+#### docket background tasks & concurrent exports (PRs #534-546, Dec 9)
+
+**docket integration** (PRs #534, #536, #539):
+- migrated background tasks from inline asyncio to docket (Redis-backed task queue)
+- copyright scanning, media export, ATProto sync, and teal scrobbling now run via docket
+- graceful fallback to asyncio for local development without Redis
+- parallel test execution with xdist template databases (#540)
+
+**concurrent export downloads** (PR #545):
+- exports now download tracks in parallel (up to 4 concurrent) instead of sequentially
+- significantly faster for users with many tracks or large files
+- zip creation remains sequential (zipfile constraint)
+
+**ATProto refactor** (PR #534):
+- reorganized ATProto record code into `_internal/atproto/records/` by lexicon namespace
+- extracted `client.py` for low-level PDS operations
+- cleaner separation between plyr.fm and teal.fm lexicons
+
+**documentation & observability**:
+- AudD API cost tracking dashboard (#546)
+- promoted runbooks from sandbox to `docs/runbooks/`
+- updated CLAUDE.md files across the codebase
+
+---
+
 #### artist support links & inline playlist editing (PRs #520-532, Dec 8)
 
 **artist support link** (PR #532):
@@ -156,22 +181,20 @@ See `.status_history/2025-12.md` and `.status_history/2025-11.md` for detailed h
 
 ## immediate priorities
 
-### high priority features
-1. **audio transcoding pipeline integration** (issue #153)
-   - ✅ standalone transcoder service deployed at https://plyr-transcoder.fly.dev/
-   - ⏳ next: integrate into plyr.fm upload pipeline
-
 ### known issues
 - playback auto-start on refresh (#225)
-- no AIFF/AIF transcoding support (#153)
 - iOS PWA audio may hang on first play after backgrounding
 
-### new features
-- issue #146: content-addressable storage (hash-based deduplication)
-- issue #155: add track metadata (genres, tags, descriptions)
+### immediate focus
+- **moderation cleanup**: consolidate copyright detection, reduce AudD API costs, streamline labeler integration (issues #541-544)
+- **public cost dashboard**: interactive page showing platform running costs (fly.io, neon, audd, r2) - transparency + prompts for community support
+
+### feature ideas
 - issue #334: add 'share to bluesky' option for tracks
 - issue #373: lyrics field and Genius-style annotations
-- issue #393: moderation - represent confirmed takedown state in labeler
+
+### backlog
+- audio transcoding pipeline integration (#153) - transcoder service deployed, integration deferred
 
 ## technical state
 
@@ -182,6 +205,7 @@ See `.status_history/2025-12.md` and `.status_history/2025-11.md` for detailed h
 - framework: FastAPI with uvicorn
 - database: Neon PostgreSQL (serverless)
 - storage: Cloudflare R2 (S3-compatible)
+- background tasks: docket (Redis-backed)
 - hosting: Fly.io (2x shared-cpu VMs)
 - observability: Pydantic Logfire
 - auth: ATProto OAuth 2.1
@@ -214,6 +238,8 @@ See `.status_history/2025-12.md` and `.status_history/2025-11.md` for detailed h
 - ✅ unified search with Cmd/Ctrl+K
 - ✅ teal.fm scrobbling
 - ✅ copyright moderation with ATProto labeler
+- ✅ docket background tasks (copyright scan, export, atproto sync, scrobble)
+- ✅ media export with concurrent downloads
 
 **albums**
 - ✅ album CRUD with cover art
@@ -309,15 +335,13 @@ plyr.fm/
 
 ## documentation
 
-- [deployment overview](docs/deployment/overview.md)
-- [configuration guide](docs/configuration.md)
-- [queue design](docs/queue-design.md)
-- [logfire querying](docs/logfire-querying.md)
-- [moderation & labeler](docs/moderation/atproto-labeler.md)
-- [unified search](docs/frontend/search.md)
-- [keyboard shortcuts](docs/frontend/keyboard-shortcuts.md)
-- [lexicons overview](docs/lexicons/overview.md)
+- [docs/README.md](docs/README.md) - documentation index
+- [runbooks](docs/runbooks/) - production incident procedures
+- [background tasks](docs/backend/background-tasks.md) - docket task system
+- [logfire querying](docs/tools/logfire.md) - observability queries
+- [moderation & labeler](docs/moderation/atproto-labeler.md) - copyright, sensitive content
+- [lexicons overview](docs/lexicons/overview.md) - ATProto record schemas
 
 ---
 
-this is a living document. last updated 2025-12-08.
+this is a living document. last updated 2025-12-09.
