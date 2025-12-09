@@ -148,12 +148,11 @@ async def test_discovery_feed_filters_hidden_tags_by_default(
 ):
     """test that discovery feed (no artist_did) filters hidden tags."""
     async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
+        transport=ASGITransport(app=test_app),
+        base_url="http://test",
+        cookies={"session_id": "test_session"},
     ) as client:
-        response = await client.get(
-            "/tracks/",
-            cookies={"session_id": "test_session"},
-        )
+        response = await client.get("/tracks/")
 
     assert response.status_code == 200
     tracks = response.json()["tracks"]
@@ -175,12 +174,11 @@ async def test_artist_page_shows_all_tracks_by_default(
 ):
     """test that artist page (with artist_did) shows all tracks including hidden."""
     async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
+        transport=ASGITransport(app=test_app),
+        base_url="http://test",
+        cookies={"session_id": "test_session"},
     ) as client:
-        response = await client.get(
-            f"/tracks/?artist_did={artist.did}",
-            cookies={"session_id": "test_session"},
-        )
+        response = await client.get(f"/tracks/?artist_did={artist.did}")
 
     assert response.status_code == 200
     tracks = response.json()["tracks"]
@@ -201,11 +199,12 @@ async def test_explicit_filter_hidden_tags_true_forces_filtering(
 ):
     """test that filter_hidden_tags=true forces filtering even on artist page."""
     async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
+        transport=ASGITransport(app=test_app),
+        base_url="http://test",
+        cookies={"session_id": "test_session"},
     ) as client:
         response = await client.get(
-            f"/tracks/?artist_did={artist.did}&filter_hidden_tags=true",
-            cookies={"session_id": "test_session"},
+            f"/tracks/?artist_did={artist.did}&filter_hidden_tags=true"
         )
 
     assert response.status_code == 200
@@ -226,12 +225,11 @@ async def test_explicit_filter_hidden_tags_false_disables_filtering(
 ):
     """test that filter_hidden_tags=false disables filtering on discovery feed."""
     async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
+        transport=ASGITransport(app=test_app),
+        base_url="http://test",
+        cookies={"session_id": "test_session"},
     ) as client:
-        response = await client.get(
-            "/tracks/?filter_hidden_tags=false",
-            cookies={"session_id": "test_session"},
-        )
+        response = await client.get("/tracks/?filter_hidden_tags=false")
 
     assert response.status_code == 200
     tracks = response.json()["tracks"]

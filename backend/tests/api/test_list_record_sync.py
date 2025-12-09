@@ -1,6 +1,5 @@
 """tests for ATProto list record sync on login."""
 
-import asyncio
 from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
@@ -392,9 +391,9 @@ async def test_login_callback_triggers_background_sync(
             return_value=True,
         ),
         patch(
-            "backend.api.auth.sync_atproto_records",
+            "backend.api.auth.schedule_atproto_sync",
             new_callable=AsyncMock,
-        ) as mock_sync,
+        ) as mock_schedule_sync,
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
@@ -409,14 +408,10 @@ async def test_login_callback_triggers_background_sync(
                 follow_redirects=False,
             )
 
-        # give background tasks time to run
-        await asyncio.sleep(0.1)
-
     assert response.status_code == 303
     assert "exchange_token=test_exchange_token" in response.headers["location"]
 
-    # verify sync was triggered in background
-    mock_sync.assert_called_once()
-    call_args = mock_sync.call_args
-    # first arg is the session, second is the DID
-    assert call_args[0][1] == "did:plc:testartist123"
+    # verify sync was scheduled via docket
+    mock_schedule_sync.assert_called_once_with(
+        "test_session_id", "did:plc:testartist123"
+    )

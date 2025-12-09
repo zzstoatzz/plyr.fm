@@ -2,9 +2,10 @@
 
 these functions are registered with docket and executed by workers.
 they should be self-contained and handle their own database sessions.
+
+requires DOCKET_URL to be set (Redis is always available).
 """
 
-import asyncio
 import logging
 import os
 import tempfile
@@ -16,17 +17,13 @@ import aioboto3
 import aiofiles
 import logfire
 
-from backend._internal.background import get_docket, is_docket_enabled
+from backend._internal.background import get_docket
 
 logger = logging.getLogger(__name__)
 
 
 async def scan_copyright(track_id: int, audio_url: str) -> None:
     """scan a track for potential copyright matches.
-
-    this is the docket version of the copyright scan task. when docket
-    is enabled (DOCKET_URL set), this provides durability and retries
-    compared to fire-and-forget asyncio.create_task().
 
     args:
         track_id: database ID of the track to scan
@@ -38,28 +35,10 @@ async def scan_copyright(track_id: int, audio_url: str) -> None:
 
 
 async def schedule_copyright_scan(track_id: int, audio_url: str) -> None:
-    """schedule a copyright scan, using docket if enabled, else asyncio.
-
-    this is the entry point for scheduling copyright scans. it handles
-    the docket vs asyncio fallback logic in one place.
-    """
-    from backend._internal.moderation import scan_track_for_copyright
-
-    if is_docket_enabled():
-        try:
-            docket = get_docket()
-            await docket.add(scan_copyright)(track_id, audio_url)
-            logfire.info("scheduled copyright scan via docket", track_id=track_id)
-            return
-        except Exception as e:
-            logfire.warning(
-                "docket scheduling failed, falling back to asyncio",
-                track_id=track_id,
-                error=str(e),
-            )
-
-    # fallback: fire-and-forget
-    asyncio.create_task(scan_track_for_copyright(track_id, audio_url))  # noqa: RUF006
+    """schedule a copyright scan via docket."""
+    docket = get_docket()
+    await docket.add(scan_copyright)(track_id, audio_url)
+    logfire.info("scheduled copyright scan", track_id=track_id)
 
 
 async def process_export(export_id: str, artist_did: str) -> None:
@@ -283,23 +262,110 @@ async def process_export(export_id: str, artist_did: str) -> None:
 
 
 async def schedule_export(export_id: str, artist_did: str) -> None:
-    """schedule an export, using docket if enabled, else asyncio.
+    """schedule an export via docket."""
+    docket = get_docket()
+    await docket.add(process_export)(export_id, artist_did)
+    logfire.info("scheduled export", export_id=export_id)
 
-    this is the entry point for scheduling exports. it handles
-    the docket vs asyncio fallback logic in one place.
+
+async def sync_atproto(session_id: str, user_did: str) -> None:
+    """sync ATProto records (profile, albums, liked tracks) for a user.
+
+    this runs after login or scope upgrade to ensure the user's PDS
+    has up-to-date records for their plyr.fm data.
+
+    args:
+        session_id: the user's session ID for authentication
+        user_did: the user's DID
     """
-    if is_docket_enabled():
-        try:
-            docket = get_docket()
-            await docket.add(process_export)(export_id, artist_did)
-            logfire.info("scheduled export via docket", export_id=export_id)
-            return
-        except Exception as e:
-            logfire.warning(
-                "docket scheduling failed, falling back to asyncio",
-                export_id=export_id,
-                error=str(e),
-            )
+    from backend._internal.atproto.sync import sync_atproto_records
+    from backend._internal.auth import get_session
 
-    # fallback: fire-and-forget
-    asyncio.create_task(process_export(export_id, artist_did))  # noqa: RUF006
+    auth_session = await get_session(session_id)
+    if not auth_session:
+        logger.warning(f"sync_atproto: session {session_id[:8]}... not found")
+        return
+
+    await sync_atproto_records(auth_session, user_did)
+
+
+async def schedule_atproto_sync(session_id: str, user_did: str) -> None:
+    """schedule an ATProto sync via docket."""
+    docket = get_docket()
+    await docket.add(sync_atproto)(session_id, user_did)
+    logfire.info("scheduled atproto sync", user_did=user_did)
+
+
+async def scrobble_to_teal(
+    session_id: str,
+    track_id: int,
+    track_title: str,
+    artist_name: str,
+    duration: int | None,
+    album_name: str | None,
+) -> None:
+    """scrobble a play to teal.fm (creates play record + updates status).
+
+    args:
+        session_id: the user's session ID for authentication
+        track_id: database ID of the track
+        track_title: title of the track
+        artist_name: name of the artist
+        duration: track duration in seconds
+        album_name: album name (optional)
+    """
+    from backend._internal.atproto.teal import (
+        create_teal_play_record,
+        update_teal_status,
+    )
+    from backend._internal.auth import get_session
+    from backend.config import settings
+
+    auth_session = await get_session(session_id)
+    if not auth_session:
+        logger.warning(f"teal scrobble: session {session_id[:8]}... not found")
+        return
+
+    origin_url = f"{settings.frontend.url}/track/{track_id}"
+
+    try:
+        # create play record (scrobble)
+        play_uri = await create_teal_play_record(
+            auth_session=auth_session,
+            track_name=track_title,
+            artist_name=artist_name,
+            duration=duration,
+            album_name=album_name,
+            origin_url=origin_url,
+        )
+        logger.info(f"teal play record created: {play_uri}")
+
+        # update status (now playing)
+        status_uri = await update_teal_status(
+            auth_session=auth_session,
+            track_name=track_title,
+            artist_name=artist_name,
+            duration=duration,
+            album_name=album_name,
+            origin_url=origin_url,
+        )
+        logger.info(f"teal status updated: {status_uri}")
+
+    except Exception as e:
+        logger.error(f"teal scrobble failed for track {track_id}: {e}", exc_info=True)
+
+
+async def schedule_teal_scrobble(
+    session_id: str,
+    track_id: int,
+    track_title: str,
+    artist_name: str,
+    duration: int | None,
+    album_name: str | None,
+) -> None:
+    """schedule a teal scrobble via docket."""
+    docket = get_docket()
+    await docket.add(scrobble_to_teal)(
+        session_id, track_id, track_title, artist_name, duration, album_name
+    )
+    logfire.info("scheduled teal scrobble", track_id=track_id)

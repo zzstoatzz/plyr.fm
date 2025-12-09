@@ -2,17 +2,13 @@
 
 provides a docket instance for scheduling background tasks and a worker
 that runs alongside the FastAPI server. requires DOCKET_URL to be set
-to a Redis URL for durable execution across multiple machines.
+to a Redis URL.
 
 usage:
-    from backend._internal.background import get_docket, is_docket_enabled
+    from backend._internal.background import get_docket
 
-    if is_docket_enabled():
-        docket = get_docket()
-        await docket.add(my_task_function)(arg1, arg2)
-    else:
-        # fallback to direct execution or FastAPI BackgroundTasks
-        await my_task_function(arg1, arg2)
+    docket = get_docket()
+    await docket.add(my_task_function)(arg1, arg2)
 """
 
 import asyncio
@@ -26,50 +22,33 @@ from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-# global docket instance - initialized in lifespan (None if disabled)
+# global docket instance - initialized in lifespan
 _docket: Docket | None = None
-_docket_enabled: bool = False
-
-
-def is_docket_enabled() -> bool:
-    """check if docket is enabled and initialized."""
-    return _docket_enabled and _docket is not None
 
 
 def get_docket() -> Docket:
     """get the global docket instance.
 
     raises:
-        RuntimeError: if docket is not initialized or disabled
+        RuntimeError: if docket is not initialized
     """
-    if not _docket_enabled:
-        raise RuntimeError("docket is disabled - set DOCKET_URL to enable")
     if _docket is None:
         raise RuntimeError("docket not initialized - is the server running?")
     return _docket
 
 
 @asynccontextmanager
-async def background_worker_lifespan() -> AsyncGenerator[Docket | None, None]:
+async def background_worker_lifespan() -> AsyncGenerator[Docket, None]:
     """lifespan context manager for docket and its worker.
 
-    if DOCKET_URL is not set, docket is disabled and this yields None.
-    when enabled, initializes the docket connection and starts an in-process
+    initializes the docket connection and starts an in-process
     worker that processes background tasks.
 
     yields:
-        Docket | None: the initialized docket instance, or None if disabled
+        Docket: the initialized docket instance
     """
-    global _docket, _docket_enabled
+    global _docket
 
-    # check if docket should be enabled
-    if not settings.docket.url:
-        logger.info("docket disabled (DOCKET_URL not set)")
-        _docket_enabled = False
-        yield None
-        return
-
-    _docket_enabled = True
     logger.info(
         "initializing docket",
         extra={"docket_name": settings.docket.name, "url": settings.docket.url},
@@ -108,9 +87,8 @@ async def background_worker_lifespan() -> AsyncGenerator[Docket | None, None]:
                     await worker_task
                 except asyncio.CancelledError:
                     logger.debug("docket worker task cancelled")
-            # clear globals after worker is fully stopped
+            # clear global after worker is fully stopped
             _docket = None
-            _docket_enabled = False
             logger.info("docket worker stopped")
 
 
@@ -121,12 +99,26 @@ def _register_tasks(docket: Docket) -> None:
     add new task imports here as they're created.
     """
     # import task functions here to avoid circular imports
-    from backend._internal.background_tasks import process_export, scan_copyright
+    from backend._internal.background_tasks import (
+        process_export,
+        scan_copyright,
+        scrobble_to_teal,
+        sync_atproto,
+    )
 
     docket.register(scan_copyright)
     docket.register(process_export)
+    docket.register(sync_atproto)
+    docket.register(scrobble_to_teal)
 
     logger.info(
         "registered background tasks",
-        extra={"tasks": ["scan_copyright", "process_export"]},
+        extra={
+            "tasks": [
+                "scan_copyright",
+                "process_export",
+                "sync_atproto",
+                "scrobble_to_teal",
+            ]
+        },
     )

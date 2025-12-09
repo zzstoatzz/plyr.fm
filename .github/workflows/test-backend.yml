@@ -32,6 +32,16 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v5
 
@@ -52,7 +62,8 @@ jobs:
       - name: run tests
         env:
           DATABASE_URL: postgresql+asyncpg://relay_test:relay_test@localhost:5432/relay_test
-        run: cd backend && uv run pytest tests/
+          DOCKET_URL: redis://localhost:6379
+        run: cd backend && uv run pytest tests/ -n auto
 
       - name: prune uv cache
         if: always()
