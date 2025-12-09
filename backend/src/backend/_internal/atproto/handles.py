@@ -72,6 +72,56 @@ async def resolve_handle(handle: str) -> dict[str, Any] | None:
         return None
 
 
+async def resolve_featured_artists(
+    features_json: str | None,
+    exclude_handle: str,
+) -> list[dict]:
+    """resolve featured artist handles from JSON array.
+
+    args:
+        features_json: JSON array string of handles, e.g., '["user1.bsky.social"]'
+        exclude_handle: handle to exclude (typically the uploading artist)
+
+    returns:
+        list of resolved artist dicts, excluding failures and the uploader
+    """
+    if not features_json:
+        return []
+
+    import asyncio
+    import json
+
+    try:
+        handles_list = json.loads(features_json)
+    except json.JSONDecodeError:
+        logger.warning(
+            "malformed features JSON, ignoring", extra={"raw": features_json}
+        )
+        return []
+
+    if not isinstance(handles_list, list):
+        return []
+
+    # filter valid handles, excluding the uploading artist
+    valid_handles = [
+        handle
+        for handle in handles_list
+        if isinstance(handle, str) and handle.lstrip("@") != exclude_handle
+    ]
+
+    if not valid_handles:
+        return []
+
+    # resolve concurrently
+    resolved = await asyncio.gather(
+        *[resolve_handle(h) for h in valid_handles],
+        return_exceptions=True,
+    )
+
+    # filter out exceptions and None values
+    return [r for r in resolved if isinstance(r, dict) and r is not None]
+
+
 async def search_handles(query: str, limit: int = 10) -> list[dict]:
     """search for ATProto handles by prefix.
 

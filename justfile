@@ -32,3 +32,22 @@ release:
 release-frontend-only:
     git fetch origin main
     git push origin origin/main:production-fe
+
+# start dev services (redis for background tasks)
+dev-up:
+    docker compose up -d
+    @echo "redis running at localhost:6379"
+    @echo "set DOCKET_URL=redis://localhost:6379 to enable docket"
+
+# stop dev services
+dev-down:
+    docker compose down
+
+# start full dev environment (services + backend + frontend)
+dev:
+    docker compose up -d
+    @echo "starting backend and frontend..."
+    @echo "redis: localhost:6379"
+    @echo "set DOCKET_URL=redis://localhost:6379 to enable docket"
+    @just backend run &
+    @just frontend dev

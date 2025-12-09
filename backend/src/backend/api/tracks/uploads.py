@@ -27,9 +27,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile
 from backend._internal.atproto import create_track_record
-from backend._internal.atproto.handles import resolve_handle
+from backend._internal.atproto.handles import resolve_featured_artists
 from backend._internal.audio import AudioFormat
-from backend._internal.background import get_docket, is_docket_enabled
+from backend._internal.background_tasks import schedule_copyright_scan
 from backend._internal.image import ImageFormat
 from backend._internal.jobs import job_service
 from backend.config import settings
@@ -87,6 +87,116 @@ async def _get_or_create_tag(
         return tag
 
 
+async def _save_audio_to_storage(
+    upload_id: str,
+    file_path: str,
+    filename: str,
+) -> str | None:
+    """save audio file to storage, returning file_id or None on failure."""
+    await job_service.update_progress(
+        upload_id,
+        JobStatus.PROCESSING,
+        "uploading to storage...",
+        phase="upload",
+        progress_pct=0,
+    )
+    try:
+        async with R2ProgressTracker(
+            job_id=upload_id,
+            message="uploading to storage...",
+            phase="upload",
+        ) as tracker:
+            with open(file_path, "rb") as file_obj:
+                file_id = await storage.save(
+                    file_obj, filename, progress_callback=tracker.on_progress
+                )
+
+        await job_service.update_progress(
+            upload_id,
+            JobStatus.PROCESSING,
+            "uploading to storage...",
+            phase="upload",
+            progress_pct=100.0,
+        )
+        logfire.info("storage.save completed", file_id=file_id)
+        return file_id
+
+    except Exception as e:
+        logfire.error("storage.save failed", error=str(e), exc_info=True)
+        await job_service.update_progress(
+            upload_id, JobStatus.FAILED, "upload failed", error=str(e)
+        )
+        return None
+
+
+async def _save_image_to_storage(
+    upload_id: str,
+    image_path: str,
+    image_filename: str,
+    image_content_type: str | None,
+) -> tuple[str | None, str | None]:
+    """save image to storage, returning (image_id, image_url) or (None, None)."""
+    await job_service.update_progress(
+        upload_id,
+        JobStatus.PROCESSING,
+        "saving image...",
+        phase="image",
+    )
+    image_format, is_valid = ImageFormat.validate_and_extract(
+        image_filename, image_content_type
+    )
+    if not is_valid or not image_format:
+        logger.warning(f"unsupported image format: {image_filename}")
+        return None, None
+
+    try:
+        with open(image_path, "rb") as image_obj:
+            image_id = await storage.save(image_obj, f"images/{image_filename}")
+            image_url = await storage.get_url(image_id, file_type="image")
+            return image_id, image_url
+    except Exception as e:
+        logger.warning(f"failed to save image: {e}", exc_info=True)
+        return None, None
+
+
+async def _add_tags_to_track(
+    db: AsyncSession,
+    track_id: int,
+    validated_tags: list[str],
+    creator_did: str,
+) -> None:
+    """add validated tags to a track."""
+    if not validated_tags:
+        return
+
+    try:
+        for tag_name in validated_tags:
+            tag = await _get_or_create_tag(db, tag_name, creator_did)
+            track_tag = TrackTag(track_id=track_id, tag_id=tag.id)
+            db.add(track_tag)
+        await db.commit()
+    except Exception as e:
+        logfire.error(
+            "failed to add tags to track",
+            track_id=track_id,
+            tags=validated_tags,
+            error=str(e),
+        )
+
+
+async def _send_track_notification(db: AsyncSession, track: Track) -> None:
+    """send notification for new track upload."""
+    from backend._internal.notifications import notification_service
+
+    try:
+        await db.refresh(track, ["artist"])
+        await notification_service.send_track_notification(track)
+        track.notification_sent = True
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"failed to send notification for track {track.id}: {e}")
+
+
 async def _process_upload_background(
     upload_id: str,
     file_path: str,
@@ -101,10 +211,14 @@ async def _process_upload_background(
     image_filename: str | None = None,
     image_content_type: str | None = None,
 ) -> None:
-    """Background task to process upload."""
+    """background task to process upload."""
     with logfire.span(
         "process upload background", upload_id=upload_id, filename=filename
     ):
+        file_id: str | None = None
+        image_id: str | None = None
+        audio_format: AudioFormat | None = None
+
         try:
             await job_service.update_progress(
                 upload_id, JobStatus.PROCESSING, "processing upload..."
@@ -122,83 +236,29 @@ async def _process_upload_background(
                 )
                 return
 
-            # extract duration from audio file
+            # extract duration
             with open(file_path, "rb") as f:
                 duration = extract_duration(f)
-            if duration:
-                logfire.info("extracted duration", duration=duration)
 
-            # save audio file
-            await job_service.update_progress(
-                upload_id,
-                JobStatus.PROCESSING,
-                "uploading to storage...",
-                phase="upload",
-                progress_pct=0,
-            )
-            try:
-                logfire.info("preparing to save audio file", filename=filename)
-
-                async with R2ProgressTracker(
-                    job_id=upload_id,
-                    message="uploading to storage...",
-                    phase="upload",
-                ) as tracker:
-                    with open(file_path, "rb") as file_obj:
-                        logfire.info("calling storage.save")
-                        file_id = await storage.save(
-                            file_obj, filename, progress_callback=tracker.on_progress
-                        )
-
-                # Final 100% update
-                await job_service.update_progress(
-                    upload_id,
-                    JobStatus.PROCESSING,
-                    "uploading to storage...",
-                    phase="upload",
-                    progress_pct=100.0,
-                )
-
-                logfire.info("storage.save completed", file_id=file_id)
-
-            except ValueError as e:
-                logfire.error("ValueError during storage.save", error=str(e))
-                await job_service.update_progress(
-                    upload_id, JobStatus.FAILED, "upload failed", error=str(e)
-                )
-                return
-            except Exception as e:
-                logfire.error(
-                    "unexpected exception during storage.save",
-                    error=str(e),
-                    exc_info=True,
-                )
-                await job_service.update_progress(
-                    upload_id, JobStatus.FAILED, "upload failed", error=str(e)
-                )
+            # save audio to storage
+            file_id = await _save_audio_to_storage(upload_id, file_path, filename)
+            if not file_id:
                 return
 
-            # check for duplicate uploads (same file_id + artist_did)
+            # check for duplicate
             async with db_session() as db:
-                stmt = select(Track).where(
-                    Track.file_id == file_id,
-                    Track.artist_did == artist_did,
-                )
-                result = await db.execute(stmt)
-                existing_track = result.scalar_one_or_none()
-
-                if existing_track:
-                    logfire.info(
-                        "duplicate upload detected, returning existing track",
-                        file_id=file_id,
-                        existing_track_id=existing_track.id,
-                        artist_did=artist_did,
+                result = await db.execute(
+                    select(Track).where(
+                        Track.file_id == file_id,
+                        Track.artist_did == artist_did,
                     )
+                )
+                if existing := result.scalar_one_or_none():
                     await job_service.update_progress(
                         upload_id,
                         JobStatus.FAILED,
                         "upload failed",
-                        error=f"duplicate upload: track already exists (id: {existing_track.id})",
+                        error=f"duplicate upload: track already exists (id: {existing.id})",
                     )
                     return
 
@@ -206,39 +266,23 @@ async def _process_upload_background(
             r2_url = await storage.get_url(
                 file_id, file_type="audio", extension=ext[1:]
             )
-
-            # save image if provided
-            image_id = None
-            image_url = None
-            if image_path and image_filename:
+            if not r2_url:
                 await job_service.update_progress(
                     upload_id,
-                    JobStatus.PROCESSING,
-                    "saving image...",
-                    phase="image",
+                    JobStatus.FAILED,
+                    "upload failed",
+                    error="failed to get public audio URL",
                 )
-                # use content_type for format detection (more reliable on iOS)
-                image_format, is_valid = ImageFormat.validate_and_extract(
-                    image_filename, image_content_type
-                )
-                if is_valid and image_format:
-                    try:
-                        with open(image_path, "rb") as image_obj:
-                            # save with images/ prefix to namespace it
-                            image_id = await storage.save(
-                                image_obj, f"images/{image_filename}"
-                            )
-                            # get R2 URL for image
-                            image_url = await storage.get_url(
-                                image_id, file_type="image"
-                            )
-                    except Exception as e:
-                        logger.warning(f"failed to save image: {e}", exc_info=True)
-                        # continue without image - it's optional
-                else:
-                    logger.warning(f"unsupported image format: {image_filename}")
+                return
 
-            # get artist and resolve features
+            # save image if provided
+            image_url = None
+            if image_path and image_filename:
+                image_id, image_url = await _save_image_to_storage(
+                    upload_id, image_path, image_filename, image_content_type
+                )
+
+            # get artist and resolve featured artists
             async with db_session() as db:
                 result = await db.execute(
                     select(Artist).where(Artist.did == artist_did)
@@ -253,8 +297,8 @@ async def _process_upload_background(
                     )
                     return
 
-                # resolve featured artist handles
-                featured_artists = []
+                # resolve featured artists
+                featured_artists: list[dict] = []
                 if features:
                     await job_service.update_progress(
                         upload_id,
@@ -262,88 +306,47 @@ async def _process_upload_background(
                         "resolving featured artists...",
                         phase="metadata",
                     )
-                    try:
-                        handles_list = json.loads(features)
-                        if isinstance(handles_list, list):
-                            # filter valid handles and batch resolve concurrently
-                            valid_handles = [
-                                handle
-                                for handle in handles_list
-                                if isinstance(handle, str)
-                                and handle.lstrip("@") != artist.handle
-                            ]
-                            if valid_handles:
-                                resolved_artists = await asyncio.gather(
-                                    *[resolve_handle(h) for h in valid_handles],
-                                    return_exceptions=True,
-                                )
-                                # filter out exceptions and None values
-                                featured_artists = [
-                                    r
-                                    for r in resolved_artists
-                                    if isinstance(r, dict) and r is not None
-                                ]
-                    except json.JSONDecodeError:
-                        pass  # ignore malformed features
-
-                async def fail_atproto_sync(reason: str) -> None:
-                    """mark upload as failed when ATProto sync cannot complete."""
-
-                    logger.error(
-                        "upload %s failed during ATProto sync",
-                        upload_id,
-                        extra={
-                            "file_id": file_id,
-                            "artist_did": artist_did,
-                            "reason": reason,
-                        },
+                    featured_artists = await resolve_featured_artists(
+                        features, artist.handle
                     )
+
+                # create ATProto record
+                await job_service.update_progress(
+                    upload_id,
+                    JobStatus.PROCESSING,
+                    "creating atproto record...",
+                    phase="atproto",
+                )
+                try:
+                    atproto_result = await create_track_record(
+                        auth_session=auth_session,
+                        title=title,
+                        artist=artist.display_name,
+                        audio_url=r2_url,
+                        file_type=ext[1:],
+                        album=album,
+                        duration=duration,
+                        features=featured_artists or None,
+                        image_url=image_url,
+                    )
+                    if not atproto_result:
+                        raise ValueError("PDS returned no record data")
+                    atproto_uri, atproto_cid = atproto_result
+                except Exception as e:
+                    logger.error("ATProto sync failed for upload %s: %s", upload_id, e)
                     await job_service.update_progress(
                         upload_id,
                         JobStatus.FAILED,
                         "upload failed",
-                        error=f"failed to sync track to ATProto: {reason}",
+                        error=f"failed to sync track to ATProto: {e}",
                         phase="atproto",
                     )
-
-                    # delete uploaded media so we don't leave orphaned files behind
+                    # cleanup orphaned media
                     with contextlib.suppress(Exception):
                         await storage.delete(file_id, audio_format.value)
                     if image_id:
                         with contextlib.suppress(Exception):
                             await storage.delete(image_id)
-
-                # create ATProto record
-                atproto_uri = None
-                atproto_cid = None
-                if r2_url:
-                    await job_service.update_progress(
-                        upload_id,
-                        JobStatus.PROCESSING,
-                        "creating atproto record...",
-                        phase="atproto",
-                    )
-                    try:
-                        result = await create_track_record(
-                            auth_session=auth_session,
-                            title=title,
-                            artist=artist.display_name,
-                            audio_url=r2_url,
-                            file_type=ext[1:],
-                            album=album,
-                            duration=duration,
-                            features=featured_artists if featured_artists else None,
-                            image_url=image_url,
-                        )
-                        if not result:
-                            await fail_atproto_sync("PDS returned no record data")
-                            return
-                        atproto_uri, atproto_cid = result
-                    except Exception as e:
-                        await fail_atproto_sync(str(e))
-                        return
-                else:
-                    await fail_atproto_sync("no public audio URL available")
                     return
 
                 # create track record
@@ -353,18 +356,16 @@ async def _process_upload_background(
                     "saving track metadata...",
                     phase="database",
                 )
-                extra = {}
+
+                extra: dict = {}
                 if duration:
                     extra["duration"] = duration
+
                 album_record = None
                 if album:
                     extra["album"] = album
                     album_record = await get_or_create_album(
-                        db,
-                        artist,
-                        album,
-                        image_id,
-                        image_url,
+                        db, artist, album, image_id, image_url
                     )
 
                 track = Track(
@@ -387,74 +388,11 @@ async def _process_upload_background(
                     await db.commit()
                     await db.refresh(track)
 
-                    # handle tags if provided (already validated)
-                    if validated_tags:
-                        try:
-                            for tag_name in validated_tags:
-                                # get or create tag with race condition handling
-                                tag = await _get_or_create_tag(db, tag_name, artist_did)
+                    await _add_tags_to_track(db, track.id, validated_tags, artist_did)
+                    await _send_track_notification(db, track)
 
-                                # create track_tag association
-                                track_tag = TrackTag(track_id=track.id, tag_id=tag.id)
-                                db.add(track_tag)
-
-                            await db.commit()
-                        except Exception as e:
-                            logfire.error(
-                                "failed to add tags to track",
-                                track_id=track.id,
-                                tags=validated_tags,
-                                error=str(e),
-                            )
-
-                    # send notification about new track
-                    from backend._internal.notifications import notification_service
-
-                    try:
-                        # eagerly load artist for notification
-                        await db.refresh(track, ["artist"])
-                        await notification_service.send_track_notification(track)
-                        track.notification_sent = True
-                        await db.commit()
-                    except Exception as e:
-                        logger.warning(
-                            f"failed to send notification for track {track.id}: {e}"
-                        )
-
-                    # kick off copyright scan in background
-                    # uses docket if enabled (Redis-backed), else fire-and-forget
                     if r2_url:
-                        from backend._internal.moderation import (
-                            scan_track_for_copyright,
-                        )
-
-                        if is_docket_enabled():
-                            from backend._internal.background_tasks import (
-                                scan_copyright,
-                            )
-
-                            try:
-                                docket = get_docket()
-                                await docket.add(scan_copyright)(track.id, r2_url)
-                                logfire.info(
-                                    "scheduled copyright scan via docket",
-                                    track_id=track.id,
-                                )
-                            except Exception as e:
-                                # fallback to fire-and-forget if docket fails
-                                logfire.warning(
-                                    "docket failed, falling back to asyncio",
-                                    track_id=track.id,
-                                    error=str(e),
-                                )
-                                asyncio.create_task(  # noqa: RUF006
-                                    scan_track_for_copyright(track.id, r2_url)
-                                )
-                        else:
-                            # docket disabled - use fire-and-forget
-                            asyncio.create_task(  # noqa: RUF006
-                                scan_track_for_copyright(track.id, r2_url)
-                            )
+                        await schedule_copyright_scan(track.id, r2_url)
 
                     await job_service.update_progress(
                         upload_id,
@@ -465,15 +403,12 @@ async def _process_upload_background(
 
                 except IntegrityError as e:
                     await db.rollback()
-                    # integrity errors now only occur for foreign key violations or other constraints
-                    error_msg = f"database constraint violation: {e!s}"
                     await job_service.update_progress(
                         upload_id,
                         JobStatus.FAILED,
                         "upload failed",
-                        error=error_msg,
+                        error=f"database constraint violation: {e!s}",
                     )
-                    # cleanup: delete uploaded file
                     with contextlib.suppress(Exception):
                         await storage.delete(file_id, audio_format.value)
 
