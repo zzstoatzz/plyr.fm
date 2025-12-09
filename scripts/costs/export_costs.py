@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["asyncpg", "boto3", "pydantic-settings", "typer"]
+# dependencies = ["asyncpg", "boto3", "pydantic", "pydantic-settings", "typer"]
 # ///
 """export platform costs to R2 for public dashboard
 
@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import typer
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # billing constants
@@ -79,12 +80,17 @@ class Settings(BaseSettings):
     neon_database_url_stg: str | None = None
     neon_database_url_dev: str | None = None
 
-    # r2 for upload
+    # r2 stats bucket (dedicated, shared across environments)
     aws_access_key_id: str = ""
     aws_secret_access_key: str = ""
     r2_endpoint_url: str = ""
-    r2_bucket: str = ""
-    r2_public_bucket_url: str = ""
+    r2_stats_bucket: str = Field(
+        default="plyr-stats", validation_alias="R2_STATS_BUCKET"
+    )
+    r2_stats_public_url: str = Field(
+        default="https://pub-68f2c7379f204d81bdf65152b0ff0207.r2.dev",
+        validation_alias="R2_STATS_PUBLIC_URL",
+    )
 
     def get_db_url(self, env: str) -> str:
         """get database url for environment, converting to asyncpg format"""
@@ -236,53 +242,27 @@ def build_cost_data(audd_stats: dict[str, Any]) -> dict[str, Any]:
 
 
 async def upload_to_r2(data: dict[str, Any]) -> str:
-    """upload json to r2 public bucket"""
+    """upload json to dedicated stats bucket"""
+    import boto3
 
-    # s3-compatible signing for r2
-    bucket = settings.r2_bucket
-    key = "stats/costs.json"
+    bucket = settings.r2_stats_bucket
+    key = "costs.json"
     body = json.dumps(data, indent=2).encode()
 
-    # use httpx with basic auth approach via presigned-like headers
-    # actually simpler: use boto3-like signing or just httpx with aws4auth
-    # for simplicity, let's use the s3 client approach
-
-    try:
-        import aioboto3
-    except ImportError:
-        # fallback to sync boto3
-        import boto3
-
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=settings.r2_endpoint_url,
-            aws_access_key_id=settings.aws_access_key_id,
-            aws_secret_access_key=settings.aws_secret_access_key,
-        )
-        s3.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=body,
-            ContentType="application/json",
-            CacheControl="public, max-age=3600",  # 1 hour cache
-        )
-        return f"{settings.r2_public_bucket_url}/{key}"
-
-    session = aioboto3.Session()
-    async with session.client(
+    s3 = boto3.client(
         "s3",
         endpoint_url=settings.r2_endpoint_url,
         aws_access_key_id=settings.aws_access_key_id,
         aws_secret_access_key=settings.aws_secret_access_key,
-    ) as s3:
-        await s3.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=body,
-            ContentType="application/json",
-            CacheControl="public, max-age=3600",
-        )
-        return f"{settings.r2_public_bucket_url}/{key}"
+    )
+    s3.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=body,
+        ContentType="application/json",
+        CacheControl="public, max-age=3600",
+    )
+    return f"{settings.r2_stats_public_url}/{key}"
 
 
 @app.command()
