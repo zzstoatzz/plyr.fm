@@ -121,11 +121,12 @@ def _register_tasks(docket: Docket) -> None:
     add new task imports here as they're created.
     """
     # import task functions here to avoid circular imports
-    from backend._internal.background_tasks import scan_copyright
+    from backend._internal.background_tasks import process_export, scan_copyright
 
     docket.register(scan_copyright)
+    docket.register(process_export)
 
     logger.info(
         "registered background tasks",
-        extra={"tasks": ["scan_copyright"]},
+        extra={"tasks": ["scan_copyright", "process_export"]},
     )

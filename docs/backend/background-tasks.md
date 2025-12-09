@@ -6,7 +6,7 @@ plyr.fm uses [pydocket](https://github.com/PrefectHQ/pydocket) for durable backg
 
 background tasks handle operations that shouldn't block the request/response cycle:
 - **copyright scanning** - analyzes uploaded tracks for potential copyright matches
-- (future) upload processing, notifications, etc.
+- **media export** - downloads all tracks, zips them, and uploads to R2
 
 ## architecture
 
@@ -69,10 +69,11 @@ note: use `rediss://` (with double 's') for TLS connections to Upstash.
 ### scheduling a task
 
 ```python
-from backend._internal.background_tasks import schedule_copyright_scan
+from backend._internal.background_tasks import schedule_copyright_scan, schedule_export
 
 # automatically uses docket if enabled, else asyncio.create_task
 await schedule_copyright_scan(track_id, audio_url)
+await schedule_export(export_id, artist_did)
 ```
 
 ### adding new tasks
