@@ -21,12 +21,12 @@ import typer
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # billing constants
-AUDD_INCLUDED_REQUESTS = 6000  # 1000 + 5000 bonus
-AUDD_COST_PER_REQUEST = 0.005  # $5 per 1000
 AUDD_BILLING_DAY = 24
 
-# hardcoded monthly costs (updated 2024-12-09)
-# source: fly.io cost explorer, neon billing, cloudflare billing
+# hardcoded monthly costs (updated 2025-12-09)
+# source: fly.io cost explorer, neon billing, cloudflare billing, audd dashboard
+# NOTE: audd usage comes from their dashboard, not our database
+# (copyright_scans table only has data since Nov 30, 2025)
 FIXED_COSTS = {
     "fly_io": {
         "total": 28.83,
@@ -54,6 +54,19 @@ FIXED_COSTS = {
         "domain": 1.00,
         "total": 1.16,
         "note": "r2 egress is free, pages free tier",
+    },
+    # audd: ONE-TIME ADJUSTMENT for Nov 24 - Dec 24 billing period
+    # the copyright_scans table was created Nov 24 but first scan recorded Nov 30
+    # so we hardcode this period from AudD dashboard. DELETE THIS after Dec 24 -
+    # future periods will use live database counts.
+    # source: https://dashboard.audd.io - checked 2025-12-09
+    "audd": {
+        "total_requests": 6781,
+        "included_requests": 6000,  # 1000 + 5000 bonus
+        "billable_requests": 781,
+        "cost_per_request": 0.005,  # $5 per 1000
+        "cost": 3.91,  # 781 * $0.005
+        "note": "copyright detection API (indie plan)",
     },
 }
 
@@ -97,14 +110,19 @@ def get_billing_period_start() -> datetime:
 
 
 async def get_audd_stats(db_url: str) -> dict[str, Any]:
-    """fetch audd scan stats from postgres"""
+    """fetch audd scan stats from postgres."""
     import asyncpg
 
     billing_start = get_billing_period_start()
+    audd_config = FIXED_COSTS["audd"]
+
+    # ONE-TIME: use hardcoded values for Nov 24 - Dec 24 billing period
+    # remove this check after Dec 24, 2025
+    use_hardcoded = billing_start.month == 11 and billing_start.day == 24
 
     conn = await asyncpg.connect(db_url)
     try:
-        # current billing period stats
+        # get database stats
         row = await conn.fetchrow(
             """
             SELECT COUNT(*) as total,
@@ -114,8 +132,8 @@ async def get_audd_stats(db_url: str) -> dict[str, Any]:
             """,
             billing_start,
         )
-        total = row["total"]
-        flagged = row["flagged"]
+        db_total = row["total"]
+        db_flagged = row["flagged"]
 
         # daily breakdown for chart
         daily = await conn.fetch(
@@ -131,18 +149,28 @@ async def get_audd_stats(db_url: str) -> dict[str, Any]:
             billing_start,
         )
 
-        billable = max(0, total - AUDD_INCLUDED_REQUESTS)
-        cost = billable * AUDD_COST_PER_REQUEST
+        if use_hardcoded:
+            # Nov 24 - Dec 24: use hardcoded values (incomplete db data)
+            total = audd_config["total_requests"]
+            included = audd_config["included_requests"]
+            billable = audd_config["billable_requests"]
+            cost = audd_config["cost"]
+        else:
+            # future billing periods: use live database counts
+            total = db_total
+            included = audd_config["included_requests"]
+            billable = max(0, total - included)
+            cost = round(billable * audd_config["cost_per_request"], 2)
 
         return {
             "billing_period_start": billing_start.isoformat(),
             "total_scans": total,
-            "flagged": flagged,
-            "flag_rate": round(flagged / total * 100, 1) if total else 0,
-            "included_requests": AUDD_INCLUDED_REQUESTS,
-            "remaining_free": max(0, AUDD_INCLUDED_REQUESTS - total),
+            "flagged": db_flagged,
+            "flag_rate": round(db_flagged / db_total * 100, 1) if db_total else 0,
+            "included_requests": included,
+            "remaining_free": max(0, included - total),
             "billable_requests": billable,
-            "estimated_cost": round(cost, 2),
+            "estimated_cost": cost,
             "daily": [
                 {
                     "date": r["date"].isoformat(),
