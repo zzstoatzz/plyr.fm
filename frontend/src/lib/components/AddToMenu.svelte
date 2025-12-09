@@ -503,6 +503,26 @@
 	.playlist-list {
 		max-height: 240px;
 		overflow-y: auto;
+		scrollbar-width: thin;
+		scrollbar-color: var(--border-default) transparent;
+	}
+
+	.playlist-list::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.playlist-list::-webkit-scrollbar-track {
+		background: transparent;
+		border-radius: 4px;
+	}
+
+	.playlist-list::-webkit-scrollbar-thumb {
+		background: var(--border-default);
+		border-radius: 4px;
+	}
+
+	.playlist-list::-webkit-scrollbar-thumb:hover {
+		background: var(--border-emphasis);
 	}
 
 	.playlist-item {
