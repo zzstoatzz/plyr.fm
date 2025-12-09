@@ -51,6 +51,7 @@ settings.atproto.resolved_scope                # computed: "atproto repo:{collec
 settings.observability.enabled                 # from LOGFIRE_ENABLED
 settings.observability.write_token             # from LOGFIRE_WRITE_TOKEN
 settings.observability.environment             # from LOGFIRE_ENVIRONMENT
+settings.observability.suppressed_loggers      # from LOGFIRE_SUPPRESSED_LOGGERS (default: {"docket"})
 
 # notification settings
 settings.notify.enabled                        # from NOTIFY_ENABLED
@@ -101,6 +102,7 @@ FRONTEND_URL=http://localhost:5173
 # observability
 LOGFIRE_ENABLED=true
 LOGFIRE_WRITE_TOKEN=pylf_xxx
+LOGFIRE_SUPPRESSED_LOGGERS=docket  # comma-separated, suppress noisy loggers
 
 # notifications (bluesky DMs)
 NOTIFY_ENABLED=true
