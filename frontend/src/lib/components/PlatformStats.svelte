@@ -25,13 +25,13 @@
 	<div class="stats-header">
 		{#if !loading && stats}
 			<div class="header-stat" title="{stats.total_plays.toLocaleString()} {pluralize(stats.total_plays, 'play', 'plays')}">
-				<svg class="header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<svg class="header-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<polygon points="5 3 19 12 5 21 5 3"></polygon>
 				</svg>
 				<span class="header-value">{stats.total_plays.toLocaleString()}</span>
 			</div>
 			<div class="header-stat" title="{stats.total_tracks.toLocaleString()} {pluralize(stats.total_tracks, 'track', 'tracks')}">
-				<svg class="header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+				<svg class="header-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 					<path d="M9 18V5l12-2v13"></path>
 					<circle cx="6" cy="18" r="3"></circle>
 					<circle cx="18" cy="16" r="3"></circle>
@@ -39,14 +39,14 @@
 				<span class="header-value">{stats.total_tracks.toLocaleString()}</span>
 			</div>
 			<div class="header-stat" title="{stats.total_artists.toLocaleString()} {pluralize(stats.total_artists, 'artist', 'artists')}">
-				<svg class="header-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
+				<svg class="header-icon" width="12" height="12" viewBox="0 0 16 16" fill="none">
 					<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
 					<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 				</svg>
 				<span class="header-value">{stats.total_artists.toLocaleString()}</span>
 			</div>
 			<div class="header-stat" title="{formatDuration(stats.total_duration_seconds)} of audio">
-				<svg class="header-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<svg class="header-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="12" cy="12" r="10"></circle>
 					<polyline points="12 6 12 12 16 14"></polyline>
 				</svg>
@@ -121,18 +121,18 @@
 	.stats-header {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem 0.75rem;
+		gap: 0.4rem 0.6rem;
 		flex-wrap: wrap;
-		justify-content: center;
-		max-width: 280px;
+		justify-content: flex-start;
+		max-width: 260px;
 	}
 
 	.header-stat {
 		display: flex;
 		align-items: center;
-		gap: 0.3rem;
+		gap: 0.25rem;
 		color: var(--text-secondary);
-		font-size: 0.75rem;
+		font-size: 0.65rem;
 		transition: color 0.2s;
 		white-space: nowrap;
 	}

@@ -236,16 +236,16 @@
 
 	.margin-left {
 		position: absolute;
-		/* Center in the left margin: halfway between left edge and content area */
-		left: calc((100vw - var(--queue-width, 0px) - 800px) / 4);
+		left: 0;
 		top: 50%;
-		transform: translate(-50%, -50%);
-		transition: left 0.3s ease;
+		transform: translateY(-50%);
+		transition: width 0.3s ease;
 		display: flex;
 		align-items: center;
-		gap: 1rem;
-		/* Constrain width to prevent overflow into content area */
-		max-width: calc((100vw - var(--queue-width, 0px) - 800px) / 2 - 2rem);
+		justify-content: space-evenly;
+		/* Fill the left margin area */
+		width: calc((100vw - var(--queue-width, 0px) - 800px) / 2);
+		padding: 0 1rem;
 	}
 
 	.logout-right {
