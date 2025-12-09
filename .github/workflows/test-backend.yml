@@ -63,7 +63,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://relay_test:relay_test@localhost:5432/relay_test
           DOCKET_URL: redis://localhost:6379
-        run: cd backend && uv run pytest tests/
+        run: cd backend && uv run pytest tests/ -n auto
 
       - name: prune uv cache
         if: always()
