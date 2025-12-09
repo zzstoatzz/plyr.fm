@@ -1,6 +1,5 @@
 """authentication api endpoints."""
 
-import asyncio
 import logging
 from typing import Annotated
 
@@ -29,23 +28,11 @@ from backend._internal import (
     start_oauth_flow,
     start_oauth_flow_with_scopes,
 )
-from backend._internal.atproto import sync_atproto_records
+from backend._internal.background_tasks import schedule_atproto_sync
 from backend.config import settings
 from backend.utilities.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
-
-# hold references to background tasks to prevent GC before completion
-_background_tasks: set[asyncio.Task[None]] = set()
-
-
-def _create_background_task(coro) -> asyncio.Task:
-    """create a background task with proper lifecycle management."""
-    task = asyncio.create_task(coro)
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return task
-
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -159,21 +146,8 @@ async def oauth_callback(
         # create exchange token - NOT marked as dev token so cookie gets set
         exchange_token = await create_exchange_token(session_id)
 
-        # fire-and-forget: sync ATProto records with new scopes
-        auth_session = Session(
-            session_id=session_id,
-            did=did,
-            handle=handle,
-            oauth_session=oauth_session,
-        )
-
-        async def _sync_on_scope_upgrade():
-            try:
-                await sync_atproto_records(auth_session, did)
-            except Exception as e:
-                logger.error(f"background sync failed for {did}: {e}", exc_info=True)
-
-        _create_background_task(_sync_on_scope_upgrade())
+        # schedule ATProto sync (via docket if enabled, else asyncio)
+        await schedule_atproto_sync(session_id, did)
 
         return RedirectResponse(
             url=f"{settings.frontend.url}/settings?exchange_token={exchange_token}&scope_upgraded=true",
@@ -189,21 +163,8 @@ async def oauth_callback(
     # check if artist profile exists
     has_profile = await check_artist_profile_exists(did)
 
-    # fire-and-forget: sync ATProto records on login
-    auth_session = Session(
-        session_id=session_id,
-        did=did,
-        handle=handle,
-        oauth_session=oauth_session,
-    )
-
-    async def _sync_on_login():
-        try:
-            await sync_atproto_records(auth_session, did)
-        except Exception as e:
-            logger.error(f"background sync failed for {did}: {e}", exc_info=True)
-
-    _create_background_task(_sync_on_login())
+    # schedule ATProto sync (via docket if enabled, else asyncio)
+    await schedule_atproto_sync(session_id, did)
 
     # redirect to profile setup if needed, otherwise to portal
     redirect_path = "/portal" if has_profile else "/profile/setup"

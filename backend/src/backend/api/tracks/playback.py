@@ -4,14 +4,13 @@ import asyncio
 import logging
 from typing import Annotated
 
-from fastapi import BackgroundTasks, Depends, HTTPException
+from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session, get_optional_session
-from backend._internal.atproto.teal import create_teal_play_record, update_teal_status
-from backend._internal.auth import get_session
+from backend._internal.background_tasks import schedule_teal_scrobble
 from backend.config import settings
 from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
 from backend.schemas import TrackResponse
@@ -59,53 +58,10 @@ async def get_track(
     )
 
 
-async def _scrobble_to_teal(
-    session_id: str,
-    track_id: int,
-    track_title: str,
-    artist_name: str,
-    duration: int | None,
-    album_name: str | None,
-) -> None:
-    """scrobble a play to teal.fm (creates play record + updates status)."""
-    if not (auth_session := await get_session(session_id)):
-        logger.warning(f"teal scrobble failed: session {session_id[:8]}... not found")
-        return
-
-    origin_url = f"{settings.frontend.url}/track/{track_id}"
-
-    try:
-        # create play record (scrobble)
-        play_uri = await create_teal_play_record(
-            auth_session=auth_session,
-            track_name=track_title,
-            artist_name=artist_name,
-            duration=duration,
-            album_name=album_name,
-            origin_url=origin_url,
-        )
-        logger.info(f"teal play record created: {play_uri}")
-
-        # update status (now playing)
-        status_uri = await update_teal_status(
-            auth_session=auth_session,
-            track_name=track_title,
-            artist_name=artist_name,
-            duration=duration,
-            album_name=album_name,
-            origin_url=origin_url,
-        )
-        logger.info(f"teal status updated: {status_uri}")
-
-    except Exception as e:
-        logger.error(f"teal scrobble failed for track {track_id}: {e}", exc_info=True)
-
-
 @router.post("/{track_id}/play")
 async def increment_play_count(
     track_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
-    background_tasks: BackgroundTasks,
     session: Session | None = Depends(get_optional_session),
 ) -> dict:
     """Increment play count for a track (called after 30 seconds of playback).
@@ -135,8 +91,7 @@ async def increment_play_count(
             # check if session has teal scopes
             scope = session.oauth_session.get("scope", "")
             if settings.teal.play_collection in scope:
-                background_tasks.add_task(
-                    _scrobble_to_teal,
+                await schedule_teal_scrobble(
                     session_id=session.session_id,
                     track_id=track_id,
                     track_title=track.title,
