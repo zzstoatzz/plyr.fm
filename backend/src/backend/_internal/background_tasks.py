@@ -6,6 +6,7 @@ they should be self-contained and handle their own database sessions.
 requires DOCKET_URL to be set (Redis is always available).
 """
 
+import asyncio
 import logging
 import os
 import tempfile
@@ -44,8 +45,8 @@ async def schedule_copyright_scan(track_id: int, audio_url: str) -> None:
 async def process_export(export_id: str, artist_did: str) -> None:
     """process a media export in the background.
 
-    downloads all tracks for the given artist, zips them, and uploads
-    to R2. progress is tracked via job_service.
+    downloads all tracks for the given artist concurrently, zips them,
+    and uploads to R2. progress is tracked via job_service.
 
     args:
         export_id: job ID for tracking progress
@@ -91,98 +92,158 @@ async def process_export(export_id: str, artist_did: str) -> None:
             zip_path = temp_path / f"{export_id}.zip"
             async_session = aioboto3.Session()
 
+            # prepare track metadata before downloading
+            title_counts: dict[str, int] = {}
+            track_info: list[dict] = []
+
+            for track in tracks:
+                if not track.file_id or not track.file_type:
+                    logfire.warn(
+                        "skipping track: missing file_id or file_type",
+                        track_id=track.id,
+                    )
+                    continue
+
+                # create safe filename with duplicate handling
+                base_filename = f"{track.title}.{track.file_type}"
+                if base_filename in title_counts:
+                    title_counts[base_filename] += 1
+                    filename = f"{track.title} ({title_counts[base_filename]}).{track.file_type}"
+                else:
+                    title_counts[base_filename] = 0
+                    filename = base_filename
+
+                # sanitize filename (remove invalid chars)
+                filename = "".join(
+                    c
+                    for c in filename
+                    if c.isalnum() or c in (" ", ".", "-", "_", "(", ")")
+                )
+
+                track_info.append(
+                    {
+                        "track": track,
+                        "key": f"audio/{track.file_id}.{track.file_type}",
+                        "filename": filename,
+                        "temp_path": temp_path / filename,
+                    }
+                )
+
+            total = len(track_info)
+            if total == 0:
+                await job_service.update_progress(
+                    export_id,
+                    JobStatus.FAILED,
+                    "export failed",
+                    error="no valid tracks found to export",
+                )
+                return
+
+            # download counter for progress updates
+            downloaded = 0
+            download_lock = asyncio.Lock()
+
+            async def download_track(
+                info: dict,
+                s3_client,
+                semaphore: asyncio.Semaphore,
+            ) -> dict | None:
+                """download a single track, returning info on success or None on failure."""
+                nonlocal downloaded
+
+                async with semaphore:
+                    track = info["track"]
+                    try:
+                        response = await s3_client.get_object(
+                            Bucket=settings.storage.r2_bucket,
+                            Key=info["key"],
+                        )
+
+                        # stream to disk in chunks
+                        async with aiofiles.open(info["temp_path"], "wb") as f:
+                            async for chunk in response["Body"].iter_chunks():
+                                await f.write(chunk)
+
+                        # update progress
+                        async with download_lock:
+                            downloaded += 1
+                            pct = (downloaded / total) * 100
+                            await job_service.update_progress(
+                                export_id,
+                                JobStatus.PROCESSING,
+                                f"downloading tracks ({downloaded}/{total})...",
+                                progress_pct=pct,
+                                result={
+                                    "processed_count": downloaded,
+                                    "total_count": total,
+                                },
+                            )
+
+                        logfire.info(
+                            "downloaded track: {track_title}",
+                            track_id=track.id,
+                            track_title=track.title,
+                        )
+                        return info
+
+                    except Exception as e:
+                        logfire.error(
+                            "failed to download track: {track_title}",
+                            track_id=track.id,
+                            track_title=track.title,
+                            error=str(e),
+                            _exc_info=True,
+                        )
+                        return None
+
+            # download all tracks concurrently (limit to 4 concurrent downloads)
+            await job_service.update_progress(
+                export_id,
+                JobStatus.PROCESSING,
+                f"downloading {total} tracks...",
+                progress_pct=0,
+                result={"processed_count": 0, "total_count": total},
+            )
+
+            semaphore = asyncio.Semaphore(4)
             async with async_session.client(
                 "s3",
                 endpoint_url=settings.storage.r2_endpoint_url,
                 aws_access_key_id=settings.storage.aws_access_key_id,
                 aws_secret_access_key=settings.storage.aws_secret_access_key,
             ) as s3_client:
-                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                    # track counter for duplicate titles
-                    title_counts: dict[str, int] = {}
-                    processed = 0
-                    total = len(tracks)
+                results = await asyncio.gather(
+                    *[download_track(info, s3_client, semaphore) for info in track_info]
+                )
 
-                    for track in tracks:
-                        if not track.file_id or not track.file_type:
-                            logfire.warn(
-                                "skipping track: missing file_id or file_type",
-                                track_id=track.id,
-                            )
-                            continue
+            # filter out failed downloads
+            successful_downloads = [r for r in results if r is not None]
 
-                        # construct R2 key
-                        key = f"audio/{track.file_id}.{track.file_type}"
+            # create zip file from downloaded tracks (sequential - zipfile not thread-safe)
+            await job_service.update_progress(
+                export_id,
+                JobStatus.PROCESSING,
+                "creating zip archive...",
+                progress_pct=100,
+                result={
+                    "processed_count": len(successful_downloads),
+                    "total_count": total,
+                },
+            )
 
-                        try:
-                            # update progress (current_track is 1-indexed for display)
-                            current_track = processed + 1
-                            pct = (processed / total) * 100
-                            await job_service.update_progress(
-                                export_id,
-                                JobStatus.PROCESSING,
-                                f"downloading track {current_track} of {total}...",
-                                progress_pct=pct,
-                                result={
-                                    "processed_count": processed,
-                                    "total_count": total,
-                                    "current_track": current_track,
-                                    "current_title": track.title,
-                                },
-                            )
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for info in successful_downloads:
+                    zip_file.write(info["temp_path"], arcname=info["filename"])
+                    logfire.info(
+                        "added track to export: {track_title}",
+                        track_id=info["track"].id,
+                        track_title=info["track"].title,
+                        filename=info["filename"],
+                    )
+                    # remove temp file to free disk space
+                    os.unlink(info["temp_path"])
 
-                            # create safe filename
-                            # handle duplicate titles by appending counter
-                            base_filename = f"{track.title}.{track.file_type}"
-                            if base_filename in title_counts:
-                                title_counts[base_filename] += 1
-                                filename = f"{track.title} ({title_counts[base_filename]}).{track.file_type}"
-                            else:
-                                title_counts[base_filename] = 0
-                                filename = base_filename
-
-                            # sanitize filename (remove invalid chars)
-                            filename = "".join(
-                                c
-                                for c in filename
-                                if c.isalnum() or c in (" ", ".", "-", "_", "(", ")")
-                            )
-
-                            # download file to temp location, streaming to disk
-                            temp_file_path = temp_path / filename
-                            response = await s3_client.get_object(
-                                Bucket=settings.storage.r2_bucket,
-                                Key=key,
-                            )
-
-                            # stream to disk in chunks to avoid loading into memory
-                            async with aiofiles.open(temp_file_path, "wb") as f:
-                                async for chunk in response["Body"].iter_chunks():
-                                    await f.write(chunk)
-
-                            # add to zip from disk (streams from file, doesn't load into memory)
-                            zip_file.write(temp_file_path, arcname=filename)
-
-                            # remove temp file immediately to free disk space
-                            os.unlink(temp_file_path)
-
-                            processed += 1
-                            logfire.info(
-                                "added track to export: {track_title}",
-                                track_id=track.id,
-                                track_title=track.title,
-                                filename=filename,
-                            )
-
-                        except Exception as e:
-                            logfire.error(
-                                "failed to add track to export: {track_title}",
-                                track_id=track.id,
-                                track_title=track.title,
-                                error=str(e),
-                                _exc_info=True,
-                            )
-                            # continue with other tracks instead of failing entire export
+            processed = len(successful_downloads)
 
             # upload the zip file to R2 (still inside temp directory context)
             r2_key = f"exports/{export_id}.zip"
