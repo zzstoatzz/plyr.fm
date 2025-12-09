@@ -271,15 +271,19 @@ See `.status_history/2025-12.md` and `.status_history/2025-11.md` for detailed h
 
 ## cost structure
 
-current monthly costs: ~$35-40/month
+current monthly costs: ~$18/month (plyr.fm specific)
 
-- fly.io backend (prod + staging): ~$10/month
-- fly.io transcoder: ~$0-5/month (auto-scales to zero)
+see live dashboard: [plyr.fm/costs](https://plyr.fm/costs)
+
+- fly.io (plyr apps only): ~$12/month
+  - relay-api (prod): $5.80
+  - relay-api-staging: $5.60
+  - plyr-moderation: $0.24
+  - plyr-transcoder: $0.02
 - neon postgres: $5/month
-- audd audio fingerprinting: ~$10/month
-- cloudflare pages + R2: ~$0.16/month
+- cloudflare (R2 + pages + domain): ~$1.16/month
+- audd audio fingerprinting: $0-10/month (6000 free/month)
 - logfire: $0 (free tier)
-- domain: ~$1/month
 
 ## admin tooling
 

@@ -270,6 +270,14 @@ class StorageSettings(AppSettingsSection):
 
     @computed_field
     @property
+    def costs_json_url(self) -> str:
+        """URL for the public costs dashboard JSON."""
+        if self.r2_public_bucket_url:
+            return f"{self.r2_public_bucket_url.rstrip('/')}/stats/costs.json"
+        return ""
+
+    @computed_field
+    @property
     def allowed_image_origins(self) -> set[str]:
         """Origins allowed for imageUrl validation."""
         origins = set()
