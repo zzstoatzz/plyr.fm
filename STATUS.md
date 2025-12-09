@@ -47,6 +47,13 @@ plyr.fm should become:
 
 ### December 2025
 
+#### public cost dashboard (PR #548, Dec 9)
+
+- `/costs` page showing live platform infrastructure costs
+- daily export to R2 via GitHub Action, proxied through `/stats/costs` endpoint
+- includes fly.io, neon, cloudflare, and audd API costs
+- ko-fi integration for community support
+
 #### docket background tasks & concurrent exports (PRs #534-546, Dec 9)
 
 **docket integration** (PRs #534, #536, #539):
@@ -187,7 +194,6 @@ See `.status_history/2025-12.md` and `.status_history/2025-11.md` for detailed h
 
 ### immediate focus
 - **moderation cleanup**: consolidate copyright detection, reduce AudD API costs, streamline labeler integration (issues #541-544)
-- **public cost dashboard**: interactive page showing platform running costs (fly.io, neon, audd, r2) - transparency + prompts for community support
 
 ### feature ideas
 - issue #334: add 'share to bluesky' option for tracks
