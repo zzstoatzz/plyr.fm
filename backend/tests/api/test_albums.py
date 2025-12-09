@@ -1,10 +1,12 @@
 """tests for album API helpers."""
 
 from collections.abc import Generator
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session
@@ -18,19 +20,37 @@ class MockSession(Session):
 
     def __init__(self, did: str = "did:test:user123"):
         self.did = did
+        self.handle = "testuser.bsky.social"
+        self.session_id = "test_session_id"
         self.access_token = "test_token"
         self.refresh_token = "test_refresh"
+        self.oauth_session = {
+            "did": did,
+            "handle": "testuser.bsky.social",
+            "pds_url": "https://test.pds",
+            "authserver_iss": "https://auth.test",
+            "scope": "atproto transition:generic",
+            "access_token": "test_token",
+            "refresh_token": "test_refresh",
+            "dpop_private_key_pem": "fake_key",
+            "dpop_authserver_nonce": "",
+            "dpop_pds_nonce": "",
+        }
 
 
 @pytest.fixture
 def test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
     """create test app with mocked auth."""
-    from backend._internal import require_auth
+    from backend._internal import require_artist_profile, require_auth
 
     async def mock_require_auth() -> Session:
         return MockSession()
 
+    async def mock_require_artist_profile() -> Session:
+        return MockSession()
+
     app.dependency_overrides[require_auth] = mock_require_auth
+    app.dependency_overrides[require_artist_profile] = mock_require_artist_profile
 
     yield app
 
@@ -187,3 +207,624 @@ async def test_get_album_serializes_tracks_correctly(
     assert data["tracks"][0]["album"]["id"] == album.id
     assert data["tracks"][0]["album"]["slug"] == "test-album"
     assert data["tracks"][0]["album"]["title"] == "Test Album"
+
+
+async def test_delete_album_orphans_tracks_by_default(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test that deleting album orphans tracks (sets album_id to null).
+
+    regression test for user report: unable to delete empty album after
+    deleting individual tracks.
+    """
+    # create artist matching mock session
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album
+    album = Album(
+        artist_did=artist.did,
+        slug="test-album",
+        title="Test Album",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create tracks linked to album
+    track1 = Track(
+        title="Track 1",
+        file_id="test-file-1",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+    )
+    track2 = Track(
+        title="Track 2",
+        file_id="test-file-2",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+    )
+    db_session.add_all([track1, track2])
+    await db_session.commit()
+
+    album_id = album.id
+    track1_id = track1.id
+    track2_id = track2.id
+
+    # mock ATProto delete (imported inside the function from _internal.atproto.records)
+    with patch(
+        "backend._internal.atproto.records.fm_plyr.track.delete_record_by_uri",
+        new_callable=AsyncMock,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/albums/{album_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["deleted"] is True
+    assert data["cascade"] is False
+
+    # close test session and create fresh one to read committed data
+    await db_session.close()
+
+    # verify album is deleted by checking response
+    # (the API committed in a separate session, test session can't see it)
+    # Use a fresh query to verify the state
+    from backend.utilities.database import get_engine
+
+    engine = get_engine()
+    async with AsyncSession(engine, expire_on_commit=False) as fresh_session:
+        # verify album is deleted
+        result = await fresh_session.execute(select(Album).where(Album.id == album_id))
+        assert result.scalar_one_or_none() is None
+
+        # verify tracks still exist but are orphaned (album_id = null)
+        result = await fresh_session.execute(select(Track).where(Track.id == track1_id))
+        track1_after = result.scalar_one_or_none()
+        assert track1_after is not None
+        assert track1_after.album_id is None
+
+        result = await fresh_session.execute(select(Track).where(Track.id == track2_id))
+        track2_after = result.scalar_one_or_none()
+        assert track2_after is not None
+        assert track2_after.album_id is None
+
+
+async def test_delete_album_cascade_deletes_tracks(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test that deleting album with cascade=true also deletes all tracks."""
+    # create artist matching mock session
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album
+    album = Album(
+        artist_did=artist.did,
+        slug="test-album-cascade",
+        title="Test Album Cascade",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create tracks linked to album
+    track1 = Track(
+        title="Track 1",
+        file_id="cascade-file-1",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+    )
+    track2 = Track(
+        title="Track 2",
+        file_id="cascade-file-2",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+    )
+    db_session.add_all([track1, track2])
+    await db_session.commit()
+
+    album_id = album.id
+    track1_id = track1.id
+    track2_id = track2.id
+
+    # mock ATProto and storage deletes
+    with (
+        patch(
+            "backend._internal.atproto.records.fm_plyr.track.delete_record_by_uri",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "backend.api.tracks.mutations.delete_record_by_uri",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "backend.api.tracks.mutations.storage.delete",
+            new_callable=AsyncMock,
+        ),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/albums/{album_id}?cascade=true")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["deleted"] is True
+    assert data["cascade"] is True
+
+    # verify album is deleted
+    result = await db_session.execute(select(Album).where(Album.id == album_id))
+    assert result.scalar_one_or_none() is None
+
+    # verify tracks are also deleted
+    result = await db_session.execute(select(Track).where(Track.id == track1_id))
+    assert result.scalar_one_or_none() is None
+
+    result = await db_session.execute(select(Track).where(Track.id == track2_id))
+    assert result.scalar_one_or_none() is None
+
+
+async def test_delete_album_forbidden_for_non_owner(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test that users cannot delete albums they don't own."""
+    # create a different artist (not the mock session's did)
+    other_artist = Artist(
+        did="did:other:artist999",
+        handle="other.artist",
+        display_name="Other Artist",
+    )
+    db_session.add(other_artist)
+    await db_session.flush()
+
+    # create album owned by other artist
+    album = Album(
+        artist_did=other_artist.did,
+        slug="other-album",
+        title="Other Album",
+    )
+    db_session.add(album)
+    await db_session.commit()
+
+    album_id = album.id
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.delete(f"/albums/{album_id}")
+
+    assert response.status_code == 403
+    assert "your own albums" in response.json()["detail"]
+
+
+async def test_delete_empty_album(test_app: FastAPI, db_session: AsyncSession):
+    """test deleting an album with no tracks (empty album shell).
+
+    regression test for user report: after deleting all tracks individually,
+    the album folder remains and cannot be deleted.
+    """
+    # create artist matching mock session
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create empty album (no tracks)
+    album = Album(
+        artist_did=artist.did,
+        slug="empty-album",
+        title="Empty Album",
+    )
+    db_session.add(album)
+    await db_session.commit()
+
+    album_id = album.id
+
+    # mock ATProto delete
+    with patch(
+        "backend._internal.atproto.records.fm_plyr.track.delete_record_by_uri",
+        new_callable=AsyncMock,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/albums/{album_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["deleted"] is True
+
+    # verify album is deleted
+    result = await db_session.execute(select(Album).where(Album.id == album_id))
+    assert result.scalar_one_or_none() is None
+
+
+async def test_get_album_respects_atproto_track_order(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test that get_album returns tracks in ATProto list order.
+
+    regression test for user report: album track reorder doesn't persist.
+    the frontend saves order to ATProto, but backend was ignoring it.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    # create artist
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+        pds_url="https://test.pds",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album with ATProto record URI
+    album = Album(
+        artist_did=artist.did,
+        slug="ordered-album",
+        title="Ordered Album",
+        atproto_record_uri="at://did:test:user123/fm.plyr.list/album123",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create tracks with staggered created_at (track3 first, track1 last)
+    base_time = datetime.now(UTC)
+    track1 = Track(
+        title="Track 1",
+        file_id="order-file-1",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        atproto_record_uri="at://did:test:user123/fm.plyr.track/track1",
+        atproto_record_cid="cid1",
+        created_at=base_time + timedelta(hours=2),  # created last
+    )
+    track2 = Track(
+        title="Track 2",
+        file_id="order-file-2",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        atproto_record_uri="at://did:test:user123/fm.plyr.track/track2",
+        atproto_record_cid="cid2",
+        created_at=base_time + timedelta(hours=1),  # created second
+    )
+    track3 = Track(
+        title="Track 3",
+        file_id="order-file-3",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        atproto_record_uri="at://did:test:user123/fm.plyr.track/track3",
+        atproto_record_cid="cid3",
+        created_at=base_time,  # created first
+    )
+    db_session.add_all([track1, track2, track3])
+    await db_session.commit()
+
+    # mock ATProto record fetch to return custom order: track2, track3, track1
+    # (different from created_at order which would be track3, track2, track1)
+    mock_record = {
+        "value": {
+            "items": [
+                {"subject": {"uri": track2.atproto_record_uri, "cid": "cid2"}},
+                {"subject": {"uri": track3.atproto_record_uri, "cid": "cid3"}},
+                {"subject": {"uri": track1.atproto_record_uri, "cid": "cid1"}},
+            ]
+        }
+    }
+
+    with patch(
+        "backend._internal.atproto.records.get_record_public",
+        new_callable=AsyncMock,
+        return_value=mock_record,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(f"/albums/{artist.handle}/{album.slug}")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # verify tracks are in ATProto order (track2, track3, track1)
+    # NOT created_at order (which would be track3, track2, track1)
+    assert len(data["tracks"]) == 3
+    assert data["tracks"][0]["title"] == "Track 2"
+    assert data["tracks"][1]["title"] == "Track 3"
+    assert data["tracks"][2]["title"] == "Track 1"
+
+
+async def test_get_album_fallback_to_created_at_without_atproto(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test that get_album falls back to created_at order without ATProto record."""
+    from datetime import UTC, datetime, timedelta
+
+    # create artist
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album WITHOUT ATProto record URI
+    album = Album(
+        artist_did=artist.did,
+        slug="no-atproto-album",
+        title="No ATProto Album",
+        atproto_record_uri=None,  # no ATProto record
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create tracks with specific order
+    base_time = datetime.now(UTC)
+    track1 = Track(
+        title="First Track",
+        file_id="first-file",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        created_at=base_time,
+    )
+    track2 = Track(
+        title="Second Track",
+        file_id="second-file",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        created_at=base_time + timedelta(hours=1),
+    )
+    track3 = Track(
+        title="Third Track",
+        file_id="third-file",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        created_at=base_time + timedelta(hours=2),
+    )
+    db_session.add_all([track1, track2, track3])
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/albums/{artist.handle}/{album.slug}")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # verify tracks are in created_at order (default fallback)
+    assert len(data["tracks"]) == 3
+    assert data["tracks"][0]["title"] == "First Track"
+    assert data["tracks"][1]["title"] == "Second Track"
+    assert data["tracks"][2]["title"] == "Third Track"
+
+
+async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
+    """test updating album title via PATCH endpoint.
+
+    verifies that:
+    1. album title is updated in database
+    2. track extra["album"] is updated for all tracks
+    3. ATProto records are updated for tracks that have them
+    """
+    # create artist matching mock session
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album
+    album = Album(
+        artist_did=artist.did,
+        slug="test-album",
+        title="Original Title",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create track with ATProto record
+    track = Track(
+        title="Test Track",
+        file_id="test-file-update",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        extra={"album": "Original Title"},
+        atproto_record_uri="at://did:test:user123/fm.plyr.track/track123",
+        atproto_record_cid="original_cid",
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    album_id = album.id
+    track_id = track.id
+
+    # mock ATProto update_record
+    with patch(
+        "backend._internal.atproto.records.fm_plyr.track.update_record",
+        new_callable=AsyncMock,
+        return_value=("at://did:test:user123/fm.plyr.track/track123", "new_cid"),
+    ) as mock_update:
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.patch(f"/albums/{album_id}?title=Updated%20Title")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Updated Title"
+    assert data["id"] == album_id
+
+    # verify ATProto update was called
+    mock_update.assert_called_once()
+    call_kwargs = mock_update.call_args.kwargs
+    assert call_kwargs["record"]["album"] == "Updated Title"
+
+    # verify track extra["album"] was updated in database
+    from backend.utilities.database import get_engine
+
+    engine = get_engine()
+    async with AsyncSession(engine, expire_on_commit=False) as fresh_session:
+        result = await fresh_session.execute(select(Track).where(Track.id == track_id))
+        updated_track = result.scalar_one()
+        assert updated_track.extra["album"] == "Updated Title"
+        assert updated_track.atproto_record_cid == "new_cid"
+
+
+async def test_update_album_forbidden_for_non_owner(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test that users cannot update albums they don't own."""
+    # create a different artist
+    other_artist = Artist(
+        did="did:other:artist999",
+        handle="other.artist",
+        display_name="Other Artist",
+    )
+    db_session.add(other_artist)
+    await db_session.flush()
+
+    # create album owned by other artist
+    album = Album(
+        artist_did=other_artist.did,
+        slug="other-album",
+        title="Other Album",
+    )
+    db_session.add(album)
+    await db_session.commit()
+
+    album_id = album.id
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.patch(f"/albums/{album_id}?title=Hacked%20Title")
+
+    assert response.status_code == 403
+    assert "your own albums" in response.json()["detail"]
+
+
+async def test_remove_track_from_album(test_app: FastAPI, db_session: AsyncSession):
+    """test removing a track from an album (orphaning it)."""
+    # create artist matching mock session
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album
+    album = Album(
+        artist_did=artist.did,
+        slug="test-album",
+        title="Test Album",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create track in album
+    track = Track(
+        title="Track to Remove",
+        file_id="remove-file-1",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    album_id = album.id
+    track_id = track.id
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.delete(f"/albums/{album_id}/tracks/{track_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["removed"] is True
+    assert data["track_id"] == track_id
+
+    # verify track is orphaned (album_id = null)
+    from backend.utilities.database import get_engine
+
+    engine = get_engine()
+    async with AsyncSession(engine, expire_on_commit=False) as fresh_session:
+        result = await fresh_session.execute(select(Track).where(Track.id == track_id))
+        track_after = result.scalar_one_or_none()
+        assert track_after is not None
+        assert track_after.album_id is None
+
+
+async def test_remove_track_not_in_album(test_app: FastAPI, db_session: AsyncSession):
+    """test that removing a track not in the album returns 400."""
+    # create artist
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album
+    album = Album(
+        artist_did=artist.did,
+        slug="test-album",
+        title="Test Album",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # create track NOT in this album (orphaned)
+    track = Track(
+        title="Orphan Track",
+        file_id="orphan-file-1",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=None,  # not in any album
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    album_id = album.id
+    track_id = track.id
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.delete(f"/albums/{album_id}/tracks/{track_id}")
+
+    assert response.status_code == 400
+    assert "not in this album" in response.json()["detail"]

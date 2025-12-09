@@ -2,11 +2,21 @@
 
 import asyncio
 import contextlib
+import logging
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, File, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +34,8 @@ from backend.utilities.aggregations import (
     get_track_tags,
 )
 from backend.utilities.hashing import CHUNK_SIZE
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/albums", tags=["albums"])
 
@@ -246,7 +258,13 @@ async def get_album(
     request: Request,
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> AlbumResponse:
-    """get album details with all tracks for a specific artist."""
+    """get album details with all tracks for a specific artist.
+
+    if the album has an ATProto list record, tracks are returned in the
+    order stored in that record. otherwise, tracks are ordered by created_at.
+    """
+    from backend._internal.atproto.records import get_record_public
+
     # look up artist + album
     album_result = await db.execute(
         select(Album, Artist)
@@ -259,16 +277,72 @@ async def get_album(
 
     album, artist = row
 
-    # batch fetch like counts
+    # ensure PDS URL cached (needed for ATProto record fetch)
+    pds_cache: dict[str, str | None] = {}
+    if artist.pds_url:
+        pds_cache[artist.did] = artist.pds_url
+    else:
+        from atproto_identity.did.resolver import AsyncDidResolver
+
+        resolver = AsyncDidResolver()
+        try:
+            atproto_data = await resolver.resolve_atproto_data(artist.did)
+            pds_cache[artist.did] = atproto_data.pds
+            artist.pds_url = atproto_data.pds
+            db.add(artist)
+            await db.commit()
+        except Exception:
+            pds_cache[artist.did] = None
+
+    # fetch all tracks for this album
     track_stmt = (
         select(Track)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.album_id == album.id)
-        .order_by(Track.created_at.asc())
     )
     track_result = await db.execute(track_stmt)
-    tracks = track_result.scalars().all()
+    all_tracks = list(track_result.scalars().all())
+
+    # determine track order: use ATProto list record if available
+    ordered_tracks: list[Track] = []
+    if album.atproto_record_uri and artist.pds_url:
+        try:
+            record_data = await get_record_public(
+                record_uri=album.atproto_record_uri,
+                pds_url=artist.pds_url,
+            )
+            items = record_data.get("value", {}).get("items", [])
+            track_uris = [item.get("subject", {}).get("uri") for item in items]
+            track_uris = [uri for uri in track_uris if uri]
+
+            # build uri -> track map
+            track_by_uri = {t.atproto_record_uri: t for t in all_tracks}
+
+            # order tracks by ATProto list, append any not in list at end
+            seen_ids = set()
+            for uri in track_uris:
+                if uri in track_by_uri:
+                    track = track_by_uri[uri]
+                    ordered_tracks.append(track)
+                    seen_ids.add(track.id)
+
+            # append any tracks not in the ATProto list (fallback)
+            for track in sorted(all_tracks, key=lambda t: t.created_at):
+                if track.id not in seen_ids:
+                    ordered_tracks.append(track)
+
+        except Exception as e:
+            logger.warning(f"failed to fetch ATProto list for album ordering: {e}")
+            # fallback to created_at order
+            ordered_tracks = sorted(all_tracks, key=lambda t: t.created_at)
+    else:
+        # no ATProto record - order by created_at
+        ordered_tracks = sorted(all_tracks, key=lambda t: t.created_at)
+
+    tracks = ordered_tracks
     track_ids = [track.id for track in tracks]
+
+    # batch fetch aggregations
     if track_ids:
         like_counts, comment_counts, track_tags = await asyncio.gather(
             get_like_counts(db, track_ids),
@@ -293,24 +367,7 @@ async def get_album(
             )
             liked_track_ids = set(liked_result.scalars().all())
 
-    # ensure PDS URL cached
-    pds_cache: dict[str, str | None] = {}
-    if artist.pds_url:
-        pds_cache[artist.did] = artist.pds_url
-    else:
-        from atproto_identity.did.resolver import AsyncDidResolver
-
-        resolver = AsyncDidResolver()
-        try:
-            atproto_data = await resolver.resolve_atproto_data(artist.did)
-            pds_cache[artist.did] = atproto_data.pds
-            artist.pds_url = atproto_data.pds
-            db.add(artist)
-            await db.commit()
-        except Exception:
-            pds_cache[artist.did] = None
-
-    # build track responses
+    # build track responses (maintaining order)
     track_responses = await asyncio.gather(
         *[
             TrackResponse.from_track(
@@ -401,3 +458,192 @@ async def upload_album_cover(
         raise HTTPException(
             status_code=500, detail=f"failed to upload image: {e!s}"
         ) from e
+
+
+@router.patch("/{album_id}")
+async def update_album(
+    album_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Annotated[AuthSession, Depends(require_artist_profile)],
+    title: Annotated[str | None, Query(description="new album title")] = None,
+    description: Annotated[
+        str | None, Query(description="new album description")
+    ] = None,
+) -> AlbumMetadata:
+    """update album metadata (title, description).
+
+    when title changes, all tracks in the album have their ATProto records
+    updated to reflect the new album name.
+    """
+    from backend._internal.atproto.records.fm_plyr.track import (
+        build_track_record,
+        update_record,
+    )
+
+    result = await db.execute(
+        select(Album)
+        .where(Album.id == album_id)
+        .options(selectinload(Album.tracks).selectinload(Track.artist))
+    )
+    album = result.scalar_one_or_none()
+    if not album:
+        raise HTTPException(status_code=404, detail="album not found")
+    if album.artist_did != auth_session.did:
+        raise HTTPException(
+            status_code=403, detail="you can only update your own albums"
+        )
+
+    old_title = album.title
+    title_changed = title is not None and title.strip() != old_title
+
+    if title is not None:
+        album.title = title.strip()
+    if description is not None:
+        album.description = description.strip() if description.strip() else None
+
+    # if title changed, update all tracks' extra["album"] and ATProto records
+    if title_changed and title is not None:
+        new_title = title.strip()
+
+        for track in album.tracks:
+            # update the track's extra["album"] field
+            if track.extra is None:
+                track.extra = {}
+            track.extra = {**track.extra, "album": new_title}
+
+            # update ATProto record
+            updated_record = build_track_record(
+                title=track.title,
+                artist=track.artist.display_name,
+                audio_url=track.r2_url,
+                file_type=track.file_type,
+                album=new_title,
+                duration=track.duration,
+                features=track.features if track.features else None,
+                image_url=await track.get_image_url(),
+            )
+
+            _, new_cid = await update_record(
+                auth_session=auth_session,
+                record_uri=track.atproto_record_uri,
+                record=updated_record,
+            )
+            track.atproto_record_cid = new_cid
+
+    await db.commit()
+
+    # fetch artist for response
+    artist_result = await db.execute(
+        select(Artist).where(Artist.did == album.artist_did)
+    )
+    artist = artist_result.scalar_one()
+    track_count, total_plays = await _album_stats(db, album_id)
+
+    return await _album_metadata(album, artist, track_count, total_plays)
+
+
+@router.delete("/{album_id}/tracks/{track_id}")
+async def remove_track_from_album(
+    album_id: str,
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Annotated[AuthSession, Depends(require_artist_profile)],
+) -> dict:
+    """remove a track from an album (orphan it, don't delete).
+
+    the track remains available as a standalone track.
+    """
+    # verify album exists and belongs to the authenticated artist
+    album_result = await db.execute(select(Album).where(Album.id == album_id))
+    album = album_result.scalar_one_or_none()
+    if not album:
+        raise HTTPException(status_code=404, detail="album not found")
+    if album.artist_did != auth_session.did:
+        raise HTTPException(
+            status_code=403, detail="you can only modify your own albums"
+        )
+
+    # verify track exists and is in this album
+    track_result = await db.execute(select(Track).where(Track.id == track_id))
+    track = track_result.scalar_one_or_none()
+    if not track:
+        raise HTTPException(status_code=404, detail="track not found")
+    if track.album_id != album_id:
+        raise HTTPException(status_code=400, detail="track is not in this album")
+
+    # orphan the track
+    track.album_id = None
+    await db.commit()
+
+    return {"removed": True, "track_id": track_id}
+
+
+@router.delete("/{album_id}")
+async def delete_album(
+    album_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: Annotated[AuthSession, Depends(require_artist_profile)],
+    cascade: Annotated[
+        bool,
+        Query(description="if true, also delete all tracks in the album"),
+    ] = False,
+) -> dict:
+    """delete an album.
+
+    by default, tracks are orphaned (album_id set to null) and remain
+    available as standalone tracks. with cascade=true, tracks are also deleted.
+
+    also deletes the ATProto list record if one exists.
+    """
+    from backend._internal.atproto.records import delete_record_by_uri
+
+    # verify album exists and belongs to the authenticated artist
+    result = await db.execute(select(Album).where(Album.id == album_id))
+    album = result.scalar_one_or_none()
+    if not album:
+        raise HTTPException(status_code=404, detail="album not found")
+    if album.artist_did != auth_session.did:
+        raise HTTPException(
+            status_code=403, detail="you can only delete your own albums"
+        )
+
+    # handle tracks
+    if cascade:
+        # delete all tracks in album
+        from backend.api.tracks.mutations import delete_track
+
+        tracks_result = await db.execute(
+            select(Track).where(Track.album_id == album_id)
+        )
+        tracks = tracks_result.scalars().all()
+        for track in tracks:
+            try:
+                await delete_track(track.id, db, auth_session)
+            except Exception as e:
+                logger.warning(f"failed to delete track {track.id}: {e}")
+    else:
+        # orphan tracks - set album_id to null
+        from sqlalchemy import update
+
+        await db.execute(
+            update(Track).where(Track.album_id == album_id).values(album_id=None)
+        )
+
+    # delete ATProto record if exists
+    if album.atproto_record_uri:
+        try:
+            await delete_record_by_uri(auth_session, album.atproto_record_uri)
+        except Exception as e:
+            logger.warning(f"failed to delete ATProto record: {e}")
+            # continue with database cleanup even if ATProto delete fails
+
+    # delete cover image from storage if exists
+    if album.image_id:
+        with contextlib.suppress(Exception):
+            await storage.delete(album.image_id)
+
+    # delete album from database
+    await db.delete(album)
+    await db.commit()
+
+    return {"deleted": True, "cascade": cascade}
