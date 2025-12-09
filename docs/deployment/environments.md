@@ -4,28 +4,28 @@ plyr.fm uses a simple three-tier deployment strategy: development → staging �
 
 ## environments
 
-| environment | trigger | backend URL | database | frontend | storage |
-|-------------|---------|-------------|----------|----------|---------|
-| **development** | local | localhost:8001 | plyr-dev (neon) | localhost:5173 | audio-dev, images-dev (r2) |
-| **staging** | push to main | api-stg.plyr.fm | plyr-staging (neon) | stg.plyr.fm (main branch) | audio-staging, images-staging (r2) |
-| **production** | github release | api.plyr.fm | plyr-prod (neon) | plyr.fm (production-fe branch) | audio-prod, images-prod (r2) |
+| environment | trigger | backend URL | database | redis | frontend | storage |
+|-------------|---------|-------------|----------|-------|----------|---------|
+| **development** | local | localhost:8001 | plyr-dev (neon) | localhost:6379 (docker) | localhost:5173 | audio-dev, images-dev (r2) |
+| **staging** | push to main | api-stg.plyr.fm | plyr-stg (neon) | plyr-redis-stg (upstash) | stg.plyr.fm (main branch) | audio-staging, images-staging (r2) |
+| **production** | github release | api.plyr.fm | plyr-prd (neon) | plyr-redis-prd (upstash) | plyr.fm (production-fe branch) | audio-prod, images-prod (r2) |
 
 ## workflow
 
 ### local development
 
 ```bash
-# start backend (hot reloads)
-just run-backend
+# start everything (redis + backend + frontend)
+just dev
 
-# start frontend (hot reloads)
-just frontend dev
-
-# start transcoder (hot reloads)
-just transcoder run
+# or separately:
+docker compose up -d              # start redis
+just backend run                  # start backend (hot reloads)
+just frontend dev                 # start frontend (hot reloads)
+just transcoder run               # start transcoder (hot reloads)
 ```
 
-connects to `plyr-dev` neon database and uses `fm.plyr.dev` atproto namespace.
+connects to `plyr-dev` neon database, local Redis, and uses `fm.plyr.dev` atproto namespace.
 
 ### staging deployment (automatic)
 
@@ -110,6 +110,7 @@ this will:
 
 all secrets configured via `flyctl secrets set`. key environment variables:
 - `DATABASE_URL` → neon connection string (env-specific)
+- `DOCKET_URL` → redis URL for background tasks (env-specific, use `rediss://` for TLS)
 - `FRONTEND_URL` → frontend URL for CORS (production: `https://plyr.fm`, staging: `https://stg.plyr.fm`)
 - `ATPROTO_APP_NAMESPACE` → atproto namespace (environment-specific, separates records by environment)
   - development: `fm.plyr.dev` (local `.env`)
