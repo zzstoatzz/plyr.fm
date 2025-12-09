@@ -549,8 +549,13 @@ class DocketSettings(AppSettingsSection):
         description="Name of the docket instance (shared across workers)",
     )
     url: str = Field(
-        default="memory://plyr",
-        description="Redis URL for docket. Use 'memory://' for in-memory mode (default)",
+        default="",
+        validation_alias="DOCKET_URL",
+        description="Redis URL for docket (required in production). Empty disables docket.",
+    )
+    enabled: bool = Field(
+        default=False,
+        description="Enable docket background tasks. Auto-enabled when url is set.",
     )
     worker_concurrency: int = Field(
         default=10,
