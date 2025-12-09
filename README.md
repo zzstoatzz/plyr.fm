@@ -11,14 +11,20 @@ check the [plyr.fm artist page](https://plyr.fm/u/plyr.fm) for the latest [auto-
 - **framework**: [FastAPI](https://fastapi.tiangolo.com)
 - **database**: [Neon PostgreSQL](https://neon.com)
 - **storage**: [Cloudflare R2](https://developers.cloudflare.com/r2/)
+- **background tasks**: [docket](https://github.com/zzstoatzz/docket) (Redis-backed)
 - **hosting**: [Fly.io](https://fly.io)
-- **auth**: [atproto OAuth 2.1](https://atproto.com/specs/oauth) ([fork with OAuth implementation](https://github.com/zzstoatzz/atproto))
+- **observability**: [Pydantic Logfire](https://logfire.pydantic.dev)
+- **auth**: [atproto OAuth 2.1](https://atproto.com/specs/oauth)
 
 ### frontend
-- **framework**: [SvelteKit](https://kit.svelte.dev)
+- **framework**: [SvelteKit](https://kit.svelte.dev) with Svelte 5 runes
 - **runtime**: [Bun](https://bun.sh)
 - **hosting**: [Cloudflare Pages](https://pages.cloudflare.com)
 - **styling**: vanilla CSS (lowercase aesthetic)
+
+### services
+- **moderation**: Rust ATProto labeler for copyright/sensitive content
+- **transcoder**: Rust audio conversion service (ffmpeg)
 
 </details>
 
@@ -27,27 +33,44 @@ check the [plyr.fm artist page](https://plyr.fm/u/plyr.fm) for the latest [auto-
 
 ### prerequisites
 
-- [uv](https://docs.astral.sh/uv/) for Python package management
-- [bun](https://bun.sh/) for frontend development
-- [just](https://github.com/casey/just) for task running (recommended)
+- [uv](https://docs.astral.sh/uv/) for Python
+- [bun](https://bun.sh/) for frontend
+- [just](https://github.com/casey/just) for task running
+- [docker](https://www.docker.com/) for dev services (redis)
 
 ### quick start
 
-using [just](https://github.com/casey/just):
-
 ```bash
-# install dependencies (uv handles backend venv automatically)
-uv sync # For root-level deps, if any, and initializes uv
-just frontend install
+# install dependencies
+uv sync
+cd frontend && bun install && cd ..
+
+# start dev services (redis for background tasks)
+just dev-services
 
 # run backend (hot reloads at http://localhost:8001)
 just backend run
 
 # run frontend (hot reloads at http://localhost:5173)
 just frontend dev
+```
 
-# run transcoder (hot reloads at http://localhost:8082)
-just transcoder run
+### useful commands
+
+```bash
+# run tests
+just backend test
+
+# run linting
+just backend lint
+just frontend check
+
+# database migrations
+just backend migrate "migration message"
+just backend migrate-up
+
+# stop dev services
+just dev-services-down
 ```
 
 </details>
@@ -56,38 +79,45 @@ just transcoder run
 <summary>features</summary>
 
 ### listening
-- audio playback with persistent queue across tabs/devices
-- like tracks with counts visible to all listeners
+- audio playback with persistent queue across tabs
+- like tracks, add to playlists
 - browse artist profiles and discographies
-- share tracks and albums with nice link previews
+- share tracks, albums, and playlists with link previews
+- unified search with Cmd/Ctrl+K
+- teal.fm scrobbling
 
 ### creating
-- well-scoped OAuth authentication via ATProto (bluesky accounts)
-- upload tracks with title, artwork, and featured artists
-- organize tracks into albums with cover art
-- edit metadata and replace artwork anytime
-- track play counts and like analytics
-- publish ATProto track and like records to your PDS
+- OAuth authentication via ATProto (bluesky accounts)
+- upload tracks with title, artwork, tags, and featured artists
+- organize tracks into albums and playlists
+- drag-and-drop reordering
+- timed comments with clickable timestamps
+- artist support links (ko-fi, patreon, etc.)
+
+### data ownership
+- tracks, likes, playlists synced to your PDS as ATProto records
+- portable identity - your data travels with you
+- public by default - any client can read your music records
 
 </details>
-
 
 <details>
 <summary>project structure</summary>
 
 ```
 plyr.fm/
-├── backend/              # FastAPI app & Python tooling
+├── backend/              # FastAPI app
 │   ├── src/backend/      # application code
 │   │   ├── api/          # public endpoints
-│   │   ├── _internal/    # internal services
+│   │   ├── _internal/    # services (auth, atproto, background tasks)
 │   │   ├── models/       # database schemas
-│   │   └── storage/      # storage adapters
+│   │   └── storage/      # R2 adapter
 │   ├── tests/            # pytest suite
-│   └── alembic/          # database migrations
+│   └── alembic/          # migrations
 ├── frontend/             # SvelteKit app
 │   ├── src/lib/          # components & state
 │   └── src/routes/       # pages
+├── moderation/           # Rust labeler service
 ├── transcoder/           # Rust audio service
 ├── docs/                 # documentation
 └── justfile              # task runner
@@ -99,25 +129,23 @@ plyr.fm/
 <summary>costs</summary>
 
 ~$35-40/month:
-- fly.io backend (production): ~$5/month (shared-cpu-1x, 256MB RAM)
-- fly.io backend (staging): ~$5/month (shared-cpu-1x, 256MB RAM)
-- fly.io transcoder: ~$0-5/month (auto-scales to zero when idle)
-- neon postgres: $5/month (starter plan)
-- audd audio fingerprinting: ~$10/month (enterprise API for copyright detection)
-- cloudflare pages: free (frontend hosting)
-- cloudflare r2: ~$0.16/month (6 buckets across dev/staging/prod)
+- fly.io backend (prod + staging): ~$10/month
+- fly.io transcoder: ~$0-5/month (auto-scales to zero)
+- neon postgres: $5/month
+- audd audio fingerprinting: ~$10/month
+- cloudflare (pages + r2): ~$0.16/month
 
 </details>
 
 ## links
 
 - **production**: https://plyr.fm
+- **staging**: https://stg.plyr.fm
 - **API docs**: https://api.plyr.fm/docs
 - **python SDK / MCP server**: [plyrfm](https://github.com/zzstoatzz/plyr-python-client) ([PyPI](https://pypi.org/project/plyrfm/))
-- **repository**: https://github.com/zzstoatzz/plyr.fm
+- **documentation**: [docs/README.md](docs/README.md)
+- **status**: [STATUS.md](STATUS.md)
 
-## documentation
-
-- [deployment guide](docs/deployment/environments.md)
-- [configuration](docs/backend/configuration.md)
-- [full documentation](docs/README.md)
+### mirrors
+- **github**: https://github.com/zzstoatzz/plyr.fm
+- **tangled**: https://tangled.sh/@zzstoatzz.io/plyr.fm
