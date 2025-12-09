@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import tempfile
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -47,6 +48,30 @@ from .router import router
 from .services import get_or_create_album
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class UploadContext:
+    """all data needed to process an upload in the background."""
+
+    upload_id: str
+    auth_session: AuthSession
+
+    # audio file
+    file_path: str
+    filename: str
+
+    # track metadata
+    title: str
+    artist_did: str
+    album: str | None
+    features_json: str | None
+    tags: list[str]
+
+    # optional image
+    image_path: str | None = None
+    image_filename: str | None = None
+    image_content_type: str | None = None
 
 
 async def _get_or_create_tag(
@@ -197,23 +222,10 @@ async def _send_track_notification(db: AsyncSession, track: Track) -> None:
         logger.warning(f"failed to send notification for track {track.id}: {e}")
 
 
-async def _process_upload_background(
-    upload_id: str,
-    file_path: str,
-    filename: str,
-    title: str,
-    artist_did: str,
-    album: str | None,
-    features: str | None,
-    validated_tags: list[str],
-    auth_session: AuthSession,
-    image_path: str | None = None,
-    image_filename: str | None = None,
-    image_content_type: str | None = None,
-) -> None:
+async def _process_upload_background(ctx: UploadContext) -> None:
     """background task to process upload."""
     with logfire.span(
-        "process upload background", upload_id=upload_id, filename=filename
+        "process upload background", upload_id=ctx.upload_id, filename=ctx.filename
     ):
         file_id: str | None = None
         image_id: str | None = None
@@ -221,15 +233,15 @@ async def _process_upload_background(
 
         try:
             await job_service.update_progress(
-                upload_id, JobStatus.PROCESSING, "processing upload..."
+                ctx.upload_id, JobStatus.PROCESSING, "processing upload..."
             )
 
             # validate file type
-            ext = Path(filename).suffix.lower()
+            ext = Path(ctx.filename).suffix.lower()
             audio_format = AudioFormat.from_extension(ext)
             if not audio_format:
                 await job_service.update_progress(
-                    upload_id,
+                    ctx.upload_id,
                     JobStatus.FAILED,
                     "upload failed",
                     error=f"unsupported file type: {ext}",
@@ -237,11 +249,13 @@ async def _process_upload_background(
                 return
 
             # extract duration
-            with open(file_path, "rb") as f:
+            with open(ctx.file_path, "rb") as f:
                 duration = extract_duration(f)
 
             # save audio to storage
-            file_id = await _save_audio_to_storage(upload_id, file_path, filename)
+            file_id = await _save_audio_to_storage(
+                ctx.upload_id, ctx.file_path, ctx.filename
+            )
             if not file_id:
                 return
 
@@ -250,12 +264,12 @@ async def _process_upload_background(
                 result = await db.execute(
                     select(Track).where(
                         Track.file_id == file_id,
-                        Track.artist_did == artist_did,
+                        Track.artist_did == ctx.artist_did,
                     )
                 )
                 if existing := result.scalar_one_or_none():
                     await job_service.update_progress(
-                        upload_id,
+                        ctx.upload_id,
                         JobStatus.FAILED,
                         "upload failed",
                         error=f"duplicate upload: track already exists (id: {existing.id})",
@@ -268,7 +282,7 @@ async def _process_upload_background(
             )
             if not r2_url:
                 await job_service.update_progress(
-                    upload_id,
+                    ctx.upload_id,
                     JobStatus.FAILED,
                     "upload failed",
                     error="failed to get public audio URL",
@@ -277,20 +291,23 @@ async def _process_upload_background(
 
             # save image if provided
             image_url = None
-            if image_path and image_filename:
+            if ctx.image_path and ctx.image_filename:
                 image_id, image_url = await _save_image_to_storage(
-                    upload_id, image_path, image_filename, image_content_type
+                    ctx.upload_id,
+                    ctx.image_path,
+                    ctx.image_filename,
+                    ctx.image_content_type,
                 )
 
             # get artist and resolve featured artists
             async with db_session() as db:
                 result = await db.execute(
-                    select(Artist).where(Artist.did == artist_did)
+                    select(Artist).where(Artist.did == ctx.artist_did)
                 )
                 artist = result.scalar_one_or_none()
                 if not artist:
                     await job_service.update_progress(
-                        upload_id,
+                        ctx.upload_id,
                         JobStatus.FAILED,
                         "upload failed",
                         error="artist profile not found",
@@ -299,32 +316,32 @@ async def _process_upload_background(
 
                 # resolve featured artists
                 featured_artists: list[dict] = []
-                if features:
+                if ctx.features_json:
                     await job_service.update_progress(
-                        upload_id,
+                        ctx.upload_id,
                         JobStatus.PROCESSING,
                         "resolving featured artists...",
                         phase="metadata",
                     )
                     featured_artists = await resolve_featured_artists(
-                        features, artist.handle
+                        ctx.features_json, artist.handle
                     )
 
                 # create ATProto record
                 await job_service.update_progress(
-                    upload_id,
+                    ctx.upload_id,
                     JobStatus.PROCESSING,
                     "creating atproto record...",
                     phase="atproto",
                 )
                 try:
                     atproto_result = await create_track_record(
-                        auth_session=auth_session,
-                        title=title,
+                        auth_session=ctx.auth_session,
+                        title=ctx.title,
                         artist=artist.display_name,
                         audio_url=r2_url,
                         file_type=ext[1:],
-                        album=album,
+                        album=ctx.album,
                         duration=duration,
                         features=featured_artists or None,
                         image_url=image_url,
@@ -333,9 +350,11 @@ async def _process_upload_background(
                         raise ValueError("PDS returned no record data")
                     atproto_uri, atproto_cid = atproto_result
                 except Exception as e:
-                    logger.error("ATProto sync failed for upload %s: %s", upload_id, e)
+                    logger.error(
+                        "ATProto sync failed for upload %s: %s", ctx.upload_id, e
+                    )
                     await job_service.update_progress(
-                        upload_id,
+                        ctx.upload_id,
                         JobStatus.FAILED,
                         "upload failed",
                         error=f"failed to sync track to ATProto: {e}",
@@ -351,7 +370,7 @@ async def _process_upload_background(
 
                 # create track record
                 await job_service.update_progress(
-                    upload_id,
+                    ctx.upload_id,
                     JobStatus.PROCESSING,
                     "saving track metadata...",
                     phase="database",
@@ -362,17 +381,17 @@ async def _process_upload_background(
                     extra["duration"] = duration
 
                 album_record = None
-                if album:
-                    extra["album"] = album
+                if ctx.album:
+                    extra["album"] = ctx.album
                     album_record = await get_or_create_album(
-                        db, artist, album, image_id, image_url
+                        db, artist, ctx.album, image_id, image_url
                     )
 
                 track = Track(
-                    title=title,
+                    title=ctx.title,
                     file_id=file_id,
                     file_type=ext[1:],
-                    artist_did=artist_did,
+                    artist_did=ctx.artist_did,
                     extra=extra,
                     album_id=album_record.id if album_record else None,
                     features=featured_artists,
@@ -388,14 +407,14 @@ async def _process_upload_background(
                     await db.commit()
                     await db.refresh(track)
 
-                    await _add_tags_to_track(db, track.id, validated_tags, artist_did)
+                    await _add_tags_to_track(db, track.id, ctx.tags, ctx.artist_did)
                     await _send_track_notification(db, track)
 
                     if r2_url:
                         await schedule_copyright_scan(track.id, r2_url)
 
                     await job_service.update_progress(
-                        upload_id,
+                        ctx.upload_id,
                         JobStatus.COMPLETED,
                         "upload completed successfully",
                         result={"track_id": track.id},
@@ -404,7 +423,7 @@ async def _process_upload_background(
                 except IntegrityError as e:
                     await db.rollback()
                     await job_service.update_progress(
-                        upload_id,
+                        ctx.upload_id,
                         JobStatus.FAILED,
                         "upload failed",
                         error=f"database constraint violation: {e!s}",
@@ -413,9 +432,9 @@ async def _process_upload_background(
                         await storage.delete(file_id, audio_format.value)
 
         except Exception as e:
-            logger.exception(f"upload {upload_id} failed with unexpected error")
+            logger.exception(f"upload {ctx.upload_id} failed with unexpected error")
             await job_service.update_progress(
-                upload_id,
+                ctx.upload_id,
                 JobStatus.FAILED,
                 "upload failed",
                 error=f"unexpected error: {e!s}",
@@ -423,10 +442,10 @@ async def _process_upload_background(
         finally:
             # cleanup temp files
             with contextlib.suppress(Exception):
-                Path(file_path).unlink(missing_ok=True)
-            if image_path:
+                Path(ctx.file_path).unlink(missing_ok=True)
+            if ctx.image_path:
                 with contextlib.suppress(Exception):
-                    Path(image_path).unlink(missing_ok=True)
+                    Path(ctx.image_path).unlink(missing_ok=True)
 
 
 @router.post("/")
@@ -536,21 +555,21 @@ async def upload_track(
         )
 
         # schedule background processing once response is sent
-        background_tasks.add_task(
-            _process_upload_background,
-            upload_id,
-            file_path,
-            file.filename,
-            title,
-            auth_session.did,
-            album,
-            features,
-            validated_tags,
-            auth_session,
-            image_path,
-            image_filename,
-            image_content_type,
+        ctx = UploadContext(
+            upload_id=upload_id,
+            auth_session=auth_session,
+            file_path=file_path,
+            filename=file.filename,
+            title=title,
+            artist_did=auth_session.did,
+            album=album,
+            features_json=features,
+            tags=validated_tags,
+            image_path=image_path,
+            image_filename=image_filename,
+            image_content_type=image_content_type,
         )
+        background_tasks.add_task(_process_upload_background, ctx)
     except Exception:
         if file_path:
             with contextlib.suppress(Exception):

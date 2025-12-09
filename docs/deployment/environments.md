@@ -15,14 +15,17 @@ plyr.fm uses a simple three-tier deployment strategy: development â†’ staging â†
 ### local development
 
 ```bash
-# start everything (redis + backend + frontend)
-just dev
+# terminal 1: start redis
+just dev-services
 
-# or separately:
-docker compose up -d              # start redis
-just backend run                  # start backend (hot reloads)
-just frontend dev                 # start frontend (hot reloads)
-just transcoder run               # start transcoder (hot reloads)
+# terminal 2: start backend (with docket enabled)
+DOCKET_URL=redis://localhost:6379 just backend run
+
+# terminal 3: start frontend
+just frontend dev
+
+# optional: start transcoder
+just transcoder run
 ```
 
 connects to `plyr-dev` neon database, local Redis, and uses `fm.plyr.dev` atproto namespace.
