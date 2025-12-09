@@ -631,6 +631,7 @@ async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
     1. album title is updated in database
     2. track extra["album"] is updated for all tracks
     3. ATProto records are updated for tracks that have them
+    4. album's ATProto list record name is updated
     """
     # create artist matching mock session
     artist = Artist(
@@ -641,11 +642,13 @@ async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
     db_session.add(artist)
     await db_session.flush()
 
-    # create album
+    # create album with ATProto list record
     album = Album(
         artist_did=artist.did,
         slug="test-album",
         title="Original Title",
+        atproto_record_uri="at://did:test:user123/fm.plyr.dev.list/album123",
+        atproto_record_cid="original_list_cid",
     )
     db_session.add(album)
     await db_session.flush()
@@ -667,12 +670,22 @@ async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
     album_id = album.id
     track_id = track.id
 
-    # mock ATProto update_record
-    with patch(
-        "backend._internal.atproto.records.fm_plyr.track.update_record",
-        new_callable=AsyncMock,
-        return_value=("at://did:test:user123/fm.plyr.track/track123", "new_cid"),
-    ) as mock_update:
+    # mock ATProto update_record for tracks and list
+    with (
+        patch(
+            "backend._internal.atproto.records.fm_plyr.track.update_record",
+            new_callable=AsyncMock,
+            return_value=("at://did:test:user123/fm.plyr.track/track123", "new_cid"),
+        ) as mock_track_update,
+        patch(
+            "backend._internal.atproto.records.fm_plyr.list.update_list_record",
+            new_callable=AsyncMock,
+            return_value=(
+                "at://did:test:user123/fm.plyr.dev.list/album123",
+                "new_list_cid",
+            ),
+        ) as mock_list_update,
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -683,10 +696,16 @@ async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
     assert data["title"] == "Updated Title"
     assert data["id"] == album_id
 
-    # verify ATProto update was called
-    mock_update.assert_called_once()
-    call_kwargs = mock_update.call_args.kwargs
+    # verify track ATProto update was called
+    mock_track_update.assert_called_once()
+    call_kwargs = mock_track_update.call_args.kwargs
     assert call_kwargs["record"]["album"] == "Updated Title"
+
+    # verify list record update was called with new name
+    mock_list_update.assert_called_once()
+    list_call_kwargs = mock_list_update.call_args.kwargs
+    assert list_call_kwargs["name"] == "Updated Title"
+    assert list_call_kwargs["list_type"] == "album"
 
     # verify track extra["album"] was updated in database
     from backend.utilities.database import get_engine
@@ -697,6 +716,13 @@ async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
         updated_track = result.scalar_one()
         assert updated_track.extra["album"] == "Updated Title"
         assert updated_track.atproto_record_cid == "new_cid"
+
+        # verify album list record CID was updated
+        album_result = await fresh_session.execute(
+            select(Album).where(Album.id == album_id)
+        )
+        updated_album = album_result.scalar_one()
+        assert updated_album.atproto_record_cid == "new_list_cid"
 
 
 async def test_update_album_forbidden_for_non_owner(
