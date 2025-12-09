@@ -496,6 +496,11 @@ class ObservabilitySettings(AppSettingsSection):
         validation_alias="LOGFIRE_ENVIRONMENT",
         description="Logfire environment (local/production)",
     )
+    suppressed_loggers: CommaSeparatedStringSet = Field(
+        default={"docket"},
+        validation_alias="LOGFIRE_SUPPRESSED_LOGGERS",
+        description="Logger names to suppress (set to WARNING level)",
+    )
 
 
 class ModerationSettings(AppSettingsSection):

@@ -74,7 +74,8 @@ else:
     )
 
 # reduce noise from verbose loggers
-logging.getLogger("docket").setLevel(logging.WARNING)
+for logger_name in settings.observability.suppressed_loggers:
+    logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
