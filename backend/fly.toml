@@ -34,10 +34,9 @@ primary_region = 'iad'
   R2_PUBLIC_BUCKET_URL = 'https://pub-d4ed8a1e39d44dac85263d86ad5676fd.r2.dev'
   ATPROTO_PDS_URL = 'https://pds.zzstoatzz.io'
 
-# secrets to set via: fly secrets set KEY=value
-# - DATABASE_URL
-# - AWS_ACCESS_KEY_ID
-# - AWS_SECRET_ACCESS_KEY
-# - ATPROTO_CLIENT_ID (will be https://api.plyr.fm/oauth-client-metadata.json after deployment)
-# - ATPROTO_REDIRECT_URI (will be https://api.plyr.fm/auth/callback after deployment)
-# - OAUTH_ENCRYPTION_KEY (44-character base64 Fernet key, generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+# secrets to set via: fly secrets set KEY=value -a relay-api
+# - DATABASE_URL (neon postgres connection string)
+# - AWS_ACCESS_KEY_ID (cloudflare R2)
+# - AWS_SECRET_ACCESS_KEY (cloudflare R2)
+# - OAUTH_ENCRYPTION_KEY (generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+# - DOCKET_URL (upstash redis: rediss://default:xxx@xxx.upstash.io:6379)
