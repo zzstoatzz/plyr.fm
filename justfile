@@ -11,13 +11,8 @@ default:
 
 # get setup
 setup:
-    # symlink AGENTS.md to CLAUDE.md and GEMINI.md
+    # symlink AGENTS.md to CLAUDE.md
     ln -s AGENTS.md CLAUDE.md
-    ln -s AGENTS.md GEMINI.md
-
-    # Setup sub-modules if they have setup recipes
-    # just frontend setup # Uncomment if frontend/justfile gets a setup
-    # just backend setup # Uncomment if backend/justfile gets a setup
 
 
 # show commits since last release

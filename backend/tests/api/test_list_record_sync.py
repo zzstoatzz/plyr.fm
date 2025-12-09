@@ -157,12 +157,12 @@ async def test_sync_atproto_records_syncs_albums(
 
     with (
         patch(
-            "backend._internal.atproto.records.upsert_profile_record",
+            "backend._internal.atproto.sync.upsert_profile_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend._internal.atproto.records.upsert_album_list_record",
+            "backend._internal.atproto.sync.upsert_album_list_record",
             new_callable=AsyncMock,
             return_value=(
                 "at://did:plc:testartist123/fm.plyr.list/album123",
@@ -170,7 +170,7 @@ async def test_sync_atproto_records_syncs_albums(
             ),
         ) as mock_album_sync,
         patch(
-            "backend._internal.atproto.records.upsert_liked_list_record",
+            "backend._internal.atproto.sync.upsert_liked_list_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
@@ -197,17 +197,17 @@ async def test_sync_atproto_records_syncs_liked_list(
 
     with (
         patch(
-            "backend._internal.atproto.records.upsert_profile_record",
+            "backend._internal.atproto.sync.upsert_profile_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend._internal.atproto.records.upsert_album_list_record",
+            "backend._internal.atproto.sync.upsert_album_list_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend._internal.atproto.records.upsert_liked_list_record",
+            "backend._internal.atproto.sync.upsert_liked_list_record",
             new_callable=AsyncMock,
             return_value=(
                 "at://did:plc:testartist123/fm.plyr.list/liked456",
@@ -254,16 +254,16 @@ async def test_sync_atproto_records_skips_albums_without_atproto_tracks(
 
     with (
         patch(
-            "backend._internal.atproto.records.upsert_profile_record",
+            "backend._internal.atproto.sync.upsert_profile_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend._internal.atproto.records.upsert_album_list_record",
+            "backend._internal.atproto.sync.upsert_album_list_record",
             new_callable=AsyncMock,
         ) as mock_album_sync,
         patch(
-            "backend._internal.atproto.records.upsert_liked_list_record",
+            "backend._internal.atproto.sync.upsert_liked_list_record",
             new_callable=AsyncMock,
         ),
     ):
@@ -286,16 +286,16 @@ async def test_sync_atproto_records_continues_on_album_sync_failure(
 
     with (
         patch(
-            "backend._internal.atproto.records.upsert_profile_record",
+            "backend._internal.atproto.sync.upsert_profile_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend._internal.atproto.records.upsert_album_list_record",
+            "backend._internal.atproto.sync.upsert_album_list_record",
             side_effect=Exception("PDS error"),
         ),
         patch(
-            "backend._internal.atproto.records.upsert_liked_list_record",
+            "backend._internal.atproto.sync.upsert_liked_list_record",
             new_callable=AsyncMock,
             return_value=None,
         ) as mock_liked_sync,
@@ -319,17 +319,17 @@ async def test_sync_atproto_records_continues_on_liked_sync_failure(
 
     with (
         patch(
-            "backend._internal.atproto.records.upsert_profile_record",
+            "backend._internal.atproto.sync.upsert_profile_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend._internal.atproto.records.upsert_album_list_record",
+            "backend._internal.atproto.sync.upsert_album_list_record",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "backend._internal.atproto.records.upsert_liked_list_record",
+            "backend._internal.atproto.sync.upsert_liked_list_record",
             side_effect=Exception("PDS error"),
         ),
     ):

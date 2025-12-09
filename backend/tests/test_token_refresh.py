@@ -7,7 +7,7 @@ import pytest
 from atproto_oauth.models import OAuthSession
 
 from backend._internal import Session as AuthSession
-from backend._internal.atproto.records import _refresh_session_tokens
+from backend._internal.atproto.client import _refresh_session_tokens
 
 
 @pytest.fixture
@@ -115,15 +115,15 @@ class TestConcurrentTokenRefresh:
 
         with (
             patch(
-                "backend._internal.atproto.records.get_oauth_client",
+                "backend._internal.atproto.client.get_oauth_client",
                 return_value=mock_oauth_client,
             ),
             patch(
-                "backend._internal.atproto.records.get_session",
+                "backend._internal.atproto.client.get_session",
                 side_effect=mock_get_session,
             ),
             patch(
-                "backend._internal.atproto.records.update_session_tokens",
+                "backend._internal.atproto.client.update_session_tokens",
                 side_effect=mock_update_session_tokens,
             ),
         ):
@@ -182,15 +182,15 @@ class TestConcurrentTokenRefresh:
 
         with (
             patch(
-                "backend._internal.atproto.records.get_oauth_client",
+                "backend._internal.atproto.client.get_oauth_client",
                 return_value=mock_oauth_client,
             ),
             patch(
-                "backend._internal.atproto.records.get_session",
+                "backend._internal.atproto.client.get_session",
                 side_effect=mock_get_session,
             ),
             patch(
-                "backend._internal.atproto.records.update_session_tokens",
+                "backend._internal.atproto.client.update_session_tokens",
                 side_effect=mock_update_session_tokens,
             ),
         ):
@@ -246,15 +246,15 @@ class TestConcurrentTokenRefresh:
 
         with (
             patch(
-                "backend._internal.atproto.records.get_oauth_client",
+                "backend._internal.atproto.client.get_oauth_client",
                 return_value=mock_oauth_client,
             ),
             patch(
-                "backend._internal.atproto.records.get_session",
+                "backend._internal.atproto.client.get_session",
                 side_effect=mock_get_session,
             ),
             patch(
-                "backend._internal.atproto.records.update_session_tokens",
+                "backend._internal.atproto.client.update_session_tokens",
                 side_effect=mock_update_session_tokens,
             ),
         ):
