@@ -37,6 +37,7 @@
 
 	// inline edit state
 	let editName = $state("");
+	let editShowOnProfile = $state(false);
 	let coverInputElement = $state<HTMLInputElement | null>(null);
 	let uploadingCover = $state(false);
 
@@ -215,6 +216,7 @@
 		} else {
 			// entering edit mode - initialize edit state
 			editName = playlist.name;
+			editShowOnProfile = playlist.show_on_profile;
 		}
 		isEditMode = !isEditMode;
 	}
@@ -223,18 +225,29 @@
 		// save track order
 		await saveOrder();
 
-		// save name if changed
-		if (editName.trim() && editName.trim() !== playlist.name) {
-			await saveNameChange();
+		// save name and/or show_on_profile if changed
+		const nameChanged =
+			!!editName.trim() && editName.trim() !== playlist.name;
+		const showOnProfileChanged =
+			editShowOnProfile !== playlist.show_on_profile;
+
+		if (nameChanged || showOnProfileChanged) {
+			await savePlaylistMetadata(nameChanged, showOnProfileChanged);
 		}
 	}
 
-	async function saveNameChange() {
-		if (!editName.trim() || editName.trim() === playlist.name) return;
-
+	async function savePlaylistMetadata(
+		nameChanged: boolean,
+		showOnProfileChanged: boolean,
+	) {
 		try {
 			const formData = new FormData();
-			formData.append("name", editName.trim());
+			if (nameChanged) {
+				formData.append("name", editName.trim());
+			}
+			if (showOnProfileChanged) {
+				formData.append("show_on_profile", String(editShowOnProfile));
+			}
 
 			const response = await fetch(
 				`${API_URL}/lists/playlists/${playlist.id}`,
@@ -246,16 +259,20 @@
 			);
 
 			if (!response.ok) {
-				throw new Error("failed to update name");
+				throw new Error("failed to update playlist");
 			}
 
 			const updated = await response.json();
 			playlist.name = updated.name;
+			playlist.show_on_profile = updated.show_on_profile;
 		} catch (e) {
-			console.error("failed to save name:", e);
-			toast.error(e instanceof Error ? e.message : "failed to save name");
-			// revert to original name
+			console.error("failed to save playlist:", e);
+			toast.error(
+				e instanceof Error ? e.message : "failed to save playlist",
+			);
+			// revert changes
 			editName = playlist.name;
+			editShowOnProfile = playlist.show_on_profile;
 		}
 	}
 
@@ -680,6 +697,15 @@
 								: "tracks"}</span
 						>
 					</div>
+					{#if isEditMode && isOwner}
+						<label class="show-on-profile-toggle">
+							<input
+								type="checkbox"
+								bind:checked={editShowOnProfile}
+							/>
+							<span class="toggle-label">show on profile</span>
+						</label>
+					{/if}
 				</div>
 
 				<div class="side-buttons">
@@ -1379,6 +1405,31 @@
 	.meta-separator {
 		color: var(--text-muted);
 		font-size: 0.7rem;
+	}
+
+	.show-on-profile-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 0.75rem;
+		cursor: pointer;
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+	}
+
+	.show-on-profile-toggle input[type="checkbox"] {
+		width: 16px;
+		height: 16px;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+
+	.show-on-profile-toggle .toggle-label {
+		user-select: none;
+	}
+
+	.show-on-profile-toggle:hover .toggle-label {
+		color: var(--text-primary);
 	}
 
 	.icon-btn {
