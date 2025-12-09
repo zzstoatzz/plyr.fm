@@ -36,8 +36,9 @@ async def test_track(db_session: AsyncSession) -> Track:
 
 
 @pytest.fixture
-def test_app() -> FastAPI:
-    """get test app."""
+def test_app(db_session: AsyncSession) -> FastAPI:
+    """get test app with db session dependency to ensure correct database URL."""
+    _ = db_session  # ensures database fixtures run first
     return app
 
 
