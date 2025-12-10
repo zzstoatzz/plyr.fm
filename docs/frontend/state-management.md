@@ -124,7 +124,9 @@ plyr.fm uses global state managers following the Svelte 5 runes pattern for cros
 ### tracks cache (`frontend/src/lib/tracks.svelte.ts`)
 - caches track list globally in localStorage
 - provides instant navigation by serving cached data
-- invalidates on new uploads
+- cursor-based pagination with `fetchMore()` for infinite scroll
+- pagination state (`nextCursor`, `hasMore`) persisted alongside tracks
+- invalidates on new uploads (resets to first page)
 - includes like status for each track (when authenticated)
 - simple invalidation model - no time-based expiry
 

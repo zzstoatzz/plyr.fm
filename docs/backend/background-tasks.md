@@ -7,6 +7,8 @@ plyr.fm uses [pydocket](https://github.com/PrefectHQ/pydocket) for durable backg
 background tasks handle operations that shouldn't block the request/response cycle:
 - **copyright scanning** - analyzes uploaded tracks for potential copyright matches
 - **media export** - downloads all tracks, zips them, and uploads to R2
+- **ATProto sync** - syncs records to user's PDS on login
+- **teal scrobbling** - scrobbles plays to user's PDS
 
 ## architecture
 
