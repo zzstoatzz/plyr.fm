@@ -35,7 +35,7 @@ let shareUrl = $state('');
 const supportUrl = $derived(() => {
 	if (!artist?.support_url) return null;
 	if (artist.support_url === 'atprotofans') {
-		return `https://atprotofans.com/profile/${artist.handle}`;
+		return `https://atprotofans.com/u/${artist.did}`;
 	}
 	return artist.support_url;
 });
