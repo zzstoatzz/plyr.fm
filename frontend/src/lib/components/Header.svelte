@@ -7,7 +7,7 @@
 	import PlatformStats from './PlatformStats.svelte';
 	import SearchTrigger from './SearchTrigger.svelte';
 	import { search } from '$lib/search.svelte';
-	import { APP_NAME, APP_TAGLINE } from '$lib/branding';
+	import { APP_NAME, APP_TAGLINE, APP_STAGE } from '$lib/branding';
 
 	interface Props {
 		user: User | null;
@@ -79,7 +79,7 @@
 			</div>
 
 			<a href="/" class="brand">
-				<h1>{APP_NAME}</h1>
+				<h1>{APP_NAME}{#if APP_STAGE}<sup class="stage-badge">{APP_STAGE}</sup>{/if}</h1>
 				<p>{APP_TAGLINE}</p>
 			</a>
 		</div>
@@ -310,6 +310,15 @@
 		margin: 0;
 		color: var(--text-primary);
 		transition: color 0.2s;
+	}
+
+	.stage-badge {
+		font-size: 0.5rem;
+		font-weight: 500;
+		color: var(--text-tertiary);
+		margin-left: 0.25rem;
+		vertical-align: super;
+		letter-spacing: 0.03em;
 	}
 
 	.brand p {
