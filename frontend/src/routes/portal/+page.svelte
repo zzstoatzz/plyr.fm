@@ -609,7 +609,7 @@
 							{:else if !atprotofansEligible}
 								<a href="https://atprotofans.com" target="_blank" rel="noopener" class="support-setup-link">set up</a>
 							{:else}
-								<span class="support-status eligible">ready</span>
+								<a href="https://atprotofans.com/u/{auth.user?.did}" target="_blank" rel="noopener" class="support-status-link">profile ready</a>
 							{/if}
 						</label>
 						<label class="support-option">
@@ -1345,18 +1345,23 @@
 		color: var(--text-tertiary);
 	}
 
-	.support-status.eligible {
-		color: var(--success, #22c55e);
-	}
-
-	.support-setup-link {
+	.support-setup-link,
+	.support-status-link {
 		margin-left: auto;
 		font-size: 0.75rem;
-		color: var(--accent);
 		text-decoration: none;
 	}
 
-	.support-setup-link:hover {
+	.support-setup-link {
+		color: var(--accent);
+	}
+
+	.support-status-link {
+		color: var(--success, #22c55e);
+	}
+
+	.support-setup-link:hover,
+	.support-status-link:hover {
 		text-decoration: underline;
 	}
 
