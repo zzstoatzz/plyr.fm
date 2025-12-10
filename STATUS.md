@@ -47,6 +47,26 @@ plyr.fm should become:
 
 ### December 2025
 
+#### pagination & album management (PRs #550-554, Dec 9-10)
+
+**tracks list pagination** (PR #554):
+- cursor-based pagination on `/tracks/` endpoint (default 50 per page)
+- infinite scroll on homepage using native IntersectionObserver
+- zero new dependencies - uses browser APIs only
+- pagination state persisted to localStorage for fast subsequent loads
+
+**album management improvements** (PRs #550-552):
+- album delete and track reorder fixes
+- album page edit mode matching playlist UX (inline title editing, cover upload)
+- optimistic UI updates for album title changes (instant feedback)
+- ATProto record sync when album title changes (updates all track records + list record)
+
+**playlist show on profile** (PR #553):
+- restored "show on profile" toggle that was lost during inline editing refactor
+- users can now control whether playlists appear on their public profile
+
+---
+
 #### public cost dashboard (PR #548, Dec 9)
 
 - `/costs` page showing live platform infrastructure costs
@@ -354,4 +374,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-09.
+this is a living document. last updated 2025-12-10.
