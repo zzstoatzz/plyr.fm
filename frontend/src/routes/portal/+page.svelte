@@ -37,6 +37,9 @@
 	let supportLinkMode = $state<'none' | 'atprotofans' | 'custom'>('none');
 	let customSupportUrl = $state('');
 	let savingProfile = $state(false);
+	// atprotofans eligibility - checked on mount
+	let atprotofansEligible = $state(false);
+	let checkingAtprotofans = $state(false);
 
 	// album management state
 	let albums = $state<AlbumSummary[]>([]);
@@ -130,11 +133,34 @@
 		}
 	}
 
+	async function checkAtprotofansEligibility() {
+		if (!auth.user?.did) return;
+		checkingAtprotofans = true;
+		try {
+			// check for atprotofans creator profile directly from PDS
+			const response = await fetch(
+				`https://bsky.social/xrpc/com.atproto.repo.getRecord?repo=${auth.user.did}&collection=com.atprotofans.profile&rkey=self`
+			);
+			if (response.ok) {
+				const record = await response.json();
+				atprotofansEligible = record?.value?.acceptingSupporters === true;
+			} else {
+				atprotofansEligible = false;
+			}
+		} catch (_e) {
+			console.error('failed to check atprotofans eligibility:', _e);
+			atprotofansEligible = false;
+		} finally {
+			checkingAtprotofans = false;
+		}
+	}
+
 	async function loadArtistProfile() {
 		try {
 			const [artistRes, prefsRes] = await Promise.all([
 				fetch(`${API_URL}/artists/me`, { credentials: 'include' }),
-				fetch(`${API_URL}/preferences/`, { credentials: 'include' })
+				fetch(`${API_URL}/preferences/`, { credentials: 'include' }),
+				checkAtprotofansEligibility()
 			]);
 
 			if (artistRes.ok) {
@@ -558,16 +584,22 @@
 							/>
 							<span>none</span>
 						</label>
-						<label class="support-option">
+						<label class="support-option" class:disabled={!atprotofansEligible && supportLinkMode !== 'atprotofans'}>
 							<input
 								type="radio"
 								name="support-mode"
 								value="atprotofans"
 								bind:group={supportLinkMode}
-								disabled={savingProfile}
+								disabled={savingProfile || (!atprotofansEligible && supportLinkMode !== 'atprotofans')}
 							/>
 							<span>atprotofans</span>
-							<a href="https://atprotofans.com" target="_blank" rel="noopener" class="support-learn-more">learn more</a>
+							{#if checkingAtprotofans}
+								<span class="support-status">checking...</span>
+							{:else if !atprotofansEligible}
+								<a href="https://atprotofans.com" target="_blank" rel="noopener" class="support-setup-link">set up</a>
+							{:else}
+								<span class="support-status eligible">ready</span>
+							{/if}
 						</label>
 						<label class="support-option">
 							<input
@@ -1296,15 +1328,34 @@
 		color: var(--text-primary);
 	}
 
-	.support-learn-more {
+	.support-status {
 		margin-left: auto;
 		font-size: 0.75rem;
 		color: var(--text-tertiary);
+	}
+
+	.support-status.eligible {
+		color: var(--success, #22c55e);
+	}
+
+	.support-setup-link {
+		margin-left: auto;
+		font-size: 0.75rem;
+		color: var(--accent);
 		text-decoration: none;
 	}
 
-	.support-learn-more:hover {
-		color: var(--accent);
+	.support-setup-link:hover {
+		text-decoration: underline;
+	}
+
+	.support-option.disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.support-option.disabled input {
+		cursor: not-allowed;
 	}
 
 	.custom-support-input {
