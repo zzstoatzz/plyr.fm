@@ -1,10 +1,11 @@
 """Read-only track listing endpoints."""
 
 import asyncio
+from datetime import datetime
 from typing import Annotated
 
 import logfire
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, require_auth
+from backend.config import settings
 from backend.models import (
     Artist,
     Tag,
@@ -33,14 +35,24 @@ from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 from .router import router
 
 
+class TracksListResponse(BaseModel):
+    """Response for paginated track listing."""
+
+    tracks: list[TrackResponse]
+    next_cursor: str | None = None
+    has_more: bool = False
+
+
 @router.get("/")
 async def list_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     artist_did: str | None = None,
     filter_hidden_tags: bool | None = None,
+    cursor: str | None = None,
+    limit: int | None = None,
     session: AuthSession | None = Depends(get_optional_session),
-) -> dict:
-    """List all tracks, optionally filtered by artist DID.
+) -> TracksListResponse:
+    """List tracks with cursor-based pagination.
 
     Args:
         artist_did: Filter to tracks by this artist only.
@@ -49,7 +61,14 @@ async def list_tracks(
               don't filter on artist pages)
             - True: always filter hidden tags
             - False: never filter hidden tags
+        cursor: ISO timestamp cursor from previous response's next_cursor.
+            Pass this to get the next page of results.
+        limit: Maximum number of tracks to return (default from settings, max 100).
     """
+    # use settings default if not provided, clamp to reasonable bounds
+    if limit is None:
+        limit = settings.app.default_page_size
+    limit = max(1, min(limit, 100))
     from atproto_identity.did.resolver import AsyncDidResolver
 
     # get authenticated user's liked tracks and preferences
@@ -98,9 +117,25 @@ async def list_tracks(
         )
         stmt = stmt.where(Track.id.not_in(hidden_track_ids_subq))
 
-    stmt = stmt.order_by(Track.created_at.desc())
+    # apply cursor-based pagination (tracks older than cursor timestamp)
+    if cursor:
+        try:
+            cursor_time = datetime.fromisoformat(cursor)
+            stmt = stmt.where(Track.created_at < cursor_time)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="invalid cursor format") from e
+
+    # order by created_at desc and fetch one extra to check if there's more
+    stmt = stmt.order_by(Track.created_at.desc()).limit(limit + 1)
     result = await db.execute(stmt)
-    tracks = result.scalars().all()
+    tracks = list(result.scalars().all())
+
+    # check if there are more results and trim to requested limit
+    if has_more := len(tracks) > limit:
+        tracks = tracks[:limit]
+
+    # generate next cursor from the last track's created_at
+    next_cursor = tracks[-1].created_at.isoformat() if has_more and tracks else None
 
     # batch fetch like, comment counts, copyright info, and tags for all tracks
     track_ids = [track.id for track in tracks]
@@ -213,7 +248,11 @@ async def list_tracks(
         ]
     )
 
-    return {"tracks": track_responses}
+    return TracksListResponse(
+        tracks=list(track_responses),
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
 
 
 @router.get("/me")

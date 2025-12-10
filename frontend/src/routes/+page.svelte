@@ -14,6 +14,8 @@
 	// use cached tracks
 	let tracks = $derived(tracksCache.tracks);
 	let loadingTracks = $derived(tracksCache.loading);
+	let loadingMore = $derived(tracksCache.loadingMore);
+	let hasMore = $derived(tracksCache.hasMore);
 	let hasTracks = $derived(tracks.length > 0);
 	let initialLoad = $state(true);
 
@@ -23,10 +25,36 @@
 	// track which track ID we've already auto-played to prevent infinite loops
 	let autoPlayedTrackId = $state<string | null>(null);
 
+	// infinite scroll sentinel element
+	let sentinelElement = $state<HTMLDivElement | null>(null);
+
 	onMount(async () => {
 		// fetch tracks from cache (will use cached data if recent)
 		await tracksCache.fetch();
 		initialLoad = false;
+	});
+
+	// set up IntersectionObserver for infinite scroll
+	$effect(() => {
+		if (!sentinelElement) return;
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				const entry = entries[0];
+				if (entry.isIntersecting && hasMore && !loadingMore && !loadingTracks) {
+					tracksCache.fetchMore();
+				}
+			},
+			{
+				rootMargin: '200px' // trigger 200px before reaching the end
+			}
+		);
+
+		observer.observe(sentinelElement);
+
+		return () => {
+			observer.disconnect();
+		};
 	});
 
 	// reactive effect to auto-play track from URL query param
@@ -112,6 +140,14 @@
 					/>
 				{/each}
 			</div>
+			<!-- infinite scroll sentinel -->
+			{#if hasMore}
+				<div bind:this={sentinelElement} class="scroll-sentinel">
+					{#if loadingMore}
+						<WaveLoading size="sm" message="loading more..." />
+					{/if}
+				</div>
+			{/if}
 		{/if}
 	</section>
 </main>
@@ -176,6 +212,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+	}
+
+	.scroll-sentinel {
+		display: flex;
+		justify-content: center;
+		padding: 2rem 0;
+		min-height: 60px;
 	}
 
 	@media (max-width: 768px) {

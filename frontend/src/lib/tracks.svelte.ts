@@ -1,30 +1,68 @@
 import { API_URL } from './config';
 import type { Track } from './types';
 
+interface TracksApiResponse {
+	tracks: Track[];
+	next_cursor: string | null;
+	has_more: boolean;
+}
+
+interface CachedTracksData {
+	tracks: Track[];
+	nextCursor: string | null;
+	hasMore: boolean;
+}
+
 // load cached tracks from localStorage (no time check - trust invalidate() calls)
-function loadCachedTracks(): Track[] {
-	if (typeof window === 'undefined') return [];
+function loadCachedTracks(): CachedTracksData {
+	if (typeof window === 'undefined') {
+		return { tracks: [], nextCursor: null, hasMore: true };
+	}
 	try {
 		const cached = localStorage.getItem('tracks_cache');
 		if (cached) {
-			const { tracks } = JSON.parse(cached);
+			const data = JSON.parse(cached);
 			// check if cache has the new is_liked field, if not invalidate
-			if (tracks && tracks.length > 0 && !('is_liked' in tracks[0])) {
+			if (data.tracks && data.tracks.length > 0 && !('is_liked' in data.tracks[0])) {
 				localStorage.removeItem('tracks_cache');
-				return [];
+				return { tracks: [], nextCursor: null, hasMore: true };
 			}
-			return tracks;
+			return {
+				tracks: data.tracks || [],
+				nextCursor: data.nextCursor ?? null,
+				hasMore: data.hasMore ?? true
+			};
 		}
 	} catch (e) {
 		console.warn('failed to load cached tracks:', e);
 	}
-	return [];
+	return { tracks: [], nextCursor: null, hasMore: true };
 }
 
 // global tracks cache using Svelte 5 runes
 class TracksCache {
-	tracks = $state<Track[]>(loadCachedTracks());
+	tracks = $state<Track[]>(loadCachedTracks().tracks);
 	loading = $state(false);
+	loadingMore = $state(false);
+	nextCursor = $state<string | null>(loadCachedTracks().nextCursor);
+	hasMore = $state(loadCachedTracks().hasMore);
+
+	private persistToStorage(): void {
+		if (typeof window !== 'undefined') {
+			try {
+				localStorage.setItem(
+					'tracks_cache',
+					JSON.stringify({
+						tracks: this.tracks,
+						nextCursor: this.nextCursor,
+						hasMore: this.hasMore
+					})
+				);
+			} catch (e) {
+				console.warn('failed to cache tracks:', e);
+			}
+		}
+	}
 
 	async fetch(force = false): Promise<void> {
 		// always fetch in background to check for updates
@@ -38,19 +76,12 @@ class TracksCache {
 			const response = await fetch(`${API_URL}/tracks/`, {
 				credentials: 'include'
 			});
-			const data = await response.json();
+			const data: TracksApiResponse = await response.json();
 			this.tracks = data.tracks;
+			this.nextCursor = data.next_cursor;
+			this.hasMore = data.has_more;
 
-			// persist to localStorage
-			if (typeof window !== 'undefined') {
-				try {
-					localStorage.setItem('tracks_cache', JSON.stringify({
-						tracks: this.tracks
-					}));
-				} catch (e) {
-					console.warn('failed to cache tracks:', e);
-				}
-			}
+			this.persistToStorage();
 		} catch (e) {
 			console.error('failed to fetch tracks:', e);
 		} finally {
@@ -58,11 +89,42 @@ class TracksCache {
 		}
 	}
 
+	async fetchMore(): Promise<void> {
+		// don't fetch if already loading or no more results
+		if (this.loadingMore || this.loading || !this.hasMore || !this.nextCursor) {
+			return;
+		}
+
+		this.loadingMore = true;
+		try {
+			const url = new URL(`${API_URL}/tracks/`);
+			url.searchParams.set('cursor', this.nextCursor);
+
+			const response = await fetch(url.toString(), {
+				credentials: 'include'
+			});
+			const data: TracksApiResponse = await response.json();
+
+			// append new tracks to existing list
+			this.tracks = [...this.tracks, ...data.tracks];
+			this.nextCursor = data.next_cursor;
+			this.hasMore = data.has_more;
+
+			this.persistToStorage();
+		} catch (e) {
+			console.error('failed to fetch more tracks:', e);
+		} finally {
+			this.loadingMore = false;
+		}
+	}
+
 	invalidate(): void {
-		// clear cache - next fetch will get fresh data
+		// clear cache and reset pagination state - next fetch will get fresh data
 		if (typeof window !== 'undefined') {
 			localStorage.removeItem('tracks_cache');
 		}
+		this.nextCursor = null;
+		this.hasMore = true;
 	}
 }
 
