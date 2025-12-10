@@ -4,14 +4,17 @@ import asyncio
 import logging
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
+from fastapi import Cookie, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_auth
-from backend._internal.atproto import create_like_record, delete_record_by_uri
+from backend._internal.background_tasks import (
+    schedule_pds_create_like,
+    schedule_pds_delete_like,
+)
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
@@ -64,10 +67,16 @@ async def list_liked_tracks(
 @router.post("/{track_id}/like")
 async def like_track(
     track_id: int,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
+    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> dict:
-    """Like a track - creates ATProto record and stores in index."""
+    """Like a track - stores in database immediately, creates ATProto record in background.
+
+    The like is visible immediately in the UI. The ATProto record is created
+    asynchronously via a background task, keeping the API response fast.
+    """
     result = await db.execute(select(Track).where(Track.id == track_id))
     track = result.scalar_one_or_none()
 
@@ -91,51 +100,43 @@ async def like_track(
     if existing_like.scalar_one_or_none():
         return {"liked": True}
 
-    like_uri = None
-    try:
-        like_uri = await create_like_record(
-            auth_session=auth_session,
-            subject_uri=track.atproto_record_uri,
-            subject_cid=track.atproto_record_cid,
-        )
+    # create database record immediately (optimistic)
+    like = TrackLike(
+        track_id=track_id,
+        user_did=auth_session.did,
+        atproto_like_uri=None,  # will be set by background task
+    )
+    db.add(like)
+    await db.commit()
+    await db.refresh(like)
 
-        like = TrackLike(
-            track_id=track_id,
-            user_did=auth_session.did,
-            atproto_like_uri=like_uri,
-        )
-        db.add(like)
-        await db.commit()
-    except Exception as e:
-        logger.error(
-            f"failed to like track {track_id} for user {auth_session.did}: {e}",
-            exc_info=True,
-        )
-        if like_uri:
-            try:
-                await delete_record_by_uri(
-                    auth_session=auth_session,
-                    record_uri=like_uri,
-                )
-                logger.info(f"cleaned up orphaned ATProto like record: {like_uri}")
-            except Exception as cleanup_exc:
-                logger.error(
-                    f"failed to clean up orphaned ATProto like record {like_uri}: {cleanup_exc}"
-                )
-        raise HTTPException(
-            status_code=500, detail="failed to like track - please try again"
-        ) from e
+    # schedule PDS record creation in background
+    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
+        "Bearer ", ""
+    )
+    await schedule_pds_create_like(
+        session_id=session_id,
+        like_id=like.id,
+        subject_uri=track.atproto_record_uri,
+        subject_cid=track.atproto_record_cid,
+    )
 
-    return {"liked": True, "atproto_uri": like_uri}
+    return {"liked": True}
 
 
 @router.delete("/{track_id}/like")
 async def unlike_track(
     track_id: int,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
+    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> dict:
-    """Unlike a track - deletes ATProto record and removes from index."""
+    """Unlike a track - removes from database immediately, deletes ATProto record in background.
+
+    The unlike is reflected immediately in the UI. The ATProto record deletion
+    happens asynchronously via a background task.
+    """
     result = await db.execute(
         select(TrackLike).where(
             TrackLike.track_id == track_id, TrackLike.user_did == auth_session.did
@@ -146,50 +147,22 @@ async def unlike_track(
     if not like:
         return {"liked": False}
 
-    track_result = await db.execute(select(Track).where(Track.id == track_id))
-    track = track_result.scalar_one_or_none()
-    if not track:
-        raise HTTPException(status_code=404, detail="track not found")
+    # capture the ATProto URI before deleting the DB record
+    like_uri = like.atproto_like_uri
 
-    if not track.atproto_record_uri or not track.atproto_record_cid:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": "missing_atproto_record",
-                "message": "this track cannot be unliked because its ATProto record is missing",
-            },
-        )
-
-    await delete_record_by_uri(
-        auth_session=auth_session,
-        record_uri=like.atproto_like_uri,
-    )
-
+    # delete database record immediately (optimistic)
     await db.delete(like)
-    try:
-        await db.commit()
-    except Exception as e:
-        logger.error(
-            f"failed to commit unlike to database after deleting ATProto record: {e}"
+    await db.commit()
+
+    # schedule PDS record deletion in background (if URI exists)
+    if like_uri:
+        session_id = session_id_cookie or request.headers.get(
+            "authorization", ""
+        ).replace("Bearer ", "")
+        await schedule_pds_delete_like(
+            session_id=session_id,
+            like_uri=like_uri,
         )
-        try:
-            recreated_uri = await create_like_record(
-                auth_session=auth_session,
-                subject_uri=track.atproto_record_uri,
-                subject_cid=track.atproto_record_cid,
-            )
-            logger.info(
-                f"rolled back ATProto deletion by recreating like: {recreated_uri}"
-            )
-        except Exception as rollback_exc:
-            logger.critical(
-                f"failed to rollback ATProto deletion for track {track_id}, "
-                f"user {auth_session.did}: {rollback_exc}. "
-                "database and ATProto are now inconsistent"
-            )
-        raise HTTPException(
-            status_code=500, detail="failed to unlike track - please try again"
-        ) from e
 
     return {"liked": False}
 

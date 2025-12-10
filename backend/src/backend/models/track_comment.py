@@ -42,8 +42,9 @@ class TrackComment(Base):
     timestamp_ms: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # ATProto comment record URI (source of truth)
-    atproto_comment_uri: Mapped[str] = mapped_column(
-        String, nullable=False, unique=True, index=True
+    # nullable to support optimistic DB writes before PDS record creation
+    atproto_comment_uri: Mapped[str | None] = mapped_column(
+        String, nullable=True, unique=True, index=True
     )
 
     # when it was created (indexed from ATProto record)

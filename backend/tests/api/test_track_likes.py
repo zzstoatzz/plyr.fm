@@ -1,7 +1,7 @@
 """tests for track like api endpoints and error handling."""
 
 from collections.abc import Generator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -83,10 +83,8 @@ def test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
 async def test_like_track_success(
     test_app: FastAPI, db_session: AsyncSession, test_track: Track
 ):
-    """test successful track like creates ATProto record and DB entry."""
-    with patch("backend.api.tracks.likes.create_like_record") as mock_create:
-        mock_create.return_value = "at://did:test:user123/fm.plyr.like/abc123"
-
+    """test successful track like creates DB entry and schedules PDS record creation."""
+    with patch("backend.api.tracks.likes.schedule_pds_create_like") as mock_schedule:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -95,10 +93,13 @@ async def test_like_track_success(
     assert response.status_code == 200
     assert response.json()["liked"] is True
 
-    # verify ATProto record was created
-    mock_create.assert_called_once()
+    # verify background task was scheduled
+    mock_schedule.assert_called_once()
+    call_kwargs = mock_schedule.call_args.kwargs
+    assert call_kwargs["subject_uri"] == test_track.atproto_record_uri
+    assert call_kwargs["subject_cid"] == test_track.atproto_record_cid
 
-    # verify DB entry exists
+    # verify DB entry exists (created immediately, before PDS)
     result = await db_session.execute(
         select(TrackLike).where(
             TrackLike.track_id == test_track.id,
@@ -107,59 +108,39 @@ async def test_like_track_success(
     )
     like = result.scalar_one_or_none()
     assert like is not None
-    assert like.atproto_like_uri == "at://did:test:user123/fm.plyr.like/abc123"
+    # atproto_like_uri is None initially - will be set by background task
+    assert like.atproto_like_uri is None
 
 
-async def test_like_track_cleanup_on_db_failure(
+async def test_like_track_db_entry_has_correct_like_id(
     test_app: FastAPI, db_session: AsyncSession, test_track: Track
 ):
-    """test that ATProto record is cleaned up if DB commit fails."""
-    created_uri = "at://did:test:user123/fm.plyr.like/abc123"
-
-    # create a mock session that fails on commit
-    mock_db = AsyncMock(spec=AsyncSession)
-    mock_db.execute = db_session.execute
-    mock_db.add = db_session.add
-    mock_db.delete = db_session.delete
-    mock_db.flush = db_session.flush
-    mock_db.refresh = db_session.refresh
-    mock_db.commit = AsyncMock(side_effect=Exception("DB error"))
-
-    async def mock_get_db():
-        yield mock_db
-
-    from backend.models import get_db
-
-    test_app.dependency_overrides[get_db] = mock_get_db
-
-    with (
-        patch("backend.api.tracks.likes.create_like_record") as mock_create,
-        patch("backend.api.tracks.likes.delete_record_by_uri") as mock_delete,
-    ):
-        mock_create.return_value = created_uri
-
+    """test that the like_id passed to background task matches the DB record."""
+    with patch("backend.api.tracks.likes.schedule_pds_create_like") as mock_schedule:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
-            response = await client.post(f"/tracks/{test_track.id}/like")
+            await client.post(f"/tracks/{test_track.id}/like")
 
-    # should return 500 error
-    assert response.status_code == 500
-    assert "failed to like track" in response.json()["detail"]
+    # get the like_id from the scheduled call
+    call_kwargs = mock_schedule.call_args.kwargs
+    scheduled_like_id = call_kwargs["like_id"]
 
-    # verify cleanup was attempted
-    mock_delete.assert_called_once()
-    call_args = mock_delete.call_args
-    assert call_args.kwargs["record_uri"] == created_uri
-
-    # cleanup override
-    del test_app.dependency_overrides[get_db]
+    # verify it matches the DB record
+    result = await db_session.execute(
+        select(TrackLike).where(
+            TrackLike.track_id == test_track.id,
+            TrackLike.user_did == "did:test:user123",
+        )
+    )
+    like = result.scalar_one()
+    assert like.id == scheduled_like_id
 
 
 async def test_unlike_track_success(
     test_app: FastAPI, db_session: AsyncSession, test_track: Track
 ):
-    """test successful track unlike deletes ATProto record and DB entry."""
+    """test successful track unlike removes DB entry and schedules PDS record deletion."""
     # create existing like
     like = TrackLike(
         track_id=test_track.id,
@@ -169,7 +150,7 @@ async def test_unlike_track_success(
     db_session.add(like)
     await db_session.commit()
 
-    with patch("backend.api.tracks.likes.delete_record_by_uri") as mock_delete:
+    with patch("backend.api.tracks.likes.schedule_pds_delete_like") as mock_schedule:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -178,10 +159,12 @@ async def test_unlike_track_success(
     assert response.status_code == 200
     assert response.json()["liked"] is False
 
-    # verify ATProto record was deleted
-    mock_delete.assert_called_once()
+    # verify background task was scheduled with correct URI
+    mock_schedule.assert_called_once()
+    call_kwargs = mock_schedule.call_args.kwargs
+    assert call_kwargs["like_uri"] == "at://did:test:user123/fm.plyr.like/abc123"
 
-    # verify DB entry is gone
+    # verify DB entry is gone (deleted immediately, before PDS)
     result = await db_session.execute(
         select(TrackLike).where(
             TrackLike.track_id == test_track.id,
@@ -191,63 +174,39 @@ async def test_unlike_track_success(
     assert result.scalar_one_or_none() is None
 
 
-async def test_unlike_track_rollback_on_db_failure(
+async def test_unlike_track_without_atproto_uri(
     test_app: FastAPI, db_session: AsyncSession, test_track: Track
 ):
-    """test that ATProto record is recreated if DB commit fails during unlike."""
-    like_uri = "at://did:test:user123/fm.plyr.like/abc123"
-
-    # create existing like
+    """test that unliking a track without ATProto URI doesn't schedule deletion."""
+    # create like without ATProto URI (e.g., background task hasn't run yet)
     like = TrackLike(
         track_id=test_track.id,
         user_did="did:test:user123",
-        atproto_like_uri=like_uri,
+        atproto_like_uri=None,
     )
     db_session.add(like)
     await db_session.commit()
 
-    # create a mock session that fails on commit
-    mock_db = AsyncMock(spec=AsyncSession)
-    mock_db.execute = db_session.execute
-    mock_db.add = db_session.add
-    mock_db.delete = db_session.delete
-    mock_db.flush = db_session.flush
-    mock_db.refresh = db_session.refresh
-    mock_db.commit = AsyncMock(side_effect=Exception("DB error"))
-
-    async def mock_get_db():
-        yield mock_db
-
-    from backend.models import get_db
-
-    test_app.dependency_overrides[get_db] = mock_get_db
-
-    with (
-        patch("backend.api.tracks.likes.delete_record_by_uri") as mock_delete,
-        patch("backend.api.tracks.likes.create_like_record") as mock_create,
-    ):
-        mock_create.return_value = "at://did:test:user123/fm.plyr.like/new123"
-
+    with patch("backend.api.tracks.likes.schedule_pds_delete_like") as mock_schedule:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
             response = await client.delete(f"/tracks/{test_track.id}/like")
 
-    # should return 500 error
-    assert response.status_code == 500
-    assert "failed to unlike track" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["liked"] is False
 
-    # verify ATProto record was deleted
-    mock_delete.assert_called_once()
+    # no PDS deletion should be scheduled since there's no ATProto record
+    mock_schedule.assert_not_called()
 
-    # verify rollback was attempted (recreate the like)
-    mock_create.assert_called_once()
-    call_args = mock_create.call_args
-    assert call_args.kwargs["subject_uri"] == test_track.atproto_record_uri
-    assert call_args.kwargs["subject_cid"] == test_track.atproto_record_cid
-
-    # cleanup override
-    del test_app.dependency_overrides[get_db]
+    # verify DB entry is still gone
+    result = await db_session.execute(
+        select(TrackLike).where(
+            TrackLike.track_id == test_track.id,
+            TrackLike.user_did == "did:test:user123",
+        )
+    )
+    assert result.scalar_one_or_none() is None
 
 
 async def test_like_already_liked_track_idempotent(
@@ -263,7 +222,7 @@ async def test_like_already_liked_track_idempotent(
     db_session.add(like)
     await db_session.commit()
 
-    with patch("backend.api.tracks.likes.create_like_record") as mock_create:
+    with patch("backend.api.tracks.likes.schedule_pds_create_like") as mock_schedule:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -272,15 +231,15 @@ async def test_like_already_liked_track_idempotent(
     assert response.status_code == 200
     assert response.json()["liked"] is True
 
-    # verify no new ATProto record was created
-    mock_create.assert_not_called()
+    # verify no new background task was scheduled
+    mock_schedule.assert_not_called()
 
 
 async def test_unlike_not_liked_track_idempotent(
     test_app: FastAPI, db_session: AsyncSession, test_track: Track
 ):
     """test that unliking a not-liked track is idempotent."""
-    with patch("backend.api.tracks.likes.delete_record_by_uri") as mock_delete:
+    with patch("backend.api.tracks.likes.schedule_pds_delete_like") as mock_schedule:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -289,5 +248,52 @@ async def test_unlike_not_liked_track_idempotent(
     assert response.status_code == 200
     assert response.json()["liked"] is False
 
-    # verify no ATProto record deletion was attempted
-    mock_delete.assert_not_called()
+    # verify no background task was scheduled
+    mock_schedule.assert_not_called()
+
+
+async def test_like_track_missing_atproto_record(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test that liking a track without ATProto record returns 422."""
+    # create artist
+    artist = Artist(
+        did="did:plc:artist456",
+        handle="artist2.bsky.social",
+        display_name="Test Artist 2",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create track WITHOUT ATProto record
+    track = Track(
+        title="No ATProto Track",
+        artist_did=artist.did,
+        file_id="noatproto123",
+        file_type="mp3",
+        atproto_record_uri=None,
+        atproto_record_cid=None,
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.post(f"/tracks/{track.id}/like")
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error"] == "missing_atproto_record"
+
+
+async def test_like_nonexistent_track(test_app: FastAPI):
+    """test that liking a nonexistent track returns 404."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.post("/tracks/99999/like")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "track not found"

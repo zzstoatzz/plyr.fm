@@ -4,17 +4,17 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
+from fastapi import Cookie, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_auth
-from backend._internal.atproto import (
-    create_comment_record,
-    delete_record_by_uri,
-    update_comment_record,
+from backend._internal.background_tasks import (
+    schedule_pds_create_comment,
+    schedule_pds_delete_comment,
+    schedule_pds_update_comment,
 )
 from backend.models import Artist, Track, TrackComment, UserPreferences, get_db
 
@@ -121,12 +121,15 @@ async def get_track_comments(
 async def create_comment(
     track_id: int,
     body: CommentCreate,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
+    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> CommentResponse:
     """create a timed comment on a track.
 
     requires auth. track owner must have allow_comments enabled.
+    the comment is visible immediately; the ATProto record is created in background.
     """
     # get track
     track_result = await db.execute(select(Track).where(Track.id == track_id))
@@ -165,47 +168,30 @@ async def create_comment(
             detail=f"track has reached maximum of {MAX_COMMENTS_PER_TRACK} comments",
         )
 
-    # create ATProto record
-    comment_uri = None
-    try:
-        comment_uri = await create_comment_record(
-            auth_session=auth_session,
-            subject_uri=track.atproto_record_uri,
-            subject_cid=track.atproto_record_cid,
-            text=body.text,
-            timestamp_ms=body.timestamp_ms,
-        )
+    # create database record immediately (optimistic)
+    comment = TrackComment(
+        track_id=track_id,
+        user_did=auth_session.did,
+        text=body.text,
+        timestamp_ms=body.timestamp_ms,
+        atproto_comment_uri=None,  # will be set by background task
+    )
+    db.add(comment)
+    await db.commit()
+    await db.refresh(comment)
 
-        # create database record
-        comment = TrackComment(
-            track_id=track_id,
-            user_did=auth_session.did,
-            text=body.text,
-            timestamp_ms=body.timestamp_ms,
-            atproto_comment_uri=comment_uri,
-        )
-        db.add(comment)
-        await db.commit()
-        await db.refresh(comment)
-
-    except Exception as e:
-        await db.rollback()
-        logger.error(
-            f"failed to create comment on track {track_id} by {auth_session.did}: {e}",
-            exc_info=True,
-        )
-        # cleanup ATProto record if created
-        if comment_uri:
-            try:
-                await delete_record_by_uri(auth_session, comment_uri)
-                logger.info(
-                    f"cleaned up orphaned ATProto comment record: {comment_uri}"
-                )
-            except Exception as cleanup_exc:
-                logger.error(
-                    f"failed to cleanup orphaned comment record: {cleanup_exc}"
-                )
-        raise HTTPException(status_code=500, detail="failed to create comment") from e
+    # schedule PDS record creation in background
+    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
+        "Bearer ", ""
+    )
+    await schedule_pds_create_comment(
+        session_id=session_id,
+        comment_id=comment.id,
+        subject_uri=track.atproto_record_uri,
+        subject_cid=track.atproto_record_cid,
+        text=body.text,
+        timestamp_ms=body.timestamp_ms,
+    )
 
     # get user info for response
     artist_result = await db.execute(
@@ -229,10 +215,15 @@ async def create_comment(
 @router.delete("/comments/{comment_id}")
 async def delete_comment(
     comment_id: int,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
+    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> dict:
-    """delete a comment. only the author can delete their own comments."""
+    """delete a comment. only the author can delete their own comments.
+
+    the comment is removed immediately; the ATProto record is deleted in background.
+    """
     comment_result = await db.execute(
         select(TrackComment).where(TrackComment.id == comment_id)
     )
@@ -244,15 +235,22 @@ async def delete_comment(
     if comment.user_did != auth_session.did:
         raise HTTPException(status_code=403, detail="can only delete your own comments")
 
-    # delete ATProto record
-    try:
-        await delete_record_by_uri(auth_session, comment.atproto_comment_uri)
-    except Exception as e:
-        logger.error(f"failed to delete ATProto comment record: {e}")
-        # continue with DB deletion anyway
+    # capture the ATProto URI before deleting the DB record
+    comment_uri = comment.atproto_comment_uri
 
+    # delete database record immediately (optimistic)
     await db.delete(comment)
     await db.commit()
+
+    # schedule PDS record deletion in background (if URI exists)
+    if comment_uri:
+        session_id = session_id_cookie or request.headers.get(
+            "authorization", ""
+        ).replace("Bearer ", "")
+        await schedule_pds_delete_comment(
+            session_id=session_id,
+            comment_uri=comment_uri,
+        )
 
     return {"deleted": True}
 
@@ -261,10 +259,15 @@ async def delete_comment(
 async def update_comment(
     comment_id: int,
     body: CommentUpdate,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
+    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> CommentResponse:
-    """update a comment's text. only the author can edit their own comments."""
+    """update a comment's text. only the author can edit their own comments.
+
+    the comment is updated immediately; the ATProto record is updated in background.
+    """
     comment_result = await db.execute(
         select(TrackComment).where(TrackComment.id == comment_id)
     )
@@ -286,34 +289,29 @@ async def update_comment(
             detail="track missing ATProto record - cannot update comment",
         )
 
-    # update ATProto record first
+    # update database record immediately (optimistic)
     updated_at = datetime.now(UTC)
-    try:
-        await update_comment_record(
-            auth_session=auth_session,
+    comment.text = body.text
+    comment.updated_at = updated_at
+
+    await db.commit()
+    await db.refresh(comment)
+
+    # schedule PDS record update in background (if URI exists)
+    if comment.atproto_comment_uri:
+        session_id = session_id_cookie or request.headers.get(
+            "authorization", ""
+        ).replace("Bearer ", "")
+        await schedule_pds_update_comment(
+            session_id=session_id,
+            comment_id=comment.id,
             comment_uri=comment.atproto_comment_uri,
             subject_uri=track.atproto_record_uri,
             subject_cid=track.atproto_record_cid,
             text=body.text,
             timestamp_ms=comment.timestamp_ms,
             created_at=comment.created_at,
-            updated_at=updated_at,
         )
-    except Exception as e:
-        logger.error(
-            f"failed to update ATProto comment record {comment.atproto_comment_uri}: {e}",
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=500, detail="failed to update comment on ATProto"
-        ) from e
-
-    # update database record
-    comment.text = body.text
-    comment.updated_at = updated_at
-
-    await db.commit()
-    await db.refresh(comment)
 
     # get user info for response
     artist_result = await db.execute(
