@@ -60,13 +60,13 @@ FIXED_COSTS = {
     # the copyright_scans table was created Nov 24 but first scan recorded Nov 30
     # so we hardcode this period from AudD dashboard. DELETE THIS after Dec 24 -
     # future periods will use live database counts.
-    # source: https://dashboard.audd.io - checked 2025-12-09
+    # source: https://dashboard.audd.io - checked 2025-12-10
     "audd": {
-        "total_requests": 6781,
+        "total_requests": 7826,  # 6000 included + 1826 billable
         "included_requests": 6000,  # 1000 + 5000 bonus
-        "billable_requests": 781,
+        "billable_requests": 1826,
         "cost_per_request": 0.005,  # $5 per 1000
-        "cost": 3.91,  # 781 * $0.005
+        "cost": 9.13,  # 1826 * $0.005
         "note": "copyright detection API (indie plan)",
     },
 }
