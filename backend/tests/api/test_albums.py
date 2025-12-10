@@ -758,6 +758,66 @@ async def test_update_album_forbidden_for_non_owner(
     assert "your own albums" in response.json()["detail"]
 
 
+async def test_update_album_syncs_slug_on_title_change(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """regression test: album slug must update when title changes.
+
+    fixes bug where renaming an album via PATCH didn't update the slug,
+    causing get_or_create_album to create duplicates when adding tracks
+    to the renamed album (since it looks up by slugified title).
+    """
+    from backend.utilities.slugs import slugify
+
+    # create artist matching mock session
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album with original title/slug
+    original_title = "Private Event 2016"
+    album = Album(
+        artist_did=artist.did,
+        slug=slugify(original_title),
+        title=original_title,
+    )
+    db_session.add(album)
+    await db_session.commit()
+
+    album_id = album.id
+    assert album.slug == "private-event-2016"
+
+    # rename album with PATCH
+    new_title = "The Waybacks at Private Event 2016"
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.patch(
+            f"/albums/{album_id}?title={new_title.replace(' ', '%20')}"
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == new_title
+    # slug should be updated to match new title
+    assert data["slug"] == slugify(new_title)
+    assert data["slug"] == "the-waybacks-at-private-event-2016"
+
+    # verify in database
+    from backend.utilities.database import get_engine
+
+    engine = get_engine()
+    async with AsyncSession(engine, expire_on_commit=False) as fresh_session:
+        result = await fresh_session.execute(select(Album).where(Album.id == album_id))
+        updated_album = result.scalar_one()
+        assert updated_album.title == new_title
+        assert updated_album.slug == "the-waybacks-at-private-event-2016"
+
+
 async def test_remove_track_from_album(test_app: FastAPI, db_session: AsyncSession):
     """test removing a track from an album (orphaning it)."""
     # create artist matching mock session

@@ -96,29 +96,8 @@ def _register_tasks(docket: Docket) -> None:
     """register all background task functions with the docket.
 
     tasks must be registered before they can be executed by workers.
-    add new task imports here as they're created.
+    new tasks should be added to background_tasks.background_tasks list.
     """
-    # import task functions here to avoid circular imports
-    from backend._internal.background_tasks import (
-        process_export,
-        scan_copyright,
-        scrobble_to_teal,
-        sync_atproto,
-    )
+    docket.register_collection("backend._internal.background_tasks:background_tasks")
 
-    docket.register(scan_copyright)
-    docket.register(process_export)
-    docket.register(sync_atproto)
-    docket.register(scrobble_to_teal)
-
-    logger.info(
-        "registered background tasks",
-        extra={
-            "tasks": [
-                "scan_copyright",
-                "process_export",
-                "sync_atproto",
-                "scrobble_to_teal",
-            ]
-        },
-    )
+    logger.info("registered background tasks")

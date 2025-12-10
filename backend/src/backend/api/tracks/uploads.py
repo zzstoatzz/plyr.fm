@@ -30,7 +30,10 @@ from backend._internal import require_artist_profile
 from backend._internal.atproto import create_track_record
 from backend._internal.atproto.handles import resolve_featured_artists
 from backend._internal.audio import AudioFormat
-from backend._internal.background_tasks import schedule_copyright_scan
+from backend._internal.background_tasks import (
+    schedule_album_list_sync,
+    schedule_copyright_scan,
+)
 from backend._internal.image import ImageFormat
 from backend._internal.jobs import job_service
 from backend.config import settings
@@ -412,6 +415,12 @@ async def _process_upload_background(ctx: UploadContext) -> None:
 
                     if r2_url:
                         await schedule_copyright_scan(track.id, r2_url)
+
+                    # sync album list record if track is in an album
+                    if album_record:
+                        await schedule_album_list_sync(
+                            ctx.auth_session.session_id, album_record.id
+                        )
 
                     await job_service.update_progress(
                         ctx.upload_id,
