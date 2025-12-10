@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { invalidateAll, replaceState } from '$app/navigation';
+	import { AtpAgent } from '@atproto/api';
 	import Header from '$lib/components/Header.svelte';
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
 	import AlbumSelect from '$lib/components/AlbumSelect.svelte';
@@ -137,18 +138,28 @@
 		if (!auth.user?.did) return;
 		checkingAtprotofans = true;
 		try {
-			// check for atprotofans creator profile directly from PDS
-			const response = await fetch(
-				`https://bsky.social/xrpc/com.atproto.repo.getRecord?repo=${auth.user.did}&collection=com.atprotofans.profile&rkey=self`
+			// resolve DID to find user's PDS (com.atprotofans.profile isn't indexed by Bluesky appview)
+			const didDoc = await fetch(`https://plc.directory/${auth.user.did}`).then((r) => r.json());
+			const pdsService = didDoc?.service?.find(
+				(s: { id: string }) => s.id === '#atproto_pds'
 			);
-			if (response.ok) {
-				const record = await response.json();
-				atprotofansEligible = record?.value?.acceptingSupporters === true;
-			} else {
+			const pdsUrl = pdsService?.serviceEndpoint;
+			if (!pdsUrl) {
 				atprotofansEligible = false;
+				return;
 			}
+
+			// use SDK agent pointed at user's PDS to fetch the record
+			const agent = new AtpAgent({ service: pdsUrl });
+			const response = await agent.com.atproto.repo.getRecord({
+				repo: auth.user.did,
+				collection: 'com.atprotofans.profile',
+				rkey: 'self'
+			});
+			const value = response.data.value as { acceptingSupporters?: boolean } | undefined;
+			atprotofansEligible = value?.acceptingSupporters === true;
 		} catch (_e) {
-			console.error('failed to check atprotofans eligibility:', _e);
+			// record doesn't exist or other error - not eligible
 			atprotofansEligible = false;
 		} finally {
 			checkingAtprotofans = false;
