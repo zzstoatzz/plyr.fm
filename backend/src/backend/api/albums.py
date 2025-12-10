@@ -34,6 +34,7 @@ from backend.utilities.aggregations import (
     get_track_tags,
 )
 from backend.utilities.hashing import CHUNK_SIZE
+from backend.utilities.slugs import slugify
 
 logger = logging.getLogger(__name__)
 
@@ -500,6 +501,9 @@ async def update_album(
 
     if title is not None:
         album.title = title.strip()
+        # sync slug when title changes so get_or_create_album lookups work
+        if title_changed:
+            album.slug = slugify(title.strip())
     if description is not None:
         album.description = description.strip() if description.strip() else None
 
