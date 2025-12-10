@@ -17,8 +17,18 @@ from pathlib import Path
 import aioboto3
 import aiofiles
 import logfire
+from sqlalchemy import select
 
+from backend._internal.atproto.records import (
+    create_comment_record,
+    create_like_record,
+    delete_record_by_uri,
+    update_comment_record,
+)
+from backend._internal.auth import get_session
 from backend._internal.background import get_docket
+from backend.models import TrackComment, TrackLike
+from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 
@@ -539,13 +549,6 @@ async def pds_create_like(
         subject_uri: AT URI of the track being liked
         subject_cid: CID of the track being liked
     """
-    from sqlalchemy import select
-
-    from backend._internal.atproto.records import create_like_record
-    from backend._internal.auth import get_session
-    from backend.models import TrackLike
-    from backend.utilities.database import db_session
-
     auth_session = await get_session(session_id)
     if not auth_session:
         logger.warning(f"pds_create_like: session {session_id[:8]}... not found")
@@ -571,8 +574,6 @@ async def pds_create_like(
             else:
                 # like was deleted before we could update it - clean up orphan
                 logger.warning(f"pds_create_like: like {like_id} no longer exists")
-                from backend._internal.atproto.records import delete_record_by_uri
-
                 await delete_record_by_uri(auth_session, like_uri)
 
     except Exception as e:
@@ -603,9 +604,6 @@ async def pds_delete_like(
         session_id: the user's session ID for authentication
         like_uri: AT URI of the like record to delete
     """
-    from backend._internal.atproto.records import delete_record_by_uri
-    from backend._internal.auth import get_session
-
     auth_session = await get_session(session_id)
     if not auth_session:
         logger.warning(f"pds_delete_like: session {session_id[:8]}... not found")
@@ -645,13 +643,6 @@ async def pds_create_comment(
         text: comment text
         timestamp_ms: playback position when comment was made
     """
-    from sqlalchemy import select
-
-    from backend._internal.atproto.records import create_comment_record
-    from backend._internal.auth import get_session
-    from backend.models import TrackComment
-    from backend.utilities.database import db_session
-
     auth_session = await get_session(session_id)
     if not auth_session:
         logger.warning(f"pds_create_comment: session {session_id[:8]}... not found")
@@ -681,8 +672,6 @@ async def pds_create_comment(
                 logger.warning(
                     f"pds_create_comment: comment {comment_id} no longer exists"
                 )
-                from backend._internal.atproto.records import delete_record_by_uri
-
                 await delete_record_by_uri(auth_session, comment_uri)
 
     except Exception as e:
@@ -717,9 +706,6 @@ async def pds_delete_comment(
         session_id: the user's session ID for authentication
         comment_uri: AT URI of the comment record to delete
     """
-    from backend._internal.atproto.records import delete_record_by_uri
-    from backend._internal.auth import get_session
-
     auth_session = await get_session(session_id)
     if not auth_session:
         logger.warning(f"pds_delete_comment: session {session_id[:8]}... not found")
@@ -761,9 +747,6 @@ async def pds_update_comment(
         timestamp_ms: playback position when comment was made
         created_at: original creation timestamp
     """
-    from backend._internal.atproto.records import update_comment_record
-    from backend._internal.auth import get_session
-
     auth_session = await get_session(session_id)
     if not auth_session:
         logger.warning(f"pds_update_comment: session {session_id[:8]}... not found")
