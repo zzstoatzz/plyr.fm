@@ -221,3 +221,39 @@ async def test_support_url_persists_after_update(
     # support_url should still be set
     assert data["support_url"] == "https://patreon.com/testartist"
     assert data["auto_advance"] is False
+
+
+async def test_set_support_url_atprotofans(
+    client_no_teal: AsyncClient,
+):
+    """should accept 'atprotofans' as a valid support_url value."""
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={"support_url": "atprotofans"},
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["support_url"] == "atprotofans"
+
+
+async def test_support_url_rejects_http(
+    client_no_teal: AsyncClient,
+):
+    """should reject http:// URLs (only https:// or 'atprotofans' allowed)."""
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={"support_url": "http://insecure.com"},
+    )
+    assert response.status_code == 422  # validation error
+
+
+async def test_support_url_rejects_invalid_strings(
+    client_no_teal: AsyncClient,
+):
+    """should reject strings that aren't 'atprotofans' or https:// URLs."""
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={"support_url": "random-string"},
+    )
+    assert response.status_code == 422  # validation error
