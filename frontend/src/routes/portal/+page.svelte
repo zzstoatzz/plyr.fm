@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { invalidateAll, replaceState } from '$app/navigation';
+	import { AtpAgent } from '@atproto/api';
 	import Header from '$lib/components/Header.svelte';
 	import HandleSearch from '$lib/components/HandleSearch.svelte';
 	import AlbumSelect from '$lib/components/AlbumSelect.svelte';
@@ -33,9 +34,13 @@
 	let displayName = $state('');
 	let bio = $state('');
 	let avatarUrl = $state('');
-	let supportUrl = $state('');
+	// support link mode: 'none' | 'atprotofans' | 'custom'
+	let supportLinkMode = $state<'none' | 'atprotofans' | 'custom'>('none');
+	let customSupportUrl = $state('');
 	let savingProfile = $state(false);
-	let savingSupportUrl = $state(false);
+	// atprotofans eligibility - checked on mount
+	let atprotofansEligible = $state(false);
+	let checkingAtprotofans = $state(false);
 
 	// album management state
 	let albums = $state<AlbumSummary[]>([]);
@@ -129,11 +134,44 @@
 		}
 	}
 
+	async function checkAtprotofansEligibility() {
+		if (!auth.user?.did) return;
+		checkingAtprotofans = true;
+		try {
+			// resolve DID to find user's PDS (com.atprotofans.profile isn't indexed by Bluesky appview)
+			const didDoc = await fetch(`https://plc.directory/${auth.user.did}`).then((r) => r.json());
+			const pdsService = didDoc?.service?.find(
+				(s: { id: string }) => s.id === '#atproto_pds'
+			);
+			const pdsUrl = pdsService?.serviceEndpoint;
+			if (!pdsUrl) {
+				atprotofansEligible = false;
+				return;
+			}
+
+			// use SDK agent pointed at user's PDS to fetch the record
+			const agent = new AtpAgent({ service: pdsUrl });
+			const response = await agent.com.atproto.repo.getRecord({
+				repo: auth.user.did,
+				collection: 'com.atprotofans.profile',
+				rkey: 'self'
+			});
+			const value = response.data.value as { acceptingSupporters?: boolean } | undefined;
+			atprotofansEligible = value?.acceptingSupporters === true;
+		} catch (_e) {
+			// record doesn't exist or other error - not eligible
+			atprotofansEligible = false;
+		} finally {
+			checkingAtprotofans = false;
+		}
+	}
+
 	async function loadArtistProfile() {
 		try {
 			const [artistRes, prefsRes] = await Promise.all([
 				fetch(`${API_URL}/artists/me`, { credentials: 'include' }),
-				fetch(`${API_URL}/preferences/`, { credentials: 'include' })
+				fetch(`${API_URL}/preferences/`, { credentials: 'include' }),
+				checkAtprotofansEligibility()
 			]);
 
 			if (artistRes.ok) {
@@ -145,7 +183,18 @@
 
 			if (prefsRes.ok) {
 				const prefs = await prefsRes.json();
-				supportUrl = prefs.support_url || '';
+				// parse support_url into mode + custom URL
+				const url = prefs.support_url || '';
+				if (!url) {
+					supportLinkMode = 'none';
+					customSupportUrl = '';
+				} else if (url === 'atprotofans') {
+					supportLinkMode = 'atprotofans';
+					customSupportUrl = '';
+				} else {
+					supportLinkMode = 'custom';
+					customSupportUrl = url;
+				}
 			}
 		} catch (_e) {
 			console.error('failed to load artist profile:', _e);
@@ -189,12 +238,18 @@
 		savingProfile = true;
 
 		try {
-			// validate support URL
-			const trimmedSupportUrl = supportUrl.trim();
-			if (trimmedSupportUrl && !trimmedSupportUrl.startsWith('https://')) {
-				toast.error('support link must start with https://');
-				savingProfile = false;
-				return;
+			// compute support_url value based on mode
+			let supportUrlValue = '';
+			if (supportLinkMode === 'atprotofans') {
+				supportUrlValue = 'atprotofans';
+			} else if (supportLinkMode === 'custom') {
+				const trimmed = customSupportUrl.trim();
+				if (trimmed && !trimmed.startsWith('https://')) {
+					toast.error('custom support link must start with https://');
+					savingProfile = false;
+					return;
+				}
+				supportUrlValue = trimmed;
 			}
 
 			// save artist profile and support URL in parallel
@@ -213,7 +268,7 @@
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					credentials: 'include',
-					body: JSON.stringify({ support_url: trimmedSupportUrl || '' })
+					body: JSON.stringify({ support_url: supportUrlValue })
 				})
 			]);
 
@@ -527,16 +582,66 @@
 					{/if}
 				</div>
 
-				<div class="form-group">
-					<label for="support-url">support link (optional)</label>
-					<input
-						id="support-url"
-						type="url"
-						bind:value={supportUrl}
-						disabled={savingSupportUrl}
-						placeholder="https://ko-fi.com/yourname"
-					/>
-					<p class="hint">link to Ko-fi, Patreon, or similar - shown on your profile</p>
+				<div class="form-group support-link-group" role="group" aria-labelledby="support-link-label">
+					<span id="support-link-label" class="form-label">support link (optional)</span>
+					<div class="support-options">
+						<label class="support-option">
+							<input
+								type="radio"
+								name="support-mode"
+								value="none"
+								bind:group={supportLinkMode}
+								disabled={savingProfile}
+							/>
+							<span>none</span>
+						</label>
+						<label class="support-option" class:disabled={!atprotofansEligible && supportLinkMode !== 'atprotofans'}>
+							<input
+								type="radio"
+								name="support-mode"
+								value="atprotofans"
+								bind:group={supportLinkMode}
+								disabled={savingProfile || (!atprotofansEligible && supportLinkMode !== 'atprotofans')}
+							/>
+							<span>atprotofans</span>
+							{#if checkingAtprotofans}
+								<span class="support-status">checking...</span>
+							{:else if !atprotofansEligible}
+								<a href="https://atprotofans.com" target="_blank" rel="noopener" class="support-setup-link">set up</a>
+							{:else}
+								<a href="https://atprotofans.com/u/{auth.user?.did}" target="_blank" rel="noopener" class="support-status-link">profile ready</a>
+							{/if}
+						</label>
+						<label class="support-option">
+							<input
+								type="radio"
+								name="support-mode"
+								value="custom"
+								bind:group={supportLinkMode}
+								disabled={savingProfile}
+							/>
+							<span>custom link</span>
+						</label>
+					</div>
+					{#if supportLinkMode === 'custom'}
+						<input
+							id="custom-support-url"
+							type="url"
+							bind:value={customSupportUrl}
+							disabled={savingProfile}
+							placeholder="https://ko-fi.com/yourname"
+							class="custom-support-input"
+						/>
+					{/if}
+					<p class="hint">
+						{#if supportLinkMode === 'atprotofans'}
+							uses <a href="https://atprotofans.com" target="_blank" rel="noopener">atprotofans</a> for ATProto-native support
+						{:else if supportLinkMode === 'custom'}
+							link to Ko-fi, Patreon, or similar - shown on your profile
+						{:else}
+							no support link will be shown on your profile
+						{/if}
+					</p>
 				</div>
 
 				<button type="submit" disabled={savingProfile || !displayName}>
@@ -1174,6 +1279,122 @@
 		margin-top: 0.35rem;
 		font-size: 0.75rem;
 		color: var(--text-muted);
+	}
+
+	.hint a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.hint a:hover {
+		text-decoration: underline;
+	}
+
+	/* support link options */
+	.support-link-group .form-label {
+		display: block;
+		color: var(--text-secondary);
+		margin-bottom: 0.6rem;
+		font-size: 0.85rem;
+	}
+
+	.support-options {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.support-option {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.6rem 0.75rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: 6px;
+		cursor: pointer;
+		transition: all 0.15s;
+		margin-bottom: 0;
+	}
+
+	.support-option:hover {
+		border-color: var(--border-emphasis);
+	}
+
+	.support-option:has(input:checked) {
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 8%, var(--bg-primary));
+	}
+
+	.support-option input[type='radio'] {
+		width: 16px;
+		height: 16px;
+		accent-color: var(--accent);
+		margin: 0;
+	}
+
+	.support-option span {
+		font-size: 0.9rem;
+		color: var(--text-primary);
+	}
+
+	.support-status {
+		margin-left: auto;
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+	}
+
+	.support-setup-link,
+	.support-status-link {
+		margin-left: auto;
+		font-size: 0.75rem;
+		text-decoration: none;
+	}
+
+	.support-setup-link {
+		color: var(--accent);
+	}
+
+	.support-status-link {
+		color: var(--success, #22c55e);
+	}
+
+	.support-setup-link:hover,
+	.support-status-link:hover {
+		text-decoration: underline;
+	}
+
+	.support-option.disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.support-option.disabled input {
+		cursor: not-allowed;
+	}
+
+	.custom-support-input {
+		width: 100%;
+		padding: 0.6rem 0.75rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: 4px;
+		color: var(--text-primary);
+		font-size: 0.95rem;
+		font-family: inherit;
+		transition: all 0.15s;
+		margin-bottom: 0.5rem;
+	}
+
+	.custom-support-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.custom-support-input:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.avatar-preview {

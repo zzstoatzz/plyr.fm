@@ -4,8 +4,12 @@ import logging
 from typing import Any
 
 import httpx
+from atproto import AsyncIdResolver
 
 logger = logging.getLogger(__name__)
+
+# shared resolver instance for DID/handle resolution
+_resolver = AsyncIdResolver()
 
 
 async def resolve_handle(handle: str) -> dict[str, Any] | None:
@@ -21,23 +25,16 @@ async def resolve_handle(handle: str) -> dict[str, Any] | None:
     handle = handle.lstrip("@")
 
     try:
+        # use ATProto SDK for proper handle resolution (works with any PDS)
+        did = await _resolver.handle.resolve(handle)
+
+        if not did:
+            logger.warning(f"failed to resolve handle {handle}: no DID found")
+            return None
+
+        # fetch profile info from Bluesky appview (for display name/avatar)
+        # this is acceptable since we're fetching Bluesky profile data specifically
         async with httpx.AsyncClient() as client:
-            # resolve handle to DID
-            did_response = await client.get(
-                "https://bsky.social/xrpc/com.atproto.identity.resolveHandle",
-                params={"handle": handle},
-                timeout=5.0,
-            )
-
-            if did_response.status_code != 200:
-                logger.warning(
-                    f"failed to resolve handle {handle}: {did_response.status_code}"
-                )
-                return None
-
-            did = did_response.json()["did"]
-
-            # fetch profile info
             profile_response = await client.get(
                 "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile",
                 params={"actor": did},

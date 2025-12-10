@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { AtpAgent } from '@atproto/api';
 	import { APP_NAME } from '$lib/branding';
 
 	const status = $page.status;
@@ -11,24 +12,21 @@
 	let blueskyUrl = $state('');
 
 	onMount(async () => {
-		// if this is a 404, check if the handle exists on Bluesky
+		// if this is a 404, check if the handle exists on the ATProto network
 		if (status === 404 && handle) {
 			checkingBluesky = true;
 			try {
-				// try to resolve the handle via ATProto
-				const response = await fetch(
-					`https://bsky.social/xrpc/com.atproto.identity.resolveHandle?handle=${handle}`
-				);
+				// use ATProto SDK for proper handle resolution (works with any PDS)
+				const agent = new AtpAgent({ service: 'https://public.api.bsky.app' });
+				const response = await agent.resolveHandle({ handle });
 
-				if (response.ok) {
-					const data = await response.json();
-					if (data.did) {
-						blueskyProfileExists = true;
-						blueskyUrl = `https://bsky.app/profile/${handle}`;
-					}
+				if (response.data.did) {
+					blueskyProfileExists = true;
+					blueskyUrl = `https://bsky.app/profile/${handle}`;
 				}
-			} catch (e) {
-				console.error('failed to check Bluesky:', e);
+			} catch (_e) {
+				// handle doesn't exist on ATProto network
+				blueskyProfileExists = false;
 			} finally {
 				checkingBluesky = false;
 			}

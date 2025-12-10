@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,9 @@ from backend.models import UserPreferences, get_db
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
+
+# magic value for atprotofans support link mode
+ATPROTOFANS_MODE = "atprotofans"
 
 
 class PreferencesResponse(BaseModel):
@@ -41,6 +44,20 @@ class PreferencesUpdate(BaseModel):
     show_sensitive_artwork: bool | None = None
     show_liked_on_profile: bool | None = None
     support_url: str | None = None
+
+    @field_validator("support_url", mode="before")
+    @classmethod
+    def validate_support_url(cls, v: str | None) -> str | None:
+        """validate support url: empty, 'atprotofans', or https:// URL."""
+        if v is None or v == "":
+            return v  # let update logic handle clearing
+        if v == ATPROTOFANS_MODE:
+            return v
+        if not v.startswith("https://"):
+            raise ValueError(
+                "support link must be 'atprotofans' or start with https://"
+            )
+        return v
 
 
 def _has_teal_scope(session: Session) -> bool:

@@ -31,6 +31,15 @@ let tracks = $state(data.tracks ?? []);
 const albums = $derived(data.albums ?? []);
 let shareUrl = $state('');
 
+// compute support URL - handle 'atprotofans' magic value
+const supportUrl = $derived(() => {
+	if (!artist?.support_url) return null;
+	if (artist.support_url === 'atprotofans') {
+		return `https://atprotofans.com/u/${artist.did}`;
+	}
+	return artist.support_url;
+});
+
 $effect(() => {
 	if (!artist?.handle) {
 		shareUrl = '';
@@ -272,8 +281,8 @@ $effect(() => {
 					{/if}
 				</div>
 				<div class="artist-actions-desktop">
-					{#if artist.support_url}
-						<a href={artist.support_url} target="_blank" rel="noopener" class="support-btn">
+					{#if supportUrl()}
+						<a href={supportUrl()} target="_blank" rel="noopener" class="support-btn">
 							<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
 								<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
 							</svg>
@@ -284,8 +293,8 @@ $effect(() => {
 				</div>
 			</div>
 			<div class="artist-actions-mobile">
-				{#if artist.support_url}
-					<a href={artist.support_url} target="_blank" rel="noopener" class="support-btn">
+				{#if supportUrl()}
+					<a href={supportUrl()} target="_blank" rel="noopener" class="support-btn">
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
 							<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
 						</svg>
