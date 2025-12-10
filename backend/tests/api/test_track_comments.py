@@ -176,10 +176,10 @@ async def test_create_comment_success(
     artist_with_comments_enabled: UserPreferences,
     commenter_artist: Artist,
 ):
-    """test successful comment creation."""
-    with patch("backend.api.tracks.comments.create_comment_record") as mock_create:
-        mock_create.return_value = "at://did:test:commenter123/fm.plyr.comment/xyz"
-
+    """test successful comment creation schedules background task."""
+    with patch(
+        "backend.api.tracks.comments.schedule_pds_create_comment"
+    ) as mock_schedule:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -194,16 +194,54 @@ async def test_create_comment_success(
     assert data["timestamp_ms"] == 30000
     assert data["user_did"] == "did:test:commenter123"
 
-    # verify ATProto record was created
-    mock_create.assert_called_once()
+    # verify background task was scheduled
+    mock_schedule.assert_called_once()
+    call_kwargs = mock_schedule.call_args.kwargs
+    assert call_kwargs["subject_uri"] == test_track.atproto_record_uri
+    assert call_kwargs["subject_cid"] == test_track.atproto_record_cid
+    assert call_kwargs["text"] == "awesome drop at this moment!"
+    assert call_kwargs["timestamp_ms"] == 30000
 
-    # verify DB entry
+    # verify DB entry exists (created immediately, before PDS)
     result = await db_session.execute(
         select(TrackComment).where(TrackComment.track_id == test_track.id)
     )
     comment = result.scalar_one()
     assert comment.text == "awesome drop at this moment!"
     assert comment.timestamp_ms == 30000
+    # atproto_comment_uri is None initially - will be set by background task
+    assert comment.atproto_comment_uri is None
+
+
+async def test_create_comment_db_entry_has_correct_comment_id(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    test_track: Track,
+    artist_with_comments_enabled: UserPreferences,
+    commenter_artist: Artist,
+):
+    """test that the comment_id passed to background task matches the DB record."""
+    with patch(
+        "backend.api.tracks.comments.schedule_pds_create_comment"
+    ) as mock_schedule:
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            await client.post(
+                f"/tracks/{test_track.id}/comments",
+                json={"text": "test comment", "timestamp_ms": 5000},
+            )
+
+    # get the comment_id from the scheduled call
+    call_kwargs = mock_schedule.call_args.kwargs
+    scheduled_comment_id = call_kwargs["comment_id"]
+
+    # verify it matches the DB record
+    result = await db_session.execute(
+        select(TrackComment).where(TrackComment.track_id == test_track.id)
+    )
+    comment = result.scalar_one()
+    assert comment.id == scheduled_comment_id
 
 
 async def test_create_comment_respects_limit(
@@ -285,9 +323,7 @@ async def test_edit_comment_success(
     artist_with_comments_enabled: UserPreferences,
     commenter_artist: Artist,
 ):
-    """test that comment owner can edit their comment and ATProto record is updated."""
-    from unittest.mock import AsyncMock, patch
-
+    """test that comment owner can edit their comment and background task is scheduled."""
     comment = TrackComment(
         track_id=test_track.id,
         user_did="did:test:commenter123",
@@ -300,10 +336,8 @@ async def test_edit_comment_success(
     await db_session.refresh(comment)
 
     with patch(
-        "backend.api.tracks.comments.update_comment_record", new_callable=AsyncMock
-    ) as mock_update:
-        mock_update.return_value = "bafynewcid"
-
+        "backend.api.tracks.comments.schedule_pds_update_comment"
+    ) as mock_schedule:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -317,9 +351,9 @@ async def test_edit_comment_success(
     assert data["text"] == "edited text"
     assert data["updated_at"] is not None
 
-    # verify ATProto record was updated
-    mock_update.assert_called_once()
-    call_kwargs = mock_update.call_args.kwargs
+    # verify background task was scheduled
+    mock_schedule.assert_called_once()
+    call_kwargs = mock_schedule.call_args.kwargs
     assert call_kwargs["comment_uri"] == comment.atproto_comment_uri
     assert call_kwargs["subject_uri"] == test_track.atproto_record_uri
     assert call_kwargs["subject_cid"] == test_track.atproto_record_cid
@@ -327,58 +361,43 @@ async def test_edit_comment_success(
     assert call_kwargs["timestamp_ms"] == 5000
 
 
-async def test_edit_comment_syncs_to_atproto(
+async def test_edit_comment_without_atproto_uri(
     test_app: FastAPI,
     db_session: AsyncSession,
     test_track: Track,
     artist_with_comments_enabled: UserPreferences,
     commenter_artist: Artist,
 ):
-    """regression test: editing a comment must update the ATProto record."""
-    from unittest.mock import AsyncMock, patch
-
+    """test that editing a comment without ATProto URI doesn't schedule update."""
+    # comment without ATProto URI (e.g., background task hasn't run yet)
     comment = TrackComment(
         track_id=test_track.id,
         user_did="did:test:commenter123",
         text="original text",
-        timestamp_ms=12345,
-        atproto_comment_uri="at://did:test:commenter123/fm.plyr.comment/sync1",
+        timestamp_ms=5000,
+        atproto_comment_uri=None,
     )
     db_session.add(comment)
     await db_session.commit()
     await db_session.refresh(comment)
-    original_created_at = comment.created_at
 
     with patch(
-        "backend.api.tracks.comments.update_comment_record", new_callable=AsyncMock
-    ) as mock_update:
-        mock_update.return_value = "bafynewcid123"
-
+        "backend.api.tracks.comments.schedule_pds_update_comment"
+    ) as mock_schedule:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
             response = await client.patch(
                 f"/tracks/comments/{comment.id}",
-                json={"text": "updated via edit"},
+                json={"text": "edited text"},
             )
 
     assert response.status_code == 200
+    data = response.json()
+    assert data["text"] == "edited text"
 
-    # verify ATProto sync happened with correct data
-    mock_update.assert_called_once()
-    call_kwargs = mock_update.call_args.kwargs
-
-    # subject must reference the track's ATProto record
-    assert call_kwargs["subject_uri"] == test_track.atproto_record_uri
-    assert call_kwargs["subject_cid"] == test_track.atproto_record_cid
-
-    # original timestamp_ms and created_at preserved
-    assert call_kwargs["timestamp_ms"] == 12345
-    assert call_kwargs["created_at"] == original_created_at
-
-    # new text and updated_at passed
-    assert call_kwargs["text"] == "updated via edit"
-    assert "updated_at" in call_kwargs  # updated_at should be set
+    # no PDS update should be scheduled since there's no ATProto record
+    mock_schedule.assert_not_called()
 
 
 async def test_edit_comment_forbidden_for_other_user(
@@ -418,9 +437,7 @@ async def test_delete_comment_success(
     artist_with_comments_enabled: UserPreferences,
     commenter_artist: Artist,
 ):
-    """test that comment owner can delete their comment."""
-    from unittest.mock import AsyncMock, patch
-
+    """test that comment owner can delete their comment and background task is scheduled."""
     comment = TrackComment(
         track_id=test_track.id,
         user_did="did:test:commenter123",
@@ -434,8 +451,8 @@ async def test_delete_comment_success(
     comment_id = comment.id
 
     with patch(
-        "backend.api.tracks.comments.delete_record_by_uri", new_callable=AsyncMock
-    ):
+        "backend.api.tracks.comments.schedule_pds_delete_comment"
+    ) as mock_schedule:
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
@@ -444,6 +461,56 @@ async def test_delete_comment_success(
     assert response.status_code == 200
     assert response.json()["deleted"] is True
 
+    # verify background task was scheduled with correct URI
+    mock_schedule.assert_called_once()
+    call_kwargs = mock_schedule.call_args.kwargs
+    assert (
+        call_kwargs["comment_uri"] == "at://did:test:commenter123/fm.plyr.comment/del1"
+    )
+
+    # verify DB entry is gone (deleted immediately, before PDS)
+    result = await db_session.execute(
+        select(TrackComment).where(TrackComment.id == comment_id)
+    )
+    assert result.scalar_one_or_none() is None
+
+
+async def test_delete_comment_without_atproto_uri(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    test_track: Track,
+    artist_with_comments_enabled: UserPreferences,
+    commenter_artist: Artist,
+):
+    """test that deleting a comment without ATProto URI doesn't schedule deletion."""
+    # comment without ATProto URI (e.g., background task hasn't run yet)
+    comment = TrackComment(
+        track_id=test_track.id,
+        user_did="did:test:commenter123",
+        text="to be deleted",
+        timestamp_ms=5000,
+        atproto_comment_uri=None,
+    )
+    db_session.add(comment)
+    await db_session.commit()
+    await db_session.refresh(comment)
+    comment_id = comment.id
+
+    with patch(
+        "backend.api.tracks.comments.schedule_pds_delete_comment"
+    ) as mock_schedule:
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/tracks/comments/{comment_id}")
+
+    assert response.status_code == 200
+    assert response.json()["deleted"] is True
+
+    # no PDS deletion should be scheduled since there's no ATProto record
+    mock_schedule.assert_not_called()
+
+    # verify DB entry is still gone
     result = await db_session.execute(
         select(TrackComment).where(TrackComment.id == comment_id)
     )

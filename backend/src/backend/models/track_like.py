@@ -36,8 +36,9 @@ class TrackLike(Base):
     user_did: Mapped[str] = mapped_column(String, nullable=False, index=True)
 
     # ATProto like record URI (source of truth)
-    atproto_like_uri: Mapped[str] = mapped_column(
-        String, nullable=False, unique=True, index=True
+    # nullable to support optimistic DB writes before PDS record creation
+    atproto_like_uri: Mapped[str | None] = mapped_column(
+        String, nullable=True, unique=True, index=True
     )
 
     # when it was liked (indexed from ATProto record)
