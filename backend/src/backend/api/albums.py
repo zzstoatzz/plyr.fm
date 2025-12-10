@@ -368,6 +368,19 @@ async def get_album(
             )
             liked_track_ids = set(liked_result.scalars().all())
 
+        # if owner views album without ATProto record, trigger sync for reordering
+        # (fixes albums created before schedule_album_list_sync was added)
+        if (
+            auth_session.did == album.artist_did
+            and not album.atproto_record_uri
+            and any(t.atproto_record_uri for t in all_tracks)
+        ):
+            from backend._internal.background_tasks import schedule_album_list_sync
+
+            with contextlib.suppress(Exception):
+                await schedule_album_list_sync(session_id, str(album.id))
+                logger.info(f"triggered album list sync for album {album.id}")
+
     # build track responses (maintaining order)
     track_responses = await asyncio.gather(
         *[

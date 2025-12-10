@@ -15,6 +15,7 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import timedelta
 
 from docket import Docket, Worker
 
@@ -69,6 +70,13 @@ async def background_worker_lifespan() -> AsyncGenerator[Docket, None]:
             async with Worker(
                 docket,
                 concurrency=settings.docket.worker_concurrency,
+                # reduce polling frequency to save Redis costs (default is 250ms)
+                minimum_check_interval=timedelta(
+                    seconds=settings.docket.check_interval_seconds
+                ),
+                scheduling_resolution=timedelta(
+                    seconds=settings.docket.scheduling_resolution_seconds
+                ),
             ) as worker:
                 worker_task = asyncio.create_task(
                     worker.run_forever(),

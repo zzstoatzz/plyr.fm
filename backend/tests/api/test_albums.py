@@ -914,3 +914,90 @@ async def test_remove_track_not_in_album(test_app: FastAPI, db_session: AsyncSes
 
     assert response.status_code == 400
     assert "not in this album" in response.json()["detail"]
+
+
+async def test_album_list_uri_reflects_atproto_record_state(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """regression test: list_uri must be null when atproto_record_uri is missing.
+
+    this is critical for the frontend to determine whether track reordering
+    is available. albums created before ATProto sync or during deployment
+    gaps may lack atproto_record_uri, and the API must correctly return
+    list_uri=null so the frontend can disable reordering UI.
+
+    fixes bug where albums without ATProto list records showed drag handles
+    but reordering silently failed (reverted without saving).
+    """
+    # create artist
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # create album WITHOUT ATProto record (simulates pre-sync or deployment gap)
+    album_no_atproto = Album(
+        artist_did=artist.did,
+        slug="no-atproto-album",
+        title="Album Without ATProto",
+        atproto_record_uri=None,
+        atproto_record_cid=None,
+    )
+    db_session.add(album_no_atproto)
+
+    # create album WITH ATProto record (normal synced state)
+    album_with_atproto = Album(
+        artist_did=artist.did,
+        slug="with-atproto-album",
+        title="Album With ATProto",
+        atproto_record_uri="at://did:test:user123/fm.plyr.list/abc123",
+        atproto_record_cid="bafyreiabc123",
+    )
+    db_session.add(album_with_atproto)
+
+    # add a track to each album (required for album to be visible)
+    track1 = Track(
+        title="Track in No-ATProto Album",
+        file_id="track-no-atproto",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album_no_atproto.id,
+    )
+    track2 = Track(
+        title="Track in With-ATProto Album",
+        file_id="track-with-atproto",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album_with_atproto.id,
+    )
+    db_session.add_all([track1, track2])
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        # check album WITHOUT ATProto record
+        response_no_atproto = await client.get(
+            f"/albums/{artist.handle}/{album_no_atproto.slug}"
+        )
+        assert response_no_atproto.status_code == 200
+        data_no_atproto = response_no_atproto.json()
+
+        # list_uri MUST be null when atproto_record_uri is missing
+        assert data_no_atproto["metadata"]["list_uri"] is None
+
+        # check album WITH ATProto record
+        response_with_atproto = await client.get(
+            f"/albums/{artist.handle}/{album_with_atproto.slug}"
+        )
+        assert response_with_atproto.status_code == 200
+        data_with_atproto = response_with_atproto.json()
+
+        # list_uri MUST be present when atproto_record_uri exists
+        assert (
+            data_with_atproto["metadata"]["list_uri"]
+            == album_with_atproto.atproto_record_uri
+        )
