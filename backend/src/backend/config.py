@@ -576,6 +576,14 @@ class DocketSettings(AppSettingsSection):
         default=10,
         description="Number of concurrent tasks per worker",
     )
+    check_interval_seconds: float = Field(
+        default=5.0,
+        description="How often to check for new tasks (seconds). Default 5s reduces Redis costs vs docket's 250ms default.",
+    )
+    scheduling_resolution_seconds: float = Field(
+        default=5.0,
+        description="How often to run the scheduler loop (seconds). Default 5s reduces Redis costs vs docket's 250ms default.",
+    )
 
 
 class RateLimitSettings(AppSettingsSection):
