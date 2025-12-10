@@ -23,6 +23,7 @@ from backend._internal.atproto.records import (
     update_record,
 )
 from backend._internal.atproto.tid import datetime_to_tid
+from backend._internal.background_tasks import schedule_album_list_sync
 from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackTag, get_db
 from backend.schemas import TrackResponse
@@ -146,9 +147,16 @@ async def delete_track(
                     f"failed to delete image {track.image_id}: {e}", exc_info=True
                 )
 
+    # capture album_id before deletion for list sync
+    album_id_to_sync = track.album_id
+
     # delete track record
     await db.delete(track)
     await db.commit()
+
+    # sync album list record if track was in an album
+    if album_id_to_sync:
+        await schedule_album_list_sync(auth_session.session_id, album_id_to_sync)
 
     return {"message": "track deleted successfully"}
 
@@ -188,7 +196,11 @@ async def update_track_metadata(
         track.title = title
         title_changed = True
 
+    # track album changes for list sync
+    old_album_id = track.album_id
     await apply_album_update(db, track, album)
+    new_album_id = track.album_id
+    album_changed = old_album_id != new_album_id
 
     if features is not None:
         track.features = await resolve_feature_handles(
@@ -259,6 +271,15 @@ async def update_track_metadata(
 
     await db.commit()
     await db.refresh(track)
+
+    # sync album list records if album changed
+    if album_changed:
+        # sync old album (track was removed)
+        if old_album_id:
+            await schedule_album_list_sync(auth_session.session_id, old_album_id)
+        # sync new album (track was added)
+        if new_album_id:
+            await schedule_album_list_sync(auth_session.session_id, new_album_id)
 
     # build track_tags dict for response
     # if tags were updated, use updated_tags; otherwise query for existing
@@ -551,6 +572,10 @@ async def restore_track_record(
     track.atproto_record_cid = new_cid
     await db.commit()
     await db.refresh(track)
+
+    # sync album list if track is in an album
+    if track.album_id:
+        await schedule_album_list_sync(auth_session.session_id, track.album_id)
 
     logger.info(f"restored ATProto record for track {track_id}: {new_uri}")
 

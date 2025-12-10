@@ -317,6 +317,10 @@ async def test_track_deletion_preserves_shared_album_image(
             "backend.api.tracks.mutations.storage.delete",
             side_effect=mock_delete,
         ),
+        patch(
+            "backend.api.tracks.mutations.schedule_album_list_sync",
+            new_callable=AsyncMock,
+        ),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
@@ -370,6 +374,10 @@ async def test_track_deletion_deletes_unshared_image(
         patch(
             "backend.api.tracks.mutations.storage.delete",
             side_effect=mock_delete,
+        ),
+        patch(
+            "backend.api.tracks.mutations.schedule_album_list_sync",
+            new_callable=AsyncMock,
         ),
     ):
         async with AsyncClient(
