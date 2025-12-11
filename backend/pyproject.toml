@@ -28,6 +28,7 @@ dependencies = [
     "orjson>=3.11.4",
     "mutagen>=1.47.0",
     "pydocket>=0.15.2",
+    "redis>=7.1.0",
 ]
 
 requires-python = ">=3.11"
@@ -80,6 +81,8 @@ env = [
     # reduce connection pool for tests to avoid exhausting Neon's connection limit
     "DATABASE_POOL_SIZE=2",
     "DATABASE_MAX_OVERFLOW=0",
+    # redis URL for cache tests (uses test-redis from docker-compose)
+    "DOCKET_URL=redis://localhost:6380/0",
 ]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",

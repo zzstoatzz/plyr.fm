@@ -13,6 +13,10 @@ from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 
+# redis cache key prefix and TTL for active copyright labels
+_LABEL_CACHE_PREFIX = "plyr:copyright-label:"
+_LABEL_CACHE_TTL = 300  # 5 minutes, matches queue cache
+
 
 async def scan_track_for_copyright(track_id: int, audio_url: str) -> None:
     """scan a track for potential copyright matches.
@@ -183,6 +187,9 @@ async def _emit_copyright_label(
             )
             response.raise_for_status()
 
+            # invalidate cache since label status changed
+            await invalidate_label_cache(uri)
+
             logfire.info(
                 "copyright label emitted",
                 uri=uri,
@@ -195,8 +202,8 @@ async def _emit_copyright_label(
 async def get_active_copyright_labels(uris: list[str]) -> set[str]:
     """check which URIs have active (non-negated) copyright-violation labels.
 
-    queries the moderation service's labeler to determine which tracks are
-    still actively flagged. this is the source of truth for flag status.
+    uses redis cache (shared across instances) to avoid repeated calls
+    to the moderation service. only URIs not in cache are fetched.
 
     args:
         uris: list of AT URIs to check
@@ -219,28 +226,115 @@ async def get_active_copyright_labels(uris: list[str]) -> set[str]:
         logger.warning("MODERATION_AUTH_TOKEN not set, treating all as active")
         return set(uris)
 
+    # check redis cache first - partition into cached vs uncached
+    active_from_cache: set[str] = set()
+    uris_to_fetch: list[str] = []
+
+    try:
+        from backend.utilities.redis import get_async_redis_client
+
+        redis = get_async_redis_client()
+        cache_keys = [f"{_LABEL_CACHE_PREFIX}{uri}" for uri in uris]
+        cached_values = await redis.mget(cache_keys)
+
+        for uri, cached_value in zip(uris, cached_values, strict=True):
+            if cached_value is not None:
+                if cached_value == "1":
+                    active_from_cache.add(uri)
+                # else: cached as "0" (not active), skip
+            else:
+                uris_to_fetch.append(uri)
+    except Exception as e:
+        # redis unavailable - fall through to fetch all
+        logger.warning("redis cache unavailable: %s", e)
+        uris_to_fetch = list(uris)
+
+    # if everything was cached, return early
+    if not uris_to_fetch:
+        logfire.debug(
+            "checked active copyright labels (all cached)",
+            total_uris=len(uris),
+            active_count=len(active_from_cache),
+        )
+        return active_from_cache
+
+    # fetch uncached URIs from moderation service
     try:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(settings.moderation.timeout_seconds)
         ) as client:
             response = await client.post(
                 f"{settings.moderation.labeler_url}/admin/active-labels",
-                json={"uris": uris},
+                json={"uris": uris_to_fetch},
                 headers={"X-Moderation-Key": settings.moderation.auth_token},
             )
             response.raise_for_status()
             data = response.json()
-            active = set(data.get("active_uris", []))
-            logfire.debug(
+            active_from_service = set(data.get("active_uris", []))
+
+            # update redis cache with results
+            try:
+                from backend.utilities.redis import get_async_redis_client
+
+                redis = get_async_redis_client()
+                async with redis.pipeline() as pipe:
+                    for uri in uris_to_fetch:
+                        cache_key = f"{_LABEL_CACHE_PREFIX}{uri}"
+                        value = "1" if uri in active_from_service else "0"
+                        await pipe.set(cache_key, value, ex=_LABEL_CACHE_TTL)
+                    await pipe.execute()
+            except Exception as e:
+                # cache update failed - not critical, just log
+                logger.warning("failed to update redis cache: %s", e)
+
+            logfire.info(
                 "checked active copyright labels",
                 total_uris=len(uris),
-                active_count=len(active),
+                cached_count=len(uris) - len(uris_to_fetch),
+                fetched_count=len(uris_to_fetch),
+                active_count=len(active_from_cache) + len(active_from_service),
             )
-            return active
+            return active_from_cache | active_from_service
+
     except Exception as e:
         # fail closed: if we can't confirm resolution, treat as active
+        # don't cache failures - we want to retry next time
         logger.warning("failed to check active labels, treating all as active: %s", e)
         return set(uris)
+
+
+async def invalidate_label_cache(uri: str) -> None:
+    """invalidate cache entry for a URI when its label status changes.
+
+    call this when emitting or negating labels to ensure fresh data.
+    """
+    try:
+        from backend.utilities.redis import get_async_redis_client
+
+        redis = get_async_redis_client()
+        await redis.delete(f"{_LABEL_CACHE_PREFIX}{uri}")
+    except Exception as e:
+        logger.warning("failed to invalidate label cache for %s: %s", uri, e)
+
+
+async def clear_label_cache() -> None:
+    """clear all label cache entries. primarily for testing."""
+    try:
+        from backend.utilities.redis import get_async_redis_client
+
+        redis = get_async_redis_client()
+        # scan and delete all keys with our prefix
+        cursor = 0
+        while True:
+            cursor, keys = await redis.scan(
+                cursor, match=f"{_LABEL_CACHE_PREFIX}*", count=100
+            )
+            if keys:
+                await redis.delete(*keys)
+            if cursor == 0:
+                break
+    except Exception as e:
+        logger.warning("failed to clear label cache: %s", e)
 
 
 async def _store_scan_error(track_id: int, error: str) -> None:

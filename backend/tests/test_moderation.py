@@ -414,6 +414,11 @@ async def test_get_active_copyright_labels_no_auth_token() -> None:
 
 async def test_get_active_copyright_labels_success() -> None:
     """test successful call to labeler returns active URIs."""
+    from backend._internal.moderation import clear_label_cache
+
+    # clear cache before test
+    await clear_label_cache()
+
     uris = [
         "at://did:plc:test/fm.plyr.track/1",
         "at://did:plc:test/fm.plyr.track/2",
@@ -445,9 +450,17 @@ async def test_get_active_copyright_labels_success() -> None:
     assert "/admin/active-labels" in str(call_kwargs)
     assert call_kwargs.kwargs["json"] == {"uris": uris}
 
+    # cleanup
+    await clear_label_cache()
+
 
 async def test_get_active_copyright_labels_service_error() -> None:
     """test that service errors return all URIs as active (fail closed)."""
+    from backend._internal.moderation import clear_label_cache
+
+    # clear cache before test to avoid interference from other tests
+    await clear_label_cache()
+
     uris = ["at://did:plc:test/fm.plyr.track/1", "at://did:plc:test/fm.plyr.track/2"]
 
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
@@ -463,3 +476,187 @@ async def test_get_active_copyright_labels_service_error() -> None:
 
     # should fail closed - all URIs treated as active
     assert result == set(uris)
+
+    # cleanup
+    await clear_label_cache()
+
+
+# tests for active labels caching (using real redis from test docker-compose)
+
+
+async def test_get_active_copyright_labels_caching() -> None:
+    """test that repeated calls use cache instead of calling service."""
+    from backend._internal.moderation import clear_label_cache
+
+    # clear cache before test
+    await clear_label_cache()
+
+    uris = [
+        "at://did:plc:cache/fm.plyr.track/1",
+        "at://did:plc:cache/fm.plyr.track/2",
+    ]
+
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        "active_uris": ["at://did:plc:cache/fm.plyr.track/1"]
+    }
+    mock_response.raise_for_status.return_value = None
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        with patch("backend._internal.moderation.settings") as mock_settings:
+            mock_settings.moderation.enabled = True
+            mock_settings.moderation.auth_token = "test-token"
+            mock_settings.moderation.labeler_url = "https://labeler.example.com"
+            mock_settings.moderation.timeout_seconds = 10
+
+            # first call - should hit service
+            result1 = await get_active_copyright_labels(uris)
+            assert result1 == {"at://did:plc:cache/fm.plyr.track/1"}
+            assert mock_post.call_count == 1
+
+            # second call with same URIs - should use cache, not call service
+            result2 = await get_active_copyright_labels(uris)
+            assert result2 == {"at://did:plc:cache/fm.plyr.track/1"}
+            assert mock_post.call_count == 1  # still 1, no new call
+
+    # cleanup
+    await clear_label_cache()
+
+
+async def test_get_active_copyright_labels_partial_cache() -> None:
+    """test that cache hits are combined with service calls for new URIs."""
+    from backend._internal.moderation import clear_label_cache
+
+    # clear cache before test
+    await clear_label_cache()
+
+    uris_batch1 = ["at://did:plc:partial/fm.plyr.track/1"]
+    uris_batch2 = [
+        "at://did:plc:partial/fm.plyr.track/1",  # cached
+        "at://did:plc:partial/fm.plyr.track/2",  # new
+    ]
+
+    mock_response1 = Mock()
+    mock_response1.json.return_value = {
+        "active_uris": ["at://did:plc:partial/fm.plyr.track/1"]
+    }
+    mock_response1.raise_for_status.return_value = None
+
+    mock_response2 = Mock()
+    mock_response2.json.return_value = {
+        "active_uris": []  # uri/2 is not active
+    }
+    mock_response2.raise_for_status.return_value = None
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.side_effect = [mock_response1, mock_response2]
+
+        with patch("backend._internal.moderation.settings") as mock_settings:
+            mock_settings.moderation.enabled = True
+            mock_settings.moderation.auth_token = "test-token"
+            mock_settings.moderation.labeler_url = "https://labeler.example.com"
+            mock_settings.moderation.timeout_seconds = 10
+
+            # first call - cache uri/1 as active
+            result1 = await get_active_copyright_labels(uris_batch1)
+            assert result1 == {"at://did:plc:partial/fm.plyr.track/1"}
+            assert mock_post.call_count == 1
+
+            # second call - uri/1 from cache, only uri/2 fetched
+            result2 = await get_active_copyright_labels(uris_batch2)
+            # uri/1 is active (from cache), uri/2 is not active (from service)
+            assert result2 == {"at://did:plc:partial/fm.plyr.track/1"}
+            assert mock_post.call_count == 2
+
+            # verify second call only requested uri/2
+            second_call_args = mock_post.call_args_list[1]
+            assert second_call_args.kwargs["json"] == {
+                "uris": ["at://did:plc:partial/fm.plyr.track/2"]
+            }
+
+    # cleanup
+    await clear_label_cache()
+
+
+async def test_get_active_copyright_labels_cache_invalidation() -> None:
+    """test that invalidate_label_cache clears specific entry."""
+    from backend._internal.moderation import clear_label_cache, invalidate_label_cache
+
+    # clear cache before test
+    await clear_label_cache()
+
+    uris = ["at://did:plc:invalidate/fm.plyr.track/1"]
+
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        "active_uris": ["at://did:plc:invalidate/fm.plyr.track/1"]
+    }
+    mock_response.raise_for_status.return_value = None
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        with patch("backend._internal.moderation.settings") as mock_settings:
+            mock_settings.moderation.enabled = True
+            mock_settings.moderation.auth_token = "test-token"
+            mock_settings.moderation.labeler_url = "https://labeler.example.com"
+            mock_settings.moderation.timeout_seconds = 10
+
+            # first call - populate cache
+            result1 = await get_active_copyright_labels(uris)
+            assert result1 == {"at://did:plc:invalidate/fm.plyr.track/1"}
+            assert mock_post.call_count == 1
+
+            # invalidate the cache entry
+            await invalidate_label_cache("at://did:plc:invalidate/fm.plyr.track/1")
+
+            # third call - should hit service again since cache was invalidated
+            result2 = await get_active_copyright_labels(uris)
+            assert result2 == {"at://did:plc:invalidate/fm.plyr.track/1"}
+            assert mock_post.call_count == 2
+
+    # cleanup
+    await clear_label_cache()
+
+
+async def test_service_error_does_not_cache() -> None:
+    """test that service errors don't pollute the cache."""
+    from backend._internal.moderation import clear_label_cache
+
+    # clear cache before test
+    await clear_label_cache()
+
+    uris = ["at://did:plc:error/fm.plyr.track/1"]
+
+    mock_success_response = Mock()
+    mock_success_response.json.return_value = {"active_uris": []}
+    mock_success_response.raise_for_status.return_value = None
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        # first call fails
+        mock_post.side_effect = httpx.ConnectError("connection failed")
+
+        with patch("backend._internal.moderation.settings") as mock_settings:
+            mock_settings.moderation.enabled = True
+            mock_settings.moderation.auth_token = "test-token"
+            mock_settings.moderation.labeler_url = "https://labeler.example.com"
+            mock_settings.moderation.timeout_seconds = 10
+
+            # first call - fails, returns all URIs as active (fail closed)
+            result1 = await get_active_copyright_labels(uris)
+            assert result1 == set(uris)
+            assert mock_post.call_count == 1
+
+            # reset mock to succeed
+            mock_post.side_effect = None
+            mock_post.return_value = mock_success_response
+
+            # second call - should try service again (error wasn't cached)
+            result2 = await get_active_copyright_labels(uris)
+            assert result2 == set()  # now correctly shows not active
+            assert mock_post.call_count == 2
+
+    # cleanup
+    await clear_label_cache()
