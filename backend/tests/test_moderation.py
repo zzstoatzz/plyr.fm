@@ -414,22 +414,15 @@ async def test_get_active_copyright_labels_no_auth_token() -> None:
 
 async def test_get_active_copyright_labels_success() -> None:
     """test successful call to labeler returns active URIs."""
-    from backend._internal.moderation import clear_label_cache
-    from backend.utilities.redis import clear_client_cache
-
-    # clear caches before test
-    clear_client_cache()
-    await clear_label_cache()
-
     uris = [
-        "at://did:plc:test/fm.plyr.track/1",
-        "at://did:plc:test/fm.plyr.track/2",
-        "at://did:plc:test/fm.plyr.track/3",
+        "at://did:plc:success/fm.plyr.track/1",
+        "at://did:plc:success/fm.plyr.track/2",
+        "at://did:plc:success/fm.plyr.track/3",
     ]
 
     mock_response = Mock()
     mock_response.json.return_value = {
-        "active_uris": ["at://did:plc:test/fm.plyr.track/1"]  # only one is active
+        "active_uris": [uris[0]]  # only first is active
     }
     mock_response.raise_for_status.return_value = None
 
@@ -439,28 +432,20 @@ async def test_get_active_copyright_labels_success() -> None:
         result = await get_active_copyright_labels(uris)
 
     # only the active URI should be in the result
-    assert result == {"at://did:plc:test/fm.plyr.track/1"}
+    assert result == {uris[0]}
 
     # verify correct endpoint was called
     call_kwargs = mock_post.call_args
     assert "/admin/active-labels" in str(call_kwargs)
     assert call_kwargs.kwargs["json"] == {"uris": uris}
 
-    # cleanup
-    await clear_label_cache()
-    clear_client_cache()
-
 
 async def test_get_active_copyright_labels_service_error() -> None:
     """test that service errors return all URIs as active (fail closed)."""
-    from backend._internal.moderation import clear_label_cache
-    from backend.utilities.redis import clear_client_cache
-
-    # clear caches before test to avoid interference from other tests
-    clear_client_cache()
-    await clear_label_cache()
-
-    uris = ["at://did:plc:test/fm.plyr.track/1", "at://did:plc:test/fm.plyr.track/2"]
+    uris = [
+        "at://did:plc:error/fm.plyr.track/1",
+        "at://did:plc:error/fm.plyr.track/2",
+    ]
 
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
         mock_post.side_effect = httpx.ConnectError("connection failed")
@@ -470,31 +455,20 @@ async def test_get_active_copyright_labels_service_error() -> None:
     # should fail closed - all URIs treated as active
     assert result == set(uris)
 
-    # cleanup
-    await clear_label_cache()
-    clear_client_cache()
-
 
 # tests for active labels caching (using real redis from test docker-compose)
 
 
 async def test_get_active_copyright_labels_caching() -> None:
     """test that repeated calls use cache instead of calling service."""
-    from backend._internal.moderation import clear_label_cache
-    from backend.utilities.redis import clear_client_cache
-
-    # clear caches before test
-    clear_client_cache()
-    await clear_label_cache()
-
     uris = [
-        "at://did:plc:cache/fm.plyr.track/1",
-        "at://did:plc:cache/fm.plyr.track/2",
+        "at://did:plc:caching/fm.plyr.track/1",
+        "at://did:plc:caching/fm.plyr.track/2",
     ]
 
     mock_response = Mock()
     mock_response.json.return_value = {
-        "active_uris": ["at://did:plc:cache/fm.plyr.track/1"]
+        "active_uris": [uris[0]]  # only first is active
     }
     mock_response.raise_for_status.return_value = None
 
@@ -503,28 +477,17 @@ async def test_get_active_copyright_labels_caching() -> None:
 
         # first call - should hit service
         result1 = await get_active_copyright_labels(uris)
-        assert result1 == {"at://did:plc:cache/fm.plyr.track/1"}
+        assert result1 == {uris[0]}
         assert mock_post.call_count == 1
 
         # second call with same URIs - should use cache, not call service
         result2 = await get_active_copyright_labels(uris)
-        assert result2 == {"at://did:plc:cache/fm.plyr.track/1"}
+        assert result2 == {uris[0]}
         assert mock_post.call_count == 1  # still 1, no new call
-
-    # cleanup
-    await clear_label_cache()
-    clear_client_cache()
 
 
 async def test_get_active_copyright_labels_partial_cache() -> None:
     """test that cache hits are combined with service calls for new URIs."""
-    from backend._internal.moderation import clear_label_cache
-    from backend.utilities.redis import clear_client_cache
-
-    # clear caches before test
-    clear_client_cache()
-    await clear_label_cache()
-
     uris_batch1 = ["at://did:plc:partial/fm.plyr.track/1"]
     uris_batch2 = [
         "at://did:plc:partial/fm.plyr.track/1",  # cached
@@ -563,19 +526,10 @@ async def test_get_active_copyright_labels_partial_cache() -> None:
             "uris": ["at://did:plc:partial/fm.plyr.track/2"]
         }
 
-    # cleanup
-    await clear_label_cache()
-    clear_client_cache()
-
 
 async def test_get_active_copyright_labels_cache_invalidation() -> None:
     """test that invalidate_label_cache clears specific entry."""
-    from backend._internal.moderation import clear_label_cache, invalidate_label_cache
-    from backend.utilities.redis import clear_client_cache
-
-    # clear caches before test
-    clear_client_cache()
-    await clear_label_cache()
+    from backend._internal.moderation import invalidate_label_cache
 
     uris = ["at://did:plc:invalidate/fm.plyr.track/1"]
 
@@ -596,26 +550,16 @@ async def test_get_active_copyright_labels_cache_invalidation() -> None:
         # invalidate the cache entry
         await invalidate_label_cache("at://did:plc:invalidate/fm.plyr.track/1")
 
-        # third call - should hit service again since cache was invalidated
+        # next call - should hit service again since cache was invalidated
         result2 = await get_active_copyright_labels(uris)
         assert result2 == {"at://did:plc:invalidate/fm.plyr.track/1"}
         assert mock_post.call_count == 2
 
-    # cleanup
-    await clear_label_cache()
-    clear_client_cache()
-
 
 async def test_service_error_does_not_cache() -> None:
     """test that service errors don't pollute the cache."""
-    from backend._internal.moderation import clear_label_cache
-    from backend.utilities.redis import clear_client_cache
-
-    # clear caches before test
-    clear_client_cache()
-    await clear_label_cache()
-
-    uris = ["at://did:plc:error/fm.plyr.track/1"]
+    # use unique URIs for this test to avoid cache pollution from other tests
+    uris = ["at://did:plc:errnocache/fm.plyr.track/1"]
 
     mock_success_response = Mock()
     mock_success_response.json.return_value = {"active_uris": []}
@@ -638,7 +582,3 @@ async def test_service_error_does_not_cache() -> None:
         result2 = await get_active_copyright_labels(uris)
         assert result2 == set()  # now correctly shows not active
         assert mock_post.call_count == 2
-
-    # cleanup
-    await clear_label_cache()
-    clear_client_cache()

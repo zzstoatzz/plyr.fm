@@ -369,3 +369,76 @@ def client(fastapi_app: FastAPI) -> Generator[TestClient, None, None]:
     """provides a TestClient for testing the FastAPI application."""
     with TestClient(fastapi_app) as tc:
         yield tc
+
+
+def _redis_db_for_worker(worker_id: str) -> int:
+    """determine redis database number based on xdist worker id.
+
+    uses different DB numbers for each worker to isolate parallel tests:
+    - master/gw0: db 1
+    - gw1: db 2
+    - gw2: db 3
+    - etc.
+
+    db 0 is reserved for local development.
+    """
+    if worker_id == "master" or not worker_id:
+        return 1
+    if "gw" in worker_id:
+        return 1 + int(worker_id.replace("gw", ""))
+    return 1
+
+
+def _redis_url_with_db(base_url: str, db: int) -> str:
+    """replace database number in redis URL."""
+    # redis://host:port/db -> redis://host:port/{new_db}
+    if "/" in base_url.rsplit(":", 1)[-1]:
+        # has db number, replace it
+        base = base_url.rsplit("/", 1)[0]
+        return f"{base}/{db}"
+    else:
+        # no db number, append it
+        return f"{base_url}/{db}"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def redis_database(worker_id: str) -> Generator[None, None, None]:
+    """use isolated redis databases for parallel test execution.
+
+    each xdist worker gets its own redis database to prevent cache pollution
+    between tests running in parallel. flushes the db before and after tests.
+    """
+    import os
+
+    from backend.config import settings
+    from backend.utilities.redis import clear_client_cache
+
+    # skip if no redis configured
+    if not settings.docket.url:
+        yield
+        return
+
+    db = _redis_db_for_worker(worker_id)
+    new_url = _redis_url_with_db(settings.docket.url, db)
+
+    # patch settings for this worker process
+    settings.docket.url = new_url
+    os.environ["DOCKET_URL"] = new_url
+
+    # clear any cached clients (they have old URL)
+    clear_client_cache()
+
+    # flush db before tests
+    import redis
+
+    sync_redis = redis.Redis.from_url(new_url)
+    sync_redis.flushdb()
+    sync_redis.close()
+
+    yield
+
+    # flush db after tests and clear cached clients
+    clear_client_cache()
+    sync_redis = redis.Redis.from_url(new_url)
+    sync_redis.flushdb()
+    sync_redis.close()

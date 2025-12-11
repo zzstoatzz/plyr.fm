@@ -159,3 +159,77 @@ rolling back transactions is faster, but:
 - some ORMs behave differently in uncommitted transactions
 
 delete-by-timestamp gives us real commits while staying fast.
+
+## redis isolation for parallel tests
+
+tests that use redis (caching, background tasks) need isolation between xdist workers. without isolation, one worker's cache entries pollute another's tests.
+
+### how it works
+
+each xdist worker uses a different redis database number:
+
+| worker | redis db |
+|--------|----------|
+| master/gw0 | 1 |
+| gw1 | 2 |
+| gw2 | 3 |
+| ... | ... |
+
+db 0 is reserved for local development.
+
+### the redis_database fixture
+
+```python
+@pytest.fixture(scope="session", autouse=True)
+def redis_database(worker_id: str) -> Generator[None, None, None]:
+    """use isolated redis databases for parallel test execution."""
+    db = _redis_db_for_worker(worker_id)
+    new_url = _redis_url_with_db(settings.docket.url, db)
+
+    # patch settings for this worker process
+    settings.docket.url = new_url
+    os.environ["DOCKET_URL"] = new_url
+    clear_client_cache()
+
+    # flush db before tests
+    sync_redis = redis.Redis.from_url(new_url)
+    sync_redis.flushdb()
+    sync_redis.close()
+
+    yield
+
+    # flush after tests
+    ...
+```
+
+this fixture is `autouse=True` so it applies to all tests automatically.
+
+### common pitfall: unique URIs in cache tests
+
+even with per-worker database isolation, tests within the same worker share redis state. if multiple tests use the same cache keys, they can interfere with each other.
+
+**wrong**:
+```python
+async def test_caching_first():
+    uris = ["at://did:plc:test/fm.plyr.track/1"]  # generic URI
+    result = await get_active_copyright_labels(uris)
+    # caches the result
+
+async def test_caching_second():
+    uris = ["at://did:plc:test/fm.plyr.track/1"]  # same URI!
+    result = await get_active_copyright_labels(uris)
+    # gets cached value from first test - may fail unexpectedly
+```
+
+**right**:
+```python
+async def test_caching_first():
+    uris = ["at://did:plc:first/fm.plyr.track/1"]  # unique to this test
+    ...
+
+async def test_caching_second():
+    uris = ["at://did:plc:second/fm.plyr.track/1"]  # different URI
+    ...
+```
+
+use unique identifiers (test name, uuid, etc.) in cache keys to avoid cross-test pollution.
