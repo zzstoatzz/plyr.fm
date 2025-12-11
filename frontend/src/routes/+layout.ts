@@ -22,7 +22,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	teal_needs_reauth: false,
 	show_sensitive_artwork: false,
 	show_liked_on_profile: false,
-	support_url: null
+	support_url: null,
+	terms_accepted_at: null
 };
 
 export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
@@ -63,7 +64,8 @@ export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
 						teal_needs_reauth: prefsData.teal_needs_reauth ?? false,
 						show_sensitive_artwork: prefsData.show_sensitive_artwork ?? false,
 						show_liked_on_profile: prefsData.show_liked_on_profile ?? false,
-						support_url: prefsData.support_url ?? null
+						support_url: prefsData.support_url ?? null,
+						terms_accepted_at: prefsData.terms_accepted_at ?? null
 					};
 				}
 			} catch (e) {

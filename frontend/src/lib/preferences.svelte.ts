@@ -16,6 +16,7 @@ export interface Preferences {
 	show_sensitive_artwork: boolean;
 	show_liked_on_profile: boolean;
 	support_url: string | null;
+	terms_accepted_at: string | null;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -28,7 +29,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	teal_needs_reauth: false,
 	show_sensitive_artwork: false,
 	show_liked_on_profile: false,
-	support_url: null
+	support_url: null,
+	terms_accepted_at: null
 };
 
 class PreferencesManager {
@@ -78,6 +80,14 @@ class PreferencesManager {
 
 	get supportUrl(): string | null {
 		return this.data?.support_url ?? DEFAULT_PREFERENCES.support_url;
+	}
+
+	get termsAcceptedAt(): string | null {
+		return this.data?.terms_accepted_at ?? null;
+	}
+
+	get hasAcceptedTerms(): boolean {
+		return this.data?.terms_accepted_at !== null;
 	}
 
 	setTheme(theme: Theme): void {
@@ -132,7 +142,8 @@ class PreferencesManager {
 					teal_needs_reauth: data.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth,
 					show_sensitive_artwork: data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork,
 					show_liked_on_profile: data.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile,
-					support_url: data.support_url ?? DEFAULT_PREFERENCES.support_url
+					support_url: data.support_url ?? DEFAULT_PREFERENCES.support_url,
+					terms_accepted_at: data.terms_accepted_at ?? null
 				};
 			} else {
 				this.data = { ...DEFAULT_PREFERENCES, theme: currentTheme };
@@ -176,6 +187,28 @@ class PreferencesManager {
 	clear(): void {
 		this.data = null;
 		this.initialized = false;
+	}
+
+	async acceptTerms(): Promise<boolean> {
+		if (!browser || !auth.isAuthenticated) return false;
+
+		try {
+			const response = await fetch(`${API_URL}/preferences/accept-terms`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+			if (response.ok) {
+				const data = await response.json();
+				if (this.data) {
+					this.data = { ...this.data, terms_accepted_at: data.terms_accepted_at };
+				}
+				return true;
+			}
+			return false;
+		} catch (error) {
+			console.error('failed to accept terms:', error);
+			return false;
+		}
 	}
 }
 

@@ -11,7 +11,7 @@
 	import SearchModal from '$lib/components/SearchModal.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
 	import { moderation } from '$lib/moderation.svelte';
@@ -36,6 +36,25 @@
 
 	let isEmbed = $derived($page.url.pathname.startsWith('/embed/'));
 
+	// pages that don't require terms acceptance (public pages + the acceptance page itself)
+	const TERMS_EXEMPT_PATHS = [
+		'/',
+		'/login',
+		'/terms',
+		'/privacy',
+		'/accept-terms',
+		'/track/',
+		'/u/',
+		'/playlist/',
+		'/embed/'
+	];
+
+	function isTermsExemptPath(pathname: string): boolean {
+		return TERMS_EXEMPT_PATHS.some(
+			(path) => pathname === path || pathname.startsWith(path)
+		);
+	}
+
 	// sync auth and preferences state from layout data (fetched by +layout.ts)
 	$effect(() => {
 		if (browser) {
@@ -45,6 +64,17 @@
 			preferences.data = data.preferences;
 			// fetch explicit images list (public, no auth needed)
 			moderation.initialize();
+
+			// redirect to terms acceptance if authenticated but hasn't accepted terms
+			const pathname = $page.url.pathname;
+			if (
+				data.isAuthenticated &&
+				data.preferences &&
+				!data.preferences.terms_accepted_at &&
+				!isTermsExemptPath(pathname)
+			) {
+				goto('/accept-terms');
+			}
 		}
 	});
 
