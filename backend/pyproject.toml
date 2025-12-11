@@ -82,7 +82,8 @@ env = [
     "DATABASE_POOL_SIZE=2",
     "DATABASE_MAX_OVERFLOW=0",
     # redis URL for cache tests (uses test-redis from docker-compose)
-    "DOCKET_URL=redis://localhost:6380/0",
+    # D: prefix means don't override if already set (e.g., by CI workflow)
+    "D:DOCKET_URL=redis://localhost:6380/0",
 ]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
