@@ -65,6 +65,12 @@ class UserPreferences(Base):
     # artist support link (Ko-fi, Patreon, etc.)
     support_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # terms of service acceptance
+    # null means terms not yet accepted, timestamp means when they were accepted
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
