@@ -1,5 +1,6 @@
 """pytest configuration for relay tests."""
 
+import os
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -7,6 +8,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import asyncpg
 import pytest
+import redis as sync_redis_lib
 import sqlalchemy as sa
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -20,6 +22,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.config import settings
 from backend.models import Base
+from backend.utilities.redis import clear_client_cache
 
 
 class MockStorage:
@@ -411,13 +414,6 @@ def redis_database(worker_id: str) -> Generator[None, None, None]:
     if redis is not available, silently skips - tests that actually need redis
     will fail on their own with a more specific error.
     """
-    import os
-
-    import redis as sync_redis_lib
-
-    from backend.config import settings
-    from backend.utilities.redis import clear_client_cache
-
     # skip if no redis configured
     if not settings.docket.url:
         yield

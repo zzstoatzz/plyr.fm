@@ -4,9 +4,11 @@ provides async redis client initialized from docket URL settings.
 the client is lazily created and cached per event loop.
 """
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 from urllib.parse import urlparse
 
 import redis.asyncio as async_redis
@@ -29,7 +31,7 @@ def _parse_redis_url(url: str) -> dict:
     """
     parsed = urlparse(url)
 
-    kwargs: dict = {
+    kwargs: dict[str, Any] = {
         "host": parsed.hostname or "localhost",
         "port": parsed.port or 6379,
         "db": int(parsed.path.lstrip("/") or 0),
@@ -58,8 +60,6 @@ def get_async_redis_client() -> async_redis.Redis:
     raises:
         RuntimeError: if docket URL is not configured
     """
-    import asyncio
-
     try:
         loop = asyncio.get_running_loop()
         loop_id = id(loop)
@@ -116,8 +116,6 @@ async def async_redis_client() -> AsyncGenerator[async_redis.Redis, None]:
 
 async def close_redis_client() -> None:
     """close all cached redis clients."""
-    import asyncio
-
     try:
         loop = asyncio.get_running_loop()
         loop_id = id(loop)

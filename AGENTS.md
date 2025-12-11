@@ -17,6 +17,7 @@
 *   **Async Everywhere:** Never block the event loop. Use `anyio`/`aiofiles`.
 *   **Type Hints:** Required everywhere (Python & TypeScript).
 *   **Communication:** Use emojis sparingly and strictly for emphasis.
+*   **DO NOT UNNECESSARILY DEFER IMPORTS.** Put imports at the top of the file where they belong. Deferred imports inside functions are only acceptable for avoiding circular imports - not for "lazy loading" or other reasons.
 
 ## 🛠️ Stack & Tooling
 *   **Backend:** FastAPI, Neon (Postgres), Cloudflare R2, Fly.io.
@@ -55,4 +56,4 @@ plyr.fm/
 └── STATUS.md         # Living status document
 ```
 
-this file ("AGENTS.md") is symlinked to `CLAUDE.md` and `GEMINI.md` for maximal compatibility.
+this file ("AGENTS.md") is symlinked to `CLAUDE.md` for maximal compatibility.

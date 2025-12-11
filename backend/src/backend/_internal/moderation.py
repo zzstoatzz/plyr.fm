@@ -10,6 +10,7 @@ from sqlalchemy import select
 from backend.config import settings
 from backend.models import CopyrightScan, Track
 from backend.utilities.database import db_session
+from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -227,8 +228,6 @@ async def get_active_copyright_labels(uris: list[str]) -> set[str]:
     uris_to_fetch: list[str] = []
 
     try:
-        from backend.utilities.redis import get_async_redis_client
-
         redis = get_async_redis_client()
         prefix = settings.moderation.label_cache_prefix
         cache_keys = [f"{prefix}{uri}" for uri in uris]
@@ -271,8 +270,6 @@ async def get_active_copyright_labels(uris: list[str]) -> set[str]:
 
             # update redis cache with results
             try:
-                from backend.utilities.redis import get_async_redis_client
-
                 redis = get_async_redis_client()
                 prefix = settings.moderation.label_cache_prefix
                 ttl = settings.moderation.label_cache_ttl_seconds
@@ -308,8 +305,6 @@ async def invalidate_label_cache(uri: str) -> None:
     call this when emitting or negating labels to ensure fresh data.
     """
     try:
-        from backend.utilities.redis import get_async_redis_client
-
         redis = get_async_redis_client()
         prefix = settings.moderation.label_cache_prefix
         await redis.delete(f"{prefix}{uri}")
@@ -320,8 +315,6 @@ async def invalidate_label_cache(uri: str) -> None:
 async def clear_label_cache() -> None:
     """clear all label cache entries. primarily for testing."""
     try:
-        from backend.utilities.redis import get_async_redis_client
-
         redis = get_async_redis_client()
         prefix = settings.moderation.label_cache_prefix
         # scan and delete all keys with our prefix
