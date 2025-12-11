@@ -24,6 +24,7 @@ export interface Preferences {
 	support_url: string | null;
 	ui_settings: UiSettings;
 	auto_download_liked: boolean;
+	terms_accepted_at: string | null;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -38,7 +39,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	show_liked_on_profile: false,
 	support_url: null,
 	ui_settings: {},
-	auto_download_liked: false
+	auto_download_liked: false,
+	terms_accepted_at: null
 };
 
 class PreferencesManager {
@@ -96,6 +98,14 @@ class PreferencesManager {
 
 	get autoDownloadLiked(): boolean {
 		return this.data?.auto_download_liked ?? DEFAULT_PREFERENCES.auto_download_liked;
+	}
+
+	get termsAcceptedAt(): string | null {
+		return this.data?.terms_accepted_at ?? null;
+	}
+
+	get hasAcceptedTerms(): boolean {
+		return this.data?.terms_accepted_at !== null;
 	}
 
 	setAutoDownloadLiked(enabled: boolean): void {
@@ -163,7 +173,8 @@ class PreferencesManager {
 					show_liked_on_profile: data.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile,
 					support_url: data.support_url ?? DEFAULT_PREFERENCES.support_url,
 					ui_settings: data.ui_settings ?? DEFAULT_PREFERENCES.ui_settings,
-					auto_download_liked: storedAutoDownload
+					auto_download_liked: storedAutoDownload,
+					terms_accepted_at: data.terms_accepted_at ?? null
 				};
 			} else {
 				const storedAutoDownload = localStorage.getItem('autoDownloadLiked') === '1';
@@ -236,6 +247,28 @@ class PreferencesManager {
 	clear(): void {
 		this.data = null;
 		this.initialized = false;
+	}
+
+	async acceptTerms(): Promise<boolean> {
+		if (!browser || !auth.isAuthenticated) return false;
+
+		try {
+			const response = await fetch(`${API_URL}/preferences/accept-terms`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+			if (response.ok) {
+				const data = await response.json();
+				if (this.data) {
+					this.data = { ...this.data, terms_accepted_at: data.terms_accepted_at };
+				}
+				return true;
+			}
+			return false;
+		} catch (error) {
+			console.error('failed to accept terms:', error);
+			return false;
+		}
 	}
 }
 
