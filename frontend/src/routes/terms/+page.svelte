@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { APP_NAME } from '$lib/branding';
+	import type { PageData } from './$types';
+
+	let { data } = $props<{ data: PageData }>();
 </script>
 
 <svelte:head>
@@ -142,8 +145,8 @@
 			<p>our designated DMCA agent is:</p>
 			<address class="dmca-agent">
 				Nathan Nowack<br />
-				DMCA Registration: DMCA-1069186<br />
-				Email: <a href="mailto:plyrdotfm@proton.me">plyrdotfm@proton.me</a>
+				DMCA Registration: {data.dmcaRegistrationNumber}<br />
+				Email: <a href="mailto:{data.dmcaEmail}">{data.dmcaEmail}</a>
 			</address>
 
 			<h3>6.3 takedown notice requirements</h3>
@@ -286,9 +289,14 @@
 			<h2>contact</h2>
 			<p>
 				questions about these terms? contact us at
-				<a href="mailto:plyrdotfm@proton.me">plyrdotfm@proton.me</a>.
+				<a href="mailto:{data.contactEmail}">{data.contactEmail}</a>.
 			</p>
 		</section>
+
+		<nav class="legal-nav">
+			<a href="/privacy">privacy policy</a>
+			<a href="/cookies">cookie policy</a>
+		</nav>
 	</article>
 </div>
 
@@ -428,6 +436,23 @@
 
 	.contact p {
 		margin: 0;
+	}
+
+	.legal-nav {
+		margin-top: 3rem;
+		padding-top: 2rem;
+		border-top: 1px solid var(--border-subtle);
+		display: flex;
+		gap: 2rem;
+	}
+
+	.legal-nav a {
+		color: var(--text-tertiary);
+		font-size: 0.9rem;
+	}
+
+	.legal-nav a:hover {
+		color: var(--accent);
 	}
 
 	@media (max-width: 600px) {

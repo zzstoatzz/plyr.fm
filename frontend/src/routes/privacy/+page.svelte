@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { APP_NAME } from '$lib/branding';
+	import type { PageData } from './$types';
+
+	let { data } = $props<{ data: PageData }>();
 </script>
 
 <svelte:head>
@@ -17,6 +20,13 @@
 			this policy explains what data we collect, what's public by design, and your rights.
 		</p>
 
+		<p class="open-source-notice">
+			{APP_NAME} is open source under the MIT license. source code is available at
+			<a href="https://github.com/zzstoatzz/plyr.fm" target="_blank" rel="noopener">github.com/zzstoatzz/plyr.fm</a>.
+			this policy applies only to the instance at <a href="https://plyr.fm">plyr.fm</a> —
+			other instances or forks are not covered.
+		</p>
+
 		<nav class="toc">
 			<h2>contents</h2>
 			<ol>
@@ -26,6 +36,8 @@
 				<li><a href="#third-parties">third-party services</a></li>
 				<li><a href="#your-rights">your rights</a></li>
 				<li><a href="#security">security</a></li>
+				<li><a href="#tracking">tracking and do not track</a></li>
+				<li><a href="#indexed-data">indexed data and external content</a></li>
 				<li><a href="#children">children's privacy</a></li>
 				<li><a href="#international">international transfers</a></li>
 				<li><a href="#changes">changes to this policy</a></li>
@@ -36,8 +48,9 @@
 		<section id="atproto">
 			<h2>1. the AT Protocol difference</h2>
 			<p>
-				unlike traditional platforms, {APP_NAME} uses the AT Protocol (ATProto) for identity
-				and social features. this has important privacy implications:
+				unlike traditional platforms, {APP_NAME} uses the
+				<a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a> (ATProto)
+				for identity and social features. this has important privacy implications:
 			</p>
 
 			<h3>public protocol data</h3>
@@ -46,17 +59,35 @@
 				AT Protocol network, not exclusively on our servers:
 			</p>
 			<ul>
-				<li>your DID (Decentralized Identifier) - your permanent, portable identity</li>
-				<li>your handle (e.g., yourname.bsky.social)</li>
+				<li>your <a href="https://atproto.com/guides/glossary#did" target="_blank" rel="noopener">DID</a> (Decentralized Identifier) - your permanent, portable identity</li>
+				<li>your <a href="https://atproto.com/guides/glossary#handle" target="_blank" rel="noopener">handle</a> (e.g., yourname.bsky.social)</li>
 				<li>your profile information (display name, avatar, bio)</li>
 				<li>tracks you upload (metadata published to your PDS)</li>
 				<li>likes, comments, and other social interactions</li>
-				<li>scrobbles (if teal.fm integration is enabled)</li>
+				<li>scrobbles (if <a href="https://teal.fm" target="_blank" rel="noopener">teal.fm</a> integration is enabled)</li>
 			</ul>
 			<p>
 				<strong>important:</strong> this data is visible to anyone on the AT Protocol network,
-				not just {APP_NAME} users. other ATProto clients can read this data. {APP_NAME}
-				cannot delete data from the network - only from our own servers.
+				not just {APP_NAME} users. other ATProto clients can read this data.
+			</p>
+
+			<h3>OAuth scopes we request</h3>
+			<p>
+				when you log in, we request permission to read and write the following record types
+				on your <a href="https://atproto.com/guides/glossary#pds-personal-data-server">PDS</a>:
+			</p>
+			<ul>
+				<li><code>fm.plyr.feed.track</code> - your uploaded tracks</li>
+				<li><code>fm.plyr.feed.like</code> - your likes</li>
+				<li><code>fm.plyr.feed.comment</code> - your comments</li>
+				<li><code>fm.plyr.feed.list</code> - your playlists and albums</li>
+				<li><code>fm.plyr.actor.profile</code> - your artist profile</li>
+			</ul>
+			<p>
+				we can create, update, and delete these records on your behalf. when you delete
+				content through {APP_NAME}, we delete it from your PDS. however, copies may persist
+				on <a href="https://atproto.com/guides/glossary#relay">relay servers</a> that have
+				already indexed your data - {APP_NAME} cannot control third-party relays.
 			</p>
 
 			<h3>private platform data</h3>
@@ -66,7 +97,7 @@
 			</p>
 			<ul>
 				<li>session tokens and authentication state</li>
-				<li>your preferences and settings</li>
+				<li>your preferences and some settings</li>
 				<li>server logs and analytics</li>
 			</ul>
 		</section>
@@ -79,7 +110,7 @@
 				<li><strong>AT Protocol identity:</strong> your DID and handle when you authenticate</li>
 				<li><strong>profile data:</strong> display name, avatar, bio (synced from your ATProto profile)</li>
 				<li><strong>content:</strong> audio files, artwork, and metadata you upload</li>
-				<li><strong>preferences:</strong> theme, hidden tags, playback settings</li>
+				<li><strong>preferences:</strong> accent color, hidden tags, playback settings (stored on our servers to sync across devices)</li>
 			</ul>
 
 			<h3>2.2 information collected automatically</h3>
@@ -121,7 +152,7 @@
 			<h2>4. third-party services</h2>
 			<p>we share data with the following service providers:</p>
 
-			<h3>4.1 Cloudflare (infrastructure)</h3>
+			<h3>4.1 <a href="https://www.cloudflare.com" target="_blank" rel="noopener">Cloudflare</a> (infrastructure)</h3>
 			<p>
 				Cloudflare provides CDN, DDoS protection, and storage (R2) for audio files and
 				images. they may collect IP addresses and access logs.
@@ -131,18 +162,18 @@
 				<a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer">cloudflare.com/privacypolicy</a>
 			</p>
 
-			<h3>4.2 Fly.io (hosting)</h3>
+			<h3>4.2 <a href="https://fly.io" target="_blank" rel="noopener">Fly.io</a> (hosting)</h3>
 			<p>
 				our backend runs on Fly.io. they may process server logs and request metadata.
 			</p>
 
-			<h3>4.3 Neon (database)</h3>
+			<h3>4.3 <a href="https://neon.tech" target="_blank" rel="noopener">Neon</a> (database)</h3>
 			<p>
 				our database is hosted on Neon's PostgreSQL service. your private platform data
 				is stored there.
 			</p>
 
-			<h3>4.4 Pydantic Logfire (observability)</h3>
+			<h3>4.4 <a href="https://pydantic.dev/logfire" target="_blank" rel="noopener">Pydantic Logfire</a> (observability)</h3>
 			<p>
 				we use Logfire for application monitoring and debugging. logs may contain request
 				metadata but are stripped of sensitive personal information.
@@ -186,7 +217,7 @@
 			<h3>5.3 for EU/EEA users (GDPR)</h3>
 			<p>under the General Data Protection Regulation, you have additional rights:</p>
 			<ul>
-				<li><strong>right to be forgotten:</strong> applies only to data we control (our servers), not the AT Protocol network</li>
+				<li><strong>right to be forgotten:</strong> we delete from our servers and your PDS, but cannot control third-party relays</li>
 				<li><strong>right to object:</strong> to processing based on legitimate interests</li>
 				<li><strong>right to restrict:</strong> processing in certain circumstances</li>
 				<li><strong>right to complain:</strong> to your local data protection authority</li>
@@ -217,12 +248,64 @@
 			</ul>
 			<p>
 				no system is 100% secure. if you discover a vulnerability, please report it to
-				<a href="mailto:plyrdotfm@proton.me">plyrdotfm@proton.me</a>.
+				<a href="mailto:{data.contactEmail}">{data.contactEmail}</a>.
+			</p>
+		</section>
+
+		<section id="tracking">
+			<h2>7. tracking and do not track</h2>
+			<p>
+				{APP_NAME} does not use third-party analytics (like Google Analytics), advertising
+				trackers, or behavioral profiling. we use only essential cookies for authentication.
+			</p>
+			<p>
+				we honor Do Not Track (DNT) browser signals by default — because we have no
+				first-party tracking to disable.
+			</p>
+			<p>
+				<strong>infrastructure providers:</strong> Cloudflare (our CDN/hosting) may collect
+				IP addresses and request metadata for security and performance purposes. this is
+				standard infrastructure logging, not behavioral tracking. see
+				<a href="#third-parties">section 4</a> for details.
+			</p>
+			<p>
+				<strong>operational monitoring:</strong> we use
+				<a href="https://pydantic.dev/logfire" target="_blank" rel="noopener">Logfire</a>
+				for error tracking and performance monitoring. this data is used for debugging
+				and is not linked to individual users or used for profiling.
+			</p>
+		</section>
+
+		<section id="indexed-data">
+			<h2>8. indexed data and external content</h2>
+			<p>
+				{APP_NAME} indexes and displays content from ATProtocol PDS instances operated by
+				third parties. we are not the source of truth for this data — your PDS is.
+			</p>
+			<p>
+				while we index content from external PDSs, we may apply moderation to what we
+				display. this includes:
+			</p>
+			<ul>
+				<li>blurring images flagged as sensitive or explicit</li>
+				<li>hiding or removing content subject to valid <a href="/terms#dmca">DMCA takedown requests</a></li>
+				<li>removing content that violates our <a href="/terms#content-policy">content policy</a></li>
+			</ul>
+			<p>
+				moderation applies only to how content appears on {APP_NAME} — we cannot modify
+				or delete the underlying records on third-party PDSs. we also cannot guarantee
+				the accuracy or appropriateness of content we haven't yet reviewed.
+			</p>
+			<p>
+				<strong>protocol transparency:</strong> ATProtocol is a public data protocol.
+				there is no built-in privacy mechanism for hiding public records (tracks, likes,
+				comments). {APP_NAME} reflects this architecture and cannot offer private storage
+				for protocol data.
 			</p>
 		</section>
 
 		<section id="children">
-			<h2>7. children's privacy</h2>
+			<h2>9. children's privacy</h2>
 			<p>
 				{APP_NAME} is not intended for children under 13 (or 16 in the EU). we do not
 				knowingly collect data from children. if you believe a child has provided us
@@ -231,7 +314,7 @@
 		</section>
 
 		<section id="international">
-			<h2>8. international transfers</h2>
+			<h2>10. international transfers</h2>
 			<p>
 				{APP_NAME} is operated from the United States. your data may be transferred to
 				and processed in the US and other countries where our service providers operate.
@@ -243,7 +326,7 @@
 		</section>
 
 		<section id="changes">
-			<h2>9. changes to this policy</h2>
+			<h2>11. changes to this policy</h2>
 			<p>
 				we may update this policy from time to time. material changes will be announced
 				via the Service with at least 30 days' notice. continued use after changes take
@@ -252,13 +335,18 @@
 		</section>
 
 		<section id="contact" class="contact">
-			<h2>10. contact us</h2>
+			<h2>12. contact us</h2>
 			<p>for privacy questions or to exercise your rights:</p>
 			<address>
-				Email: <a href="mailto:plyrdotfm@proton.me">plyrdotfm@proton.me</a>
+				Email: <a href="mailto:{data.privacyEmail}">{data.privacyEmail}</a>
 			</address>
 			<p class="response-time">we aim to respond to all requests within 30 days.</p>
 		</section>
+
+		<nav class="legal-nav">
+			<a href="/terms">terms of service</a>
+			<a href="/cookies">cookie policy</a>
+		</nav>
 	</article>
 </div>
 
@@ -288,6 +376,16 @@
 
 	.intro {
 		font-size: 1.1rem;
+		color: var(--text-secondary);
+		margin-bottom: 1rem;
+	}
+
+	.open-source-notice {
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 6px;
+		padding: 1rem;
+		font-size: 0.9rem;
 		color: var(--text-secondary);
 		margin-bottom: 2rem;
 		padding-bottom: 2rem;
@@ -395,6 +493,23 @@
 		margin: 0;
 		font-size: 0.9rem;
 		color: var(--text-tertiary);
+	}
+
+	.legal-nav {
+		margin-top: 3rem;
+		padding-top: 2rem;
+		border-top: 1px solid var(--border-subtle);
+		display: flex;
+		gap: 2rem;
+	}
+
+	.legal-nav a {
+		color: var(--text-tertiary);
+		font-size: 0.9rem;
+	}
+
+	.legal-nav a:hover {
+		color: var(--accent);
 	}
 
 	@media (max-width: 600px) {

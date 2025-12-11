@@ -125,6 +125,46 @@ class AppSettings(AppSettingsSection):
     )
 
 
+class LegalSettings(AppSettingsSection):
+    """Legal and contact configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="LEGAL_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    contact_email: str = Field(
+        default="plyrdotfm@proton.me",
+        description="General contact email",
+    )
+    privacy_email: str | None = Field(
+        default=None,
+        description="Privacy-specific contact email (falls back to contact_email)",
+    )
+    dmca_email: str | None = Field(
+        default=None,
+        description="DMCA/copyright contact email (falls back to contact_email)",
+    )
+    dmca_registration_number: str = Field(
+        default="DMCA-1069186",
+        description="USPTO DMCA agent registration number",
+    )
+
+    @computed_field
+    @property
+    def resolved_privacy_email(self) -> str:
+        """Privacy email, falling back to contact_email."""
+        return self.privacy_email or self.contact_email
+
+    @computed_field
+    @property
+    def resolved_dmca_email(self) -> str:
+        """DMCA email, falling back to contact_email."""
+        return self.dmca_email or self.contact_email
+
+
 class FrontendSettings(AppSettingsSection):
     """Frontend-specific configuration."""
 
@@ -691,6 +731,10 @@ class Settings(AppSettingsSection):
     storage: StorageSettings = Field(default_factory=StorageSettings)
     atproto: AtprotoSettings = Field(default_factory=AtprotoSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+    legal: LegalSettings = Field(
+        default_factory=LegalSettings,
+        description="Legal and contact settings",
+    )
     rate_limit: RateLimitSettings = Field(
         default_factory=RateLimitSettings,
         description="Rate limiting settings",
