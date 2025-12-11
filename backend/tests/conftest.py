@@ -1,5 +1,6 @@
 """pytest configuration for relay tests."""
 
+import os
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -7,6 +8,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import asyncpg
 import pytest
+import redis as sync_redis_lib
 import sqlalchemy as sa
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -20,6 +22,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.config import settings
 from backend.models import Base
+from backend.utilities.redis import clear_client_cache
 
 
 class MockStorage:
@@ -369,3 +372,80 @@ def client(fastapi_app: FastAPI) -> Generator[TestClient, None, None]:
     """provides a TestClient for testing the FastAPI application."""
     with TestClient(fastapi_app) as tc:
         yield tc
+
+
+def _redis_db_for_worker(worker_id: str) -> int:
+    """determine redis database number based on xdist worker id.
+
+    uses different DB numbers for each worker to isolate parallel tests:
+    - master/gw0: db 1
+    - gw1: db 2
+    - gw2: db 3
+    - etc.
+
+    db 0 is reserved for local development.
+    """
+    if worker_id == "master" or not worker_id:
+        return 1
+    if "gw" in worker_id:
+        return 1 + int(worker_id.replace("gw", ""))
+    return 1
+
+
+def _redis_url_with_db(base_url: str, db: int) -> str:
+    """replace database number in redis URL."""
+    # redis://host:port/db -> redis://host:port/{new_db}
+    if "/" in base_url.rsplit(":", 1)[-1]:
+        # has db number, replace it
+        base = base_url.rsplit("/", 1)[0]
+        return f"{base}/{db}"
+    else:
+        # no db number, append it
+        return f"{base_url}/{db}"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def redis_database(worker_id: str) -> Generator[None, None, None]:
+    """use isolated redis databases for parallel test execution.
+
+    each xdist worker gets its own redis database to prevent cache pollution
+    between tests running in parallel. flushes the db before and after tests.
+
+    if redis is not available, silently skips - tests that actually need redis
+    will fail on their own with a more specific error.
+    """
+    # skip if no redis configured
+    if not settings.docket.url:
+        yield
+        return
+
+    db = _redis_db_for_worker(worker_id)
+    new_url = _redis_url_with_db(settings.docket.url, db)
+
+    # patch settings for this worker process
+    settings.docket.url = new_url
+    os.environ["DOCKET_URL"] = new_url
+
+    # clear any cached clients (they have old URL)
+    clear_client_cache()
+
+    # try to flush db before tests - if redis unavailable, skip silently
+    try:
+        client = sync_redis_lib.Redis.from_url(new_url, socket_connect_timeout=1)
+        client.flushdb()
+        client.close()
+    except sync_redis_lib.ConnectionError:
+        # redis not available - tests that need it will fail with specific errors
+        yield
+        return
+
+    yield
+
+    # flush db after tests and clear cached clients
+    clear_client_cache()
+    try:
+        client = sync_redis_lib.Redis.from_url(new_url, socket_connect_timeout=1)
+        client.flushdb()
+        client.close()
+    except sync_redis_lib.ConnectionError:
+        pass  # redis went away during tests, nothing to clean up
