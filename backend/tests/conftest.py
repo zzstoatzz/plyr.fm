@@ -407,8 +407,13 @@ def redis_database(worker_id: str) -> Generator[None, None, None]:
 
     each xdist worker gets its own redis database to prevent cache pollution
     between tests running in parallel. flushes the db before and after tests.
+
+    if redis is not available, silently skips - tests that actually need redis
+    will fail on their own with a more specific error.
     """
     import os
+
+    import redis as sync_redis_lib
 
     from backend.config import settings
     from backend.utilities.redis import clear_client_cache
@@ -428,17 +433,23 @@ def redis_database(worker_id: str) -> Generator[None, None, None]:
     # clear any cached clients (they have old URL)
     clear_client_cache()
 
-    # flush db before tests
-    import redis
-
-    sync_redis = redis.Redis.from_url(new_url)
-    sync_redis.flushdb()
-    sync_redis.close()
+    # try to flush db before tests - if redis unavailable, skip silently
+    try:
+        client = sync_redis_lib.Redis.from_url(new_url, socket_connect_timeout=1)
+        client.flushdb()
+        client.close()
+    except sync_redis_lib.ConnectionError:
+        # redis not available - tests that need it will fail with specific errors
+        yield
+        return
 
     yield
 
     # flush db after tests and clear cached clients
     clear_client_cache()
-    sync_redis = redis.Redis.from_url(new_url)
-    sync_redis.flushdb()
-    sync_redis.close()
+    try:
+        client = sync_redis_lib.Redis.from_url(new_url, socket_connect_timeout=1)
+        client.flushdb()
+        client.close()
+    except sync_redis_lib.ConnectionError:
+        pass  # redis went away during tests, nothing to clean up
