@@ -13,28 +13,20 @@
 
 		const success = await preferences.acceptTerms();
 
-		if (success) {
-			// redirect to portal or wherever they were going
-			goto('/portal');
-		} else {
+		if (!success) {
 			error = 'failed to accept terms. please try again.';
 			accepting = false;
 		}
 	}
 
 	function handleDecline() {
-		// log them out and send to home
 		auth.logout();
 		goto('/');
 	}
 </script>
 
-<svelte:head>
-	<title>accept terms - {APP_NAME}</title>
-</svelte:head>
-
-<div class="accept-terms-container">
-	<div class="accept-terms-content">
+<div class="terms-overlay">
+	<div class="terms-modal">
 		<h1>welcome to {APP_NAME}</h1>
 		<p class="subtitle">please review and accept our terms to continue</p>
 
@@ -42,16 +34,17 @@
 			<h2>key points</h2>
 			<ul>
 				<li>
-					<strong>your content:</strong> you retain ownership of everything you upload.
-					we get a license to host and stream it.
+					<strong>your content:</strong> you own what you upload. we store it, stream it,
+					and transcode it. delete through {APP_NAME} and we clean up everything.
 				</li>
 				<li>
 					<strong>copyright:</strong> don't upload content you don't have rights to.
 					we follow DMCA takedown procedures.
 				</li>
 				<li>
-					<strong>AT Protocol:</strong> your identity and some data lives on the decentralized
-					network, not just our servers.
+					<strong>AT Protocol:</strong> your identity is on your
+					<a href="https://atproto.com/guides/glossary#pds-personal-data-server" target="_blank" rel="noopener">PDS</a>.
+					public interactions (likes, comments) are written to the network.
 				</li>
 				<li>
 					<strong>privacy:</strong> we don't sell your data or use it for ads.
@@ -82,43 +75,52 @@
 </div>
 
 <style>
-	.accept-terms-container {
-		min-height: 100vh;
+	.terms-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.9);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 2rem;
+		z-index: 9999;
+		padding: 1rem;
 	}
 
-	.accept-terms-content {
+	.terms-modal {
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 12px;
+		padding: 2rem;
 		max-width: 600px;
 		width: 100%;
+		max-height: 90vh;
+		overflow-y: auto;
 		text-align: center;
 	}
 
 	h1 {
-		font-size: 2rem;
+		font-size: 1.75rem;
 		margin: 0 0 0.5rem 0;
 		color: var(--text-primary);
 	}
 
 	.subtitle {
 		color: var(--text-tertiary);
-		margin: 0 0 2rem 0;
+		margin: 0 0 1.5rem 0;
 	}
 
 	.terms-summary {
-		background: var(--bg-secondary);
+		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
-		padding: 1.5rem;
+		padding: 1.25rem;
 		text-align: left;
-		margin-bottom: 1.5rem;
+		margin-bottom: 1.25rem;
 	}
 
 	.terms-summary h2 {
-		font-size: 1rem;
-		margin: 0 0 1rem 0;
+		font-size: 0.9rem;
+		margin: 0 0 0.75rem 0;
 		color: var(--text-secondary);
 		text-transform: lowercase;
 	}
@@ -129,9 +131,10 @@
 	}
 
 	.terms-summary li {
-		margin-bottom: 0.75rem;
+		margin-bottom: 0.6rem;
 		color: var(--text-secondary);
 		line-height: 1.5;
+		font-size: 0.9rem;
 	}
 
 	.terms-summary li:last-child {
@@ -142,14 +145,23 @@
 		color: var(--text-primary);
 	}
 
+	.terms-summary a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.terms-summary a:hover {
+		text-decoration: underline;
+	}
+
 	.full-terms-link {
-		margin-bottom: 1.5rem;
+		margin-bottom: 1.25rem;
 	}
 
 	.full-terms-link p {
 		margin: 0;
 		color: var(--text-tertiary);
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 	}
 
 	.full-terms-link a {
@@ -164,11 +176,12 @@
 	.error {
 		color: var(--error);
 		margin-bottom: 1rem;
+		font-size: 0.9rem;
 	}
 
 	.actions {
 		display: flex;
-		gap: 1rem;
+		gap: 0.75rem;
 		justify-content: center;
 	}
 
@@ -176,9 +189,10 @@
 		background: var(--accent);
 		color: white;
 		border: none;
-		padding: 0.75rem 2rem;
+		padding: 0.7rem 1.75rem;
 		border-radius: 6px;
-		font-size: 1rem;
+		font-family: inherit;
+		font-size: 0.95rem;
 		cursor: pointer;
 		transition: opacity 0.15s;
 	}
@@ -196,9 +210,10 @@
 		background: transparent;
 		color: var(--text-tertiary);
 		border: 1px solid var(--border-subtle);
-		padding: 0.75rem 1.5rem;
+		padding: 0.7rem 1.25rem;
 		border-radius: 6px;
-		font-size: 1rem;
+		font-family: inherit;
+		font-size: 0.95rem;
 		cursor: pointer;
 		transition: all 0.15s;
 	}
@@ -214,6 +229,14 @@
 	}
 
 	@media (max-width: 500px) {
+		.terms-modal {
+			padding: 1.5rem;
+		}
+
+		h1 {
+			font-size: 1.5rem;
+		}
+
 		.actions {
 			flex-direction: column;
 		}
