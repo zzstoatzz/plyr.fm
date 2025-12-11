@@ -5,6 +5,8 @@ the client is lazily created and cached per event loop.
 """
 
 import logging
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 import redis.asyncio as async_redis
@@ -83,6 +85,35 @@ def get_async_redis_client() -> async_redis.Redis:
     return client
 
 
+@asynccontextmanager
+async def async_redis_client() -> AsyncGenerator[async_redis.Redis, None]:
+    """async context manager for redis client.
+
+    ensures proper cleanup when used in isolated contexts.
+    for most cases, prefer get_async_redis_client() which caches
+    the connection for reuse.
+
+    yields:
+        async redis client
+
+    raises:
+        RuntimeError: if docket URL is not configured
+    """
+    if not settings.docket.url:
+        raise RuntimeError("docket URL not configured - cannot create redis client")
+
+    kwargs = _parse_redis_url(settings.docket.url)
+    client = async_redis.Redis(
+        socket_connect_timeout=5.0,
+        **kwargs,
+    )
+
+    try:
+        yield client
+    finally:
+        await client.aclose()
+
+
 async def close_redis_client() -> None:
     """close all cached redis clients."""
     import asyncio
@@ -97,3 +128,8 @@ async def close_redis_client() -> None:
         client = _client_cache.pop(loop_id)
         await client.aclose()
         logger.debug("closed async redis client for loop %s", loop_id)
+
+
+def clear_client_cache() -> None:
+    """clear the client cache. primarily for testing."""
+    _client_cache.clear()

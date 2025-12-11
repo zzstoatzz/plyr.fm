@@ -13,10 +13,6 @@ from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 
-# redis cache key prefix and TTL for active copyright labels
-_LABEL_CACHE_PREFIX = "plyr:copyright-label:"
-_LABEL_CACHE_TTL = 300  # 5 minutes, matches queue cache
-
 
 async def scan_track_for_copyright(track_id: int, audio_url: str) -> None:
     """scan a track for potential copyright matches.
@@ -234,7 +230,8 @@ async def get_active_copyright_labels(uris: list[str]) -> set[str]:
         from backend.utilities.redis import get_async_redis_client
 
         redis = get_async_redis_client()
-        cache_keys = [f"{_LABEL_CACHE_PREFIX}{uri}" for uri in uris]
+        prefix = settings.moderation.label_cache_prefix
+        cache_keys = [f"{prefix}{uri}" for uri in uris]
         cached_values = await redis.mget(cache_keys)
 
         for uri, cached_value in zip(uris, cached_values, strict=True):
@@ -277,11 +274,13 @@ async def get_active_copyright_labels(uris: list[str]) -> set[str]:
                 from backend.utilities.redis import get_async_redis_client
 
                 redis = get_async_redis_client()
+                prefix = settings.moderation.label_cache_prefix
+                ttl = settings.moderation.label_cache_ttl_seconds
                 async with redis.pipeline() as pipe:
                     for uri in uris_to_fetch:
-                        cache_key = f"{_LABEL_CACHE_PREFIX}{uri}"
+                        cache_key = f"{prefix}{uri}"
                         value = "1" if uri in active_from_service else "0"
-                        await pipe.set(cache_key, value, ex=_LABEL_CACHE_TTL)
+                        await pipe.set(cache_key, value, ex=ttl)
                     await pipe.execute()
             except Exception as e:
                 # cache update failed - not critical, just log
@@ -312,7 +311,8 @@ async def invalidate_label_cache(uri: str) -> None:
         from backend.utilities.redis import get_async_redis_client
 
         redis = get_async_redis_client()
-        await redis.delete(f"{_LABEL_CACHE_PREFIX}{uri}")
+        prefix = settings.moderation.label_cache_prefix
+        await redis.delete(f"{prefix}{uri}")
     except Exception as e:
         logger.warning("failed to invalidate label cache for %s: %s", uri, e)
 
@@ -323,12 +323,11 @@ async def clear_label_cache() -> None:
         from backend.utilities.redis import get_async_redis_client
 
         redis = get_async_redis_client()
+        prefix = settings.moderation.label_cache_prefix
         # scan and delete all keys with our prefix
         cursor = 0
         while True:
-            cursor, keys = await redis.scan(
-                cursor, match=f"{_LABEL_CACHE_PREFIX}*", count=100
-            )
+            cursor, keys = await redis.scan(cursor, match=f"{prefix}*", count=100)
             if keys:
                 await redis.delete(*keys)
             if cursor == 0:

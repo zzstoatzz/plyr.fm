@@ -543,6 +543,14 @@ class ModerationSettings(AppSettingsSection):
         default="https://moderation.plyr.fm",
         description="URL of the ATProto labeler service for emitting labels",
     )
+    label_cache_prefix: str = Field(
+        default="plyr:copyright-label:",
+        description="Redis key prefix for caching copyright label status",
+    )
+    label_cache_ttl_seconds: int = Field(
+        default=300,
+        description="TTL in seconds for cached copyright label status (default 5 min)",
+    )
 
 
 class DocketSettings(AppSettingsSection):
