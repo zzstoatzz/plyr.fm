@@ -24,7 +24,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	show_liked_on_profile: false,
 	support_url: null,
 	ui_settings: {},
-	auto_download_liked: false
+	auto_download_liked: false,
+	terms_accepted_at: null
 };
 
 export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
@@ -71,7 +72,8 @@ export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
 						show_liked_on_profile: prefsData.show_liked_on_profile ?? false,
 						support_url: prefsData.support_url ?? null,
 						ui_settings: prefsData.ui_settings ?? {},
-						auto_download_liked: storedAutoDownload
+						auto_download_liked: storedAutoDownload,
+						terms_accepted_at: prefsData.terms_accepted_at ?? null
 					};
 				}
 			} catch (e) {
