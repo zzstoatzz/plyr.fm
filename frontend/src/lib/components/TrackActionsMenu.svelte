@@ -422,22 +422,22 @@
 
 	.menu-panel {
 		position: fixed;
-		bottom: 0;
+		top: 0;
 		left: 0;
 		right: 0;
 		background: var(--bg-secondary);
-		border-radius: 16px 16px 0 0;
-		box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+		border-radius: 0 0 16px 16px;
+		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 		z-index: 101;
-		animation: slideUp 0.2s ease-out;
-		padding-bottom: env(safe-area-inset-bottom, 0);
+		animation: slideDown 0.2s ease-out;
+		padding-top: env(safe-area-inset-top, 0);
 		max-height: 70vh;
 		overflow-y: auto;
 	}
 
-	@keyframes slideUp {
+	@keyframes slideDown {
 		from {
-			transform: translateY(100%);
+			transform: translateY(-100%);
 		}
 		to {
 			transform: translateY(0);

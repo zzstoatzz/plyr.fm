@@ -115,6 +115,7 @@
 
 	function addToQueue() {
 		queue.addTracks([track]);
+		toast.success(`queued ${track.title}`, 1800);
 	}
 
 	async function loadComments() {
@@ -465,6 +466,8 @@ $effect(() => {
 								trackUri={track.atproto_record_uri}
 								trackCid={track.atproto_record_cid}
 								initialLiked={track.is_liked || false}
+								shareUrl={shareUrl}
+								onQueue={addToQueue}
 							/>
 						{/if}
 						<ShareButton url={shareUrl} title="share track" />
