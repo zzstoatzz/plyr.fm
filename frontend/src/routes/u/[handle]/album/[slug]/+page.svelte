@@ -1094,6 +1094,8 @@
 		.mobile-buttons {
 			display: flex;
 			gap: 0.5rem;
+			justify-content: center;
+			align-items: center;
 		}
 
 		.album-title {
