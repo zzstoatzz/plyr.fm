@@ -14,6 +14,8 @@
 		disabledReason?: string;
 		onLikeChange?: (_liked: boolean) => void;
 		excludePlaylistId?: string;
+		shareUrl?: string;
+		onQueue?: () => void;
 	}
 
 	let {
@@ -25,7 +27,9 @@
 		disabled = false,
 		disabledReason,
 		onLikeChange,
-		excludePlaylistId
+		excludePlaylistId,
+		shareUrl,
+		onQueue
 	}: Props = $props();
 
 	let liked = $state(initialLiked);
@@ -116,6 +120,26 @@
 		} finally {
 			loading = false;
 			menuOpen = false;
+		}
+	}
+
+	function handleQueue(e: Event) {
+		e.stopPropagation();
+		if (onQueue) {
+			onQueue();
+			menuOpen = false;
+		}
+	}
+
+	async function handleShare(e: Event) {
+		e.stopPropagation();
+		if (!shareUrl) return;
+		try {
+			await navigator.clipboard.writeText(shareUrl);
+			toast.success('link copied');
+			menuOpen = false;
+		} catch {
+			toast.error('failed to copy link');
 		}
 	}
 
@@ -255,6 +279,8 @@
 
 	{#if menuOpen}
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="menu-backdrop" role="presentation" onclick={() => { menuOpen = false; showPlaylistPicker = false; }}></div>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 		<div class="menu-dropdown" class:open-upward={openUpward} role="menu" tabindex="-1" onclick={(e) => {
 			// don't stop propagation for links - let SvelteKit handle navigation
 			if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
@@ -283,6 +309,30 @@
 						<svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<path d="M9 18l6-6-6-6"/>
 						</svg>
+					</button>
+				{/if}
+				{#if onQueue}
+					<button class="menu-item" onclick={handleQueue}>
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+							<line x1="5" y1="15" x2="5" y2="21"></line>
+							<line x1="2" y1="18" x2="8" y2="18"></line>
+							<line x1="9" y1="6" x2="21" y2="6"></line>
+							<line x1="9" y1="12" x2="21" y2="12"></line>
+							<line x1="9" y1="18" x2="21" y2="18"></line>
+						</svg>
+						<span>add to queue</span>
+					</button>
+				{/if}
+				{#if shareUrl}
+					<button class="menu-item" onclick={handleShare}>
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="18" cy="5" r="3"></circle>
+							<circle cx="6" cy="12" r="3"></circle>
+							<circle cx="18" cy="19" r="3"></circle>
+							<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+							<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+						</svg>
+						<span>share</span>
 					</button>
 				{/if}
 			{:else}
@@ -680,7 +730,12 @@
 		to { transform: rotate(360deg); }
 	}
 
-	/* mobile: show as bottom sheet */
+	/* backdrop - hidden on desktop, visible on mobile */
+	.menu-backdrop {
+		display: none;
+	}
+
+	/* mobile: show as top sheet */
 	@media (max-width: 768px) {
 		.trigger-button {
 			width: 28px;
@@ -692,21 +747,33 @@
 			height: 14px;
 		}
 
+		.menu-backdrop {
+			display: block;
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: 100;
+			background: rgba(0, 0, 0, 0.4);
+		}
+
 		.menu-dropdown {
 			position: fixed;
-			top: auto;
-			bottom: 0;
+			top: 0;
+			bottom: auto;
 			left: 0;
 			right: 0;
 			min-width: 100%;
-			border-radius: 16px 16px 0 0;
-			padding-bottom: env(safe-area-inset-bottom, 0);
-			animation: slideUp 0.2s ease-out;
+			border-radius: 0 0 16px 16px;
+			padding-top: env(safe-area-inset-top, 0);
+			animation: slideDown 0.2s ease-out;
+			z-index: 101;
 		}
 
-		@keyframes slideUp {
+		@keyframes slideDown {
 			from {
-				transform: translateY(100%);
+				transform: translateY(-100%);
 			}
 			to {
 				transform: translateY(0);
