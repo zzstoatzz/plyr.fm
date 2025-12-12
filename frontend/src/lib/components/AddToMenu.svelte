@@ -85,10 +85,39 @@
 		}
 
 		menuOpen = !menuOpen;
+		console.log('[AddToMenu] toggleMenu called, menuOpen:', menuOpen, 'viewport:', window.innerWidth, 'x', window.innerHeight);
 		if (!menuOpen) {
 			showPlaylistPicker = false;
 		}
 	}
+
+	// debug: log when menu renders
+	$effect(() => {
+		if (menuOpen) {
+			console.log('[AddToMenu] menu is open, should render dropdown');
+			// check if dropdown element exists after a tick
+			setTimeout(() => {
+				const dropdown = document.querySelector('.menu-dropdown');
+				const backdrop = document.querySelector('.menu-backdrop');
+				console.log('[AddToMenu] dropdown element:', dropdown, 'backdrop:', backdrop);
+				if (dropdown) {
+					const styles = window.getComputedStyle(dropdown);
+					console.log('[AddToMenu] dropdown computed styles:', {
+						position: styles.position,
+						top: styles.top,
+						left: styles.left,
+						zIndex: styles.zIndex,
+						display: styles.display,
+						visibility: styles.visibility,
+						opacity: styles.opacity,
+						transform: styles.transform,
+						width: styles.width,
+						height: styles.height
+					});
+				}
+			}, 50);
+		}
+	});
 
 	async function handleLike(e: Event) {
 		e.stopPropagation();
