@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -24,6 +24,7 @@ warnings.filterwarnings(
 )
 
 from backend._internal import notification_service, queue_service
+from backend._internal.auth import get_public_jwks, is_confidential_client
 from backend._internal.background import background_worker_lifespan
 from backend.api import (
     account_router,
@@ -239,18 +240,16 @@ async def get_public_config() -> dict[str, int | list[str]]:
 
 
 @app.get("/oauth-client-metadata.json")
-async def client_metadata() -> dict:
+async def client_metadata() -> dict[str, Any]:
     """serve OAuth client metadata.
 
     returns metadata for public or confidential client depending on
     whether OAUTH_JWK is configured.
     """
-    from backend._internal.auth import is_confidential_client
-
     # extract base URL from client_id for client_uri
     client_uri = settings.atproto.client_id.replace("/oauth-client-metadata.json", "")
 
-    metadata = {
+    metadata: dict[str, Any] = {
         "client_id": settings.atproto.client_id,
         "client_name": settings.app.name,
         "client_uri": client_uri,
@@ -278,15 +277,11 @@ async def client_metadata() -> dict:
 
 
 @app.get("/.well-known/jwks.json")
-async def jwks_endpoint() -> dict:
+async def jwks_endpoint() -> dict[str, Any]:
     """serve public JWKS for confidential client authentication.
 
     returns 404 if confidential client is not configured.
     """
-    from fastapi import HTTPException
-
-    from backend._internal.auth import get_public_jwks
-
     jwks = get_public_jwks()
     if jwks is None:
         raise HTTPException(
