@@ -1,5 +1,6 @@
 {
   "name": "plyr.fm",
+  "id": "fm.plyr",
   "short_name": "Plyr",
   "start_url": "/",
   "display": "standalone",
