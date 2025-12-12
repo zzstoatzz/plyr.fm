@@ -5,18 +5,24 @@ import logging
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from atproto_oauth import OAuthClient
 from atproto_oauth.stores.memory import MemorySessionStore
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from fastapi import Cookie, Header, HTTPException
+from jose import jwk
 from sqlalchemy import select
 
 from backend._internal.oauth_stores import PostgresStateStore
 from backend.config import settings
 from backend.models import ExchangeToken, PendingDevToken, UserPreferences, UserSession
 from backend.utilities.database import db_session
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +75,94 @@ class Session:
 _state_store = PostgresStateStore()
 _session_store = MemorySessionStore()
 
+# confidential client key (loaded lazily)
+_client_secret_key: "EllipticCurvePrivateKey | None" = None
+_client_secret_key_loaded = False
+
+
+def _load_client_secret_key() -> "EllipticCurvePrivateKey | None":
+    """load EC private key from OAUTH_JWK setting for confidential client.
+
+    the key is expected to be a JSON-serialized JWK with ES256 (P-256) key.
+    returns None if OAUTH_JWK is not configured (public client mode).
+    """
+    global _client_secret_key, _client_secret_key_loaded
+
+    if _client_secret_key_loaded:
+        return _client_secret_key
+
+    _client_secret_key_loaded = True
+
+    if not settings.atproto.oauth_jwk:
+        logger.info("OAUTH_JWK not configured, using public OAuth client")
+        return None
+
+    try:
+        # parse JWK JSON
+        jwk_data = json.loads(settings.atproto.oauth_jwk)
+
+        # convert JWK to PEM format using python-jose
+        key_obj = jwk.construct(jwk_data, algorithm="ES256")
+        pem_bytes = key_obj.to_pem()
+
+        # load as cryptography key
+        _client_secret_key = load_pem_private_key(pem_bytes, password=None)
+
+        if not isinstance(_client_secret_key, ec.EllipticCurvePrivateKey):
+            raise ValueError("OAUTH_JWK must be an EC key (ES256)")
+
+        logger.info("loaded confidential OAuth client key from OAUTH_JWK")
+        return _client_secret_key
+
+    except Exception as e:
+        logger.error(f"failed to load OAUTH_JWK: {e}")
+        raise RuntimeError(f"invalid OAUTH_JWK configuration: {e}") from e
+
+
+def get_public_jwks() -> dict | None:
+    """get public JWKS for the /.well-known/jwks.json endpoint.
+
+    returns None if confidential client is not configured.
+    """
+    if not settings.atproto.oauth_jwk:
+        return None
+
+    try:
+        # parse private JWK
+        jwk_data = json.loads(settings.atproto.oauth_jwk)
+
+        # construct key and extract public components
+        key_obj = jwk.construct(jwk_data, algorithm="ES256")
+        public_jwk = key_obj.to_dict()
+
+        # remove private key components, keep only public
+        public_jwk.pop("d", None)  # private key scalar
+
+        # ensure required fields for public key
+        public_jwk["use"] = "sig"
+        public_jwk["alg"] = "ES256"
+
+        return {"keys": [public_jwk]}
+
+    except Exception as e:
+        logger.error(f"failed to generate public JWKS: {e}")
+        return None
+
+
+def is_confidential_client() -> bool:
+    """check if confidential OAuth client is configured."""
+    return bool(settings.atproto.oauth_jwk)
+
 
 def get_oauth_client(include_teal: bool = False) -> OAuthClient:
     """create an OAuth client with the appropriate scopes.
 
     at ~17 OAuth flows/day, instantiation cost is negligible.
     this eliminates the need for pre-instantiated bifurcated clients.
+
+    if OAUTH_JWK is configured, creates a confidential client with
+    private_key_jwt authentication (180-day refresh tokens).
+    otherwise creates a public client (2-week refresh tokens).
     """
     scope = (
         settings.atproto.resolved_scope_with_teal(
@@ -83,12 +171,17 @@ def get_oauth_client(include_teal: bool = False) -> OAuthClient:
         if include_teal
         else settings.atproto.resolved_scope
     )
+
+    # load confidential client key if configured
+    client_secret_key = _load_client_secret_key()
+
     return OAuthClient(
         client_id=settings.atproto.client_id,
         redirect_uri=settings.atproto.redirect_uri,
         scope=scope,
         state_store=_state_store,
         session_store=_session_store,
+        client_secret_key=client_secret_key,
     )
 
 

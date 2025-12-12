@@ -2,6 +2,7 @@
 
 import json
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,9 @@ from backend._internal.auth import (
     create_exchange_token,
     create_session,
     delete_session,
+    get_public_jwks,
     get_session,
+    is_confidential_client,
     update_session_tokens,
 )
 from backend.models import ExchangeToken, UserSession
@@ -326,3 +329,61 @@ async def test_create_session_default_expiration(db_session: AsyncSession):
     actual_expiry = db_session_record.expires_at.replace(tzinfo=UTC)
     diff = abs((expected_expiry - actual_expiry).total_seconds())
     assert diff < 60  # within 1 minute
+
+
+# confidential client tests
+
+
+def test_is_confidential_client_false_by_default():
+    """verify is_confidential_client returns False when OAUTH_JWK not set."""
+    # tests run without OAUTH_JWK configured
+    assert is_confidential_client() is False
+
+
+def test_is_confidential_client_true_when_configured():
+    """verify is_confidential_client returns True when OAUTH_JWK is set."""
+    test_jwk = '{"kty":"EC","crv":"P-256","x":"test","y":"test","d":"test"}'
+
+    with patch("backend._internal.auth.settings.atproto.oauth_jwk", test_jwk):
+        assert is_confidential_client() is True
+
+
+def test_get_public_jwks_returns_none_without_config():
+    """verify get_public_jwks returns None when OAUTH_JWK not configured."""
+    # tests run without OAUTH_JWK configured
+    assert get_public_jwks() is None
+
+
+def test_get_public_jwks_returns_public_key():
+    """verify get_public_jwks returns JWKS with public key only."""
+    # generate a test JWK
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from jose import jwk as jose_jwk
+
+    # generate test key
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    pem_bytes = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    key_obj = jose_jwk.construct(pem_bytes, algorithm="ES256")
+    test_jwk = json.dumps(key_obj.to_dict())
+
+    with patch("backend._internal.auth.settings.atproto.oauth_jwk", test_jwk):
+        jwks = get_public_jwks()
+
+        assert jwks is not None
+        assert "keys" in jwks
+        assert len(jwks["keys"]) == 1
+
+        public_key = jwks["keys"][0]
+        # should NOT have private key component
+        assert "d" not in public_key
+        # should have public key components
+        assert "x" in public_key
+        assert "y" in public_key
+        assert public_key["kty"] == "EC"
+        assert public_key["alg"] == "ES256"
+        assert public_key["use"] == "sig"

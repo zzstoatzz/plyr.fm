@@ -357,6 +357,11 @@ class AtprotoSettings(AppSettingsSection):
         validation_alias="OAUTH_ENCRYPTION_KEY",
         description="Fernet encryption key for OAuth data at rest",
     )
+    oauth_jwk: str = Field(
+        default="",
+        validation_alias="OAUTH_JWK",
+        description="JSON-serialized ES256 private key for confidential OAuth client. Generate with: uv run python scripts/gen_oauth_jwk.py",
+    )
 
     @computed_field
     @property
