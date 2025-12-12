@@ -789,7 +789,8 @@
 			transform: translateZ(0);
 		}
 
-		.menu-dropdown {
+		.menu-dropdown,
+		.menu-dropdown.open-upward {
 			position: fixed;
 			top: 0;
 			bottom: auto;
