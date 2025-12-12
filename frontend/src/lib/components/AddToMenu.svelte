@@ -754,8 +754,10 @@
 			left: 0;
 			right: 0;
 			bottom: 0;
-			z-index: 100;
+			z-index: 199;
 			background: rgba(0, 0, 0, 0.4);
+			-webkit-transform: translateZ(0);
+			transform: translateZ(0);
 		}
 
 		.menu-dropdown {
@@ -764,20 +766,14 @@
 			bottom: auto;
 			left: 0;
 			right: 0;
+			width: 100%;
 			min-width: 100%;
+			max-width: 100vw;
 			border-radius: 0 0 16px 16px;
 			padding-top: env(safe-area-inset-top, 0);
-			animation: slideDown 0.2s ease-out;
-			z-index: 101;
-		}
-
-		@keyframes slideDown {
-			from {
-				transform: translateY(-100%);
-			}
-			to {
-				transform: translateY(0);
-			}
+			z-index: 200;
+			-webkit-transform: translateZ(0);
+			transform: translateZ(0);
 		}
 
 		.menu-item {
