@@ -287,8 +287,8 @@ wheels = [
 
 [[package]]
 name = "atproto"
-version = "0.0.1.dev469"
-source = { git = "https://github.com/zzstoatzz/atproto?rev=main#dfbaf0002fed21d5a0ca28a6219e2b6b42384259" }
+version = "0.0.1.dev470"
+source = { git = "https://github.com/zzstoatzz/atproto?rev=main#6710edb64d144a0ff2757526ade34fa1625a46e6" }
 dependencies = [
     { name = "click" },
     { name = "cryptography" },
