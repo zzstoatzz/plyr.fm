@@ -541,6 +541,57 @@ for key rotation:
 3. deploy - new tokens use new key, old tokens still verify
 4. after 180 days, remove old key from JWKS
 
+### token refresh mechanism
+
+plyr.fm automatically refreshes ATProto tokens when they expire. here's how it works:
+
+1. **trigger**: user makes a PDS request (upload, create record, etc.)
+2. **detection**: PDS returns `401 Unauthorized` with `"exp"` in error message (access token expired)
+3. **refresh**: `_refresh_session_tokens()` in `_internal/atproto/client.py`:
+   - acquires per-session lock (prevents race conditions)
+   - calls `OAuthClient.refresh_session()` with the refresh token
+   - for confidential clients: signs a client assertion JWT
+   - PDS verifies assertion → issues new tokens
+   - saves new tokens to database
+4. **retry**: original request retries with fresh tokens
+
+**what gets refreshed**:
+- **access token**: short-lived (~minutes), refreshed frequently
+- **refresh token**: long-lived (2 weeks public, 180 days confidential), rotated on each use
+
+**observability**: look for these log messages in logfire:
+- `"access token expired for did:plc:..., attempting refresh"`
+- `"refreshing access token for did:plc:..."`
+- `"successfully refreshed access token for did:plc:..."`
+
+### migration: deploying confidential client
+
+when deploying confidential client support, **existing sessions continue to work** but have limitations:
+
+| aspect | existing sessions | new sessions (post-deploy) |
+|--------|-------------------|---------------------------|
+| plyr.fm session | unchanged | unchanged |
+| ATProto refresh token | 2-week lifetime (public client) | 180-day lifetime (confidential) |
+| behavior at 2 weeks | refresh fails → re-auth needed | continues working |
+
+**what happens to existing tokens**:
+1. existing sessions were created as "public client" - the PDS issued 2-week refresh tokens
+2. those refresh tokens cannot be upgraded - they have a fixed expiration
+3. when the refresh token expires, the next PDS request will fail
+4. users will need to re-authenticate to get new sessions with 180-day refresh tokens
+
+**timeline example**:
+- dec 8: user creates dev token (public client, 2-week refresh)
+- dec 22: ATProto refresh token expires
+- user tries to upload → refresh fails → 401 error
+- user creates new dev token → now gets 180-day refresh
+
+**production impact** (as of deployment):
+- most browser sessions expire within 14 days anyway (cookie `max_age`)
+- developer tokens are affected most - they have 90+ day session expiry but 2-week refresh
+- only 3 long-lived dev tokens in production (internal accounts)
+- new sessions will automatically get 180-day refresh tokens
+
 ### sources
 
 - [ATProto OAuth spec - tokens and session lifetime](https://atproto.com/specs/oauth#tokens-and-session-lifetime)
