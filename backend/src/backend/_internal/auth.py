@@ -142,6 +142,10 @@ def get_public_jwks() -> dict | None:
         public_jwk["use"] = "sig"
         public_jwk["alg"] = "ES256"
 
+        # preserve kid from original JWK (python-jose's to_dict() doesn't include it)
+        if "kid" in jwk_data:
+            public_jwk["kid"] = jwk_data["kid"]
+
         return {"keys": [public_jwk]}
 
     except Exception as e:
