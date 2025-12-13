@@ -77,29 +77,35 @@ _session_store = MemorySessionStore()
 
 # confidential client key (loaded lazily)
 _client_secret_key: "EllipticCurvePrivateKey | None" = None
+_client_secret_kid: str | None = None
 _client_secret_key_loaded = False
 
 
-def _load_client_secret_key() -> "EllipticCurvePrivateKey | None":
-    """load EC private key from OAUTH_JWK setting for confidential client.
+def _load_client_secret() -> tuple["EllipticCurvePrivateKey | None", str | None]:
+    """load EC private key and kid from OAUTH_JWK setting for confidential client.
 
     the key is expected to be a JSON-serialized JWK with ES256 (P-256) key.
-    returns None if OAUTH_JWK is not configured (public client mode).
+    returns (None, None) if OAUTH_JWK is not configured (public client mode).
     """
-    global _client_secret_key, _client_secret_key_loaded
+    global _client_secret_key, _client_secret_kid, _client_secret_key_loaded
 
     if _client_secret_key_loaded:
-        return _client_secret_key
+        return _client_secret_key, _client_secret_kid
 
     _client_secret_key_loaded = True
 
     if not settings.atproto.oauth_jwk:
         logger.info("OAUTH_JWK not configured, using public OAuth client")
-        return None
+        return None, None
 
     try:
         # parse JWK JSON
         jwk_data = json.loads(settings.atproto.oauth_jwk)
+
+        # extract kid (required for client assertions)
+        _client_secret_kid = jwk_data.get("kid")
+        if not _client_secret_kid:
+            raise ValueError("OAUTH_JWK must include 'kid' field")
 
         # convert JWK to PEM format using python-jose
         key_obj = jwk.construct(jwk_data, algorithm="ES256")
@@ -111,8 +117,8 @@ def _load_client_secret_key() -> "EllipticCurvePrivateKey | None":
         if not isinstance(_client_secret_key, ec.EllipticCurvePrivateKey):
             raise ValueError("OAUTH_JWK must be an EC key (ES256)")
 
-        logger.info("loaded confidential OAuth client key from OAUTH_JWK")
-        return _client_secret_key
+        logger.info(f"loaded confidential OAuth client key (kid={_client_secret_kid})")
+        return _client_secret_key, _client_secret_kid
 
     except Exception as e:
         logger.error(f"failed to load OAUTH_JWK: {e}")
@@ -177,7 +183,7 @@ def get_oauth_client(include_teal: bool = False) -> OAuthClient:
     )
 
     # load confidential client key if configured
-    client_secret_key = _load_client_secret_key()
+    client_secret_key, client_secret_kid = _load_client_secret()
 
     return OAuthClient(
         client_id=settings.atproto.client_id,
@@ -186,6 +192,7 @@ def get_oauth_client(include_teal: bool = False) -> OAuthClient:
         state_store=_state_store,
         session_store=_session_store,
         client_secret_key=client_secret_key,
+        client_secret_kid=client_secret_kid,
     )
 
 
