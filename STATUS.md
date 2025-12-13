@@ -47,6 +47,28 @@ plyr.fm should become:
 
 ### December 2025
 
+#### confidential OAuth client (PRs #578, #580-582, Dec 12-13)
+
+**confidential client support** (PR #578):
+- implemented ATProto OAuth confidential client using `private_key_jwt` authentication
+- when `OAUTH_JWK` is configured, plyr.fm authenticates with a cryptographic key
+- confidential clients earn 180-day refresh tokens (vs 2-week for public clients)
+- added `/.well-known/jwks.json` endpoint for public key discovery
+- updated `/oauth-client-metadata.json` with confidential client fields
+
+**bug fixes** (PRs #580-582):
+- fixed client assertion JWT to use Authorization Server's issuer as `aud` claim (not token endpoint URL)
+- fixed JWKS endpoint to preserve `kid` field from original JWK
+- fixed `OAuthClient` to pass `client_secret_kid` for JWT header
+
+**atproto fork updates** (zzstoatzz/atproto#6, #7):
+- added `issuer` parameter to `_make_token_request()` for correct `aud` claim
+- added `client_secret_kid` parameter to include `kid` in client assertion JWT header
+
+**outcome**: users now get 180-day refresh tokens, and "remember this account" on the PDS authorization page works (auto-approves subsequent logins). see #583 for future work on account switching via OAuth `prompt` parameter.
+
+---
+
 #### pagination & album management (PRs #550-554, Dec 9-10)
 
 **tracks list pagination** (PR #554):
@@ -374,4 +396,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-10.
+this is a living document. last updated 2025-12-13.
