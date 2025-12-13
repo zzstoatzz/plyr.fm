@@ -149,13 +149,31 @@ pub async fn resolve_flag(
         .as_ref()
         .ok_or(AppError::LabelerNotConfigured)?;
 
-    tracing::info!(uri = %request.uri, val = %request.val, "resolving flag (creating negation)");
+    // Parse the reason
+    let reason = request
+        .reason
+        .as_deref()
+        .and_then(crate::db::ResolutionReason::from_str);
+
+    tracing::info!(
+        uri = %request.uri,
+        val = %request.val,
+        reason = ?reason,
+        notes = ?request.notes,
+        "resolving flag (creating negation)"
+    );
 
     // Create a negation label
     let label = crate::labels::Label::new(signer.did(), &request.uri, &request.val).negated();
     let label = signer.sign_label(label)?;
 
     let seq = db.store_label(&label).await?;
+
+    // Store resolution reason in context
+    if let Some(r) = reason {
+        db.store_resolution(&request.uri, r, request.notes.as_deref())
+            .await?;
+    }
 
     // Broadcast to subscribers
     if let Some(tx) = &state.label_tx {
@@ -432,18 +450,21 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
         .unwrap_or_default();
 
     let action_button = if track.resolved {
-        // Show the resolution reason if available
+        // Show the resolution reason and notes if available
         let reason_text = ctx
             .and_then(|c| c.resolution_reason.as_ref())
             .map(|r| r.label())
             .unwrap_or("resolved");
-        let notes_text = ctx
+        let notes_html = ctx
             .and_then(|c| c.resolution_notes.as_ref())
-            .map(|n| format!(r#" title="{}""#, html_escape(n)))
+            .map(|n| format!(r#"<div class="resolution-notes">{}</div>"#, html_escape(n)))
             .unwrap_or_default();
         format!(
-            r#"<span class="resolution-reason"{}>{}</span>"#,
-            notes_text, reason_text
+            r#"<div class="resolution-info">
+                <span class="resolution-reason">{}</span>
+                {}
+            </div>"#,
+            reason_text, notes_html
         )
     } else {
         // Multi-step flow: button -> reason select -> confirm
