@@ -461,6 +461,93 @@ dev tokens can:
 - token names help identify which token is used where
 - tokens require explicit OAuth consent at your PDS
 
+## OAuth client types: public vs confidential
+
+ATProto OAuth distinguishes between two types of clients based on their ability to authenticate themselves to the authorization server.
+
+### what is a confidential client?
+
+a **confidential client** is an OAuth client that can prove its identity to the authorization server using cryptographic keys. the term "confidential" means the client can keep a secret - specifically, an ES256 private key that never leaves the server.
+
+**public client** (default):
+- cannot authenticate itself (uses `token_endpoint_auth_method: "none"`)
+- anyone could impersonate your client_id
+- authorization server issues **2-week refresh tokens**
+
+**confidential client** (with `OAUTH_JWK`):
+- authenticates using `private_key_jwt` - signs a JWT with its private key
+- authorization server verifies signature against your `/.well-known/jwks.json`
+- proves the request actually came from your server
+- authorization server issues **180-day refresh tokens**
+
+### why this matters for plyr.fm
+
+with public clients, the underlying ATProto refresh token expires after 2 weeks regardless of what we store in our database. users would need to re-authenticate with their PDS every 2 weeks.
+
+with confidential clients:
+- **developer tokens actually work long-term** - not limited to 2 weeks
+- **users don't get randomly kicked out** after 2 weeks of inactivity
+- **sessions last effectively forever** as long as tokens are refreshed within 180 days
+
+### how it works
+
+1. **key generation**: generate an ES256 (P-256) keypair
+   ```bash
+   uv run python scripts/gen_oauth_jwk.py
+   ```
+
+2. **configuration**: set `OAUTH_JWK` env var with the private key JSON
+
+3. **JWKS endpoint**: backend serves public key at `/.well-known/jwks.json`
+   - authorization server fetches this to verify our signatures
+
+4. **client metadata**: `/oauth-client-metadata.json` advertises:
+   ```json
+   {
+     "token_endpoint_auth_method": "private_key_jwt",
+     "token_endpoint_auth_signing_alg": "ES256",
+     "jwks_uri": "https://plyr.fm/.well-known/jwks.json"
+   }
+   ```
+
+5. **token requests**: on every token request (initial AND refresh), the library:
+   - creates a short-lived JWT (`client_assertion`) signed with our private key
+   - includes `client_assertion_type` and `client_assertion` in the request
+   - PDS verifies signature → issues long-lived tokens
+
+### implementation details
+
+the confidential client support lives in our `atproto` fork (`zzstoatzz/atproto`):
+
+```python
+# packages/atproto_oauth/client.py
+client = OAuthClient(
+    client_id='https://plyr.fm/oauth-client-metadata.json',
+    redirect_uri='https://plyr.fm/auth/callback',
+    scope='atproto ...',
+    state_store=state_store,
+    session_store=session_store,
+    client_secret_key=ec_private_key,  # enables confidential client
+)
+```
+
+when `client_secret_key` is set, `_make_token_request()` automatically adds client assertions to all token endpoint calls (initial exchange, refresh, revoke).
+
+### key rotation
+
+for key rotation:
+1. generate new key with different `kid` (key ID)
+2. add both keys to JWKS (old and new)
+3. deploy - new tokens use new key, old tokens still verify
+4. after 180 days, remove old key from JWKS
+
+### sources
+
+- [ATProto OAuth spec - tokens and session lifetime](https://atproto.com/specs/oauth#tokens-and-session-lifetime)
+- [RFC 7523 - JWT Bearer Client Authentication](https://datatracker.ietf.org/doc/html/rfc7523)
+- [bailey's ATProto SvelteKit template](https://tangled.org/baileytownsend.dev/atproto-sveltekit-template) - TypeScript reference implementation
+- PR #578: confidential OAuth client support
+
 ## references
 
 - [MDN: HttpOnly cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#security)
