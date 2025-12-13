@@ -323,12 +323,30 @@ h1 {
     border-top: 1px solid var(--border-subtle);
 }
 
-/* resolution reason display */
+/* resolution info display */
+.resolution-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+}
+
 .resolution-reason {
     color: var(--success);
     font-size: 0.85rem;
     font-weight: 500;
-    cursor: help;
+}
+
+.resolution-notes {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    max-width: 500px;
+    text-align: left;
 }
 
 /* multi-step resolve flow */
