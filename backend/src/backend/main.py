@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -24,6 +24,7 @@ warnings.filterwarnings(
 )
 
 from backend._internal import notification_service, queue_service
+from backend._internal.auth import get_public_jwks, is_confidential_client
 from backend._internal.background import background_worker_lifespan
 from backend.api import (
     account_router,
@@ -239,12 +240,16 @@ async def get_public_config() -> dict[str, int | list[str]]:
 
 
 @app.get("/oauth-client-metadata.json")
-async def client_metadata() -> dict:
-    """serve OAuth client metadata."""
-    # Extract base URL from client_id for client_uri
+async def client_metadata() -> dict[str, Any]:
+    """serve OAuth client metadata.
+
+    returns metadata for public or confidential client depending on
+    whether OAUTH_JWK is configured.
+    """
+    # extract base URL from client_id for client_uri
     client_uri = settings.atproto.client_id.replace("/oauth-client-metadata.json", "")
 
-    return {
+    metadata: dict[str, Any] = {
         "client_id": settings.atproto.client_id,
         "client_name": settings.app.name,
         "client_uri": client_uri,
@@ -254,7 +259,34 @@ async def client_metadata() -> dict:
         ),
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
-        "token_endpoint_auth_method": "none",
         "application_type": "web",
         "dpop_bound_access_tokens": True,
     }
+
+    if is_confidential_client():
+        # confidential client: use private_key_jwt authentication
+        # this gives us 180-day refresh tokens instead of 2-week
+        metadata["token_endpoint_auth_method"] = "private_key_jwt"
+        metadata["token_endpoint_auth_signing_alg"] = "ES256"
+        metadata["jwks_uri"] = f"{client_uri}/.well-known/jwks.json"
+    else:
+        # public client: no authentication
+        metadata["token_endpoint_auth_method"] = "none"
+
+    return metadata
+
+
+@app.get("/.well-known/jwks.json")
+async def jwks_endpoint() -> dict[str, Any]:
+    """serve public JWKS for confidential client authentication.
+
+    returns 404 if confidential client is not configured.
+    """
+    jwks = get_public_jwks()
+    if jwks is None:
+        raise HTTPException(
+            status_code=404,
+            detail="JWKS not available - confidential client not configured",
+        )
+
+    return jwks
