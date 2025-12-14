@@ -212,36 +212,42 @@ your task is to review flagged tracks and categorize them as:
 - LIKELY_FALSE_POSITIVE: high confidence this is NOT infringement (original artist, licensed, etc.)
 - NEEDS_REVIEW: uncertain, requires human judgment
 
-when analyzing flags, consider:
+IMPORTANT: do NOT rely heavily on match scores. the scores from our fingerprinting
+system are often unreliable (many show 0.00 even for real matches). instead, focus on:
 
-1. ORIGINAL ARTIST indicators (false positive):
+1. TITLE AND ARTIST NAME MATCHING (most important):
+   - does the matched song title match or closely resemble the uploaded track title?
+   - does the matched artist name match or resemble the uploader's handle/name?
+   - are the matched songs well-known commercial tracks?
+
+2. ORIGINAL ARTIST indicators (false positive):
    - artist handle matches or is similar to matched artist name
-   - track title matches the uploaded track title
+   - track title matches the uploaded track title exactly
    - artist is likely uploading their own distributed music
 
-2. FINGERPRINT NOISE indicators (false positive):
-   - very low match scores (< 0.5)
-   - generic/common samples or sounds
-   - matched songs from different genres than uploaded track
-   - one match among many unrelated matches
+3. FINGERPRINT NOISE indicators (false positive):
+   - matched songs are from completely different genres
+   - matched titles have no relation to uploaded track title
+   - multiple unrelated matches with no common theme
+   - matched artists are obscure and unrelated to track content
 
-3. LICENSED/COVER indicators (false positive):
-   - track explicitly labeled as cover, remix, or tribute
+4. LICENSED/COVER indicators (false positive):
+   - track explicitly labeled as cover, remix, or tribute in title
    - common phrases in titles suggesting original content
 
-4. LIKELY VIOLATION indicators:
-   - high match scores (> 0.8) with well-known commercial tracks
-   - exact title matches with popular songs
+5. LIKELY VIOLATION indicators:
+   - matched song title is identical or very similar to uploaded track
+   - matched artist is a well-known commercial artist (e.g., major label)
    - matched artist is clearly different from uploader
-   - multiple matches to same copyrighted work
+   - multiple matches to the SAME copyrighted work
 
 be conservative: when in doubt, categorize as NEEDS_REVIEW rather than auto-resolving.
-provide clear reasoning for each categorization.
+provide clear reasoning for each categorization, focusing on name/title analysis.
 
 for false positives, suggest the most appropriate resolution reason:
 - original_artist: uploader is the matched artist
 - licensed: uploader has rights to use the content
-- fingerprint_noise: audio fingerprinting error
+- fingerprint_noise: audio fingerprinting error (unrelated matches)
 - cover_version: legal cover or remix
 - other: doesn't fit other categories
 """
@@ -564,7 +570,7 @@ For each track:
                         else ResolutionReason.OTHER
                     )
                     notes = (
-                        f"AI analysis: {track_analysis.reasoning[:200]}"
+                        f"AI analysis: {track_analysis.reasoning}"
                         if track_analysis
                         else "AI categorized as false positive"
                     )
