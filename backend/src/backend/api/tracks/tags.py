@@ -14,7 +14,6 @@ from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
     get_comment_counts,
-    get_copyright_info,
     get_like_counts,
     get_track_tags,
 )
@@ -82,12 +81,12 @@ async def get_tracks_by_tag(
         )
         liked_track_ids = set(liked_result.scalars().all())
 
-    # batch fetch like, comment counts, copyright info, and tags
+    # batch fetch like counts, comment counts, and tags
+    # note: copyright_info excluded - only needed in artist portal (/tracks/me)
     track_ids = [track.id for track in tracks]
-    like_counts, comment_counts, copyright_info, track_tags_map = await asyncio.gather(
+    like_counts, comment_counts, track_tags_map = await asyncio.gather(
         get_like_counts(db, track_ids),
         get_comment_counts(db, track_ids),
-        get_copyright_info(db, track_ids),
         get_track_tags(db, track_ids),
     )
 
@@ -99,7 +98,6 @@ async def get_tracks_by_tag(
                 liked_track_ids=liked_track_ids,
                 like_counts=like_counts,
                 comment_counts=comment_counts,
-                copyright_info=copyright_info,
                 track_tags=track_tags_map,
             )
             for track in tracks
