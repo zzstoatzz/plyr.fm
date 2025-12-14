@@ -137,12 +137,13 @@ async def list_tracks(
     # generate next cursor from the last track's created_at
     next_cursor = tracks[-1].created_at.isoformat() if has_more and tracks else None
 
-    # batch fetch like, comment counts, copyright info, and tags for all tracks
+    # batch fetch like counts, comment counts, and tags for all tracks
+    # note: copyright_info is intentionally excluded here - it requires an HTTP call
+    # to the moderation service and is only displayed in /tracks/me (artist portal)
     track_ids = [track.id for track in tracks]
-    like_counts, comment_counts, copyright_info, track_tags = await asyncio.gather(
+    like_counts, comment_counts, track_tags = await asyncio.gather(
         get_like_counts(db, track_ids),
         get_comment_counts(db, track_ids),
-        get_copyright_info(db, track_ids),
         get_track_tags(db, track_ids),
     )
 
@@ -241,8 +242,7 @@ async def list_tracks(
                 liked_track_ids,
                 like_counts,
                 comment_counts,
-                copyright_info,
-                track_tags,
+                track_tags=track_tags,
             )
             for track in tracks
         ]
