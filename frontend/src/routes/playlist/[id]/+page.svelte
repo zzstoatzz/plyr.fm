@@ -6,17 +6,100 @@
 	import { auth } from "$lib/auth.svelte";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/stores";
+	import { browser } from "$app/environment";
 	import { API_URL } from "$lib/config";
 	import { APP_NAME, APP_CANONICAL_URL } from "$lib/branding";
 	import { toast } from "$lib/toast.svelte";
 	import { player } from "$lib/player.svelte";
 	import { queue } from "$lib/queue.svelte";
+	import { fetchLikedTracks } from "$lib/tracks.svelte";
 	import type { PageData } from "./$types";
 	import type { PlaylistWithTracks, Track } from "$lib/types";
 
 	let { data }: { data: PageData } = $props();
 	let playlist = $state<PlaylistWithTracks>(data.playlist);
 	let tracks = $state<Track[]>(data.playlist.tracks);
+
+	// liked state hydration
+	let tracksHydrated = $state(false);
+	let loadedForPlaylistId = $state<string | null>(null);
+
+	// sync tracks when navigating between playlists
+	$effect(() => {
+		const currentId = data.playlist.id;
+		if (!currentId || !browser) return;
+
+		if (loadedForPlaylistId !== currentId) {
+			// reset state for new playlist
+			tracksHydrated = false;
+			playlist = data.playlist;
+			tracks = data.playlist.tracks;
+			loadedForPlaylistId = currentId;
+
+			// hydrate liked state
+			primeLikesFromCache();
+			void hydrateTracksWithLikes();
+		}
+	});
+
+	async function hydrateTracksWithLikes() {
+		if (!browser || tracksHydrated) return;
+
+		// skip if not authenticated - no need to fetch liked tracks
+		if (!auth.isAuthenticated) {
+			tracksHydrated = true;
+			return;
+		}
+
+		try {
+			const likedTracks = await fetchLikedTracks();
+			const likedIds = new Set(likedTracks.map(track => track.id));
+			applyLikedFlags(likedIds);
+		} catch (_e) {
+			console.error('failed to hydrate playlist likes:', _e);
+		} finally {
+			tracksHydrated = true;
+		}
+	}
+
+	function applyLikedFlags(likedIds: Set<number>) {
+		let changed = false;
+
+		const nextTracks = tracks.map(track => {
+			const nextLiked = likedIds.has(track.id);
+			const currentLiked = Boolean(track.is_liked);
+			if (currentLiked !== nextLiked) {
+				changed = true;
+				return { ...track, is_liked: nextLiked };
+			}
+			return track;
+		});
+
+		if (changed) {
+			tracks = nextTracks;
+		}
+	}
+
+	function primeLikesFromCache() {
+		if (!browser) return;
+		try {
+			const cachedRaw = localStorage.getItem('tracks_cache');
+			if (!cachedRaw) return;
+			const cached = JSON.parse(cachedRaw) as { tracks?: Track[] };
+			const cachedTracks = cached.tracks ?? [];
+			if (cachedTracks.length === 0) return;
+
+			const likedIds = new Set(
+				cachedTracks.filter(track => Boolean(track.is_liked)).map(track => track.id)
+			);
+
+			if (likedIds.size > 0) {
+				applyLikedFlags(likedIds);
+			}
+		} catch (e) {
+			console.warn('failed to hydrate likes from cache', e);
+		}
+	}
 
 	// search state
 	let showSearch = $state(false);
