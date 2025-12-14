@@ -6,7 +6,16 @@ from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +28,8 @@ from backend._internal.atproto.records import (
     create_list_record,
     update_list_record,
 )
-from backend.models import Artist, Playlist, Track, UserPreferences, get_db
+from backend._internal.auth import get_session
+from backend.models import Artist, Playlist, Track, TrackLike, UserPreferences, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
@@ -347,12 +357,14 @@ async def get_playlist_meta(
 @router.get("/playlists/{playlist_id}", response_model=PlaylistWithTracksResponse)
 async def get_playlist(
     playlist_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
+    session_id_cookie: str | None = Cookie(default=None, alias="session_id"),
 ) -> PlaylistWithTracksResponse:
-    """get a playlist with full track details (public, no auth required).
+    """get a playlist with full track details (public, auth optional for liked state).
 
     fetches the ATProto list record to get track ordering, then hydrates
-    track metadata from the database.
+    track metadata from the database. if authenticated, includes liked state.
     """
     from backend._internal.atproto.records import get_record_public
 
@@ -404,8 +416,20 @@ async def get_playlist(
         like_counts = await get_like_counts(db, track_ids) if track_ids else {}
         comment_counts = await get_comment_counts(db, track_ids) if track_ids else {}
 
-        # no authenticated user for public endpoint - liked status not available
+        # get authenticated user's likes if session available
         liked_track_ids: set[int] = set()
+        session_id = session_id_cookie or request.headers.get(
+            "authorization", ""
+        ).replace("Bearer ", "")
+        if session_id and (auth_session := await get_session(session_id)):
+            if track_ids:
+                liked_result = await db.execute(
+                    select(TrackLike.track_id).where(
+                        TrackLike.user_did == auth_session.did,
+                        TrackLike.track_id.in_(track_ids),
+                    )
+                )
+                liked_track_ids = set(liked_result.scalars().all())
 
         # maintain ATProto ordering, skip unavailable tracks
         for uri in track_uris:
