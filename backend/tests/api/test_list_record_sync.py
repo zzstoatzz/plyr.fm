@@ -338,7 +338,6 @@ async def test_sync_atproto_records_continues_on_liked_sync_failure(
 
 async def test_sync_preserves_existing_album_track_order(
     db_session: AsyncSession,
-    test_artist: Artist,
 ):
     """test that sync preserves user's custom track order from ATProto.
 
@@ -346,21 +345,32 @@ async def test_sync_preserves_existing_album_track_order(
     when an album already has an ATProto list record with a custom order,
     sync should preserve that order instead of overwriting with created_at.
     """
+    import uuid
     from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import delete
 
     from backend._internal.atproto import sync_atproto_records
 
-    # set pds_url on artist (required for ATProto record fetch)
-    test_artist.pds_url = "https://test.pds"
-    db_session.add(test_artist)
-    await db_session.commit()
+    # use unique DID to avoid conflicts with other tests
+    unique_did = f"did:plc:ordertest{uuid.uuid4().hex[:8]}"
+
+    # create artist with pds_url (required for ATProto record fetch)
+    artist = Artist(
+        did=unique_did,
+        handle="ordertest.bsky.social",
+        display_name="Order Test Artist",
+        pds_url="https://test.pds",
+    )
+    db_session.add(artist)
+    await db_session.flush()
 
     # create album with existing ATProto record
     album = Album(
-        artist_did=test_artist.did,
+        artist_did=unique_did,
         title="Reordered Album",
         slug="reordered-album",
-        atproto_record_uri="at://did:plc:testartist123/fm.plyr.list/existing123",
+        atproto_record_uri=f"at://{unique_did}/fm.plyr.list/existing123",
         atproto_record_cid="bafyexisting123",
     )
     db_session.add(album)
@@ -370,38 +380,39 @@ async def test_sync_preserves_existing_album_track_order(
     base_time = datetime.now(UTC)
     track1 = Track(
         title="Track 1",
-        file_id="preserve-order-1",
+        file_id=f"preserve-order-1-{uuid.uuid4().hex[:8]}",
         file_type="audio/mpeg",
-        artist_did=test_artist.did,
+        artist_did=unique_did,
         album_id=album.id,
-        atproto_record_uri="at://did:plc:testartist123/fm.plyr.track/t1",
+        atproto_record_uri=f"at://{unique_did}/fm.plyr.track/t1",
         atproto_record_cid="cid1",
         created_at=base_time,  # newest
     )
     track2 = Track(
         title="Track 2",
-        file_id="preserve-order-2",
+        file_id=f"preserve-order-2-{uuid.uuid4().hex[:8]}",
         file_type="audio/mpeg",
-        artist_did=test_artist.did,
+        artist_did=unique_did,
         album_id=album.id,
-        atproto_record_uri="at://did:plc:testartist123/fm.plyr.track/t2",
+        atproto_record_uri=f"at://{unique_did}/fm.plyr.track/t2",
         atproto_record_cid="cid2",
         created_at=base_time - timedelta(hours=1),
     )
     track3 = Track(
         title="Track 3",
-        file_id="preserve-order-3",
+        file_id=f"preserve-order-3-{uuid.uuid4().hex[:8]}",
         file_type="audio/mpeg",
-        artist_did=test_artist.did,
+        artist_did=unique_did,
         album_id=album.id,
-        atproto_record_uri="at://did:plc:testartist123/fm.plyr.track/t3",
+        atproto_record_uri=f"at://{unique_did}/fm.plyr.track/t3",
         atproto_record_cid="cid3",
         created_at=base_time - timedelta(hours=2),  # oldest
     )
     db_session.add_all([track1, track2, track3])
     await db_session.commit()
 
-    mock_session = MockSession(did="did:plc:testartist123")
+    album_id = album.id
+    mock_session = MockSession(did=unique_did)
 
     # mock ATProto record fetch to return custom order: track2, track1, track3
     # (user reordered via frontend - different from created_at order)
@@ -415,42 +426,51 @@ async def test_sync_preserves_existing_album_track_order(
         }
     }
 
-    captured_track_refs = []
+    captured_track_refs: list[dict[str, str]] = []
 
-    async def capture_album_sync(*args, **kwargs):
-        captured_track_refs.extend(kwargs.get("track_refs", []))
+    async def capture_album_sync(*args: object, **kwargs: object) -> tuple[str, str]:
+        track_refs: list[dict[str, str]] = kwargs.get("track_refs", [])  # type: ignore[assignment]
+        captured_track_refs.extend(track_refs)
+        assert album.atproto_record_uri is not None
         return (album.atproto_record_uri, "bafynewcid")
 
-    with (
-        patch(
-            "backend._internal.atproto.sync.upsert_profile_record",
-            new_callable=AsyncMock,
-            return_value=None,
-        ),
-        patch(
-            "backend._internal.atproto.sync.get_record_public",
-            new_callable=AsyncMock,
-            return_value=mock_existing_record,
-        ),
-        patch(
-            "backend._internal.atproto.sync.upsert_album_list_record",
-            new_callable=AsyncMock,
-            side_effect=capture_album_sync,
-        ),
-        patch(
-            "backend._internal.atproto.sync.upsert_liked_list_record",
-            new_callable=AsyncMock,
-            return_value=None,
-        ),
-    ):
-        await sync_atproto_records(mock_session, "did:plc:testartist123")
+    try:
+        with (
+            patch(
+                "backend._internal.atproto.sync.upsert_profile_record",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "backend._internal.atproto.sync.get_record_public",
+                new_callable=AsyncMock,
+                return_value=mock_existing_record,
+            ),
+            patch(
+                "backend._internal.atproto.sync.upsert_album_list_record",
+                new_callable=AsyncMock,
+                side_effect=capture_album_sync,
+            ),
+            patch(
+                "backend._internal.atproto.sync.upsert_liked_list_record",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+        ):
+            await sync_atproto_records(mock_session, unique_did)
 
-    # verify track order was preserved (track2, track1, track3)
-    # NOT created_at order (which would be track3, track2, track1)
-    assert len(captured_track_refs) == 3
-    assert captured_track_refs[0]["uri"] == track2.atproto_record_uri
-    assert captured_track_refs[1]["uri"] == track1.atproto_record_uri
-    assert captured_track_refs[2]["uri"] == track3.atproto_record_uri
+        # verify track order was preserved (track2, track1, track3)
+        # NOT created_at order (which would be track3, track2, track1)
+        assert len(captured_track_refs) == 3
+        assert captured_track_refs[0]["uri"] == track2.atproto_record_uri
+        assert captured_track_refs[1]["uri"] == track1.atproto_record_uri
+        assert captured_track_refs[2]["uri"] == track3.atproto_record_uri
+    finally:
+        # clean up in correct order (tracks before albums before artists)
+        await db_session.execute(delete(Track).where(Track.album_id == album_id))
+        await db_session.execute(delete(Album).where(Album.id == album_id))
+        await db_session.execute(delete(Artist).where(Artist.did == unique_did))
+        await db_session.commit()
 
 
 async def test_login_callback_triggers_background_sync(
