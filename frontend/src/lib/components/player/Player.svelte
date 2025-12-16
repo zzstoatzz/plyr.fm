@@ -359,8 +359,10 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		background: var(--bg-tertiary);
-		border-top: 1px solid var(--border-default);
+		background: var(--glass-bg, var(--bg-tertiary));
+		backdrop-filter: var(--glass-blur, none);
+		-webkit-backdrop-filter: var(--glass-blur, none);
+		border-top: 1px solid var(--glass-border, var(--border-default));
 		padding: 0.75rem 2rem;
 		padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 		z-index: 100;

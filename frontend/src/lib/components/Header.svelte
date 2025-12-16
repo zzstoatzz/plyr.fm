@@ -151,12 +151,14 @@
 
 <style>
 	header {
-		border-bottom: 1px solid var(--border-default);
+		border-bottom: 1px solid var(--glass-border, var(--border-default));
 		margin-bottom: 2rem;
 		position: sticky;
 		top: 0;
 		z-index: 50;
-		background: var(--bg-primary);
+		background: var(--glass-bg, var(--bg-primary));
+		backdrop-filter: var(--glass-blur, none);
+		-webkit-backdrop-filter: var(--glass-blur, none);
 	}
 
 	.header-content {

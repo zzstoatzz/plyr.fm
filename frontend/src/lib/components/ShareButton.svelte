@@ -36,9 +36,9 @@
 
 <style>
 	.share-btn {
-		background: transparent;
-		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		background: var(--glass-btn-bg, transparent);
+		border: 1px solid var(--glass-btn-border, var(--border-default));
+		border-radius: 6px;
 		width: 32px;
 		height: 32px;
 		padding: 0;
@@ -53,6 +53,7 @@
 	}
 
 	.share-btn:hover {
+		background: var(--glass-btn-bg-hover, transparent);
 		border-color: var(--accent);
 		color: var(--accent);
 	}

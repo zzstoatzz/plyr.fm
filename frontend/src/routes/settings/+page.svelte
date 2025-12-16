@@ -21,6 +21,9 @@
 	let currentTheme = $derived(preferences.theme);
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let autoAdvance = $derived(preferences.autoAdvance);
+	let backgroundImageUrl = $derived(preferences.uiSettings.background_image_url ?? '');
+	let backgroundTile = $derived(preferences.uiSettings.background_tile ?? false);
+	let usePlayingArtwork = $derived(preferences.uiSettings.use_playing_artwork_as_background ?? false);
 	// developer token state
 	let creatingToken = $state(false);
 	let developerToken = $state<string | null>(null);
@@ -141,6 +144,40 @@
 
 	function selectPreset(color: string) {
 		applyColor(color);
+	}
+
+	// background image state - initialize once, don't sync reactively
+	let backgroundInput = $state(preferences.uiSettings.background_image_url ?? '');
+	let backgroundInputInitialized = $state(false);
+
+	// only sync from server on initial load, not on every change
+	$effect(() => {
+		if (!backgroundInputInitialized && preferences.loaded) {
+			backgroundInput = preferences.uiSettings.background_image_url ?? '';
+			backgroundInputInitialized = true;
+		}
+	});
+
+	async function saveBackgroundImage() {
+		const url = backgroundInput.trim();
+		await preferences.updateUiSettings({
+			background_image_url: url || ''
+		});
+		if (url) {
+			toast.success('background image set');
+		} else {
+			toast.success('background image cleared');
+		}
+	}
+
+	async function saveBackgroundTile(tile: boolean) {
+		await preferences.updateUiSettings({ background_tile: tile });
+		toast.success(tile ? 'background tiled' : 'background stretched');
+	}
+
+	async function saveUsePlayingArtwork(enabled: boolean) {
+		await preferences.updateUiSettings({ use_playing_artwork_as_background: enabled });
+		toast.success(enabled ? 'using playing artwork as background' : 'using custom background');
 	}
 
 	function selectTheme(theme: Theme) {
@@ -415,6 +452,49 @@
 							{/each}
 						</div>
 					</div>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>background image</h3>
+						<p>set a custom background image (URL)</p>
+					</div>
+					<div class="background-controls">
+						<input
+							type="url"
+							class="background-input"
+							placeholder="https://..."
+							bind:value={backgroundInput}
+							onblur={saveBackgroundImage}
+							onkeydown={(e) => e.key === 'Enter' && saveBackgroundImage()}
+							disabled={usePlayingArtwork}
+						/>
+						{#if backgroundImageUrl && !usePlayingArtwork}
+							<label class="tile-toggle">
+								<input
+									type="checkbox"
+									checked={backgroundTile}
+									onchange={(e) => saveBackgroundTile((e.target as HTMLInputElement).checked)}
+								/>
+								<span>tile</span>
+							</label>
+						{/if}
+					</div>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>playing artwork as background</h3>
+						<p>use the currently playing track's artwork as background (overrides custom image)</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={usePlayingArtwork}
+							onchange={(e) => saveUsePlayingArtwork((e.target as HTMLInputElement).checked)}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
 				</div>
 			</div>
 		</section>
@@ -786,6 +866,7 @@
 		letter-spacing: 0.08em;
 		color: var(--text-tertiary);
 		margin-bottom: 0.75rem;
+		text-shadow: var(--text-shadow, none);
 	}
 
 	.settings-card {
@@ -931,6 +1012,47 @@
 	.preset-btn.active {
 		border-color: var(--text-primary);
 		box-shadow: 0 0 0 1px var(--bg-secondary);
+	}
+
+	/* background controls */
+	.background-controls {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-shrink: 0;
+	}
+
+	.background-input {
+		width: 200px;
+		padding: 0.5rem 0.75rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: 6px;
+		color: var(--text-primary);
+		font-size: 0.85rem;
+		font-family: inherit;
+	}
+
+	.background-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.background-input::placeholder {
+		color: var(--text-tertiary);
+	}
+
+	.tile-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+		cursor: pointer;
+	}
+
+	.tile-toggle input {
+		accent-color: var(--accent);
 	}
 
 	/* toggle switch */

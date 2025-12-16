@@ -5,6 +5,12 @@ import { auth } from '$lib/auth.svelte';
 
 export type Theme = 'dark' | 'light' | 'system';
 
+export interface UiSettings {
+	background_image_url?: string;
+	background_tile?: boolean;
+	use_playing_artwork_as_background?: boolean;
+}
+
 export interface Preferences {
 	accent_color: string | null;
 	auto_advance: boolean;
@@ -16,6 +22,7 @@ export interface Preferences {
 	show_sensitive_artwork: boolean;
 	show_liked_on_profile: boolean;
 	support_url: string | null;
+	ui_settings: UiSettings;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -28,7 +35,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	teal_needs_reauth: false,
 	show_sensitive_artwork: false,
 	show_liked_on_profile: false,
-	support_url: null
+	support_url: null,
+	ui_settings: {}
 };
 
 class PreferencesManager {
@@ -78,6 +86,10 @@ class PreferencesManager {
 
 	get supportUrl(): string | null {
 		return this.data?.support_url ?? DEFAULT_PREFERENCES.support_url;
+	}
+
+	get uiSettings(): UiSettings {
+		return this.data?.ui_settings ?? DEFAULT_PREFERENCES.ui_settings;
 	}
 
 	setTheme(theme: Theme): void {
@@ -132,7 +144,8 @@ class PreferencesManager {
 					teal_needs_reauth: data.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth,
 					show_sensitive_artwork: data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork,
 					show_liked_on_profile: data.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile,
-					support_url: data.support_url ?? DEFAULT_PREFERENCES.support_url
+					support_url: data.support_url ?? DEFAULT_PREFERENCES.support_url,
+					ui_settings: data.ui_settings ?? DEFAULT_PREFERENCES.ui_settings
 				};
 			} else {
 				this.data = { ...DEFAULT_PREFERENCES, theme: currentTheme };
@@ -169,6 +182,34 @@ class PreferencesManager {
 		} catch (error) {
 			console.error('failed to save preferences:', error);
 			// revert on error by refetching
+			await this.fetch();
+		}
+	}
+
+	async updateUiSettings(updates: Partial<UiSettings>): Promise<void> {
+		if (!browser || !auth.isAuthenticated) return;
+
+		// optimistic update - merge with existing
+		if (this.data) {
+			this.data = {
+				...this.data,
+				ui_settings: { ...this.data.ui_settings, ...updates }
+			};
+		}
+
+		try {
+			const response = await fetch(`${API_URL}/preferences/`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({ ui_settings: updates })
+			});
+			if (!response.ok) {
+				console.error('failed to save ui settings:', response.status);
+				await this.fetch();
+			}
+		} catch (error) {
+			console.error('failed to save ui settings:', error);
 			await this.fetch();
 		}
 	}

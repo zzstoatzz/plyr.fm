@@ -136,6 +136,7 @@
 		font-size: 0.95rem;
 		color: var(--text-tertiary);
 		margin: 0;
+		text-shadow: var(--text-shadow, none);
 	}
 
 	.btn-queue-all {
@@ -143,8 +144,8 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.6rem 1rem;
-		background: transparent;
-		border: 1px solid var(--accent);
+		background: var(--glass-btn-bg, transparent);
+		border: 1px solid var(--glass-btn-border, var(--accent));
 		color: var(--accent);
 		border-radius: 6px;
 		font-size: 0.9rem;

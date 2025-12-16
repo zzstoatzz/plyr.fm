@@ -242,8 +242,7 @@
 		flex-direction: column;
 		height: 100%;
 		padding: 1.5rem 1.25rem calc(var(--player-height, 0px) + 40px + env(safe-area-inset-bottom, 0px));
-		background: var(--bg-primary);
-		border-left: 1px solid var(--border-subtle);
+		background: transparent;
 		gap: 1rem;
 	}
 

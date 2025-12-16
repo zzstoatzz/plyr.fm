@@ -85,6 +85,56 @@
 		document.documentElement.style.setProperty('--queue-width', queueWidth);
 	});
 
+	// apply background image from ui_settings or playing track artwork
+	// only apply when preferences are actually loaded (not null) to avoid clearing on initial load
+	$effect(() => {
+		if (!browser) return;
+		// don't clear bg image if preferences haven't loaded yet
+		if (!preferences.loaded) return;
+
+		const uiSettings = preferences.uiSettings;
+		const root = document.documentElement;
+
+		// determine background image URL
+		// priority: playing artwork (if enabled and available) > custom URL
+		let bgImageUrl: string | undefined;
+		let isUsingPlayingArtwork = false;
+		if (uiSettings.use_playing_artwork_as_background && player.currentTrack?.image_url) {
+			bgImageUrl = player.currentTrack.image_url;
+			isUsingPlayingArtwork = true;
+		} else if (uiSettings.background_image_url) {
+			// fall back to custom URL (whether playing artwork is enabled or not)
+			bgImageUrl = uiSettings.background_image_url;
+		}
+
+		if (bgImageUrl) {
+			root.style.setProperty('--bg-image', `url(${bgImageUrl})`);
+			// playing artwork tiles in a 4x4 grid with blur, custom image respects tile setting
+			const shouldTile = isUsingPlayingArtwork || uiSettings.background_tile;
+			root.style.setProperty('--bg-image-mode', shouldTile ? 'repeat' : 'no-repeat');
+			// playing artwork: 25% size (4x4 grid), custom: auto if tiled, cover if not
+			root.style.setProperty('--bg-image-size', isUsingPlayingArtwork ? '25%' : (uiSettings.background_tile ? 'auto' : 'cover'));
+			// blur playing artwork for smoother look
+			root.style.setProperty('--bg-blur', isUsingPlayingArtwork ? '40px' : '0px');
+			// glass button styling for visibility against background images
+			const isLight = root.classList.contains('theme-light');
+			root.style.setProperty('--glass-btn-bg', isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(18, 18, 18, 0.8)');
+			root.style.setProperty('--glass-btn-bg-hover', isLight ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 30, 30, 0.9)');
+			root.style.setProperty('--glass-btn-border', isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)');
+			// very subtle text outline for readability against background images
+			root.style.setProperty('--text-shadow', isLight ? '0 0 8px rgba(255, 255, 255, 0.6)' : '0 0 8px rgba(0, 0, 0, 0.6)');
+		} else {
+			root.style.removeProperty('--bg-image');
+			root.style.removeProperty('--bg-image-mode');
+			root.style.removeProperty('--bg-image-size');
+			root.style.removeProperty('--bg-blur');
+			root.style.removeProperty('--glass-btn-bg');
+			root.style.removeProperty('--glass-btn-bg-hover');
+			root.style.removeProperty('--glass-btn-border');
+			root.style.removeProperty('--text-shadow');
+		}
+	});
+
 	const SEEK_AMOUNT = 10; // seconds
 	let previousVolume = 0.7; // for mute toggle
 
@@ -408,6 +458,18 @@
 		--success: #4ade80;
 		--warning: #fbbf24;
 		--error: #ef4444;
+
+		/* glass effects (dark theme) */
+		--glass-bg: rgba(20, 20, 20, 0.75);
+		--glass-blur: blur(12px);
+		--glass-border: rgba(255, 255, 255, 0.06);
+
+		/* track item glass (no blur, just translucent) */
+		--track-bg: rgba(18, 18, 18, 0.88);
+		--track-bg-hover: rgba(24, 24, 24, 0.92);
+		--track-bg-playing: rgba(18, 18, 18, 0.88);
+		--track-border: rgba(255, 255, 255, 0.06);
+		--track-border-hover: rgba(255, 255, 255, 0.1);
 	}
 
 	/* light theme overrides */
@@ -434,28 +496,20 @@
 		--success: #16a34a;
 		--warning: #d97706;
 		--error: #dc2626;
+
+		/* glass effects (light theme) */
+		--glass-bg: rgba(250, 250, 250, 0.75);
+		--glass-border: rgba(0, 0, 0, 0.06);
+
+		/* track item glass (light theme) */
+		--track-bg: rgba(255, 255, 255, 0.94);
+		--track-bg-hover: rgba(250, 250, 250, 0.96);
+		--track-bg-playing: rgba(255, 255, 255, 0.94);
+		--track-border: rgba(0, 0, 0, 0.08);
+		--track-border-hover: rgba(0, 0, 0, 0.12);
 	}
 
 	/* light theme specific overrides for components */
-	:global(:root.theme-light) :global(.track-container) {
-		background: var(--bg-secondary);
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-	}
-
-	:global(:root.theme-light) :global(.track-container:hover) {
-		background: var(--bg-tertiary);
-	}
-
-	:global(:root.theme-light) :global(.track-container.playing) {
-		background: color-mix(in srgb, var(--accent) 8%, white);
-		border-color: color-mix(in srgb, var(--accent) 30%, white);
-	}
-
-	:global(:root.theme-light) :global(header) {
-		background: var(--bg-primary);
-		border-color: var(--border-default);
-	}
-
 	:global(:root.theme-light) :global(.tag-badge) {
 		background: color-mix(in srgb, var(--accent) 12%, white);
 		color: var(--accent-muted);
@@ -465,9 +519,23 @@
 		margin: 0;
 		padding: 0;
 		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
-		background: var(--bg-primary);
+		background-color: var(--bg-primary);
 		color: var(--text-primary);
 		-webkit-font-smoothing: antialiased;
+	}
+
+	/* background image with blur effect */
+	:global(body::before) {
+		content: '';
+		position: fixed;
+		inset: 0;
+		background-image: var(--bg-image, none);
+		background-repeat: var(--bg-image-mode, no-repeat);
+		background-size: var(--bg-image-size, cover);
+		background-position: center;
+		filter: blur(var(--bg-blur, 0px));
+		transform: scale(1.1); /* prevent blur edge artifacts */
+		z-index: -1;
 	}
 
 	.app-layout {
@@ -500,8 +568,10 @@
 		right: 0;
 		width: min(360px, 100%);
 		height: 100vh; /* fallback for browsers without dvh support */
-		background: var(--bg-primary);
-		border-left: 1px solid var(--border-subtle);
+		background: var(--glass-bg, var(--bg-primary));
+		backdrop-filter: var(--glass-blur, none);
+		-webkit-backdrop-filter: var(--glass-blur, none);
+		border-left: 1px solid var(--glass-border, var(--border-subtle));
 		z-index: 50;
 	}
 
