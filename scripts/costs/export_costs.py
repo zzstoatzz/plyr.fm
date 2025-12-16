@@ -239,7 +239,7 @@ def build_cost_data(audd_stats: dict[str, Any]) -> dict[str, Any]:
             },
         },
         "support": {
-            "kofi": "https://ko-fi.com/zzstoatzz",
+            "url": "https://atprotofans.com/u/did:plc:xbtmt2zjwlrfegqvch7fboei",
             "message": "help cover moderation costs",
         },
     }
