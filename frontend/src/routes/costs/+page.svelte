@@ -14,6 +14,7 @@
 		date: string;
 		scans: number;
 		flagged: number;
+		requests: number;
 	}
 
 	interface CostData {
@@ -36,9 +37,14 @@
 			};
 			audd: {
 				amount: number;
+				base_cost: number;
+				overage_cost: number;
 				scans_this_period: number;
-				included_free: number;
+				requests_this_period: number;
+				audio_seconds: number;
+				free_requests: number;
 				remaining_free: number;
+				billable_requests: number;
 				flag_rate: number;
 				daily: DailyData[];
 				note: string;
@@ -66,9 +72,9 @@
 			: 1
 	);
 
-	let maxScans = $derived(
+	let maxRequests = $derived(
 		data?.costs.audd.daily.length
-			? Math.max(...data.costs.audd.daily.map((d) => d.scans))
+			? Math.max(...data.costs.audd.daily.map((d) => d.requests))
 			: 1
 	);
 
@@ -213,29 +219,37 @@
 			<h2>copyright scanning (audd)</h2>
 			<div class="audd-stats">
 				<div class="stat">
-					<span class="stat-value">{data.costs.audd.scans_this_period.toLocaleString()}</span>
-					<span class="stat-label">scans this period</span>
+					<span class="stat-value">{data.costs.audd.requests_this_period.toLocaleString()}</span>
+					<span class="stat-label">API requests</span>
 				</div>
 				<div class="stat">
 					<span class="stat-value">{data.costs.audd.remaining_free.toLocaleString()}</span>
 					<span class="stat-label">free remaining</span>
 				</div>
 				<div class="stat">
-					<span class="stat-value">{data.costs.audd.flag_rate}%</span>
-					<span class="stat-label">flag rate</span>
+					<span class="stat-value">{data.costs.audd.scans_this_period.toLocaleString()}</span>
+					<span class="stat-label">tracks scanned</span>
 				</div>
 			</div>
 
+			<p class="audd-explainer">
+				1 request = 12s of audio. {data.costs.audd.free_requests.toLocaleString()} free/month,
+				then ${(5).toFixed(2)}/1k requests.
+				{#if data.costs.audd.billable_requests > 0}
+					<strong>{data.costs.audd.billable_requests.toLocaleString()} billable</strong> this period.
+				{/if}
+			</p>
+
 			{#if data.costs.audd.daily.length > 0}
 				<div class="daily-chart">
-					<h3>daily scans</h3>
+					<h3>daily requests</h3>
 					<div class="chart-bars">
 						{#each data.costs.audd.daily as day}
 							<div class="chart-bar-container">
 								<div
 									class="chart-bar"
-									style="height: {Math.max(4, (day.scans / maxScans) * 100)}%"
-									title="{day.date}: {day.scans} scans, {day.flagged} flagged"
+									style="height: {Math.max(4, (day.requests / maxRequests) * 100)}%"
+									title="{day.date}: {day.requests} requests ({day.scans} tracks)"
 								></div>
 								<span class="chart-label">{day.date.slice(5)}</span>
 							</div>
@@ -428,7 +442,18 @@
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	.audd-explainer {
+		font-size: 0.8rem;
+		color: var(--text-secondary);
 		margin-bottom: 1.5rem;
+		line-height: 1.5;
+	}
+
+	.audd-explainer strong {
+		color: var(--warning);
 	}
 
 	.stat {

@@ -1,7 +1,10 @@
 # export platform costs to R2 for public dashboard
 #
-# runs daily at 6am UTC to update the costs.json file in R2
+# runs hourly to update the costs.json file in R2
 # the frontend /costs page fetches this static JSON
+#
+# AudD costs are derived from track duration (1 request = 12s of audio)
+# so this gives near real-time cost visibility as uploads happen
 #
 # required secrets:
 #   NEON_DATABASE_URL_PRD - production database URL
@@ -15,7 +18,7 @@ name: export costs
 
 on:
   schedule:
-    - cron: "0 6 * * *" # daily at 6am UTC
+    - cron: "0 * * * *" # hourly
   workflow_dispatch:
     inputs:
       dry_run:
