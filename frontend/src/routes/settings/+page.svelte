@@ -23,6 +23,7 @@
 	let autoAdvance = $derived(preferences.autoAdvance);
 	let backgroundImageUrl = $derived(preferences.uiSettings.background_image_url ?? '');
 	let backgroundTile = $derived(preferences.uiSettings.background_tile ?? false);
+	let usePlayingArtwork = $derived(preferences.uiSettings.use_playing_artwork_as_background ?? false);
 	// developer token state
 	let creatingToken = $state(false);
 	let developerToken = $state<string | null>(null);
@@ -172,6 +173,11 @@
 	async function saveBackgroundTile(tile: boolean) {
 		await preferences.updateUiSettings({ background_tile: tile });
 		toast.success(tile ? 'background tiled' : 'background stretched');
+	}
+
+	async function saveUsePlayingArtwork(enabled: boolean) {
+		await preferences.updateUiSettings({ use_playing_artwork_as_background: enabled });
+		toast.success(enabled ? 'using playing artwork as background' : 'using custom background');
 	}
 
 	function selectTheme(theme: Theme) {
@@ -461,8 +467,9 @@
 							bind:value={backgroundInput}
 							onblur={saveBackgroundImage}
 							onkeydown={(e) => e.key === 'Enter' && saveBackgroundImage()}
+							disabled={usePlayingArtwork}
 						/>
-						{#if backgroundImageUrl}
+						{#if backgroundImageUrl && !usePlayingArtwork}
 							<label class="tile-toggle">
 								<input
 									type="checkbox"
@@ -473,6 +480,21 @@
 							</label>
 						{/if}
 					</div>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>playing artwork as background</h3>
+						<p>use the currently playing track's artwork as background (overrides custom image)</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={usePlayingArtwork}
+							onchange={(e) => saveUsePlayingArtwork((e.target as HTMLInputElement).checked)}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
 				</div>
 			</div>
 		</section>

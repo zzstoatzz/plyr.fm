@@ -85,7 +85,7 @@
 		document.documentElement.style.setProperty('--queue-width', queueWidth);
 	});
 
-	// apply background image from ui_settings
+	// apply background image from ui_settings or playing track artwork
 	// only apply when preferences are actually loaded (not null) to avoid clearing on initial load
 	$effect(() => {
 		if (!browser) return;
@@ -95,10 +95,20 @@
 		const uiSettings = preferences.uiSettings;
 		const root = document.documentElement;
 
-		if (uiSettings.background_image_url) {
-			root.style.setProperty('--bg-image', `url(${uiSettings.background_image_url})`);
-			root.style.setProperty('--bg-image-mode', uiSettings.background_tile ? 'repeat' : 'no-repeat');
-			root.style.setProperty('--bg-image-size', uiSettings.background_tile ? 'auto' : 'cover');
+		// determine background image URL - playing artwork takes priority if enabled
+		let bgImageUrl: string | undefined;
+		if (uiSettings.use_playing_artwork_as_background && player.currentTrack?.image_url) {
+			bgImageUrl = player.currentTrack.image_url;
+		} else if (!uiSettings.use_playing_artwork_as_background && uiSettings.background_image_url) {
+			bgImageUrl = uiSettings.background_image_url;
+		}
+
+		if (bgImageUrl) {
+			root.style.setProperty('--bg-image', `url(${bgImageUrl})`);
+			// playing artwork never tiles, custom image respects tile setting
+			const shouldTile = !uiSettings.use_playing_artwork_as_background && uiSettings.background_tile;
+			root.style.setProperty('--bg-image-mode', shouldTile ? 'repeat' : 'no-repeat');
+			root.style.setProperty('--bg-image-size', shouldTile ? 'auto' : 'cover');
 			// glass button styling for visibility against background images
 			const isLight = root.classList.contains('theme-light');
 			root.style.setProperty('--glass-btn-bg', isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(18, 18, 18, 0.8)');

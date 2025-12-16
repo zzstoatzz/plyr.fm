@@ -8,6 +8,7 @@ export type Theme = 'dark' | 'light' | 'system';
 export interface UiSettings {
 	background_image_url?: string;
 	background_tile?: boolean;
+	use_playing_artwork_as_background?: boolean;
 }
 
 export interface Preferences {
