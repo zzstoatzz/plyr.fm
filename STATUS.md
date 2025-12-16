@@ -69,6 +69,30 @@ plyr.fm should become:
 
 ---
 
+#### mobile UI polish & background task expansion (PRs #558-572, Dec 10-12)
+
+**background task expansion** (PRs #558, #561):
+- moved like/unlike and comment PDS writes to docket background tasks
+- API responses now immediate; PDS sync happens asynchronously
+- added targeted album list sync background task for ATProto record updates
+
+**performance caching** (PR #566):
+- added Redis cache for copyright label lookups (5-minute TTL)
+- fixed 2-3s latency spikes on `/tracks/` endpoint
+- batch operations via `mget`/pipeline for efficiency
+
+**mobile UX improvements** (PRs #569, #572):
+- mobile action menus now open from top with all actions visible
+- UI polish for album and artist pages on small screens
+
+**misc** (PRs #559, #562, #563, #570):
+- reduced docket Redis polling from 250ms to 5s (lower resource usage)
+- added atprotofans support link mode for ko-fi integration
+- added alpha badge to header branding
+- fixed web manifest ID for PWA stability
+
+---
+
 #### confidential OAuth client (PRs #578, #580-582, Dec 12-13)
 
 **confidential client support** (PR #578):
