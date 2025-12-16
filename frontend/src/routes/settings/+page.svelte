@@ -21,6 +21,8 @@
 	let currentTheme = $derived(preferences.theme);
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let autoAdvance = $derived(preferences.autoAdvance);
+	let backgroundImageUrl = $derived(preferences.uiSettings.background_image_url ?? '');
+	let backgroundTile = $derived(preferences.uiSettings.background_tile ?? false);
 	// developer token state
 	let creatingToken = $state(false);
 	let developerToken = $state<string | null>(null);
@@ -141,6 +143,29 @@
 
 	function selectPreset(color: string) {
 		applyColor(color);
+	}
+
+	// background image state for debounced input
+	let backgroundInput = $state('');
+	$effect(() => {
+		backgroundInput = backgroundImageUrl;
+	});
+
+	async function saveBackgroundImage() {
+		const url = backgroundInput.trim();
+		await preferences.updateUiSettings({
+			background_image_url: url || undefined
+		});
+		if (url) {
+			toast.success('background image set');
+		} else {
+			toast.success('background image cleared');
+		}
+	}
+
+	async function saveBackgroundTile(tile: boolean) {
+		await preferences.updateUiSettings({ background_tile: tile });
+		toast.success(tile ? 'background tiled' : 'background stretched');
 	}
 
 	function selectTheme(theme: Theme) {
@@ -414,6 +439,33 @@
 								></button>
 							{/each}
 						</div>
+					</div>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>background image</h3>
+						<p>set a custom background image (URL)</p>
+					</div>
+					<div class="background-controls">
+						<input
+							type="url"
+							class="background-input"
+							placeholder="https://..."
+							bind:value={backgroundInput}
+							onblur={saveBackgroundImage}
+							onkeydown={(e) => e.key === 'Enter' && saveBackgroundImage()}
+						/>
+						{#if backgroundImageUrl}
+							<label class="tile-toggle">
+								<input
+									type="checkbox"
+									checked={backgroundTile}
+									onchange={(e) => saveBackgroundTile((e.target as HTMLInputElement).checked)}
+								/>
+								<span>tile</span>
+							</label>
+						{/if}
 					</div>
 				</div>
 			</div>
@@ -931,6 +983,47 @@
 	.preset-btn.active {
 		border-color: var(--text-primary);
 		box-shadow: 0 0 0 1px var(--bg-secondary);
+	}
+
+	/* background controls */
+	.background-controls {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-shrink: 0;
+	}
+
+	.background-input {
+		width: 200px;
+		padding: 0.5rem 0.75rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: 6px;
+		color: var(--text-primary);
+		font-size: 0.85rem;
+		font-family: inherit;
+	}
+
+	.background-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.background-input::placeholder {
+		color: var(--text-tertiary);
+	}
+
+	.tile-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+		cursor: pointer;
+	}
+
+	.tile-toggle input {
+		accent-color: var(--accent);
 	}
 
 	/* toggle switch */

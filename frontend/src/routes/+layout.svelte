@@ -85,6 +85,23 @@
 		document.documentElement.style.setProperty('--queue-width', queueWidth);
 	});
 
+	// apply background image from ui_settings
+	$effect(() => {
+		if (!browser) return;
+		const uiSettings = preferences.uiSettings;
+		const root = document.documentElement;
+
+		if (uiSettings.background_image_url) {
+			root.style.setProperty('--bg-image', `url(${uiSettings.background_image_url})`);
+			root.style.setProperty('--bg-image-mode', uiSettings.background_tile ? 'repeat' : 'no-repeat');
+			root.style.setProperty('--bg-image-size', uiSettings.background_tile ? 'auto' : 'cover');
+		} else {
+			root.style.removeProperty('--bg-image');
+			root.style.removeProperty('--bg-image-mode');
+			root.style.removeProperty('--bg-image-size');
+		}
+	});
+
 	const SEEK_AMOUNT = 10; // seconds
 	let previousVolume = 0.7; // for mute toggle
 
@@ -469,7 +486,12 @@
 		margin: 0;
 		padding: 0;
 		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
-		background: var(--bg-primary);
+		background-color: var(--bg-primary);
+		background-image: var(--bg-image, none);
+		background-repeat: var(--bg-image-mode, no-repeat);
+		background-size: var(--bg-image-size, cover);
+		background-position: center;
+		background-attachment: fixed;
 		color: var(--text-primary);
 		-webkit-font-smoothing: antialiased;
 	}
