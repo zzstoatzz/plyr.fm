@@ -257,3 +257,83 @@ async def test_support_url_rejects_invalid_strings(
         json={"support_url": "random-string"},
     )
     assert response.status_code == 422  # validation error
+
+
+async def test_get_preferences_includes_ui_settings(
+    client_no_teal: AsyncClient,
+):
+    """should return ui_settings field in preferences response."""
+    response = await client_no_teal.get("/preferences/")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "ui_settings" in data
+    # default should be empty dict
+    assert data["ui_settings"] == {}
+
+
+async def test_set_ui_settings(
+    client_no_teal: AsyncClient,
+):
+    """should update ui_settings preference."""
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={
+            "ui_settings": {
+                "glass_enabled": True,
+                "background_image_url": "https://example.com/bg.jpg",
+            }
+        },
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["ui_settings"]["glass_enabled"] is True
+    assert data["ui_settings"]["background_image_url"] == "https://example.com/bg.jpg"
+
+
+async def test_ui_settings_partial_update(
+    client_no_teal: AsyncClient,
+):
+    """should merge ui_settings on partial update."""
+    # first set some settings
+    await client_no_teal.post(
+        "/preferences/",
+        json={"ui_settings": {"glass_enabled": True, "theme_color": "#ff0000"}},
+    )
+
+    # then update just one setting
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={"ui_settings": {"glass_enabled": False}},
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    # new value should override
+    assert data["ui_settings"]["glass_enabled"] is False
+    # old value should be preserved
+    assert data["ui_settings"]["theme_color"] == "#ff0000"
+
+
+async def test_ui_settings_persists_after_other_update(
+    client_no_teal: AsyncClient,
+):
+    """ui_settings should persist when updating other preferences."""
+    # set ui_settings
+    await client_no_teal.post(
+        "/preferences/",
+        json={"ui_settings": {"glass_enabled": True}},
+    )
+
+    # update a different preference
+    response = await client_no_teal.post(
+        "/preferences/",
+        json={"auto_advance": False},
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    # ui_settings should still be set
+    assert data["ui_settings"]["glass_enabled"] is True
+    assert data["auto_advance"] is False

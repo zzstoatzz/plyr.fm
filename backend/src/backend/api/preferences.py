@@ -1,6 +1,6 @@
 """user preferences api endpoints."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator
@@ -31,6 +31,8 @@ class PreferencesResponse(BaseModel):
     show_sensitive_artwork: bool = False
     show_liked_on_profile: bool = False
     support_url: str | None = None
+    # extensible UI settings (background_image_url, glass_effects, custom_colors, etc.)
+    ui_settings: dict[str, Any] = {}
 
 
 class PreferencesUpdate(BaseModel):
@@ -44,6 +46,7 @@ class PreferencesUpdate(BaseModel):
     show_sensitive_artwork: bool | None = None
     show_liked_on_profile: bool | None = None
     support_url: str | None = None
+    ui_settings: dict[str, Any] | None = None
 
     @field_validator("support_url", mode="before")
     @classmethod
@@ -104,6 +107,7 @@ async def get_preferences(
         show_sensitive_artwork=prefs.show_sensitive_artwork,
         show_liked_on_profile=prefs.show_liked_on_profile,
         support_url=prefs.support_url,
+        ui_settings=prefs.ui_settings or {},
     )
 
 
@@ -143,6 +147,7 @@ async def update_preferences(
             if update.show_liked_on_profile is not None
             else False,
             support_url=update.support_url,
+            ui_settings=update.ui_settings or {},
         )
         db.add(prefs)
     else:
@@ -164,6 +169,9 @@ async def update_preferences(
         if update.support_url is not None:
             # allow clearing by setting to empty string
             prefs.support_url = update.support_url if update.support_url else None
+        if update.ui_settings is not None:
+            # merge with existing settings to allow partial updates
+            prefs.ui_settings = {**(prefs.ui_settings or {}), **update.ui_settings}
 
     await db.commit()
     await db.refresh(prefs)
@@ -182,4 +190,5 @@ async def update_preferences(
         show_sensitive_artwork=prefs.show_sensitive_artwork,
         show_liked_on_profile=prefs.show_liked_on_profile,
         support_url=prefs.support_url,
+        ui_settings=prefs.ui_settings or {},
     )

@@ -65,6 +65,15 @@ class UserPreferences(Base):
     # artist support link (Ko-fi, Patreon, etc.)
     support_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # extensible UI settings (colors, background image, glass effects, etc.)
+    # schema-less to avoid migrations for new UI preferences
+    ui_settings: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+
     # metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
