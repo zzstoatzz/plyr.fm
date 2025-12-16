@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { APP_NAME } from '$lib/branding';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
@@ -19,9 +18,10 @@
 		}
 	}
 
-	function handleDecline() {
-		auth.logout();
-		goto('/');
+	async function handleDecline() {
+		await auth.logout();
+		// force page reload to clear layout data
+		window.location.href = '/';
 	}
 </script>
 
