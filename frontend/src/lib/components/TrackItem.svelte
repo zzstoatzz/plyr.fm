@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import ShareButton from './ShareButton.svelte';
 	import AddToMenu from './AddToMenu.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
@@ -114,9 +116,55 @@
 		// also update the track object itself
 		track.like_count = likeCount;
 	}
+
+	// wheel effect: tracks rotate based on distance from viewport center
+	let containerEl: HTMLDivElement;
+	let rotateX = $state(0);
+	let translateZ = $state(0);
+
+	onMount(() => {
+		if (!browser) return;
+
+		const MAX_ROTATION = 2; // max degrees of rotation (very subtle)
+
+		function updateWheelPosition() {
+			if (!containerEl) return;
+
+			const rect = containerEl.getBoundingClientRect();
+			const viewportCenter = window.innerHeight / 2;
+			const itemCenter = rect.top + rect.height / 2;
+
+			// distance from viewport center, normalized (-1 to 1)
+			const distanceFromCenter = (itemCenter - viewportCenter) / viewportCenter;
+
+			// convex wheel: items above tilt toward viewer (positive), below tilt away (negative)
+			rotateX = -distanceFromCenter * MAX_ROTATION;
+
+			// z-translate: items at center are closest, edges recede slightly
+			translateZ = (1 - Math.abs(distanceFromCenter)) * 3 - 1.5;
+		}
+
+		// use passive scroll listener for performance
+		window.addEventListener('scroll', updateWheelPosition, { passive: true });
+		// also update on resize
+		window.addEventListener('resize', updateWheelPosition, { passive: true });
+		// initial position
+		updateWheelPosition();
+
+		return () => {
+			window.removeEventListener('scroll', updateWheelPosition);
+			window.removeEventListener('resize', updateWheelPosition);
+		};
+	});
 </script>
 
-<div class="track-container" class:playing={isPlaying} class:likers-tooltip-open={showLikersTooltip}>
+<div
+	class="track-container"
+	class:playing={isPlaying}
+	class:likers-tooltip-open={showLikersTooltip}
+	bind:this={containerEl}
+	style="transform: perspective(1000px) rotateX({rotateX}deg) translateZ({translateZ}px);"
+>
 	{#if showIndex}
 		<span class="track-index">{index + 1}</span>
 	{/if}
@@ -333,9 +381,10 @@
 		border-radius: 8px;
 		padding: 1rem;
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-		transform: translateY(0);
+		transform-origin: center center;
+		transform-style: preserve-3d;
+		will-change: transform;
 		transition:
-			transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
 			box-shadow 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
 			background 0.15s ease-out,
 			border-color 0.15s ease-out;
@@ -353,14 +402,12 @@
 	.track-container:hover {
 		background: var(--track-bg-hover, var(--bg-tertiary));
 		border-color: color-mix(in srgb, var(--accent) 15%, var(--track-border-hover, var(--border-default)));
-		transform: translateY(-0.5px);
 		box-shadow:
 			0 1px 3px rgba(0, 0, 0, 0.06),
 			0 0 8px color-mix(in srgb, var(--accent) 8%, transparent);
 	}
 
 	.track-container:active {
-		transform: translateY(0);
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 		transition-duration: 0.08s;
 	}
