@@ -197,12 +197,16 @@ class PreferencesManager {
 		}
 
 		try {
-			await fetch(`${API_URL}/preferences/`, {
+			const response = await fetch(`${API_URL}/preferences/`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				credentials: 'include',
 				body: JSON.stringify({ ui_settings: updates })
 			});
+			if (!response.ok) {
+				console.error('failed to save ui settings:', response.status);
+				await this.fetch();
+			}
 		} catch (error) {
 			console.error('failed to save ui settings:', error);
 			await this.fetch();

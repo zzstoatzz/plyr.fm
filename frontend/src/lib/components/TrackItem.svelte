@@ -330,11 +330,15 @@
 		gap: 0.75rem;
 		background: var(--track-bg, var(--bg-secondary));
 		border: 1px solid var(--track-border, var(--border-subtle));
-		border-left: 3px solid transparent;
-		border-radius: 6px;
+		border-radius: 8px;
 		padding: 1rem;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
-		transition: background 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		transform: translateY(0);
+		transition:
+			transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+			box-shadow 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+			background 0.15s ease-out,
+			border-color 0.15s ease-out;
 	}
 
 	.track-index {
@@ -348,14 +352,22 @@
 
 	.track-container:hover {
 		background: var(--track-bg-hover, var(--bg-tertiary));
-		border-left-color: var(--accent);
-		border-color: var(--track-border-hover, var(--border-default));
+		border-color: color-mix(in srgb, var(--accent) 15%, var(--track-border-hover, var(--border-default)));
+		transform: translateY(-0.5px);
+		box-shadow:
+			0 1px 3px rgba(0, 0, 0, 0.06),
+			0 0 8px color-mix(in srgb, var(--accent) 8%, transparent);
+	}
+
+	.track-container:active {
+		transform: translateY(0);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		transition-duration: 0.08s;
 	}
 
 	.track-container.playing {
-		background: var(--track-bg-playing, color-mix(in srgb, var(--accent) 10%, var(--bg-tertiary)));
-		border-left-color: var(--accent);
-		border-color: color-mix(in srgb, var(--accent) 20%, var(--border-subtle));
+		background: color-mix(in srgb, var(--accent) 10%, var(--track-bg-playing, var(--bg-tertiary)));
+		border-color: color-mix(in srgb, var(--accent) 20%, var(--track-border, var(--border-subtle)));
 	}
 
 	/* elevate entire track container when likers tooltip is open

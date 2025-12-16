@@ -145,16 +145,22 @@
 		applyColor(color);
 	}
 
-	// background image state for debounced input
-	let backgroundInput = $state('');
+	// background image state - initialize once, don't sync reactively
+	let backgroundInput = $state(preferences.uiSettings.background_image_url ?? '');
+	let backgroundInputInitialized = $state(false);
+
+	// only sync from server on initial load, not on every change
 	$effect(() => {
-		backgroundInput = backgroundImageUrl;
+		if (!backgroundInputInitialized && preferences.loaded) {
+			backgroundInput = preferences.uiSettings.background_image_url ?? '';
+			backgroundInputInitialized = true;
+		}
 	});
 
 	async function saveBackgroundImage() {
 		const url = backgroundInput.trim();
 		await preferences.updateUiSettings({
-			background_image_url: url || undefined
+			background_image_url: url || ''
 		});
 		if (url) {
 			toast.success('background image set');

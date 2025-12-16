@@ -432,9 +432,9 @@
 		--glass-border: rgba(255, 255, 255, 0.06);
 
 		/* track item glass (no blur, just translucent) */
-		--track-bg: rgba(24, 24, 24, 0.85);
-		--track-bg-hover: rgba(32, 32, 32, 0.9);
-		--track-bg-playing: rgba(var(--accent-rgb), 0.12);
+		--track-bg: rgba(18, 18, 18, 0.88);
+		--track-bg-hover: rgba(24, 24, 24, 0.92);
+		--track-bg-playing: rgba(18, 18, 18, 0.88);
 		--track-border: rgba(255, 255, 255, 0.06);
 		--track-border-hover: rgba(255, 255, 255, 0.1);
 	}
@@ -469,11 +469,11 @@
 		--glass-border: rgba(0, 0, 0, 0.06);
 
 		/* track item glass (light theme) */
-		--track-bg: rgba(255, 255, 255, 0.9);
-		--track-bg-hover: rgba(250, 250, 250, 0.95);
-		--track-bg-playing: rgba(var(--accent-rgb), 0.12);
-		--track-border: rgba(0, 0, 0, 0.06);
-		--track-border-hover: rgba(0, 0, 0, 0.1);
+		--track-bg: rgba(255, 255, 255, 0.94);
+		--track-bg-hover: rgba(250, 250, 250, 0.96);
+		--track-bg-playing: rgba(255, 255, 255, 0.94);
+		--track-border: rgba(0, 0, 0, 0.08);
+		--track-border-hover: rgba(0, 0, 0, 0.12);
 	}
 
 	/* light theme specific overrides for components */
