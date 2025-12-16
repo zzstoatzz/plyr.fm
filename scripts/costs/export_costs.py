@@ -9,6 +9,13 @@ usage:
     uv run scripts/costs/export_costs.py              # export to R2 (prod)
     uv run scripts/costs/export_costs.py --dry-run    # print JSON, don't upload
     uv run scripts/costs/export_costs.py --env stg    # use staging db
+
+AudD billing model:
+    - $5/month base (indie plan)
+    - 6000 free requests/month (1000 base + 5000 bonus)
+    - $5 per 1000 requests after free tier
+    - 1 request = 12 seconds of audio
+    - so a 5-minute track = ceil(300/12) = 25 requests
 """
 
 import asyncio
@@ -23,31 +30,28 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # billing constants
 AUDD_BILLING_DAY = 24
+AUDD_SECONDS_PER_REQUEST = 12
+AUDD_FREE_REQUESTS = 6000  # 1000 base + 5000 bonus on indie plan
+AUDD_COST_PER_1000 = 5.00  # $5 per 1000 requests
+AUDD_BASE_COST = 5.00  # $5/month base
 
-# hardcoded monthly costs (updated 2025-12-09)
-# source: fly.io cost explorer, neon billing, cloudflare billing, audd dashboard
-# NOTE: audd usage comes from their dashboard, not our database
-# (copyright_scans table only has data since Nov 30, 2025)
+# fixed monthly costs (updated 2025-12-16)
+# fly.io: manually updated from cost explorer (TODO: use fly billing API)
+# neon: fixed $5/month
+# cloudflare: mostly free tier
 FIXED_COSTS = {
     "fly_io": {
-        "total": 28.83,
         "breakdown": {
             "relay-api": 5.80,  # prod backend
             "relay-api-staging": 5.60,
             "plyr-moderation": 0.24,
             "plyr-transcoder": 0.02,
-            # non-plyr apps (included in org total but not plyr-specific)
-            # "bsky-feed": 7.46,
-            # "pds-zzstoatzz-io": 5.48,
-            # "zzstoatzz-status": 3.48,
-            # "at-me": 0.58,
-            # "find-bufo": 0.13,
         },
-        "note": "~40% of org total ($28.83) is plyr.fm",
+        "note": "compute (2x shared-cpu VMs + moderation + transcoder)",
     },
     "neon": {
         "total": 5.00,
-        "note": "postgres serverless (3 projects: dev/stg/prd)",
+        "note": "postgres serverless (fixed)",
     },
     "cloudflare": {
         "r2": 0.16,
@@ -55,19 +59,6 @@ FIXED_COSTS = {
         "domain": 1.00,
         "total": 1.16,
         "note": "r2 egress is free, pages free tier",
-    },
-    # audd: ONE-TIME ADJUSTMENT for Nov 24 - Dec 24 billing period
-    # the copyright_scans table was created Nov 24 but first scan recorded Nov 30
-    # so we hardcode this period from AudD dashboard. DELETE THIS after Dec 24 -
-    # future periods will use live database counts.
-    # source: https://dashboard.audd.io - checked 2025-12-10
-    "audd": {
-        "total_requests": 7826,  # 6000 included + 1826 billable
-        "included_requests": 6000,  # 1000 + 5000 bonus
-        "billable_requests": 1826,
-        "cost_per_request": 0.005,  # $5 per 1000
-        "cost": 9.13,  # 1826 * $0.005
-        "note": "copyright detection API (indie plan)",
     },
 }
 
@@ -116,72 +107,80 @@ def get_billing_period_start() -> datetime:
 
 
 async def get_audd_stats(db_url: str) -> dict[str, Any]:
-    """fetch audd scan stats from postgres."""
+    """fetch audd scan stats from postgres.
+
+    calculates AudD API requests from track duration:
+    - each 12 seconds of audio = 1 API request
+    - derived by joining copyright_scans with tracks table
+    """
     import asyncpg
 
     billing_start = get_billing_period_start()
-    audd_config = FIXED_COSTS["audd"]
-
-    # ONE-TIME: use hardcoded values for Nov 24 - Dec 24 billing period
-    # remove this check after Dec 24, 2025
-    use_hardcoded = billing_start.month == 11 and billing_start.day == 24
 
     conn = await asyncpg.connect(db_url)
     try:
-        # get database stats
+        # get totals: scans, flagged, and derived API requests from duration
         row = await conn.fetchrow(
             """
-            SELECT COUNT(*) as total,
-                   COUNT(CASE WHEN is_flagged THEN 1 END) as flagged
-            FROM copyright_scans
-            WHERE scanned_at >= $1
+            SELECT
+                COUNT(*) as total_scans,
+                COUNT(CASE WHEN cs.is_flagged THEN 1 END) as flagged,
+                COALESCE(SUM(CEIL((t.extra->>'duration')::float / $2)), 0)::bigint as total_requests,
+                COALESCE(SUM((t.extra->>'duration')::int), 0)::bigint as total_seconds
+            FROM copyright_scans cs
+            JOIN tracks t ON t.id = cs.track_id
+            WHERE cs.scanned_at >= $1
             """,
             billing_start,
+            AUDD_SECONDS_PER_REQUEST,
         )
-        db_total = row["total"]
-        db_flagged = row["flagged"]
+        total_scans = row["total_scans"]
+        flagged = row["flagged"]
+        total_requests = row["total_requests"]
+        total_seconds = row["total_seconds"]
 
-        # daily breakdown for chart
+        # daily breakdown for chart - now includes requests derived from duration
         daily = await conn.fetch(
             """
-            SELECT DATE(scanned_at) as date,
-                   COUNT(*) as scans,
-                   COUNT(CASE WHEN is_flagged THEN 1 END) as flagged
-            FROM copyright_scans
-            WHERE scanned_at >= $1
-            GROUP BY DATE(scanned_at)
+            SELECT
+                DATE(cs.scanned_at) as date,
+                COUNT(*) as scans,
+                COUNT(CASE WHEN cs.is_flagged THEN 1 END) as flagged,
+                COALESCE(SUM(CEIL((t.extra->>'duration')::float / $2)), 0)::bigint as requests
+            FROM copyright_scans cs
+            JOIN tracks t ON t.id = cs.track_id
+            WHERE cs.scanned_at >= $1
+            GROUP BY DATE(cs.scanned_at)
             ORDER BY date
             """,
             billing_start,
+            AUDD_SECONDS_PER_REQUEST,
         )
 
-        if use_hardcoded:
-            # Nov 24 - Dec 24: use hardcoded values (incomplete db data)
-            total = audd_config["total_requests"]
-            included = audd_config["included_requests"]
-            billable = audd_config["billable_requests"]
-            cost = audd_config["cost"]
-        else:
-            # future billing periods: use live database counts
-            total = db_total
-            included = audd_config["included_requests"]
-            billable = max(0, total - included)
-            cost = round(billable * audd_config["cost_per_request"], 2)
+        # calculate costs
+        billable_requests = max(0, total_requests - AUDD_FREE_REQUESTS)
+        overage_cost = round(billable_requests * AUDD_COST_PER_1000 / 1000, 2)
+        total_cost = AUDD_BASE_COST + overage_cost
 
         return {
             "billing_period_start": billing_start.isoformat(),
-            "total_scans": total,
-            "flagged": db_flagged,
-            "flag_rate": round(db_flagged / db_total * 100, 1) if db_total else 0,
-            "included_requests": included,
-            "remaining_free": max(0, included - total),
-            "billable_requests": billable,
-            "estimated_cost": cost,
+            "total_scans": total_scans,
+            "total_requests": total_requests,
+            "total_audio_seconds": total_seconds,
+            "flagged": flagged,
+            "flag_rate": round(flagged / total_scans * 100, 1) if total_scans else 0,
+            "free_requests": AUDD_FREE_REQUESTS,
+            "remaining_free": max(0, AUDD_FREE_REQUESTS - total_requests),
+            "billable_requests": billable_requests,
+            "base_cost": AUDD_BASE_COST,
+            "overage_cost": overage_cost,
+            "estimated_cost": total_cost,
             "daily": [
                 {
                     "date": r["date"].isoformat(),
                     "scans": r["scans"],
                     "flagged": r["flagged"],
+                    "requests": r["requests"],
                 }
                 for r in daily
             ],
@@ -209,11 +208,11 @@ def build_cost_data(audd_stats: dict[str, Any]) -> dict[str, Any]:
             "fly_io": {
                 "amount": round(plyr_fly, 2),
                 "breakdown": FIXED_COSTS["fly_io"]["breakdown"],
-                "note": "compute (2x shared-cpu VMs + moderation + transcoder)",
+                "note": FIXED_COSTS["fly_io"]["note"],
             },
             "neon": {
                 "amount": FIXED_COSTS["neon"]["total"],
-                "note": "postgres serverless",
+                "note": FIXED_COSTS["neon"]["note"],
             },
             "cloudflare": {
                 "amount": FIXED_COSTS["cloudflare"]["total"],
@@ -222,16 +221,21 @@ def build_cost_data(audd_stats: dict[str, Any]) -> dict[str, Any]:
                     "pages": FIXED_COSTS["cloudflare"]["pages"],
                     "domain": FIXED_COSTS["cloudflare"]["domain"],
                 },
-                "note": "storage, hosting, domain",
+                "note": FIXED_COSTS["cloudflare"]["note"],
             },
             "audd": {
                 "amount": audd_stats["estimated_cost"],
+                "base_cost": audd_stats["base_cost"],
+                "overage_cost": audd_stats["overage_cost"],
                 "scans_this_period": audd_stats["total_scans"],
-                "included_free": audd_stats["included_requests"],
+                "requests_this_period": audd_stats["total_requests"],
+                "audio_seconds": audd_stats["total_audio_seconds"],
+                "free_requests": audd_stats["free_requests"],
                 "remaining_free": audd_stats["remaining_free"],
+                "billable_requests": audd_stats["billable_requests"],
                 "flag_rate": audd_stats["flag_rate"],
                 "daily": audd_stats["daily"],
-                "note": "copyright detection API",
+                "note": f"copyright detection ($5 base + ${AUDD_COST_PER_1000}/1k requests over {AUDD_FREE_REQUESTS})",
             },
         },
         "support": {
