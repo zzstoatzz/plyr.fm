@@ -474,7 +474,7 @@
 		display: flex;
 		min-height: 100vh; /* fallback for browsers without dvh support */
 		width: 100%;
-		overflow-x: hidden;
+		overflow-x: clip; /* clip instead of hidden to preserve position: sticky on descendants */
 	}
 
 	@supports (min-height: 100dvh) {

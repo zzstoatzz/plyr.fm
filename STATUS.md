@@ -47,6 +47,28 @@ plyr.fm should become:
 
 ### December 2025
 
+#### performance & UX polish (PRs #586-593, Dec 14-15)
+
+**performance improvements** (PRs #590-591):
+- removed moderation service call from `/tracks/` listing endpoint
+- removed copyright check from tag listing endpoint
+- faster page loads for track feeds
+
+**moderation agent** (PRs #586, #588):
+- added moderation agent script with audit trail support
+- improved moderation prompt and UI layout
+
+**bug fixes** (PRs #589, #592, #593):
+- fixed liked state display on playlist detail page
+- preserved album track order during ATProto sync
+- made header sticky on scroll for better mobile navigation
+
+**iOS Safari fixes** (PRs #573-576):
+- fixed AddToMenu visibility issue on iOS Safari
+- menu now correctly opens upward when near viewport bottom
+
+---
+
 #### confidential OAuth client (PRs #578, #580-582, Dec 12-13)
 
 **confidential client support** (PR #578):
@@ -396,4 +418,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-13.
+this is a living document. last updated 2025-12-15.
