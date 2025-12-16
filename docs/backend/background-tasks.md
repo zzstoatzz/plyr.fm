@@ -9,6 +9,9 @@ background tasks handle operations that shouldn't block the request/response cyc
 - **media export** - downloads all tracks, zips them, and uploads to R2
 - **ATProto sync** - syncs records to user's PDS on login
 - **teal scrobbling** - scrobbles plays to user's PDS
+- **album list sync** - updates ATProto list records when album metadata changes
+- **PDS like/unlike** - syncs like records to user's PDS asynchronously
+- **PDS comment create/update/delete** - syncs comment records to user's PDS asynchronously
 
 ## architecture
 
