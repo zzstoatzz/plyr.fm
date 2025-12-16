@@ -47,6 +47,20 @@ plyr.fm should become:
 
 ### December 2025
 
+#### visual customization (PRs #595-596, Dec 16)
+
+**custom backgrounds** (PR #595):
+- users can set a custom background image URL in settings with optional tiling
+- new "playing artwork as background" toggle - uses current track's artwork as blurred page background
+- glass effect styling for track items (translucent backgrounds, subtle shadows)
+- new `ui_settings` JSONB column in preferences for extensible UI settings
+
+**bug fix** (PR #596):
+- removed 3D wheel scroll effect that was blocking like/share button clicks
+- root cause: `translateZ` transforms created z-index stacking that intercepted pointer events
+
+---
+
 #### performance & UX polish (PRs #586-593, Dec 14-15)
 
 **performance improvements** (PRs #590-591):
@@ -123,11 +137,12 @@ plyr.fm should become:
 - zero new dependencies - uses browser APIs only
 - pagination state persisted to localStorage for fast subsequent loads
 
-**album management improvements** (PRs #550-552):
+**album management improvements** (PRs #550-552, #557):
 - album delete and track reorder fixes
 - album page edit mode matching playlist UX (inline title editing, cover upload)
 - optimistic UI updates for album title changes (instant feedback)
 - ATProto record sync when album title changes (updates all track records + list record)
+- fixed album slug sync on rename (prevented duplicate albums when adding tracks)
 
 **playlist show on profile** (PR #553):
 - restored "show on profile" toggle that was lost during inline editing refactor
@@ -135,10 +150,11 @@ plyr.fm should become:
 
 ---
 
-#### public cost dashboard (PR #548, Dec 9)
+#### public cost dashboard (PRs #548-549, Dec 9)
 
 - `/costs` page showing live platform infrastructure costs
 - daily export to R2 via GitHub Action, proxied through `/stats/costs` endpoint
+- dedicated `plyr-stats` R2 bucket with public access (shared across environments)
 - includes fly.io, neon, cloudflare, and audd API costs
 - ko-fi integration for community support
 
@@ -442,4 +458,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-15.
+this is a living document. last updated 2025-12-16.
