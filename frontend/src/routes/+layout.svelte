@@ -95,10 +95,18 @@
 			root.style.setProperty('--bg-image', `url(${uiSettings.background_image_url})`);
 			root.style.setProperty('--bg-image-mode', uiSettings.background_tile ? 'repeat' : 'no-repeat');
 			root.style.setProperty('--bg-image-size', uiSettings.background_tile ? 'auto' : 'cover');
+			// glass button styling for visibility against background images
+			const isLight = root.classList.contains('theme-light');
+			root.style.setProperty('--glass-btn-bg', isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(18, 18, 18, 0.8)');
+			root.style.setProperty('--glass-btn-bg-hover', isLight ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 30, 30, 0.9)');
+			root.style.setProperty('--glass-btn-border', isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)');
 		} else {
 			root.style.removeProperty('--bg-image');
 			root.style.removeProperty('--bg-image-mode');
 			root.style.removeProperty('--bg-image-size');
+			root.style.removeProperty('--glass-btn-bg');
+			root.style.removeProperty('--glass-btn-bg-hover');
+			root.style.removeProperty('--glass-btn-border');
 		}
 	});
 

@@ -133,17 +133,18 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		padding: 0.25rem;
-		background: transparent;
-		border: none;
+		padding: 0.35rem;
+		background: var(--glass-btn-bg, transparent);
+		border: 1px solid var(--glass-btn-border, transparent);
 		color: var(--text-tertiary);
 		cursor: pointer;
-		transition: color 0.15s;
-		border-radius: 4px;
+		transition: all 0.15s;
+		border-radius: 6px;
 	}
 
 	.filter-toggle:hover {
 		color: var(--text-secondary);
+		background: var(--glass-btn-bg-hover, var(--bg-hover, transparent));
 	}
 
 	.filter-toggle.has-filters {

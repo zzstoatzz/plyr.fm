@@ -1521,20 +1521,22 @@
 		justify-content: center;
 		width: 32px;
 		height: 32px;
-		background: transparent;
-		border: 1px solid var(--border-default);
-		border-radius: 4px;
-		color: var(--text-tertiary);
+		background: var(--glass-btn-bg, rgba(18, 18, 18, 0.75));
+		border: 1px solid var(--glass-btn-border, rgba(255, 255, 255, 0.1));
+		border-radius: 6px;
+		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.15s;
 	}
 
 	.icon-btn:hover {
+		background: var(--glass-btn-bg-hover, rgba(30, 30, 30, 0.85));
 		border-color: var(--accent);
 		color: var(--accent);
 	}
 
 	.icon-btn.danger:hover {
+		background: rgba(239, 68, 68, 0.15);
 		border-color: #ef4444;
 		color: #ef4444;
 	}
@@ -1542,7 +1544,7 @@
 	.icon-btn.active {
 		border-color: var(--accent);
 		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		background: color-mix(in srgb, var(--accent) 20%, var(--glass-btn-bg, rgba(18, 18, 18, 0.75)));
 	}
 
 	/* playlist actions */

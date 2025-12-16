@@ -36,13 +36,13 @@
 
 <style>
 	.share-btn {
-		background: transparent;
-		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		background: var(--glass-btn-bg, rgba(18, 18, 18, 0.75));
+		border: 1px solid var(--glass-btn-border, rgba(255, 255, 255, 0.1));
+		border-radius: 6px;
 		width: 32px;
 		height: 32px;
 		padding: 0;
-		color: var(--text-tertiary);
+		color: var(--text-secondary);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -53,6 +53,7 @@
 	}
 
 	.share-btn:hover {
+		background: var(--glass-btn-bg-hover, rgba(30, 30, 30, 0.85));
 		border-color: var(--accent);
 		color: var(--accent);
 	}
