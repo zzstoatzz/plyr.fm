@@ -105,10 +105,14 @@
 
 		if (bgImageUrl) {
 			root.style.setProperty('--bg-image', `url(${bgImageUrl})`);
-			// playing artwork never tiles, custom image respects tile setting
-			const shouldTile = !uiSettings.use_playing_artwork_as_background && uiSettings.background_tile;
+			// playing artwork tiles in a 4x4 grid with blur, custom image respects tile setting
+			const isPlayingArtwork = uiSettings.use_playing_artwork_as_background;
+			const shouldTile = isPlayingArtwork || uiSettings.background_tile;
 			root.style.setProperty('--bg-image-mode', shouldTile ? 'repeat' : 'no-repeat');
-			root.style.setProperty('--bg-image-size', shouldTile ? 'auto' : 'cover');
+			// playing artwork: 25% size (4x4 grid), custom: auto if tiled, cover if not
+			root.style.setProperty('--bg-image-size', isPlayingArtwork ? '25%' : (uiSettings.background_tile ? 'auto' : 'cover'));
+			// blur playing artwork for smoother look
+			root.style.setProperty('--bg-blur', isPlayingArtwork ? '40px' : '0px');
 			// glass button styling for visibility against background images
 			const isLight = root.classList.contains('theme-light');
 			root.style.setProperty('--glass-btn-bg', isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(18, 18, 18, 0.8)');
@@ -118,6 +122,7 @@
 			root.style.removeProperty('--bg-image');
 			root.style.removeProperty('--bg-image-mode');
 			root.style.removeProperty('--bg-image-size');
+			root.style.removeProperty('--bg-blur');
 			root.style.removeProperty('--glass-btn-bg');
 			root.style.removeProperty('--glass-btn-bg-hover');
 			root.style.removeProperty('--glass-btn-border');
@@ -509,13 +514,22 @@
 		padding: 0;
 		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
 		background-color: var(--bg-primary);
+		color: var(--text-primary);
+		-webkit-font-smoothing: antialiased;
+	}
+
+	/* background image with blur effect */
+	:global(body::before) {
+		content: '';
+		position: fixed;
+		inset: 0;
 		background-image: var(--bg-image, none);
 		background-repeat: var(--bg-image-mode, no-repeat);
 		background-size: var(--bg-image-size, cover);
 		background-position: center;
-		background-attachment: fixed;
-		color: var(--text-primary);
-		-webkit-font-smoothing: antialiased;
+		filter: blur(var(--bg-blur, 0px));
+		transform: scale(1.1); /* prevent blur edge artifacts */
+		z-index: -1;
 	}
 
 	.app-layout {
