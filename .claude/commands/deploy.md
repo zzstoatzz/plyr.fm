@@ -46,6 +46,5 @@ if confirmed:
 ## post-deployment
 
 remind the user to:
-- verify staging at https://stg.plyr.fm (frontend auto-deploys)
 - monitor fly.io dashboard for backend deployment status
 - check https://plyr.fm once deployment completes

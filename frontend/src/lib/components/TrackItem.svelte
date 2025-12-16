@@ -328,11 +328,13 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-subtle);
+		background: var(--track-bg, var(--bg-secondary));
+		border: 1px solid var(--track-border, var(--border-subtle));
 		border-left: 3px solid transparent;
+		border-radius: 6px;
 		padding: 1rem;
-		transition: all 0.15s ease-in-out;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+		transition: background 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 	}
 
 	.track-index {
@@ -345,13 +347,13 @@
 	}
 
 	.track-container:hover {
-		background: var(--bg-tertiary);
+		background: var(--track-bg-hover, var(--bg-tertiary));
 		border-left-color: var(--accent);
-		border-color: var(--border-default);
+		border-color: var(--track-border-hover, var(--border-default));
 	}
 
 	.track-container.playing {
-		background: color-mix(in srgb, var(--accent) 10%, var(--bg-tertiary));
+		background: var(--track-bg-playing, color-mix(in srgb, var(--accent) 10%, var(--bg-tertiary)));
 		border-left-color: var(--accent);
 		border-color: color-mix(in srgb, var(--accent) 20%, var(--border-subtle));
 	}

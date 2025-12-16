@@ -408,6 +408,18 @@
 		--success: #4ade80;
 		--warning: #fbbf24;
 		--error: #ef4444;
+
+		/* glass effects (dark theme) */
+		--glass-bg: rgba(20, 20, 20, 0.75);
+		--glass-blur: blur(12px);
+		--glass-border: rgba(255, 255, 255, 0.06);
+
+		/* track item glass (no blur, just translucent) */
+		--track-bg: rgba(24, 24, 24, 0.85);
+		--track-bg-hover: rgba(32, 32, 32, 0.9);
+		--track-bg-playing: rgba(var(--accent-rgb), 0.12);
+		--track-border: rgba(255, 255, 255, 0.06);
+		--track-border-hover: rgba(255, 255, 255, 0.1);
 	}
 
 	/* light theme overrides */
@@ -434,28 +446,20 @@
 		--success: #16a34a;
 		--warning: #d97706;
 		--error: #dc2626;
+
+		/* glass effects (light theme) */
+		--glass-bg: rgba(250, 250, 250, 0.75);
+		--glass-border: rgba(0, 0, 0, 0.06);
+
+		/* track item glass (light theme) */
+		--track-bg: rgba(255, 255, 255, 0.9);
+		--track-bg-hover: rgba(250, 250, 250, 0.95);
+		--track-bg-playing: rgba(var(--accent-rgb), 0.12);
+		--track-border: rgba(0, 0, 0, 0.06);
+		--track-border-hover: rgba(0, 0, 0, 0.1);
 	}
 
 	/* light theme specific overrides for components */
-	:global(:root.theme-light) :global(.track-container) {
-		background: var(--bg-secondary);
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-	}
-
-	:global(:root.theme-light) :global(.track-container:hover) {
-		background: var(--bg-tertiary);
-	}
-
-	:global(:root.theme-light) :global(.track-container.playing) {
-		background: color-mix(in srgb, var(--accent) 8%, white);
-		border-color: color-mix(in srgb, var(--accent) 30%, white);
-	}
-
-	:global(:root.theme-light) :global(header) {
-		background: var(--bg-primary);
-		border-color: var(--border-default);
-	}
-
 	:global(:root.theme-light) :global(.tag-badge) {
 		background: color-mix(in srgb, var(--accent) 12%, white);
 		color: var(--accent-muted);
@@ -500,8 +504,10 @@
 		right: 0;
 		width: min(360px, 100%);
 		height: 100vh; /* fallback for browsers without dvh support */
-		background: var(--bg-primary);
-		border-left: 1px solid var(--border-subtle);
+		background: var(--glass-bg, var(--bg-primary));
+		backdrop-filter: var(--glass-blur, none);
+		-webkit-backdrop-filter: var(--glass-blur, none);
+		border-left: 1px solid var(--glass-border, var(--border-subtle));
 		z-index: 50;
 	}
 
