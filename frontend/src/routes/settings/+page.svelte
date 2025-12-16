@@ -866,6 +866,7 @@
 		letter-spacing: 0.08em;
 		color: var(--text-tertiary);
 		margin-bottom: 0.75rem;
+		text-shadow: var(--text-shadow, none);
 	}
 
 	.settings-card {

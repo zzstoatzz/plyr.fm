@@ -895,6 +895,7 @@
 		letter-spacing: 0.1em;
 		color: var(--text-tertiary);
 		margin: 0;
+		text-shadow: var(--text-shadow, none);
 	}
 
 	.album-title {
@@ -906,6 +907,7 @@
 		word-wrap: break-word;
 		overflow-wrap: break-word;
 		hyphens: auto;
+		text-shadow: var(--text-shadow, none);
 	}
 
 	.album-meta {
@@ -914,6 +916,7 @@
 		gap: 0.75rem;
 		font-size: 0.95rem;
 		color: var(--text-secondary);
+		text-shadow: var(--text-shadow, none);
 	}
 
 	.artist-link {
@@ -921,6 +924,7 @@
 		text-decoration: none;
 		font-weight: 600;
 		transition: color 0.2s;
+		text-shadow: var(--text-shadow, none);
 	}
 
 	.artist-link:hover {

@@ -136,6 +136,7 @@
 		font-size: 0.95rem;
 		color: var(--text-tertiary);
 		margin: 0;
+		text-shadow: var(--text-shadow, none);
 	}
 
 	.btn-queue-all {
