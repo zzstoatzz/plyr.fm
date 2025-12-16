@@ -95,24 +95,27 @@
 		const uiSettings = preferences.uiSettings;
 		const root = document.documentElement;
 
-		// determine background image URL - playing artwork takes priority if enabled
+		// determine background image URL
+		// priority: playing artwork (if enabled and available) > custom URL
 		let bgImageUrl: string | undefined;
+		let isUsingPlayingArtwork = false;
 		if (uiSettings.use_playing_artwork_as_background && player.currentTrack?.image_url) {
 			bgImageUrl = player.currentTrack.image_url;
-		} else if (!uiSettings.use_playing_artwork_as_background && uiSettings.background_image_url) {
+			isUsingPlayingArtwork = true;
+		} else if (uiSettings.background_image_url) {
+			// fall back to custom URL (whether playing artwork is enabled or not)
 			bgImageUrl = uiSettings.background_image_url;
 		}
 
 		if (bgImageUrl) {
 			root.style.setProperty('--bg-image', `url(${bgImageUrl})`);
 			// playing artwork tiles in a 4x4 grid with blur, custom image respects tile setting
-			const isPlayingArtwork = uiSettings.use_playing_artwork_as_background;
-			const shouldTile = isPlayingArtwork || uiSettings.background_tile;
+			const shouldTile = isUsingPlayingArtwork || uiSettings.background_tile;
 			root.style.setProperty('--bg-image-mode', shouldTile ? 'repeat' : 'no-repeat');
 			// playing artwork: 25% size (4x4 grid), custom: auto if tiled, cover if not
-			root.style.setProperty('--bg-image-size', isPlayingArtwork ? '25%' : (uiSettings.background_tile ? 'auto' : 'cover'));
+			root.style.setProperty('--bg-image-size', isUsingPlayingArtwork ? '25%' : (uiSettings.background_tile ? 'auto' : 'cover'));
 			// blur playing artwork for smoother look
-			root.style.setProperty('--bg-blur', isPlayingArtwork ? '40px' : '0px');
+			root.style.setProperty('--bg-blur', isUsingPlayingArtwork ? '40px' : '0px');
 			// glass button styling for visibility against background images
 			const isLight = root.classList.contains('theme-light');
 			root.style.setProperty('--glass-btn-bg', isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(18, 18, 18, 0.8)');
