@@ -4,11 +4,11 @@ plyr.fm legal questions
 
 music streaming platform on AT Protocol. users upload audio. no payments yet.
 
-## 1. copyright liability without licensing deals
+## 1. DMCA safe harbor limits
 
-youtube/spotify/tiktok have content ID systems and pay labels for copyrighted content on their platforms. we don't - we just respond to DMCA takedowns (registered agent, terminate repeat infringers).
+we have DMCA safe harbor (registered agent, respond to takedowns, terminate repeat infringers). 
 
-**question:** is DMCA safe harbor sufficient for a user-upload music platform, or do we eventually need licensing agreements? what's the realistic legal exposure if a label decides to come after us instead of just sending takedowns?
+**question:** does safe harbor fully protect us from liability, or can rights holders still get injunctions requiring proactive filtering or licensing? what's the realistic worst-case if a major label targets us?
 
 ## 2. proactive scanning implications
 
