@@ -86,8 +86,12 @@
 	});
 
 	// apply background image from ui_settings
+	// only apply when preferences are actually loaded (not null) to avoid clearing on initial load
 	$effect(() => {
 		if (!browser) return;
+		// don't clear bg image if preferences haven't loaded yet
+		if (!preferences.loaded) return;
+
 		const uiSettings = preferences.uiSettings;
 		const root = document.documentElement;
 

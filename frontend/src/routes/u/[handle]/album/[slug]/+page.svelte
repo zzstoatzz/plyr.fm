@@ -963,12 +963,13 @@
 	}
 
 	.queue-button {
-		background: transparent;
+		background: var(--glass-btn-bg, transparent);
 		color: var(--text-primary);
-		border: 1px solid var(--border-default);
+		border: 1px solid var(--glass-btn-border, var(--border-default));
 	}
 
 	.queue-button:hover {
+		background: var(--glass-btn-bg-hover, transparent);
 		border-color: var(--accent);
 		color: var(--accent);
 	}
