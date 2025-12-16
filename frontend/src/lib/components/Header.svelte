@@ -132,6 +132,16 @@
 							<span>library</span>
 						</a>
 					{/if}
+					{#if $page.url.pathname !== '/upload'}
+						<a href="/upload" class="nav-link upload-link" title="upload a track">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+								<polyline points="17 8 12 3 7 8"></polyline>
+								<line x1="12" y1="3" x2="12" y2="15"></line>
+							</svg>
+							<span>upload</span>
+						</a>
+					{/if}
 					{#if $page.url.pathname !== '/portal'}
 						<a href="/portal" class="user-handle" title="go to portal">@{user?.handle}</a>
 					{/if}
@@ -358,6 +368,16 @@
 		color: var(--accent);
 		background: var(--bg-tertiary);
 		border-color: var(--border-default);
+	}
+
+	.nav-link.upload-link {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.nav-link.upload-link:hover {
+		background: var(--accent);
+		color: var(--bg-primary);
 	}
 
 	.nav-link svg {
