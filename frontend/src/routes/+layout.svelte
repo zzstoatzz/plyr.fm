@@ -536,6 +536,7 @@
 		filter: blur(var(--bg-blur, 0px));
 		transform: scale(1.1); /* prevent blur edge artifacts */
 		z-index: -1;
+		pointer-events: none;
 	}
 
 	.app-layout {

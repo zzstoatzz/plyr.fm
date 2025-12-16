@@ -177,7 +177,7 @@
 
 	async function saveUsePlayingArtwork(enabled: boolean) {
 		await preferences.updateUiSettings({ use_playing_artwork_as_background: enabled });
-		toast.success(enabled ? 'using playing artwork as background' : 'using custom background');
+		toast.success(enabled ? 'playing artwork background enabled' : 'playing artwork background disabled');
 	}
 
 	function selectTheme(theme: Theme) {
@@ -457,7 +457,7 @@
 				<div class="setting-row">
 					<div class="setting-info">
 						<h3>background image</h3>
-						<p>set a custom background image (URL)</p>
+						<p>set a custom background image (URL){#if usePlayingArtwork} — used as fallback when nothing is playing{/if}</p>
 					</div>
 					<div class="background-controls">
 						<input
@@ -467,9 +467,8 @@
 							bind:value={backgroundInput}
 							onblur={saveBackgroundImage}
 							onkeydown={(e) => e.key === 'Enter' && saveBackgroundImage()}
-							disabled={usePlayingArtwork}
 						/>
-						{#if backgroundImageUrl && !usePlayingArtwork}
+						{#if backgroundImageUrl}
 							<label class="tile-toggle">
 								<input
 									type="checkbox"
@@ -485,7 +484,7 @@
 				<div class="setting-row">
 					<div class="setting-info">
 						<h3>playing artwork as background</h3>
-						<p>use the currently playing track's artwork as background (overrides custom image)</p>
+						<p>use currently playing track's artwork as background (falls back to custom image when nothing is playing)</p>
 					</div>
 					<label class="toggle-switch">
 						<input
