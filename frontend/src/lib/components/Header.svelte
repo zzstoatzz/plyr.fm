@@ -153,8 +153,10 @@
 	header {
 		border-bottom: 1px solid var(--border-default);
 		margin-bottom: 2rem;
-		position: relative;
+		position: sticky;
+		top: 0;
 		z-index: 50;
+		background: var(--bg-primary);
 	}
 
 	.header-content {
