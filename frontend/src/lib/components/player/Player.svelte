@@ -5,6 +5,7 @@
 	import { moderation } from '$lib/moderation.svelte';
 	import { preferences } from '$lib/preferences.svelte';
 	import { API_URL } from '$lib/config';
+	import { getCachedAudioUrl } from '$lib/storage';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import TrackInfo from './TrackInfo.svelte';
@@ -238,6 +239,29 @@
 		);
 	});
 
+	// get audio source URL - checks local cache first, falls back to network
+	async function getAudioSource(file_id: string): Promise<string> {
+		try {
+			const cachedUrl = await getCachedAudioUrl(file_id);
+			if (cachedUrl) {
+				return cachedUrl;
+			}
+		} catch (err) {
+			console.error('failed to check audio cache:', err);
+		}
+		return `${API_URL}/audio/${file_id}`;
+	}
+
+	// track blob URLs we've created so we can revoke them
+	let currentBlobUrl: string | null = null;
+
+	function cleanupBlobUrl() {
+		if (currentBlobUrl) {
+			URL.revokeObjectURL(currentBlobUrl);
+			currentBlobUrl = null;
+		}
+	}
+
 	// handle track changes - load new audio when track changes
 	let previousTrackId = $state<number | null>(null);
 	let isLoadingTrack = $state(false);
@@ -247,17 +271,42 @@
 
 		// only load new track if it actually changed
 		if (player.currentTrack.id !== previousTrackId) {
-			previousTrackId = player.currentTrack.id;
+			const trackToLoad = player.currentTrack;
+			previousTrackId = trackToLoad.id;
 			player.resetPlayCount();
 			isLoadingTrack = true;
 
-			player.audioElement.src = `${API_URL}/audio/${player.currentTrack.file_id}`;
-			player.audioElement.load();
+			// cleanup previous blob URL before loading new track
+			cleanupBlobUrl();
 
-			// wait for audio to be ready before allowing playback
-			player.audioElement.addEventListener('loadeddata', () => {
-				isLoadingTrack = false;
-			}, { once: true });
+			// async: get audio source (cached or network)
+			getAudioSource(trackToLoad.file_id).then((src) => {
+				// check if track is still current (user may have changed tracks during await)
+				if (player.currentTrack?.id !== trackToLoad.id || !player.audioElement) {
+					// track changed, cleanup if we created a blob URL
+					if (src.startsWith('blob:')) {
+						URL.revokeObjectURL(src);
+					}
+					return;
+				}
+
+				// track if this is a blob URL so we can revoke it later
+				if (src.startsWith('blob:')) {
+					currentBlobUrl = src;
+				}
+
+				player.audioElement.src = src;
+				player.audioElement.load();
+
+				// wait for audio to be ready before allowing playback
+				player.audioElement.addEventListener(
+					'loadeddata',
+					() => {
+						isLoadingTrack = false;
+					},
+					{ once: true }
+				);
+			});
 		}
 	});
 

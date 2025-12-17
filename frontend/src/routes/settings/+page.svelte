@@ -24,6 +24,7 @@
 	let backgroundImageUrl = $derived(preferences.uiSettings.background_image_url ?? '');
 	let backgroundTile = $derived(preferences.uiSettings.background_tile ?? false);
 	let usePlayingArtwork = $derived(preferences.uiSettings.use_playing_artwork_as_background ?? false);
+	let autoDownloadLiked = $derived(preferences.autoDownloadLiked);
 	// developer token state
 	let creatingToken = $state(false);
 	let developerToken = $state<string | null>(null);
@@ -190,6 +191,29 @@
 		queue.setAutoAdvance(value);
 		localStorage.setItem('autoAdvance', value ? '1' : '0');
 		await preferences.update({ auto_advance: value });
+	}
+
+	function handleAutoDownloadToggle(enabled: boolean) {
+		preferences.setAutoDownloadLiked(enabled);
+
+		if (enabled) {
+			// start downloading existing liked tracks in background (non-blocking)
+			toast.success('downloading liked tracks in background...');
+			import('$lib/storage').then(({ downloadAllLikedTracks }) => {
+				downloadAllLikedTracks().then((count) => {
+					if (count > 0) {
+						toast.success(`downloaded ${count} track${count === 1 ? '' : 's'} for offline`);
+					} else {
+						toast.success('all liked tracks already downloaded');
+					}
+				}).catch((err) => {
+					console.error('failed to download liked tracks:', err);
+					toast.error('failed to download some tracks');
+				});
+			});
+		} else {
+			toast.success('auto-download disabled');
+		}
 	}
 
 	// preferences
@@ -515,6 +539,21 @@
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>auto-download liked</h3>
+						<p>automatically download tracks for offline playback when you like them</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={autoDownloadLiked}
+							onchange={(e) => handleAutoDownloadToggle((e.target as HTMLInputElement).checked)}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
 			</div>
 		</section>
 
@@ -603,7 +642,7 @@
 							<circle cx="12" cy="12" r="10" />
 							<path d="M12 16v-4M12 8h.01" />
 						</svg>
-						<span>toggle on to connect teal.fm scrobbling</span>
+						<span>authorization expired — disable and re-enable to reconnect</span>
 					</div>
 				{/if}
 			</div>

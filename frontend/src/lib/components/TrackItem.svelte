@@ -284,6 +284,7 @@
 					trackTitle={track.title}
 					trackUri={track.atproto_record_uri}
 					trackCid={track.atproto_record_cid}
+					fileId={track.file_id}
 					initialLiked={track.is_liked || false}
 					disabled={!track.atproto_record_uri}
 					disabledReason={!track.atproto_record_uri ? "track's record is unavailable" : undefined}
@@ -316,6 +317,7 @@
 				trackTitle={track.title}
 				trackUri={track.atproto_record_uri}
 				trackCid={track.atproto_record_cid}
+				fileId={track.file_id}
 				initialLiked={track.is_liked || false}
 				shareUrl={shareUrl}
 				onQueue={handleQueue}
@@ -710,6 +712,11 @@
 		background: var(--bg-tertiary);
 		border-color: var(--accent);
 		color: var(--accent);
+	}
+
+	.action-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.action-button svg {

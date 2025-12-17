@@ -5,13 +5,14 @@
 	interface Props {
 		trackId: number;
 		trackTitle: string;
+		fileId?: string;
 		initialLiked?: boolean;
 		disabled?: boolean;
 		disabledReason?: string;
 		onLikeChange?: (_liked: boolean) => void;
 	}
 
-	let { trackId, trackTitle, initialLiked = false, disabled = false, disabledReason, onLikeChange }: Props = $props();
+	let { trackId, trackTitle, fileId, initialLiked = false, disabled = false, disabledReason, onLikeChange }: Props = $props();
 
 	let liked = $state(initialLiked);
 	let loading = $state(false);
@@ -34,7 +35,7 @@
 
 		try {
 			const success = liked
-				? await likeTrack(trackId)
+				? await likeTrack(trackId, fileId)
 				: await unlikeTrack(trackId);
 
 			if (!success) {

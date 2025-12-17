@@ -23,7 +23,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	show_sensitive_artwork: false,
 	show_liked_on_profile: false,
 	support_url: null,
-	ui_settings: {}
+	ui_settings: {},
+	auto_download_liked: false
 };
 
 export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
@@ -54,6 +55,10 @@ export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
 				});
 				if (prefsResponse.ok) {
 					const prefsData = await prefsResponse.json();
+					// auto_download_liked is stored locally, not on server
+					const storedAutoDownload = typeof localStorage !== 'undefined'
+						? localStorage.getItem('autoDownloadLiked') === '1'
+						: false;
 					preferences = {
 						accent_color: prefsData.accent_color ?? null,
 						auto_advance: prefsData.auto_advance ?? true,
@@ -65,7 +70,8 @@ export async function load({ fetch, data }: LoadEvent): Promise<LayoutData> {
 						show_sensitive_artwork: prefsData.show_sensitive_artwork ?? false,
 						show_liked_on_profile: prefsData.show_liked_on_profile ?? false,
 						support_url: prefsData.support_url ?? null,
-						ui_settings: prefsData.ui_settings ?? {}
+						ui_settings: prefsData.ui_settings ?? {},
+						auto_download_liked: storedAutoDownload
 					};
 				}
 			} catch (e) {
