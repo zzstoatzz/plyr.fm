@@ -23,6 +23,7 @@ export interface Preferences {
 	show_liked_on_profile: boolean;
 	support_url: string | null;
 	ui_settings: UiSettings;
+	auto_download_liked: boolean;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -36,7 +37,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	show_sensitive_artwork: false,
 	show_liked_on_profile: false,
 	support_url: null,
-	ui_settings: {}
+	ui_settings: {},
+	auto_download_liked: false
 };
 
 class PreferencesManager {
@@ -92,6 +94,19 @@ class PreferencesManager {
 		return this.data?.ui_settings ?? DEFAULT_PREFERENCES.ui_settings;
 	}
 
+	get autoDownloadLiked(): boolean {
+		return this.data?.auto_download_liked ?? DEFAULT_PREFERENCES.auto_download_liked;
+	}
+
+	setAutoDownloadLiked(enabled: boolean): void {
+		if (browser) {
+			localStorage.setItem('autoDownloadLiked', enabled ? '1' : '0');
+		}
+		if (this.data) {
+			this.data = { ...this.data, auto_download_liked: enabled };
+		}
+	}
+
 	setTheme(theme: Theme): void {
 		if (browser) {
 			localStorage.setItem('theme', theme);
@@ -134,6 +149,8 @@ class PreferencesManager {
 			});
 			if (response.ok) {
 				const data = await response.json();
+				// auto_download_liked is stored locally since it's device-specific
+				const storedAutoDownload = localStorage.getItem('autoDownloadLiked') === '1';
 				this.data = {
 					accent_color: data.accent_color ?? null,
 					auto_advance: data.auto_advance ?? DEFAULT_PREFERENCES.auto_advance,
@@ -145,10 +162,12 @@ class PreferencesManager {
 					show_sensitive_artwork: data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork,
 					show_liked_on_profile: data.show_liked_on_profile ?? DEFAULT_PREFERENCES.show_liked_on_profile,
 					support_url: data.support_url ?? DEFAULT_PREFERENCES.support_url,
-					ui_settings: data.ui_settings ?? DEFAULT_PREFERENCES.ui_settings
+					ui_settings: data.ui_settings ?? DEFAULT_PREFERENCES.ui_settings,
+					auto_download_liked: storedAutoDownload
 				};
 			} else {
-				this.data = { ...DEFAULT_PREFERENCES, theme: currentTheme };
+				const storedAutoDownload = localStorage.getItem('autoDownloadLiked') === '1';
+				this.data = { ...DEFAULT_PREFERENCES, theme: currentTheme, auto_download_liked: storedAutoDownload };
 			}
 			// apply theme after fetching
 			if (browser) {

@@ -9,6 +9,7 @@
 		trackTitle: string;
 		trackUri?: string;
 		trackCid?: string;
+		fileId?: string;
 		initialLiked: boolean;
 		shareUrl: string;
 		onQueue: () => void;
@@ -22,6 +23,7 @@
 		trackTitle,
 		trackUri,
 		trackCid,
+		fileId,
 		initialLiked,
 		shareUrl,
 		onQueue,
@@ -99,7 +101,7 @@
 
 		try {
 			const success = liked
-				? await likeTrack(trackId)
+				? await likeTrack(trackId, fileId)
 				: await unlikeTrack(trackId);
 
 			if (!success) {

@@ -1,5 +1,7 @@
 import { API_URL } from './config';
 import type { Track } from './types';
+import { preferences } from './preferences.svelte';
+import { downloadAudio, isDownloaded } from './storage';
 
 interface TracksApiResponse {
 	tracks: Track[];
@@ -131,7 +133,7 @@ class TracksCache {
 export const tracksCache = new TracksCache();
 
 // like/unlike track functions
-export async function likeTrack(trackId: number): Promise<boolean> {
+export async function likeTrack(trackId: number, fileId?: string): Promise<boolean> {
 	try {
 		const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
 			method: 'POST',
@@ -144,6 +146,21 @@ export async function likeTrack(trackId: number): Promise<boolean> {
 
 		// invalidate cache so next fetch gets updated like status
 		tracksCache.invalidate();
+
+		// auto-download if preference is enabled and file_id provided
+		if (fileId && preferences.autoDownloadLiked) {
+			try {
+				const alreadyDownloaded = await isDownloaded(fileId);
+				if (!alreadyDownloaded) {
+					// download in background, don't await
+					downloadAudio(fileId).catch((err) => {
+						console.error('auto-download failed:', err);
+					});
+				}
+			} catch (err) {
+				console.error('failed to check/download:', err);
+			}
+		}
 
 		return true;
 	} catch (e) {

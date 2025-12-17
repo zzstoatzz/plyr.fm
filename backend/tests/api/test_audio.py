@@ -7,8 +7,24 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend._internal import Session, require_auth
 from backend.main import app
 from backend.models import Artist, Track
+
+
+@pytest.fixture
+def mock_session() -> Session:
+    """create a mock session for authenticated endpoints."""
+    return Session(
+        session_id="test-session-id",
+        did="did:plc:testuser123",
+        handle="testuser.bsky.social",
+        oauth_session={
+            "access_token": "test-access-token",
+            "refresh_token": "test-refresh-token",
+            "dpop_key": {},
+        },
+    )
 
 
 @pytest.fixture
@@ -146,3 +162,123 @@ async def test_stream_audio_file_not_in_storage(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "audio file not found"
+
+
+# tests for /audio/{file_id}/url endpoint (offline caching, requires auth)
+
+
+async def test_get_audio_url_with_cached_url(
+    test_app: FastAPI, test_track_with_r2_url: Track, mock_session: Session
+):
+    """test that /url endpoint returns cached r2_url as JSON."""
+    mock_storage = MagicMock()
+    mock_storage.get_url = AsyncMock()
+
+    test_app.dependency_overrides[require_auth] = lambda: mock_session
+
+    try:
+        with patch("backend.api.audio.storage", mock_storage):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    f"/audio/{test_track_with_r2_url.file_id}/url"
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["url"] == test_track_with_r2_url.r2_url
+        assert data["file_id"] == test_track_with_r2_url.file_id
+        assert data["file_type"] == test_track_with_r2_url.file_type
+        # should NOT call get_url when r2_url is cached
+        mock_storage.get_url.assert_not_called()
+    finally:
+        test_app.dependency_overrides.pop(require_auth, None)
+
+
+async def test_get_audio_url_without_cached_url(
+    test_app: FastAPI, test_track_without_r2_url: Track, mock_session: Session
+):
+    """test that /url endpoint calls storage.get_url when r2_url is None."""
+    expected_url = "https://cdn.example.com/audio/test456.flac"
+
+    mock_storage = MagicMock()
+    mock_storage.get_url = AsyncMock(return_value=expected_url)
+
+    test_app.dependency_overrides[require_auth] = lambda: mock_session
+
+    try:
+        with patch("backend.api.audio.storage", mock_storage):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    f"/audio/{test_track_without_r2_url.file_id}/url"
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["url"] == expected_url
+        assert data["file_id"] == test_track_without_r2_url.file_id
+        assert data["file_type"] == test_track_without_r2_url.file_type
+
+        mock_storage.get_url.assert_called_once_with(
+            test_track_without_r2_url.file_id,
+            file_type="audio",
+            extension=test_track_without_r2_url.file_type,
+        )
+    finally:
+        test_app.dependency_overrides.pop(require_auth, None)
+
+
+async def test_get_audio_url_not_found(test_app: FastAPI, mock_session: Session):
+    """test that /url endpoint returns 404 for nonexistent track."""
+    test_app.dependency_overrides[require_auth] = lambda: mock_session
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get("/audio/nonexistent/url")
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "audio file not found"
+    finally:
+        test_app.dependency_overrides.pop(require_auth, None)
+
+
+async def test_get_audio_url_storage_returns_none(
+    test_app: FastAPI, test_track_without_r2_url: Track, mock_session: Session
+):
+    """test that /url endpoint returns 404 when storage.get_url returns None."""
+    mock_storage = MagicMock()
+    mock_storage.get_url = AsyncMock(return_value=None)
+
+    test_app.dependency_overrides[require_auth] = lambda: mock_session
+
+    try:
+        with patch("backend.api.audio.storage", mock_storage):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    f"/audio/{test_track_without_r2_url.file_id}/url"
+                )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "audio file not found"
+    finally:
+        test_app.dependency_overrides.pop(require_auth, None)
+
+
+async def test_get_audio_url_requires_auth(test_app: FastAPI):
+    """test that /url endpoint returns 401 without authentication."""
+    # ensure no auth override
+    test_app.dependency_overrides.pop(require_auth, None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get("/audio/somefile/url")
+
+    assert response.status_code == 401

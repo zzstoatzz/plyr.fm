@@ -9,6 +9,7 @@
 		trackTitle: string;
 		trackUri?: string;
 		trackCid?: string;
+		fileId?: string;
 		initialLiked?: boolean;
 		disabled?: boolean;
 		disabledReason?: string;
@@ -23,6 +24,7 @@
 		trackTitle,
 		trackUri,
 		trackCid,
+		fileId,
 		initialLiked = false,
 		disabled = false,
 		disabledReason,
@@ -100,7 +102,7 @@
 
 		try {
 			const success = liked
-				? await likeTrack(trackId)
+				? await likeTrack(trackId, fileId)
 				: await unlikeTrack(trackId);
 
 			if (!success) {
