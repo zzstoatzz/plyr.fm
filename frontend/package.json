@@ -29,6 +29,7 @@
 		"vite": "^7.1.7"
 	},
 	"dependencies": {
-		"@atproto/api": "^0.18.7"
+		"@atproto/api": "^0.18.7",
+		"svelte-portal": "^2.2.1"
 	}
 }

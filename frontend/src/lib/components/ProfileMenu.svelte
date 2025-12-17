@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { portal } from 'svelte-portal';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { queue } from '$lib/queue.svelte';
@@ -118,8 +119,8 @@
 	{#if showMenu}
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="menu-backdrop" onclick={closeMenu}></div>
-		<div class="menu-popover">
+		<div class="menu-backdrop" use:portal={'body'} onclick={closeMenu}></div>
+		<div class="menu-popover" use:portal={'body'}>
 			<div class="menu-header">
 				<span>{showSettings ? 'settings' : 'menu'}</span>
 				<button class="close-btn" onclick={closeMenu} aria-label="close">

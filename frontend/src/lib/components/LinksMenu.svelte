@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { portal } from 'svelte-portal';
 	import PlatformStats from './PlatformStats.svelte';
 
 	let showMenu = $state(false);
@@ -33,8 +34,8 @@
 	{#if showMenu}
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="menu-backdrop" onclick={closeMenu}></div>
-		<div class="menu-popover">
+		<div class="menu-backdrop" use:portal={'body'} onclick={closeMenu}></div>
+		<div class="menu-popover" use:portal={'body'}>
 			<div class="menu-header">
 				<span>links</span>
 				<button
