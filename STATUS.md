@@ -208,9 +208,9 @@ plyr.fm should become:
 - enhanced moderation workflow for copyright claims
 - improved labeler integration
 
-**letta-backed status maintenance** (PR #529):
-- automated status maintenance using Letta AI agent
-- agent reviews merged PRs and updates STATUS.md narratively
+**status maintenance workflow** (PR #529):
+- automated status maintenance using claude-code-action
+- reviews merged PRs and updates STATUS.md narratively
 
 ---
 

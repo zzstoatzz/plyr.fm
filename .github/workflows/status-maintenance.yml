@@ -1,17 +1,11 @@
-# status maintenance via letta-backed agent
+# status maintenance via claude code
 #
 # two-phase workflow:
-# 1. workflow_dispatch: runs letta-backed script to archive, generate audio, open PR
+# 1. workflow_dispatch: archives old STATUS.md sections, generates audio, opens PR
 # 2. on PR merge: uploads audio to plyr.fm
 #
-# the letta agent maintains persistent memory across runs, remembering:
-# - previous status updates and their content
-# - architectural decisions and patterns
-# - recurring themes in development
-#
 # required secrets:
-#   LETTA_API_KEY - letta cloud API key (for persistent memory)
-#   ANTHROPIC_API_KEY - anthropic API key (for claude)
+#   ANTHROPIC_API_KEY - claude code
 #   GOOGLE_API_KEY - gemini TTS (for audio generation)
 #   PLYR_BOT_TOKEN - plyr.fm developer token (for audio upload)
 
@@ -27,22 +21,19 @@ on:
         description: "skip audio generation"
         type: boolean
         default: false
-      dry_run:
-        description: "dry run (no file changes)"
-        type: boolean
-        default: false
   pull_request:
     types: [closed]
     branches: [main]
 
 jobs:
-  # phase 1: run letta-backed maintenance script + open PR
+  # phase 1: archive + generate audio + open PR
   maintain:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -51,82 +42,211 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
 
-      - name: Run letta-backed status maintenance
-        id: maintenance
-        run: |
-          ARGS=""
-          if [ "${{ inputs.skip_audio }}" = "true" ]; then
-            ARGS="$ARGS --skip-audio"
-          fi
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            ARGS="$ARGS --dry-run"
-          fi
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --model opus
+            --allowedTools "Read,Write,Edit,Bash,Fetch,Task"
+          prompt: |
+            you are maintaining the plyr.fm (pronounced "player FM") project status file.
 
-          uv run scripts/status_maintenance.py $ARGS
+            ## critical rules
 
-          # check if files were modified
-          if [ -f .modified_files ]; then
-            echo "files_modified=true" >> $GITHUB_OUTPUT
-          else
-            echo "files_modified=false" >> $GITHUB_OUTPUT
-          fi
+            1. STATUS.md MUST be kept under 500 lines. this is non-negotiable.
+            2. archive content MUST be moved to .status_history/, not deleted
+            3. podcast tone MUST be dry, matter-of-fact, slightly sardonic - NOT enthusiastic or complimentary
+
+            ## task 1: gather temporal context
+
+            CRITICAL: you must determine the correct time window by finding when the LAST status maintenance PR was MERGED (not opened).
+
+            run these commands:
+            ```bash
+            date
+            # get the most recently merged status-maintenance PR (filter by branch name, sort by merge date)
+            gh pr list --state merged --search "status-maintenance" --limit 20 --json number,title,mergedAt,headRefName | jq '[.[] | select(.headRefName | startswith("status-maintenance-"))] | sort_by(.mergedAt) | reverse | .[0]'
+            git log --oneline -50
+            ls -la .status_history/ 2>/dev/null || echo "no archive directory yet"
+            wc -l STATUS.md
+            ```
+
+            determine:
+            - what is today's date?
+            - when was the last status-maintenance PR MERGED? (use the mergedAt field from the jq output - it's the most recent PR with a branch starting with "status-maintenance-")
+            - what shipped SINCE that merge date? (this is your focus window - NOT "last week")
+            - does .status_history/ exist? (this implies whether or not this is the first episode)
+            - how many lines is STATUS.md currently?
+
+            IMPORTANT: the time window for this maintenance run is from the last merged status-maintenance PR until now. if the last PR was merged on Dec 2nd and today is Dec 8th, you should focus on everything from Dec 3rd onwards, NOT just "the last week".
+
+            ## task 2: archive old sections (MANDATORY if over 250 lines)
+
+            if STATUS.md > 500 lines:
+            1. create .status_history/ directory if it doesn't exist
+            2. identify section boundaries (look for "---" separators and "### " headers with dates)
+            3. move OLDEST sections to .status_history/YYYY-MM.md (grouped by month)
+            4. compact the meaning of the original entire STATUS.md into about 500 lines or less
+            5. generally preserve the document structure (keep "## recent work" header, "## immediate priorities", etc)
+            6. do NOT summarize archived content - move it verbatim and organize it chronologically
+
+            ARCHIVE FILE NAMING - CRITICAL:
+            - archive files are organized BY MONTH: .status_history/YYYY-MM.md
+            - if today is December 2025, archived December content goes to .status_history/2025-12.md
+            - if today is January 2026, archived January content goes to .status_history/2026-01.md
+            - check what files already exist in .status_history/ and ADD to the appropriate month file if it exists
+            - each month gets ONE file - append to existing month files, don't create duplicates
+
+            so STATUS.md is the living overview, slightly recency biased, but a good general overview of the project.
+
+            .status_history/ is the archive of temporally specific sections of STATUS.md that are worth preserving for historical context, but not significant enough to be stated literally in STATUS.md in perpetuity.
+
+            VERIFY: run `wc -l STATUS.md` after archiving. it MUST be under 500 lines.
+
+            ## task 3: generate audio overview (if skip_audio is false)
+
+            skip_audio input: ${{ inputs.skip_audio }}
+
+            if skip_audio is false:
+
+            ### deep investigation phase
+
+            before writing anything, you need to deeply understand what happened in the time window.
+            use subagents liberally to investigate in parallel:
+
+            1. **get the full picture of PRs merged in the time window**:
+               ```bash
+               gh pr list --state merged --search "merged:>={mergedAt date}" --limit 50 --json number,title,body,mergedAt,additions,deletions,files
+               ```
+
+            2. **for each significant PR, read its body and understand the design decisions**:
+               - what problem was being solved?
+               - what approach was taken and why?
+               - what are the key files changed?
+
+            3. **read the actual code changes** for the top 2-3 most significant PRs:
+               - use `gh pr diff {number}` or read the changed files directly
+               - understand the architecture, not just the commit messages
+
+            4. **read background context**:
+               - STATUS.md (the current state)
+               - docs/deployment/overview.md if it exists
+               - Fetch https://atproto.com/guides/overview to understand ATProto primitives
+               - Fetch https://atproto.com/guides/lexicon to understand NSIDs and lexicons
+
+            ### identify the narrative structure
+
+            after investigating, categorize what shipped:
+
+            **big ticket items** (1-3 major features or architectural changes):
+            - these get the most airtime (60-70% of the script)
+            - explain HOW they were designed, not just WHAT they do
+            - discuss interesting technical decisions or tradeoffs
+
+            **smaller but notable changes** (3-6 fixes, improvements, polish):
+            - these get rapid-fire coverage (20-30% of the script)
+            - one or two sentences each
+            - acknowledge they happened without belaboring them
+
+            ### write the podcast script
+
+            write to podcast_script.txt with "Host: ..." and "Cohost: ..." lines.
+
+            **CHRONOLOGICAL NARRATIVE STRUCTURE** (CRITICAL):
+
+            the script must tell a coherent story of the time period, structured as:
+
+            1. **opening** (10 seconds): set the scene - what's the date range, what was the focus?
+
+            2. **the main story** (60-90 seconds): the biggest thing that shipped
+               - what problem did it solve?
+               - how was it designed? (explain the architecture accessibly)
+               - what's interesting about the implementation?
+               - the hosts should have a back-and-forth discussing the design
+
+            3. **secondary feature** (30-45 seconds, if applicable): another significant change
+               - lighter treatment than the main story
+               - still explain the "why" not just the "what"
+
+            4. **rapid fire** (20-30 seconds): the smaller changes
+               - "we also saw..." or "a few other things landed..."
+               - quick hits: bug fixes, polish, minor improvements
+               - don't dwell, just acknowledge
+
+            5. **closing** (10 seconds): looking ahead or wrapping up
+
+            the narrative should flow like you're telling a friend what happened on the project this week.
+            use transitions: "but before that landed...", "meanwhile...", "and then to tie it together..."
+
+            ### tone requirements (CRITICAL)
+
+            the hosts should sound like two engineers who:
+            - are skeptical, amused and somewhat intrigued by the absurdity of building things
+            - acknowledge problems and limitations honestly
+            - don't over-use superlatives ("amazing", "incredible", "exciting")
+            - explain technical concepts through analogy, not hypey jargon
+            - genuinely find the technical details interesting (not performatively enthusiastic)
+
+            avoid excessive phrasing:
+            - "exciting", "amazing", "incredible", "impressive", "great job"
+            - "the team has done", "they've really", "fantastic work"
+            - any variation of over-congratulating or over-sensationalizing the project
+
+            ### pronunciation (CRITICAL - READ THIS CAREFULLY)
+
+            the project name "plyr.fm" is pronounced "player FM" (like "music player").
+
+            **in your script, ALWAYS write "player FM" or "player dot FM" - NEVER write "plyr.fm" or "plyr".**
+
+            the TTS engine will mispronounce "plyr" as "plir" or "p-l-y-r" if you write it that way.
+            write phonetically for correct pronunciation: "player FM", "player dot FM".
+
+            ### identifying what actually shipped
+
+            read the commit messages and PR bodies carefully to understand what changed.
+
+            - if something is completely NEW (didn't exist before), say it "shipped" or "launched"
+            - if something existing got improved or fixed, call it what it is: fixes, improvements, polish
+
+            don't rely on commit message prefixes like `feat:` or `fix:` - they're not always accurate.
+            read the actual content to understand the scope of what changed.
+
+            ### time references (CRITICAL)
+
+            NEVER say "last week", "this week", "recently", or vague time references.
+
+            ALWAYS use specific date ranges based on the mergedAt date from task 1:
+            - "since December 2nd" or "from December 3rd to today"
+            - "in the past six days" (if that's accurate)
+            - "since the last update"
+
+            the listener doesn't know when "last week" was - be specific.
+
+            target length: 2-3 minutes spoken (~300-400 words) (it should be 4-5 if its the first episode)
+
+            ### generate audio
+
+            run: uv run scripts/generate_tts.py podcast_script.txt update.wav
+            then: rm podcast_script.txt
+
+            ## task 4: open PR
+
+            if any files changed:
+            1. first, generate a unique branch name: BRANCH="status-maintenance-$(date +%Y%m%d-%H%M%S)"
+            2. git checkout -b $BRANCH
+            3. git add .status_history/ STATUS.md update.wav
+            4. git commit -m "chore: status maintenance"
+            5. git push -u origin $BRANCH
+            6. gh pr create with a title and body you craft:
+               - title should be descriptive of what this status update covers (e.g. "chore: status maintenance - playlist fast-follow fixes" or "chore: status maintenance - December updates")
+               - make it clear this is an automated status maintenance PR from the GitHub Action
+               - body should summarize what changed (archival, audio generation, etc.)
+
+            add a label like "ai-generated" to the PR (create the label if it doesn't exist)
+            if nothing changed, report that no maintenance was needed.
+
         env:
-          LETTA_API_KEY: ${{ secrets.LETTA_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-
-      - name: Create PR
-        if: steps.maintenance.outputs.files_modified == 'true' && inputs.dry_run != true
-        run: |
-          # generate unique branch name
-          BRANCH="status-maintenance-$(date +%Y%m%d-%H%M%S)"
-
-          # configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # create branch and commit
-          git checkout -b "$BRANCH"
-          git add .status_history/ STATUS.md update.wav 2>/dev/null || true
-          git add -A  # catch any other changes
-
-          # check if there are changes to commit
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-
-          git commit -m "chore: status maintenance (letta-backed)
-
-          🤖 Generated with letta-backed status agent
-          "
-
-          git push -u origin "$BRANCH"
-
-          # create PR
-          gh pr create \
-            --title "chore: status maintenance - $(date +'%B %d, %Y')" \
-            --body "## automated status maintenance
-
-          this PR was generated by the letta-backed status maintenance agent.
-
-          ### what's included
-          - STATUS.md updates (if any changes were detected)
-          - archived content moved to .status_history/ (if needed)
-          - update.wav podcast audio (if audio generation was enabled)
-
-          ### letta memory
-          the agent maintains persistent memory across runs, improving context
-          and consistency over time.
-
-          ---
-          🤖 generated by status-maintenance workflow" \
-            --label "ai-generated" || gh label create "ai-generated" --description "Generated by AI" && gh pr create \
-            --title "chore: status maintenance - $(date +'%B %d, %Y')" \
-            --body "automated status maintenance PR" \
-            --label "ai-generated"
-        env:
-          GH_TOKEN: ${{ github.token }}
 
   # phase 2: upload audio after PR merge
   upload-audio:
