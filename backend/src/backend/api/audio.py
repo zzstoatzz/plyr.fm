@@ -1,11 +1,12 @@
 """audio streaming endpoint."""
 
 import logfire
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from backend._internal import Session, require_auth
 from backend.models import Track
 from backend.storage import storage
 from backend.utilities.database import db_session
@@ -72,7 +73,10 @@ async def stream_audio(file_id: str):
 
 
 @router.get("/{file_id}/url")
-async def get_audio_url(file_id: str) -> AudioUrlResponse:
+async def get_audio_url(
+    file_id: str,
+    session: Session = Depends(require_auth),
+) -> AudioUrlResponse:
     """return direct R2 URL for offline caching.
 
     unlike the streaming endpoint which returns a 307 redirect,
