@@ -734,6 +734,26 @@
 				{/if}
 			</div>
 		</section>
+
+		<section class="settings-section">
+			<h2>experimental</h2>
+			<div class="settings-card">
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>auto-download liked</h3>
+						<p>automatically download tracks for offline playback when you like them</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={autoDownloadLiked}
+							onchange={(e) => handleAutoDownloadToggle((e.target as HTMLInputElement).checked)}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+			</div>
+		</section>
 	</main>
 {/if}
 
