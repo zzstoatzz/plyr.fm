@@ -1,16 +1,17 @@
 <script lang="ts">
-	import { APP_NAME, APP_TAGLINE } from '$lib/branding';
+	import { APP_NAME } from '$lib/branding';
 	import { API_URL } from '$lib/config';
 	import HandleAutocomplete from '$lib/components/HandleAutocomplete.svelte';
 
 	let handle = $state('');
 	let loading = $state(false);
+	let showHandleInfo = $state(false);
+	let showPdsInfo = $state(false);
 
 	function startOAuth(e: SubmitEvent) {
 		e.preventDefault();
 		if (!handle.trim()) return;
 		loading = true;
-		// redirect to backend OAuth start endpoint
 		window.location.href = `${API_URL}/auth/start?handle=${encodeURIComponent(handle)}`;
 	}
 
@@ -21,40 +22,86 @@
 
 <div class="container">
 	<div class="login-card">
-		<h1>{APP_NAME}</h1>
-		<p>{APP_TAGLINE}</p>
+		<h1>sign in to {APP_NAME}</h1>
 
 		<form onsubmit={startOAuth}>
 			<div class="input-group">
-				<div class="label-row">
-					<label for="handle">atproto handle</label>
-					<a
-						href="https://atproto.com/specs/handle"
-						target="_blank"
-						rel="noopener noreferrer"
-						class="help-link"
-						title="learn about ATProto handles"
-					>
-						what's this?
-					</a>
-				</div>
+				<label for="handle">internet handle</label>
 				<HandleAutocomplete
 					bind:value={handle}
 					onSelect={handleSelect}
-					placeholder="yourname.bsky.social"
+					placeholder="you.bsky.social"
 					disabled={loading}
 				/>
-				<p class="input-help">
-					don't have one?
-					<a href="https://bsky.app" target="_blank" rel="noopener noreferrer">create a free Bluesky account</a>
-					to get your ATProto identity
-				</p>
 			</div>
 
-			<button type="submit" disabled={loading || !handle.trim()}>
-				{loading ? 'redirecting...' : 'sign in with atproto'}
+			<button type="submit" class="primary" disabled={loading || !handle.trim()}>
+				{loading ? 'redirecting...' : 'sign in'}
 			</button>
 		</form>
+
+		<div class="faq">
+			<button
+				class="faq-toggle"
+				onclick={() => (showHandleInfo = !showHandleInfo)}
+				aria-expanded={showHandleInfo}
+			>
+				<span>what is an internet handle?</span>
+				<svg
+					class="chevron"
+					class:open={showHandleInfo}
+					width="16"
+					height="16"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
+					<polyline points="6 9 12 15 18 9"></polyline>
+				</svg>
+			</button>
+			{#if showHandleInfo}
+				<div class="faq-content">
+					<p>
+						your internet handle is a domain that identifies you across apps built on
+						<a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>.
+						if you signed up for Bluesky or another ATProto service, you already have one
+						(like <code>yourname.bsky.social</code>).
+					</p>
+					<p>
+						read more at <a href="https://internethandle.org" target="_blank" rel="noopener">internethandle.org</a>.
+					</p>
+				</div>
+			{/if}
+
+			<button
+				class="faq-toggle"
+				onclick={() => (showPdsInfo = !showPdsInfo)}
+				aria-expanded={showPdsInfo}
+			>
+				<span>don't have one?</span>
+				<svg
+					class="chevron"
+					class:open={showPdsInfo}
+					width="16"
+					height="16"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
+					<polyline points="6 9 12 15 18 9"></polyline>
+				</svg>
+			</button>
+			{#if showPdsInfo}
+				<div class="faq-content">
+					<p>
+						the easiest way to get one is to sign up for <a href="https://bsky.app" target="_blank" rel="noopener">Bluesky</a>.
+						once you have an account, you can use that handle here.
+					</p>
+				</div>
+			{/if}
+		</div>
 	</div>
 </div>
 
@@ -71,35 +118,31 @@
 	.login-card {
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
-		padding: 3rem;
-		max-width: 400px;
+		border-radius: 12px;
+		padding: 2.5rem;
+		max-width: 420px;
 		width: 100%;
 	}
 
 	h1 {
-		font-size: 2.5rem;
-		margin: 0 0 0.5rem 0;
+		font-size: 1.75rem;
+		margin: 0 0 2rem 0;
 		color: var(--text-primary);
 		text-align: center;
+		font-weight: 600;
+		white-space: nowrap;
 	}
 
-	p {
-		color: var(--text-tertiary);
-		text-align: center;
-		margin: 0 0 2rem 0;
-		font-size: 0.95rem;
+	form {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
 	}
 
 	.input-group {
-		margin-bottom: 1.5rem;
-	}
-
-	.label-row {
 		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 0.5rem;
+		flex-direction: column;
+		gap: 0.5rem;
 	}
 
 	label {
@@ -107,62 +150,102 @@
 		font-size: 0.9rem;
 	}
 
-	.help-link {
-		color: var(--accent);
-		text-decoration: none;
-		font-size: 0.85rem;
-		transition: color 0.2s;
-	}
-
-	.help-link:hover {
-		color: var(--accent-hover);
-		text-decoration: underline;
-	}
-
-	.input-help {
-		margin: 0.5rem 0 0 0;
-		font-size: 0.85rem;
-		color: var(--text-tertiary);
-	}
-
-	.input-help a {
-		color: var(--accent);
-		text-decoration: none;
-		transition: color 0.2s;
-	}
-
-	.input-help a:hover {
-		color: var(--accent-hover);
-		text-decoration: underline;
-	}
-
-	button {
+	button.primary {
 		width: 100%;
-		padding: 0.75rem;
+		padding: 0.85rem;
 		background: var(--accent);
 		color: white;
 		border: none;
-		border-radius: 4px;
-		font-size: 1rem;
-		font-weight: 600;
+		border-radius: 8px;
+		font-size: 0.95rem;
+		font-weight: 500;
 		font-family: inherit;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.15s;
 	}
 
-	button:hover:not(:disabled) {
-		background: var(--accent-hover);
-		transform: translateY(-1px);
-		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
+	button.primary:hover:not(:disabled) {
+		opacity: 0.9;
 	}
 
-	button:disabled {
+	button.primary:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
-		transform: none;
 	}
 
-	button:active:not(:disabled) {
-		transform: translateY(0);
+	.faq {
+		margin-top: 1.5rem;
+		border-top: 1px solid var(--border-subtle);
+		padding-top: 1rem;
+	}
+
+	.faq-toggle {
+		width: 100%;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.75rem 0;
+		background: none;
+		border: none;
+		color: var(--text-secondary);
+		font-family: inherit;
+		font-size: 0.9rem;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.faq-toggle:hover {
+		color: var(--text-primary);
+	}
+
+	.chevron {
+		transition: transform 0.2s;
+		flex-shrink: 0;
+	}
+
+	.chevron.open {
+		transform: rotate(180deg);
+	}
+
+	.faq-content {
+		padding: 0 0 1rem 0;
+		color: var(--text-tertiary);
+		font-size: 0.85rem;
+		line-height: 1.6;
+	}
+
+	.faq-content p {
+		margin: 0 0 0.75rem 0;
+		text-align: left;
+	}
+
+	.faq-content p:last-child {
+		margin-bottom: 0;
+	}
+
+	.faq-content a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.faq-content a:hover {
+		text-decoration: underline;
+	}
+
+	.faq-content code {
+		background: var(--bg-secondary);
+		padding: 0.15rem 0.4rem;
+		border-radius: 4px;
+		font-size: 0.85em;
+	}
+
+	@media (max-width: 480px) {
+		.login-card {
+			padding: 2rem 1.5rem;
+		}
+
+		h1 {
+			font-size: 1.5rem;
+		}
 	}
 </style>
