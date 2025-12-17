@@ -21,6 +21,9 @@ const DB_NAME = 'plyr-offline';
 const DB_VERSION = 1;
 const DOWNLOADS_STORE = 'downloads';
 
+// in-flight downloads (prevents duplicate concurrent downloads)
+const activeDownloads = new Map<string, Promise<void>>();
+
 export interface DownloadRecord {
 	file_id: string;
 	size: number;
@@ -48,55 +51,46 @@ function openDatabase(): Promise<IDBDatabase> {
 	});
 }
 
-async function getDownloadRecord(file_id: string): Promise<DownloadRecord | null> {
+/**
+ * run a transaction against IndexedDB, properly closing the connection after
+ */
+async function withDatabase<T>(
+	mode: IDBTransactionMode,
+	operation: (store: IDBObjectStore) => IDBRequest<T>
+): Promise<T> {
 	const db = await openDatabase();
-	return new Promise((resolve, reject) => {
-		const tx = db.transaction(DOWNLOADS_STORE, 'readonly');
-		const store = tx.objectStore(DOWNLOADS_STORE);
-		const request = store.get(file_id);
+	try {
+		return await new Promise<T>((resolve, reject) => {
+			const tx = db.transaction(DOWNLOADS_STORE, mode);
+			const store = tx.objectStore(DOWNLOADS_STORE);
+			const request = operation(store);
 
-		request.onerror = () => reject(request.error);
-		request.onsuccess = () => resolve(request.result || null);
-	});
+			request.onerror = () => reject(request.error);
+			request.onsuccess = () => resolve(request.result);
+		});
+	} finally {
+		db.close();
+	}
+}
+
+async function getDownloadRecord(file_id: string): Promise<DownloadRecord | null> {
+	const result = await withDatabase('readonly', (store) => store.get(file_id));
+	return result || null;
 }
 
 async function setDownloadRecord(record: DownloadRecord): Promise<void> {
-	const db = await openDatabase();
-	return new Promise((resolve, reject) => {
-		const tx = db.transaction(DOWNLOADS_STORE, 'readwrite');
-		const store = tx.objectStore(DOWNLOADS_STORE);
-		const request = store.put(record);
-
-		request.onerror = () => reject(request.error);
-		request.onsuccess = () => resolve();
-	});
+	await withDatabase('readwrite', (store) => store.put(record));
 }
 
 async function deleteDownloadRecord(file_id: string): Promise<void> {
-	const db = await openDatabase();
-	return new Promise((resolve, reject) => {
-		const tx = db.transaction(DOWNLOADS_STORE, 'readwrite');
-		const store = tx.objectStore(DOWNLOADS_STORE);
-		const request = store.delete(file_id);
-
-		request.onerror = () => reject(request.error);
-		request.onsuccess = () => resolve();
-	});
+	await withDatabase('readwrite', (store) => store.delete(file_id));
 }
 
 /**
  * get all download records from IndexedDB
  */
 export async function getAllDownloads(): Promise<DownloadRecord[]> {
-	const db = await openDatabase();
-	return new Promise((resolve, reject) => {
-		const tx = db.transaction(DOWNLOADS_STORE, 'readonly');
-		const store = tx.objectStore(DOWNLOADS_STORE);
-		const request = store.getAll();
-
-		request.onerror = () => reject(request.error);
-		request.onsuccess = () => resolve(request.result);
-	});
+	return withDatabase('readonly', (store) => store.getAll());
 }
 
 // Cache API helpers
@@ -111,10 +105,26 @@ function getCacheKey(file_id: string): string {
 
 /**
  * check if audio is cached locally
+ * verifies both metadata (IndexedDB) and actual audio (Cache API) exist
  */
 export async function isDownloaded(file_id: string): Promise<boolean> {
 	const record = await getDownloadRecord(file_id);
-	return record !== null;
+	if (!record) return false;
+
+	// also verify the cache entry exists (handles edge case where cache was
+	// cleared but IndexedDB wasn't)
+	try {
+		const cache = await caches.open(AUDIO_CACHE_NAME);
+		const cached = await cache.match(getCacheKey(file_id));
+		if (!cached) {
+			// cache is gone but metadata exists - clean up the stale record
+			await deleteDownloadRecord(file_id);
+			return false;
+		}
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -145,8 +155,31 @@ export async function getCachedAudioUrl(file_id: string): Promise<string | null>
  * 2. fetch audio from R2 directly
  * 3. store in Cache API
  * 4. record in IndexedDB
+ *
+ * if a download for this file_id is already in progress, returns
+ * the existing promise (prevents duplicate downloads from concurrent calls)
  */
 export async function downloadAudio(
+	file_id: string,
+	onProgress?: (loaded: number, total: number) => void
+): Promise<void> {
+	// if already downloading this file, return existing promise
+	const existing = activeDownloads.get(file_id);
+	if (existing) return existing;
+
+	const downloadPromise = (async () => {
+		try {
+			await performDownload(file_id, onProgress);
+		} finally {
+			activeDownloads.delete(file_id);
+		}
+	})();
+
+	activeDownloads.set(file_id, downloadPromise);
+	return downloadPromise;
+}
+
+async function performDownload(
 	file_id: string,
 	onProgress?: (loaded: number, total: number) => void
 ): Promise<void> {
@@ -255,15 +288,7 @@ export async function clearAllDownloads(): Promise<void> {
 	await caches.delete(AUDIO_CACHE_NAME);
 
 	// clear IndexedDB
-	const db = await openDatabase();
-	return new Promise((resolve, reject) => {
-		const tx = db.transaction(DOWNLOADS_STORE, 'readwrite');
-		const store = tx.objectStore(DOWNLOADS_STORE);
-		const request = store.clear();
-
-		request.onerror = () => reject(request.error);
-		request.onsuccess = () => resolve();
-	});
+	await withDatabase('readwrite', (store) => store.clear());
 }
 
 /**
