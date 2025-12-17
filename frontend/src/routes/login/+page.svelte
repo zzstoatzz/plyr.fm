@@ -8,11 +8,35 @@
 	let showHandleInfo = $state(false);
 	let showPdsInfo = $state(false);
 
+	/**
+	 * normalize user input to a valid identifier for OAuth
+	 *
+	 * accepts:
+	 * - handles: "user.bsky.social", "@user.bsky.social", "at://user.bsky.social"
+	 * - DIDs: "did:plc:abc123", "at://did:plc:abc123"
+	 */
+	function normalizeInput(input: string): string {
+		let value = input.trim();
+
+		// strip at:// prefix (valid for both handles and DIDs per AT-URI spec)
+		if (value.startsWith('at://')) {
+			value = value.slice(5);
+		}
+
+		// strip @ prefix from handles
+		if (value.startsWith('@')) {
+			value = value.slice(1);
+		}
+
+		return value;
+	}
+
 	function startOAuth(e: SubmitEvent) {
 		e.preventDefault();
 		if (!handle.trim()) return;
 		loading = true;
-		window.location.href = `${API_URL}/auth/start?handle=${encodeURIComponent(handle)}`;
+		const normalized = normalizeInput(handle);
+		window.location.href = `${API_URL}/auth/start?handle=${encodeURIComponent(normalized)}`;
 	}
 
 	function handleSelect(selected: string) {
