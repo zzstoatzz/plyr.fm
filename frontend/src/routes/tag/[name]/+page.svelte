@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
+	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
+	import { API_URL } from '$lib/config';
 	import Header from '$lib/components/Header.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import { player } from '$lib/player.svelte';
@@ -10,6 +13,41 @@
 
 	let { data }: { data: PageData } = $props();
 
+	// server provides tag metadata for OG tags, client fetches full track list
+	let tracks = $state<Track[]>([]);
+	let loading = $state(true);
+	let error = $state<string | null>(data.error);
+
+	async function loadTracks() {
+		if (!browser || !data.tag) return;
+
+		loading = true;
+		try {
+			const response = await fetch(`${API_URL}/tracks/tags/${encodeURIComponent(data.tag.name)}`, {
+				credentials: 'include'
+			});
+
+			if (!response.ok) {
+				error = 'failed to load tracks';
+				return;
+			}
+
+			const result = await response.json();
+			tracks = result.tracks;
+		} catch (e) {
+			console.error('failed to load tracks:', e);
+			error = 'failed to load tracks';
+		} finally {
+			loading = false;
+		}
+	}
+
+	$effect(() => {
+		if (browser && data.tag) {
+			loadTracks();
+		}
+	});
+
 	async function handleLogout() {
 		await auth.logout();
 		window.location.href = '/';
@@ -20,26 +58,48 @@
 	}
 
 	function queueAll() {
-		if (data.tracks.length === 0) return;
-		queue.addTracks(data.tracks);
-		toast.success(`queued ${data.tracks.length} ${data.tracks.length === 1 ? 'track' : 'tracks'}`);
+		if (tracks.length === 0) return;
+		queue.addTracks(tracks);
+		toast.success(`queued ${tracks.length} ${tracks.length === 1 ? 'track' : 'tracks'}`);
 	}
 </script>
 
 <svelte:head>
-	<title>{data.tag?.name ?? 'tag'} • plyr</title>
+	<title>#{data.tag?.name ?? 'tag'} • {APP_NAME}</title>
+	<meta
+		name="description"
+		content="{data.trackCount} {data.trackCount === 1 ? 'track' : 'tracks'} tagged #{data.tag?.name ?? 'tag'} on {APP_NAME}"
+	/>
+
+	<!-- Open Graph -->
+	<meta property="og:type" content="website" />
+	<meta property="og:title" content="#{data.tag?.name ?? 'tag'} • {APP_NAME}" />
+	<meta
+		property="og:description"
+		content="{data.trackCount} {data.trackCount === 1 ? 'track' : 'tracks'} tagged #{data.tag?.name ?? 'tag'}"
+	/>
+	<meta property="og:url" content="{APP_CANONICAL_URL}/tag/{data.tag?.name ?? ''}" />
+	<meta property="og:site_name" content={APP_NAME} />
+
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content="#{data.tag?.name ?? 'tag'} • {APP_NAME}" />
+	<meta
+		name="twitter:description"
+		content="{data.trackCount} {data.trackCount === 1 ? 'track' : 'tracks'} tagged #{data.tag?.name ?? 'tag'}"
+	/>
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 <div class="page">
-	{#if data.error}
+	{#if error}
 		<div class="empty-state">
 			<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
 				<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
 				<line x1="7" y1="7" x2="7.01" y2="7"></line>
 			</svg>
-			<h2>{data.error}</h2>
+			<h2>{error}</h2>
 			<p><a href="/">back to home</a></p>
 		</div>
 	{:else if data.tag}
@@ -54,10 +114,10 @@
 						{data.tag.name}
 					</h1>
 					<p class="subtitle">
-						{data.tag.track_count} {data.tag.track_count === 1 ? 'track' : 'tracks'}
+						{data.trackCount} {data.trackCount === 1 ? 'track' : 'tracks'}
 					</p>
 				</div>
-				{#if data.tracks.length > 0}
+				{#if tracks.length > 0}
 					<button class="btn-queue-all" onclick={queueAll} title="queue all tracks">
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<line x1="8" y1="6" x2="21" y2="6"></line>
@@ -73,7 +133,11 @@
 			</div>
 		</header>
 
-		{#if data.tracks.length === 0}
+		{#if loading}
+			<div class="loading-state">
+				<p>loading tracks...</p>
+			</div>
+		{:else if tracks.length === 0}
 			<div class="empty-state">
 				<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
 					<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
@@ -84,7 +148,7 @@
 			</div>
 		{:else}
 			<div class="tracks-list">
-				{#each data.tracks as track, i (track.id)}
+				{#each tracks as track, i (track.id)}
 					<TrackItem
 						{track}
 						index={i}
@@ -194,6 +258,13 @@
 
 	.empty-state a:hover {
 		text-decoration: underline;
+	}
+
+	.loading-state {
+		text-align: center;
+		padding: 4rem 1rem;
+		color: var(--text-tertiary);
+		font-size: 0.95rem;
 	}
 
 	.tracks-list {
