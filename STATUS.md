@@ -47,6 +47,23 @@ plyr.fm should become:
 
 ### December 2025
 
+#### offline mode foundation (PRs #610-611, Dec 17)
+
+**experimental offline playback**:
+- new storage layer using Cache API for audio bytes + IndexedDB for metadata
+- `GET /audio/{file_id}/url` backend endpoint returns direct R2 URLs for client-side caching
+- "auto-download liked" toggle in experimental settings section
+- when enabled, bulk-downloads all liked tracks and auto-downloads future likes
+- Player checks for cached audio before streaming from R2
+- works offline once tracks are downloaded
+
+**robustness improvements**:
+- IndexedDB connections properly closed after each operation
+- concurrent downloads deduplicated via in-flight promise tracking
+- stale metadata cleanup when cache entries are missing
+
+---
+
 #### visual customization (PRs #595-596, Dec 16)
 
 **custom backgrounds** (PR #595):
@@ -458,4 +475,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-16.
+this is a living document. last updated 2025-12-17.
