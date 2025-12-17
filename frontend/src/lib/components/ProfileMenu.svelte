@@ -660,9 +660,14 @@
 
 	@media (max-width: 768px) {
 		.menu-popover {
-			/* stay centered but shift up to avoid player */
-			top: calc(50% - var(--player-height, 0px) / 2);
-			max-height: calc(100vh - var(--player-height, 0px) - 3rem - env(safe-area-inset-bottom, 0px));
+			/* use inset positioning to avoid Safari sticky+fixed issues */
+			top: env(safe-area-inset-top, 1rem);
+			left: 1rem;
+			right: 1rem;
+			bottom: calc(var(--player-height, 0px) + env(safe-area-inset-bottom, 0px) + 1rem);
+			width: auto;
+			transform: none;
+			max-height: none;
 		}
 	}
 </style>
