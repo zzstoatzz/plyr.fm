@@ -369,17 +369,21 @@ async def db_session(
         yield session
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def fastapi_app() -> FastAPI:
-    """provides the FastAPI app instance."""
+    """provides the FastAPI app instance (session-scoped for performance)."""
     from backend.main import app as main_app
 
     return main_app
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def client(fastapi_app: FastAPI) -> Generator[TestClient, None, None]:
-    """provides a TestClient for testing the FastAPI application."""
+    """provides a TestClient for testing the FastAPI application.
+
+    session-scoped to avoid the overhead of starting the full lifespan
+    (database init, services, docket worker) for each test.
+    """
     with TestClient(fastapi_app) as tc:
         yield tc
 
