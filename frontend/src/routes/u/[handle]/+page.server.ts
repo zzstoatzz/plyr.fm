@@ -17,10 +17,14 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		// fetch artist's tracks server-side (no cookie available on frontend host)
 		const tracksResponse = await fetch(`${API_URL}/tracks/?artist_did=${artist.did}`);
 		let tracks: Track[] = [];
+		let hasMoreTracks = false;
+		let nextCursor: string | null = null;
 
 		if (tracksResponse.ok) {
 			const data = await tracksResponse.json();
 			tracks = data.tracks || [];
+			hasMoreTracks = data.has_more || false;
+			nextCursor = data.next_cursor || null;
 		}
 
 		const albumsResponse = await fetch(`${API_URL}/albums/${params.handle}`);
@@ -34,7 +38,9 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		return {
 			artist,
 			tracks,
-			albums
+			albums,
+			hasMoreTracks,
+			nextCursor
 		};
 	} catch (e) {
 		console.error('failed to load artist:', e);
