@@ -85,6 +85,8 @@ env = [
     # redis URL for cache tests (uses test-redis from docker-compose)
     # D: prefix means don't override if already set (e.g., by CI workflow)
     "D:DOCKET_URL=redis://localhost:6380/0",
+    # disable automatic perpetual task scheduling in tests to avoid event loop issues
+    "DOCKET_SCHEDULE_AUTOMATIC_TASKS=false",
 ]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",

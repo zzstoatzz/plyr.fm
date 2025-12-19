@@ -77,6 +77,8 @@ async def background_worker_lifespan() -> AsyncGenerator[Docket, None]:
                 scheduling_resolution=timedelta(
                     seconds=settings.docket.scheduling_resolution_seconds
                 ),
+                # disable automatic perpetual tasks in tests to avoid event loop issues
+                schedule_automatic_tasks=settings.docket.schedule_automatic_tasks,
             ) as worker:
                 worker_task = asyncio.create_task(
                     worker.run_forever(),
