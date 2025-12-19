@@ -29,6 +29,9 @@
 const artist = $derived(data.artist);
 let tracks = $state(data.tracks ?? []);
 const albums = $derived(data.albums ?? []);
+let hasMoreTracks = $state(data.hasMoreTracks ?? false);
+let nextCursor = $state<string | null>(data.nextCursor ?? null);
+let loadingMoreTracks = $state(false);
 let shareUrl = $state('');
 
 // compute support URL - handle 'atprotofans' magic value
@@ -141,8 +144,10 @@ $effect(() => {
 			likedTracksCount = null;
 			publicPlaylists = [];
 
-			// sync tracks from server data
+			// sync tracks and pagination from server data
 			tracks = data.tracks ?? [];
+			hasMoreTracks = data.hasMoreTracks ?? false;
+			nextCursor = data.nextCursor ?? null;
 
 			// mark as loaded for this artist
 			loadedForDid = currentDid;
@@ -155,6 +160,38 @@ $effect(() => {
 			void loadPublicPlaylists();
 		}
 	});
+
+	async function loadMoreTracks() {
+		if (!artist?.did || !nextCursor || loadingMoreTracks) return;
+
+		loadingMoreTracks = true;
+		try {
+			const response = await fetch(
+				`${API_URL}/tracks/?artist_did=${artist.did}&cursor=${encodeURIComponent(nextCursor)}`
+			);
+			if (response.ok) {
+				const data = await response.json();
+				const newTracks = data.tracks || [];
+
+				// hydrate with liked status if authenticated
+				if (auth.isAuthenticated) {
+					const likedTracks = await fetchLikedTracks();
+					const likedIds = new Set(likedTracks.map(track => track.id));
+					for (const track of newTracks) {
+						track.is_liked = likedIds.has(track.id);
+					}
+				}
+
+				tracks = [...tracks, ...newTracks];
+				hasMoreTracks = data.has_more || false;
+				nextCursor = data.next_cursor || null;
+			}
+		} catch (_e) {
+			console.error('failed to load more tracks:', _e);
+		} finally {
+			loadingMoreTracks = false;
+		}
+	}
 
 	async function hydrateTracksWithLikes() {
 		if (!browser || tracksHydrated) return;
@@ -355,12 +392,17 @@ $effect(() => {
 		</section>
 
 		<section class="tracks">
-			<h2>
-				tracks
-				{#if tracksLoading}
-					<span class="tracks-loading">updating…</span>
+			<div class="section-header">
+				<h2>
+					tracks
+					{#if tracksLoading}
+						<span class="tracks-loading">updating…</span>
+					{/if}
+				</h2>
+				{#if analytics?.total_items}
+					<span>{analytics.total_items} {analytics.total_items === 1 ? 'track' : 'tracks'}</span>
 				{/if}
-			</h2>
+			</div>
 			{#if tracks.length === 0}
 				<div class="empty-state">
 					<p class="empty-message">no tracks yet</p>
@@ -378,18 +420,31 @@ $effect(() => {
 				</div>
 			{:else}
 				<div class="track-list">
-		{#each tracks as track, i}
-			<TrackItem
-				{track}
-				index={i}
-				isPlaying={player.currentTrack?.id === track.id}
-				onPlay={(t) => queue.playNow(t)}
-				isAuthenticated={auth.isAuthenticated}
-				hideArtist={true}
-			/>
-		{/each}
-	</div>
-{/if}
+					{#each tracks as track, i}
+						<TrackItem
+							{track}
+							index={i}
+							isPlaying={player.currentTrack?.id === track.id}
+							onPlay={(t) => queue.playNow(t)}
+							isAuthenticated={auth.isAuthenticated}
+							hideArtist={true}
+						/>
+					{/each}
+				</div>
+				{#if hasMoreTracks}
+					<button
+						class="load-more-btn"
+						onclick={loadMoreTracks}
+						disabled={loadingMoreTracks}
+					>
+						{#if loadingMoreTracks}
+							loading…
+						{:else}
+							load more tracks
+						{/if}
+					</button>
+				{/if}
+			{/if}
 		</section>
 
 		{#if albums.length > 0}
@@ -650,6 +705,8 @@ $effect(() => {
 		color: inherit;
 		text-decoration: none;
 		transition: transform 0.15s ease, border-color 0.15s ease;
+		overflow: hidden;
+		max-width: 100%;
 	}
 
 	.album-card:hover {
@@ -835,10 +892,35 @@ $effect(() => {
 		margin-top: 2rem;
 	}
 
-	.tracks h2 {
-		margin-bottom: 1.5rem;
+	.tracks .section-header h2 {
+		margin: 0;
 		color: var(--text-primary);
 		font-size: 1.8rem;
+	}
+
+	.load-more-btn {
+		display: block;
+		width: 100%;
+		margin-top: 1rem;
+		padding: 0.75rem 1.5rem;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 8px;
+		color: var(--text-secondary);
+		font-size: 0.95rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.load-more-btn:hover:not(:disabled) {
+		background: var(--bg-tertiary);
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.load-more-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.tracks-loading {
@@ -960,6 +1042,26 @@ $effect(() => {
 
 		.album-grid {
 			grid-template-columns: 1fr;
+		}
+
+		.album-card {
+			padding: 0.75rem;
+			gap: 0.75rem;
+		}
+
+		.album-cover-wrapper {
+			width: 56px;
+			height: 56px;
+			border-radius: 4px;
+		}
+
+		.album-card-meta h3 {
+			font-size: 0.95rem;
+			margin-bottom: 0.25rem;
+		}
+
+		.album-card-meta p {
+			font-size: 0.8rem;
 		}
 	}
 
