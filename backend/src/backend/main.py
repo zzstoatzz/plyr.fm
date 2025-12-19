@@ -46,7 +46,6 @@ from backend.api.albums import router as albums_router
 from backend.api.lists import router as lists_router
 from backend.api.migration import router as migration_router
 from backend.config import settings
-from backend.models import init_db
 from backend.utilities.rate_limit import limiter
 
 # configure logfire if enabled
@@ -148,12 +147,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """handle application lifespan events."""
-    # startup: initialize database
-    # NOTE: init_db() is still needed because base tables (artists, tracks, user_sessions)
-    # don't have migrations - they were created before migrations were introduced.
-    # See issue #46 for removing this in favor of a proper initial migration.
-    await init_db()
-
     # setup services
     await notification_service.setup()
     await queue_service.setup()
