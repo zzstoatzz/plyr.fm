@@ -907,6 +907,7 @@ $effect(() => {
 		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 		color: var(--text-secondary);
+		font-family: inherit;
 		font-size: 0.95rem;
 		cursor: pointer;
 		transition: all 0.2s ease;
