@@ -1,6 +1,7 @@
 """audio file type definitions."""
 
 from enum import Enum
+from typing import Self
 
 
 class AudioFormat(str, Enum):
@@ -26,7 +27,7 @@ class AudioFormat(str, Enum):
         return media_types[self]
 
     @classmethod
-    def from_extension(cls, ext: str) -> "AudioFormat | None":
+    def from_extension(cls, ext: str) -> Self | None:
         """get format from file extension (with or without dot)."""
         ext = ext.lower().lstrip(".")
         for format in cls:

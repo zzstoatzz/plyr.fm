@@ -657,10 +657,11 @@ async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
     track = Track(
         title="Test Track",
         file_id="test-file-update",
-        file_type="audio/mpeg",
+        file_type="mp3",
         artist_did=artist.did,
         album_id=album.id,
         extra={"album": "Original Title"},
+        r2_url="https://r2.example.com/audio/test-file-update.mp3",
         atproto_record_uri="at://did:test:user123/fm.plyr.track/track123",
         atproto_record_cid="original_cid",
     )

@@ -5,12 +5,13 @@ import logging
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 from atproto_oauth import OAuthClient
 from atproto_oauth.stores.memory import MemorySessionStore
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from fastapi import Cookie, Header, HTTPException
 from jose import jwk
@@ -20,9 +21,6 @@ from backend._internal.oauth_stores import PostgresStateStore
 from backend.config import settings
 from backend.models import ExchangeToken, PendingDevToken, UserPreferences, UserSession
 from backend.utilities.database import db_session
-
-if TYPE_CHECKING:
-    from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 
 logger = logging.getLogger(__name__)
 
@@ -76,12 +74,12 @@ _state_store = PostgresStateStore()
 _session_store = MemorySessionStore()
 
 # confidential client key (loaded lazily)
-_client_secret_key: "EllipticCurvePrivateKey | None" = None
+_client_secret_key: EllipticCurvePrivateKey | None = None
 _client_secret_kid: str | None = None
 _client_secret_key_loaded = False
 
 
-def _load_client_secret() -> tuple["EllipticCurvePrivateKey | None", str | None]:
+def _load_client_secret() -> tuple[EllipticCurvePrivateKey | None, str | None]:
     """load EC private key and kid from OAUTH_JWK setting for confidential client.
 
     the key is expected to be a JSON-serialized JWK with ES256 (P-256) key.

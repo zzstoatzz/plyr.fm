@@ -22,24 +22,34 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.config import settings
 from backend.models import Base
+from backend.storage.r2 import R2Storage
 from backend.utilities.redis import clear_client_cache
 
 
-class MockStorage:
+class MockStorage(R2Storage):
     """Mock storage for tests - no R2 credentials needed."""
+
+    def __init__(self):
+        # skip R2Storage.__init__ which requires credentials
+        pass
 
     async def save(self, file_obj, filename: str, progress_callback=None) -> str:
         """Mock save - returns a fake file_id."""
         return "mock_file_id_123"
 
     async def get_url(
-        self, file_id: str, file_type: str | None = None, extension: str | None = None
-    ) -> str:
+        self,
+        file_id: str,
+        *,
+        file_type: str | None = None,
+        extension: str | None = None,
+    ) -> str | None:
         """Mock get_url - returns a fake URL."""
         return f"https://mock.r2.dev/{file_id}"
 
-    async def delete(self, file_id: str, extension: str | None = None) -> None:
+    async def delete(self, file_id: str, file_type: str | None = None) -> bool:
         """Mock delete."""
+        return True
 
 
 def pytest_configure(config):

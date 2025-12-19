@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _get_existing_track_order(
-    album_atproto_uri: str,
+    album_atproto_uri: str | None,
     artist_pds_url: str | None,
 ) -> list[str]:
     """fetch existing track URIs from ATProto list record.

@@ -517,24 +517,25 @@ async def update_album(
                 track.extra = {}
             track.extra = {**track.extra, "album": new_title}
 
-            # update ATProto record
-            updated_record = build_track_record(
-                title=track.title,
-                artist=track.artist.display_name,
-                audio_url=track.r2_url,
-                file_type=track.file_type,
-                album=new_title,
-                duration=track.duration,
-                features=track.features if track.features else None,
-                image_url=await track.get_image_url(),
-            )
+            # update ATProto record if track has one
+            if track.atproto_record_uri and track.r2_url and track.file_type:
+                updated_record = build_track_record(
+                    title=track.title,
+                    artist=track.artist.display_name,
+                    audio_url=track.r2_url,
+                    file_type=track.file_type,
+                    album=new_title,
+                    duration=track.duration,
+                    features=track.features if track.features else None,
+                    image_url=await track.get_image_url(),
+                )
 
-            _, new_cid = await update_record(
-                auth_session=auth_session,
-                record_uri=track.atproto_record_uri,
-                record=updated_record,
-            )
-            track.atproto_record_cid = new_cid
+                _, new_cid = await update_record(
+                    auth_session=auth_session,
+                    record_uri=track.atproto_record_uri,
+                    record=updated_record,
+                )
+                track.atproto_record_cid = new_cid
 
         # update the album's ATProto list record name
         if album.atproto_record_uri:

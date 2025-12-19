@@ -54,7 +54,7 @@ class ModerationClient:
         service_url: str,
         labeler_url: str,
         auth_token: str,
-        timeout_seconds: float,
+        timeout_seconds: float | int,
         label_cache_prefix: str,
         label_cache_ttl_seconds: int,
     ) -> None:
