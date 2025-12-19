@@ -11,12 +11,13 @@ import logging
 import os
 import tempfile
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import aioboto3
 import aiofiles
 import logfire
+from docket import Perpetual
 from sqlalchemy import select
 
 from backend._internal.atproto.records import (
@@ -52,14 +53,16 @@ async def schedule_copyright_scan(track_id: int, audio_url: str) -> None:
     logfire.info("scheduled copyright scan", track_id=track_id)
 
 
-async def sync_copyright_resolutions() -> None:
+async def sync_copyright_resolutions(
+    perpetual: Perpetual = Perpetual(every=timedelta(minutes=5), automatic=True),  # noqa: B008
+) -> None:
     """sync resolution status from labeler to backend database.
 
     finds tracks that are flagged but have no resolution, checks the labeler
     to see if the labels were negated (dismissed), and marks them as resolved.
 
     this replaces the lazy reconciliation that was happening on read paths.
-    should be scheduled periodically (e.g., every 5 minutes).
+    runs automatically every 5 minutes via docket's Perpetual.
     """
     from backend._internal.moderation_client import get_moderation_client
 
