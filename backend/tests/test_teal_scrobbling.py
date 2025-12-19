@@ -4,6 +4,7 @@ from backend._internal.atproto.teal import (
     build_teal_play_record,
     build_teal_status_record,
 )
+from backend._internal.auth import get_oauth_client
 from backend.config import TealSettings, settings
 
 
@@ -140,3 +141,43 @@ class TestTealSettings:
         # alpha namespaces should NOT be in scope when overridden
         assert "fm.teal.alpha.feed.play" not in scope
         assert "fm.teal.alpha.actor.status" not in scope
+
+
+class TestOAuthClientWithTealScopes:
+    """tests for OAuth client creation with teal scopes.
+
+    verifies that get_oauth_client correctly includes teal scopes
+    when include_teal=True - this is the core behavior for scope upgrade flows.
+    """
+
+    def test_oauth_client_without_teal(self):
+        """OAuth client without teal should only have base plyr scopes."""
+        client = get_oauth_client(include_teal=False)
+
+        # should have plyr scopes
+        assert settings.atproto.track_collection in client.scope
+        assert settings.atproto.like_collection in client.scope
+
+        # should NOT have teal scopes
+        assert settings.teal.play_collection not in client.scope
+        assert settings.teal.status_collection not in client.scope
+
+    def test_oauth_client_with_teal(self):
+        """OAuth client with teal should have both plyr and teal scopes."""
+        client = get_oauth_client(include_teal=True)
+
+        # should have plyr scopes
+        assert settings.atproto.track_collection in client.scope
+        assert settings.atproto.like_collection in client.scope
+
+        # should ALSO have teal scopes
+        assert settings.teal.play_collection in client.scope
+        assert settings.teal.status_collection in client.scope
+
+    def test_oauth_client_teal_scopes_are_repo_scopes(self):
+        """teal scopes should be formatted as repo: scopes for OAuth."""
+        client = get_oauth_client(include_teal=True)
+
+        # verify scope format is correct for ATProto OAuth
+        assert f"repo:{settings.teal.play_collection}" in client.scope
+        assert f"repo:{settings.teal.status_collection}" in client.scope
