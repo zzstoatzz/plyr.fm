@@ -3,14 +3,13 @@
 import logging
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
-from backend.models import CopyrightScan, Tag, Track, TrackComment, TrackLike, TrackTag
+from backend.models import CopyrightScan, Tag, TrackComment, TrackLike, TrackTag
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +74,8 @@ async def get_copyright_info(
 ) -> dict[int, CopyrightInfo]:
     """get copyright scan info for multiple tracks in a single query.
 
-    checks the moderation service's labeler for the true resolution status.
-    if a track was resolved (negation label exists), treats it as not flagged
-    and lazily updates the backend's resolution field.
+    this is a pure read - no reconciliation with the labeler.
+    resolution sync happens via background task (sync_copyright_resolutions).
 
     args:
         db: database session
@@ -89,88 +87,21 @@ async def get_copyright_info(
     if not track_ids:
         return {}
 
-    # get scans with track AT URIs for labeler lookup
-    stmt = (
-        select(
-            CopyrightScan.id,
-            CopyrightScan.track_id,
-            CopyrightScan.is_flagged,
-            CopyrightScan.matches,
-            CopyrightScan.resolution,
-            Track.atproto_record_uri,
-        )
-        .join(Track, CopyrightScan.track_id == Track.id)
-        .where(CopyrightScan.track_id.in_(track_ids))
-    )
+    stmt = select(
+        CopyrightScan.track_id,
+        CopyrightScan.is_flagged,
+        CopyrightScan.matches,
+    ).where(CopyrightScan.track_id.in_(track_ids))
 
     result = await db.execute(stmt)
     rows = result.all()
 
-    # separate flagged scans that need labeler check vs already resolved
-    needs_labeler_check: list[
-        tuple[int, int, str, list]
-    ] = []  # scan_id, track_id, uri, matches
     copyright_info: dict[int, CopyrightInfo] = {}
-
-    for scan_id, track_id, is_flagged, matches, resolution, uri in rows:
-        if not is_flagged or resolution is not None:
-            # not flagged or already resolved - no need to check labeler
-            copyright_info[track_id] = CopyrightInfo(
-                is_flagged=False if resolution else is_flagged,
-                primary_match=_extract_primary_match(matches)
-                if is_flagged and not resolution
-                else None,
-            )
-        elif uri:
-            # flagged with no resolution - need to check labeler
-            needs_labeler_check.append((scan_id, track_id, uri, matches))
-        else:
-            # flagged but no AT URI - can't check labeler, treat as flagged
-            copyright_info[track_id] = CopyrightInfo(
-                is_flagged=True,
-                primary_match=_extract_primary_match(matches),
-            )
-
-    # check labeler for tracks that need it
-    if needs_labeler_check:
-        from backend._internal.moderation import get_active_copyright_labels
-
-        uris = [uri for _, _, uri, _ in needs_labeler_check]
-        active_uris = await get_active_copyright_labels(uris)
-
-        # process results and lazily update DB for resolved tracks
-        resolved_scan_ids: list[int] = []
-        for scan_id, track_id, uri, matches in needs_labeler_check:
-            if uri in active_uris:
-                # still actively flagged
-                copyright_info[track_id] = CopyrightInfo(
-                    is_flagged=True,
-                    primary_match=_extract_primary_match(matches),
-                )
-            else:
-                # resolved in labeler - treat as not flagged
-                copyright_info[track_id] = CopyrightInfo(
-                    is_flagged=False,
-                    primary_match=None,
-                )
-                resolved_scan_ids.append(scan_id)
-
-        # lazily update resolution for newly discovered resolved scans
-        if resolved_scan_ids:
-            try:
-                await db.execute(
-                    update(CopyrightScan)
-                    .where(CopyrightScan.id.in_(resolved_scan_ids))
-                    .values(resolution="dismissed", reviewed_at=datetime.now(UTC))
-                )
-                await db.commit()
-                logger.info(
-                    "lazily updated %d copyright scans as dismissed",
-                    len(resolved_scan_ids),
-                )
-            except Exception as e:
-                logger.warning("failed to lazily update copyright resolutions: %s", e)
-                await db.rollback()
+    for track_id, is_flagged, matches in rows:
+        copyright_info[track_id] = CopyrightInfo(
+            is_flagged=is_flagged,
+            primary_match=_extract_primary_match(matches) if is_flagged else None,
+        )
 
     return copyright_info
 

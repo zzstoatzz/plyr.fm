@@ -2,7 +2,7 @@
 
 from backend.models.album import Album
 from backend.models.artist import Artist
-from backend.models.copyright_scan import CopyrightScan, ScanResolution
+from backend.models.copyright_scan import CopyrightScan
 from backend.models.database import Base
 from backend.models.sensitive_image import SensitiveImage
 from backend.models.exchange_token import ExchangeToken
@@ -32,7 +32,6 @@ __all__ = [
     "PendingScopeUpgrade",
     "Playlist",
     "QueueState",
-    "ScanResolution",
     "SensitiveImage",
     "Tag",
     "Track",
