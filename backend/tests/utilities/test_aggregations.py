@@ -1,9 +1,6 @@
 """tests for aggregation utilities."""
 
-from unittest.mock import AsyncMock, patch
-
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models import Artist, CopyrightScan, Track, TrackLike
@@ -146,81 +143,41 @@ async def flagged_track(db_session: AsyncSession) -> Track:
     return track
 
 
-async def test_get_copyright_info_already_resolved(
+async def test_get_copyright_info_flagged(
     db_session: AsyncSession, flagged_track: Track
 ) -> None:
-    """test that already resolved scans are treated as not flagged."""
-    # update scan to have resolution set
-    scan = await db_session.scalar(
-        select(CopyrightScan).where(CopyrightScan.track_id == flagged_track.id)
-    )
-    assert scan is not None
-    scan.resolution = "dismissed"
-    await db_session.commit()
+    """test that flagged scans are returned as flagged.
 
-    # should NOT call labeler since resolution is already set
-    with patch(
-        "backend._internal.moderation.get_active_copyright_labels",
-        new_callable=AsyncMock,
-    ) as mock_labeler:
-        result = await get_copyright_info(db_session, [flagged_track.id])
+    get_copyright_info is now a pure read - it reads the is_flagged state
+    directly from the database. the sync_copyright_resolutions background
+    task is responsible for updating is_flagged based on labeler state.
+    """
+    result = await get_copyright_info(db_session, [flagged_track.id])
 
-        # labeler should not be called for already-resolved scans
-        mock_labeler.assert_not_called()
-
-    # track should show as not flagged
-    assert flagged_track.id in result
-    assert result[flagged_track.id].is_flagged is False
-
-
-async def test_get_copyright_info_checks_labeler_for_pending(
-    db_session: AsyncSession, flagged_track: Track
-) -> None:
-    """test that pending flagged scans query the labeler."""
-    # mock labeler returning this URI as active (still flagged)
-    with patch(
-        "backend._internal.moderation.get_active_copyright_labels",
-        new_callable=AsyncMock,
-    ) as mock_labeler:
-        mock_labeler.return_value = {flagged_track.atproto_record_uri}
-
-        result = await get_copyright_info(db_session, [flagged_track.id])
-
-        # labeler should be called
-        mock_labeler.assert_called_once()
-        call_args = mock_labeler.call_args[0][0]
-        assert flagged_track.atproto_record_uri in call_args
-
-    # track should still show as flagged
     assert flagged_track.id in result
     assert result[flagged_track.id].is_flagged is True
     assert result[flagged_track.id].primary_match == "Copyrighted Song by Famous Artist"
 
 
-async def test_get_copyright_info_resolved_in_labeler(
+async def test_get_copyright_info_not_flagged(
     db_session: AsyncSession, flagged_track: Track
 ) -> None:
-    """test that labeler resolution clears the flag and updates DB."""
-    # mock labeler returning empty set (all resolved)
-    with patch(
-        "backend._internal.moderation.get_active_copyright_labels",
-        new_callable=AsyncMock,
-    ) as mock_labeler:
-        mock_labeler.return_value = set()  # not active = resolved
+    """test that resolved scans (is_flagged=False) are returned as not flagged."""
+    from sqlalchemy import select
 
-        result = await get_copyright_info(db_session, [flagged_track.id])
-
-    # track should show as not flagged
-    assert flagged_track.id in result
-    assert result[flagged_track.id].is_flagged is False
-
-    # verify lazy update: resolution should be set in DB
+    # update scan to be not flagged (simulates sync_copyright_resolutions running)
     scan = await db_session.scalar(
         select(CopyrightScan).where(CopyrightScan.track_id == flagged_track.id)
     )
     assert scan is not None
-    assert scan.resolution == "dismissed"
-    assert scan.reviewed_at is not None
+    scan.is_flagged = False
+    await db_session.commit()
+
+    result = await get_copyright_info(db_session, [flagged_track.id])
+
+    assert flagged_track.id in result
+    assert result[flagged_track.id].is_flagged is False
+    assert result[flagged_track.id].primary_match is None
 
 
 async def test_get_copyright_info_empty_list(db_session: AsyncSession) -> None:
@@ -236,14 +193,7 @@ async def test_get_copyright_info_no_scan(
     # test_tracks fixture doesn't create copyright scans
     track_ids = [track.id for track in test_tracks]
 
-    with patch(
-        "backend._internal.moderation.get_active_copyright_labels",
-        new_callable=AsyncMock,
-    ) as mock_labeler:
-        result = await get_copyright_info(db_session, track_ids)
-
-        # labeler should not be called since no flagged tracks
-        mock_labeler.assert_not_called()
+    result = await get_copyright_info(db_session, track_ids)
 
     # no tracks should be in result since none have scans
     assert result == {}

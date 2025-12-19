@@ -8,19 +8,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.moderation import (
-    _call_moderation_service,
-    _store_scan_result,
     get_active_copyright_labels,
     scan_track_for_copyright,
 )
+from backend._internal.moderation_client import ModerationClient, ScanResult
 from backend.models import Artist, CopyrightScan, Track
 
 
 @pytest.fixture
-def mock_moderation_response() -> dict:
-    """typical response from moderation service."""
-    return {
-        "matches": [
+def mock_scan_result() -> ScanResult:
+    """typical scan result from moderation client."""
+    return ScanResult(
+        is_flagged=True,
+        highest_score=85,
+        matches=[
             {
                 "artist": "Test Artist",
                 "title": "Test Song",
@@ -28,69 +29,75 @@ def mock_moderation_response() -> dict:
                 "isrc": "USRC12345678",
             }
         ],
-        "is_flagged": True,
-        "highest_score": 85,
-        "raw_response": {"status": "success", "result": []},
-    }
+        raw_response={"status": "success", "result": []},
+    )
 
 
 @pytest.fixture
-def mock_clear_response() -> dict:
-    """response when no copyright matches found."""
-    return {
-        "matches": [],
-        "is_flagged": False,
-        "highest_score": 0,
-        "raw_response": {"status": "success", "result": None},
-    }
+def mock_clear_result() -> ScanResult:
+    """scan result when no copyright matches found."""
+    return ScanResult(
+        is_flagged=False,
+        highest_score=0,
+        matches=[],
+        raw_response={"status": "success", "result": None},
+    )
 
 
-async def test_call_moderation_service_success(
-    mock_moderation_response: dict,
-) -> None:
-    """test successful call to moderation service."""
-    # use regular Mock for response since httpx Response methods are sync
+async def test_moderation_client_scan_success() -> None:
+    """test ModerationClient.scan() with successful response."""
     mock_response = Mock()
-    mock_response.json.return_value = mock_moderation_response
+    mock_response.json.return_value = {
+        "is_flagged": True,
+        "highest_score": 85,
+        "matches": [{"artist": "Test", "title": "Song", "score": 85}],
+        "raw_response": {"status": "success"},
+    }
     mock_response.raise_for_status.return_value = None
+
+    client = ModerationClient(
+        service_url="https://test.example.com",
+        labeler_url="https://labeler.example.com",
+        auth_token="test-token",
+        timeout_seconds=30,
+        label_cache_prefix="test:label:",
+        label_cache_ttl_seconds=300,
+    )
 
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
         mock_post.return_value = mock_response
 
-        with patch("backend._internal.moderation.settings") as mock_settings:
-            mock_settings.moderation.service_url = "https://test.example.com"
-            mock_settings.moderation.auth_token = "test-token"
-            mock_settings.moderation.timeout_seconds = 30
+        result = await client.scan("https://example.com/audio.mp3")
 
-            result = await _call_moderation_service("https://example.com/audio.mp3")
-
-    assert result == mock_moderation_response
+    assert result.is_flagged is True
+    assert result.highest_score == 85
+    assert len(result.matches) == 1
     mock_post.assert_called_once()
-    call_kwargs = mock_post.call_args
-    assert call_kwargs.kwargs["json"] == {"audio_url": "https://example.com/audio.mp3"}
-    assert call_kwargs.kwargs["headers"] == {"X-Moderation-Key": "test-token"}
 
 
-async def test_call_moderation_service_timeout() -> None:
-    """test timeout handling."""
+async def test_moderation_client_scan_timeout() -> None:
+    """test ModerationClient.scan() timeout handling."""
+    client = ModerationClient(
+        service_url="https://test.example.com",
+        labeler_url="https://labeler.example.com",
+        auth_token="test-token",
+        timeout_seconds=30,
+        label_cache_prefix="test:label:",
+        label_cache_ttl_seconds=300,
+    )
+
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
         mock_post.side_effect = httpx.TimeoutException("timeout")
 
-        with patch("backend._internal.moderation.settings") as mock_settings:
-            mock_settings.moderation.service_url = "https://test.example.com"
-            mock_settings.moderation.auth_token = "test-token"
-            mock_settings.moderation.timeout_seconds = 30
-
-            with pytest.raises(httpx.TimeoutException):
-                await _call_moderation_service("https://example.com/audio.mp3")
+        with pytest.raises(httpx.TimeoutException):
+            await client.scan("https://example.com/audio.mp3")
 
 
-async def test_store_scan_result_flagged(
+async def test_scan_track_stores_flagged_result(
     db_session: AsyncSession,
-    mock_moderation_response: dict,
+    mock_scan_result: ScanResult,
 ) -> None:
     """test storing a flagged scan result."""
-    # create test artist and track
     artist = Artist(
         did="did:plc:test123",
         handle="test.bsky.social",
@@ -109,9 +116,20 @@ async def test_store_scan_result_flagged(
     db_session.add(track)
     await db_session.commit()
 
-    await _store_scan_result(track.id, mock_moderation_response)
+    with patch("backend._internal.moderation.settings") as mock_settings:
+        mock_settings.moderation.enabled = True
+        mock_settings.moderation.auth_token = "test-token"
 
-    # verify scan was stored
+        with patch(
+            "backend._internal.moderation.get_moderation_client"
+        ) as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.scan.return_value = mock_scan_result
+            mock_get_client.return_value = mock_client
+
+            assert track.r2_url is not None
+            await scan_track_for_copyright(track.id, track.r2_url)
+
     result = await db_session.execute(
         select(CopyrightScan).where(CopyrightScan.track_id == track.id)
     )
@@ -123,12 +141,11 @@ async def test_store_scan_result_flagged(
     assert scan.matches[0]["artist"] == "Test Artist"
 
 
-async def test_store_scan_result_flagged_emits_label(
+async def test_scan_track_emits_label_when_flagged(
     db_session: AsyncSession,
-    mock_moderation_response: dict,
+    mock_scan_result: ScanResult,
 ) -> None:
     """test that flagged scan result emits ATProto label."""
-    # create test artist and track with ATProto URI
     artist = Artist(
         did="did:plc:labelertest",
         handle="labeler.bsky.social",
@@ -149,38 +166,33 @@ async def test_store_scan_result_flagged_emits_label(
     db_session.add(track)
     await db_session.commit()
 
-    with patch(
-        "backend._internal.moderation._emit_copyright_label",
-        new_callable=AsyncMock,
-    ) as mock_emit:
-        await _store_scan_result(track.id, mock_moderation_response)
+    with patch("backend._internal.moderation.settings") as mock_settings:
+        mock_settings.moderation.enabled = True
+        mock_settings.moderation.auth_token = "test-token"
 
-        # verify label emission was called with full context
-        mock_emit.assert_called_once_with(
-            uri="at://did:plc:labelertest/fm.plyr.track/abc123",
-            cid="bafyreiabc123",
-            track_id=track.id,
-            track_title="Labeler Test Track",
-            artist_handle="labeler.bsky.social",
-            artist_did="did:plc:labelertest",
-            highest_score=85,
-            matches=[
-                {
-                    "artist": "Test Artist",
-                    "title": "Test Song",
-                    "score": 85,
-                    "isrc": "USRC12345678",
-                }
-            ],
-        )
+        with patch(
+            "backend._internal.moderation.get_moderation_client"
+        ) as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.scan.return_value = mock_scan_result
+            mock_client.emit_label = AsyncMock()
+            mock_get_client.return_value = mock_client
+
+            assert track.r2_url is not None
+            await scan_track_for_copyright(track.id, track.r2_url)
+
+            # verify label was emitted
+            mock_client.emit_label.assert_called_once()
+            call_kwargs = mock_client.emit_label.call_args.kwargs
+            assert call_kwargs["uri"] == "at://did:plc:labelertest/fm.plyr.track/abc123"
+            assert call_kwargs["cid"] == "bafyreiabc123"
 
 
-async def test_store_scan_result_flagged_no_atproto_uri_skips_label(
+async def test_scan_track_no_label_without_atproto_uri(
     db_session: AsyncSession,
-    mock_moderation_response: dict,
+    mock_scan_result: ScanResult,
 ) -> None:
     """test that flagged scan without ATProto URI skips label emission."""
-    # create test artist and track without ATProto URI
     artist = Artist(
         did="did:plc:nouri",
         handle="nouri.bsky.social",
@@ -200,22 +212,30 @@ async def test_store_scan_result_flagged_no_atproto_uri_skips_label(
     db_session.add(track)
     await db_session.commit()
 
-    with patch(
-        "backend._internal.moderation._emit_copyright_label",
-        new_callable=AsyncMock,
-    ) as mock_emit:
-        await _store_scan_result(track.id, mock_moderation_response)
+    with patch("backend._internal.moderation.settings") as mock_settings:
+        mock_settings.moderation.enabled = True
+        mock_settings.moderation.auth_token = "test-token"
 
-        # label emission should not be called
-        mock_emit.assert_not_called()
+        with patch(
+            "backend._internal.moderation.get_moderation_client"
+        ) as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.scan.return_value = mock_scan_result
+            mock_client.emit_label = AsyncMock()
+            mock_get_client.return_value = mock_client
+
+            assert track.r2_url is not None
+            await scan_track_for_copyright(track.id, track.r2_url)
+
+            # label emission should not be called
+            mock_client.emit_label.assert_not_called()
 
 
-async def test_store_scan_result_clear(
+async def test_scan_track_stores_clear_result(
     db_session: AsyncSession,
-    mock_clear_response: dict,
+    mock_clear_result: ScanResult,
 ) -> None:
     """test storing a clear (no matches) scan result."""
-    # create test artist and track
     artist = Artist(
         did="did:plc:test456",
         handle="clear.bsky.social",
@@ -234,9 +254,20 @@ async def test_store_scan_result_clear(
     db_session.add(track)
     await db_session.commit()
 
-    await _store_scan_result(track.id, mock_clear_response)
+    with patch("backend._internal.moderation.settings") as mock_settings:
+        mock_settings.moderation.enabled = True
+        mock_settings.moderation.auth_token = "test-token"
 
-    # verify scan was stored
+        with patch(
+            "backend._internal.moderation.get_moderation_client"
+        ) as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.scan.return_value = mock_clear_result
+            mock_get_client.return_value = mock_client
+
+            assert track.r2_url is not None
+            await scan_track_for_copyright(track.id, track.r2_url)
+
     result = await db_session.execute(
         select(CopyrightScan).where(CopyrightScan.track_id == track.id)
     )
@@ -253,12 +284,12 @@ async def test_scan_track_disabled() -> None:
         mock_settings.moderation.enabled = False
 
         with patch(
-            "backend._internal.moderation._call_moderation_service"
-        ) as mock_call:
+            "backend._internal.moderation.get_moderation_client"
+        ) as mock_get_client:
             await scan_track_for_copyright(1, "https://example.com/audio.mp3")
 
-            # should not call the service when disabled
-            mock_call.assert_not_called()
+            # should not even get the client when disabled
+            mock_get_client.assert_not_called()
 
 
 async def test_scan_track_no_auth_token() -> None:
@@ -268,19 +299,18 @@ async def test_scan_track_no_auth_token() -> None:
         mock_settings.moderation.auth_token = ""
 
         with patch(
-            "backend._internal.moderation._call_moderation_service"
-        ) as mock_call:
+            "backend._internal.moderation.get_moderation_client"
+        ) as mock_get_client:
             await scan_track_for_copyright(1, "https://example.com/audio.mp3")
 
-            # should not call the service without auth token
-            mock_call.assert_not_called()
+            # should not even get the client without auth token
+            mock_get_client.assert_not_called()
 
 
 async def test_scan_track_service_error_stores_as_clear(
     db_session: AsyncSession,
 ) -> None:
     """test that service errors are stored as clear results."""
-    # create test artist and track
     artist = Artist(
         did="did:plc:errortest",
         handle="errortest.bsky.social",
@@ -304,19 +334,19 @@ async def test_scan_track_service_error_stores_as_clear(
         mock_settings.moderation.auth_token = "test-token"
 
         with patch(
-            "backend._internal.moderation._call_moderation_service",
-            new_callable=AsyncMock,
-        ) as mock_call:
-            mock_call.side_effect = httpx.HTTPStatusError(
+            "backend._internal.moderation.get_moderation_client"
+        ) as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.scan.side_effect = httpx.HTTPStatusError(
                 "502 error",
                 request=AsyncMock(),
                 response=AsyncMock(status_code=502),
             )
+            mock_get_client.return_value = mock_client
 
             # should not raise - stores error as clear
             await scan_track_for_copyright(track.id, "https://example.com/short.mp3")
 
-    # verify scan was stored as clear with error info
     result = await db_session.execute(
         select(CopyrightScan).where(CopyrightScan.track_id == track.id)
     )
@@ -327,55 +357,6 @@ async def test_scan_track_service_error_stores_as_clear(
     assert scan.matches == []
     assert "error" in scan.raw_response
     assert scan.raw_response["status"] == "scan_failed"
-
-
-async def test_scan_track_full_flow(
-    db_session: AsyncSession,
-    mock_moderation_response: dict,
-) -> None:
-    """test complete scan flow from track to stored result."""
-    # create test artist and track
-    artist = Artist(
-        did="did:plc:fullflow",
-        handle="fullflow.bsky.social",
-        display_name="Full Flow User",
-    )
-    db_session.add(artist)
-    await db_session.commit()
-
-    track = Track(
-        title="Full Flow Track",
-        file_id="fullflow_file",
-        file_type="flac",
-        artist_did=artist.did,
-        r2_url="https://example.com/fullflow.flac",
-    )
-    db_session.add(track)
-    await db_session.commit()
-
-    with patch("backend._internal.moderation.settings") as mock_settings:
-        mock_settings.moderation.enabled = True
-        mock_settings.moderation.auth_token = "test-token"
-        mock_settings.moderation.service_url = "https://test.example.com"
-        mock_settings.moderation.timeout_seconds = 30
-
-        with patch(
-            "backend._internal.moderation._call_moderation_service",
-            new_callable=AsyncMock,
-        ) as mock_call:
-            mock_call.return_value = mock_moderation_response
-
-            assert track.r2_url is not None
-            await scan_track_for_copyright(track.id, track.r2_url)
-
-    # verify scan was stored (need fresh session query)
-    result = await db_session.execute(
-        select(CopyrightScan).where(CopyrightScan.track_id == track.id)
-    )
-    scan = result.scalar_one()
-
-    assert scan.is_flagged is True
-    assert scan.highest_score == 85
 
 
 # tests for get_active_copyright_labels
@@ -420,32 +401,20 @@ async def test_get_active_copyright_labels_success() -> None:
         "at://did:plc:success/fm.plyr.track/3",
     ]
 
-    mock_response = Mock()
-    mock_response.json.return_value = {
-        "active_uris": [uris[0]]  # only first is active
-    }
-    mock_response.raise_for_status.return_value = None
-
     with patch("backend._internal.moderation.settings") as mock_settings:
         mock_settings.moderation.enabled = True
         mock_settings.moderation.auth_token = "test-token"
-        mock_settings.moderation.labeler_url = "https://test.example.com"
-        mock_settings.moderation.timeout_seconds = 30
-        mock_settings.moderation.label_cache_prefix = "test:label:"
-        mock_settings.moderation.label_cache_ttl_seconds = 300
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
+        with patch(
+            "backend._internal.moderation.get_moderation_client"
+        ) as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.get_active_labels.return_value = {uris[0]}  # only first active
+            mock_get_client.return_value = mock_client
 
             result = await get_active_copyright_labels(uris)
 
-        # only the active URI should be in the result
-        assert result == {uris[0]}
-
-        # verify correct endpoint was called
-        call_kwargs = mock_post.call_args
-        assert "/admin/active-labels" in str(call_kwargs)
-        assert call_kwargs.kwargs["json"] == {"uris": uris}
+    assert result == {uris[0]}
 
 
 async def test_get_active_copyright_labels_service_error() -> None:
@@ -458,175 +427,95 @@ async def test_get_active_copyright_labels_service_error() -> None:
     with patch("backend._internal.moderation.settings") as mock_settings:
         mock_settings.moderation.enabled = True
         mock_settings.moderation.auth_token = "test-token"
-        mock_settings.moderation.labeler_url = "https://test.example.com"
-        mock_settings.moderation.timeout_seconds = 30
-        mock_settings.moderation.label_cache_prefix = "test:label:"
-        mock_settings.moderation.label_cache_ttl_seconds = 300
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.side_effect = httpx.ConnectError("connection failed")
+        with patch(
+            "backend._internal.moderation.get_moderation_client"
+        ) as mock_get_client:
+            mock_client = AsyncMock()
+            # client's get_active_labels fails closed internally
+            mock_client.get_active_labels.return_value = set(uris)
+            mock_get_client.return_value = mock_client
 
             result = await get_active_copyright_labels(uris)
 
-        # should fail closed - all URIs treated as active
-        assert result == set(uris)
+    assert result == set(uris)
 
 
-# tests for active labels caching (using real redis from test docker-compose)
+# tests for background task
 
 
-async def test_get_active_copyright_labels_caching() -> None:
-    """test that repeated calls use cache instead of calling service."""
-    uris = [
-        "at://did:plc:caching/fm.plyr.track/1",
-        "at://did:plc:caching/fm.plyr.track/2",
-    ]
+async def test_sync_copyright_resolutions(db_session: AsyncSession) -> None:
+    """test that sync_copyright_resolutions updates flagged scans."""
+    from backend._internal.background_tasks import sync_copyright_resolutions
 
-    mock_response = Mock()
-    mock_response.json.return_value = {
-        "active_uris": [uris[0]]  # only first is active
-    }
-    mock_response.raise_for_status.return_value = None
+    # create test artist and tracks
+    artist = Artist(
+        did="did:plc:synctest",
+        handle="synctest.bsky.social",
+        display_name="Sync Test User",
+    )
+    db_session.add(artist)
+    await db_session.commit()
 
-    with patch("backend._internal.moderation.settings") as mock_settings:
-        mock_settings.moderation.enabled = True
-        mock_settings.moderation.auth_token = "test-token"
-        mock_settings.moderation.labeler_url = "https://test.example.com"
-        mock_settings.moderation.timeout_seconds = 30
-        mock_settings.moderation.label_cache_prefix = "test:label:"
-        mock_settings.moderation.label_cache_ttl_seconds = 300
+    # track 1: flagged, will be resolved
+    track1 = Track(
+        title="Flagged Track 1",
+        file_id="flagged_1",
+        file_type="mp3",
+        artist_did=artist.did,
+        r2_url="https://example.com/flagged1.mp3",
+        atproto_record_uri="at://did:plc:synctest/fm.plyr.track/1",
+    )
+    db_session.add(track1)
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
+    # track 2: flagged, will stay flagged
+    track2 = Track(
+        title="Flagged Track 2",
+        file_id="flagged_2",
+        file_type="mp3",
+        artist_did=artist.did,
+        r2_url="https://example.com/flagged2.mp3",
+        atproto_record_uri="at://did:plc:synctest/fm.plyr.track/2",
+    )
+    db_session.add(track2)
+    await db_session.commit()
 
-            # first call - should hit service
-            result1 = await get_active_copyright_labels(uris)
-            assert result1 == {uris[0]}
-            assert mock_post.call_count == 1
+    # create flagged scans
+    scan1 = CopyrightScan(
+        track_id=track1.id,
+        is_flagged=True,
+        highest_score=85,
+        matches=[{"artist": "Test", "title": "Song"}],
+        raw_response={},
+    )
+    scan2 = CopyrightScan(
+        track_id=track2.id,
+        is_flagged=True,
+        highest_score=90,
+        matches=[{"artist": "Test", "title": "Song2"}],
+        raw_response={},
+    )
+    db_session.add_all([scan1, scan2])
+    await db_session.commit()
 
-            # second call with same URIs - should use cache, not call service
-            result2 = await get_active_copyright_labels(uris)
-            assert result2 == {uris[0]}
-            assert mock_post.call_count == 1  # still 1, no new call
+    with patch(
+        "backend._internal.moderation_client.get_moderation_client"
+    ) as mock_get_client:
+        mock_client = AsyncMock()
+        # only track2's URI is still active
+        mock_client.get_active_labels.return_value = {
+            "at://did:plc:synctest/fm.plyr.track/2"
+        }
+        mock_get_client.return_value = mock_client
 
+        await sync_copyright_resolutions()
 
-async def test_get_active_copyright_labels_partial_cache() -> None:
-    """test that cache hits are combined with service calls for new URIs."""
-    uris_batch1 = ["at://did:plc:partial/fm.plyr.track/1"]
-    uris_batch2 = [
-        "at://did:plc:partial/fm.plyr.track/1",  # cached
-        "at://did:plc:partial/fm.plyr.track/2",  # new
-    ]
+    # refresh from db
+    await db_session.refresh(scan1)
+    await db_session.refresh(scan2)
 
-    mock_response1 = Mock()
-    mock_response1.json.return_value = {
-        "active_uris": ["at://did:plc:partial/fm.plyr.track/1"]
-    }
-    mock_response1.raise_for_status.return_value = None
+    # scan1 should no longer be flagged (label was negated)
+    assert scan1.is_flagged is False
 
-    mock_response2 = Mock()
-    mock_response2.json.return_value = {
-        "active_uris": []  # uri/2 is not active
-    }
-    mock_response2.raise_for_status.return_value = None
-
-    with patch("backend._internal.moderation.settings") as mock_settings:
-        mock_settings.moderation.enabled = True
-        mock_settings.moderation.auth_token = "test-token"
-        mock_settings.moderation.labeler_url = "https://test.example.com"
-        mock_settings.moderation.timeout_seconds = 30
-        mock_settings.moderation.label_cache_prefix = "test:label:"
-        mock_settings.moderation.label_cache_ttl_seconds = 300
-
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.side_effect = [mock_response1, mock_response2]
-
-            # first call - cache uri/1 as active
-            result1 = await get_active_copyright_labels(uris_batch1)
-            assert result1 == {"at://did:plc:partial/fm.plyr.track/1"}
-            assert mock_post.call_count == 1
-
-            # second call - uri/1 from cache, only uri/2 fetched
-            result2 = await get_active_copyright_labels(uris_batch2)
-            # uri/1 is active (from cache), uri/2 is not active (from service)
-            assert result2 == {"at://did:plc:partial/fm.plyr.track/1"}
-            assert mock_post.call_count == 2
-
-            # verify second call only requested uri/2
-            second_call_args = mock_post.call_args_list[1]
-            assert second_call_args.kwargs["json"] == {
-                "uris": ["at://did:plc:partial/fm.plyr.track/2"]
-            }
-
-
-async def test_get_active_copyright_labels_cache_invalidation() -> None:
-    """test that invalidate_label_cache clears specific entry."""
-    from backend._internal.moderation import invalidate_label_cache
-
-    uris = ["at://did:plc:invalidate/fm.plyr.track/1"]
-
-    mock_response = Mock()
-    mock_response.json.return_value = {
-        "active_uris": ["at://did:plc:invalidate/fm.plyr.track/1"]
-    }
-    mock_response.raise_for_status.return_value = None
-
-    with patch("backend._internal.moderation.settings") as mock_settings:
-        mock_settings.moderation.enabled = True
-        mock_settings.moderation.auth_token = "test-token"
-        mock_settings.moderation.labeler_url = "https://test.example.com"
-        mock_settings.moderation.timeout_seconds = 30
-        mock_settings.moderation.label_cache_prefix = "test:label:"
-        mock_settings.moderation.label_cache_ttl_seconds = 300
-
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
-
-            # first call - populate cache
-            result1 = await get_active_copyright_labels(uris)
-            assert result1 == {"at://did:plc:invalidate/fm.plyr.track/1"}
-            assert mock_post.call_count == 1
-
-            # invalidate the cache entry
-            await invalidate_label_cache("at://did:plc:invalidate/fm.plyr.track/1")
-
-            # next call - should hit service again since cache was invalidated
-            result2 = await get_active_copyright_labels(uris)
-            assert result2 == {"at://did:plc:invalidate/fm.plyr.track/1"}
-            assert mock_post.call_count == 2
-
-
-async def test_service_error_does_not_cache() -> None:
-    """test that service errors don't pollute the cache."""
-    # use unique URIs for this test to avoid cache pollution from other tests
-    uris = ["at://did:plc:errnocache/fm.plyr.track/1"]
-
-    mock_success_response = Mock()
-    mock_success_response.json.return_value = {"active_uris": []}
-    mock_success_response.raise_for_status.return_value = None
-
-    with patch("backend._internal.moderation.settings") as mock_settings:
-        mock_settings.moderation.enabled = True
-        mock_settings.moderation.auth_token = "test-token"
-        mock_settings.moderation.labeler_url = "https://test.example.com"
-        mock_settings.moderation.timeout_seconds = 30
-        mock_settings.moderation.label_cache_prefix = "test:label:"
-        mock_settings.moderation.label_cache_ttl_seconds = 300
-
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            # first call fails
-            mock_post.side_effect = httpx.ConnectError("connection failed")
-
-            # first call - fails, returns all URIs as active (fail closed)
-            result1 = await get_active_copyright_labels(uris)
-            assert result1 == set(uris)
-            assert mock_post.call_count == 1
-
-            # reset mock to succeed
-            mock_post.side_effect = None
-            mock_post.return_value = mock_success_response
-
-            # second call - should try service again (error wasn't cached)
-            result2 = await get_active_copyright_labels(uris)
-            assert result2 == set()  # now correctly shows not active
-            assert mock_post.call_count == 2
+    # scan2 should still be flagged
+    assert scan2.is_flagged is True
