@@ -29,6 +29,7 @@ dependencies = [
     "mutagen>=1.47.0",
     "pydocket>=0.15.2",
     "redis>=7.1.0",
+    "beartype>=0.22.8",
 ]
 
 requires-python = ">=3.11"
