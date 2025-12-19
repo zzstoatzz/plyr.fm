@@ -18,7 +18,7 @@ from backend.models.tag import Tag, TrackTag
 from backend.models.track import Track
 from backend.models.track_comment import TrackComment
 from backend.models.track_like import TrackLike
-from backend.utilities.database import db_session, get_db, init_db
+from backend.utilities.database import db_session, get_db
 
 __all__ = [
     "Album",
@@ -42,5 +42,4 @@ __all__ = [
     "UserSession",
     "db_session",
     "get_db",
-    "init_db",
 ]

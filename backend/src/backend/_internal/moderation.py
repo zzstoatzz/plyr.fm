@@ -107,7 +107,7 @@ async def _emit_copyright_label(
     track_title: str | None = None,
     artist_handle: str | None = None,
     artist_did: str | None = None,
-    highest_score: float | None = None,
+    highest_score: int | None = None,
     matches: list[dict[str, Any]] | None = None,
 ) -> None:
     """emit a copyright-violation label to the ATProto labeler service."""

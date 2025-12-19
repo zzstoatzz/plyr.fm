@@ -1,13 +1,14 @@
 """streaming hash calculation utilities."""
 
 import hashlib
+from io import IOBase
 from typing import BinaryIO
 
 # 8MB chunks balances memory usage and performance
 CHUNK_SIZE = 8 * 1024 * 1024
 
 
-def hash_file_chunked(file_obj: BinaryIO, algorithm: str = "sha256") -> str:
+def hash_file_chunked(file_obj: BinaryIO | IOBase, algorithm: str = "sha256") -> str:
     """compute hash by reading file in chunks.
 
     this prevents loading entire file into memory, enabling constant

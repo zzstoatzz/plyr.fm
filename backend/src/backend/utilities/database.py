@@ -90,12 +90,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """get async database session (for FastAPI dependency injection)."""
     async with db_session() as session:
         yield session
-
-
-async def init_db():
-    """initialize database tables."""
-    from backend.models.database import Base
-
-    engine = get_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)

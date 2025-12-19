@@ -597,6 +597,10 @@ class DocketSettings(AppSettingsSection):
         default=5.0,
         description="How often to run the scheduler loop (seconds). Default 5s reduces Redis costs vs docket's 250ms default.",
     )
+    schedule_automatic_tasks: bool = Field(
+        default=True,
+        description="Schedule automatic perpetual tasks at worker startup. Disable in tests to avoid event loop issues.",
+    )
 
 
 class RateLimitSettings(AppSettingsSection):

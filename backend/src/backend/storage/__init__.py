@@ -1,19 +1,14 @@
 """storage implementations."""
 
-from typing import TYPE_CHECKING
+from backend.storage.r2 import R2Storage
 
-if TYPE_CHECKING:
-    from backend.storage.r2 import R2Storage
-
-_storage: "R2Storage | None" = None
+_storage: R2Storage | None = None
 
 
-def _get_storage() -> "R2Storage":
+def _get_storage() -> R2Storage:
     """lazily initialize storage on first access."""
     global _storage
     if _storage is None:
-        from backend.storage.r2 import R2Storage
-
         _storage = R2Storage()
     return _storage
 

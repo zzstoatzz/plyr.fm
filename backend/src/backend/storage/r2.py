@@ -32,7 +32,7 @@ class UploadProgressTracker:
         total_size: int,
         callback: Callable[[float], None],
         min_bytes_between_updates: int = 5 * 1024 * 1024,  # 5MB
-        min_time_between_updates: float = 0.25,  # 250ms
+        min_time_between_updates: float | int = 0.25,  # 250ms
     ):
         """initialize progress tracker.
 
