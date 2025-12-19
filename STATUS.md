@@ -47,6 +47,44 @@ plyr.fm should become:
 
 ### December 2025
 
+#### beartype + moderation cleanup (PRs #617-619, Dec 19)
+
+**runtime type checking** (PR #619):
+- enabled beartype runtime type validation across the backend
+- catches type errors at runtime instead of silently passing bad data
+- test infrastructure improvements: session-scoped TestClient fixture (5x faster tests)
+- disabled automatic perpetual task scheduling in tests
+
+**moderation cleanup** (PRs #617-618):
+- consolidated moderation code, addressing issues #541-543
+- `sync_copyright_resolutions` now runs automatically via docket Perpetual task
+- removed `init_db()` from lifespan (handled by alembic migrations)
+
+---
+
+#### UX polish (PRs #604-607, #613, #615, Dec 16-18)
+
+**login improvements** (PRs #604, #613):
+- login page now uses "internet handle" terminology for clarity
+- input normalization: strips `@` and `at://` prefixes automatically
+
+**artist page fixes** (PR #615):
+- track pagination on artist pages now works correctly
+- fixed mobile album card overflow
+
+**mobile + metadata** (PRs #605-607):
+- Open Graph tags added to tag detail pages for link previews
+- mobile modals now use full screen positioning
+- fixed `/tag/` routes in hasPageMetadata check
+
+**misc** (PRs #598-601):
+- upload button added to desktop header nav
+- background settings UX improvements
+- switched support link to atprotofans
+- AudD costs now derived from track duration for accurate billing
+
+---
+
 #### offline mode foundation (PRs #610-611, Dec 17)
 
 **experimental offline playback**:
@@ -475,4 +513,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-17.
+this is a living document. last updated 2025-12-19.
