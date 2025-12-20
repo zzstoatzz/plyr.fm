@@ -91,37 +91,46 @@ artists would choose which tiers to offer. supporters select tier on atprotofans
 
 ## implementation phases
 
-### phase 1: read-only validation (week 1)
+### phase 1: read-only validation (week 1) - IMPLEMENTED
 
 **goal**: show supporter badges, no platform registration required
 
-1. **add validateSupporter calls to artist page**
+**status**: completed 2025-12-20
+
+1. **add validateSupporter calls to artist page** ✓
    ```typescript
    // when viewing artist page, if viewer is logged in:
-   const validation = await fetch(
-     `https://atprotofans.com/xrpc/com.atprotofans.validateSupporter` +
-     `?supporter=${viewer.did}&subject=${artist.did}&signer=${artist.did}`
-   );
-   if (validation.valid) {
-     // show "supporter" badge
+   const ATPROTOFANS_BROKER_DID = 'did:plc:7ewx3bksukdk6a4vycoykhhw';
+   const url = new URL('https://atprotofans.com/xrpc/com.atprotofans.validateSupporter');
+   url.searchParams.set('supporter', auth.user.did);
+   url.searchParams.set('subject', artist.did);
+   url.searchParams.set('signer', ATPROTOFANS_BROKER_DID);
+
+   const response = await fetch(url.toString());
+   if (response.ok) {
+     const data = await response.json();
+     isSupporter = data.valid === true;
    }
    ```
 
-2. **cache validation results**
-   - redis cache with 5-minute TTL
-   - key: `atprotofans:supporter:{viewer_did}:{artist_did}`
+2. **cache validation results** - deferred
+   - frontend calls atprotofans directly (no backend cache needed initially)
+   - can add redis cache later if rate limiting becomes an issue
 
-3. **display supporter badge on profile**
-   - similar to verified badge styling
-   - tooltip: "supports this artist via atprotofans"
+3. **display supporter badge on profile** ✓
+   - heart icon with "supporter" label
+   - tooltip: "you support this artist via atprotofans"
+   - only shown when logged-in viewer is a supporter
 
-**frontend changes:**
-- `+page.svelte` (artist): call validation on mount if viewer logged in
-- new `SupporterBadge.svelte` component
+**files changed:**
+- `frontend/src/routes/u/[handle]/+page.svelte` - added validation logic
+- `frontend/src/lib/components/SupporterBadge.svelte` - new component
 
-**backend changes:**
-- new endpoint: `GET /artists/{did}/supporter-status?viewer_did={did}`
-- or: call atprotofans directly from frontend (simpler, public endpoint)
+**implementation notes:**
+- calls atprotofans directly from frontend (public endpoint, no auth needed)
+- uses broker DID `did:plc:7ewx3bksukdk6a4vycoykhhw` as signer
+- only checks if artist has `support_url: 'atprotofans'`
+- doesn't show on your own profile
 
 ### phase 2: platform registration (week 2)
 
