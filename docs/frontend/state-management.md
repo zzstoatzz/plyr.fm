@@ -38,6 +38,40 @@ use `$state()` for any variable that:
 - is bound to form inputs (`bind:value={title}`)
 - is checked in reactive blocks (`$effect(() => { ... })`)
 
+### overridable `$derived` for optimistic UI (Svelte 5.25+)
+
+as of Svelte 5.25, `$derived` values can be temporarily overridden by reassignment. this is the recommended pattern for optimistic UI where you want to:
+1. sync with a prop value (derived behavior)
+2. temporarily override for immediate feedback (state behavior)
+3. auto-reset when the prop updates
+
+```typescript
+// ✅ RECOMMENDED for optimistic UI (Svelte 5.25+)
+let liked = $derived(initialLiked);
+
+async function toggleLike() {
+    const previous = liked;
+    liked = !liked;  // optimistic update - works in 5.25+!
+
+    try {
+        await saveLike(liked);
+    } catch {
+        liked = previous;  // revert on failure
+    }
+}
+```
+
+this replaces the older pattern of `$state` + `$effect` to sync with props:
+
+```typescript
+// ❌ OLD pattern - still works but more verbose
+let liked = $state(initialLiked);
+
+$effect(() => {
+    liked = initialLiked;  // sync with prop
+});
+```
+
 use plain `let` for:
 - constants that never change
 - variables only used in functions/callbacks (not template)

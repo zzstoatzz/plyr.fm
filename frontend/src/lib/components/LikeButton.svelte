@@ -14,13 +14,9 @@
 
 	let { trackId, trackTitle, fileId, initialLiked = false, disabled = false, disabledReason, onLikeChange }: Props = $props();
 
-	let liked = $state(initialLiked);
+	// use overridable $derived (Svelte 5.25+) - syncs with prop but can be overridden for optimistic UI
+	let liked = $derived(initialLiked);
 	let loading = $state(false);
-
-	// update liked state when initialLiked changes
-	$effect(() => {
-		liked = initialLiked;
-	});
 
 	async function toggleLike(e: Event) {
 		e.stopPropagation();
@@ -70,6 +66,7 @@
 	class:disabled-state={disabled}
 	onclick={toggleLike}
 	title={disabled && disabledReason ? disabledReason : (liked ? 'unlike' : 'like')}
+	aria-label={disabled && disabledReason ? disabledReason : (liked ? 'unlike' : 'like')}
 	disabled={loading || disabled}
 >
 	<svg width="16" height="16" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

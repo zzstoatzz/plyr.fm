@@ -37,11 +37,25 @@
 	const imageFetchPriority = index < 2 ? 'high' : undefined;
 
 	let showLikersTooltip = $state(false);
-	let likeCount = $state(track.like_count || 0);
-	let commentCount = $state(track.comment_count || 0);
+	// use overridable $derived (Svelte 5.25+) - syncs with prop but can be overridden for optimistic UI
+	let likeCount = $derived(track.like_count || 0);
+	let commentCount = $derived(track.comment_count || 0);
+	// local UI state keyed by track.id - reset when track changes (component recycling)
 	let trackImageError = $state(false);
 	let avatarError = $state(false);
 	let tagsExpanded = $state(false);
+	let prevTrackId: number | undefined;
+
+	// reset local UI state when track changes (component may be recycled)
+	// using $effect.pre so state is ready before render
+	$effect.pre(() => {
+		if (prevTrackId !== undefined && track.id !== prevTrackId) {
+			trackImageError = false;
+			avatarError = false;
+			tagsExpanded = false;
+		}
+		prevTrackId = track.id;
+	});
 
 	// limit visible tags to prevent vertical sprawl (max 2 shown)
 	const MAX_VISIBLE_TAGS = 2;
@@ -51,16 +65,6 @@
 	let hiddenTagCount = $derived(
 		(track.tags?.length || 0) - MAX_VISIBLE_TAGS
 	);
-
-	// sync counts when track changes
-	$effect(() => {
-		likeCount = track.like_count || 0;
-		commentCount = track.comment_count || 0;
-		// reset error states when track changes (e.g. recycled component)
-		trackImageError = false;
-		avatarError = false;
-		tagsExpanded = false;
-	});
 
 	// construct shareable URL - use /track/[id] for link previews
 	// the track page will redirect to home with query param for actual playback
