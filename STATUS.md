@@ -47,6 +47,29 @@ plyr.fm should become:
 
 ### December 2025
 
+#### end-of-year sprint (Dec 20-31)
+
+**focus**: two foundational systems need solid experimental implementations by 2026.
+
+**track 1: moderation architecture overhaul**
+- consolidate sensitive images into moderation service
+- add event-sourced audit trail
+- implement configurable rules (replace hard-coded thresholds)
+- informed by [Roost Osprey](https://github.com/roostorg/osprey) patterns and [Bluesky Ozone](https://github.com/bluesky-social/ozone) workflows
+
+**track 2: atprotofans paywall integration**
+- phase 1: read-only supporter validation (show badges)
+- phase 2: platform registration (artists create support tiers)
+- phase 3: content gating (track-level access control)
+
+**research docs**:
+- [moderation architecture overhaul](docs/research/2025-12-20-moderation-architecture-overhaul.md)
+- [atprotofans paywall integration](docs/research/2025-12-20-atprotofans-paywall-integration.md)
+
+**tracking**: issue #625
+
+---
+
 #### beartype + moderation cleanup (PRs #617-619, Dec 19)
 
 **runtime type checking** (PR #619):
@@ -347,19 +370,23 @@ See `.status_history/2025-12.md` and `.status_history/2025-11.md` for detailed h
 
 ## immediate priorities
 
+### end-of-year sprint (Dec 20-31)
+
+see [sprint tracking issue #625](https://github.com/zzstoatzz/plyr.fm/issues/625) for details.
+
+| track | focus | status |
+|-------|-------|--------|
+| moderation | consolidate architecture, add rules engine | planning |
+| atprotofans | supporter validation, content gating | planning |
+
 ### known issues
 - playback auto-start on refresh (#225)
 - iOS PWA audio may hang on first play after backgrounding
 
-### immediate focus
-- **moderation cleanup**: consolidate copyright detection, reduce AudD API costs, streamline labeler integration (issues #541-544)
-
-### feature ideas
-- issue #334: add 'share to bluesky' option for tracks
-- issue #373: lyrics field and Genius-style annotations
-
 ### backlog
 - audio transcoding pipeline integration (#153) - transcoder service deployed, integration deferred
+- share to bluesky (#334)
+- lyrics and annotations (#373)
 
 ## technical state
 
@@ -513,4 +540,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-19.
+this is a living document. last updated 2025-12-20.
