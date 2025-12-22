@@ -47,6 +47,17 @@ plyr.fm should become:
 
 ### December 2025
 
+#### rate limit moderation endpoint (PR #629, Dec 21)
+
+**incident response**: detected suspicious activity - 72 requests in 17 seconds from a single IP targeting `/moderation/sensitive-images`. investigation via Logfire showed:
+- single IP generating all traffic with no User-Agent header
+- requests spaced ~230ms apart (too consistent for human browsing)
+- no corresponding user activity (page loads, audio streams)
+
+**fix**: added `10/minute` rate limit to the endpoint using existing slowapi infrastructure. verified rate limiting works correctly post-deployment.
+
+---
+
 #### end-of-year sprint (Dec 20-31)
 
 **focus**: two foundational systems need solid experimental implementations by 2026.
@@ -540,4 +551,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-20.
+this is a living document. last updated 2025-12-21.

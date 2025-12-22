@@ -11,6 +11,8 @@ after shipping something notable:
 - deployment/infrastructure changes
 - incidents and their resolutions
 
+**tip**: after running `/deploy`, consider running `/status-update` to document what shipped.
+
 ## how to update
 
 1. add a new subsection under `## recent work` with today's date
