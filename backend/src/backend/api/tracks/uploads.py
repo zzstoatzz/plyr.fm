@@ -126,7 +126,7 @@ async def _save_audio_to_storage(
         JobStatus.PROCESSING,
         "uploading to storage...",
         phase="upload",
-        progress_pct=0,
+        progress_pct=0.0,
     )
     try:
         async with R2ProgressTracker(
