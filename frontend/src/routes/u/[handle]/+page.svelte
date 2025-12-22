@@ -17,8 +17,6 @@
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
-	// atprotofans broker DID for validateSupporter calls
-	const ATPROTOFANS_BROKER_DID = 'did:plc:7ewx3bksukdk6a4vycoykhhw';
 
 	// receive server-loaded data
 	let { data }: { data: PageData } = $props();
@@ -161,7 +159,7 @@ $effect(() => {
 			const url = new URL('https://atprotofans.com/xrpc/com.atprotofans.validateSupporter');
 			url.searchParams.set('supporter', auth.user.did);
 			url.searchParams.set('subject', artist.did);
-			url.searchParams.set('signer', ATPROTOFANS_BROKER_DID);
+			url.searchParams.set('signer', artist.did);
 
 			const response = await fetch(url.toString());
 			if (response.ok) {
