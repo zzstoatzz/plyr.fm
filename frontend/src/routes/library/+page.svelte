@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { replaceState, invalidateAll, goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { goto } from '$app/navigation';
+	import { preferences } from '$lib/preferences.svelte';
 	import { API_URL } from '$lib/config';
 	import type { PageData } from './$types';
 	import type { Playlist } from '$lib/types';
@@ -13,6 +15,42 @@
 	let newPlaylistName = $state('');
 	let creating = $state(false);
 	let error = $state('');
+
+	onMount(async () => {
+		// check if exchange_token is in URL (from OAuth callback)
+		const params = new URLSearchParams(window.location.search);
+		const exchangeToken = params.get('exchange_token');
+		const isDevToken = params.get('dev_token') === 'true';
+
+		// redirect dev token callbacks to settings page
+		if (exchangeToken && isDevToken) {
+			window.location.href = `/settings?exchange_token=${exchangeToken}&dev_token=true`;
+			return;
+		}
+
+		if (exchangeToken) {
+			// regular login - exchange token for session
+			try {
+				const exchangeResponse = await fetch(`${API_URL}/auth/exchange`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					credentials: 'include',
+					body: JSON.stringify({ exchange_token: exchangeToken })
+				});
+
+				if (exchangeResponse.ok) {
+					// invalidate all load functions so they rerun with the new session cookie
+					await invalidateAll();
+					await auth.initialize();
+					await preferences.fetch();
+				}
+			} catch (_e) {
+				console.error('failed to exchange token:', _e);
+			}
+
+			replaceState('/library', {});
+		}
+	});
 
 	async function handleLogout() {
 		await auth.logout();
