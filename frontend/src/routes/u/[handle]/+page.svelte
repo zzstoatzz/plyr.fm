@@ -8,6 +8,7 @@
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import SupporterBadge from '$lib/components/SupporterBadge.svelte';
 	import { checkImageSensitive } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -15,6 +16,9 @@
 	import { fetchLikedTracks, fetchUserLikes } from '$lib/tracks.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
+
+	// atprotofans broker DID for validateSupporter calls
+	const ATPROTOFANS_BROKER_DID = 'did:plc:7ewx3bksukdk6a4vycoykhhw';
 
 	// receive server-loaded data
 	let { data }: { data: PageData } = $props();
@@ -66,6 +70,9 @@ $effect(() => {
 
 	// public playlists for collections section
 	let publicPlaylists = $state<Playlist[]>([]);
+
+	// supporter status - true if logged-in viewer supports this artist via atprotofans
+	let isSupporter = $state(false);
 
 	// track which artist we've loaded data for to detect navigation
 	let loadedForDid = $state<string | null>(null);
@@ -130,6 +137,43 @@ $effect(() => {
 		}
 	}
 
+	/**
+	 * check if the logged-in viewer supports this artist via atprotofans.
+	 * only called when:
+	 * 1. viewer is authenticated
+	 * 2. artist has atprotofans support enabled
+	 * 3. viewer is not the artist themselves
+	 */
+	async function checkSupporterStatus() {
+		// reset state
+		isSupporter = false;
+
+		// only check if viewer is logged in
+		if (!auth.isAuthenticated || !auth.user?.did) return;
+
+		// only check if artist has atprotofans enabled
+		if (artist?.support_url !== 'atprotofans') return;
+
+		// don't show badge on your own profile
+		if (auth.user.did === artist.did) return;
+
+		try {
+			const url = new URL('https://atprotofans.com/xrpc/com.atprotofans.validateSupporter');
+			url.searchParams.set('supporter', auth.user.did);
+			url.searchParams.set('subject', artist.did);
+			url.searchParams.set('signer', ATPROTOFANS_BROKER_DID);
+
+			const response = await fetch(url.toString());
+			if (response.ok) {
+				const data = await response.json();
+				isSupporter = data.valid === true;
+			}
+		} catch (_e) {
+			// silently fail - supporter badge is optional enhancement
+			console.error('failed to check supporter status:', _e);
+		}
+	}
+
 	// reload data when navigating between artist pages
 	// watch data.artist?.did (from server) not artist?.did (local derived)
 	$effect(() => {
@@ -143,6 +187,7 @@ $effect(() => {
 			tracksHydrated = false;
 			likedTracksCount = null;
 			publicPlaylists = [];
+			isSupporter = false;
 
 			// sync tracks and pagination from server data
 			tracks = data.tracks ?? [];
@@ -158,6 +203,7 @@ $effect(() => {
 			void hydrateTracksWithLikes();
 			void loadLikedTracksCount();
 			void loadPublicPlaylists();
+			void checkSupporterStatus();
 		}
 	});
 
@@ -310,9 +356,14 @@ $effect(() => {
 			<div class="artist-details">
 				<div class="artist-info">
 					<h1>{artist.display_name}</h1>
-					<a href="https://bsky.app/profile/{artist.handle}" target="_blank" rel="noopener" class="handle">
-						@{artist.handle}
-					</a>
+					<div class="handle-row">
+						<a href="https://bsky.app/profile/{artist.handle}" target="_blank" rel="noopener" class="handle">
+							@{artist.handle}
+						</a>
+						{#if isSupporter}
+							<SupporterBadge />
+						{/if}
+					</div>
 					{#if artist.bio}
 						<p class="bio">{artist.bio}</p>
 					{/if}
@@ -636,13 +687,19 @@ $effect(() => {
 		hyphens: auto;
 	}
 
+	.handle-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+		margin-bottom: 1rem;
+	}
+
 	.handle {
 		color: var(--text-tertiary);
 		font-size: 1.1rem;
-		margin: 0 0 1rem 0;
 		text-decoration: none;
 		transition: color 0.2s;
-		display: inline-block;
 	}
 
 	.handle:hover {
