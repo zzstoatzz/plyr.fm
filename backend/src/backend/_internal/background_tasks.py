@@ -281,7 +281,7 @@ async def process_export(export_id: str, artist_did: str) -> None:
                 export_id,
                 JobStatus.PROCESSING,
                 f"downloading {total} tracks...",
-                progress_pct=0,
+                progress_pct=0.0,
                 result={"processed_count": 0, "total_count": total},
             )
 
@@ -304,7 +304,7 @@ async def process_export(export_id: str, artist_did: str) -> None:
                 export_id,
                 JobStatus.PROCESSING,
                 "creating zip archive...",
-                progress_pct=100,
+                progress_pct=100.0,
                 result={
                     "processed_count": len(successful_downloads),
                     "total_count": total,
