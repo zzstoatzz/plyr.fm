@@ -2,12 +2,13 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models import SensitiveImage, get_db
+from backend.utilities.rate_limit import limiter
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
 
@@ -22,7 +23,9 @@ class SensitiveImagesResponse(BaseModel):
 
 
 @router.get("/sensitive-images")
+@limiter.limit("10/minute")
 async def get_sensitive_images(
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SensitiveImagesResponse:
     """get all flagged sensitive images.
