@@ -166,8 +166,8 @@ async def oauth_callback(
     # schedule ATProto sync (via docket if enabled, else asyncio)
     await schedule_atproto_sync(session_id, did)
 
-    # redirect to profile setup if needed, otherwise to library
-    redirect_path = "/library" if has_profile else "/profile/setup"
+    # redirect to profile setup if needed, otherwise to portal
+    redirect_path = "/portal" if has_profile else "/profile/setup"
 
     return RedirectResponse(
         url=f"{settings.frontend.url}{redirect_path}?exchange_token={exchange_token}",
