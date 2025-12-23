@@ -24,7 +24,10 @@ from backend._internal.atproto.records import (
     update_record,
 )
 from backend._internal.atproto.tid import datetime_to_tid
-from backend._internal.background_tasks import schedule_album_list_sync
+from backend._internal.background_tasks import (
+    schedule_album_list_sync,
+    schedule_track_migration,
+)
 from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackTag, get_db
 from backend.schemas import TrackResponse
@@ -202,6 +205,7 @@ async def update_track_metadata(
         title_changed = True
 
     # handle support_gate update
+    needs_migration = False
     if support_gate is not None:
         if support_gate.lower() == "null" or support_gate == "":
             # remove gating
@@ -217,6 +221,10 @@ async def update_track_metadata(
                     raise ValueError(
                         f"unsupported support_gate type: {parsed_gate['type']}"
                     )
+                # check if we need to migrate file from public to private bucket
+                # (track was previously public and has a cached public URL)
+                if track.support_gate is None and track.r2_url is not None:
+                    needs_migration = True
                 track.support_gate = parsed_gate
             except json.JSONDecodeError as e:
                 raise HTTPException(
@@ -309,6 +317,10 @@ async def update_track_metadata(
         # sync new album (track was added)
         if new_album_id:
             await schedule_album_list_sync(auth_session.session_id, new_album_id)
+
+    # migrate audio file to private bucket if support_gate was enabled
+    if needs_migration:
+        await schedule_track_migration(track.id)
 
     # build track_tags dict for response
     # if tags were updated, use updated_tags; otherwise query for existing

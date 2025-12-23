@@ -865,6 +865,56 @@ async def schedule_pds_update_comment(
     logfire.info("scheduled pds comment update", comment_id=comment_id)
 
 
+async def migrate_track_to_private_bucket(track_id: int) -> None:
+    """migrate a track's audio file from public to private bucket.
+
+    called when support_gate is enabled on an existing track.
+    copies file to private bucket, deletes from public, clears r2_url.
+
+    args:
+        track_id: database ID of the track to migrate
+    """
+    from backend.models import Track
+    from backend.storage import storage
+
+    async with db_session() as db:
+        result = await db.execute(select(Track).where(Track.id == track_id))
+        track = result.scalar_one_or_none()
+
+        if not track:
+            logger.warning(
+                f"migrate_track_to_private_bucket: track {track_id} not found"
+            )
+            return
+
+        if not track.file_id or not track.file_type:
+            logger.warning(
+                f"migrate_track_to_private_bucket: track {track_id} missing file_id/file_type"
+            )
+            return
+
+        # migrate the file
+        success = await storage.migrate_to_private_bucket(
+            file_id=track.file_id,
+            extension=track.file_type,
+        )
+
+        if success:
+            # clear r2_url so the public URL is no longer used
+            track.r2_url = None
+            await db.commit()
+            logger.info(f"migrated track {track_id} to private bucket")
+        else:
+            logger.error(f"failed to migrate track {track_id} to private bucket")
+
+
+async def schedule_track_migration(track_id: int) -> None:
+    """schedule a track migration to private bucket via docket."""
+    docket = get_docket()
+    await docket.add(migrate_track_to_private_bucket)(track_id)
+    logfire.info("scheduled track migration to private bucket", track_id=track_id)
+
+
 # collection of all background task functions for docket registration
 background_tasks = [
     scan_copyright,
@@ -878,4 +928,5 @@ background_tasks = [
     pds_create_comment,
     pds_delete_comment,
     pds_update_comment,
+    migrate_track_to_private_bucket,
 ]

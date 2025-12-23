@@ -579,3 +579,77 @@ class R2Storage:
                     expires_in=expiry,
                 )
                 return url
+
+    async def migrate_to_private_bucket(
+        self,
+        file_id: str,
+        extension: str,
+    ) -> bool:
+        """migrate an audio file from public bucket to private bucket.
+
+        copies the file to the private bucket, then deletes from public.
+        used when enabling support_gate on an existing track.
+
+        args:
+            file_id: the file identifier hash
+            extension: file extension (e.g., "mp3", "flac")
+
+        returns:
+            True if migration succeeded, False otherwise
+
+        raises:
+            ValueError: if private bucket not configured
+        """
+        if not self.private_audio_bucket_name:
+            raise ValueError("R2_PRIVATE_BUCKET not configured")
+
+        ext = extension.lstrip(".")
+        key = f"audio/{file_id}.{ext}"
+
+        with logfire.span(
+            "R2 migrate_to_private_bucket",
+            file_id=file_id,
+            key=key,
+        ):
+            try:
+                async with self.async_session.client(
+                    "s3",
+                    endpoint_url=self.endpoint_url,
+                    aws_access_key_id=self.aws_access_key_id,
+                    aws_secret_access_key=self.aws_secret_access_key,
+                ) as client:
+                    # copy from public to private bucket
+                    copy_source = {"Bucket": self.audio_bucket_name, "Key": key}
+                    await client.copy_object(
+                        CopySource=copy_source,
+                        Bucket=self.private_audio_bucket_name,
+                        Key=key,
+                    )
+                    logfire.info(
+                        "copied file to private bucket",
+                        file_id=file_id,
+                        source_bucket=self.audio_bucket_name,
+                        dest_bucket=self.private_audio_bucket_name,
+                    )
+
+                    # delete from public bucket
+                    await client.delete_object(
+                        Bucket=self.audio_bucket_name,
+                        Key=key,
+                    )
+                    logfire.info(
+                        "deleted file from public bucket",
+                        file_id=file_id,
+                        bucket=self.audio_bucket_name,
+                    )
+
+                    return True
+
+            except ClientError as e:
+                logfire.error(
+                    "R2 migration failed",
+                    file_id=file_id,
+                    error=str(e),
+                    exc_info=True,
+                )
+                return False
