@@ -5,6 +5,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
+from urllib.parse import urljoin
 
 import logfire
 from fastapi import Depends, File, Form, HTTPException, UploadFile
@@ -292,8 +293,13 @@ async def update_track_metadata(
             updated_tags.add(tag_name)
 
     # always update ATProto record if any metadata changed
+    support_gate_changed = move_to_private is not None
     metadata_changed = (
-        title_changed or album is not None or features is not None or image_changed
+        title_changed
+        or album is not None
+        or features is not None
+        or image_changed
+        or support_gate_changed
     )
     if track.atproto_record_uri and metadata_changed:
         try:
@@ -348,9 +354,18 @@ async def _update_atproto_record(
         Exception: if ATProto record update fails
     """
     record_uri = track.atproto_record_uri
-    audio_url = track.r2_url
-    if not record_uri or not audio_url:
+    if not record_uri:
         return
+
+    # for gated tracks, use the API endpoint URL instead of r2_url
+    # (r2_url is None for private bucket tracks)
+    if track.support_gate is not None:
+        backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
+        audio_url = urljoin(backend_url + "/", f"audio/{track.file_id}")
+    else:
+        audio_url = track.r2_url
+        if not audio_url:
+            return
 
     updated_record = build_track_record(
         title=track.title,
@@ -361,6 +376,7 @@ async def _update_atproto_record(
         duration=track.duration,
         features=track.features if track.features else None,
         image_url=image_url_override or await track.get_image_url(),
+        support_gate=track.support_gate,
     )
 
     result = await update_record(
