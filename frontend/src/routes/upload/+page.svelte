@@ -6,7 +6,7 @@
 	import AlbumSelect from "$lib/components/AlbumSelect.svelte";
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
-	import type { FeaturedArtist, AlbumSummary } from "$lib/types";
+	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
 	import { API_URL, getServerConfig } from "$lib/config";
 	import { uploader } from "$lib/uploader.svelte";
 	import { toast } from "$lib/toast.svelte";
@@ -38,9 +38,13 @@
 	let uploadTags = $state<string[]>([]);
 	let hasUnresolvedFeaturesInput = $state(false);
 	let attestedRights = $state(false);
+	let supportGated = $state(false);
 
 	// albums for selection
 	let albums = $state<AlbumSummary[]>([]);
+
+	// artist profile for checking atprotofans eligibility
+	let artistProfile = $state<Artist | null>(null);
 
 	onMount(async () => {
 		// wait for auth to finish loading
@@ -53,9 +57,23 @@
 			return;
 		}
 
-		await loadMyAlbums();
+		await Promise.all([loadMyAlbums(), loadArtistProfile()]);
 		loading = false;
 	});
+
+	async function loadArtistProfile() {
+		if (!auth.user) return;
+		try {
+			const response = await fetch(
+				`${API_URL}/artists/by-handle/${auth.user.handle}`,
+			);
+			if (response.ok) {
+				artistProfile = await response.json();
+			}
+		} catch (_e) {
+			console.error("failed to load artist profile:", _e);
+		}
+	}
 
 	async function loadMyAlbums() {
 		if (!auth.user) return;
@@ -82,6 +100,7 @@
 		const uploadFeatures = [...featuredArtists];
 		const uploadImage = imageFile;
 		const tagsToUpload = [...uploadTags];
+		const isGated = supportGated;
 
 		const clearForm = () => {
 			title = "";
@@ -91,6 +110,7 @@
 			featuredArtists = [];
 			uploadTags = [];
 			attestedRights = false;
+			supportGated = false;
 
 			const fileInput = document.getElementById(
 				"file-input",
@@ -109,6 +129,7 @@
 			uploadFeatures,
 			uploadImage,
 			tagsToUpload,
+			isGated,
 			async () => {
 				await loadMyAlbums();
 			},
@@ -283,6 +304,37 @@
 							1024
 						).toFixed(2)} MB)
 					</p>
+				{/if}
+			</div>
+
+			<div class="form-group supporter-gating">
+				{#if artistProfile?.support_url}
+					<label class="checkbox-label">
+						<input
+							type="checkbox"
+							bind:checked={supportGated}
+						/>
+						<span class="checkbox-text">
+							<svg class="heart-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+								<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+							</svg>
+							supporters only
+						</span>
+					</label>
+					<p class="gating-note">
+						only users who support you via <a href={artistProfile.support_url} target="_blank" rel="noopener">atprotofans</a> can play this track
+					</p>
+				{:else}
+					<div class="gating-disabled">
+						<span class="gating-disabled-icon">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+							</svg>
+						</span>
+						<span class="gating-disabled-text">
+							want to gate tracks for supporters? <a href="https://atprotofans.com" target="_blank" rel="noopener">set up atprotofans</a>, then add your profile URL in <a href="/settings">settings</a>
+						</span>
+					</div>
 				{/if}
 			</div>
 
@@ -508,6 +560,66 @@
 	}
 
 	.attestation-note a:hover {
+		text-decoration: underline;
+	}
+
+	.supporter-gating {
+		background: color-mix(in srgb, var(--accent) 8%, var(--bg-primary));
+		padding: 1rem;
+		border-radius: 4px;
+		border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border-default));
+	}
+
+	.supporter-gating .checkbox-text {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.supporter-gating .heart-icon {
+		color: var(--accent);
+	}
+
+	.gating-note {
+		margin-top: 0.5rem;
+		margin-left: 2rem;
+		font-size: 0.8rem;
+		color: var(--text-tertiary);
+		line-height: 1.4;
+	}
+
+	.gating-note a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.gating-note a:hover {
+		text-decoration: underline;
+	}
+
+	.gating-disabled {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		color: var(--text-muted);
+	}
+
+	.gating-disabled-icon {
+		flex-shrink: 0;
+		margin-top: 0.1rem;
+	}
+
+	.gating-disabled-text {
+		font-size: 0.85rem;
+		line-height: 1.4;
+	}
+
+	.gating-disabled-text a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.gating-disabled-text a:hover {
 		text-decoration: underline;
 	}
 

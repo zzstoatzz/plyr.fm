@@ -138,45 +138,54 @@
 			onPlay(track);
 		}}
 	>
-		{#if track.image_url && !trackImageError}
-			<SensitiveImage src={track.image_url}>
-				<div class="track-image">
-					<img
-						src={track.image_url}
-						alt="{track.title} artwork"
-						width="48"
-						height="48"
-						loading={imageLoading}
-						fetchpriority={imageFetchPriority}
-						onerror={() => trackImageError = true}
-					/>
+		<div class="track-image-wrapper" class:gated={track.support_gate}>
+			{#if track.image_url && !trackImageError}
+				<SensitiveImage src={track.image_url}>
+					<div class="track-image">
+						<img
+							src={track.image_url}
+							alt="{track.title} artwork"
+							width="48"
+							height="48"
+							loading={imageLoading}
+							fetchpriority={imageFetchPriority}
+							onerror={() => trackImageError = true}
+						/>
+					</div>
+				</SensitiveImage>
+			{:else if track.artist_avatar_url && !avatarError}
+				<SensitiveImage src={track.artist_avatar_url}>
+					<a
+						href="/u/{track.artist_handle}"
+						class="track-avatar"
+					>
+						<img
+							src={track.artist_avatar_url}
+							alt={track.artist}
+							width="48"
+							height="48"
+							loading={imageLoading}
+							fetchpriority={imageFetchPriority}
+							onerror={() => avatarError = true}
+						/>
+					</a>
+				</SensitiveImage>
+			{:else}
+				<div class="track-image-placeholder">
+					<svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">
+						<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
+						<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+					</svg>
 				</div>
-			</SensitiveImage>
-		{:else if track.artist_avatar_url && !avatarError}
-			<SensitiveImage src={track.artist_avatar_url}>
-				<a
-					href="/u/{track.artist_handle}"
-					class="track-avatar"
-				>
-					<img
-						src={track.artist_avatar_url}
-						alt={track.artist}
-						width="48"
-						height="48"
-						loading={imageLoading}
-						fetchpriority={imageFetchPriority}
-						onerror={() => avatarError = true}
-					/>
-				</a>
-			</SensitiveImage>
-		{:else}
-			<div class="track-image-placeholder">
-				<svg width="24" height="24" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">
-					<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
-					<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-				</svg>
-			</div>
-		{/if}
+			{/if}
+			{#if track.support_gate}
+				<div class="gated-badge" title="supporters only">
+					<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+						<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+					</svg>
+				</div>
+			{/if}
+		</div>
 		<div class="track-info">
 			<div class="track-title">{track.title}</div>
 			<div class="track-metadata">
@@ -395,6 +404,38 @@
 		align-items: center;
 		gap: 0.75rem;
 		font-family: inherit;
+	}
+
+	.track-image-wrapper {
+		position: relative;
+		flex-shrink: 0;
+		width: 48px;
+		height: 48px;
+	}
+
+	.track-image-wrapper.gated::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.3);
+		border-radius: 4px;
+		pointer-events: none;
+	}
+
+	.gated-badge {
+		position: absolute;
+		bottom: -4px;
+		right: -4px;
+		width: 18px;
+		height: 18px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--accent);
+		border: 2px solid var(--bg-secondary);
+		border-radius: 50%;
+		color: white;
+		z-index: 1;
 	}
 
 	.track-image,
@@ -750,11 +791,24 @@
 			gap: 0.5rem;
 		}
 
+		.track-image-wrapper,
 		.track-image,
 		.track-image-placeholder,
 		.track-avatar {
 			width: 40px;
 			height: 40px;
+		}
+
+		.gated-badge {
+			width: 16px;
+			height: 16px;
+			bottom: -3px;
+			right: -3px;
+		}
+
+		.gated-badge svg {
+			width: 8px;
+			height: 8px;
 		}
 
 		.track-title {
@@ -790,11 +844,24 @@
 			padding: 0.5rem 0.65rem;
 		}
 
+		.track-image-wrapper,
 		.track-image,
 		.track-image-placeholder,
 		.track-avatar {
 			width: 36px;
 			height: 36px;
+		}
+
+		.gated-badge {
+			width: 14px;
+			height: 14px;
+			bottom: -2px;
+			right: -2px;
+		}
+
+		.gated-badge svg {
+			width: 7px;
+			height: 7px;
 		}
 
 		.track-title {

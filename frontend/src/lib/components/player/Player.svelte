@@ -4,6 +4,7 @@
 	import { nowPlaying } from '$lib/now-playing.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { preferences } from '$lib/preferences.svelte';
+	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
 	import { getCachedAudioUrl } from '$lib/storage';
 	import { onMount } from 'svelte';
@@ -11,6 +12,9 @@
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
 	import type { Track } from '$lib/types';
+
+	// atprotofans base URL for supporter CTAs
+	const ATPROTOFANS_URL = 'https://atprotofans.com';
 
 	// check if artwork should be shown in media session (respects sensitive content settings)
 	function shouldShowArtwork(url: string | null | undefined): boolean {
@@ -239,8 +243,17 @@
 		);
 	});
 
+	// gated content error types
+	interface GatedError {
+		type: 'gated';
+		artistDid: string;
+		artistHandle: string;
+		requiresAuth: boolean;
+	}
+
 	// get audio source URL - checks local cache first, falls back to network
-	async function getAudioSource(file_id: string): Promise<string> {
+	// throws GatedError if the track requires supporter access
+	async function getAudioSource(file_id: string, track: Track): Promise<string> {
 		try {
 			const cachedUrl = await getCachedAudioUrl(file_id);
 			if (cachedUrl) {
@@ -249,6 +262,33 @@
 		} catch (err) {
 			console.error('failed to check audio cache:', err);
 		}
+
+		// for gated tracks, check authorization first
+		if (track.support_gate) {
+			const response = await fetch(`${API_URL}/audio/${file_id}`, {
+				method: 'HEAD',
+				credentials: 'include'
+			});
+
+			if (response.status === 401) {
+				throw {
+					type: 'gated',
+					artistDid: track.artist_did,
+					artistHandle: track.artist_handle,
+					requiresAuth: true
+				} as GatedError;
+			}
+
+			if (response.status === 402) {
+				throw {
+					type: 'gated',
+					artistDid: track.artist_did,
+					artistHandle: track.artist_handle,
+					requiresAuth: false
+				} as GatedError;
+			}
+		}
+
 		return `${API_URL}/audio/${file_id}`;
 	}
 
@@ -280,33 +320,67 @@
 			cleanupBlobUrl();
 
 			// async: get audio source (cached or network)
-			getAudioSource(trackToLoad.file_id).then((src) => {
-				// check if track is still current (user may have changed tracks during await)
-				if (player.currentTrack?.id !== trackToLoad.id || !player.audioElement) {
-					// track changed, cleanup if we created a blob URL
-					if (src.startsWith('blob:')) {
-						URL.revokeObjectURL(src);
+			getAudioSource(trackToLoad.file_id, trackToLoad)
+				.then((src) => {
+					// check if track is still current (user may have changed tracks during await)
+					if (player.currentTrack?.id !== trackToLoad.id || !player.audioElement) {
+						// track changed, cleanup if we created a blob URL
+						if (src.startsWith('blob:')) {
+							URL.revokeObjectURL(src);
+						}
+						return;
 					}
-					return;
-				}
 
-				// track if this is a blob URL so we can revoke it later
-				if (src.startsWith('blob:')) {
-					currentBlobUrl = src;
-				}
+					// track if this is a blob URL so we can revoke it later
+					if (src.startsWith('blob:')) {
+						currentBlobUrl = src;
+					}
 
-				player.audioElement.src = src;
-				player.audioElement.load();
+					player.audioElement.src = src;
+					player.audioElement.load();
 
-				// wait for audio to be ready before allowing playback
-				player.audioElement.addEventListener(
-					'loadeddata',
-					() => {
-						isLoadingTrack = false;
-					},
-					{ once: true }
-				);
-			});
+					// wait for audio to be ready before allowing playback
+					player.audioElement.addEventListener(
+						'loadeddata',
+						() => {
+							isLoadingTrack = false;
+						},
+						{ once: true }
+					);
+				})
+				.catch((err) => {
+					isLoadingTrack = false;
+
+					// handle gated content errors with supporter CTA
+					if (err && err.type === 'gated') {
+						const gatedErr = err as GatedError;
+
+						if (gatedErr.requiresAuth) {
+							toast.info('sign in to play supporter-only tracks');
+						} else {
+							// show toast with supporter CTA
+							const supportUrl = gatedErr.artistDid
+								? `${ATPROTOFANS_URL}/${gatedErr.artistDid}`
+								: `${ATPROTOFANS_URL}/${gatedErr.artistHandle}`;
+
+							toast.info('this track is for supporters only', 5000, {
+								label: 'become a supporter',
+								href: supportUrl
+							});
+						}
+
+						// skip to next track if available
+						if (queue.hasNext) {
+							queue.next();
+						} else {
+							player.currentTrack = null;
+							player.paused = true;
+						}
+						return;
+					}
+
+					console.error('failed to load audio:', err);
+				});
 		}
 	});
 
