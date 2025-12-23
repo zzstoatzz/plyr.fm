@@ -111,7 +111,7 @@
 		} else {
 			// different track or no track - start this one
 			// use playTrack for gated content checks
-			if (track.support_gate) {
+			if (track.gated) {
 				await playTrack(track);
 			} else {
 				queue.playNow(track);
@@ -209,7 +209,7 @@
 		// otherwise start playing and wait for audio to be ready
 		// use playTrack for gated content checks
 		let played = false;
-		if (track.support_gate) {
+		if (track.gated) {
 			played = await playTrack(track);
 		} else {
 			queue.playNow(track);

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
-from backend._internal import get_optional_session, require_auth
+from backend._internal import get_optional_session, get_supported_artists, require_auth
 from backend.config import settings
 from backend.models import (
     Artist,
@@ -233,6 +233,21 @@ async def list_tracks(
             await asyncio.gather(*[resolve_image(t) for t in tracks_needing_images])
             await db.commit()
 
+    # resolve supporter status for gated content
+    viewer_did = session.did if session else None
+    supported_artist_dids: set[str] = set()
+    if viewer_did:
+        # collect artist DIDs with gated tracks (excluding viewer's own tracks)
+        gated_artist_dids = {
+            t.artist_did
+            for t in tracks
+            if t.support_gate and t.artist_did != viewer_did
+        }
+        if gated_artist_dids:
+            supported_artist_dids = await get_supported_artists(
+                viewer_did, gated_artist_dids
+            )
+
     # fetch all track responses concurrently with like status and counts
     track_responses = await asyncio.gather(
         *[
@@ -243,6 +258,8 @@ async def list_tracks(
                 like_counts,
                 comment_counts,
                 track_tags=track_tags,
+                viewer_did=viewer_did,
+                supported_artist_dids=supported_artist_dids,
             )
             for track in tracks
         ]

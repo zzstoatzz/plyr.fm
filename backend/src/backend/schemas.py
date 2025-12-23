@@ -72,6 +72,7 @@ class TrackResponse(BaseModel):
     )
     copyright_match: str | None = None  # "Title by Artist" of primary match
     support_gate: dict[str, Any] | None = None  # supporter gating config
+    gated: bool = False  # true if track is gated AND viewer lacks access
 
     @classmethod
     async def from_track(
@@ -83,6 +84,8 @@ class TrackResponse(BaseModel):
         comment_counts: dict[int, int] | None = None,
         copyright_info: dict[int, CopyrightInfo] | None = None,
         track_tags: dict[int, set[str]] | None = None,
+        viewer_did: str | None = None,
+        supported_artist_dids: set[str] | None = None,
     ) -> "TrackResponse":
         """build track response from Track model.
 
@@ -94,6 +97,8 @@ class TrackResponse(BaseModel):
             comment_counts: optional dict of track_id -> comment_count
             copyright_info: optional dict of track_id -> CopyrightInfo
             track_tags: optional dict of track_id -> set of tag names
+            viewer_did: optional DID of the viewer (for gated content resolution)
+            supported_artist_dids: optional set of artist DIDs the viewer supports
         """
         # check if user has liked this track
         is_liked = liked_track_ids is not None and track.id in liked_track_ids
@@ -137,6 +142,16 @@ class TrackResponse(BaseModel):
         # get tags for this track
         tags = track_tags.get(track.id, set()) if track_tags else set()
 
+        # resolve gated status for viewer
+        # gated = true only if track has support_gate AND viewer lacks access
+        gated = False
+        if track.support_gate:
+            is_owner = viewer_did and viewer_did == track.artist_did
+            is_supporter = (
+                supported_artist_dids and track.artist_did in supported_artist_dids
+            )
+            gated = not (is_owner or is_supporter)
+
         return cls(
             id=track.id,
             title=track.title,
@@ -162,4 +177,5 @@ class TrackResponse(BaseModel):
             copyright_flagged=copyright_flagged,
             copyright_match=copyright_match,
             support_gate=track.support_gate,
+            gated=gated,
         )

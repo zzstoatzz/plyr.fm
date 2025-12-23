@@ -56,6 +56,7 @@ export interface Track {
 	copyright_flagged?: boolean | null; // null = not scanned, false = clear, true = flagged
 	copyright_match?: string | null; // "Title by Artist" of primary match
 	support_gate?: SupportGate | null; // if set, track requires supporter access
+	gated?: boolean; // true if track is gated AND viewer lacks access
 }
 
 export interface User {

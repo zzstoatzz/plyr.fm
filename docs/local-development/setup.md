@@ -53,6 +53,7 @@ OAUTH_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
 # storage (r2 or filesystem)
 STORAGE_BACKEND=filesystem  # or "r2" for cloudflare r2
 R2_BUCKET=audio-dev
+R2_PRIVATE_BUCKET=audio-private-dev  # for supporter-gated content
 R2_IMAGE_BUCKET=images-dev
 R2_ENDPOINT_URL=<your-r2-endpoint>
 R2_PUBLIC_BUCKET_URL=<your-r2-public-url>

@@ -27,7 +27,8 @@ settings.database.url                          # from DATABASE_URL
 
 # storage settings (cloudflare r2)
 settings.storage.backend                       # from STORAGE_BACKEND
-settings.storage.r2_bucket                     # from R2_BUCKET (audio files)
+settings.storage.r2_bucket                     # from R2_BUCKET (public audio files)
+settings.storage.r2_private_bucket             # from R2_PRIVATE_BUCKET (gated audio files)
 settings.storage.r2_image_bucket               # from R2_IMAGE_BUCKET (image files)
 settings.storage.r2_endpoint_url               # from R2_ENDPOINT_URL
 settings.storage.r2_public_bucket_url          # from R2_PUBLIC_BUCKET_URL (audio files)
@@ -84,6 +85,7 @@ OAUTH_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
 # storage
 STORAGE_BACKEND=r2  # or "filesystem"
 R2_BUCKET=your-audio-bucket
+R2_PRIVATE_BUCKET=your-private-audio-bucket  # for supporter-gated content
 R2_IMAGE_BUCKET=your-image-bucket
 R2_ENDPOINT_URL=https://xxx.r2.cloudflarestorage.com
 R2_PUBLIC_BUCKET_URL=https://pub-xxx.r2.dev  # for audio files

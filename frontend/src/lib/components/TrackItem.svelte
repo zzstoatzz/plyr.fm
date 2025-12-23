@@ -7,7 +7,7 @@
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
-	import { playTrack } from '$lib/playback.svelte';
+	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
 
 	interface Props {
 		track: Track;
@@ -75,11 +75,13 @@
 
 	function addToQueue(e: Event) {
 		e.stopPropagation();
+		if (!guardGatedTrack(track, isAuthenticated)) return;
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
 	}
 
 	function handleQueue() {
+		if (!guardGatedTrack(track, isAuthenticated)) return;
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
 	}
@@ -137,14 +139,14 @@
 				return;
 			}
 			// use playTrack for gated content checks, fall back to onPlay for non-gated
-			if (track.support_gate) {
+			if (track.gated) {
 				await playTrack(track);
 			} else {
 				onPlay(track);
 			}
 		}}
 	>
-		<div class="track-image-wrapper" class:gated={track.support_gate}>
+		<div class="track-image-wrapper" class:gated={track.gated}>
 			{#if track.image_url && !trackImageError}
 				<SensitiveImage src={track.image_url}>
 					<div class="track-image">
@@ -184,10 +186,10 @@
 					</svg>
 				</div>
 			{/if}
-			{#if track.support_gate}
+			{#if track.gated}
 				<div class="gated-badge" title="supporters only">
 					<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-						<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+						<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
 					</svg>
 				</div>
 			{/if}

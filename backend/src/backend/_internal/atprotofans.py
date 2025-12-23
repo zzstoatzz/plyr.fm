@@ -14,6 +14,8 @@ the signer is the artist's own DID.
 see: https://atprotofans.leaflet.pub/3mabsmts3rs2b
 """
 
+import asyncio
+
 import httpx
 import logfire
 from pydantic import BaseModel
@@ -91,3 +93,29 @@ async def validate_supporter(
                 exc_info=True,
             )
             return SupporterValidation(valid=False)
+
+
+async def get_supported_artists(
+    supporter_did: str,
+    artist_dids: set[str],
+    timeout: float = 5.0,
+) -> set[str]:
+    """batch check which artists a user supports.
+
+    args:
+        supporter_did: DID of the potential supporter
+        artist_dids: set of artist DIDs to check
+        timeout: request timeout per check
+
+    returns:
+        set of artist DIDs the user supports
+    """
+    if not artist_dids:
+        return set()
+
+    async def check_one(artist_did: str) -> str | None:
+        result = await validate_supporter(supporter_did, artist_did, timeout)
+        return artist_did if result.valid else None
+
+    results = await asyncio.gather(*[check_one(did) for did in artist_dids])
+    return {did for did in results if did is not None}

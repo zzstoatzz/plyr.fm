@@ -264,7 +264,7 @@
 		}
 
 		// for gated tracks, check authorization first
-		if (track.support_gate) {
+		if (track.gated) {
 			const response = await fetch(`${API_URL}/audio/${file_id}`, {
 				method: 'HEAD',
 				credentials: 'include'
