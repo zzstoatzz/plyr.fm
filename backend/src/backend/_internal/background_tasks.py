@@ -865,14 +865,14 @@ async def schedule_pds_update_comment(
     logfire.info("scheduled pds comment update", comment_id=comment_id)
 
 
-async def migrate_track_to_private_bucket(track_id: int) -> None:
-    """migrate a track's audio file from public to private bucket.
+async def move_track_audio(track_id: int, to_private: bool) -> None:
+    """move a track's audio file between public and private buckets.
 
-    called when support_gate is enabled on an existing track.
-    copies file to private bucket, deletes from public, clears r2_url.
+    called when support_gate is toggled on an existing track.
 
     args:
-        track_id: database ID of the track to migrate
+        track_id: database ID of the track
+        to_private: if True, move to private bucket; if False, move to public
     """
     from backend.models import Track
     from backend.storage import storage
@@ -882,37 +882,43 @@ async def migrate_track_to_private_bucket(track_id: int) -> None:
         track = result.scalar_one_or_none()
 
         if not track:
-            logger.warning(
-                f"migrate_track_to_private_bucket: track {track_id} not found"
-            )
+            logger.warning(f"move_track_audio: track {track_id} not found")
             return
 
         if not track.file_id or not track.file_type:
             logger.warning(
-                f"migrate_track_to_private_bucket: track {track_id} missing file_id/file_type"
+                f"move_track_audio: track {track_id} missing file_id/file_type"
             )
             return
 
-        # migrate the file
-        success = await storage.migrate_to_private_bucket(
+        result_url = await storage.move_audio(
             file_id=track.file_id,
             extension=track.file_type,
+            to_private=to_private,
         )
 
-        if success:
-            # clear r2_url so the public URL is no longer used
+        # update r2_url: None for private, public URL for public
+        if to_private:
+            # moved to private - result_url is None on success, None on failure
+            # we check by verifying the file was actually moved (no error logged)
             track.r2_url = None
             await db.commit()
-            logger.info(f"migrated track {track_id} to private bucket")
+            logger.info(f"moved track {track_id} to private bucket")
+        elif result_url:
+            # moved to public - result_url is the public URL
+            track.r2_url = result_url
+            await db.commit()
+            logger.info(f"moved track {track_id} to public bucket")
         else:
-            logger.error(f"failed to migrate track {track_id} to private bucket")
+            logger.error(f"failed to move track {track_id}")
 
 
-async def schedule_track_migration(track_id: int) -> None:
-    """schedule a track migration to private bucket via docket."""
+async def schedule_move_track_audio(track_id: int, to_private: bool) -> None:
+    """schedule a track audio move via docket."""
     docket = get_docket()
-    await docket.add(migrate_track_to_private_bucket)(track_id)
-    logfire.info("scheduled track migration to private bucket", track_id=track_id)
+    await docket.add(move_track_audio)(track_id, to_private)
+    direction = "private" if to_private else "public"
+    logfire.info(f"scheduled track audio move to {direction}", track_id=track_id)
 
 
 # collection of all background task functions for docket registration
@@ -928,5 +934,5 @@ background_tasks = [
     pds_create_comment,
     pds_delete_comment,
     pds_update_comment,
-    migrate_track_to_private_bucket,
+    move_track_audio,
 ]

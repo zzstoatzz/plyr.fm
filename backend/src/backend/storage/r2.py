@@ -580,22 +580,24 @@ class R2Storage:
                 )
                 return url
 
-    async def migrate_to_private_bucket(
+    async def move_audio(
         self,
         file_id: str,
         extension: str,
-    ) -> bool:
-        """migrate an audio file from public bucket to private bucket.
+        *,
+        to_private: bool,
+    ) -> str | None:
+        """move an audio file between public and private buckets.
 
-        copies the file to the private bucket, then deletes from public.
-        used when enabling support_gate on an existing track.
+        copies the file to the destination bucket, then deletes from source.
 
         args:
             file_id: the file identifier hash
             extension: file extension (e.g., "mp3", "flac")
+            to_private: if True, move public->private; if False, move private->public
 
         returns:
-            True if migration succeeded, False otherwise
+            new URL if successful (public URL or None for private), None on failure
 
         raises:
             ValueError: if private bucket not configured
@@ -606,10 +608,18 @@ class R2Storage:
         ext = extension.lstrip(".")
         key = f"audio/{file_id}.{ext}"
 
+        if to_private:
+            src_bucket = self.audio_bucket_name
+            dst_bucket = self.private_audio_bucket_name
+        else:
+            src_bucket = self.private_audio_bucket_name
+            dst_bucket = self.audio_bucket_name
+
         with logfire.span(
-            "R2 migrate_to_private_bucket",
+            "R2 move_audio",
             file_id=file_id,
             key=key,
+            to_private=to_private,
         ):
             try:
                 async with self.async_session.client(
@@ -618,38 +628,33 @@ class R2Storage:
                     aws_access_key_id=self.aws_access_key_id,
                     aws_secret_access_key=self.aws_secret_access_key,
                 ) as client:
-                    # copy from public to private bucket
-                    copy_source = {"Bucket": self.audio_bucket_name, "Key": key}
+                    # copy to destination
                     await client.copy_object(
-                        CopySource=copy_source,
-                        Bucket=self.private_audio_bucket_name,
+                        CopySource={"Bucket": src_bucket, "Key": key},
+                        Bucket=dst_bucket,
                         Key=key,
                     )
                     logfire.info(
-                        "copied file to private bucket",
+                        "copied audio file",
                         file_id=file_id,
-                        source_bucket=self.audio_bucket_name,
-                        dest_bucket=self.private_audio_bucket_name,
+                        src=src_bucket,
+                        dst=dst_bucket,
                     )
 
-                    # delete from public bucket
-                    await client.delete_object(
-                        Bucket=self.audio_bucket_name,
-                        Key=key,
-                    )
-                    logfire.info(
-                        "deleted file from public bucket",
-                        file_id=file_id,
-                        bucket=self.audio_bucket_name,
-                    )
+                    # delete from source
+                    await client.delete_object(Bucket=src_bucket, Key=key)
+                    logfire.info("deleted from source bucket", file_id=file_id)
 
-                    return True
+                    # return public URL if moved to public, None if moved to private
+                    if to_private:
+                        return None
+                    return f"{self.public_audio_bucket_url}/{key}"
 
             except ClientError as e:
                 logfire.error(
-                    "R2 migration failed",
+                    "R2 move_audio failed",
                     file_id=file_id,
                     error=str(e),
                     exc_info=True,
                 )
-                return False
+                return None
