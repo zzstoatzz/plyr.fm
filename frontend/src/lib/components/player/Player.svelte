@@ -306,12 +306,37 @@
 	let previousTrackId = $state<number | null>(null);
 	let isLoadingTrack = $state(false);
 
+	// store previous playback state for restoration on gated errors
+	let savedPlaybackState = $state<{
+		track: Track;
+		src: string;
+		currentTime: number;
+		paused: boolean;
+	} | null>(null);
+
 	$effect(() => {
 		if (!player.currentTrack || !player.audioElement) return;
 
 		// only load new track if it actually changed
 		if (player.currentTrack.id !== previousTrackId) {
 			const trackToLoad = player.currentTrack;
+			const audioElement = player.audioElement;
+
+			// save current playback state BEFORE changing anything
+			// (only if we have a playing/paused track to restore to)
+			if (previousTrackId !== null && audioElement.src && !audioElement.src.startsWith('blob:')) {
+				const prevTrack = queue.tracks.find((t) => t.id === previousTrackId);
+				if (prevTrack) {
+					savedPlaybackState = {
+						track: prevTrack,
+						src: audioElement.src,
+						currentTime: audioElement.currentTime,
+						paused: audioElement.paused
+					};
+				}
+			}
+
+			// update tracking state
 			previousTrackId = trackToLoad.id;
 			player.resetPlayCount();
 			isLoadingTrack = true;
@@ -330,6 +355,9 @@
 						}
 						return;
 					}
+
+					// successfully got source - clear saved state
+					savedPlaybackState = null;
 
 					// track if this is a blob URL so we can revoke it later
 					if (src.startsWith('blob:')) {
@@ -369,7 +397,20 @@
 							});
 						}
 
-						// skip to next track if available
+						// restore previous playback if we had something playing
+						if (savedPlaybackState && player.audioElement) {
+							player.currentTrack = savedPlaybackState.track;
+							previousTrackId = savedPlaybackState.track.id;
+							player.audioElement.src = savedPlaybackState.src;
+							player.audioElement.currentTime = savedPlaybackState.currentTime;
+							if (!savedPlaybackState.paused) {
+								player.audioElement.play().catch(() => {});
+							}
+							savedPlaybackState = null;
+							return;
+						}
+
+						// no previous state to restore - skip to next or stop
 						if (queue.hasNext) {
 							queue.next();
 						} else {

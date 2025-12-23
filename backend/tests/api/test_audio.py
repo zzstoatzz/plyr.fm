@@ -271,14 +271,229 @@ async def test_get_audio_url_storage_returns_none(
         test_app.dependency_overrides.pop(require_auth, None)
 
 
-async def test_get_audio_url_requires_auth(test_app: FastAPI):
-    """test that /url endpoint returns 401 without authentication."""
+async def test_get_audio_url_gated_requires_auth(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """test that /url endpoint returns 401 for gated content without authentication."""
+    # create a gated track
+    artist = Artist(
+        did="did:plc:gatedartist",
+        handle="gatedartist.bsky.social",
+        display_name="Gated Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    track = Track(
+        title="Gated Track",
+        artist_did=artist.did,
+        file_id="gated-test-file",
+        file_type="mp3",
+        r2_url="https://cdn.example.com/audio/gated.mp3",
+        support_gate={"type": "any"},
+    )
+    db_session.add(track)
+    await db_session.commit()
+
     # ensure no auth override
     test_app.dependency_overrides.pop(require_auth, None)
 
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
-        response = await client.get("/audio/somefile/url")
+        response = await client.get(f"/audio/{track.file_id}/url")
 
     assert response.status_code == 401
+    assert "authentication required" in response.json()["detail"]
+
+
+# gated content regression tests
+
+
+@pytest.fixture
+async def gated_track(db_session: AsyncSession) -> Track:
+    """create a gated track for testing supporter access."""
+    artist = Artist(
+        did="did:plc:gatedowner",
+        handle="gatedowner.bsky.social",
+        display_name="Gated Owner",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    track = Track(
+        title="Supporters Only Track",
+        artist_did=artist.did,
+        file_id="gated-regression-test",
+        file_type="mp3",
+        r2_url=None,  # no cached URL - forces presigned URL generation
+        support_gate={"type": "any"},
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+
+    return track
+
+
+@pytest.fixture
+def owner_session() -> Session:
+    """session for the track owner."""
+    return Session(
+        session_id="owner-session-id",
+        did="did:plc:gatedowner",
+        handle="gatedowner.bsky.social",
+        oauth_session={
+            "access_token": "owner-access-token",
+            "refresh_token": "owner-refresh-token",
+            "dpop_key": {},
+        },
+    )
+
+
+@pytest.fixture
+def non_supporter_session() -> Session:
+    """session for a user who is not a supporter."""
+    return Session(
+        session_id="non-supporter-session-id",
+        did="did:plc:randomuser",
+        handle="randomuser.bsky.social",
+        oauth_session={
+            "access_token": "random-access-token",
+            "refresh_token": "random-refresh-token",
+            "dpop_key": {},
+        },
+    )
+
+
+async def test_gated_stream_requires_auth(test_app: FastAPI, gated_track: Track):
+    """regression: GET /audio/{file_id} returns 401 for gated content without auth."""
+    test_app.dependency_overrides.pop(require_auth, None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            f"/audio/{gated_track.file_id}", follow_redirects=False
+        )
+
+    assert response.status_code == 401
+    assert "authentication required" in response.json()["detail"]
+
+
+async def test_gated_head_requires_auth(test_app: FastAPI, gated_track: Track):
+    """regression: HEAD /audio/{file_id} returns 401 for gated content without auth."""
+    test_app.dependency_overrides.pop(require_auth, None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.head(f"/audio/{gated_track.file_id}")
+
+    assert response.status_code == 401
+
+
+async def test_gated_head_owner_allowed(
+    test_app: FastAPI, gated_track: Track, owner_session: Session
+):
+    """regression: HEAD /audio/{file_id} returns 200 for track owner."""
+    from backend._internal import get_optional_session
+
+    test_app.dependency_overrides[get_optional_session] = lambda: owner_session
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.head(f"/audio/{gated_track.file_id}")
+
+        assert response.status_code == 200
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)
+
+
+async def test_gated_stream_owner_redirects(
+    test_app: FastAPI, gated_track: Track, owner_session: Session
+):
+    """regression: GET /audio/{file_id} returns 307 redirect for track owner."""
+    from backend._internal import get_optional_session
+
+    mock_storage = MagicMock()
+    mock_storage.generate_presigned_url = AsyncMock(
+        return_value="https://presigned.example.com/audio/gated.mp3"
+    )
+
+    test_app.dependency_overrides[get_optional_session] = lambda: owner_session
+
+    try:
+        with patch("backend.api.audio.storage", mock_storage):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    f"/audio/{gated_track.file_id}", follow_redirects=False
+                )
+
+        assert response.status_code == 307
+        assert "presigned.example.com" in response.headers["location"]
+        mock_storage.generate_presigned_url.assert_called_once()
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)
+
+
+async def test_gated_head_non_supporter_denied(
+    test_app: FastAPI, gated_track: Track, non_supporter_session: Session
+):
+    """regression: HEAD /audio/{file_id} returns 402 for non-supporter."""
+    from backend._internal import get_optional_session
+
+    test_app.dependency_overrides[get_optional_session] = lambda: non_supporter_session
+
+    # mock validate_supporter to return invalid
+    mock_validation = MagicMock()
+    mock_validation.valid = False
+
+    try:
+        with patch(
+            "backend.api.audio.validate_supporter",
+            AsyncMock(return_value=mock_validation),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.head(f"/audio/{gated_track.file_id}")
+
+        assert response.status_code == 402
+        assert response.headers.get("x-support-required") == "true"
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)
+
+
+async def test_gated_stream_non_supporter_denied(
+    test_app: FastAPI, gated_track: Track, non_supporter_session: Session
+):
+    """regression: GET /audio/{file_id} returns 402 for non-supporter."""
+    from backend._internal import get_optional_session
+
+    test_app.dependency_overrides[get_optional_session] = lambda: non_supporter_session
+
+    # mock validate_supporter to return invalid
+    mock_validation = MagicMock()
+    mock_validation.valid = False
+
+    try:
+        with patch(
+            "backend.api.audio.validate_supporter",
+            AsyncMock(return_value=mock_validation),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    f"/audio/{gated_track.file_id}", follow_redirects=False
+                )
+
+        assert response.status_code == 402
+        assert "supporter access" in response.json()["detail"]
+    finally:
+        test_app.dependency_overrides.pop(get_optional_session, None)

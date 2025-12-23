@@ -1,6 +1,7 @@
 """Track mutation endpoints (delete/update/restore)."""
 
 import contextlib
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
@@ -170,6 +171,10 @@ async def update_track_metadata(
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form(description="JSON array of tag names")] = None,
+    support_gate: Annotated[
+        str | None,
+        Form(description="JSON object for supporter gating, or 'null' to remove"),
+    ] = None,
     image: UploadFile | None = File(None),
 ) -> TrackResponse:
     """Update track metadata (only by owner)."""
@@ -195,6 +200,30 @@ async def update_track_metadata(
     if title is not None:
         track.title = title
         title_changed = True
+
+    # handle support_gate update
+    if support_gate is not None:
+        if support_gate.lower() == "null" or support_gate == "":
+            # remove gating
+            track.support_gate = None
+        else:
+            try:
+                parsed_gate = json.loads(support_gate)
+                if not isinstance(parsed_gate, dict):
+                    raise ValueError("support_gate must be a JSON object")
+                if "type" not in parsed_gate:
+                    raise ValueError("support_gate must have a 'type' field")
+                if parsed_gate["type"] not in ("any",):
+                    raise ValueError(
+                        f"unsupported support_gate type: {parsed_gate['type']}"
+                    )
+                track.support_gate = parsed_gate
+            except json.JSONDecodeError as e:
+                raise HTTPException(
+                    status_code=400, detail=f"invalid support_gate JSON: {e}"
+                ) from e
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
 
     # track album changes for list sync
     old_album_id = track.album_id

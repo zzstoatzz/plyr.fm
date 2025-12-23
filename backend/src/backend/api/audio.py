@@ -1,7 +1,7 @@
 """audio streaming endpoint."""
 
 import logfire
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -22,9 +22,11 @@ class AudioUrlResponse(BaseModel):
     file_type: str | None
 
 
+@router.head("/{file_id}")
 @router.get("/{file_id}")
 async def stream_audio(
     file_id: str,
+    request: Request,
     session: Session | None = Depends(get_optional_session),
 ):
     """stream audio file by redirecting to R2 CDN URL.
@@ -32,9 +34,13 @@ async def stream_audio(
     for public tracks: redirects to R2 CDN URL.
     for gated tracks: validates supporter status and returns presigned URL.
 
+    HEAD requests are used for pre-flight auth checks - they return
+    200/401/402 status without redirecting to avoid CORS issues.
+
     images are served directly via R2 URLs stored in the image_url field,
     not through this endpoint.
     """
+    is_head_request = request.method == "HEAD"
     # look up track to get r2_url, file_type, support_gate, and artist_did
     async with db_session() as db:
         # check for duplicates (multiple tracks with same file_id)
@@ -70,6 +76,7 @@ async def stream_audio(
             file_type=file_type,
             artist_did=artist_did,
             session=session,
+            is_head_request=is_head_request,
         )
 
     # public track - use cached r2_url if available
@@ -88,11 +95,17 @@ async def _handle_gated_audio(
     file_type: str,
     artist_did: str,
     session: Session | None,
-) -> RedirectResponse:
+    is_head_request: bool = False,
+) -> RedirectResponse | Response:
     """handle streaming for supporter-gated content.
 
-    validates that the user is authenticated and supports the artist
+    validates that the user is authenticated and either:
+    - is the artist who uploaded the track, OR
+    - supports the artist via atprotofans
     before returning a presigned URL for the private bucket.
+
+    for HEAD requests (used for pre-flight auth checks), returns 200 status
+    without redirecting to avoid CORS issues with cross-origin redirects.
     """
     # must be authenticated to access gated content
     if not session:
@@ -101,26 +114,40 @@ async def _handle_gated_audio(
             detail="authentication required for supporter-gated content",
         )
 
-    # validate supporter status via atprotofans
-    validation = await validate_supporter(
-        supporter_did=session.did,
-        artist_did=artist_did,
-    )
-
-    if not validation.valid:
-        raise HTTPException(
-            status_code=402,
-            detail="this track requires supporter access",
-            headers={"X-Support-Required": "true"},
+    # artist can always play their own gated tracks
+    if session.did == artist_did:
+        logfire.info(
+            "serving gated content to owner",
+            file_id=file_id,
+            artist_did=artist_did,
+        )
+    else:
+        # validate supporter status via atprotofans
+        validation = await validate_supporter(
+            supporter_did=session.did,
+            artist_did=artist_did,
         )
 
-    # supporter verified - generate presigned URL for private bucket
-    logfire.info(
-        "serving gated content to supporter",
-        file_id=file_id,
-        supporter_did=session.did,
-        artist_did=artist_did,
-    )
+        if not validation.valid:
+            raise HTTPException(
+                status_code=402,
+                detail="this track requires supporter access",
+                headers={"X-Support-Required": "true"},
+            )
+
+    # for HEAD requests, just return 200 to confirm access
+    # (avoids CORS issues with cross-origin redirects)
+    if is_head_request:
+        return Response(status_code=200)
+
+    # authorized - generate presigned URL for private bucket
+    if session.did != artist_did:
+        logfire.info(
+            "serving gated content to supporter",
+            file_id=file_id,
+            supporter_did=session.did,
+            artist_did=artist_did,
+        )
 
     url = await storage.generate_presigned_url(file_id=file_id, extension=file_type)
     return RedirectResponse(url=url)
@@ -161,18 +188,20 @@ async def get_audio_url(
                 detail="authentication required for supporter-gated content",
             )
 
-        # validate supporter status
-        validation = await validate_supporter(
-            supporter_did=session.did,
-            artist_did=artist_did,
-        )
-
-        if not validation.valid:
-            raise HTTPException(
-                status_code=402,
-                detail="this track requires supporter access",
-                headers={"X-Support-Required": "true"},
+        # artist can always access their own gated tracks
+        if session.did != artist_did:
+            # validate supporter status
+            validation = await validate_supporter(
+                supporter_did=session.did,
+                artist_did=artist_did,
             )
+
+            if not validation.valid:
+                raise HTTPException(
+                    status_code=402,
+                    detail="this track requires supporter access",
+                    headers={"X-Support-Required": "true"},
+                )
 
         # return presigned URL
         url = await storage.generate_presigned_url(file_id=file_id, extension=file_type)

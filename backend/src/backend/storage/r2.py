@@ -563,6 +563,7 @@ class R2Storage:
                 endpoint_url=self.endpoint_url,
                 aws_access_key_id=self.aws_access_key_id,
                 aws_secret_access_key=self.aws_secret_access_key,
+                config=Config(signature_version="s3v4"),
             ) as client:
                 url = await client.generate_presigned_url(
                     "get_object",

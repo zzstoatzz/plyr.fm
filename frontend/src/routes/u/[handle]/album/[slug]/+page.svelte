@@ -7,6 +7,7 @@
 	import { checkImageSensitive } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import { playQueue } from '$lib/playback.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { API_URL } from '$lib/config';
@@ -70,11 +71,13 @@
 		queue.playNow(track);
 	}
 
-	function playNow() {
+	async function playNow() {
 		if (tracks.length > 0) {
-			queue.setQueue(tracks);
-			queue.playNow(tracks[0]);
-			toast.success(`playing ${albumMetadata.title}`, 1800);
+			// use playQueue to check gated access on first track before modifying queue
+			const played = await playQueue(tracks);
+			if (played) {
+				toast.success(`playing ${albumMetadata.title}`, 1800);
+			}
 		}
 	}
 

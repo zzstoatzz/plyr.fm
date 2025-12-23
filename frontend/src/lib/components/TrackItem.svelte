@@ -7,6 +7,7 @@
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
+	import { playTrack } from '$lib/playback.svelte';
 
 	interface Props {
 		track: Track;
@@ -130,12 +131,17 @@
 	{/if}
 	<button
 		class="track"
-		onclick={(e) => {
+		onclick={async (e) => {
 			// only play if clicking the track itself, not a link inside
 			if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
 				return;
 			}
-			onPlay(track);
+			// use playTrack for gated content checks, fall back to onPlay for non-gated
+			if (track.support_gate) {
+				await playTrack(track);
+			} else {
+				onPlay(track);
+			}
 		}}
 	>
 		<div class="track-image-wrapper" class:gated={track.support_gate}>
