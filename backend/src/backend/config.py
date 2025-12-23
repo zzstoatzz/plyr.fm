@@ -256,6 +256,16 @@ class StorageSettings(AppSettingsSection):
         validation_alias="R2_IMAGE_BUCKET",
         description="R2 bucket name for image files",
     )
+    r2_private_bucket: str = Field(
+        default="",
+        validation_alias="R2_PRIVATE_BUCKET",
+        description="R2 private bucket for supporter-gated audio (no public URL)",
+    )
+    presigned_url_expiry_seconds: int = Field(
+        default=3600,
+        validation_alias="PRESIGNED_URL_EXPIRY_SECONDS",
+        description="Expiry time in seconds for presigned URLs (default 1 hour)",
+    )
     r2_endpoint_url: str = Field(
         default="",
         validation_alias="R2_ENDPOINT_URL",

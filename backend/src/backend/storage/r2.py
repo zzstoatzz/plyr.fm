@@ -95,8 +95,10 @@ class R2Storage:
 
         self.audio_bucket_name = settings.storage.r2_bucket
         self.image_bucket_name = settings.storage.r2_image_bucket
+        self.private_audio_bucket_name = settings.storage.r2_private_bucket
         self.public_audio_bucket_url = settings.storage.r2_public_bucket_url
         self.public_image_bucket_url = settings.storage.r2_public_image_bucket_url
+        self.presigned_url_expiry = settings.storage.presigned_url_expiry_seconds
 
         # sync client for upload (used in background tasks)
         self.client = boto3.client(
@@ -439,3 +441,140 @@ class R2Storage:
                 image_bucket=self.image_bucket_name,
             )
             return False
+
+    async def save_gated(
+        self,
+        file: BinaryIO,
+        filename: str,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> str:
+        """save supporter-gated audio file to private R2 bucket.
+
+        same as save() but uses the private bucket with no public URL.
+        files in this bucket are only accessible via presigned URLs.
+
+        args:
+            file: file-like object to upload
+            filename: original filename (used to determine media type)
+            progress_callback: optional callback for upload progress
+        """
+        if not self.private_audio_bucket_name:
+            raise ValueError("R2_PRIVATE_BUCKET not configured")
+
+        with logfire.span("R2 save_gated", filename=filename):
+            # compute hash in chunks (constant memory)
+            file_id = hash_file_chunked(file)[:16]
+            logfire.info("computed file hash for gated content", file_id=file_id)
+
+            # determine file extension - only audio supported for gated content
+            ext = Path(filename).suffix.lower()
+            audio_format = AudioFormat.from_extension(ext)
+            if not audio_format:
+                raise ValueError(
+                    f"unsupported audio type for gated content: {ext}. "
+                    f"supported: {AudioFormat.supported_extensions_str()}"
+                )
+
+            key = f"audio/{file_id}{ext}"
+            media_type = audio_format.media_type
+
+            # get file size for progress tracking
+            file_size = file.seek(0, 2)
+            file.seek(0)
+
+            logfire.info(
+                "uploading gated content to private R2",
+                bucket=self.private_audio_bucket_name,
+                key=key,
+                media_type=media_type,
+                file_size=file_size,
+            )
+
+            try:
+                async with self.async_session.client(
+                    "s3",
+                    endpoint_url=self.endpoint_url,
+                    aws_access_key_id=self.aws_access_key_id,
+                    aws_secret_access_key=self.aws_secret_access_key,
+                ) as client:
+                    upload_kwargs = {
+                        "Fileobj": file,
+                        "Bucket": self.private_audio_bucket_name,
+                        "Key": key,
+                        "ExtraArgs": {"ContentType": media_type},
+                    }
+
+                    if progress_callback and file_size > 0:
+                        tracker = UploadProgressTracker(file_size, progress_callback)
+                        upload_kwargs["Callback"] = tracker
+
+                    await client.upload_fileobj(**upload_kwargs)
+            except Exception as e:
+                logfire.error(
+                    "R2 gated upload failed",
+                    error=str(e),
+                    bucket=self.private_audio_bucket_name,
+                    key=key,
+                    exc_info=True,
+                )
+                raise
+
+            logfire.info("R2 gated upload complete", file_id=file_id, key=key)
+            return file_id
+
+    async def generate_presigned_url(
+        self,
+        file_id: str,
+        extension: str,
+        expires_in: int | None = None,
+    ) -> str:
+        """generate a presigned URL for accessing gated content.
+
+        presigned URLs allow time-limited access to private bucket objects
+        without exposing credentials. the URL includes a signature that
+        expires after the specified duration.
+
+        args:
+            file_id: the file identifier hash
+            extension: file extension (e.g., "mp3", "flac")
+            expires_in: optional override for expiry seconds (default from settings)
+
+        returns:
+            presigned URL string
+
+        raises:
+            ValueError: if private bucket not configured
+        """
+        if not self.private_audio_bucket_name:
+            raise ValueError("R2_PRIVATE_BUCKET not configured")
+
+        ext = extension.lstrip(".")
+        key = f"audio/{file_id}.{ext}"
+        expiry = expires_in or self.presigned_url_expiry
+
+        with logfire.span(
+            "R2 generate_presigned_url",
+            file_id=file_id,
+            key=key,
+            expires_in=expiry,
+        ):
+            async with self.async_session.client(
+                "s3",
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+            ) as client:
+                url = await client.generate_presigned_url(
+                    "get_object",
+                    Params={
+                        "Bucket": self.private_audio_bucket_name,
+                        "Key": key,
+                    },
+                    ExpiresIn=expiry,
+                )
+                logfire.info(
+                    "generated presigned URL",
+                    file_id=file_id,
+                    expires_in=expiry,
+                )
+                return url
