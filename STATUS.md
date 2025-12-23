@@ -47,37 +47,54 @@ plyr.fm should become:
 
 ### December 2025
 
-#### rate limit moderation endpoint (PR #629, Dec 21)
+#### supporter-gated content (PR #637, Dec 22-23)
 
-**incident response**: detected suspicious activity - 72 requests in 17 seconds from a single IP targeting `/moderation/sensitive-images`. investigation via Logfire showed:
-- single IP generating all traffic with no User-Agent header
-- requests spaced ~230ms apart (too consistent for human browsing)
-- no corresponding user activity (page loads, audio streams)
+**atprotofans paywall integration** - artists can now mark tracks as "supporters only":
+- tracks with `support_gate` require atprotofans validation before playback
+- non-supporters see lock icon and "become a supporter" CTA linking to atprotofans
+- artists can always play their own gated tracks
 
-**fix**: added `10/minute` rate limit to the endpoint using existing slowapi infrastructure. verified rate limiting works correctly post-deployment.
+**backend architecture**:
+- audio endpoint validates supporter status via atprotofans API before serving gated content
+- HEAD requests return 200/401/402 for pre-flight auth checks (avoids CORS issues)
+- `R2Storage.move_audio()` moves files between public/private buckets when toggling gate
+- background task handles bucket migration asynchronously
+- ATProto record syncs when toggling gate (updates `supportGate` field and `audioUrl`)
+
+**frontend**:
+- `playback.svelte.ts` guards queue operations with gated checks BEFORE modifying state
+- clicking locked track shows toast with CTA - does NOT interrupt current playback
+- portal shows support gate toggle in track edit UI
 
 ---
 
-#### end-of-year sprint (Dec 20-31)
+#### supporter badges (PR #627, Dec 21-22)
+
+**phase 1 of atprotofans integration**:
+- supporter badge displays on artist pages when logged-in viewer supports the artist
+- calls atprotofans `validateSupporter` API directly from frontend (public endpoint)
+- badge only shows when viewer is authenticated and not viewing their own profile
+
+---
+
+#### rate limit moderation endpoint (PR #629, Dec 21)
+
+**incident response**: detected suspicious activity - 72 requests in 17 seconds from a single IP targeting `/moderation/sensitive-images`. added `10/minute` rate limit using existing slowapi infrastructure.
+
+---
+
+#### end-of-year sprint planning (PR #626, Dec 20)
 
 **focus**: two foundational systems need solid experimental implementations by 2026.
 
-**track 1: moderation architecture overhaul**
-- consolidate sensitive images into moderation service
-- add event-sourced audit trail
-- implement configurable rules (replace hard-coded thresholds)
-- informed by [Roost Osprey](https://github.com/roostorg/osprey) patterns and [Bluesky Ozone](https://github.com/bluesky-social/ozone) workflows
-
-**track 2: atprotofans paywall integration**
-- phase 1: read-only supporter validation (show badges)
-- phase 2: platform registration (artists create support tiers)
-- phase 3: content gating (track-level access control)
+| track | focus | status |
+|-------|-------|--------|
+| moderation | consolidate architecture, add rules engine | in progress |
+| atprotofans | supporter validation, content gating | shipped (phase 1-3) |
 
 **research docs**:
 - [moderation architecture overhaul](docs/research/2025-12-20-moderation-architecture-overhaul.md)
 - [atprotofans paywall integration](docs/research/2025-12-20-atprotofans-paywall-integration.md)
-
-**tracking**: issue #625
 
 ---
 
@@ -87,12 +104,11 @@ plyr.fm should become:
 - enabled beartype runtime type validation across the backend
 - catches type errors at runtime instead of silently passing bad data
 - test infrastructure improvements: session-scoped TestClient fixture (5x faster tests)
-- disabled automatic perpetual task scheduling in tests
 
 **moderation cleanup** (PRs #617-618):
 - consolidated moderation code, addressing issues #541-543
 - `sync_copyright_resolutions` now runs automatically via docket Perpetual task
-- removed `init_db()` from lifespan (handled by alembic migrations)
+- removed dead `init_db()` from lifespan (handled by alembic migrations)
 
 ---
 
@@ -111,269 +127,40 @@ plyr.fm should become:
 - mobile modals now use full screen positioning
 - fixed `/tag/` routes in hasPageMetadata check
 
-**misc** (PRs #598-601):
-- upload button added to desktop header nav
-- background settings UX improvements
-- switched support link to atprotofans
-- AudD costs now derived from track duration for accurate billing
-
 ---
 
 #### offline mode foundation (PRs #610-611, Dec 17)
 
 **experimental offline playback**:
-- new storage layer using Cache API for audio bytes + IndexedDB for metadata
+- storage layer using Cache API for audio bytes + IndexedDB for metadata
 - `GET /audio/{file_id}/url` backend endpoint returns direct R2 URLs for client-side caching
 - "auto-download liked" toggle in experimental settings section
-- when enabled, bulk-downloads all liked tracks and auto-downloads future likes
 - Player checks for cached audio before streaming from R2
-- works offline once tracks are downloaded
-
-**robustness improvements**:
-- IndexedDB connections properly closed after each operation
-- concurrent downloads deduplicated via in-flight promise tracking
-- stale metadata cleanup when cache entries are missing
 
 ---
 
-#### visual customization (PRs #595-596, Dec 16)
+### Earlier December 2025
 
-**custom backgrounds** (PR #595):
-- users can set a custom background image URL in settings with optional tiling
-- new "playing artwork as background" toggle - uses current track's artwork as blurred page background
-- glass effect styling for track items (translucent backgrounds, subtle shadows)
-- new `ui_settings` JSONB column in preferences for extensible UI settings
+See `.status_history/2025-12.md` for detailed history including:
+- visual customization with custom backgrounds (PRs #595-596, Dec 16)
+- performance & moderation polish (PRs #586-593, Dec 14-15)
+- mobile UI polish & background task expansion (PRs #558-572, Dec 10-12)
+- confidential OAuth client for 180-day sessions (PRs #578-582, Dec 12-13)
+- pagination & album management (PRs #550-554, Dec 9-10)
+- public cost dashboard (PRs #548-549, Dec 9)
+- docket background tasks & concurrent exports (PRs #534-546, Dec 9)
+- artist support links & inline playlist editing (PRs #520-532, Dec 8)
+- playlist fast-follow fixes (PRs #507-519, Dec 7-8)
+- playlists, ATProto sync, and library hub (PR #499, Dec 6-7)
+- sensitive image moderation (PRs #471-488, Dec 5-6)
+- teal.fm scrobbling (PR #467, Dec 4)
+- unified search with Cmd+K (PR #447, Dec 3)
+- light/dark theme system (PR #441, Dec 2-3)
+- tag filtering and bufo easter egg (PRs #431-438, Dec 2)
 
-**bug fix** (PR #596):
-- removed 3D wheel scroll effect that was blocking like/share button clicks
-- root cause: `translateZ` transforms created z-index stacking that intercepted pointer events
+### November 2025
 
----
-
-#### performance & UX polish (PRs #586-593, Dec 14-15)
-
-**performance improvements** (PRs #590-591):
-- removed moderation service call from `/tracks/` listing endpoint
-- removed copyright check from tag listing endpoint
-- faster page loads for track feeds
-
-**moderation agent** (PRs #586, #588):
-- added moderation agent script with audit trail support
-- improved moderation prompt and UI layout
-
-**bug fixes** (PRs #589, #592, #593):
-- fixed liked state display on playlist detail page
-- preserved album track order during ATProto sync
-- made header sticky on scroll for better mobile navigation
-
-**iOS Safari fixes** (PRs #573-576):
-- fixed AddToMenu visibility issue on iOS Safari
-- menu now correctly opens upward when near viewport bottom
-
----
-
-#### mobile UI polish & background task expansion (PRs #558-572, Dec 10-12)
-
-**background task expansion** (PRs #558, #561):
-- moved like/unlike and comment PDS writes to docket background tasks
-- API responses now immediate; PDS sync happens asynchronously
-- added targeted album list sync background task for ATProto record updates
-
-**performance caching** (PR #566):
-- added Redis cache for copyright label lookups (5-minute TTL)
-- fixed 2-3s latency spikes on `/tracks/` endpoint
-- batch operations via `mget`/pipeline for efficiency
-
-**mobile UX improvements** (PRs #569, #572):
-- mobile action menus now open from top with all actions visible
-- UI polish for album and artist pages on small screens
-
-**misc** (PRs #559, #562, #563, #570):
-- reduced docket Redis polling from 250ms to 5s (lower resource usage)
-- added atprotofans support link mode for ko-fi integration
-- added alpha badge to header branding
-- fixed web manifest ID for PWA stability
-
----
-
-#### confidential OAuth client (PRs #578, #580-582, Dec 12-13)
-
-**confidential client support** (PR #578):
-- implemented ATProto OAuth confidential client using `private_key_jwt` authentication
-- when `OAUTH_JWK` is configured, plyr.fm authenticates with a cryptographic key
-- confidential clients earn 180-day refresh tokens (vs 2-week for public clients)
-- added `/.well-known/jwks.json` endpoint for public key discovery
-- updated `/oauth-client-metadata.json` with confidential client fields
-
-**bug fixes** (PRs #580-582):
-- fixed client assertion JWT to use Authorization Server's issuer as `aud` claim (not token endpoint URL)
-- fixed JWKS endpoint to preserve `kid` field from original JWK
-- fixed `OAuthClient` to pass `client_secret_kid` for JWT header
-
-**atproto fork updates** (zzstoatzz/atproto#6, #7):
-- added `issuer` parameter to `_make_token_request()` for correct `aud` claim
-- added `client_secret_kid` parameter to include `kid` in client assertion JWT header
-
-**outcome**: users now get 180-day refresh tokens, and "remember this account" on the PDS authorization page works (auto-approves subsequent logins). see #583 for future work on account switching via OAuth `prompt` parameter.
-
----
-
-#### pagination & album management (PRs #550-554, Dec 9-10)
-
-**tracks list pagination** (PR #554):
-- cursor-based pagination on `/tracks/` endpoint (default 50 per page)
-- infinite scroll on homepage using native IntersectionObserver
-- zero new dependencies - uses browser APIs only
-- pagination state persisted to localStorage for fast subsequent loads
-
-**album management improvements** (PRs #550-552, #557):
-- album delete and track reorder fixes
-- album page edit mode matching playlist UX (inline title editing, cover upload)
-- optimistic UI updates for album title changes (instant feedback)
-- ATProto record sync when album title changes (updates all track records + list record)
-- fixed album slug sync on rename (prevented duplicate albums when adding tracks)
-
-**playlist show on profile** (PR #553):
-- restored "show on profile" toggle that was lost during inline editing refactor
-- users can now control whether playlists appear on their public profile
-
----
-
-#### public cost dashboard (PRs #548-549, Dec 9)
-
-- `/costs` page showing live platform infrastructure costs
-- daily export to R2 via GitHub Action, proxied through `/stats/costs` endpoint
-- dedicated `plyr-stats` R2 bucket with public access (shared across environments)
-- includes fly.io, neon, cloudflare, and audd API costs
-- ko-fi integration for community support
-
-#### docket background tasks & concurrent exports (PRs #534-546, Dec 9)
-
-**docket integration** (PRs #534, #536, #539):
-- migrated background tasks from inline asyncio to docket (Redis-backed task queue)
-- copyright scanning, media export, ATProto sync, and teal scrobbling now run via docket
-- graceful fallback to asyncio for local development without Redis
-- parallel test execution with xdist template databases (#540)
-
-**concurrent export downloads** (PR #545):
-- exports now download tracks in parallel (up to 4 concurrent) instead of sequentially
-- significantly faster for users with many tracks or large files
-- zip creation remains sequential (zipfile constraint)
-
-**ATProto refactor** (PR #534):
-- reorganized ATProto record code into `_internal/atproto/records/` by lexicon namespace
-- extracted `client.py` for low-level PDS operations
-- cleaner separation between plyr.fm and teal.fm lexicons
-
-**documentation & observability**:
-- AudD API cost tracking dashboard (#546)
-- promoted runbooks from sandbox to `docs/runbooks/`
-- updated CLAUDE.md files across the codebase
-
----
-
-#### artist support links & inline playlist editing (PRs #520-532, Dec 8)
-
-**artist support link** (PR #532):
-- artists can set a support URL (Ko-fi, Patreon, etc.) in their portal profile
-- support link displays as a button on artist profile pages next to the share button
-- URLs validated to require https:// prefix
-
-**inline playlist editing** (PR #531):
-- edit playlist name and description directly on playlist detail page
-- click-to-upload cover art replacement without modal
-- cleaner UX - no more edit modal popup
-
-**platform stats enhancements** (PRs #522, #528):
-- total duration displayed in platform stats (e.g., "42h 15m of music")
-- duration shown per artist in analytics section
-- combined stats and search into single centered container for cleaner layout
-
-**navigation & data loading fixes** (PR #527):
-- fixed stale data when navigating between detail pages of the same type
-- e.g., clicking from one artist to another now properly reloads data
-
-**copyright moderation improvements** (PR #480):
-- enhanced moderation workflow for copyright claims
-- improved labeler integration
-
-**status maintenance workflow** (PR #529):
-- automated status maintenance using claude-code-action
-- reviews merged PRs and updates STATUS.md narratively
-
----
-
-#### playlist fast-follow fixes (PRs #507-519, Dec 7-8)
-
-**public playlist viewing** (PR #519):
-- playlists now publicly viewable without authentication
-- ATProto records are public by design - auth was unnecessary for read access
-- shared playlist URLs no longer redirect unauthenticated users to homepage
-
-**inline playlist creation** (PR #510):
-- clicking "create new playlist" from AddToMenu previously navigated to `/library?create=playlist`
-- this caused SvelteKit to reinitialize the layout, destroying the audio element and stopping playback
-- fix: added inline create form that creates playlist and adds track in one action without navigation
-
-**UI polish** (PRs #507-509, #515):
-- include `image_url` in playlist SSR data for og:image link previews
-- invalidate layout data after token exchange - fixes stale auth state after login
-- fixed stopPropagation blocking "create new playlist" link clicks
-- detail page button layouts: all buttons visible on mobile, centered AddToMenu on track detail
-- AddToMenu smart positioning: menu opens upward when near viewport bottom
-
-**documentation** (PR #514):
-- added lexicons overview documentation at `docs/lexicons/overview.md`
-- covers `fm.plyr.track`, `fm.plyr.like`, `fm.plyr.comment`, `fm.plyr.list`, `fm.plyr.actor.profile`
-
----
-
-#### playlists, ATProto sync, and library hub (PR #499, Dec 6-7)
-
-**playlists** (full CRUD):
-- create, rename, delete playlists with cover art upload
-- add/remove/reorder tracks with drag-and-drop
-- playlist detail page with edit modal
-- "add to playlist" menu on tracks with inline create
-- playlist sharing with OpenGraph link previews
-
-**ATProto integration**:
-- `fm.plyr.list` lexicon for syncing playlists/albums to user PDSes
-- `fm.plyr.actor.profile` lexicon for artist profiles
-- automatic sync of albums, liked tracks, profile on login
-
-**library hub** (`/library`):
-- unified page with tabs: liked, playlists, albums
-- nav changed from "liked" → "library"
-
-**related**: scope upgrade OAuth flow (PR #503), settings consolidation (PR #496)
-
----
-
-#### sensitive image moderation (PRs #471-488, Dec 5-6)
-
-- `sensitive_images` table flags problematic images
-- `show_sensitive_artwork` user preference
-- flagged images blurred everywhere: track lists, player, artist pages, search, embeds
-- Media Session API respects sensitive preference
-- SSR-safe filtering for og:image link previews
-
----
-
-#### teal.fm scrobbling (PR #467, Dec 4)
-
-- native scrobbling to user's PDS using teal's ATProto lexicons
-- scrobble at 30% or 30 seconds (same threshold as play counts)
-- toggle in settings, link to pdsls.dev to view records
-
----
-
-### Earlier December / November 2025
-
-See `.status_history/2025-12.md` and `.status_history/2025-11.md` for detailed history including:
-- unified search with Cmd+K (PR #447)
-- light/dark theme system (PR #441)
-- tag filtering and bufo easter egg (PRs #431-438)
+See `.status_history/2025-11.md` for detailed history including:
 - developer tokens (PR #367)
 - copyright moderation system (PRs #382-395)
 - export & upload reliability (PRs #337-344)
@@ -388,7 +175,7 @@ see [sprint tracking issue #625](https://github.com/zzstoatzz/plyr.fm/issues/625
 | track | focus | status |
 |-------|-------|--------|
 | moderation | consolidate architecture, add rules engine | planning |
-| atprotofans | supporter validation, content gating | planning |
+| atprotofans | supporter validation, content gating | shipped |
 
 ### known issues
 - playback auto-start on refresh (#225)
@@ -443,6 +230,7 @@ see [sprint tracking issue #625](https://github.com/zzstoatzz/plyr.fm/issues/625
 - ✅ copyright moderation with ATProto labeler
 - ✅ docket background tasks (copyright scan, export, atproto sync, scrobble)
 - ✅ media export with concurrent downloads
+- ✅ supporter-gated content via atprotofans
 
 **albums**
 - ✅ album CRUD with cover art
@@ -479,10 +267,6 @@ current monthly costs: ~$18/month (plyr.fm specific)
 see live dashboard: [plyr.fm/costs](https://plyr.fm/costs)
 
 - fly.io (plyr apps only): ~$12/month
-  - relay-api (prod): $5.80
-  - relay-api-staging: $5.60
-  - plyr-moderation: $0.24
-  - plyr-transcoder: $0.02
 - neon postgres: $5/month
 - cloudflare (R2 + pages + domain): ~$1.16/month
 - audd audio fingerprinting: $0-10/month (6000 free/month)
@@ -551,4 +335,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-21.
+this is a living document. last updated 2025-12-23.
