@@ -7,7 +7,7 @@
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
-	import { playTrack } from '$lib/playback.svelte';
+	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
 
 	interface Props {
 		track: Track;
@@ -75,11 +75,13 @@
 
 	function addToQueue(e: Event) {
 		e.stopPropagation();
+		if (!guardGatedTrack(track, isAuthenticated)) return;
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
 	}
 
 	function handleQueue() {
+		if (!guardGatedTrack(track, isAuthenticated)) return;
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
 	}

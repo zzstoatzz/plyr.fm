@@ -67,7 +67,7 @@ async function checkAccess(track: Track): Promise<GatedCheckResult> {
 }
 
 /**
- * show appropriate toast for denied access.
+ * show appropriate toast for denied access (from HEAD request).
  */
 function showDeniedToast(result: GatedCheckResult): void {
 	if (result.requiresAuth) {
@@ -80,6 +80,33 @@ function showDeniedToast(result: GatedCheckResult): void {
 	} else {
 		toast.info('this track is for supporters only');
 	}
+}
+
+/**
+ * show toast for gated track (using server-resolved status).
+ */
+function showGatedToast(track: Track, isAuthenticated: boolean): void {
+	if (!isAuthenticated) {
+		toast.info('sign in to play supporter-only tracks');
+	} else if (track.artist_did) {
+		toast.info('this track is for supporters only', 5000, {
+			label: 'become a supporter',
+			href: getAtprotofansSupportUrl(track.artist_did)
+		});
+	} else {
+		toast.info('this track is for supporters only');
+	}
+}
+
+/**
+ * check if track is accessible using server-resolved gated status.
+ * shows toast if denied. no network call - instant feedback.
+ * use this for queue adds and other non-playback operations.
+ */
+export function guardGatedTrack(track: Track, isAuthenticated: boolean): boolean {
+	if (!track.gated) return true;
+	showGatedToast(track, isAuthenticated);
+	return false;
 }
 
 /**
