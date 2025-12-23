@@ -12,6 +12,7 @@
 	import { checkImageSensitive } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import { playTrack } from '$lib/playback.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
@@ -103,13 +104,18 @@
 		window.location.href = '/';
 	}
 
-	function handlePlay() {
+	async function handlePlay() {
 		if (player.currentTrack?.id === track.id) {
 			// this track is already loaded - just toggle play/pause
 			player.togglePlayPause();
 		} else {
 			// different track or no track - start this one
-			queue.playNow(track);
+			// use playTrack for gated content checks
+			if (track.support_gate) {
+				await playTrack(track);
+			} else {
+				queue.playNow(track);
+			}
 		}
 	}
 
@@ -187,7 +193,7 @@
 		return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 	}
 
-	function seekToTimestamp(ms: number) {
+	async function seekToTimestamp(ms: number) {
 		const doSeek = () => {
 			if (player.audioElement) {
 				player.audioElement.currentTime = ms / 1000;
@@ -201,7 +207,17 @@
 		}
 
 		// otherwise start playing and wait for audio to be ready
-		queue.playNow(track);
+		// use playTrack for gated content checks
+		let played = false;
+		if (track.support_gate) {
+			played = await playTrack(track);
+		} else {
+			queue.playNow(track);
+			played = true;
+		}
+
+		if (!played) return; // gated - can't seek
+
 		if (player.audioElement && player.audioElement.readyState >= 1) {
 			doSeek();
 		} else {

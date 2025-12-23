@@ -87,6 +87,16 @@ class Track(Base):
         nullable=False, default=False, server_default="false"
     )
 
+    # supporter-gated content (e.g., {"type": "any"} requires any atprotofans support)
+    support_gate: Mapped[dict | None] = mapped_column(
+        JSONB, nullable=True, default=None
+    )
+
+    @property
+    def is_gated(self) -> bool:
+        """check if this track requires supporter access."""
+        return self.support_gate is not None
+
     @property
     def album(self) -> str | None:
         """get album name from extra (for ATProto compatibility)."""

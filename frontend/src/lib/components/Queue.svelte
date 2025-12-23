@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { queue } from '$lib/queue.svelte';
+	import { goToIndex } from '$lib/playback.svelte';
 	import type { Track } from '$lib/types';
 
 	let draggedIndex = $state<number | null>(null);
@@ -167,8 +168,8 @@
 								ondragover={(e) => handleDragOver(e, index)}
 								ondrop={(e) => handleDrop(e, index)}
 								ondragend={handleDragEnd}
-								onclick={() => queue.goTo(index)}
-								onkeydown={(e) => e.key === 'Enter' && queue.goTo(index)}
+								onclick={() => goToIndex(index)}
+								onkeydown={(e) => e.key === 'Enter' && goToIndex(index)}
 							>
 								<!-- drag handle for reordering -->
 								<button

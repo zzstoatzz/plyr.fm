@@ -12,6 +12,7 @@
 	import { toast } from "$lib/toast.svelte";
 	import { player } from "$lib/player.svelte";
 	import { queue } from "$lib/queue.svelte";
+	import { playQueue } from "$lib/playback.svelte";
 	import { fetchLikedTracks } from "$lib/tracks.svelte";
 	import type { PageData } from "./$types";
 	import type { PlaylistWithTracks, Track } from "$lib/types";
@@ -143,11 +144,13 @@
 		queue.playNow(track);
 	}
 
-	function playNow() {
+	async function playNow() {
 		if (tracks.length > 0) {
-			queue.setQueue(tracks);
-			queue.playNow(tracks[0]);
-			toast.success(`playing ${playlist.name}`, 1800);
+			// use playQueue to check gated access on first track before modifying queue
+			const played = await playQueue(tracks);
+			if (played) {
+				toast.success(`playing ${playlist.name}`, 1800);
+			}
 		}
 	}
 

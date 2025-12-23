@@ -20,18 +20,20 @@ def build_track_record(
     duration: int | None = None,
     features: list[dict] | None = None,
     image_url: str | None = None,
+    support_gate: dict | None = None,
 ) -> dict[str, Any]:
     """Build a track record dict for ATProto.
 
     args:
         title: track title
         artist: artist name
-        audio_url: R2 URL for audio file
+        audio_url: R2 URL for audio file (placeholder for gated tracks)
         file_type: file extension (mp3, wav, etc)
         album: optional album name
         duration: optional duration in seconds
         features: optional list of featured artists [{did, handle, display_name, avatar_url}]
         image_url: optional cover art image URL
+        support_gate: optional gating config (e.g., {"type": "any"})
 
     returns:
         record dict ready for ATProto
@@ -64,6 +66,8 @@ def build_track_record(
         # validate image URL comes from allowed origin
         settings.storage.validate_image_url(image_url)
         record["imageUrl"] = image_url
+    if support_gate:
+        record["supportGate"] = support_gate
 
     return record
 
@@ -78,6 +82,7 @@ async def create_track_record(
     duration: int | None = None,
     features: list[dict] | None = None,
     image_url: str | None = None,
+    support_gate: dict | None = None,
 ) -> tuple[str, str]:
     """Create a track record on the user's PDS using the configured collection.
 
@@ -85,12 +90,13 @@ async def create_track_record(
         auth_session: authenticated user session
         title: track title
         artist: artist name
-        audio_url: R2 URL for audio file
+        audio_url: R2 URL for audio file (placeholder URL for gated tracks)
         file_type: file extension (mp3, wav, etc)
         album: optional album name
         duration: optional duration in seconds
         features: optional list of featured artists [{did, handle, display_name, avatar_url}]
         image_url: optional cover art image URL
+        support_gate: optional gating config (e.g., {"type": "any"})
 
     returns:
         tuple of (record_uri, record_cid)
@@ -108,6 +114,7 @@ async def create_track_record(
         duration=duration,
         features=features,
         image_url=image_url,
+        support_gate=support_gate,
     )
 
     payload = {

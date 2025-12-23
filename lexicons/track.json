@@ -61,7 +61,24 @@
             "type": "string",
             "format": "datetime",
             "description": "Timestamp when the track was uploaded."
+          },
+          "supportGate": {
+            "type": "ref",
+            "ref": "#supportGate",
+            "description": "If set, this track requires viewer to be a supporter of the artist via atprotofans."
           }
+        }
+      }
+    },
+    "supportGate": {
+      "type": "object",
+      "description": "Configuration for supporter-gated content.",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The type of support required to access this content.",
+          "knownValues": ["any"]
         }
       }
     },

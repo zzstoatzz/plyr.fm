@@ -28,6 +28,7 @@
 	let editFeaturedArtists = $state<FeaturedArtist[]>([]);
 	let editTags = $state<string[]>([]);
 	let editImageFile = $state<File | null>(null);
+	let editSupportGate = $state(false);
 	let hasUnresolvedEditFeaturesInput = $state(false);
 
 	// profile editing state
@@ -315,6 +316,7 @@
 		editAlbum = track.album?.title || '';
 		editFeaturedArtists = track.features || [];
 		editTags = track.tags || [];
+		editSupportGate = track.support_gate !== null && track.support_gate !== undefined;
 	}
 
 	function cancelEdit() {
@@ -324,6 +326,7 @@
 		editFeaturedArtists = [];
 		editTags = [];
 		editImageFile = null;
+		editSupportGate = false;
 	}
 
 
@@ -340,6 +343,12 @@
 		}
 		// always send tags (empty array clears them)
 		formData.append('tags', JSON.stringify(editTags));
+		// send support_gate - null to remove, or {type: "any"} to enable
+		if (editSupportGate) {
+			formData.append('support_gate', JSON.stringify({ type: 'any' }));
+		} else {
+			formData.append('support_gate', 'null');
+		}
 		if (editImageFile) {
 			formData.append('image', editImageFile);
 		}
@@ -740,6 +749,23 @@
 												<p class="file-info">{editImageFile.name} (will replace current)</p>
 											{/if}
 										</div>
+										{#if atprotofansEligible || track.support_gate}
+											<div class="edit-field-group">
+												<label class="edit-label">supporter access</label>
+												<label class="toggle-row">
+													<input
+														type="checkbox"
+														bind:checked={editSupportGate}
+													/>
+													<span>only supporters can play this track</span>
+												</label>
+												{#if editSupportGate}
+													<p class="field-hint">
+														only users who support you via <a href="https://atprotofans.com" target="_blank" rel="noopener">atprotofans</a> can play this track
+													</p>
+												{/if}
+											</div>
+										{/if}
 									</div>
 									<div class="edit-actions">
 										<button
@@ -784,6 +810,13 @@
 								<div class="track-info">
 					<div class="track-title">
 						{track.title}
+						{#if track.support_gate}
+							<span class="support-gate-badge" title="supporters only">
+								<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+									<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+								</svg>
+							</span>
+						{/if}
 						{#if track.copyright_flagged}
 							{@const matchText = track.copyright_match ? `potential copyright violation: ${track.copyright_match}` : 'potential copyright violation'}
 							{#if track.atproto_record_url}
@@ -1604,6 +1637,36 @@
 		color: var(--text-secondary);
 	}
 
+	.toggle-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		font-size: 0.9rem;
+		color: var(--text-primary);
+	}
+
+	.toggle-row input[type="checkbox"] {
+		width: 16px;
+		height: 16px;
+		accent-color: var(--accent);
+	}
+
+	.field-hint {
+		font-size: 0.8rem;
+		color: var(--text-tertiary);
+		margin-top: 0.25rem;
+	}
+
+	.field-hint a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.field-hint a:hover {
+		text-decoration: underline;
+	}
+
 	.track-title {
 		font-weight: 600;
 		font-size: 1rem;
@@ -1612,6 +1675,13 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+	}
+
+	.support-gate-badge {
+		display: inline-flex;
+		align-items: center;
+		color: var(--accent);
+		flex-shrink: 0;
 	}
 
 	.copyright-flag {

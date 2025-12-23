@@ -34,6 +34,7 @@ class UploaderState {
 		features: FeaturedArtist[],
 		image: File | null | undefined,
 		tags: string[],
+		supportGated: boolean,
 		onSuccess?: () => void,
 		callbacks?: UploadProgressCallback
 	): void {
@@ -59,6 +60,9 @@ class UploaderState {
 		}
 		if (image) {
 			formData.append('image', image);
+		}
+		if (supportGated) {
+			formData.append('support_gate', JSON.stringify({ type: 'any' }));
 		}
 
 		const xhr = new XMLHttpRequest();

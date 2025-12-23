@@ -1,9 +1,11 @@
 """Track mutation endpoints (delete/update/restore)."""
 
 import contextlib
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
+from urllib.parse import urljoin
 
 import logfire
 from fastapi import Depends, File, Form, HTTPException, UploadFile
@@ -23,7 +25,10 @@ from backend._internal.atproto.records import (
     update_record,
 )
 from backend._internal.atproto.tid import datetime_to_tid
-from backend._internal.background_tasks import schedule_album_list_sync
+from backend._internal.background_tasks import (
+    schedule_album_list_sync,
+    schedule_move_track_audio,
+)
 from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackTag, get_db
 from backend.schemas import TrackResponse
@@ -170,6 +175,10 @@ async def update_track_metadata(
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form(description="JSON array of tag names")] = None,
+    support_gate: Annotated[
+        str | None,
+        Form(description="JSON object for supporter gating, or 'null' to remove"),
+    ] = None,
     image: UploadFile | None = File(None),
 ) -> TrackResponse:
     """Update track metadata (only by owner)."""
@@ -195,6 +204,38 @@ async def update_track_metadata(
     if title is not None:
         track.title = title
         title_changed = True
+
+    # handle support_gate update
+    # track migration direction: None = no move, True = to private, False = to public
+    move_to_private: bool | None = None
+    if support_gate is not None:
+        was_gated = track.support_gate is not None
+        if support_gate.lower() == "null" or support_gate == "":
+            # removing gating - need to move file back to public if it was gated
+            if was_gated and track.r2_url is None:
+                move_to_private = False
+            track.support_gate = None
+        else:
+            try:
+                parsed_gate = json.loads(support_gate)
+                if not isinstance(parsed_gate, dict):
+                    raise ValueError("support_gate must be a JSON object")
+                if "type" not in parsed_gate:
+                    raise ValueError("support_gate must have a 'type' field")
+                if parsed_gate["type"] not in ("any",):
+                    raise ValueError(
+                        f"unsupported support_gate type: {parsed_gate['type']}"
+                    )
+                # enabling gating - need to move file to private if it was public
+                if not was_gated and track.r2_url is not None:
+                    move_to_private = True
+                track.support_gate = parsed_gate
+            except json.JSONDecodeError as e:
+                raise HTTPException(
+                    status_code=400, detail=f"invalid support_gate JSON: {e}"
+                ) from e
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
 
     # track album changes for list sync
     old_album_id = track.album_id
@@ -252,8 +293,13 @@ async def update_track_metadata(
             updated_tags.add(tag_name)
 
     # always update ATProto record if any metadata changed
+    support_gate_changed = move_to_private is not None
     metadata_changed = (
-        title_changed or album is not None or features is not None or image_changed
+        title_changed
+        or album is not None
+        or features is not None
+        or image_changed
+        or support_gate_changed
     )
     if track.atproto_record_uri and metadata_changed:
         try:
@@ -281,6 +327,10 @@ async def update_track_metadata(
         if new_album_id:
             await schedule_album_list_sync(auth_session.session_id, new_album_id)
 
+    # move audio file between buckets if support_gate was toggled
+    if move_to_private is not None:
+        await schedule_move_track_audio(track.id, to_private=move_to_private)
+
     # build track_tags dict for response
     # if tags were updated, use updated_tags; otherwise query for existing
     if tags is not None:
@@ -304,9 +354,18 @@ async def _update_atproto_record(
         Exception: if ATProto record update fails
     """
     record_uri = track.atproto_record_uri
-    audio_url = track.r2_url
-    if not record_uri or not audio_url:
+    if not record_uri:
         return
+
+    # for gated tracks, use the API endpoint URL instead of r2_url
+    # (r2_url is None for private bucket tracks)
+    if track.support_gate is not None:
+        backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
+        audio_url = urljoin(backend_url + "/", f"audio/{track.file_id}")
+    else:
+        audio_url = track.r2_url
+        if not audio_url:
+            return
 
     updated_record = build_track_record(
         title=track.title,
@@ -317,6 +376,7 @@ async def _update_atproto_record(
         duration=track.duration,
         features=track.features if track.features else None,
         image_url=image_url_override or await track.get_image_url(),
+        support_gate=track.support_gate,
     )
 
     result = await update_record(

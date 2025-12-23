@@ -32,6 +32,7 @@ from backend._internal.constellation import get_like_count_safe
 from backend._internal.notifications import notification_service
 from backend._internal.now_playing import now_playing_service
 from backend._internal.queue import queue_service
+from backend._internal.atprotofans import validate_supporter
 
 __all__ = [
     "DeveloperToken",
@@ -64,4 +65,5 @@ __all__ = [
     "start_oauth_flow",
     "start_oauth_flow_with_scopes",
     "update_session_tokens",
+    "validate_supporter",
 ]

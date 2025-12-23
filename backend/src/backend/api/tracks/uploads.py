@@ -37,7 +37,7 @@ from backend._internal.background_tasks import (
 from backend._internal.image import ImageFormat
 from backend._internal.jobs import job_service
 from backend.config import settings
-from backend.models import Artist, Tag, Track, TrackTag
+from backend.models import Artist, Tag, Track, TrackTag, UserPreferences
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.audio import extract_duration
@@ -75,6 +75,9 @@ class UploadContext:
     image_path: str | None = None
     image_filename: str | None = None
     image_content_type: str | None = None
+
+    # supporter-gated content (e.g., {"type": "any"})
+    support_gate: dict | None = None
 
 
 async def _get_or_create_tag(
@@ -119,34 +122,49 @@ async def _save_audio_to_storage(
     upload_id: str,
     file_path: str,
     filename: str,
+    *,
+    gated: bool = False,
 ) -> str | None:
-    """save audio file to storage, returning file_id or None on failure."""
+    """save audio file to storage, returning file_id or None on failure.
+
+    args:
+        upload_id: job tracking ID
+        file_path: path to temp file
+        filename: original filename
+        gated: if True, save to private bucket (no public URL)
+    """
+    message = "uploading to private storage..." if gated else "uploading to storage..."
     await job_service.update_progress(
         upload_id,
         JobStatus.PROCESSING,
-        "uploading to storage...",
+        message,
         phase="upload",
         progress_pct=0.0,
     )
     try:
         async with R2ProgressTracker(
             job_id=upload_id,
-            message="uploading to storage...",
+            message=message,
             phase="upload",
         ) as tracker:
             with open(file_path, "rb") as file_obj:
-                file_id = await storage.save(
-                    file_obj, filename, progress_callback=tracker.on_progress
-                )
+                if gated:
+                    file_id = await storage.save_gated(
+                        file_obj, filename, progress_callback=tracker.on_progress
+                    )
+                else:
+                    file_id = await storage.save(
+                        file_obj, filename, progress_callback=tracker.on_progress
+                    )
 
         await job_service.update_progress(
             upload_id,
             JobStatus.PROCESSING,
-            "uploading to storage...",
+            message,
             phase="upload",
             progress_pct=100.0,
         )
-        logfire.info("storage.save completed", file_id=file_id)
+        logfire.info("storage.save completed", file_id=file_id, gated=gated)
         return file_id
 
     except Exception as e:
@@ -255,9 +273,28 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             with open(ctx.file_path, "rb") as f:
                 duration = extract_duration(f)
 
-            # save audio to storage
+            # validate gating requirements if support_gate is set
+            is_gated = ctx.support_gate is not None
+            if is_gated:
+                async with db_session() as db:
+                    prefs_result = await db.execute(
+                        select(UserPreferences).where(
+                            UserPreferences.did == ctx.artist_did
+                        )
+                    )
+                    prefs = prefs_result.scalar_one_or_none()
+                    if not prefs or prefs.support_url != "atprotofans":
+                        await job_service.update_progress(
+                            ctx.upload_id,
+                            JobStatus.FAILED,
+                            "upload failed",
+                            error="supporter gating requires atprotofans to be enabled in settings",
+                        )
+                        return
+
+            # save audio to storage (private bucket if gated)
             file_id = await _save_audio_to_storage(
-                ctx.upload_id, ctx.file_path, ctx.filename
+                ctx.upload_id, ctx.file_path, ctx.filename, gated=is_gated
             )
             if not file_id:
                 return
@@ -279,18 +316,20 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                     )
                     return
 
-            # get R2 URL
-            r2_url = await storage.get_url(
-                file_id, file_type="audio", extension=ext[1:]
-            )
-            if not r2_url:
-                await job_service.update_progress(
-                    ctx.upload_id,
-                    JobStatus.FAILED,
-                    "upload failed",
-                    error="failed to get public audio URL",
+            # get R2 URL (only for public tracks - gated tracks have no public URL)
+            r2_url: str | None = None
+            if not is_gated:
+                r2_url = await storage.get_url(
+                    file_id, file_type="audio", extension=ext[1:]
                 )
-                return
+                if not r2_url:
+                    await job_service.update_progress(
+                        ctx.upload_id,
+                        JobStatus.FAILED,
+                        "upload failed",
+                        error="failed to get public audio URL",
+                    )
+                    return
 
             # save image if provided
             image_url = None
@@ -338,16 +377,32 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                     phase="atproto",
                 )
                 try:
+                    # for gated tracks, use API endpoint URL instead of direct R2 URL
+                    # this ensures playback goes through our auth check
+                    if is_gated:
+                        # use backend URL for gated audio
+                        from urllib.parse import urljoin
+
+                        backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
+                        audio_url_for_record = urljoin(
+                            backend_url + "/", f"audio/{file_id}"
+                        )
+                    else:
+                        # r2_url is guaranteed non-None here - we returned early above if None
+                        assert r2_url is not None
+                        audio_url_for_record = r2_url
+
                     atproto_result = await create_track_record(
                         auth_session=ctx.auth_session,
                         title=ctx.title,
                         artist=artist.display_name,
-                        audio_url=r2_url,
+                        audio_url=audio_url_for_record,
                         file_type=ext[1:],
                         album=ctx.album,
                         duration=duration,
                         features=featured_artists or None,
                         image_url=image_url,
+                        support_gate=ctx.support_gate,
                     )
                     if not atproto_result:
                         raise ValueError("PDS returned no record data")
@@ -403,6 +458,7 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                     atproto_record_cid=atproto_cid,
                     image_id=image_id,
                     image_url=image_url,
+                    support_gate=ctx.support_gate,
                 )
 
                 db.add(track)
@@ -467,6 +523,10 @@ async def upload_track(
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form(description="JSON array of tag names")] = None,
+    support_gate: Annotated[
+        str | None,
+        Form(description='JSON object for supporter gating, e.g., {"type": "any"}'),
+    ] = None,
     file: UploadFile = File(...),
     image: UploadFile | None = File(None),
 ) -> dict:
@@ -477,6 +537,9 @@ async def upload_track(
         album: Optional album name/ID to associate with the track.
         features: Optional JSON array of ATProto handles, e.g.,
             ["user1.bsky.social", "user2.bsky.social"].
+        support_gate: Optional JSON object for supporter gating.
+            Requires atprotofans to be enabled in settings.
+            Example: {"type": "any"} - requires any atprotofans support.
         file: Audio file to upload (required).
         image: Optional image file for track artwork.
         background_tasks: FastAPI background-task runner.
@@ -490,6 +553,26 @@ async def upload_track(
         validated_tags = parse_tags_json(tags)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # parse and validate support_gate if provided
+    parsed_support_gate: dict | None = None
+    if support_gate:
+        try:
+            parsed_support_gate = json.loads(support_gate)
+            if not isinstance(parsed_support_gate, dict):
+                raise ValueError("support_gate must be a JSON object")
+            if "type" not in parsed_support_gate:
+                raise ValueError("support_gate must have a 'type' field")
+            if parsed_support_gate["type"] not in ("any",):
+                raise ValueError(
+                    f"unsupported support_gate type: {parsed_support_gate['type']}"
+                )
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=400, detail=f"invalid support_gate JSON: {e}"
+            ) from e
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
     # validate audio file type upfront
     if not file.filename:
@@ -577,6 +660,7 @@ async def upload_track(
             image_path=image_path,
             image_filename=image_filename,
             image_content_type=image_content_type,
+            support_gate=parsed_support_gate,
         )
         background_tasks.add_task(_process_upload_background, ctx)
     except Exception:

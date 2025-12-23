@@ -2,6 +2,14 @@ import { PUBLIC_API_URL } from '$env/static/public';
 
 export const API_URL = PUBLIC_API_URL || 'http://localhost:8001';
 
+/**
+ * generate atprotofans support URL for an artist.
+ * canonical format: https://atprotofans.com/support/{did}
+ */
+export function getAtprotofansSupportUrl(did: string): string {
+	return `https://atprotofans.com/support/${did}`;
+}
+
 interface ServerConfig {
 	max_upload_size_mb: number;
 	max_image_size_mb: number;

@@ -50,6 +50,7 @@ class TrackResponse(BaseModel):
     title: str
     artist: str
     artist_handle: str
+    artist_did: str
     artist_avatar_url: str | None
     file_id: str
     file_type: str
@@ -70,6 +71,7 @@ class TrackResponse(BaseModel):
         None  # None = not scanned, False = clear, True = flagged
     )
     copyright_match: str | None = None  # "Title by Artist" of primary match
+    support_gate: dict[str, Any] | None = None  # supporter gating config
 
     @classmethod
     async def from_track(
@@ -140,6 +142,7 @@ class TrackResponse(BaseModel):
             title=track.title,
             artist=track.artist.display_name,
             artist_handle=track.artist.handle,
+            artist_did=track.artist_did,
             artist_avatar_url=track.artist.avatar_url,
             file_id=track.file_id,
             file_type=track.file_type,
@@ -158,4 +161,5 @@ class TrackResponse(BaseModel):
             tags=tags,
             copyright_flagged=copyright_flagged,
             copyright_match=copyright_match,
+            support_gate=track.support_gate,
         )

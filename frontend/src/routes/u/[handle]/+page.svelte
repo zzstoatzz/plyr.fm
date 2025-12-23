@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { fade } from 'svelte/transition';
-	import { API_URL } from '$lib/config';
+	import { API_URL, getAtprotofansSupportUrl } from '$lib/config';
 	import { browser } from '$app/environment';
 	import type { Analytics, Track, Playlist } from '$lib/types';
 	import { formatDuration } from '$lib/stats.svelte';
@@ -40,7 +40,7 @@ let shareUrl = $state('');
 const supportUrl = $derived(() => {
 	if (!artist?.support_url) return null;
 	if (artist.support_url === 'atprotofans') {
-		return `https://atprotofans.com/u/${artist.did}`;
+		return getAtprotofansSupportUrl(artist.did);
 	}
 	return artist.support_url;
 });

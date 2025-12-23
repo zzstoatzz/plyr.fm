@@ -27,6 +27,10 @@ export interface AlbumResponse {
 	tracks: Track[];
 }
 
+export interface SupportGate {
+	type: 'any' | string;
+}
+
 export interface Track {
 	id: number;
 	title: string;
@@ -36,6 +40,7 @@ export interface Track {
 	file_type: string;
 	artist_handle: string;
 	artist_avatar_url?: string;
+	artist_did?: string;
 	r2_url?: string;
 	atproto_record_uri?: string;
 	atproto_record_cid?: string;
@@ -50,6 +55,7 @@ export interface Track {
 	is_liked?: boolean;
 	copyright_flagged?: boolean | null; // null = not scanned, false = clear, true = flagged
 	copyright_match?: string | null; // "Title by Artist" of primary match
+	support_gate?: SupportGate | null; // if set, track requires supporter access
 }
 
 export interface User {
