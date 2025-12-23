@@ -12,7 +12,7 @@
 	import { checkImageSensitive } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
-	import { playTrack } from '$lib/playback.svelte';
+	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
@@ -120,6 +120,7 @@
 	}
 
 	function addToQueue() {
+		if (!guardGatedTrack(track, auth.isAuthenticated)) return;
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
 	}
@@ -429,7 +430,16 @@ $effect(() => {
 			<!-- track info wrapper -->
 			<div class="track-info-wrapper">
 				<div class="track-info">
-					<h1 class="track-title">{track.title}</h1>
+					<h1 class="track-title">
+						{track.title}
+						{#if track.gated}
+							<span class="gated-badge" title="supporters only">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+									<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+								</svg>
+							</span>
+						{/if}
+					</h1>
 					<div class="track-metadata">
 						<a href="/u/{track.artist_handle}" class="artist-link">
 							{track.artist}
@@ -719,6 +729,23 @@ $effect(() => {
 		margin: 0;
 		line-height: 1.2;
 		text-align: center;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.gated-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--accent);
+		opacity: 0.8;
+	}
+
+	.gated-badge svg {
+		display: block;
 	}
 
 	.track-metadata {
