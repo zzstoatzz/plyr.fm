@@ -25,7 +25,7 @@ interface GatedCheckResult {
  */
 async function checkAccess(track: Track): Promise<GatedCheckResult> {
 	// non-gated tracks are always allowed
-	if (!track.support_gate) {
+	if (!track.gated) {
 		return { allowed: true };
 	}
 

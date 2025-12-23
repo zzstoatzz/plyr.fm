@@ -32,7 +32,7 @@ from backend._internal.constellation import get_like_count_safe
 from backend._internal.notifications import notification_service
 from backend._internal.now_playing import now_playing_service
 from backend._internal.queue import queue_service
-from backend._internal.atprotofans import validate_supporter
+from backend._internal.atprotofans import get_supported_artists, validate_supporter
 
 __all__ = [
     "DeveloperToken",
@@ -52,6 +52,7 @@ __all__ = [
     "get_pending_dev_token",
     "get_pending_scope_upgrade",
     "get_session",
+    "get_supported_artists",
     "handle_oauth_callback",
     "list_developer_tokens",
     "notification_service",
