@@ -23,6 +23,41 @@ interface UploadProgressCallback {
 	onError?: (_error: string) => void;
 }
 
+function isMobileDevice(): boolean {
+	if (!browser) return false;
+	return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+const MOBILE_LARGE_FILE_THRESHOLD_MB = 50;
+
+function buildNetworkErrorMessage(progressPercent: number, fileSizeMB: number, isMobile: boolean): string {
+	const progressInfo = progressPercent > 0 ? ` (failed at ${progressPercent}%)` : '';
+
+	if (isMobile && fileSizeMB > MOBILE_LARGE_FILE_THRESHOLD_MB) {
+		return `upload failed${progressInfo}: large files often fail on mobile networks. try uploading from a desktop or use WiFi`;
+	}
+
+	if (progressPercent > 0 && progressPercent < 100) {
+		return `upload failed${progressInfo}: connection was interrupted. check your network and try again`;
+	}
+
+	return `upload failed${progressInfo}: connection failed. check your internet connection and try again`;
+}
+
+function buildTimeoutErrorMessage(progressPercent: number, fileSizeMB: number, isMobile: boolean): string {
+	const progressInfo = progressPercent > 0 ? ` (stopped at ${progressPercent}%)` : '';
+
+	if (isMobile) {
+		return `upload timed out${progressInfo}: mobile uploads can be slow. try WiFi or a desktop browser`;
+	}
+
+	if (fileSizeMB > 100) {
+		return `upload timed out${progressInfo}: large file (${Math.round(fileSizeMB)}MB) - try a faster connection`;
+	}
+
+	return `upload timed out${progressInfo}: try again with a better connection`;
+}
+
 // global upload manager using Svelte 5 runes
 class UploaderState {
 	activeUploads = $state<Map<string, UploadTask>>(new Map());
@@ -40,11 +75,21 @@ class UploaderState {
 	): void {
 		const taskId = crypto.randomUUID();
 		const fileSizeMB = file.size / 1024 / 1024;
+		const isMobile = isMobileDevice();
+
+		// warn about large files on mobile
+		if (isMobile && fileSizeMB > MOBILE_LARGE_FILE_THRESHOLD_MB) {
+			toast.info(`uploading ${Math.round(fileSizeMB)}MB file on mobile - ensure stable connection`, 5000);
+		}
+
 		const uploadMessage = fileSizeMB > 10
 			? 'uploading track... (large file, this may take a moment)'
 			: 'uploading track...';
 		// 0 means infinite/persist until dismissed
 		const toastId = toast.info(uploadMessage, 0);
+
+		// track upload progress for error messages
+		let lastProgressPercent = 0;
 
 		if (!browser) return;
 		const formData = new FormData();
@@ -74,6 +119,7 @@ class UploaderState {
 		xhr.upload.addEventListener('progress', (e) => {
 			if (e.lengthComputable && !uploadComplete) {
 				const percent = Math.round((e.loaded / e.total) * 100);
+				lastProgressPercent = percent;
 				const progressMsg = `retrieving your file... ${percent}%`;
 				toast.update(toastId, progressMsg);
 				if (callbacks?.onProgress) {
@@ -172,13 +218,13 @@ class UploaderState {
 					errorMsg = error.detail || errorMsg;
 				} catch {
 					if (xhr.status === 0) {
-						errorMsg = 'network error: connection failed. check your internet connection and try again';
+						errorMsg = buildNetworkErrorMessage(lastProgressPercent, fileSizeMB, isMobile);
 					} else if (xhr.status >= 500) {
 						errorMsg = 'server error: please try again in a moment';
 					} else if (xhr.status === 413) {
 						errorMsg = 'file too large: please use a smaller file';
 					} else if (xhr.status === 408 || xhr.status === 504) {
-						errorMsg = 'upload timed out: please try again with a better connection';
+						errorMsg = buildTimeoutErrorMessage(lastProgressPercent, fileSizeMB, isMobile);
 					}
 				}
 				toast.error(errorMsg);
@@ -190,7 +236,7 @@ class UploaderState {
 
 		xhr.addEventListener('error', () => {
 			toast.dismiss(toastId);
-			const errorMsg = 'network error: connection failed. check your internet connection and try again';
+			const errorMsg = buildNetworkErrorMessage(lastProgressPercent, fileSizeMB, isMobile);
 			toast.error(errorMsg);
 			if (callbacks?.onError) {
 				callbacks.onError(errorMsg);
@@ -199,7 +245,7 @@ class UploaderState {
 
 		xhr.addEventListener('timeout', () => {
 			toast.dismiss(toastId);
-			const errorMsg = 'upload timed out: please try again with a better connection';
+			const errorMsg = buildTimeoutErrorMessage(lastProgressPercent, fileSizeMB, isMobile);
 			toast.error(errorMsg);
 			if (callbacks?.onError) {
 				callbacks.onError(errorMsg);
