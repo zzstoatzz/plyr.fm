@@ -59,6 +59,30 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let data = $state<CostData | null>(null);
+	let timeRange = $state<'day' | 'week' | 'month'>('month');
+
+	// filter daily data based on selected time range
+	let filteredDaily = $derived.by(() => {
+		if (!data?.costs.audd.daily.length) return [];
+		const now = Date.now();
+		let cutoffMs: number;
+		if (timeRange === 'day') {
+			cutoffMs = now - 24 * 60 * 60 * 1000;
+		} else if (timeRange === 'week') {
+			cutoffMs = now - 7 * 24 * 60 * 60 * 1000;
+		} else {
+			cutoffMs = now - 30 * 24 * 60 * 60 * 1000;
+		}
+		return data.costs.audd.daily.filter((d) => new Date(d.date).getTime() >= cutoffMs);
+	});
+
+	// calculate totals for selected time range
+	let filteredTotals = $derived.by(() => {
+		return {
+			requests: filteredDaily.reduce((sum, d) => sum + d.requests, 0),
+			scans: filteredDaily.reduce((sum, d) => sum + d.scans, 0)
+		};
+	});
 
 	// derived values for bar chart scaling
 	let maxCost = $derived(
@@ -72,11 +96,9 @@
 			: 1
 	);
 
-	let maxRequests = $derived(
-		data?.costs.audd.daily.length
-			? Math.max(...data.costs.audd.daily.map((d) => d.requests))
-			: 1
-	);
+	let maxRequests = $derived.by(() => {
+		return filteredDaily.length ? Math.max(...filteredDaily.map((d) => d.requests)) : 1;
+	});
 
 	onMount(async () => {
 		try {
@@ -216,18 +238,41 @@
 
 		<!-- audd details -->
 		<section class="audd-section">
-			<h2>copyright scanning (audd)</h2>
+			<div class="audd-header">
+				<h2>api requests (audd)</h2>
+				<div class="time-range-toggle">
+					<button
+						class:active={timeRange === 'day'}
+						onclick={() => (timeRange = 'day')}
+					>
+						24h
+					</button>
+					<button
+						class:active={timeRange === 'week'}
+						onclick={() => (timeRange = 'week')}
+					>
+						7d
+					</button>
+					<button
+						class:active={timeRange === 'month'}
+						onclick={() => (timeRange = 'month')}
+					>
+						30d
+					</button>
+				</div>
+			</div>
+
 			<div class="audd-stats">
 				<div class="stat">
-					<span class="stat-value">{data.costs.audd.requests_this_period.toLocaleString()}</span>
-					<span class="stat-label">API requests</span>
+					<span class="stat-value">{filteredTotals.requests.toLocaleString()}</span>
+					<span class="stat-label">requests ({timeRange === 'day' ? '24h' : timeRange === 'week' ? '7d' : '30d'})</span>
 				</div>
 				<div class="stat">
 					<span class="stat-value">{data.costs.audd.remaining_free.toLocaleString()}</span>
 					<span class="stat-label">free remaining</span>
 				</div>
 				<div class="stat">
-					<span class="stat-value">{data.costs.audd.scans_this_period.toLocaleString()}</span>
+					<span class="stat-value">{filteredTotals.scans.toLocaleString()}</span>
 					<span class="stat-label">tracks scanned</span>
 				</div>
 			</div>
@@ -236,15 +281,15 @@
 				1 request = 12s of audio. {data.costs.audd.free_requests.toLocaleString()} free/month,
 				then ${(5).toFixed(2)}/1k requests.
 				{#if data.costs.audd.billable_requests > 0}
-					<strong>{data.costs.audd.billable_requests.toLocaleString()} billable</strong> this period.
+					<strong>{data.costs.audd.billable_requests.toLocaleString()} billable</strong> this billing period.
 				{/if}
 			</p>
 
-			{#if data.costs.audd.daily.length > 0}
+			{#if filteredDaily.length > 0}
 				<div class="daily-chart">
 					<h3>daily requests</h3>
 					<div class="chart-bars">
-						{#each data.costs.audd.daily as day}
+						{#each filteredDaily as day}
 							<div class="chart-bar-container">
 								<div
 									class="chart-bar"
@@ -256,6 +301,8 @@
 						{/each}
 					</div>
 				</div>
+			{:else}
+				<p class="no-data">no requests in this time range</p>
 			{/if}
 		</section>
 
@@ -433,6 +480,58 @@
 	/* audd section */
 	.audd-section {
 		margin-bottom: 2rem;
+	}
+
+	.audd-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+		gap: 1rem;
+	}
+
+	.audd-header h2 {
+		margin-bottom: 0;
+	}
+
+	.time-range-toggle {
+		display: flex;
+		gap: 0.25rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 6px;
+		padding: 0.25rem;
+	}
+
+	.time-range-toggle button {
+		padding: 0.35rem 0.75rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		background: transparent;
+		border: none;
+		border-radius: 4px;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.time-range-toggle button:hover {
+		color: var(--text-primary);
+	}
+
+	.time-range-toggle button.active {
+		background: var(--accent);
+		color: white;
+	}
+
+	.no-data {
+		text-align: center;
+		color: var(--text-tertiary);
+		font-size: 0.85rem;
+		padding: 2rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 8px;
 	}
 
 	.audd-stats {
