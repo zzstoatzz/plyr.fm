@@ -305,6 +305,8 @@
 
 // track which track we've loaded data for to detect navigation
 let loadedForTrackId = $state<number | null>(null);
+// track if we've loaded liked state for this track (separate from general load)
+let likedStateLoadedForTrackId = $state<number | null>(null);
 
 // reload data when navigating between track pages
 // watch data.track.id (from server) not track.id (local state)
@@ -321,6 +323,7 @@ $effect(() => {
 		newCommentText = '';
 		editingCommentId = null;
 		editingCommentText = '';
+		likedStateLoadedForTrackId = null; // reset liked state tracking
 
 		// sync track from server data
 		track = data.track;
@@ -328,11 +331,20 @@ $effect(() => {
 		// mark as loaded for this track
 		loadedForTrackId = currentId;
 
-		// load fresh data
-		if (auth.isAuthenticated) {
-			void loadLikedState();
-		}
+		// load comments (doesn't require auth)
 		void loadComments();
+	}
+});
+
+// separate effect to load liked state when auth becomes available
+$effect(() => {
+	const currentId = data.track?.id;
+	if (!currentId || !browser) return;
+
+	// load liked state when authenticated and haven't loaded for this track yet
+	if (auth.isAuthenticated && likedStateLoadedForTrackId !== currentId) {
+		likedStateLoadedForTrackId = currentId;
+		void loadLikedState();
 	}
 });
 
