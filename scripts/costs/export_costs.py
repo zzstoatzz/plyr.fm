@@ -116,10 +116,13 @@ async def get_audd_stats(db_url: str) -> dict[str, Any]:
     import asyncpg
 
     billing_start = get_billing_period_start()
+    # 30 days of history for the daily chart (independent of billing cycle)
+    history_start = datetime.now() - timedelta(days=30)
 
     conn = await asyncpg.connect(db_url)
     try:
         # get totals: scans, flagged, and derived API requests from duration
+        # uses billing period for accurate cost calculation
         row = await conn.fetchrow(
             """
             SELECT
@@ -139,7 +142,7 @@ async def get_audd_stats(db_url: str) -> dict[str, Any]:
         total_requests = row["total_requests"]
         total_seconds = row["total_seconds"]
 
-        # daily breakdown for chart - now includes requests derived from duration
+        # daily breakdown for chart - 30 days of history for flexible views
         daily = await conn.fetch(
             """
             SELECT
@@ -153,7 +156,7 @@ async def get_audd_stats(db_url: str) -> dict[str, Any]:
             GROUP BY DATE(cs.scanned_at)
             ORDER BY date
             """,
-            billing_start,
+            history_start,
             AUDD_SECONDS_PER_REQUEST,
         )
 
