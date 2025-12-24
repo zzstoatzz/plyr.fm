@@ -22,7 +22,9 @@
 	<!-- Stats and search together in left margin, centered as a group -->
 	<div class="margin-left desktop-only">
 		<PlatformStats variant="header" />
-		<SearchTrigger />
+		<span class="margin-search">
+			<SearchTrigger />
+		</span>
 	</div>
 	<!-- Logout positioned on far right, centered in right margin -->
 	{#if isAuthenticated}
@@ -260,6 +262,17 @@
 		/* Fill the left margin area */
 		width: calc((100vw - var(--queue-width, 0px) - 800px) / 2);
 		padding: 0 1rem;
+	}
+
+	.margin-search {
+		display: flex;
+	}
+
+	/* hide search in margin when space gets tight, keep stats visible longer */
+	@media (max-width: 1300px) {
+		.margin-search {
+			display: none;
+		}
 	}
 
 	.logout-right {
