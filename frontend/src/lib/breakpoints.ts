@@ -17,18 +17,10 @@ export const MOBILE_BREAKPOINT = 768;
 export const MOBILE_SMALL_BREAKPOINT = 480;
 
 /**
- * header search hide breakpoint - hide search from margin when space gets tight,
- * keeping stats visible a bit longer before switching to full mobile layout.
+ * header mobile breakpoint - switch to mobile layout before margin elements
+ * (stats, search, logout) crowd each other.
  */
-export const HEADER_SEARCH_HIDE_BREAKPOINT = 1300;
-
-/**
- * header mobile breakpoint - higher because header has margin-positioned
- * elements (stats, search, logout) that need space outside the 800px content area.
- *
- * calculation: 800px content + ~300px for margin elements = ~1100px minimum
- */
-export const HEADER_MOBILE_BREAKPOINT = 1100;
+export const HEADER_MOBILE_BREAKPOINT = 1300;
 
 /** content max-width used across pages */
 export const CONTENT_MAX_WIDTH = 800;

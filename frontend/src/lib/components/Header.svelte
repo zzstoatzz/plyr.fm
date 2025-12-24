@@ -22,9 +22,7 @@
 	<!-- Stats and search together in left margin, centered as a group -->
 	<div class="margin-left desktop-only">
 		<PlatformStats variant="header" />
-		<span class="margin-search">
-			<SearchTrigger />
-		</span>
+		<SearchTrigger />
 	</div>
 	<!-- Logout positioned on far right, centered in right margin -->
 	{#if isAuthenticated}
@@ -264,17 +262,6 @@
 		padding: 0 1rem;
 	}
 
-	.margin-search {
-		display: flex;
-	}
-
-	/* hide search in margin when space gets tight, keep stats visible longer */
-	@media (max-width: 1300px) {
-		.margin-search {
-			display: none;
-		}
-	}
-
 	.logout-right {
 		position: absolute;
 		right: calc((100vw - var(--queue-width, 0px) - 800px) / 4);
@@ -435,8 +422,8 @@
 	}
 
 	/* header mobile breakpoint - see $lib/breakpoints.ts
-	   higher than standard 768px because margin-positioned elements need space */
-	@media (max-width: 1100px) {
+	   switch to mobile before margin elements crowd each other */
+	@media (max-width: 1300px) {
 		.margin-left,
 		.logout-right {
 			display: none !important;
