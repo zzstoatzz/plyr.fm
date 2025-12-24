@@ -62,18 +62,20 @@
 	let timeRange = $state<'day' | 'week' | 'month'>('month');
 
 	// filter daily data based on selected time range
+	// returns the last N days of data based on selection
 	let filteredDaily = $derived.by(() => {
 		if (!data?.costs.audd.daily.length) return [];
-		const now = Date.now();
-		let cutoffMs: number;
+		const daily = data.costs.audd.daily;
 		if (timeRange === 'day') {
-			cutoffMs = now - 24 * 60 * 60 * 1000;
+			// show last 2 days (today + yesterday) for 24h view
+			return daily.slice(-2);
 		} else if (timeRange === 'week') {
-			cutoffMs = now - 7 * 24 * 60 * 60 * 1000;
+			// show last 7 days
+			return daily.slice(-7);
 		} else {
-			cutoffMs = now - 30 * 24 * 60 * 60 * 1000;
+			// show all (up to 30 days)
+			return daily;
 		}
-		return data.costs.audd.daily.filter((d) => new Date(d.date).getTime() >= cutoffMs);
 	});
 
 	// calculate totals for selected time range
@@ -505,6 +507,7 @@
 
 	.time-range-toggle button {
 		padding: 0.35rem 0.75rem;
+		font-family: inherit;
 		font-size: 0.75rem;
 		font-weight: 500;
 		background: transparent;
@@ -582,6 +585,7 @@
 		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 		padding: 1rem;
+		overflow: hidden;
 	}
 
 	.daily-chart h3 {
@@ -595,12 +599,14 @@
 	.chart-bars {
 		display: flex;
 		align-items: flex-end;
-		gap: 4px;
+		gap: 2px;
 		height: 100px;
+		width: 100%;
 	}
 
 	.chart-bar-container {
-		flex: 1;
+		flex: 1 1 0;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -621,10 +627,13 @@
 	}
 
 	.chart-label {
-		font-size: 0.6rem;
+		font-size: 0.55rem;
 		color: var(--text-tertiary);
-		margin-top: 0.5rem;
+		margin-top: 0.25rem;
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 100%;
 	}
 
 	/* support section */
