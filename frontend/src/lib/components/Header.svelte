@@ -421,9 +421,9 @@
 		color: var(--bg-primary);
 	}
 
-	/* Hide margin-positioned elements and switch to mobile layout at the same breakpoint.
-	   Account for queue panel (320px) potentially being open - need extra headroom */
-	@media (max-width: 1599px) {
+	/* header mobile breakpoint - see $lib/breakpoints.ts
+	   higher than standard 768px because margin-positioned elements need space */
+	@media (max-width: 1100px) {
 		.margin-left,
 		.logout-right {
 			display: none !important;
@@ -442,7 +442,7 @@
 		}
 	}
 
-	/* Smaller screens: compact header */
+	/* mobile breakpoint - see $lib/breakpoints.ts */
 	@media (max-width: 768px) {
 		.header-content {
 			padding: 0.75rem 0.75rem;
