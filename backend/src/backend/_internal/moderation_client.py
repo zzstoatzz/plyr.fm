@@ -35,6 +35,14 @@ class EmitLabelResult:
     error: str | None = None
 
 
+@dataclass
+class SensitiveImagesResult:
+    """result from fetching sensitive images."""
+
+    image_ids: list[str]
+    urls: list[str]
+
+
 class ModerationClient:
     """client for the plyr.fm moderation service.
 
@@ -152,6 +160,29 @@ class ModerationClient:
         except Exception as e:
             logger.warning("failed to emit copyright label for %s: %s", uri, e)
             return EmitLabelResult(success=False, error=str(e))
+
+    async def get_sensitive_images(self) -> SensitiveImagesResult:
+        """fetch all sensitive images from the moderation service.
+
+        returns:
+            SensitiveImagesResult with image_ids and urls
+
+        raises:
+            httpx.HTTPStatusError: on non-2xx response
+            httpx.TimeoutException: on timeout
+        """
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.get(
+                f"{self.labeler_url}/sensitive-images",
+                # no auth required for this public endpoint
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            return SensitiveImagesResult(
+                image_ids=data.get("image_ids", []),
+                urls=data.get("urls", []),
+            )
 
     async def get_active_labels(self, uris: list[str]) -> set[str]:
         """check which URIs have active (non-negated) copyright-violation labels.

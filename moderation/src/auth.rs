@@ -16,6 +16,7 @@ pub async fn auth_middleware(
     // Static files must be public for admin UI CSS/JS to load
     if path == "/"
         || path == "/health"
+        || path == "/sensitive-images"
         || path == "/admin"
         || path.starts_with("/static/")
         || path.starts_with("/xrpc/com.atproto.label.")

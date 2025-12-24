@@ -1,14 +1,14 @@
 """content moderation api endpoints."""
 
-from typing import Annotated
+import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models import SensitiveImage, get_db
+from backend._internal.moderation_client import get_moderation_client
 from backend.utilities.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
 
@@ -26,17 +26,19 @@ class SensitiveImagesResponse(BaseModel):
 @limiter.limit("10/minute")
 async def get_sensitive_images(
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SensitiveImagesResponse:
     """get all flagged sensitive images.
+
+    proxies to the moderation service which is the source of truth
+    for sensitive image data.
 
     returns both image_ids (for R2-stored images) and full URLs
     (for external images like avatars). clients should check both.
     """
-    result = await db.execute(select(SensitiveImage))
-    images = result.scalars().all()
+    client = get_moderation_client()
+    result = await client.get_sensitive_images()
 
-    image_ids = [img.image_id for img in images if img.image_id]
-    urls = [img.url for img in images if img.url]
-
-    return SensitiveImagesResponse(image_ids=image_ids, urls=urls)
+    return SensitiveImagesResponse(
+        image_ids=result.image_ids,
+        urls=result.urls,
+    )

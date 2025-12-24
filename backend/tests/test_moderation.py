@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +12,11 @@ from backend._internal.moderation import (
     get_active_copyright_labels,
     scan_track_for_copyright,
 )
-from backend._internal.moderation_client import ModerationClient, ScanResult
+from backend._internal.moderation_client import (
+    ModerationClient,
+    ScanResult,
+    SensitiveImagesResult,
+)
 from backend.models import Artist, CopyrightScan, Track
 
 
@@ -519,3 +524,80 @@ async def test_sync_copyright_resolutions(db_session: AsyncSession) -> None:
 
     # scan2 should still be flagged
     assert scan2.is_flagged is True
+
+
+# tests for sensitive images
+
+
+async def test_moderation_client_get_sensitive_images() -> None:
+    """test ModerationClient.get_sensitive_images() with successful response."""
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        "image_ids": ["abc123", "def456"],
+        "urls": ["https://example.com/image.jpg"],
+    }
+    mock_response.raise_for_status.return_value = None
+
+    client = ModerationClient(
+        service_url="https://test.example.com",
+        labeler_url="https://labeler.example.com",
+        auth_token="test-token",
+        timeout_seconds=30,
+        label_cache_prefix="test:label:",
+        label_cache_ttl_seconds=300,
+    )
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = mock_response
+
+        result = await client.get_sensitive_images()
+
+    assert result.image_ids == ["abc123", "def456"]
+    assert result.urls == ["https://example.com/image.jpg"]
+    mock_get.assert_called_once()
+
+
+async def test_moderation_client_get_sensitive_images_empty() -> None:
+    """test ModerationClient.get_sensitive_images() with empty response."""
+    mock_response = Mock()
+    mock_response.json.return_value = {"image_ids": [], "urls": []}
+    mock_response.raise_for_status.return_value = None
+
+    client = ModerationClient(
+        service_url="https://test.example.com",
+        labeler_url="https://labeler.example.com",
+        auth_token="test-token",
+        timeout_seconds=30,
+        label_cache_prefix="test:label:",
+        label_cache_ttl_seconds=300,
+    )
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = mock_response
+
+        result = await client.get_sensitive_images()
+
+    assert result.image_ids == []
+    assert result.urls == []
+
+
+async def test_get_sensitive_images_endpoint(
+    client: TestClient,
+) -> None:
+    """test GET /moderation/sensitive-images endpoint proxies to moderation service."""
+    mock_result = SensitiveImagesResult(
+        image_ids=["image1", "image2"],
+        urls=["https://example.com/avatar.jpg"],
+    )
+
+    with patch("backend.api.moderation.get_moderation_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.get_sensitive_images.return_value = mock_result
+        mock_get_client.return_value = mock_client
+
+        response = client.get("/moderation/sensitive-images")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["image_ids"] == ["image1", "image2"]
+    assert data["urls"] == ["https://example.com/avatar.jpg"]
