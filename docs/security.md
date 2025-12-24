@@ -24,6 +24,59 @@ The `SecurityHeadersMiddleware` in `src/backend/main.py` automatically applies i
 *   **`X-XSS-Protection: 1; mode=block`:** Enables browser cross-site scripting filters.
 *   **`Referrer-Policy: strict-origin-when-cross-origin`:** Controls how much referrer information is included with requests.
 
+## Supporter-Gated Content
+
+Tracks with `support_gate` set require atprotofans supporter validation before streaming.
+
+### Access Model
+
+```
+request → /audio/{file_id} → check support_gate
+                                    ↓
+                         ┌──────────┴──────────┐
+                         ↓                     ↓
+                      public              gated track
+                         ↓                     ↓
+                   307 → R2 CDN         validate_supporter()
+                                               ↓
+                                    ┌──────────┴──────────┐
+                                    ↓                     ↓
+                              is supporter           not supporter
+                                    ↓                     ↓
+                           presigned URL (5min)        402 error
+```
+
+### Storage Architecture
+
+- **public bucket**: `plyr-audio` - CDN-backed, public read access
+- **private bucket**: `plyr-audio-private` - no public access, presigned URLs only
+
+when `support_gate` is toggled, a background task moves the file between buckets.
+
+### Presigned URL Behavior
+
+presigned URLs are time-limited (5 minutes) and grant direct R2 access. security considerations:
+
+1. **URL sharing**: a supporter could share the presigned URL. mitigation: short TTL, URLs expire quickly.
+
+2. **offline caching**: if a supporter downloads content (via "download liked tracks"), the cached audio persists locally even if support lapses. this is **intentional** - they legitimately accessed it when authorized.
+
+3. **auto-download + gated tracks**: the `gated` field is viewer-resolved (true = no access, false = has access). when liking a track with auto-download enabled:
+   - **supporters** (`gated === false`): download proceeds normally via presigned URL
+   - **non-supporters** (`gated === true`): download is skipped client-side to avoid wasted 402 requests
+
+### ATProto Record Behavior
+
+when a track is gated, the ATProto `fm.plyr.track` record's `audioUrl` changes:
+- **public**: points to R2 CDN URL (e.g., `https://cdn.plyr.fm/audio/abc123.mp3`)
+- **gated**: points to API endpoint (e.g., `https://api.plyr.fm/audio/abc123`)
+
+this means ATProto clients cannot stream gated content without authentication through plyr.fm's API.
+
+### Validation Caching
+
+currently, `validate_supporter()` makes a fresh call to atprotofans on every request. for high-traffic gated tracks, consider adding a short TTL cache (e.g., 60s in redis) to reduce latency and avoid rate limits.
+
 ## CORS
 
 Cross-Origin Resource Sharing (CORS) is configured to allow:

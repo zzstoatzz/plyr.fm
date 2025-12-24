@@ -306,6 +306,7 @@
 					trackUri={track.atproto_record_uri}
 					trackCid={track.atproto_record_cid}
 					fileId={track.file_id}
+					gated={track.gated}
 					initialLiked={track.is_liked || false}
 					disabled={!track.atproto_record_uri}
 					disabledReason={!track.atproto_record_uri ? "track's record is unavailable" : undefined}
@@ -339,6 +340,7 @@
 				trackUri={track.atproto_record_uri}
 				trackCid={track.atproto_record_cid}
 				fileId={track.file_id}
+				gated={track.gated}
 				initialLiked={track.is_liked || false}
 				shareUrl={shareUrl}
 				onQueue={handleQueue}

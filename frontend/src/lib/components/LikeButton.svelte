@@ -6,13 +6,14 @@
 		trackId: number;
 		trackTitle: string;
 		fileId?: string;
+		gated?: boolean;
 		initialLiked?: boolean;
 		disabled?: boolean;
 		disabledReason?: string;
 		onLikeChange?: (_liked: boolean) => void;
 	}
 
-	let { trackId, trackTitle, fileId, initialLiked = false, disabled = false, disabledReason, onLikeChange }: Props = $props();
+	let { trackId, trackTitle, fileId, gated, initialLiked = false, disabled = false, disabledReason, onLikeChange }: Props = $props();
 
 	// use overridable $derived (Svelte 5.25+) - syncs with prop but can be overridden for optimistic UI
 	let liked = $derived(initialLiked);
@@ -31,7 +32,7 @@
 
 		try {
 			const success = liked
-				? await likeTrack(trackId, fileId)
+				? await likeTrack(trackId, fileId, gated)
 				: await unlikeTrack(trackId);
 
 			if (!success) {
