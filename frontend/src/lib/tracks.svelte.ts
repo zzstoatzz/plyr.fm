@@ -133,7 +133,8 @@ class TracksCache {
 export const tracksCache = new TracksCache();
 
 // like/unlike track functions
-export async function likeTrack(trackId: number, fileId?: string): Promise<boolean> {
+// gated: true means viewer lacks access (non-supporter), false means accessible
+export async function likeTrack(trackId: number, fileId?: string, gated?: boolean): Promise<boolean> {
 	try {
 		const response = await fetch(`${API_URL}/tracks/${trackId}/like`, {
 			method: 'POST',
@@ -148,7 +149,8 @@ export async function likeTrack(trackId: number, fileId?: string): Promise<boole
 		tracksCache.invalidate();
 
 		// auto-download if preference is enabled and file_id provided
-		if (fileId && preferences.autoDownloadLiked) {
+		// skip download only if track is gated AND viewer lacks access (gated === true)
+		if (fileId && preferences.autoDownloadLiked && gated !== true) {
 			try {
 				const alreadyDownloaded = await isDownloaded(fileId);
 				if (!alreadyDownloaded) {
