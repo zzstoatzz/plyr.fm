@@ -36,7 +36,7 @@ we respond to valid DMCA takedown notices. our designated agent is:
 
 > Nathan Nowack
 > DMCA Registration: DMCA-1069186
-> Email: dmca@plyr.fm
+> Email: plyrdotfm@proton.me
 
 we terminate accounts of repeat infringers.
 
@@ -54,4 +54,4 @@ we may update these terms. material changes will be posted with notice. continue
 
 ## contact
 
-questions? contact@plyr.fm
+questions? plyrdotfm@proton.me
