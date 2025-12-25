@@ -9,6 +9,7 @@
 	import Toast from '$lib/components/Toast.svelte';
 	import Queue from '$lib/components/Queue.svelte';
 	import SearchModal from '$lib/components/SearchModal.svelte';
+	import TermsOverlay from '$lib/components/TermsOverlay.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
@@ -36,6 +37,17 @@
 	);
 
 	let isEmbed = $derived($page.url.pathname.startsWith('/embed/'));
+
+	// show terms overlay if authenticated but hasn't accepted terms
+	// exclude legal pages so users can read full terms/privacy/cookies
+	let showTermsOverlay = $derived(
+		data.isAuthenticated &&
+		data.preferences &&
+		!data.preferences.terms_accepted_at &&
+		!$page.url.pathname.startsWith('/terms') &&
+		!$page.url.pathname.startsWith('/privacy') &&
+		!$page.url.pathname.startsWith('/cookies')
+	);
 
 	// sync auth and preferences state from layout data (fetched by +layout.ts)
 	$effect(() => {
@@ -414,6 +426,9 @@
 {/if}
 <Toast />
 <SearchModal />
+{#if showTermsOverlay}
+	<TermsOverlay />
+{/if}
 
 <style>
 	:global(*),

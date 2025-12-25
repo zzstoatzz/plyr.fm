@@ -16,6 +16,10 @@ interface ServerConfig {
 	default_hidden_tags: string[];
 	bufo_exclude_patterns: string[];
 	bufo_include_patterns: string[];
+	contact_email: string;
+	privacy_email: string;
+	dmca_email: string;
+	dmca_registration_number: string;
 }
 
 let serverConfig: ServerConfig | null = null;
