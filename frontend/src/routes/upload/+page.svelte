@@ -332,7 +332,7 @@
 							</svg>
 						</span>
 						<span class="gating-disabled-text">
-							want to gate tracks for supporters? <a href="https://atprotofans.com" target="_blank" rel="noopener">set up atprotofans</a>, then enable it in your <a href="/portal">portal</a>
+							want to offer exclusive tracks to supporters? <a href="https://atprotofans.com" target="_blank" rel="noopener">set up atprotofans</a>, then enable it in your <a href="/portal">portal</a>
 						</span>
 					</div>
 				{/if}
