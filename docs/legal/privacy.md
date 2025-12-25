@@ -42,7 +42,7 @@ you can access, correct, or delete your data through settings. when you delete y
 
 ## 6. security
 
-we use HTTPS, encrypt sensitive data, and use HttpOnly cookies. no system is perfectly secure—report vulnerabilities to contact@plyr.fm.
+we use HTTPS, encrypt sensitive data, and use HttpOnly cookies. no system is perfectly secure—report vulnerabilities to plyrdotfm@proton.me.
 
 ## 7. children
 
@@ -54,4 +54,4 @@ we may update this policy. material changes will be posted with notice.
 
 ## contact
 
-questions? privacy@plyr.fm
+questions? plyrdotfm@proton.me
