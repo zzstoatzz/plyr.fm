@@ -1058,6 +1058,10 @@ $effect(() => {
 			text-align: center;
 		}
 
+		.handle-row {
+			justify-content: center;
+		}
+
 		.artist-actions-desktop {
 			display: none;
 		}
