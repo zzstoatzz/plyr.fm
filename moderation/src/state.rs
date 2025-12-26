@@ -32,6 +32,9 @@ pub enum AppError {
     #[error("labeler not configured")]
     LabelerNotConfigured,
 
+    #[error("bad request: {0}")]
+    BadRequest(String),
+
     #[error("label error: {0}")]
     Label(#[from] LabelError),
 
@@ -50,6 +53,7 @@ impl IntoResponse for AppError {
             AppError::LabelerNotConfigured => {
                 (StatusCode::SERVICE_UNAVAILABLE, "LabelerNotConfigured")
             }
+            AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, "BadRequest"),
             AppError::Label(_) => (StatusCode::INTERNAL_SERVER_ERROR, "LabelError"),
             AppError::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, "DatabaseError"),
             AppError::Io(_) => (StatusCode::INTERNAL_SERVER_ERROR, "IoError"),

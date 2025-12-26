@@ -63,6 +63,15 @@ pub struct EmitLabelResponse {
     pub label: Label,
 }
 
+/// Response for sensitive images endpoint.
+#[derive(Debug, Serialize)]
+pub struct SensitiveImagesResponse {
+    /// R2 image IDs (for track/album artwork)
+    pub image_ids: Vec<String>,
+    /// Full URLs (for external images like avatars)
+    pub urls: Vec<String>,
+}
+
 // --- handlers ---
 
 /// Health check endpoint.
@@ -206,6 +215,23 @@ pub async fn emit_label(
     }
 
     Ok(Json(EmitLabelResponse { seq, label }))
+}
+
+/// Get all sensitive images (public endpoint).
+///
+/// Returns image_ids (R2 storage IDs) and urls (full URLs) for all flagged images.
+/// Clients should check both lists when determining if an image is sensitive.
+pub async fn get_sensitive_images(
+    State(state): State<AppState>,
+) -> Result<Json<SensitiveImagesResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    let images = db.get_sensitive_images().await?;
+
+    let image_ids: Vec<String> = images.iter().filter_map(|i| i.image_id.clone()).collect();
+    let urls: Vec<String> = images.iter().filter_map(|i| i.url.clone()).collect();
+
+    Ok(Json(SensitiveImagesResponse { image_ids, urls }))
 }
 
 #[cfg(test)]

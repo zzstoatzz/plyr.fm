@@ -72,6 +72,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/", get(handlers::landing))
         // Health check
         .route("/health", get(handlers::health))
+        // Sensitive images (public)
+        .route("/sensitive-images", get(handlers::get_sensitive_images))
         // AuDD scanning
         .route("/scan", post(audd::scan))
         // Label emission (internal API)
@@ -84,6 +86,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/admin/resolve-htmx", post(admin::resolve_flag_htmx))
         .route("/admin/context", post(admin::store_context))
         .route("/admin/active-labels", post(admin::get_active_labels))
+        .route("/admin/sensitive-images", post(admin::add_sensitive_image))
+        .route(
+            "/admin/sensitive-images/remove",
+            post(admin::remove_sensitive_image),
+        )
         // Static files (CSS, JS for admin UI)
         .nest_service("/static", ServeDir::new("static"))
         // ATProto XRPC endpoints (public)

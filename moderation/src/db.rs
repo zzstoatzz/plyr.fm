@@ -2,10 +2,26 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{postgres::PgPoolOptions, FromRow, PgPool};
 
 use crate::admin::FlaggedTrack;
 use crate::labels::Label;
+
+/// Sensitive image record from the database.
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct SensitiveImageRow {
+    pub id: i64,
+    /// R2 storage ID (for track/album artwork)
+    pub image_id: Option<String>,
+    /// Full URL (for external images like avatars)
+    pub url: Option<String>,
+    /// Why this image was flagged
+    pub reason: Option<String>,
+    /// When the image was flagged
+    pub flagged_at: DateTime<Utc>,
+    /// Admin who flagged it
+    pub flagged_by: Option<String>,
+}
 
 /// Type alias for context row from database query.
 type ContextRow = (
@@ -193,6 +209,29 @@ impl LabelDb {
             .execute(&self.pool)
             .await?;
         sqlx::query("ALTER TABLE label_context ADD COLUMN IF NOT EXISTS resolution_notes TEXT")
+            .execute(&self.pool)
+            .await?;
+
+        // Sensitive images table for content moderation
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS sensitive_images (
+                id BIGSERIAL PRIMARY KEY,
+                image_id TEXT,
+                url TEXT,
+                reason TEXT,
+                flagged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                flagged_by TEXT
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_sensitive_images_image_id ON sensitive_images(image_id)")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_sensitive_images_url ON sensitive_images(url)")
             .execute(&self.pool)
             .await?;
 
@@ -592,6 +631,51 @@ impl LabelDb {
             .collect();
 
         Ok(tracks)
+    }
+
+    // -------------------------------------------------------------------------
+    // Sensitive images
+    // -------------------------------------------------------------------------
+
+    /// Get all sensitive images.
+    pub async fn get_sensitive_images(&self) -> Result<Vec<SensitiveImageRow>, sqlx::Error> {
+        sqlx::query_as::<_, SensitiveImageRow>(
+            "SELECT id, image_id, url, reason, flagged_at, flagged_by FROM sensitive_images ORDER BY flagged_at DESC",
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    /// Add a sensitive image entry.
+    pub async fn add_sensitive_image(
+        &self,
+        image_id: Option<&str>,
+        url: Option<&str>,
+        reason: Option<&str>,
+        flagged_by: Option<&str>,
+    ) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            r#"
+            INSERT INTO sensitive_images (image_id, url, reason, flagged_by)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+            "#,
+        )
+        .bind(image_id)
+        .bind(url)
+        .bind(reason)
+        .bind(flagged_by)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    /// Remove a sensitive image entry by ID.
+    pub async fn remove_sensitive_image(&self, id: i64) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query("DELETE FROM sensitive_images WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
     }
 }
 

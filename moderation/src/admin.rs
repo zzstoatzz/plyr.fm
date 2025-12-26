@@ -104,6 +104,39 @@ pub struct ActiveLabelsResponse {
     pub active_uris: Vec<String>,
 }
 
+/// Request to add a sensitive image.
+#[derive(Debug, Deserialize)]
+pub struct AddSensitiveImageRequest {
+    /// R2 storage ID (for track/album artwork)
+    pub image_id: Option<String>,
+    /// Full URL (for external images like avatars)
+    pub url: Option<String>,
+    /// Why this image was flagged
+    pub reason: Option<String>,
+    /// Admin who flagged it
+    pub flagged_by: Option<String>,
+}
+
+/// Response after adding a sensitive image.
+#[derive(Debug, Serialize)]
+pub struct AddSensitiveImageResponse {
+    pub id: i64,
+    pub message: String,
+}
+
+/// Request to remove a sensitive image.
+#[derive(Debug, Deserialize)]
+pub struct RemoveSensitiveImageRequest {
+    pub id: i64,
+}
+
+/// Response after removing a sensitive image.
+#[derive(Debug, Serialize)]
+pub struct RemoveSensitiveImageResponse {
+    pub removed: bool,
+    pub message: String,
+}
+
 /// List all flagged tracks - returns JSON for API, HTML for htmx.
 pub async fn list_flagged(
     State(state): State<AppState>,
@@ -292,6 +325,63 @@ pub async fn store_context(
     Ok(Json(StoreContextResponse {
         message: format!("context stored for {}", request.uri),
     }))
+}
+
+/// Add a sensitive image entry.
+pub async fn add_sensitive_image(
+    State(state): State<AppState>,
+    Json(request): Json<AddSensitiveImageRequest>,
+) -> Result<Json<AddSensitiveImageResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    // Validate: at least one of image_id or url must be provided
+    if request.image_id.is_none() && request.url.is_none() {
+        return Err(AppError::BadRequest(
+            "at least one of image_id or url must be provided".to_string(),
+        ));
+    }
+
+    tracing::info!(
+        image_id = ?request.image_id,
+        url = ?request.url,
+        reason = ?request.reason,
+        flagged_by = ?request.flagged_by,
+        "adding sensitive image"
+    );
+
+    let id = db
+        .add_sensitive_image(
+            request.image_id.as_deref(),
+            request.url.as_deref(),
+            request.reason.as_deref(),
+            request.flagged_by.as_deref(),
+        )
+        .await?;
+
+    Ok(Json(AddSensitiveImageResponse {
+        id,
+        message: "sensitive image added".to_string(),
+    }))
+}
+
+/// Remove a sensitive image entry.
+pub async fn remove_sensitive_image(
+    State(state): State<AppState>,
+    Json(request): Json<RemoveSensitiveImageRequest>,
+) -> Result<Json<RemoveSensitiveImageResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    tracing::info!(id = request.id, "removing sensitive image");
+
+    let removed = db.remove_sensitive_image(request.id).await?;
+
+    let message = if removed {
+        format!("sensitive image {} removed", request.id)
+    } else {
+        format!("sensitive image {} not found", request.id)
+    };
+
+    Ok(Json(RemoveSensitiveImageResponse { removed, message }))
 }
 
 /// Serve the admin UI HTML from static file.
