@@ -174,7 +174,7 @@ see [sprint tracking issue #625](https://github.com/zzstoatzz/plyr.fm/issues/625
 
 | track | focus | status |
 |-------|-------|--------|
-| moderation | consolidate architecture, add rules engine | planning |
+| moderation | consolidate architecture, add rules engine | core cleanup shipped (PR #617), sensitive images moved (PR #644) |
 | atprotofans | supporter validation, content gating | shipped |
 
 ### known issues
@@ -335,4 +335,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-23.
+this is a living document. last updated 2025-12-26.
