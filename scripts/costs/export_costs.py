@@ -35,10 +35,11 @@ AUDD_FREE_REQUESTS = 6000  # 1000 base + 5000 bonus on indie plan
 AUDD_COST_PER_1000 = 5.00  # $5 per 1000 requests
 AUDD_BASE_COST = 5.00  # $5/month base
 
-# fixed monthly costs (updated 2025-12-16)
+# fixed monthly costs (updated 2025-12-26)
 # fly.io: manually updated from cost explorer (TODO: use fly billing API)
 # neon: fixed $5/month
 # cloudflare: mostly free tier
+# upstash: free tier (256MB, 500K commands/month)
 FIXED_COSTS = {
     "fly_io": {
         "breakdown": {
@@ -59,6 +60,10 @@ FIXED_COSTS = {
         "domain": 1.00,
         "total": 1.16,
         "note": "r2 egress is free, pages free tier",
+    },
+    "upstash": {
+        "total": 0.00,
+        "note": "redis for docket + caching (free tier: 256MB, 500K commands/month)",
     },
 }
 
@@ -201,6 +206,7 @@ def build_cost_data(audd_stats: dict[str, Any]) -> dict[str, Any]:
         plyr_fly
         + FIXED_COSTS["neon"]["total"]
         + FIXED_COSTS["cloudflare"]["total"]
+        + FIXED_COSTS["upstash"]["total"]
         + audd_stats["estimated_cost"]
     )
 
@@ -225,6 +231,10 @@ def build_cost_data(audd_stats: dict[str, Any]) -> dict[str, Any]:
                     "domain": FIXED_COSTS["cloudflare"]["domain"],
                 },
                 "note": FIXED_COSTS["cloudflare"]["note"],
+            },
+            "upstash": {
+                "amount": FIXED_COSTS["upstash"]["total"],
+                "note": FIXED_COSTS["upstash"]["note"],
             },
             "audd": {
                 "amount": audd_stats["estimated_cost"],
