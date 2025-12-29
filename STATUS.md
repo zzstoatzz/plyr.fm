@@ -47,6 +47,55 @@ plyr.fm should become:
 
 ### December 2025
 
+#### sensitive images consolidation (PR #644, Dec 26)
+
+**moderation architecture cleanup** - moved sensitive image tracking from Python backend to Rust moderation service:
+- added `sensitive_images` table to moderation service SQLite with auto-migration
+- exposed public `GET /sensitive-images` and admin endpoints for add/remove
+- Python backend now proxies to moderation service as single source of truth
+- migration script (`scripts/migrate_sensitive_images.py`) for existing data
+
+---
+
+#### redis overhead reduction (PR #653, Dec 29)
+
+**operational tuning** - reduced docket background task Redis commands by 15x:
+- heartbeat interval increased from 2s to 30s
+- before: ~1.3M commands/day, after: ~89K commands/day
+- tradeoff: dead worker detection 10s → 2.5min (acceptable for 5-min perpetual task)
+- added Upstash to /costs dashboard for redis usage transparency
+
+---
+
+#### gated content fast-follow (PRs #640-643, Dec 23-24)
+
+**polishing supporter-gated tracks**:
+- PR #640: server-side gated status resolution - backend determines viewer access
+- PR #641: lock icon on track detail page for gated tracks
+- PR #643: fixed auto-download for supporters - `gated` field is viewer-resolved
+
+---
+
+#### upload error improvements (PR #645, Dec 29)
+
+**mobile upload reliability** - better error messages for failing uploads:
+- shows progress percentage in errors ("failed at 23%")
+- detects mobile devices and provides targeted guidance
+- warns proactively when uploading files >50MB on mobile
+
+---
+
+#### UI polish (PRs #646-651, Dec 24-25)
+
+- PR #646: lowered header mobile breakpoint from 1599px to 1300px
+- PR #647: added time range toggle (24h/7d/30d) to costs dashboard
+- PR #648: fixed costs chart overflow and toggle button styling
+- PR #649: fixed track detail page liked state race condition (async auth timing)
+- PR #650: centered artist handle on mobile
+- PR #651: improved atprotofans gating hint copy
+
+---
+
 #### supporter-gated content (PR #637, Dec 22-23)
 
 **atprotofans paywall integration** - artists can now mark tracks as "supporters only":
@@ -335,4 +384,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-26.
+this is a living document. last updated 2025-12-29.
