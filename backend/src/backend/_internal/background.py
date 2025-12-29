@@ -58,6 +58,9 @@ async def background_worker_lifespan() -> AsyncGenerator[Docket, None]:
     async with Docket(
         name=settings.docket.name,
         url=settings.docket.url,
+        # default 2s is for systems needing fast worker failure detection
+        # with our 5-minute perpetual task, 30s is plenty responsive
+        heartbeat_interval=timedelta(seconds=30),
     ) as docket:
         _docket = docket
 
