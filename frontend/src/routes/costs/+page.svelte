@@ -103,47 +103,44 @@
 			: 1
 	);
 
-	// derive max requests for the daily chart based on filtered data
-	let maxRequests = $derived(
-		filteredDaily.length > 0 ? Math.max(...filteredDaily.map((d) => d.requests), 1) : 1
-	);
+	let maxRequests = $derived.by(() => {
+		return filteredDaily.length ? Math.max(...filteredDaily.map((d) => d.requests)) : 1;
+	});
 
-	function formatCurrency(amount: number): string {
-		return `$${amount.toFixed(2)}`;
-	}
+	onMount(async () => {
+		try {
+			const response = await fetch(`${API_URL}/stats/costs`);
+			if (!response.ok) {
+				throw new Error(`failed to load cost data: ${response.status}`);
+			}
+			data = await response.json();
+		} catch (e) {
+			console.error('failed to load costs:', e);
+			error = e instanceof Error ? e.message : 'failed to load cost data';
+		} finally {
+			loading = false;
+		}
+	});
 
 	function formatDate(isoString: string): string {
-		return new Date(isoString).toLocaleString('en-US', {
+		const date = new Date(isoString);
+		return date.toLocaleDateString('en-US', {
 			month: 'short',
 			day: 'numeric',
+			year: 'numeric',
 			hour: 'numeric',
 			minute: '2-digit'
 		});
 	}
 
-	function formatShortDate(isoString: string): string {
-		return new Date(isoString).toLocaleString('en-US', {
-			month: 'short',
-			day: 'numeric'
-		});
+	function formatCurrency(amount: number): string {
+		return `$${amount.toFixed(2)}`;
 	}
 
+	// calculate bar width as percentage of max
 	function barWidth(amount: number, max: number): number {
-		if (max === 0) return 0;
-		return Math.max((amount / max) * 100, 2); // minimum 2% for visibility
+		return Math.max(5, (amount / max) * 100);
 	}
-
-	onMount(async () => {
-		try {
-			const res = await fetch(`${API_URL}/stats/costs`);
-			if (!res.ok) throw new Error('failed to load costs');
-			data = await res.json();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'unknown error';
-		} finally {
-			loading = false;
-		}
-	});
 
 	async function logout() {
 		await auth.logout();
@@ -264,84 +261,97 @@
 
 		<!-- audd details -->
 		<section class="audd-section">
-			<h2>copyright detection (audd)</h2>
+			<div class="audd-header">
+				<h2>api requests (audd)</h2>
+				<div class="time-range-toggle">
+					<button
+						class:active={timeRange === 'day'}
+						onclick={() => (timeRange = 'day')}
+					>
+						24h
+					</button>
+					<button
+						class:active={timeRange === 'week'}
+						onclick={() => (timeRange = 'week')}
+					>
+						7d
+					</button>
+					<button
+						class:active={timeRange === 'month'}
+						onclick={() => (timeRange = 'month')}
+					>
+						30d
+					</button>
+				</div>
+			</div>
 
 			<div class="audd-stats">
 				<div class="stat">
-					<span class="stat-value">{data.costs.audd.scans_this_period.toLocaleString()}</span>
-					<span class="stat-label">tracks scanned</span>
-				</div>
-				<div class="stat">
-					<span class="stat-value">{data.costs.audd.requests_this_period.toLocaleString()}</span>
-					<span class="stat-label">api requests</span>
+					<span class="stat-value">{filteredTotals.requests.toLocaleString()}</span>
+					<span class="stat-label">requests ({timeRange === 'day' ? '24h' : timeRange === 'week' ? '7d' : '30d'})</span>
 				</div>
 				<div class="stat">
 					<span class="stat-value">{data.costs.audd.remaining_free.toLocaleString()}</span>
 					<span class="stat-label">free remaining</span>
 				</div>
 				<div class="stat">
-					<span class="stat-value">{data.costs.audd.flag_rate}%</span>
-					<span class="stat-label">flag rate</span>
+					<span class="stat-value">{filteredTotals.scans.toLocaleString()}</span>
+					<span class="stat-label">tracks scanned</span>
 				</div>
 			</div>
 
-			<!-- daily chart with time range toggle -->
-			{#if data.costs.audd.daily.length > 0}
-				<div class="daily-chart-container">
-					<div class="chart-header">
-						<h3>daily requests</h3>
-						<div class="time-toggle">
-							<button
-								class="toggle-btn"
-								class:active={timeRange === 'day'}
-								onclick={() => (timeRange = 'day')}
-							>
-								24h
-							</button>
-							<button
-								class="toggle-btn"
-								class:active={timeRange === 'week'}
-								onclick={() => (timeRange = 'week')}
-							>
-								7d
-							</button>
-							<button
-								class="toggle-btn"
-								class:active={timeRange === 'month'}
-								onclick={() => (timeRange = 'month')}
-							>
-								30d
-							</button>
-						</div>
-					</div>
-					<div class="chart-summary">
-						<span>{filteredTotals.requests.toLocaleString()} requests</span>
-						<span class="separator">·</span>
-						<span>{filteredTotals.scans.toLocaleString()} scans</span>
-					</div>
-					<div class="daily-chart">
+			<p class="audd-explainer">
+				1 request = 12s of audio. {data.costs.audd.free_requests.toLocaleString()} free/month,
+				then ${(5).toFixed(2)}/1k requests.
+				{#if data.costs.audd.billable_requests > 0}
+					<strong>{data.costs.audd.billable_requests.toLocaleString()} billable</strong> this billing period.
+				{/if}
+			</p>
+
+			{#if filteredDaily.length > 0}
+				<div class="daily-chart">
+					<h3>daily requests</h3>
+					<div class="chart-bars">
 						{#each filteredDaily as day}
-							<div class="day-bar-container">
+							<div class="chart-bar-container">
 								<div
-									class="day-bar"
-									style="height: {barWidth(day.requests, maxRequests)}%"
-									title="{formatShortDate(day.date)}: {day.requests} requests, {day.scans} scans"
+									class="chart-bar"
+									style="height: {Math.max(4, (day.requests / maxRequests) * 100)}%"
+									title="{day.date}: {day.requests} requests ({day.scans} tracks)"
 								></div>
-								<span class="day-label">{formatShortDate(day.date)}</span>
+								<span class="chart-label">{day.date.slice(5)}</span>
 							</div>
 						{/each}
 					</div>
 				</div>
+			{:else}
+				<p class="no-data">no requests in this time range</p>
 			{/if}
 		</section>
 
 		<!-- support cta -->
 		<section class="support-section">
-			<p>{data.support.message}</p>
-			<a href={data.support.url} target="_blank" rel="noopener noreferrer" class="support-link">
-				become a supporter →
-			</a>
+			<div class="support-card">
+				<div class="support-icon">
+					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+					</svg>
+				</div>
+				<div class="support-text">
+					<h3>support {APP_NAME}</h3>
+					<p>{data.support.message}</p>
+				</div>
+				<a href={data.support.url} target="_blank" rel="noopener" class="support-button">
+					support
+				</a>
+			</div>
 		</section>
+
+		<!-- footer note -->
+		<p class="footer-note">
+			{APP_NAME} is an open-source project.
+			<a href="https://github.com/zzstoatzz/plyr.fm" target="_blank" rel="noopener">view source</a>
+		</p>
 	{/if}
 </main>
 
@@ -349,7 +359,7 @@
 	main {
 		max-width: 600px;
 		margin: 0 auto;
-		padding: 2rem 1rem 6rem;
+		padding: 0 1rem calc(var(--player-height, 120px) + 2rem + env(safe-area-inset-bottom, 0px));
 	}
 
 	.page-header {
@@ -357,64 +367,68 @@
 	}
 
 	.page-header h1 {
-		font-size: 1.5rem;
-		font-weight: 600;
-		margin: 0 0 0.25rem;
+		font-size: var(--text-page-heading);
+		margin: 0 0 0.5rem;
 	}
 
 	.subtitle {
-		color: var(--text-secondary);
-		font-size: 0.875rem;
+		color: var(--text-tertiary);
+		font-size: 0.9rem;
 		margin: 0;
 	}
 
-	.loading,
+	.loading {
+		display: flex;
+		justify-content: center;
+		padding: 4rem 0;
+	}
+
 	.error-state {
 		text-align: center;
 		padding: 3rem 1rem;
-	}
-
-	.error-state p {
-		margin: 0.5rem 0;
-	}
-
-	.hint {
 		color: var(--text-secondary);
-		font-size: 0.875rem;
+	}
+
+	.error-state .hint {
+		color: var(--text-tertiary);
+		font-size: 0.85rem;
+		margin-top: 0.5rem;
 	}
 
 	/* total section */
 	.total-section {
-		text-align: center;
 		margin-bottom: 2rem;
 	}
 
 	.total-card {
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		padding: 1.5rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		align-items: center;
+		padding: 2rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 12px;
 	}
 
 	.total-label {
-		font-size: 0.875rem;
-		color: var(--text-secondary);
-		text-transform: lowercase;
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--text-tertiary);
+		margin-bottom: 0.5rem;
 	}
 
 	.total-amount {
-		font-size: 2.5rem;
+		font-size: 3rem;
 		font-weight: 700;
 		color: var(--accent);
 	}
 
 	.updated {
+		text-align: center;
 		font-size: 0.75rem;
-		color: var(--text-secondary);
-		margin-top: 0.5rem;
+		color: var(--text-tertiary);
+		margin-top: 0.75rem;
 	}
 
 	/* breakdown section */
@@ -422,11 +436,13 @@
 		margin-bottom: 2rem;
 	}
 
-	.breakdown-section h2 {
-		font-size: 1rem;
-		font-weight: 600;
-		margin: 0 0 1rem;
-		text-transform: lowercase;
+	.breakdown-section h2,
+	.audd-section h2 {
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--text-tertiary);
+		margin-bottom: 1rem;
 	}
 
 	.cost-bars {
@@ -436,32 +452,36 @@
 	}
 
 	.cost-item {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 8px;
+		padding: 1rem;
 	}
 
 	.cost-header {
 		display: flex;
 		justify-content: space-between;
-		align-items: baseline;
+		align-items: center;
+		margin-bottom: 0.5rem;
 	}
 
 	.cost-name {
-		font-weight: 500;
-		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--text-primary);
 	}
 
 	.cost-amount {
 		font-weight: 600;
-		font-size: 0.875rem;
+		color: var(--accent);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.cost-bar-bg {
 		height: 8px;
-		background: var(--surface);
+		background: var(--bg-primary);
 		border-radius: 4px;
 		overflow: hidden;
+		margin-bottom: 0.5rem;
 	}
 
 	.cost-bar {
@@ -472,12 +492,12 @@
 	}
 
 	.cost-bar.audd {
-		background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+		background: var(--warning);
 	}
 
 	.cost-note {
 		font-size: 0.75rem;
-		color: var(--text-secondary);
+		color: var(--text-tertiary);
 	}
 
 	/* audd section */
@@ -485,181 +505,240 @@
 		margin-bottom: 2rem;
 	}
 
-	.audd-section h2 {
-		font-size: 1rem;
-		font-weight: 600;
-		margin: 0 0 1rem;
-		text-transform: lowercase;
+	.audd-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+		gap: 1rem;
+	}
+
+	.audd-header h2 {
+		margin-bottom: 0;
+	}
+
+	.time-range-toggle {
+		display: flex;
+		gap: 0.25rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 6px;
+		padding: 0.25rem;
+	}
+
+	.time-range-toggle button {
+		padding: 0.35rem 0.75rem;
+		font-family: inherit;
+		font-size: 0.75rem;
+		font-weight: 500;
+		background: transparent;
+		border: none;
+		border-radius: 4px;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.time-range-toggle button:hover {
+		color: var(--text-primary);
+	}
+
+	.time-range-toggle button.active {
+		background: var(--accent);
+		color: white;
+	}
+
+	.no-data {
+		text-align: center;
+		color: var(--text-tertiary);
+		font-size: 0.85rem;
+		padding: 2rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 8px;
 	}
 
 	.audd-stats {
 		display: grid;
-		grid-template-columns: repeat(2, 1fr);
+		grid-template-columns: repeat(3, 1fr);
 		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	.audd-explainer {
+		font-size: 0.8rem;
+		color: var(--text-secondary);
 		margin-bottom: 1.5rem;
+		line-height: 1.5;
+	}
+
+	.audd-explainer strong {
+		color: var(--warning);
 	}
 
 	.stat {
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		padding: 1rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		align-items: center;
+		padding: 1rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: 8px;
 	}
 
 	.stat-value {
 		font-size: 1.25rem;
-		font-weight: 600;
+		font-weight: 700;
+		color: var(--text-primary);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.stat-label {
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		text-transform: lowercase;
+		font-size: 0.7rem;
+		color: var(--text-tertiary);
+		text-align: center;
+		margin-top: 0.25rem;
 	}
 
 	/* daily chart */
-	.daily-chart-container {
-		background: var(--surface);
-		border: 1px solid var(--border);
+	.daily-chart {
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 		padding: 1rem;
+		overflow: hidden;
 	}
 
-	.daily-chart-container h3 {
-		font-size: 0.875rem;
-		font-weight: 500;
-		margin: 0 0 0.75rem;
-		text-transform: lowercase;
-	}
-
-	.chart-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 0.5rem;
-	}
-
-	.chart-header h3 {
-		margin: 0;
-	}
-
-	.time-toggle {
-		display: flex;
-		gap: 0.25rem;
-		background: var(--background);
-		border-radius: 6px;
-		padding: 2px;
-	}
-
-	.toggle-btn {
-		background: transparent;
-		border: none;
-		padding: 0.25rem 0.5rem;
+	.daily-chart h3 {
 		font-size: 0.75rem;
-		color: var(--text-secondary);
-		cursor: pointer;
-		border-radius: 4px;
-		transition:
-			background 0.15s,
-			color 0.15s;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-tertiary);
+		margin: 0 0 1rem;
 	}
 
-	.toggle-btn:hover {
-		color: var(--text-primary);
-	}
-
-	.toggle-btn.active {
-		background: var(--surface);
-		color: var(--text-primary);
-		font-weight: 500;
-	}
-
-	.chart-summary {
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		margin-bottom: 0.75rem;
-	}
-
-	.chart-summary .separator {
-		margin: 0 0.5rem;
-	}
-
-	.daily-chart {
+	.chart-bars {
 		display: flex;
-		gap: 2px;
-		height: 80px;
 		align-items: flex-end;
-		overflow-x: auto;
+		gap: 2px;
+		height: 100px;
+		width: 100%;
 	}
 
-	.day-bar-container {
-		flex: 1;
-		min-width: 20px;
+	.chart-bar-container {
+		flex: 1 1 0;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 4px;
 		height: 100%;
 	}
 
-	.day-bar {
+	.chart-bar {
 		width: 100%;
 		background: var(--accent);
 		border-radius: 2px 2px 0 0;
-		min-height: 2px;
-		cursor: help;
-		transition: opacity 0.15s;
+		min-height: 4px;
+		margin-top: auto;
+		transition: height 0.3s ease;
 	}
 
-	.day-bar:hover {
+	.chart-bar:hover {
 		opacity: 0.8;
 	}
 
-	.day-label {
-		font-size: 0.625rem;
-		color: var(--text-secondary);
+	.chart-label {
+		font-size: 0.55rem;
+		color: var(--text-tertiary);
+		margin-top: 0.25rem;
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 100%;
 	}
 
 	/* support section */
 	.support-section {
+		margin-bottom: 2rem;
+	}
+
+	.support-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
 		text-align: center;
-		padding: 1.5rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
+		padding: 2rem;
+		background: linear-gradient(135deg,
+			color-mix(in srgb, var(--accent) 10%, var(--bg-tertiary)),
+			var(--bg-tertiary)
+		);
+		border: 1px solid var(--border-subtle);
 		border-radius: 12px;
 	}
 
-	.support-section p {
-		margin: 0 0 1rem;
-		color: var(--text-secondary);
-		font-size: 0.875rem;
+	.support-icon {
+		color: var(--accent);
+		margin-bottom: 1rem;
 	}
 
-	.support-link {
-		display: inline-block;
+	.support-text h3 {
+		margin: 0 0 0.5rem;
+		font-size: 1.1rem;
+		color: var(--text-primary);
+	}
+
+	.support-text p {
+		margin: 0 0 1.5rem;
+		color: var(--text-secondary);
+		font-size: 0.9rem;
+	}
+
+	.support-button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1.5rem;
+		background: var(--accent);
+		color: white;
+		border-radius: 8px;
+		text-decoration: none;
+		font-weight: 600;
+		font-size: 0.9rem;
+		transition: transform 0.15s, box-shadow 0.15s;
+	}
+
+	.support-button:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
+	}
+
+	/* footer */
+	.footer-note {
+		text-align: center;
+		font-size: 0.8rem;
+		color: var(--text-tertiary);
+		padding-bottom: 1rem;
+	}
+
+	.footer-note a {
 		color: var(--accent);
-		font-weight: 500;
 		text-decoration: none;
 	}
 
-	.support-link:hover {
+	.footer-note a:hover {
 		text-decoration: underline;
 	}
 
 	@media (max-width: 480px) {
 		.total-amount {
-			font-size: 2rem;
+			font-size: 2.5rem;
 		}
 
 		.audd-stats {
-			grid-template-columns: 1fr 1fr;
+			grid-template-columns: 1fr;
 		}
 
-		.day-label {
+		.chart-label {
 			display: none;
 		}
 	}
