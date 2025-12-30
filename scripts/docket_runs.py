@@ -38,17 +38,15 @@ def main():
         url = os.environ.get("DOCKET_URL_STAGING")
         if not url:
             print("error: DOCKET_URL_STAGING not set")
-            print(
-                "hint: export DOCKET_URL_STAGING=rediss://default:xxx@xxx.upstash.io:6379"
-            )
+            print("hint: flyctl proxy 6380:6379 -a plyr-redis-stg")
+            print("      export DOCKET_URL_STAGING=redis://localhost:6380")
             return 1
     elif args.env == "production":
         url = os.environ.get("DOCKET_URL_PRODUCTION")
         if not url:
             print("error: DOCKET_URL_PRODUCTION not set")
-            print(
-                "hint: export DOCKET_URL_PRODUCTION=rediss://default:xxx@xxx.upstash.io:6379"
-            )
+            print("hint: flyctl proxy 6381:6379 -a plyr-redis")
+            print("      export DOCKET_URL_PRODUCTION=redis://localhost:6381")
             return 1
 
     print(f"connecting to {args.env}...")

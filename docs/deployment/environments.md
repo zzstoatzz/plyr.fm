@@ -7,8 +7,8 @@ plyr.fm uses a simple three-tier deployment strategy: development â†’ staging â†
 | environment | trigger | backend URL | database | redis | frontend | storage |
 |-------------|---------|-------------|----------|-------|----------|---------|
 | **development** | local | localhost:8001 | plyr-dev (neon) | localhost:6379 (docker) | localhost:5173 | audio-dev, images-dev (r2) |
-| **staging** | push to main | api-stg.plyr.fm | plyr-stg (neon) | plyr-redis-stg (upstash) | stg.plyr.fm (main branch) | audio-staging, images-staging (r2) |
-| **production** | github release | api.plyr.fm | plyr-prd (neon) | plyr-redis-prd (upstash) | plyr.fm (production-fe branch) | audio-prod, images-prod (r2) |
+| **staging** | push to main | api-stg.plyr.fm | plyr-stg (neon) | plyr-redis-stg (fly.io) | stg.plyr.fm (main branch) | audio-staging, images-staging (r2) |
+| **production** | github release | api.plyr.fm | plyr-prd (neon) | plyr-redis (fly.io) | plyr.fm (production-fe branch) | audio-prod, images-prod (r2) |
 
 ## workflow
 

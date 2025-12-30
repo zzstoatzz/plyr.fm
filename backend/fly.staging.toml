@@ -44,4 +44,4 @@ primary_region = 'iad'
 # - AWS_ACCESS_KEY_ID (cloudflare R2)
 # - AWS_SECRET_ACCESS_KEY (cloudflare R2)
 # - OAUTH_ENCRYPTION_KEY (generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
-# - DOCKET_URL (upstash redis: rediss://default:xxx@xxx.upstash.io:6379)
+# - DOCKET_URL (self-hosted redis: redis://plyr-redis-stg.internal:6379)
