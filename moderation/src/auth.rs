@@ -12,9 +12,9 @@ pub async fn auth_middleware(
     let path = req.uri().path();
 
     // Public endpoints - no auth required
-    // Note: /admin and /review/:id serve HTML, auth is handled client-side for API calls
+    // Note: /admin and /admin/review/:id serve HTML, auth is handled client-side for API calls
     // Static files must be public for admin UI CSS/JS to load
-    let is_review_page = path.starts_with("/review/")
+    let is_review_page = path.starts_with("/admin/review/")
         && !path.ends_with("/data")
         && !path.ends_with("/submit");
     if path == "/"
