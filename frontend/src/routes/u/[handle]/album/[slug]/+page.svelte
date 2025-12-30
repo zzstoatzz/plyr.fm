@@ -35,12 +35,14 @@
 	// can only reorder if owner and album has an ATProto list
 	const canReorder = $derived(isOwner && !!albumMetadata.list_uri);
 
-	// check if this album is currently playing
-	const isAlbumPlaying = $derived(
+	// check if current track is from this album (active, regardless of paused state)
+	const isAlbumActive = $derived(
 		player.currentTrack !== null &&
-		!player.paused &&
 		tracks.some(t => t.id === player.currentTrack?.id)
 	);
+
+	// check if actively playing (not paused)
+	const isAlbumPlaying = $derived(isAlbumActive && !player.paused);
 
 	// edit mode state
 	let isEditMode = $state(false);
@@ -555,7 +557,7 @@
 			<button
 				class="play-button"
 				class:is-playing={isAlbumPlaying}
-				onclick={() => isAlbumPlaying ? player.togglePlayPause() : playNow()}
+				onclick={() => isAlbumActive ? player.togglePlayPause() : playNow()}
 			>
 				{#if isAlbumPlaying}
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">

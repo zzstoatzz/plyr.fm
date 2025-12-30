@@ -608,12 +608,14 @@
 	// check if user owns this playlist
 	const isOwner = $derived(auth.user?.did === playlist.owner_did);
 
-	// check if this playlist is currently playing
-	const isPlaylistPlaying = $derived(
+	// check if current track is from this playlist (active, regardless of paused state)
+	const isPlaylistActive = $derived(
 		player.currentTrack !== null &&
-		!player.paused &&
 		tracks.some(t => t.id === player.currentTrack?.id)
 	);
+
+	// check if actively playing (not paused)
+	const isPlaylistPlaying = $derived(isPlaylistActive && !player.paused);
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -875,7 +877,7 @@
 			<button
 				class="play-button"
 				class:is-playing={isPlaylistPlaying}
-				onclick={() => isPlaylistPlaying ? player.togglePlayPause() : playNow()}
+				onclick={() => isPlaylistActive ? player.togglePlayPause() : playNow()}
 			>
 				{#if isPlaylistPlaying}
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
