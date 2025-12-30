@@ -31,7 +31,8 @@ pub struct SubmitReviewRequest {
 #[derive(Debug, Deserialize)]
 pub struct ReviewDecision {
     pub uri: String,
-    pub decision: String, // "approved" or "rejected"
+    /// "clear" (false positive), "defer" (acknowledge, no action), "confirm" (real violation)
+    pub decision: String,
 }
 
 /// Response after submitting review.
@@ -110,25 +111,40 @@ pub async fn submit_review(
         db.mark_flag_reviewed(&batch_id, &decision.uri, &decision.decision)
             .await?;
 
-        if decision.decision == "approved" {
-            let label =
-                crate::labels::Label::new(signer.did(), &decision.uri, "copyright-violation")
-                    .negated();
-            let label = signer.sign_label(label)?;
-            let seq = db.store_label(&label).await?;
+        match decision.decision.as_str() {
+            "clear" => {
+                // False positive - emit negation label to clear the flag
+                let label =
+                    crate::labels::Label::new(signer.did(), &decision.uri, "copyright-violation")
+                        .negated();
+                let label = signer.sign_label(label)?;
+                let seq = db.store_label(&label).await?;
 
-            db.store_resolution(
-                &decision.uri,
-                crate::db::ResolutionReason::FingerprintNoise,
-                Some("batch review"),
-            )
-            .await?;
+                db.store_resolution(
+                    &decision.uri,
+                    crate::db::ResolutionReason::FingerprintNoise,
+                    Some("batch review: cleared"),
+                )
+                .await?;
 
-            if let Some(tx) = &state.label_tx {
-                let _ = tx.send((seq, label));
+                if let Some(tx) = &state.label_tx {
+                    let _ = tx.send((seq, label));
+                }
+
+                resolved_count += 1;
             }
-
-            resolved_count += 1;
+            "defer" => {
+                // Acknowledge but take no action - flag stays active
+                // Just mark as reviewed in the batch, no label changes
+                tracing::info!(uri = %decision.uri, "deferred - no action taken");
+            }
+            "confirm" => {
+                // Real violation - flag stays active, could add enforcement later
+                tracing::info!(uri = %decision.uri, "confirmed as violation");
+            }
+            _ => {
+                tracing::warn!(uri = %decision.uri, decision = %decision.decision, "unknown decision type");
+            }
         }
     }
 
@@ -175,7 +191,7 @@ fn render_review_page(batch_id: &str, flags: &[FlaggedTrack], status: &str) -> S
     };
 
     let status_badge = if status == "completed" {
-        r#"<span class="status-badge completed">completed</span>"#
+        r#"<span class="badge resolved">completed</span>"#
     } else {
         ""
     };
@@ -187,35 +203,36 @@ fn render_review_page(batch_id: &str, flags: &[FlaggedTrack], status: &str) -> S
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>review batch - plyr.fm</title>
+    <link rel="stylesheet" href="/static/admin.css">
     <style>{}</style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>plyr.fm moderation</h1>
-            <div class="batch-info">{} pending {}</div>
-        </header>
+    <h1>plyr.fm moderation</h1>
+    <p class="subtitle">
+        <a href="/admin">← back to dashboard</a>
+        <span style="margin: 0 12px; color: var(--text-muted);">|</span>
+        batch review: {} pending {}
+    </p>
 
-        <div class="auth-section" id="auth-section">
-            <input type="password" id="auth-token" placeholder="auth token"
-                   onkeyup="if(event.key==='Enter')authenticate()">
-            <button class="btn-submit" onclick="authenticate()">authenticate</button>
+    <div class="auth-section" id="auth-section">
+        <input type="password" id="auth-token" placeholder="auth token"
+               onkeyup="if(event.key==='Enter')authenticate()">
+        <button class="btn btn-primary" onclick="authenticate()">authenticate</button>
+    </div>
+
+    <form id="review-form" style="display: none;">
+        <div class="flags-list">
+            {}
         </div>
 
-        <form id="review-form" class="review-form" style="display: none;">
-            <div class="flags-list">
-                {}
-            </div>
+        {}
 
-            {}
-
-            <div class="submit-bar">
-                <button type="submit" class="btn-submit" id="submit-btn" disabled>
-                    submit decisions
-                </button>
-            </div>
-        </form>
-    </div>
+        <div class="submit-bar">
+            <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
+                submit decisions
+            </button>
+        </div>
+    </form>
 
     <script>
         const form = document.getElementById('review-form');
@@ -255,11 +272,18 @@ fn render_review_page(batch_id: &str, flags: &[FlaggedTrack], status: &str) -> S
         }}
 
         function setDecision(uri, decision) {{
-            decisions[uri] = decision;
-            const card = document.querySelector(`[data-uri="${{CSS.escape(uri)}}"]`);
-            if (card) {{
-                card.classList.remove('approved', 'rejected');
-                card.classList.add(decision);
+            // Toggle off if clicking the same decision
+            if (decisions[uri] === decision) {{
+                delete decisions[uri];
+                const card = document.querySelector(`[data-uri="${{CSS.escape(uri)}}"]`);
+                if (card) card.classList.remove('decision-clear', 'decision-defer', 'decision-confirm');
+            }} else {{
+                decisions[uri] = decision;
+                const card = document.querySelector(`[data-uri="${{CSS.escape(uri)}}"]`);
+                if (card) {{
+                    card.classList.remove('decision-clear', 'decision-defer', 'decision-confirm');
+                    card.classList.add('decision-' + decision);
+                }}
             }}
             updateSubmitBtn();
         }}
@@ -270,7 +294,7 @@ fn render_review_page(batch_id: &str, flags: &[FlaggedTrack], status: &str) -> S
             submitBtn.textContent = 'submitting...';
 
             try {{
-                const response = await fetch(`/review/${{batchId}}/submit`, {{
+                const response = await fetch(`/admin/review/${{batchId}}/submit`, {{
                     method: 'POST',
                     headers: {{
                         'Content-Type': 'application/json',
@@ -284,7 +308,7 @@ fn render_review_page(batch_id: &str, flags: &[FlaggedTrack], status: &str) -> S
                 if (response.status === 401) {{
                     localStorage.removeItem('mod_token');
                     currentToken = '';
-                    authSection.style.display = 'flex';
+                    authSection.style.display = 'block';
                     form.style.display = 'none';
                     document.getElementById('auth-token').value = '';
                     alert('invalid token');
@@ -347,31 +371,36 @@ fn render_review_card(track: &FlaggedTrack) -> String {
         .map(|matches| {
             let items: Vec<String> = matches
                 .iter()
-                .take(2)
+                .take(3)
                 .map(|m| {
                     format!(
-                        r#"<span class="match">{} - {}</span>"#,
+                        r#"<div class="match-item"><span class="title">{}</span> <span class="artist">by {}</span></div>"#,
                         html_escape(&m.title),
                         html_escape(&m.artist)
                     )
                 })
                 .collect();
-            format!(r#"<div class="matches">{}</div>"#, items.join(""))
+            format!(
+                r#"<div class="matches"><h4>potential matches</h4>{}</div>"#,
+                items.join("\n")
+            )
         })
         .unwrap_or_default();
 
     let resolved_badge = if track.resolved {
         r#"<span class="badge resolved">resolved</span>"#
     } else {
-        ""
+        r#"<span class="badge pending">pending</span>"#
     };
 
     let action_buttons = if !track.resolved {
         format!(
-            r#"<div class="actions">
-                <button type="button" class="btn-approve" onclick="setDecision('{}', 'approved')">approve</button>
-                <button type="button" class="btn-reject" onclick="setDecision('{}', 'rejected')">reject</button>
+            r#"<div class="flag-actions">
+                <button type="button" class="btn btn-clear" onclick="setDecision('{}', 'clear')">clear</button>
+                <button type="button" class="btn btn-defer" onclick="setDecision('{}', 'defer')">defer</button>
+                <button type="button" class="btn btn-confirm" onclick="setDecision('{}', 'confirm')">confirm</button>
             </div>"#,
+            html_escape(&track.uri),
             html_escape(&track.uri),
             html_escape(&track.uri)
         )
@@ -380,11 +409,15 @@ fn render_review_card(track: &FlaggedTrack) -> String {
     };
 
     format!(
-        r#"<div class="review-card{}" data-uri="{}">
-            <div class="track-info">
-                <div class="title">{}</div>
-                <div class="artist">@{}</div>
-                {}
+        r#"<div class="flag-card{}" data-uri="{}">
+            <div class="flag-header">
+                <div class="track-info">
+                    <h3>{}</h3>
+                    <div class="artist">@{}</div>
+                </div>
+                <div class="flag-badges">
+                    {}
+                </div>
             </div>
             {}
             {}
@@ -393,8 +426,8 @@ fn render_review_card(track: &FlaggedTrack) -> String {
         html_escape(&track.uri),
         title_html,
         html_escape(artist),
-        matches_html,
         resolved_badge,
+        matches_html,
         action_buttons
     )
 }
@@ -407,111 +440,87 @@ fn html_escape(s: &str) -> String {
         .replace('\'', "&#039;")
 }
 
+/// Additional CSS for review page (supplements admin.css)
 const REVIEW_CSS: &str = r#"
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* review page specific styles */
+body { padding-bottom: 80px; }
 
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #0a0a0a;
-    color: #e0e0e0;
-    min-height: 100vh;
+.subtitle a {
+    color: var(--accent);
+    text-decoration: none;
+}
+.subtitle a:hover { text-decoration: underline; }
+
+/* action buttons */
+.btn-clear {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+}
+.btn-clear:hover {
+    background: rgba(74, 222, 128, 0.25);
 }
 
-.container {
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 16px;
-    padding-bottom: 80px;
+.btn-defer {
+    background: rgba(251, 191, 36, 0.15);
+    color: var(--warning);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+.btn-defer:hover {
+    background: rgba(251, 191, 36, 0.25);
 }
 
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #333;
+.btn-confirm {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--error);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.btn-confirm:hover {
+    background: rgba(239, 68, 68, 0.25);
 }
 
-h1 { font-size: 1.25rem; font-weight: 600; color: #fff; }
-.batch-info { font-size: 0.875rem; color: #888; }
-.status-badge { font-size: 0.7rem; background: #1a3a1a; color: #6d9; padding: 2px 6px; border-radius: 4px; margin-left: 8px; }
-
-.auth-section {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    align-items: center;
+/* card selection states */
+.flag-card.decision-clear {
+    border-color: var(--success);
+    background: rgba(74, 222, 128, 0.05);
 }
-.auth-section input[type="password"] {
-    flex: 1;
-    padding: 10px 12px;
-    background: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 6px;
-    color: #fff;
-    font-size: 0.875rem;
+.flag-card.decision-defer {
+    border-color: var(--warning);
+    background: rgba(251, 191, 36, 0.05);
 }
-.auth-section input:focus {
-    outline: none;
-    border-color: #4a9eff;
+.flag-card.decision-confirm {
+    border-color: var(--error);
+    background: rgba(239, 68, 68, 0.05);
 }
 
-.flags-list { display: flex; flex-direction: column; gap: 12px; }
-
-.review-card {
-    background: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 8px;
-    padding: 12px;
-    transition: border-color 0.2s, background 0.2s;
-}
-
-.review-card.approved { border-color: #2d5a27; background: #1a2a18; }
-.review-card.rejected { border-color: #5a2727; background: #2a1818; }
-.review-card.resolved { opacity: 0.6; }
-.track-info { margin-bottom: 8px; }
-.title { font-weight: 600; font-size: 1rem; margin-bottom: 2px; }
-.title a { color: inherit; text-decoration: none; }
-.title a:hover { text-decoration: underline; }
-.artist { font-size: 0.875rem; color: #888; }
-.matches { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
-.match { font-size: 0.75rem; background: #2a2a2a; padding: 2px 6px; border-radius: 4px; color: #aaa; }
-.badge { display: inline-block; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; font-weight: 500; }
-.badge.resolved { background: #1a3a1a; color: #6d9; }
-.actions { display: flex; gap: 8px; margin-top: 10px; }
-.actions button { flex: 1; padding: 10px; border: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: opacity 0.2s; }
-.btn-approve { background: #2d5a27; color: #fff; }
-.btn-reject { background: #5a2727; color: #fff; }
-.actions button:active { opacity: 0.8; }
-
+/* submit bar */
 .submit-bar {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 12px 16px;
-    background: #111;
-    border-top: 1px solid #333;
+    padding: 16px 24px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-subtle);
 }
-
-.btn-submit {
+.submit-bar .btn {
     width: 100%;
-    max-width: 600px;
+    max-width: 900px;
     margin: 0 auto;
     display: block;
     padding: 14px;
-    background: #4a9eff;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
 }
 
-.btn-submit:disabled { background: #333; color: #666; cursor: not-allowed; }
-.empty { text-align: center; padding: 40px 20px; color: #666; }
-.resolved-section { margin-top: 20px; border-top: 1px solid #333; padding-top: 16px; }
-.resolved-section summary { cursor: pointer; color: #888; font-size: 0.875rem; margin-bottom: 12px; }
+/* resolved section */
+.resolved-section {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-subtle);
+}
+.resolved-section summary {
+    cursor: pointer;
+    color: var(--text-tertiary);
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+}
 "#;

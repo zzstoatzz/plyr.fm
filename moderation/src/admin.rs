@@ -380,7 +380,7 @@ pub async fn create_batch(
     db.create_batch(&id, &uris, request.created_by.as_deref())
         .await?;
 
-    let url = format!("/review/{}", id);
+    let url = format!("/admin/review/{}", id);
 
     Ok(Json(CreateBatchResponse { id, url, flag_count }))
 }
