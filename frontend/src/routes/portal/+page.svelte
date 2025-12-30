@@ -1262,28 +1262,8 @@
 		font-size: var(--text-sm);
 	}
 
-	input[type='text'] {
-		width: 100%;
-		padding: 0.6rem 0.75rem;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		color: var(--text-primary);
-		font-size: var(--text-base);
-		font-family: inherit;
-		transition: all 0.15s;
-	}
-
-	input[type='text']:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-
-	input[type='text']:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
+	input[type='text'],
+	input[type='url'],
 	textarea {
 		width: 100%;
 		padding: 0.6rem 0.75rem;
@@ -1294,18 +1274,25 @@
 		font-size: var(--text-base);
 		font-family: inherit;
 		transition: all 0.15s;
-		resize: vertical;
-		min-height: 80px;
 	}
 
+	input[type='text']:focus,
+	input[type='url']:focus,
 	textarea:focus {
 		outline: none;
 		border-color: var(--accent);
 	}
 
+	input[type='text']:disabled,
+	input[type='url']:disabled,
 	textarea:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	textarea {
+		resize: vertical;
+		min-height: 80px;
 	}
 
 	.hint {
