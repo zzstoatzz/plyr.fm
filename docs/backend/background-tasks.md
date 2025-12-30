@@ -71,20 +71,20 @@ DOCKET_URL=redis://localhost:6379 just backend run
 
 ### production/staging
 
-Redis instances are provisioned via Upstash (managed Redis):
+Redis instances are self-hosted on Fly.io (redis:7-alpine):
 
-| environment | instance | region |
-|-------------|----------|--------|
-| production | `plyr-redis-prd` | us-east-1 (near fly.io) |
-| staging | `plyr-redis-stg` | us-east-1 |
+| environment | fly app | region |
+|-------------|---------|--------|
+| production | `plyr-redis` | iad |
+| staging | `plyr-redis-stg` | iad |
 
 set `DOCKET_URL` in fly.io secrets:
 ```bash
-flyctl secrets set DOCKET_URL=rediss://default:xxx@xxx.upstash.io:6379 -a relay-api
-flyctl secrets set DOCKET_URL=rediss://default:xxx@xxx.upstash.io:6379 -a relay-api-staging
+flyctl secrets set DOCKET_URL=redis://plyr-redis.internal:6379 -a relay-api
+flyctl secrets set DOCKET_URL=redis://plyr-redis-stg.internal:6379 -a relay-api-staging
 ```
 
-note: use `rediss://` (with double 's') for TLS connections to Upstash.
+note: uses Fly internal networking (`.internal` domain), no TLS needed within private network.
 
 ## usage
 
@@ -134,16 +134,11 @@ async def schedule_my_task(arg1: str, arg2: int) -> None:
 
 ## costs
 
-**Upstash pricing** (pay-per-request):
-- free tier: 10k commands/day
-- pro: $0.2 per 100k commands + $0.25/GB storage
+**self-hosted Redis on Fly.io** (fixed monthly):
+- ~$2/month per instance (256MB shared-cpu VM)
+- ~$4/month total for prod + staging
 
-for plyr.fm's volume (~100 uploads/day), this stays well within free tier or costs $0-5/mo.
-
-**tips to avoid surprise bills**:
-- use **regional** (not global) replication
-- set **max data limit** (256MB is plenty for a task queue)
-- monitor usage in Upstash dashboard
+this replaced Upstash pay-per-command pricing which was costing ~$75/month at scale (37M commands/month).
 
 ## fallback behavior
 
