@@ -253,7 +253,10 @@ async def run_loop(
 
             if not dry_run:
                 batch = await mod.create_batch(human_uris, created_by="moderation_loop")
-                msg = f"{get_header(env)} {batch['flag_count']} need review:\n{batch['url']}"
+                full_url = f"{mod.base_url.rstrip('/')}{batch['url']}"
+                msg = (
+                    f"{get_header(env)} {batch['flag_count']} need review:\n{full_url}"
+                )
                 await dm.send(msg)
                 console.print(f"[green]sent batch {batch['id']}[/green]")
             else:
