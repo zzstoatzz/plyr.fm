@@ -106,10 +106,12 @@
 		}
 
 		try {
-			await loadMyTracks();
-			await loadArtistProfile();
-			await loadMyAlbums();
-			await loadMyPlaylists();
+			await Promise.all([
+				loadMyTracks(),
+				loadArtistProfile(),
+				loadMyAlbums(),
+				loadMyPlaylists()
+			]);
 		} catch (_e) {
 			console.error('error loading portal data:', _e);
 			error = 'failed to load portal data';
