@@ -196,7 +196,13 @@ fn render_review_page(batch_id: &str, flags: &[FlaggedTrack], status: &str) -> S
             <div class="batch-info">{} pending {}</div>
         </header>
 
-        <form id="review-form" class="review-form">
+        <div class="auth-section" id="auth-section">
+            <input type="password" id="auth-token" placeholder="auth token"
+                   onkeyup="if(event.key==='Enter')authenticate()">
+            <button class="btn-submit" onclick="authenticate()">authenticate</button>
+        </div>
+
+        <form id="review-form" class="review-form" style="display: none;">
             <div class="flags-list">
                 {}
             </div>
@@ -214,9 +220,33 @@ fn render_review_page(batch_id: &str, flags: &[FlaggedTrack], status: &str) -> S
     <script>
         const form = document.getElementById('review-form');
         const submitBtn = document.getElementById('submit-btn');
+        const authSection = document.getElementById('auth-section');
         const batchId = '{}';
 
+        let currentToken = '';
         const decisions = {{}};
+
+        function authenticate() {{
+            const token = document.getElementById('auth-token').value;
+            if (token && token !== '••••••••') {{
+                localStorage.setItem('mod_token', token);
+                currentToken = token;
+                showReviewForm();
+            }}
+        }}
+
+        function showReviewForm() {{
+            authSection.style.display = 'none';
+            form.style.display = 'block';
+        }}
+
+        // Check for saved token on load
+        const savedToken = localStorage.getItem('mod_token');
+        if (savedToken) {{
+            currentToken = savedToken;
+            document.getElementById('auth-token').value = '••••••••';
+            showReviewForm();
+        }}
 
         function updateSubmitBtn() {{
             const count = Object.keys(decisions).length;
@@ -242,11 +272,24 @@ fn render_review_page(batch_id: &str, flags: &[FlaggedTrack], status: &str) -> S
             try {{
                 const response = await fetch(`/review/${{batchId}}/submit`, {{
                     method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
+                    headers: {{
+                        'Content-Type': 'application/json',
+                        'X-Moderation-Key': currentToken
+                    }},
                     body: JSON.stringify({{
                         decisions: Object.entries(decisions).map(([uri, decision]) => ({{ uri, decision }}))
                     }})
                 }});
+
+                if (response.status === 401) {{
+                    localStorage.removeItem('mod_token');
+                    currentToken = '';
+                    authSection.style.display = 'flex';
+                    form.style.display = 'none';
+                    document.getElementById('auth-token').value = '';
+                    alert('invalid token');
+                    return;
+                }}
 
                 if (response.ok) {{
                     const result = await response.json();
@@ -393,6 +436,27 @@ header {
 h1 { font-size: 1.25rem; font-weight: 600; color: #fff; }
 .batch-info { font-size: 0.875rem; color: #888; }
 .status-badge { font-size: 0.7rem; background: #1a3a1a; color: #6d9; padding: 2px 6px; border-radius: 4px; margin-left: 8px; }
+
+.auth-section {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+.auth-section input[type="password"] {
+    flex: 1;
+    padding: 10px 12px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.875rem;
+}
+.auth-section input:focus {
+    outline: none;
+    border-color: #4a9eff;
+}
+
 .flags-list { display: flex; flex-direction: column; gap: 12px; }
 
 .review-card {

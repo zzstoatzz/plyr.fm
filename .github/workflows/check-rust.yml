@@ -11,43 +11,87 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      moderation: ${{ steps.filter.outputs.moderation }}
+      transcoder: ${{ steps.filter.outputs.transcoder }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            moderation:
+              - 'moderation/**'
+              - '.github/workflows/check-rust.yml'
+            transcoder:
+              - 'transcoder/**'
+              - '.github/workflows/check-rust.yml'
+
   check:
     name: cargo check
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: changes
 
     strategy:
+      fail-fast: false
       matrix:
-        service: [moderation, transcoder]
+        include:
+          - service: moderation
+            changed: ${{ needs.changes.outputs.moderation }}
+          - service: transcoder
+            changed: ${{ needs.changes.outputs.transcoder }}
 
     steps:
       - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
 
       - name: install rust toolchain
+        if: matrix.changed == 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: cache cargo
+        if: matrix.changed == 'true'
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ matrix.service }}
 
       - name: cargo check
+        if: matrix.changed == 'true'
         working-directory: ${{ matrix.service }}
         run: cargo check --release
+
+      - name: skip (no changes)
+        if: matrix.changed != 'true'
+        run: echo "skipping ${{ matrix.service }} - no changes"
 
   docker-build:
     name: docker build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: check
+    needs: [changes, check]
 
     strategy:
+      fail-fast: false
       matrix:
-        service: [moderation, transcoder]
+        include:
+          - service: moderation
+            changed: ${{ needs.changes.outputs.moderation }}
+          - service: transcoder
+            changed: ${{ needs.changes.outputs.transcoder }}
 
     steps:
       - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
 
       - name: build docker image
+        if: matrix.changed == 'true'
         working-directory: ${{ matrix.service }}
         run: docker build -t ${{ matrix.service }}:ci-test .
+
+      - name: skip (no changes)
+        if: matrix.changed != 'true'
+        run: echo "skipping ${{ matrix.service }} - no changes"
