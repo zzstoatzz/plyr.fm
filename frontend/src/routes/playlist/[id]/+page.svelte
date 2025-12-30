@@ -607,6 +607,13 @@
 
 	// check if user owns this playlist
 	const isOwner = $derived(auth.user?.did === playlist.owner_did);
+
+	// check if this playlist is currently playing
+	const isPlaylistPlaying = $derived(
+		player.currentTrack !== null &&
+		!player.paused &&
+		tracks.some(t => t.id === player.currentTrack?.id)
+	);
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -865,16 +872,22 @@
 		</div>
 
 		<div class="playlist-actions">
-			<button class="play-button" onclick={playNow}>
-				<svg
-					width="20"
-					height="20"
-					viewBox="0 0 24 24"
-					fill="currentColor"
-				>
-					<path d="M8 5v14l11-7z" />
-				</svg>
-				play now
+			<button
+				class="play-button"
+				class:is-playing={isPlaylistPlaying}
+				onclick={() => isPlaylistPlaying ? player.togglePlayPause() : playNow()}
+			>
+				{#if isPlaylistPlaying}
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+						<rect x="6" y="4" width="4" height="16" />
+						<rect x="14" y="4" width="4" height="16" />
+					</svg>
+				{:else}
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M8 5v14l11-7z" />
+					</svg>
+					play now
+				{/if}
 			</button>
 			<button class="queue-button" onclick={addToQueue}>
 				<svg
@@ -1579,6 +1592,10 @@
 
 	.play-button:hover {
 		transform: scale(1.05);
+	}
+
+	.play-button.is-playing {
+		animation: ethereal-glow 3s ease-in-out infinite;
 	}
 
 	.queue-button {
