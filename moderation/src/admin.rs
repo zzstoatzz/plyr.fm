@@ -465,16 +465,25 @@ fn render_flags_list(tracks: &[FlaggedTrack], current_filter: &str) -> String {
     let resolved_active = if current_filter == "resolved" { " active" } else { "" };
     let all_active = if current_filter == "all" { " active" } else { "" };
 
+    let count = tracks.len();
+    let count_label = match current_filter {
+        "pending" => format!("{} pending", count),
+        "resolved" => format!("{} resolved", count),
+        _ => format!("{} total", count),
+    };
+
     let filter_buttons = format!(
         "<div class=\"filter-row\">\
             <span class=\"filter-label\">show:</span>\
             <button type=\"button\" class=\"filter-btn{}\" hx-get=\"/admin/flags-html?filter=pending\" hx-target=\"#flags-list\">pending</button>\
             <button type=\"button\" class=\"filter-btn{}\" hx-get=\"/admin/flags-html?filter=resolved\" hx-target=\"#flags-list\">resolved</button>\
             <button type=\"button\" class=\"filter-btn{}\" hx-get=\"/admin/flags-html?filter=all\" hx-target=\"#flags-list\">all</button>\
+            <span class=\"filter-count\">{}</span>\
         </div>",
         pending_active,
         resolved_active,
         all_active,
+        count_label,
     );
 
     if tracks.is_empty() {

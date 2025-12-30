@@ -165,6 +165,12 @@ h1 {
     border-color: var(--accent);
 }
 
+.filter-count {
+    margin-left: auto;
+    color: var(--text-tertiary);
+    font-size: 0.85rem;
+}
+
 .header-row h2 {
     margin: 0;
     font-size: 1.1rem;
