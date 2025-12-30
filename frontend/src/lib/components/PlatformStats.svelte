@@ -182,7 +182,7 @@
 		gap: 0.5rem;
 		margin-bottom: 0.75rem;
 		color: var(--text-secondary);
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -229,7 +229,7 @@
 	}
 
 	.stats-menu-value {
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		color: var(--text-primary);
 		font-variant-numeric: tabular-nums;

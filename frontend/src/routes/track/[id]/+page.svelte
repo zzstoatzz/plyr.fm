@@ -769,12 +769,12 @@ $effect(() => {
 		gap: 0.75rem;
 		flex-wrap: wrap;
 		color: var(--text-secondary);
-		font-size: 1.1rem;
+		font-size: var(--text-xl);
 	}
 
 	.separator {
 		color: var(--text-muted);
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 	}
 
 	.artist-link {
@@ -855,7 +855,7 @@ $effect(() => {
 
 	.track-stats {
 		color: var(--text-tertiary);
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -863,7 +863,7 @@ $effect(() => {
 	}
 
 	.track-stats .separator {
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 	}
 
 	.track-tags {
@@ -879,7 +879,7 @@ $effect(() => {
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		color: var(--accent-hover);
 		border-radius: var(--radius-sm);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-weight: 500;
 		text-decoration: none;
 		transition: all 0.15s;
@@ -915,7 +915,7 @@ $effect(() => {
 		color: var(--bg-primary);
 		border: none;
 		border-radius: var(--radius-2xl);
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		font-family: inherit;
 		cursor: pointer;
@@ -940,7 +940,7 @@ $effect(() => {
 		color: var(--text-primary);
 		border: 1px solid var(--border-emphasis);
 		border-radius: var(--radius-2xl);
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		font-family: inherit;
 		cursor: pointer;
@@ -984,16 +984,16 @@ $effect(() => {
 		}
 
 		.track-title {
-			font-size: 1.5rem;
+			font-size: var(--text-3xl);
 		}
 
 		.track-metadata {
-			font-size: 0.9rem;
+			font-size: var(--text-base);
 			gap: 0.5rem;
 		}
 
 		.track-stats {
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.track-actions {
@@ -1010,7 +1010,7 @@ $effect(() => {
 			min-width: calc(50% - 0.25rem);
 			justify-content: center;
 			padding: 0.6rem 1rem;
-			font-size: 0.9rem;
+			font-size: var(--text-base);
 		}
 
 		.btn-play svg {
@@ -1023,7 +1023,7 @@ $effect(() => {
 			min-width: calc(50% - 0.25rem);
 			justify-content: center;
 			padding: 0.6rem 1rem;
-			font-size: 0.9rem;
+			font-size: var(--text-base);
 		}
 
 		.btn-queue svg {
@@ -1042,7 +1042,7 @@ $effect(() => {
 	}
 
 	.comments-title {
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-weight: 600;
 		color: var(--text-primary);
 		margin: 0 0 0.75rem 0;
@@ -1069,7 +1069,7 @@ $effect(() => {
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-base);
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 	}
 
@@ -1088,7 +1088,7 @@ $effect(() => {
 		color: var(--bg-primary);
 		border: none;
 		border-radius: var(--radius-base);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		font-family: inherit;
 		cursor: pointer;
@@ -1106,7 +1106,7 @@ $effect(() => {
 
 	.login-prompt {
 		color: var(--text-tertiary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		margin-bottom: 1rem;
 	}
 
@@ -1121,7 +1121,7 @@ $effect(() => {
 
 	.no-comments {
 		color: var(--text-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		text-align: center;
 		padding: 1rem;
 	}
@@ -1169,7 +1169,7 @@ $effect(() => {
 	}
 
 	.comment-timestamp {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		font-weight: 600;
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -1207,7 +1207,7 @@ $effect(() => {
 	}
 
 	.comment-time {
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		color: var(--text-muted);
 	}
 
@@ -1226,7 +1226,7 @@ $effect(() => {
 	}
 
 	.comment-author {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-weight: 500;
 		color: var(--text-secondary);
 		text-decoration: none;
@@ -1237,7 +1237,7 @@ $effect(() => {
 	}
 
 	.comment-text {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-primary);
 		margin: 0;
 		line-height: 1.4;
@@ -1277,7 +1277,7 @@ $effect(() => {
 		border: none;
 		padding: 0;
 		color: var(--text-muted);
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		cursor: pointer;
 		transition: color 0.15s;
 		font-family: inherit;
@@ -1312,7 +1312,7 @@ $effect(() => {
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 	}
 
@@ -1329,7 +1329,7 @@ $effect(() => {
 
 	.edit-form-btn {
 		padding: 0.25rem 0.6rem;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		font-family: inherit;
 		border-radius: var(--radius-sm);
 		cursor: pointer;
@@ -1443,7 +1443,7 @@ $effect(() => {
 		}
 
 		.comment-timestamp {
-			font-size: 0.75rem;
+			font-size: var(--text-xs);
 			padding: 0.15rem 0.4rem;
 		}
 	}

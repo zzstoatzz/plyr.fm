@@ -213,7 +213,7 @@
 	}
 
 	.section-header h2 {
-		font-size: 1.5rem;
+		font-size: var(--text-3xl);
 		margin: 0;
 		color: var(--warning);
 	}
@@ -225,7 +225,7 @@
 		border-radius: var(--radius-sm);
 		color: var(--warning);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -249,7 +249,7 @@
 		color: var(--warning);
 		padding: 0.25rem 0.6rem;
 		border-radius: var(--radius-lg);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-weight: 600;
 	}
 
@@ -280,7 +280,7 @@
 	}
 
 	.warning-icon {
-		font-size: 1.25rem;
+		font-size: var(--text-2xl);
 		flex-shrink: 0;
 	}
 
@@ -291,19 +291,19 @@
 
 	.track-title {
 		font-weight: 600;
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		margin-bottom: 0.25rem;
 		color: var(--text-primary);
 	}
 
 	.track-meta {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-secondary);
 		margin-bottom: 0.5rem;
 	}
 
 	.issue-description {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--warning);
 	}
 
@@ -314,7 +314,7 @@
 		border-radius: var(--radius-sm);
 		color: var(--warning);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -339,7 +339,7 @@
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-base);
 		padding: 1rem;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-secondary);
 	}
 

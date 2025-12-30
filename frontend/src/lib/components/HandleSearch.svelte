@@ -181,7 +181,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-family: inherit;
 		transition: all 0.2s;
 	}
@@ -201,7 +201,7 @@
 		right: 0.75rem;
 		top: 50%;
 		transform: translateY(-50%);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 
@@ -299,7 +299,7 @@
 	}
 
 	.result-handle {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -322,7 +322,7 @@
 		border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border-subtle));
 		border-radius: var(--radius-xl);
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	.chip-avatar {
@@ -365,7 +365,7 @@
 
 	.max-features-message {
 		margin-top: 0.5rem;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--warning);
 	}
 
@@ -376,7 +376,7 @@
 		border: 1px solid color-mix(in srgb, var(--warning) 20%, var(--border-subtle));
 		border-radius: var(--radius-sm);
 		color: var(--warning);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		text-align: center;
 	}
 
@@ -401,7 +401,7 @@
 
 		.selected-artist-chip {
 			padding: 0.4rem 0.6rem;
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.chip-avatar {

@@ -435,7 +435,7 @@
 		display: block;
 		color: var(--text-secondary);
 		margin-bottom: 0.5rem;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	input[type="text"] {
@@ -445,7 +445,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-family: inherit;
 		transition: all 0.2s;
 	}
@@ -462,20 +462,20 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 	}
 
 	.format-hint {
 		margin-top: 0.25rem;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 	}
 
 	.file-info {
 		margin-top: 0.5rem;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 
@@ -486,7 +486,7 @@
 		color: var(--text-primary);
 		border: none;
 		border-radius: var(--radius-sm);
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-weight: 600;
 		font-family: inherit;
 		cursor: pointer;
@@ -542,7 +542,7 @@
 	}
 
 	.checkbox-text {
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		color: var(--text-primary);
 		line-height: 1.4;
 	}
@@ -550,7 +550,7 @@
 	.attestation-note {
 		margin-top: 0.75rem;
 		margin-left: 2rem;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		line-height: 1.4;
 	}
@@ -584,7 +584,7 @@
 	.gating-note {
 		margin-top: 0.5rem;
 		margin-left: 2rem;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		line-height: 1.4;
 	}
@@ -611,7 +611,7 @@
 	}
 
 	.gating-disabled-text {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		line-height: 1.4;
 	}
 
@@ -638,7 +638,7 @@
 		}
 
 		.section-header h2 {
-			font-size: 1.25rem;
+			font-size: var(--text-2xl);
 		}
 	}
 </style>

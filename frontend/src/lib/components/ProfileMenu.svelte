@@ -326,7 +326,7 @@
 	}
 
 	.menu-header span {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		color: var(--text-primary);
 		text-transform: uppercase;
@@ -414,13 +414,13 @@
 	}
 
 	.item-title {
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		color: var(--text-primary);
 	}
 
 	.item-subtitle {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -443,7 +443,7 @@
 		border-radius: var(--radius-base);
 		color: var(--text-secondary);
 		font-family: inherit;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		cursor: pointer;
 		transition: all 0.15s;
 		-webkit-tap-highlight-color: transparent;
@@ -469,7 +469,7 @@
 
 	.settings-section h3 {
 		margin: 0;
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--text-tertiary);
@@ -518,7 +518,7 @@
 	}
 
 	.theme-btn span {
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
@@ -583,7 +583,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		cursor: pointer;
 		padding: 0.5rem 0;
 	}
@@ -635,7 +635,7 @@
 		border-top: 1px solid var(--border-subtle);
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		transition: color 0.15s;
 	}
 

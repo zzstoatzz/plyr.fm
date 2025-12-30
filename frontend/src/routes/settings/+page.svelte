@@ -788,13 +788,13 @@
 
 	.token-overlay-content h2 {
 		margin: 0 0 0.75rem;
-		font-size: 1.5rem;
+		font-size: var(--text-3xl);
 		color: var(--text-primary);
 	}
 
 	.token-overlay-warning {
 		color: var(--warning);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		margin: 0 0 1.5rem;
 		line-height: 1.5;
 	}
@@ -811,7 +811,7 @@
 
 	.token-overlay-display code {
 		flex: 1;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		word-break: break-all;
 		color: var(--accent);
 		text-align: left;
@@ -825,7 +825,7 @@
 		border-radius: var(--radius-base);
 		color: var(--text-primary);
 		font-family: inherit;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-weight: 600;
 		cursor: pointer;
 		white-space: nowrap;
@@ -837,7 +837,7 @@
 	}
 
 	.token-overlay-hint {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		margin: 0 0 1.5rem;
 	}
@@ -858,7 +858,7 @@
 		border-radius: var(--radius-md);
 		color: var(--text-secondary);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		cursor: pointer;
 		transition: all 0.15s;
 	}
@@ -901,7 +901,7 @@
 	.portal-link {
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		padding: 0.4rem 0.75rem;
 		background: var(--bg-tertiary);
 		border-radius: var(--radius-base);
@@ -919,7 +919,7 @@
 	}
 
 	.settings-section h2 {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--text-tertiary);
@@ -957,14 +957,14 @@
 
 	.setting-info h3 {
 		margin: 0 0 0.25rem;
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		color: var(--text-primary);
 	}
 
 	.setting-info p {
 		margin: 0;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		line-height: 1.4;
 	}
@@ -1087,7 +1087,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-base);
 		color: var(--text-primary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-family: inherit;
 	}
 
@@ -1104,7 +1104,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-secondary);
 		cursor: pointer;
 	}
@@ -1169,7 +1169,7 @@
 		border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
 		border-radius: var(--radius-base);
 		margin-top: 0.75rem;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--warning);
 	}
 
@@ -1191,7 +1191,7 @@
 	/* developer tokens */
 	.loading-tokens {
 		color: var(--text-tertiary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.existing-tokens {
@@ -1199,7 +1199,7 @@
 	}
 
 	.tokens-header {
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--text-tertiary);
@@ -1233,11 +1233,11 @@
 	.token-name {
 		font-weight: 500;
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	.token-meta {
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 	}
 
@@ -1248,7 +1248,7 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-secondary);
 		font-family: inherit;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		cursor: pointer;
 		transition: all 0.15s;
 		white-space: nowrap;
@@ -1277,7 +1277,7 @@
 
 	.token-value {
 		flex: 1;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		word-break: break-all;
 		color: var(--accent);
 	}
@@ -1290,7 +1290,7 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-secondary);
 		font-family: inherit;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		cursor: pointer;
 		transition: all 0.15s;
 	}
@@ -1303,7 +1303,7 @@
 
 	.token-warning {
 		margin-top: 0.5rem;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--warning);
 	}
 
@@ -1322,7 +1322,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-base);
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 	}
 
@@ -1335,7 +1335,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-secondary);
 	}
 
@@ -1345,7 +1345,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-base);
 		color: var(--text-primary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-family: inherit;
 		cursor: pointer;
 	}
@@ -1362,7 +1362,7 @@
 		border-radius: var(--radius-base);
 		color: var(--text-primary);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.15s;

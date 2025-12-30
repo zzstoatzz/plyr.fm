@@ -310,7 +310,7 @@
 	}
 
 	.time {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		min-width: 45px;
 		font-variant-numeric: tabular-nums;
@@ -493,7 +493,7 @@
 		}
 
 		.time {
-			font-size: 0.75rem;
+			font-size: var(--text-xs);
 			min-width: 38px;
 		}
 

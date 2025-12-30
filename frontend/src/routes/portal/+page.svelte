@@ -1142,7 +1142,7 @@
 	.view-profile-link {
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		padding: 0.35rem 0.6rem;
 		background: var(--bg-tertiary);
 		border-radius: var(--radius-sm);
@@ -1160,7 +1160,7 @@
 	.settings-link {
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		padding: 0.35rem 0.6rem;
 		background: var(--bg-tertiary);
 		border-radius: var(--radius-sm);
@@ -1219,13 +1219,13 @@
 	.upload-card-title {
 		display: block;
 		font-weight: 600;
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		color: var(--text-primary);
 	}
 
 	.upload-card-subtitle {
 		display: block;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 	}
 
@@ -1259,7 +1259,7 @@
 		display: block;
 		color: var(--text-secondary);
 		margin-bottom: 0.4rem;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	input[type='text'] {
@@ -1269,7 +1269,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		transition: all 0.15s;
 	}
@@ -1291,7 +1291,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		transition: all 0.15s;
 		resize: vertical;
@@ -1310,7 +1310,7 @@
 
 	.hint {
 		margin-top: 0.35rem;
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		color: var(--text-muted);
 	}
 
@@ -1328,7 +1328,7 @@
 		display: block;
 		color: var(--text-secondary);
 		margin-bottom: 0.6rem;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.support-options {
@@ -1368,20 +1368,20 @@
 	}
 
 	.support-option span {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-primary);
 	}
 
 	.support-status {
 		margin-left: auto;
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 	}
 
 	.support-setup-link,
 	.support-status-link {
 		margin-left: auto;
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		text-decoration: none;
 	}
 
@@ -1414,7 +1414,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		transition: all 0.15s;
 		margin-bottom: 0.5rem;
@@ -1452,7 +1452,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 	}
@@ -1464,7 +1464,7 @@
 
 	.file-info {
 		margin-top: 0.5rem;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 
@@ -1475,7 +1475,7 @@
 		color: var(--text-primary);
 		border: none;
 		border-radius: var(--radius-sm);
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-weight: 600;
 		font-family: inherit;
 		cursor: pointer;
@@ -1586,7 +1586,7 @@
 	}
 
 	.track-view-link {
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 		color: var(--text-muted);
 		text-decoration: none;
 		transition: color 0.15s;
@@ -1633,7 +1633,7 @@
 	}
 
 	.edit-label {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-secondary);
 	}
 
@@ -1642,7 +1642,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		cursor: pointer;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-primary);
 	}
 
@@ -1653,7 +1653,7 @@
 	}
 
 	.field-hint {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		margin-top: 0.25rem;
 	}
@@ -1669,7 +1669,7 @@
 
 	.track-title {
 		font-weight: 600;
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		margin-bottom: 0.25rem;
 		color: var(--text-primary);
 		display: flex;
@@ -1705,7 +1705,7 @@
 	}
 
 	.track-meta {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-secondary);
 		margin-bottom: 0.25rem;
 		display: flex;
@@ -1774,7 +1774,7 @@
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		color: var(--accent-hover);
 		border-radius: var(--radius-sm);
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		font-weight: 500;
 		text-decoration: none;
 		transition: all 0.15s;
@@ -1786,7 +1786,7 @@
 	}
 
 	.track-date {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 
@@ -1854,7 +1854,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 	}
 
@@ -1878,7 +1878,7 @@
 
 	.current-image-label {
 		color: var(--text-tertiary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.edit-input:focus {
@@ -1949,7 +1949,7 @@
 	}
 
 	.album-title {
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-weight: 600;
 		color: var(--text-primary);
 		margin: 0 0 0.25rem 0;
@@ -1959,7 +1959,7 @@
 	}
 
 	.album-stats {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		margin: 0;
 	}
@@ -1977,7 +1977,7 @@
 	.view-playlists-link {
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		padding: 0.35rem 0.6rem;
 		background: var(--bg-tertiary);
 		border-radius: var(--radius-sm);
@@ -2040,7 +2040,7 @@
 	}
 
 	.playlist-title {
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-weight: 600;
 		color: var(--text-primary);
 		margin: 0 0 0.25rem 0;
@@ -2050,7 +2050,7 @@
 	}
 
 	.playlist-stats {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		margin: 0;
 	}
@@ -2087,14 +2087,14 @@
 	}
 
 	.control-info h3 {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		margin: 0 0 0.15rem 0;
 		color: var(--text-primary);
 	}
 
 	.control-description {
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 		margin: 0;
 		line-height: 1.4;
@@ -2106,7 +2106,7 @@
 		color: var(--text-primary);
 		border: none;
 		border-radius: var(--radius-base);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -2152,7 +2152,7 @@
 		border: 1px solid var(--error);
 		border-radius: var(--radius-base);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -2174,7 +2174,7 @@
 	.delete-warning {
 		margin: 0 0 1rem;
 		color: var(--error);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		line-height: 1.5;
 	}
 
@@ -2189,7 +2189,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-primary);
 		cursor: pointer;
 	}
@@ -2202,7 +2202,7 @@
 
 	.atproto-note {
 		margin: 0.5rem 0 0;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 	}
 
@@ -2220,13 +2220,13 @@
 		padding: 0.5rem;
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
 		border-radius: var(--radius-sm);
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--warning);
 	}
 
 	.confirm-prompt {
 		margin: 0 0 0.5rem;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-secondary);
 	}
 
@@ -2237,7 +2237,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-base);
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		margin-bottom: 1rem;
 	}
@@ -2260,7 +2260,7 @@
 		border-radius: var(--radius-base);
 		color: var(--text-secondary);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		cursor: pointer;
 		transition: all 0.15s;
 	}
@@ -2282,7 +2282,7 @@
 		border-radius: var(--radius-base);
 		color: white;
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -2308,7 +2308,7 @@
 		}
 
 		.portal-header h2 {
-			font-size: 1.25rem;
+			font-size: var(--text-2xl);
 		}
 
 		.profile-section h2,
@@ -2316,7 +2316,7 @@
 		.albums-section h2,
 		.playlists-section h2,
 		.data-section h2 {
-			font-size: 1.1rem;
+			font-size: var(--text-xl);
 		}
 
 		.section-header {
@@ -2324,7 +2324,7 @@
 		}
 
 		.view-profile-link {
-			font-size: 0.75rem;
+			font-size: var(--text-xs);
 			padding: 0.3rem 0.5rem;
 		}
 
@@ -2337,7 +2337,7 @@
 		}
 
 		label {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 			margin-bottom: 0.3rem;
 		}
 
@@ -2345,7 +2345,7 @@
 		input[type='url'],
 		textarea {
 			padding: 0.5rem 0.6rem;
-			font-size: 0.9rem;
+			font-size: var(--text-base);
 		}
 
 		textarea {
@@ -2353,7 +2353,7 @@
 		}
 
 		.hint {
-			font-size: 0.7rem;
+			font-size: var(--text-xs);
 		}
 
 		.avatar-preview img {
@@ -2363,7 +2363,7 @@
 
 		button[type="submit"] {
 			padding: 0.6rem;
-			font-size: 0.9rem;
+			font-size: var(--text-base);
 		}
 
 		/* upload card mobile */
@@ -2383,11 +2383,11 @@
 		}
 
 		.upload-card-title {
-			font-size: 0.9rem;
+			font-size: var(--text-base);
 		}
 
 		.upload-card-subtitle {
-			font-size: 0.75rem;
+			font-size: var(--text-xs);
 		}
 
 		/* tracks mobile */
@@ -2421,15 +2421,15 @@
 		}
 
 		.track-title {
-			font-size: 0.9rem;
+			font-size: var(--text-base);
 		}
 
 		.track-meta {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 		}
 
 		.track-date {
-			font-size: 0.75rem;
+			font-size: var(--text-xs);
 		}
 
 		.track-actions {
@@ -2457,12 +2457,12 @@
 		}
 
 		.edit-label {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 		}
 
 		.edit-input {
 			padding: 0.45rem 0.5rem;
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.edit-actions {
@@ -2476,16 +2476,16 @@
 		}
 
 		.control-info h3 {
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.control-description {
-			font-size: 0.7rem;
+			font-size: var(--text-xs);
 		}
 
 		.export-btn {
 			padding: 0.5rem 0.85rem;
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 		}
 
 		/* albums mobile */
@@ -2500,7 +2500,7 @@
 		}
 
 		.album-title {
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		/* playlists mobile */
@@ -2515,15 +2515,15 @@
 		}
 
 		.playlist-title {
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.playlist-stats {
-			font-size: 0.75rem;
+			font-size: var(--text-xs);
 		}
 
 		.view-playlists-link {
-			font-size: 0.75rem;
+			font-size: var(--text-xs);
 			padding: 0.3rem 0.5rem;
 		}
 	}

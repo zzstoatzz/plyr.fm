@@ -147,14 +147,14 @@
 		align-items: center;
 		margin-bottom: 1rem;
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	.close-btn {
 		background: transparent;
 		border: none;
 		color: var(--text-secondary);
-		font-size: 1.5rem;
+		font-size: var(--text-3xl);
 		cursor: pointer;
 		padding: 0;
 		width: 24px;
@@ -198,7 +198,7 @@
 
 	.color-value {
 		font-family: monospace;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-secondary);
 	}
 
@@ -209,7 +209,7 @@
 	}
 
 	.presets-label {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 	}
 

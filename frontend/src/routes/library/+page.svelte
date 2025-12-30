@@ -264,7 +264,7 @@
 	}
 
 	.page-header p {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-tertiary);
 		margin: 0;
 	}
@@ -331,7 +331,7 @@
 	}
 
 	.collection-info h3 {
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-weight: 600;
 		color: var(--text-primary);
 		margin: 0 0 0.15rem 0;
@@ -341,7 +341,7 @@
 	}
 
 	.collection-info p {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		margin: 0;
 	}
@@ -370,7 +370,7 @@
 	}
 
 	.section-header h2 {
-		font-size: 1.1rem;
+		font-size: var(--text-xl);
 		font-weight: 600;
 		color: var(--text-primary);
 		margin: 0;
@@ -432,14 +432,14 @@
 	}
 
 	.empty-state p {
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-weight: 500;
 		color: var(--text-secondary);
 		margin: 0 0 0.25rem 0;
 	}
 
 	.empty-state span {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 
@@ -476,7 +476,7 @@
 	}
 
 	.modal-header h3 {
-		font-size: 1.1rem;
+		font-size: var(--text-xl);
 		font-weight: 600;
 		color: var(--text-primary);
 		margin: 0;
@@ -507,7 +507,7 @@
 
 	.modal-body label {
 		display: block;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-weight: 500;
 		color: var(--text-secondary);
 		margin-bottom: 0.5rem;
@@ -520,7 +520,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-md);
 		font-family: inherit;
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		color: var(--text-primary);
 		transition: border-color 0.15s;
 	}
@@ -536,7 +536,7 @@
 
 	.modal-body .error {
 		margin: 0.5rem 0 0 0;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: #ef4444;
 	}
 
@@ -552,7 +552,7 @@
 		padding: 0.625rem 1.25rem;
 		border-radius: var(--radius-md);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -596,7 +596,7 @@
 		}
 
 		.page-header h1 {
-			font-size: 1.5rem;
+			font-size: var(--text-3xl);
 		}
 
 		.collection-card {
@@ -609,16 +609,16 @@
 		}
 
 		.collection-info h3 {
-			font-size: 0.95rem;
+			font-size: var(--text-base);
 		}
 
 		.section-header h2 {
-			font-size: 1rem;
+			font-size: var(--text-lg);
 		}
 
 		.create-btn {
 			padding: 0.5rem 0.875rem;
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.empty-state {

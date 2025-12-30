@@ -249,7 +249,7 @@
 
 	.queue-header h2 {
 		margin: 0;
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		text-transform: uppercase;
 		letter-spacing: 0.12em;
 		color: var(--text-tertiary);
@@ -263,7 +263,7 @@
 
 	.clear-btn {
 		padding: 0.25rem 0.75rem;
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		font-family: inherit;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
@@ -290,7 +290,7 @@
 	}
 
 	.section-label {
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--text-tertiary);
@@ -316,7 +316,7 @@
 	}
 
 	.now-playing-card .track-artist {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-secondary);
 	}
 
@@ -344,14 +344,14 @@
 		justify-content: space-between;
 		align-items: center;
 		color: var(--text-tertiary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 	}
 
 	.section-header h3 {
 		margin: 0;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-weight: 600;
 		color: var(--text-secondary);
 		text-transform: uppercase;
@@ -449,7 +449,7 @@
 	}
 
 	.track-artist {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		white-space: nowrap;
 		overflow: hidden;
@@ -524,12 +524,12 @@
 
 	.empty-state p {
 		margin: 0.5rem 0 0.25rem;
-		font-size: 1.1rem;
+		font-size: var(--text-xl);
 		color: var(--text-secondary);
 	}
 
 	.empty-state span {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	.queue-tracks::-webkit-scrollbar {

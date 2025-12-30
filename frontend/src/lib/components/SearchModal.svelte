@@ -303,7 +303,7 @@
 		background: transparent;
 		border: none;
 		outline: none;
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-family: inherit;
 		color: var(--text-primary);
 	}
@@ -313,7 +313,7 @@
 	}
 
 	.search-shortcut {
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 		padding: 0.25rem 0.5rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
@@ -397,7 +397,7 @@
 		justify-content: center;
 		background: var(--bg-tertiary);
 		border-radius: var(--radius-md);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		flex-shrink: 0;
 		position: relative;
 		overflow: hidden;
@@ -441,7 +441,7 @@
 	}
 
 	.result-title {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		white-space: nowrap;
 		overflow: hidden;
@@ -449,7 +449,7 @@
 	}
 
 	.result-subtitle {
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		color: var(--text-secondary);
 		white-space: nowrap;
 		overflow: hidden;
@@ -471,7 +471,7 @@
 		padding: 2rem;
 		text-align: center;
 		color: var(--text-secondary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	.search-hints {
@@ -482,7 +482,7 @@
 	.search-hints p {
 		margin: 0 0 1rem 0;
 		color: var(--text-secondary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.hint-shortcuts {
@@ -490,7 +490,7 @@
 		justify-content: center;
 		gap: 1.5rem;
 		color: var(--text-muted);
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 	}
 
 	.hint-shortcuts span {
@@ -512,7 +512,7 @@
 		padding: 1rem;
 		text-align: center;
 		color: var(--error);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	/* mobile optimizations */
@@ -535,7 +535,7 @@
 		}
 
 		.search-input::placeholder {
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.search-results {

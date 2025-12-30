@@ -155,7 +155,7 @@
 	.error,
 	.empty {
 		color: var(--text-tertiary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		text-align: center;
 		padding: 0.5rem;
 	}
@@ -206,7 +206,7 @@
 		justify-content: center;
 		color: var(--text-tertiary);
 		font-weight: 600;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	.liker-info {
@@ -217,7 +217,7 @@
 	.display-name {
 		color: var(--text-primary);
 		font-weight: 500;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -225,7 +225,7 @@
 
 	.handle {
 		color: var(--text-tertiary);
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -233,7 +233,7 @@
 
 	.liked-time {
 		color: var(--text-muted);
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		flex-shrink: 0;
 	}
 

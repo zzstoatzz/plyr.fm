@@ -196,7 +196,7 @@
 		border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
 		color: var(--accent-hover);
 		border-radius: var(--radius-xl);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 	}
 
@@ -233,7 +233,7 @@
 		background: transparent;
 		border: none;
 		color: var(--text-primary);
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-family: inherit;
 		outline: none;
 	}
@@ -249,7 +249,7 @@
 
 	.spinner {
 		color: var(--text-muted);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		margin-left: auto;
 	}
 
@@ -317,7 +317,7 @@
 	}
 
 	.tag-count {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 	}
 
@@ -332,7 +332,7 @@
 
 		.tag-chip {
 			padding: 0.3rem 0.5rem;
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 	}
 </style>

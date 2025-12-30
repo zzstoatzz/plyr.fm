@@ -72,7 +72,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		padding: 0.25rem 0.5rem;
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 		white-space: nowrap;
 		opacity: 0;
@@ -89,7 +89,7 @@
 		transform: translate(-50%, -50%);
 		margin-bottom: 0;
 		padding: 0.5rem 0.75rem;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 	}
 
 	.sensitive-wrapper.blur:hover .sensitive-tooltip {

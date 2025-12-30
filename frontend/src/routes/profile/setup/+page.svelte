@@ -248,7 +248,7 @@
 		display: block;
 		color: var(--text-secondary);
 		margin-bottom: 0.5rem;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 	}
 
@@ -261,7 +261,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-family: inherit;
 		transition: all 0.2s;
 	}
@@ -287,7 +287,7 @@
 
 	.hint {
 		margin-top: 0.5rem;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 	}
 
@@ -298,7 +298,7 @@
 		color: white;
 		border: none;
 		border-radius: var(--radius-sm);
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.2s;

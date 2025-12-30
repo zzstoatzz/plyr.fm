@@ -865,7 +865,7 @@
 		justify-content: center;
 		gap: 0.5rem;
 		color: white;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		opacity: 0;
 		transition: opacity 0.2s;
 	}
@@ -893,7 +893,7 @@
 
 	.album-type {
 		text-transform: uppercase;
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		font-weight: 600;
 		letter-spacing: 0.1em;
 		color: var(--text-tertiary);
@@ -917,7 +917,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		color: var(--text-secondary);
 		text-shadow: var(--text-shadow, none);
 	}
@@ -936,7 +936,7 @@
 
 	.meta-separator {
 		color: var(--text-muted);
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 	}
 
 	.album-actions {
@@ -950,7 +950,7 @@
 		padding: 0.75rem 1.5rem;
 		border-radius: var(--radius-2xl);
 		font-weight: 600;
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -1000,7 +1000,7 @@
 	}
 
 	.section-heading {
-		font-size: 1.25rem;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 		color: var(--text-primary);
 		margin-bottom: 1rem;
@@ -1111,7 +1111,7 @@
 		}
 
 		.album-meta {
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.album-actions {
@@ -1143,7 +1143,7 @@
 		}
 
 		.album-meta {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 			flex-wrap: wrap;
 		}
 	}
@@ -1202,7 +1202,7 @@
 
 	.modal-header h3 {
 		margin: 0;
-		font-size: 1.25rem;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 		color: var(--text-primary);
 	}
@@ -1228,7 +1228,7 @@
 		padding: 0.625rem 1.25rem;
 		border-radius: var(--radius-md);
 		font-weight: 500;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;

@@ -186,7 +186,7 @@
 	}
 
 	.menu-header span {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		color: var(--text-primary);
 		text-transform: uppercase;
@@ -263,13 +263,13 @@
 	}
 
 	.link-title {
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		color: var(--text-primary);
 	}
 
 	.link-subtitle {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 	}
 

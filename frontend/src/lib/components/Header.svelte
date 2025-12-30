@@ -276,7 +276,7 @@
 		color: var(--text-secondary);
 		padding: 0.5rem 1rem;
 		border-radius: var(--radius-base);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -320,7 +320,7 @@
 	}
 
 	h1 {
-		font-size: 1.5rem;
+		font-size: var(--text-3xl);
 		margin: 0;
 		color: var(--text-primary);
 		transition: color 0.2s;
@@ -353,7 +353,7 @@
 	.nav-link {
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		transition: all 0.2s;
 		white-space: nowrap;
 		display: flex;
@@ -388,7 +388,7 @@
 	.user-handle {
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		padding: 0.4rem 0.75rem;
 		background: var(--bg-tertiary);
 		border-radius: var(--radius-base);
@@ -409,7 +409,7 @@
 		color: var(--accent);
 		padding: 0.5rem 1rem;
 		border-radius: var(--radius-base);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		text-decoration: none;
 		transition: all 0.2s;
 		cursor: pointer;
@@ -467,7 +467,7 @@
 
 		.nav-link {
 			padding: 0.3rem 0.5rem;
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 		}
 
 		.nav-link span {
@@ -475,12 +475,12 @@
 		}
 
 		.user-handle {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 			padding: 0.3rem 0.5rem;
 		}
 
 		.btn-primary {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 			padding: 0.3rem 0.65rem;
 		}
 	}

@@ -171,7 +171,7 @@
 
 	label {
 		color: var(--text-secondary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	button.primary {
@@ -181,7 +181,7 @@
 		color: white;
 		border: none;
 		border-radius: var(--radius-md);
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		font-family: inherit;
 		cursor: pointer;
@@ -213,7 +213,7 @@
 		border: none;
 		color: var(--text-secondary);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		cursor: pointer;
 		text-align: left;
 	}
@@ -234,7 +234,7 @@
 	.faq-content {
 		padding: 0 0 1rem 0;
 		color: var(--text-tertiary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		line-height: 1.6;
 	}
 
@@ -269,7 +269,7 @@
 		}
 
 		h1 {
-			font-size: 1.5rem;
+			font-size: var(--text-3xl);
 		}
 	}
 </style>
