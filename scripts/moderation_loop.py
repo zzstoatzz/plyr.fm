@@ -295,9 +295,9 @@ async def run_loop(
         result = await analyzer.run(f"analyze {len(pending)} flags:\n\n{desc}")
         analyses = result.output
 
-        # auto-resolve false positives
+        # auto-resolve false positives, everything else goes to human review
         auto = [a for a in analyses if a.category == "FALSE_POSITIVE"]
-        human = [a for a in analyses if a.category == "NEEDS_HUMAN"]
+        human = [a for a in analyses if a.category != "FALSE_POSITIVE"]
         console.print(f"analysis: {len(auto)} auto-resolve, {len(human)} need human")
 
         for a in auto:
