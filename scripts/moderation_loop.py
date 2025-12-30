@@ -117,6 +117,33 @@ class DMClient:
 
 
 @dataclass
+class PlyrClient:
+    """client for checking track existence in plyr.fm."""
+
+    env: str = "prod"
+    _client: httpx.AsyncClient = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        base_url = {
+            "prod": "https://api.plyr.fm",
+            "staging": "https://api-stg.plyr.fm",
+            "dev": "http://localhost:8001",
+        }.get(self.env, "https://api.plyr.fm")
+        self._client = httpx.AsyncClient(base_url=base_url, timeout=10.0)
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+    async def track_exists(self, track_id: int) -> bool:
+        """check if a track exists (returns False if 404)."""
+        try:
+            r = await self._client.get(f"/tracks/{track_id}")
+            return r.status_code == 200
+        except Exception:
+            return True  # assume exists on error (don't accidentally delete labels)
+
+
+@dataclass
 class ModClient:
     base_url: str
     auth_token: str
@@ -203,6 +230,7 @@ async def run_loop(
 
     dm = DMClient(settings.bot_handle, settings.bot_password, settings.recipient_handle)
     mod = ModClient(settings.moderation_service_url, settings.moderation_auth_token)
+    plyr = PlyrClient(env=env)
 
     try:
         await dm.setup()
@@ -215,7 +243,43 @@ async def run_loop(
 
         console.print(f"[bold]{len(pending)} pending flags[/bold]")
 
-        # analyze flags
+        # check for deleted tracks and auto-resolve them
+        console.print("[dim]checking for deleted tracks...[/dim]")
+        active_flags = []
+        deleted_count = 0
+        for flag in pending:
+            track_id = flag.get("context", {}).get("track_id")
+            if track_id and not await plyr.track_exists(track_id):
+                # track was deleted - resolve the flag
+                if not dry_run:
+                    try:
+                        await mod.resolve(
+                            flag["uri"], "content_deleted", "track no longer exists"
+                        )
+                        console.print(
+                            f"  [yellow]⌫[/yellow] deleted: {flag['uri'][-40:]}"
+                        )
+                        deleted_count += 1
+                    except Exception as e:
+                        console.print(f"  [red]✗[/red] {e}")
+                        active_flags.append(flag)
+                else:
+                    console.print(
+                        f"  [yellow]would resolve deleted:[/yellow] {flag['uri'][-40:]}"
+                    )
+                    deleted_count += 1
+            else:
+                active_flags.append(flag)
+
+        if deleted_count > 0:
+            console.print(f"[yellow]{deleted_count} deleted tracks resolved[/yellow]")
+
+        pending = active_flags
+        if not pending:
+            console.print("[green]all flags were for deleted tracks[/green]")
+            return
+
+        # analyze remaining flags
         if limit:
             pending = pending[:limit]
 
@@ -268,6 +332,7 @@ async def run_loop(
 
     finally:
         await mod.close()
+        await plyr.close()
 
 
 def main() -> None:
