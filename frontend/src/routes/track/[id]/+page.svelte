@@ -928,7 +928,7 @@ $effect(() => {
 	}
 
 	.btn-play.playing {
-		opacity: 0.8;
+		animation: ethereal-glow 3s ease-in-out infinite;
 	}
 
 	.btn-queue {

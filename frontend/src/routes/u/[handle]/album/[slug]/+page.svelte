@@ -561,14 +561,14 @@
 			>
 				{#if isAlbumPlaying}
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-						<rect x="6" y="4" width="4" height="16" />
-						<rect x="14" y="4" width="4" height="16" />
+						<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
 					</svg>
+					pause
 				{:else}
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 						<path d="M8 5v14l11-7z"/>
 					</svg>
-					play now
+					play
 				{/if}
 			</button>
 			<button class="queue-button" onclick={addToQueue}>
