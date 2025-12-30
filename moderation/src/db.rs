@@ -95,6 +95,8 @@ pub enum ResolutionReason {
     FingerprintNoise,
     /// Legal cover version or remix
     CoverVersion,
+    /// Content was deleted from plyr.fm
+    ContentDeleted,
     /// Other reason (see resolution_notes)
     Other,
 }
@@ -107,6 +109,7 @@ impl ResolutionReason {
             Self::Licensed => "licensed",
             Self::FingerprintNoise => "fingerprint noise",
             Self::CoverVersion => "cover/remix",
+            Self::ContentDeleted => "content deleted",
             Self::Other => "other",
         }
     }
@@ -118,6 +121,7 @@ impl ResolutionReason {
             "licensed" => Some(Self::Licensed),
             "fingerprint_noise" => Some(Self::FingerprintNoise),
             "cover_version" => Some(Self::CoverVersion),
+            "content_deleted" => Some(Self::ContentDeleted),
             "other" => Some(Self::Other),
             _ => None,
         }
