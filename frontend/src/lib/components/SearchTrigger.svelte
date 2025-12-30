@@ -24,7 +24,7 @@
 		border: 1px solid var(--border-default);
 		color: var(--text-secondary);
 		padding: 0.5rem;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		cursor: pointer;
 		transition: all 0.2s;
 		display: flex;

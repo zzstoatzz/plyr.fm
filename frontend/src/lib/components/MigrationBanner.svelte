@@ -152,7 +152,7 @@
 	.migration-banner {
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 1rem;
 		margin-bottom: 1.5rem;
 	}
@@ -190,7 +190,7 @@
 		gap: 1rem;
 		background: color-mix(in srgb, var(--success) 10%, transparent);
 		border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		padding: 1rem;
 		animation: slideIn 0.3s ease-out;
 	}
@@ -239,7 +239,7 @@
 	.collection-name {
 		background: color-mix(in srgb, var(--text-primary) 5%, transparent);
 		padding: 0.15em 0.4em;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		font-family: monospace;
 		font-size: 0.95em;
 		color: var(--text-primary);
@@ -265,7 +265,7 @@
 	.migrate-button,
 	.dismiss-button {
 		padding: 0.5rem 1rem;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		font-size: 0.9em;
 		font-family: inherit;
 		cursor: pointer;

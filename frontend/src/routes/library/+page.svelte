@@ -282,7 +282,7 @@
 		padding: 1rem 1.25rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 		text-decoration: none;
 		color: inherit;
 		transition: all 0.15s;
@@ -300,7 +300,7 @@
 	.collection-icon {
 		width: 48px;
 		height: 48px;
-		border-radius: 10px;
+		border-radius: var(--radius-md);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -320,7 +320,7 @@
 	.playlist-artwork {
 		width: 48px;
 		height: 48px;
-		border-radius: 10px;
+		border-radius: var(--radius-md);
 		object-fit: cover;
 		flex-shrink: 0;
 	}
@@ -384,7 +384,7 @@
 		background: var(--accent);
 		color: white;
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		font-family: inherit;
 		font-size: 0.875rem;
 		font-weight: 500;
@@ -415,14 +415,14 @@
 		padding: 3rem 2rem;
 		background: var(--bg-secondary);
 		border: 1px dashed var(--border-default);
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 		text-align: center;
 	}
 
 	.empty-icon {
 		width: 64px;
 		height: 64px;
-		border-radius: 16px;
+		border-radius: var(--radius-xl);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -461,7 +461,7 @@
 	.modal {
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 16px;
+		border-radius: var(--radius-xl);
 		width: 100%;
 		max-width: 400px;
 		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
@@ -490,7 +490,7 @@
 		height: 32px;
 		background: transparent;
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.15s;
@@ -518,7 +518,7 @@
 		padding: 0.75rem 1rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		font-family: inherit;
 		font-size: 1rem;
 		color: var(--text-primary);
@@ -550,7 +550,7 @@
 	.cancel-btn,
 	.confirm-btn {
 		padding: 0.625rem 1.25rem;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 500;

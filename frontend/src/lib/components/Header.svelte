@@ -228,7 +228,7 @@
 		justify-content: center;
 		width: 44px;
 		height: 44px;
-		border-radius: 10px;
+		border-radius: var(--radius-md);
 		background: transparent;
 		border: none;
 		color: var(--text-secondary);
@@ -275,7 +275,7 @@
 		border: 1px solid var(--border-emphasis);
 		color: var(--text-secondary);
 		padding: 0.5rem 1rem;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		font-size: 0.9rem;
 		font-family: inherit;
 		cursor: pointer;
@@ -309,7 +309,7 @@
 	}
 
 	.tangled-icon {
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		opacity: 0.7;
 		transition: opacity 0.2s, box-shadow 0.2s;
 	}
@@ -360,7 +360,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0.4rem 0.75rem;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		border: 1px solid transparent;
 	}
 
@@ -391,7 +391,7 @@
 		font-size: 0.9rem;
 		padding: 0.4rem 0.75rem;
 		background: var(--bg-tertiary);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		border: 1px solid var(--border-default);
 		transition: all 0.2s;
 		white-space: nowrap;
@@ -408,7 +408,7 @@
 		border: 1px solid var(--accent);
 		color: var(--accent);
 		padding: 0.5rem 1rem;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		font-size: 0.9rem;
 		text-decoration: none;
 		transition: all 0.2s;

@@ -38,7 +38,7 @@
 	.share-btn {
 		background: var(--glass-btn-bg, transparent);
 		border: 1px solid var(--glass-btn-border, var(--border-default));
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		width: 32px;
 		height: 32px;
 		padding: 0;
@@ -67,7 +67,7 @@
 		border: 1px solid var(--accent);
 		color: var(--accent);
 		padding: 0.25rem 0.75rem;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		font-size: 0.75rem;
 		white-space: nowrap;
 		pointer-events: none;

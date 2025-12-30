@@ -439,7 +439,7 @@
 		justify-content: center;
 		background: transparent;
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-tertiary);
 		cursor: pointer;
 		transition: all 0.2s;
@@ -490,7 +490,7 @@
 		min-width: 200px;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 		overflow: hidden;
 		z-index: 10;
@@ -567,12 +567,12 @@
 
 	.playlist-list::-webkit-scrollbar-track {
 		background: transparent;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.playlist-list::-webkit-scrollbar-thumb {
 		background: var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.playlist-list::-webkit-scrollbar-thumb:hover {
@@ -607,7 +607,7 @@
 	.playlist-thumb-placeholder {
 		width: 32px;
 		height: 32px;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 	}
 
@@ -675,7 +675,7 @@
 		padding: 0.625rem 0.75rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-primary);
 		font-family: inherit;
 		font-size: 0.9rem;
@@ -698,7 +698,7 @@
 		padding: 0.625rem 1rem;
 		background: var(--accent);
 		border: none;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: white;
 		font-family: inherit;
 		font-size: 0.9rem;
@@ -721,7 +721,7 @@
 		height: 16px;
 		border: 2px solid var(--border-default);
 		border-top-color: var(--accent);
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		animation: spin 0.8s linear infinite;
 	}
 

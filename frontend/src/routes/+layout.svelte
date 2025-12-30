@@ -455,6 +455,15 @@
 		--text-body: 1rem;
 		--text-small: 0.9rem;
 
+		/* border radius scale */
+		--radius-sm: 4px;
+		--radius-base: 6px;
+		--radius-md: 8px;
+		--radius-lg: 12px;
+		--radius-xl: 16px;
+		--radius-2xl: 24px;
+		--radius-full: 9999px;
+
 		/* semantic */
 		--success: #4ade80;
 		--warning: #fbbf24;
@@ -589,7 +598,7 @@
 		right: 20px;
 		width: 48px;
 		height: 48px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
 		color: var(--text-secondary);

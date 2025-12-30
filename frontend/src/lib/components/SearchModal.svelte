@@ -276,7 +276,7 @@
 		backdrop-filter: blur(20px) saturate(180%);
 		-webkit-backdrop-filter: blur(20px) saturate(180%);
 		border: 1px solid var(--border-subtle);
-		border-radius: 16px;
+		border-radius: var(--radius-xl);
 		box-shadow:
 			0 24px 80px color-mix(in srgb, var(--bg-primary) 50%, transparent),
 			0 0 1px var(--border-subtle) inset;
@@ -317,7 +317,7 @@
 		padding: 0.25rem 0.5rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		color: var(--text-muted);
 		font-family: inherit;
 	}
@@ -327,7 +327,7 @@
 		height: 16px;
 		border: 2px solid var(--border-default);
 		border-top-color: var(--accent);
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		animation: spin 0.6s linear infinite;
 	}
 
@@ -351,12 +351,12 @@
 
 	.search-results::-webkit-scrollbar-track {
 		background: transparent;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.search-results::-webkit-scrollbar-thumb {
 		background: var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.search-results::-webkit-scrollbar-thumb:hover {
@@ -371,7 +371,7 @@
 		padding: 0.75rem;
 		background: transparent;
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		cursor: pointer;
 		text-align: left;
 		font-family: inherit;
@@ -396,7 +396,7 @@
 		align-items: center;
 		justify-content: center;
 		background: var(--bg-tertiary);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		font-size: 0.9rem;
 		flex-shrink: 0;
 		position: relative;
@@ -409,7 +409,7 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 	}
 
 	.result-icon[data-type='track'] {
@@ -463,7 +463,7 @@
 		color: var(--text-muted);
 		padding: 0.2rem 0.45rem;
 		background: var(--bg-tertiary);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 	}
 
@@ -504,7 +504,7 @@
 		padding: 0.15rem 0.35rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		font-family: inherit;
 	}
 

@@ -61,7 +61,7 @@
 		backdrop-filter: blur(12px);
 		-webkit-backdrop-filter: blur(12px);
 		border: 1px solid rgba(255, 255, 255, 0.06);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		pointer-events: none;
 		font-size: 0.85rem;
 		max-width: 450px;

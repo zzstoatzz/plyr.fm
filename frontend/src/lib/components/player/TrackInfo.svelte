@@ -156,7 +156,7 @@
 		flex-shrink: 0;
 		width: 56px;
 		height: 56px;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		overflow: hidden;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);

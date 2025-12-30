@@ -142,7 +142,7 @@
 	.login-card {
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 		padding: 2.5rem;
 		max-width: 420px;
 		width: 100%;
@@ -180,7 +180,7 @@
 		background: var(--accent);
 		color: white;
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		font-size: 0.95rem;
 		font-weight: 500;
 		font-family: inherit;
@@ -259,7 +259,7 @@
 	.faq-content code {
 		background: var(--bg-secondary);
 		padding: 0.15rem 0.4rem;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		font-size: 0.85em;
 	}
 

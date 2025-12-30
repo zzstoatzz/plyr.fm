@@ -121,7 +121,7 @@
 		font-size: 1.1rem;
 		padding: 0.75rem 1.5rem;
 		border: 1px solid var(--accent);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		transition: all 0.2s;
 		display: inline-block;
 	}

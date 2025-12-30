@@ -168,14 +168,17 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ## immediate priorities
 
-### end-of-year sprint (Dec 20-31)
+### quality of life mode (Dec 29-31)
 
-see [sprint tracking issue #625](https://github.com/zzstoatzz/plyr.fm/issues/625) for details.
+end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) complete. remaining days before 2026 are for minor polish and bug fixes as they arise.
 
-| track | focus | status |
-|-------|-------|--------|
-| moderation | consolidate architecture, add rules engine | core cleanup shipped (PR #617), sensitive images moved (PR #644) |
-| atprotofans | supporter validation, content gating | shipped |
+**what shipped in the sprint:**
+- moderation consolidation: sensitive images moved to moderation service (#644)
+- atprotofans: supporter badges (#627) and content gating (#637)
+
+**aspirational (deferred until scale justifies):**
+- configurable rules engine for moderation
+- time-release gating (#642)
 
 ### known issues
 - playback auto-start on refresh (#225)
@@ -335,4 +338,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-26.
+this is a living document. last updated 2025-12-29.

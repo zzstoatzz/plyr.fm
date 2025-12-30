@@ -84,7 +84,7 @@
 		justify-content: center;
 		background: transparent;
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-tertiary);
 		cursor: pointer;
 		transition: all 0.2s;

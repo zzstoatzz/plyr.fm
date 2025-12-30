@@ -697,7 +697,7 @@ $effect(() => {
 		width: 100%;
 		max-width: 300px;
 		aspect-ratio: 1;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		overflow: hidden;
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 	}
@@ -878,7 +878,7 @@ $effect(() => {
 		padding: 0.25rem 0.6rem;
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		color: var(--accent-hover);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		font-size: 0.85rem;
 		font-weight: 500;
 		text-decoration: none;
@@ -914,7 +914,7 @@ $effect(() => {
 		background: var(--accent);
 		color: var(--bg-primary);
 		border: none;
-		border-radius: 24px;
+		border-radius: var(--radius-2xl);
 		font-size: 0.95rem;
 		font-weight: 600;
 		font-family: inherit;
@@ -939,7 +939,7 @@ $effect(() => {
 		background: transparent;
 		color: var(--text-primary);
 		border: 1px solid var(--border-emphasis);
-		border-radius: 24px;
+		border-radius: var(--radius-2xl);
 		font-size: 0.95rem;
 		font-weight: 500;
 		font-family: inherit;
@@ -1067,7 +1067,7 @@ $effect(() => {
 		padding: 0.6rem 0.8rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: inherit;
@@ -1087,7 +1087,7 @@ $effect(() => {
 		background: var(--accent);
 		color: var(--bg-primary);
 		border: none;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		font-size: 0.9rem;
 		font-weight: 600;
 		font-family: inherit;
@@ -1142,12 +1142,12 @@ $effect(() => {
 
 	.comments-list::-webkit-scrollbar-track {
 		background: var(--bg-primary);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.comments-list::-webkit-scrollbar-thumb {
 		background: var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.comments-list::-webkit-scrollbar-thumb:hover {
@@ -1160,7 +1160,7 @@ $effect(() => {
 		gap: 0.6rem;
 		padding: 0.5rem 0.6rem;
 		background: var(--bg-tertiary);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		transition: background 0.15s;
 	}
 
@@ -1174,7 +1174,7 @@ $effect(() => {
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 		padding: 0.2rem 0.5rem;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		white-space: nowrap;
 		height: fit-content;
 		border: none;
@@ -1214,14 +1214,14 @@ $effect(() => {
 	.comment-avatar {
 		width: 20px;
 		height: 20px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		object-fit: cover;
 	}
 
 	.comment-avatar-placeholder {
 		width: 20px;
 		height: 20px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		background: var(--border-default);
 	}
 
@@ -1310,7 +1310,7 @@ $effect(() => {
 		padding: 0.5rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: inherit;
@@ -1331,7 +1331,7 @@ $effect(() => {
 		padding: 0.25rem 0.6rem;
 		font-size: 0.8rem;
 		font-family: inherit;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		cursor: pointer;
 		transition: all 0.15s;
 	}
@@ -1381,7 +1381,7 @@ $effect(() => {
 		);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.comment-timestamp-skeleton {
@@ -1393,7 +1393,7 @@ $effect(() => {
 	.comment-avatar-skeleton {
 		width: 20px;
 		height: 20px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 	}
 
 	.comment-author-skeleton {

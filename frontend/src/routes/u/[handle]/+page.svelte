@@ -613,7 +613,7 @@ $effect(() => {
 		padding: 2rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 	}
 
 	.artist-details {
@@ -651,7 +651,7 @@ $effect(() => {
 		padding: 0 0.75rem;
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--accent);
 		font-size: 0.85rem;
 		text-decoration: none;
@@ -671,7 +671,7 @@ $effect(() => {
 	.artist-avatar {
 		width: 120px;
 		height: 120px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		object-fit: cover;
 		border: 3px solid var(--border-default);
 	}
@@ -756,7 +756,7 @@ $effect(() => {
 		padding: 1rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 10px;
+		border-radius: var(--radius-md);
 		color: inherit;
 		text-decoration: none;
 		transition: transform 0.15s ease, border-color 0.15s ease;
@@ -772,7 +772,7 @@ $effect(() => {
 	.album-cover-wrapper {
 		width: 72px;
 		height: 72px;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		overflow: hidden;
 		flex-shrink: 0;
 		background: var(--bg-tertiary);
@@ -834,7 +834,7 @@ $effect(() => {
 	.stat-card {
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 1.5rem;
 		transition: border-color 0.2s;
 	}
@@ -908,7 +908,7 @@ $effect(() => {
 		);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	/* match .stat-value dimensions: 2.5rem font + 0.5rem margin-bottom */
@@ -960,7 +960,7 @@ $effect(() => {
 		padding: 0.75rem 1.5rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--text-secondary);
 		font-family: inherit;
 		font-size: 0.95rem;
@@ -998,7 +998,7 @@ $effect(() => {
 		padding: 3rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 	}
 
 	.empty-message {
@@ -1018,7 +1018,7 @@ $effect(() => {
 		font-size: 1rem;
 		padding: 0.75rem 1.5rem;
 		border: 1px solid var(--accent);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		transition: all 0.2s;
 		display: inline-block;
 	}
@@ -1112,7 +1112,7 @@ $effect(() => {
 		.album-cover-wrapper {
 			width: 56px;
 			height: 56px;
-			border-radius: 4px;
+			border-radius: var(--radius-sm);
 		}
 
 		.album-card-meta h3 {
@@ -1148,7 +1148,7 @@ $effect(() => {
 		padding: 1.25rem 1.5rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 10px;
+		border-radius: var(--radius-md);
 		color: inherit;
 		text-decoration: none;
 		transition: transform 0.15s ease, border-color 0.15s ease;
@@ -1162,7 +1162,7 @@ $effect(() => {
 	.collection-icon {
 		width: 48px;
 		height: 48px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		display: flex;
 		align-items: center;
 		justify-content: center;

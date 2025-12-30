@@ -402,7 +402,7 @@
 		justify-content: center;
 		background: transparent;
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-tertiary);
 		cursor: pointer;
 		transition: all 0.2s;
@@ -558,7 +558,7 @@
 	.playlist-thumb-placeholder {
 		width: 36px;
 		height: 36px;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 	}
 
@@ -627,7 +627,7 @@
 		padding: 0.75rem 1rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--text-primary);
 		font-family: inherit;
 		font-size: 1rem;
@@ -650,7 +650,7 @@
 		padding: 0.75rem 1rem;
 		background: var(--accent);
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: white;
 		font-family: inherit;
 		font-size: 1rem;
@@ -673,7 +673,7 @@
 		height: 18px;
 		border: 2px solid var(--border-default);
 		border-top-color: var(--accent);
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		animation: spin 0.8s linear infinite;
 	}
 
@@ -700,7 +700,7 @@
 			top: 50%;
 			transform: translateY(-50%);
 			margin-right: 0.5rem;
-			border-radius: 8px;
+			border-radius: var(--radius-md);
 			min-width: 180px;
 			max-height: none;
 			animation: slideIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);

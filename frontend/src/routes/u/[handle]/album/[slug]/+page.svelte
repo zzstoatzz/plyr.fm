@@ -766,7 +766,7 @@
 	.album-art {
 		width: 200px;
 		height: 200px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		object-fit: cover;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 	}
@@ -774,7 +774,7 @@
 	.album-art-placeholder {
 		width: 200px;
 		height: 200px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
 		display: flex;
@@ -817,7 +817,7 @@
 		height: 32px;
 		background: transparent;
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-tertiary);
 		cursor: pointer;
 		transition: all 0.15s;
@@ -858,7 +858,7 @@
 		position: absolute;
 		inset: 0;
 		background: rgba(0, 0, 0, 0.6);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -948,7 +948,7 @@
 	.play-button,
 	.queue-button {
 		padding: 0.75rem 1.5rem;
-		border-radius: 24px;
+		border-radius: var(--radius-2xl);
 		font-weight: 600;
 		font-size: 0.95rem;
 		font-family: inherit;
@@ -1018,7 +1018,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		transition: all 0.2s;
 		position: relative;
 	}
@@ -1050,7 +1050,7 @@
 		color: var(--text-muted);
 		cursor: grab;
 		touch-action: none;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		transition: all 0.2s;
 		flex-shrink: 0;
 	}
@@ -1155,7 +1155,7 @@
 		justify-content: center;
 		width: 32px;
 		height: 32px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		background: transparent;
 		border: none;
 		color: var(--text-muted);
@@ -1188,7 +1188,7 @@
 
 	.modal {
 		background: var(--bg-secondary);
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 		padding: 1.5rem;
 		max-width: 400px;
 		width: calc(100% - 2rem);
@@ -1226,7 +1226,7 @@
 	.cancel-btn,
 	.confirm-btn {
 		padding: 0.625rem 1.25rem;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		font-weight: 500;
 		font-size: 0.9rem;
 		font-family: inherit;

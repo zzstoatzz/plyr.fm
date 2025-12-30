@@ -179,7 +179,7 @@
 		padding: 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
@@ -213,7 +213,7 @@
 		overflow-y: auto;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		margin-top: 0.25rem;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 	}
@@ -225,12 +225,12 @@
 
 	.search-results::-webkit-scrollbar-track {
 		background: var(--bg-primary);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.search-results::-webkit-scrollbar-thumb {
 		background: var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.search-results::-webkit-scrollbar-thumb:hover {
@@ -277,7 +277,7 @@
 	.result-avatar {
 		width: 36px;
 		height: 36px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		object-fit: cover;
 		border: 2px solid var(--border-default);
 		flex-shrink: 0;
@@ -320,7 +320,7 @@
 		padding: 0.5rem 0.75rem;
 		background: color-mix(in srgb, var(--accent) 10%, var(--bg-tertiary));
 		border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border-subtle));
-		border-radius: 20px;
+		border-radius: var(--radius-xl);
 		color: var(--text-primary);
 		font-size: 0.9rem;
 	}
@@ -328,7 +328,7 @@
 	.chip-avatar {
 		width: 24px;
 		height: 24px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		object-fit: cover;
 		border: 1px solid var(--border-default);
 	}
@@ -374,7 +374,7 @@
 		padding: 0.75rem;
 		background: color-mix(in srgb, var(--warning) 10%, var(--bg-primary));
 		border: 1px solid color-mix(in srgb, var(--warning) 20%, var(--border-subtle));
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--warning);
 		font-size: 0.9rem;
 		text-align: center;

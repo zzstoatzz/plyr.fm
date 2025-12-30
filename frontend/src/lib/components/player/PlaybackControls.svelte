@@ -244,7 +244,7 @@
 		align-items: center;
 		justify-content: center;
 		transition: all 0.2s;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 	}
 
 	.control-btn svg {
@@ -282,7 +282,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		transition: all 0.2s;
 		position: relative;
 	}
@@ -382,7 +382,7 @@
 		background: var(--accent);
 		height: 14px;
 		width: 14px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		margin-top: -5px;
 		transition: all 0.2s;
 		box-shadow: 0 0 0 8px transparent;
@@ -419,7 +419,7 @@
 		background: var(--accent);
 		height: 14px;
 		width: 14px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		border: none;
 		transition: all 0.2s;
 		box-shadow: 0 0 0 8px transparent;

@@ -270,7 +270,7 @@
 		background: transparent;
 		border: 1px solid var(--border-subtle);
 		color: var(--text-tertiary);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}
@@ -302,7 +302,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 1rem 1.1rem;
-		border-radius: 10px;
+		border-radius: var(--radius-md);
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
 		gap: 1rem;
@@ -372,7 +372,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.85rem 0.9rem;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		cursor: pointer;
 		transition: all 0.2s;
 		border: 1px solid var(--border-subtle);
@@ -412,7 +412,7 @@
 		color: var(--text-muted);
 		cursor: grab;
 		touch-action: none;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		transition: all 0.2s;
 		flex-shrink: 0;
 	}
@@ -476,7 +476,7 @@
 		align-items: center;
 		justify-content: center;
 		transition: all 0.2s;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		opacity: 0;
 		flex-shrink: 0;
 	}
@@ -499,7 +499,7 @@
 
 	.empty-up-next {
 		border: 1px dashed var(--border-subtle);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		padding: 1.25rem;
 		text-align: center;
 		color: var(--text-tertiary);
@@ -542,7 +542,7 @@
 
 	.queue-tracks::-webkit-scrollbar-thumb {
 		background: var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.queue-tracks::-webkit-scrollbar-thumb:hover {

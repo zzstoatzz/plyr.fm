@@ -194,7 +194,7 @@
 		margin-bottom: 3rem;
 		background: color-mix(in srgb, var(--warning) 5%, transparent);
 		border: 1px solid color-mix(in srgb, var(--warning) 20%, transparent);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 1.5rem;
 	}
 
@@ -222,7 +222,7 @@
 		padding: 0.5rem 1rem;
 		background: color-mix(in srgb, var(--warning) 20%, transparent);
 		border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--warning);
 		font-family: inherit;
 		font-size: 0.9rem;
@@ -248,7 +248,7 @@
 		background: color-mix(in srgb, var(--warning) 20%, transparent);
 		color: var(--warning);
 		padding: 0.25rem 0.6rem;
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 		font-size: 0.85rem;
 		font-weight: 600;
 	}
@@ -263,7 +263,7 @@
 	.broken-track-item {
 		background: var(--bg-tertiary);
 		border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		padding: 1rem;
 		display: flex;
 		align-items: center;
@@ -311,7 +311,7 @@
 		padding: 0.5rem 1rem;
 		background: color-mix(in srgb, var(--warning) 15%, transparent);
 		border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--warning);
 		font-family: inherit;
 		font-size: 0.9rem;
@@ -337,7 +337,7 @@
 	.info-box {
 		background: var(--bg-primary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		padding: 1rem;
 		font-size: 0.9rem;
 		color: var(--text-secondary);

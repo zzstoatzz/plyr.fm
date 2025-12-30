@@ -131,7 +131,7 @@
 		padding: 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
@@ -170,7 +170,7 @@
 		overflow-y: auto;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		margin-top: 0.25rem;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 		scrollbar-width: thin;
@@ -183,12 +183,12 @@
 
 	.results::-webkit-scrollbar-track {
 		background: var(--bg-primary);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.results::-webkit-scrollbar-thumb {
 		background: var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.results::-webkit-scrollbar-thumb:hover {
@@ -222,7 +222,7 @@
 	.avatar {
 		width: 36px;
 		height: 36px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		object-fit: cover;
 		border: 2px solid var(--border-default);
 		flex-shrink: 0;
@@ -231,7 +231,7 @@
 	.avatar-placeholder {
 		width: 36px;
 		height: 36px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		background: var(--border-default);
 		flex-shrink: 0;
 	}

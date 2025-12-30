@@ -774,7 +774,7 @@
 	.token-overlay-content {
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
-		border-radius: 16px;
+		border-radius: var(--radius-xl);
 		padding: 2rem;
 		max-width: 500px;
 		width: 100%;
@@ -804,7 +804,7 @@
 		gap: 0.5rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 1rem;
 		margin-bottom: 1rem;
 	}
@@ -822,7 +822,7 @@
 		padding: 0.5rem 1rem;
 		background: var(--accent);
 		border: none;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-primary);
 		font-family: inherit;
 		font-size: 0.85rem;
@@ -855,7 +855,7 @@
 		padding: 0.75rem 2rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--text-secondary);
 		font-family: inherit;
 		font-size: 0.9rem;
@@ -904,7 +904,7 @@
 		font-size: 0.85rem;
 		padding: 0.4rem 0.75rem;
 		background: var(--bg-tertiary);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		border: 1px solid var(--border-default);
 		transition: all 0.15s;
 	}
@@ -930,7 +930,7 @@
 	.settings-card {
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 10px;
+		border-radius: var(--radius-md);
 		padding: 1rem 1.25rem;
 	}
 
@@ -993,7 +993,7 @@
 		padding: 0.6rem 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.15s;
@@ -1034,7 +1034,7 @@
 		width: 40px;
 		height: 40px;
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		cursor: pointer;
 		background: transparent;
 	}
@@ -1044,7 +1044,7 @@
 	}
 
 	.color-input::-webkit-color-swatch {
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		border: none;
 	}
 
@@ -1056,7 +1056,7 @@
 	.preset-btn {
 		width: 32px;
 		height: 32px;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		border: 2px solid transparent;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -1085,7 +1085,7 @@
 		padding: 0.5rem 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-primary);
 		font-size: 0.85rem;
 		font-family: inherit;
@@ -1132,7 +1132,7 @@
 		width: 48px;
 		height: 28px;
 		background: var(--border-default);
-		border-radius: 999px;
+		border-radius: var(--radius-full);
 		position: relative;
 		cursor: pointer;
 		transition: background 0.2s;
@@ -1145,7 +1145,7 @@
 		left: 4px;
 		width: 20px;
 		height: 20px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		background: var(--text-secondary);
 		transition: transform 0.2s, background 0.2s;
 	}
@@ -1167,7 +1167,7 @@
 		padding: 0.75rem;
 		background: color-mix(in srgb, var(--warning) 10%, transparent);
 		border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		margin-top: 0.75rem;
 		font-size: 0.8rem;
 		color: var(--warning);
@@ -1220,7 +1220,7 @@
 		padding: 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 	}
 
 	.token-info {
@@ -1245,7 +1245,7 @@
 		padding: 0.4rem 0.75rem;
 		background: transparent;
 		border: 1px solid var(--border-emphasis);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-secondary);
 		font-family: inherit;
 		font-size: 0.8rem;
@@ -1272,7 +1272,7 @@
 		padding: 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 	}
 
 	.token-value {
@@ -1287,7 +1287,7 @@
 		padding: 0.4rem 0.6rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-secondary);
 		font-family: inherit;
 		font-size: 0.8rem;
@@ -1320,7 +1320,7 @@
 		padding: 0.6rem 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: inherit;
@@ -1343,7 +1343,7 @@
 		padding: 0.5rem 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-primary);
 		font-size: 0.85rem;
 		font-family: inherit;
@@ -1359,7 +1359,7 @@
 		padding: 0.6rem 1rem;
 		background: var(--accent);
 		border: none;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-primary);
 		font-family: inherit;
 		font-size: 0.9rem;

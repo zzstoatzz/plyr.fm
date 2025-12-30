@@ -70,7 +70,7 @@
 		margin-bottom: 4px;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		padding: 0.25rem 0.5rem;
 		font-size: 0.7rem;
 		color: var(--text-tertiary);
