@@ -55,6 +55,8 @@ async def background_worker_lifespan() -> AsyncGenerator[Docket, None]:
         extra={"docket_name": settings.docket.name, "url": settings.docket.url},
     )
 
+    # WARNING: do not modify Docket() or Worker() constructor args without
+    # reading docs/backend/background-tasks.md - see 2025-12-30 incident
     async with Docket(
         name=settings.docket.name,
         url=settings.docket.url,
