@@ -1,0 +1,43 @@
+name: deploy redis
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "redis/fly.toml"
+      - "redis/fly.staging.toml"
+      - ".github/workflows/deploy-redis.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy-staging:
+    name: deploy redis staging
+    runs-on: ubuntu-latest
+    concurrency: deploy-redis-staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: deploy to fly.io staging
+        run: flyctl deploy --config redis/fly.staging.toml --remote-only -a plyr-redis-stg
+        working-directory: redis
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_REDIS }}
+
+  deploy-prod:
+    name: deploy redis prod
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    concurrency: deploy-redis-prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: deploy to fly.io prod
+        run: flyctl deploy --config redis/fly.toml --remote-only -a plyr-redis
+        working-directory: redis
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_REDIS }}

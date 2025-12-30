@@ -1,4 +1,4 @@
-app = "plyr-redis"
+app = "plyr-redis-stg"
 primary_region = "iad"
 
 [build]
