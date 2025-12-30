@@ -222,7 +222,7 @@
 
 	.error {
 		padding: 1rem;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		margin-bottom: 1.5rem;
 		background: color-mix(in srgb, var(--error) 10%, transparent);
 		border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
@@ -232,7 +232,7 @@
 	form {
 		background: var(--bg-tertiary);
 		padding: 2rem;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--border-subtle);
 	}
 
@@ -259,7 +259,7 @@
 		padding: 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
@@ -297,7 +297,7 @@
 		background: var(--accent);
 		color: white;
 		border: none;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;

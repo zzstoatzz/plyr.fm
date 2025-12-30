@@ -1341,7 +1341,7 @@
 	.playlist-art {
 		width: 200px;
 		height: 200px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		object-fit: cover;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 	}
@@ -1349,7 +1349,7 @@
 	.playlist-art-placeholder {
 		width: 200px;
 		height: 200px;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
 		display: flex;
@@ -1394,7 +1394,7 @@
 		opacity: 0;
 		transition: opacity 0.2s;
 		pointer-events: none;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		font-family: inherit;
 	}
 
@@ -1526,7 +1526,7 @@
 		height: 32px;
 		background: var(--glass-btn-bg, rgba(18, 18, 18, 0.75));
 		border: 1px solid var(--glass-btn-border, rgba(255, 255, 255, 0.1));
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.15s;
@@ -1560,7 +1560,7 @@
 	.play-button,
 	.queue-button {
 		padding: 0.75rem 1.5rem;
-		border-radius: 24px;
+		border-radius: var(--radius-2xl);
 		font-weight: 600;
 		font-size: 0.95rem;
 		font-family: inherit;
@@ -1634,7 +1634,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		transition: all 0.2s;
 		position: relative;
 	}
@@ -1666,7 +1666,7 @@
 		color: var(--text-muted);
 		cursor: grab;
 		touch-action: none;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		transition: all 0.2s;
 		flex-shrink: 0;
 	}
@@ -1699,7 +1699,7 @@
 		padding: 0.5rem;
 		background: transparent;
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-muted);
 		cursor: pointer;
 		transition: all 0.2s;
@@ -1732,7 +1732,7 @@
 		margin-top: 0.5rem;
 		background: transparent;
 		border: 1px dashed var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--text-tertiary);
 		font-family: inherit;
 		font-size: 0.9rem;
@@ -1759,7 +1759,7 @@
 	.empty-icon {
 		width: 64px;
 		height: 64px;
-		border-radius: 16px;
+		border-radius: var(--radius-xl);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1786,7 +1786,7 @@
 		background: var(--accent);
 		color: white;
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 500;
@@ -1816,7 +1816,7 @@
 	.modal {
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 16px;
+		border-radius: var(--radius-xl);
 		width: 100%;
 		max-width: 400px;
 		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
@@ -1852,7 +1852,7 @@
 		height: 32px;
 		background: transparent;
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.15s;
@@ -1922,7 +1922,7 @@
 	.result-image-placeholder {
 		width: 40px;
 		height: 40px;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		flex-shrink: 0;
 	}
 
@@ -1971,7 +1971,7 @@
 		height: 36px;
 		background: var(--accent);
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: white;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -2008,7 +2008,7 @@
 	.cancel-btn,
 	.confirm-btn {
 		padding: 0.625rem 1.25rem;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		font-family: inherit;
 		font-size: 0.9rem;
 		font-weight: 500;
@@ -2053,7 +2053,7 @@
 		height: 16px;
 		border: 2px solid currentColor;
 		border-top-color: transparent;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		animation: spin 0.6s linear infinite;
 	}
 

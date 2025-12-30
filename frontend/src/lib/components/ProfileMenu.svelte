@@ -276,7 +276,7 @@
 		height: 44px;
 		background: transparent;
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.15s;
@@ -311,7 +311,7 @@
 		overflow-y: auto;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
-		border-radius: 16px;
+		border-radius: var(--radius-xl);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 		z-index: 101;
 		animation: slideIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
@@ -341,7 +341,7 @@
 		height: 36px;
 		background: transparent;
 		border: none;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.15s;
@@ -371,7 +371,7 @@
 		min-height: 56px;
 		background: transparent;
 		border: none;
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 		text-decoration: none;
 		color: var(--text-primary);
 		font-family: inherit;
@@ -440,7 +440,7 @@
 		padding: 0.5rem 0.75rem;
 		background: transparent;
 		border: none;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-secondary);
 		font-family: inherit;
 		font-size: 0.85rem;
@@ -490,7 +490,7 @@
 		min-height: 54px;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.15s;
@@ -533,7 +533,7 @@
 		width: 44px;
 		height: 44px;
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		cursor: pointer;
 		background: transparent;
 		flex-shrink: 0;
@@ -544,7 +544,7 @@
 	}
 
 	.color-input::-webkit-color-swatch {
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		border: none;
 	}
 
@@ -557,7 +557,7 @@
 	.preset-btn {
 		width: 36px;
 		height: 36px;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		border: 2px solid transparent;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -592,7 +592,7 @@
 		appearance: none;
 		width: 48px;
 		height: 28px;
-		border-radius: 999px;
+		border-radius: var(--radius-full);
 		background: var(--border-default);
 		position: relative;
 		cursor: pointer;
@@ -608,7 +608,7 @@
 		left: 3px;
 		width: 20px;
 		height: 20px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		background: var(--text-secondary);
 		transition: transform 0.15s, background 0.15s;
 	}

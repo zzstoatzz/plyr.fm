@@ -211,7 +211,7 @@
 		background: var(--glass-btn-bg, transparent);
 		border: 1px solid var(--glass-btn-border, var(--accent));
 		color: var(--accent);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		font-size: 0.9rem;
 		font-family: inherit;
 		cursor: pointer;

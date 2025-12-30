@@ -203,7 +203,7 @@
 		background: linear-gradient(90deg, var(--bg-tertiary) 0%, var(--bg-hover) 50%, var(--bg-tertiary) 100%);
 		background-size: 200% 100%;
 		animation: shimmer 1.5s ease-in-out infinite;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 	}
 
 	.stats-menu-grid {
@@ -219,7 +219,7 @@
 		gap: 0.15rem;
 		padding: 0.6rem 0.4rem;
 		background: var(--bg-tertiary, #1a1a1a);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 	}
 
 	.menu-stat-icon {

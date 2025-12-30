@@ -423,7 +423,7 @@
 	form {
 		background: var(--bg-tertiary);
 		padding: 2rem;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--border-subtle);
 	}
 
@@ -443,7 +443,7 @@
 		padding: 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
@@ -460,7 +460,7 @@
 		padding: 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-primary);
 		font-size: 0.9rem;
 		font-family: inherit;
@@ -485,7 +485,7 @@
 		background: var(--accent);
 		color: var(--text-primary);
 		border: none;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		font-size: 1rem;
 		font-weight: 600;
 		font-family: inherit;
@@ -520,7 +520,7 @@
 	.attestation {
 		background: var(--bg-primary);
 		padding: 1rem;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border-default);
 	}
 
@@ -567,7 +567,7 @@
 	.supporter-gating {
 		background: color-mix(in srgb, var(--accent) 8%, var(--bg-primary));
 		padding: 1rem;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border-default));
 	}
 

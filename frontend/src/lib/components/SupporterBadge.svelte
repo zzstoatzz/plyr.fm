@@ -22,7 +22,7 @@
 		padding: 0.2rem 0.5rem;
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--accent);
 		font-size: 0.75rem;
 		font-weight: 500;

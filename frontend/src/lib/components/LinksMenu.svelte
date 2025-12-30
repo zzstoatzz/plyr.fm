@@ -140,7 +140,7 @@
 		height: 32px;
 		background: transparent;
 		border: 1px solid var(--border-default);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.2s;
@@ -171,7 +171,7 @@
 		width: min(320px, calc(100vw - 2rem));
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 		z-index: 101;
 		animation: slideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -201,7 +201,7 @@
 		height: 28px;
 		background: transparent;
 		border: none;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.2s;
@@ -224,7 +224,7 @@
 		gap: 1rem;
 		padding: 1rem;
 		background: transparent;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		text-decoration: none;
 		color: var(--text-primary);
 		transition: all 0.2s;
@@ -245,7 +245,7 @@
 	}
 
 	.tangled-menu-icon {
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		opacity: 0.7;
 		transition: opacity 0.2s, box-shadow 0.2s;
 	}

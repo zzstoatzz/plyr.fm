@@ -139,7 +139,7 @@
 		color: var(--text-tertiary);
 		cursor: pointer;
 		transition: all 0.15s;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 	}
 
 	.filter-toggle:hover {
@@ -183,7 +183,7 @@
 		background: transparent;
 		border: 1px solid var(--border-default);
 		color: var(--text-secondary);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		font-size: 0.75rem;
 		font-family: inherit;
 		cursor: pointer;
@@ -219,7 +219,7 @@
 		padding: 0;
 		background: transparent;
 		border: 1px dashed var(--border-default);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		color: var(--text-tertiary);
 		font-size: 0.8rem;
 		cursor: pointer;
@@ -241,7 +241,7 @@
 		min-height: 24px;
 		width: 70px;
 		outline: none;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 
 	.add-input:focus {

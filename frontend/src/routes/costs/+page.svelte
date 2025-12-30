@@ -407,7 +407,7 @@
 		padding: 2rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 	}
 
 	.total-label {
@@ -454,7 +454,7 @@
 	.cost-item {
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 1rem;
 	}
 
@@ -479,7 +479,7 @@
 	.cost-bar-bg {
 		height: 8px;
 		background: var(--bg-primary);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		overflow: hidden;
 		margin-bottom: 0.5rem;
 	}
@@ -487,7 +487,7 @@
 	.cost-bar {
 		height: 100%;
 		background: var(--accent);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		transition: width 0.3s ease;
 	}
 
@@ -522,7 +522,7 @@
 		gap: 0.25rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		padding: 0.25rem;
 	}
 
@@ -533,7 +533,7 @@
 		font-weight: 500;
 		background: transparent;
 		border: none;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.15s;
@@ -555,7 +555,7 @@
 		padding: 2rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 	}
 
 	.audd-stats {
@@ -583,7 +583,7 @@
 		padding: 1rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 	}
 
 	.stat-value {
@@ -604,7 +604,7 @@
 	.daily-chart {
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 1rem;
 		overflow: hidden;
 	}
@@ -673,7 +673,7 @@
 			var(--bg-tertiary)
 		);
 		border: 1px solid var(--border-subtle);
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 	}
 
 	.support-icon {
@@ -700,7 +700,7 @@
 		padding: 0.75rem 1.5rem;
 		background: var(--accent);
 		color: white;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		text-decoration: none;
 		font-weight: 600;
 		font-size: 0.9rem;

@@ -350,7 +350,7 @@
 		color: var(--text-tertiary);
 		background: var(--bg-tertiary);
 		padding: 0.2rem 0.55rem;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.header-actions {
@@ -362,7 +362,7 @@
 	.queue-button,
 	.reorder-button {
 		padding: 0.75rem 1.5rem;
-		border-radius: 24px;
+		border-radius: var(--radius-2xl);
 		font-weight: 600;
 		font-size: 0.95rem;
 		font-family: inherit;
@@ -441,7 +441,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		transition: all 0.2s;
 		position: relative;
 	}
@@ -473,7 +473,7 @@
 		color: var(--text-muted);
 		cursor: grab;
 		touch-action: none;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		transition: all 0.2s;
 		flex-shrink: 0;
 	}

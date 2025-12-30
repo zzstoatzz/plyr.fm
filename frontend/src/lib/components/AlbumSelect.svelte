@@ -102,7 +102,7 @@
 		padding: 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-primary);
 		font-size: 1rem;
 		font-family: inherit;
@@ -127,7 +127,7 @@
 		overflow-y: auto;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		margin-top: 0.25rem;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 	}
@@ -139,12 +139,12 @@
 
 	.album-results::-webkit-scrollbar-track {
 		background: var(--bg-primary);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.album-results::-webkit-scrollbar-thumb {
 		background: var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 
 	.album-results::-webkit-scrollbar-thumb:hover {

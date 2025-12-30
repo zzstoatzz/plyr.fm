@@ -181,7 +181,7 @@
 		border: 1px solid var(--border-default);
 		color: var(--text-secondary);
 		padding: 0.5rem;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		cursor: pointer;
 		transition: all 0.2s;
 		display: flex;
@@ -200,7 +200,7 @@
 		right: 0;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 1.25rem;
 		min-width: 280px;
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
@@ -265,7 +265,7 @@
 		padding: 0.6rem 0.5rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.2s;
@@ -303,7 +303,7 @@
 		width: 48px;
 		height: 32px;
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		cursor: pointer;
 		background: transparent;
 	}
@@ -332,7 +332,7 @@
 	.preset-btn {
 		width: 32px;
 		height: 32px;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		border: 2px solid transparent;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -361,7 +361,7 @@
 		appearance: none;
 		width: 42px;
 		height: 22px;
-		border-radius: 999px;
+		border-radius: var(--radius-full);
 		background: var(--border-default);
 		position: relative;
 		cursor: pointer;
@@ -377,7 +377,7 @@
 		left: 2px;
 		width: 16px;
 		height: 16px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		background: var(--text-secondary);
 		transition: transform 0.2s, background 0.2s;
 	}

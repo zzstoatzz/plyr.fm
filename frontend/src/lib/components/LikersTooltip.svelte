@@ -134,7 +134,7 @@
 		margin-bottom: 0.5rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 0.75rem;
 		min-width: 240px;
 		max-width: 320px;
@@ -177,7 +177,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.5rem;
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		text-decoration: none;
 		transition: background 0.2s;
 	}
@@ -190,7 +190,7 @@
 	.avatar-placeholder {
 		width: 32px;
 		height: 32px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		flex-shrink: 0;
 	}
 
@@ -248,7 +248,7 @@
 
 	.likers-list::-webkit-scrollbar-thumb {
 		background: var(--border-default);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 	}
 
 	.likers-list::-webkit-scrollbar-thumb:hover {

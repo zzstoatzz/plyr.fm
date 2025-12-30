@@ -126,7 +126,7 @@
 	.avatar {
 		width: 64px;
 		height: 64px;
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		object-fit: cover;
 		flex-shrink: 0;
 	}
@@ -208,7 +208,7 @@
 		background: transparent;
 		border: 1px solid var(--border-default);
 		color: var(--text-secondary);
-		border-radius: 6px;
+		border-radius: var(--radius-base);
 		font-size: 0.85rem;
 		font-family: inherit;
 		cursor: pointer;

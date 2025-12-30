@@ -359,7 +359,7 @@
 		gap: 0.75rem;
 		background: var(--track-bg, var(--bg-secondary));
 		border: 1px solid var(--track-border, var(--border-subtle));
-		border-radius: 8px;
+		border-radius: var(--radius-md);
 		padding: 1rem;
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 		transition:
@@ -428,7 +428,7 @@
 		position: absolute;
 		inset: 0;
 		background: rgba(0, 0, 0, 0.3);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		pointer-events: none;
 	}
 
@@ -443,7 +443,7 @@
 		justify-content: center;
 		background: var(--accent);
 		border: 2px solid var(--bg-secondary);
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		color: white;
 		z-index: 1;
 	}
@@ -456,7 +456,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		overflow: hidden;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
@@ -490,7 +490,7 @@
 	}
 
 	.track-avatar img {
-		border-radius: 50%;
+		border-radius: var(--radius-full);
 		border: 2px solid var(--border-default);
 		transition: border-color 0.2s;
 	}
@@ -659,7 +659,7 @@
 		padding: 0.1rem 0.4rem;
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		color: var(--accent-hover);
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		font-size: 0.75rem;
 		font-weight: 500;
 		text-decoration: none;
@@ -679,7 +679,7 @@
 		background: var(--bg-tertiary);
 		color: var(--text-muted);
 		border: none;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		font-size: 0.75rem;
 		font-weight: 500;
 		font-family: inherit;
@@ -756,7 +756,7 @@
 		justify-content: center;
 		background: transparent;
 		border: 1px solid var(--border-default);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		color: var(--text-tertiary);
 		cursor: pointer;
 		transition: all 0.2s;
