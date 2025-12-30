@@ -39,6 +39,23 @@ DOCKET_NAME=plyr              # queue namespace
 DOCKET_WORKER_CONCURRENCY=10  # concurrent task limit
 ```
 
+### ⚠️ worker settings - do not modify
+
+the worker is initialized in `backend/_internal/background.py` with pydocket's defaults. **do not change these settings without extensive testing:**
+
+| setting | default | why it matters |
+|---------|---------|----------------|
+| `heartbeat_interval` | 2s | changing this broke all task execution (2025-12-30 incident) |
+| `minimum_check_interval` | 1s | affects how quickly tasks are picked up |
+| `scheduling_resolution` | 1s | affects scheduled task precision |
+
+**2025-12-30 incident**: setting `heartbeat_interval=30s` caused all scheduled tasks (likes, comments, exports) to silently fail while perpetual tasks continued running. root cause unclear - correlation was definitive but mechanism wasn't found in pydocket source. reverted in PR #669.
+
+if you need to tune worker settings:
+1. test extensively in staging with real task volume
+2. verify ALL task types execute (not just perpetual tasks)
+3. check logfire for task execution spans
+
 when `DOCKET_URL` is not set, docket is disabled and tasks fall back to `asyncio.create_task()` (fire-and-forget).
 
 ### local development
