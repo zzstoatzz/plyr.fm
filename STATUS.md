@@ -47,6 +47,18 @@ plyr.fm should become:
 
 ### December 2025
 
+#### self-hosted redis (PR #674-675, Dec 30)
+
+**replaced Upstash with self-hosted Redis on Fly.io** - ~$75/month → ~$4/month:
+- Upstash pay-as-you-go was charging per command (37M commands = $75)
+- self-hosted Redis on 256MB Fly VMs costs fixed ~$2/month per environment
+- deployed `plyr-redis` (prod) and `plyr-redis-stg` (staging)
+- added CI workflow for redis deployments on merge
+
+**no state migration needed** - docket stores ephemeral task queue data, job progress lives in postgres.
+
+---
+
 #### supporter-gated content (PR #637, Dec 22-23)
 
 **atprotofans paywall integration** - artists can now mark tracks as "supporters only":
@@ -265,14 +277,14 @@ end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) compl
 
 ## cost structure
 
-current monthly costs: ~$18/month (plyr.fm specific)
+current monthly costs: ~$20/month (plyr.fm specific)
 
 see live dashboard: [plyr.fm/costs](https://plyr.fm/costs)
 
-- fly.io (plyr apps only): ~$12/month
+- fly.io (backend + redis + moderation): ~$14/month
 - neon postgres: $5/month
-- cloudflare (R2 + pages + domain): ~$1.16/month
-- audd audio fingerprinting: $0-10/month (6000 free/month)
+- cloudflare (R2 + pages + domain): ~$1/month
+- audd audio fingerprinting: $5-10/month (usage-based)
 - logfire: $0 (free tier)
 
 ## admin tooling
@@ -323,6 +335,7 @@ plyr.fm/
 │   └── src/routes/       # pages
 ├── moderation/           # Rust moderation service (ATProto labeler)
 ├── transcoder/           # Rust audio transcoding service
+├── redis/                # self-hosted Redis config
 ├── docs/                 # documentation
 └── justfile              # task runner
 ```
@@ -338,4 +351,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-29.
+this is a living document. last updated 2025-12-30.
