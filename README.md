@@ -119,6 +119,7 @@ plyr.fm/
 │   └── src/routes/       # pages
 ├── moderation/           # Rust labeler service
 ├── transcoder/           # Rust audio service
+├── redis/                # self-hosted Redis config
 ├── docs/                 # documentation
 └── justfile              # task runner
 ```
@@ -128,12 +129,13 @@ plyr.fm/
 <details>
 <summary>costs</summary>
 
-~$35-40/month:
-- fly.io backend (prod + staging): ~$10/month
-- fly.io transcoder: ~$0-5/month (auto-scales to zero)
+~$20/month:
+- fly.io (backend + redis + moderation): ~$14/month
 - neon postgres: $5/month
-- audd audio fingerprinting: ~$10/month
-- cloudflare (pages + r2): ~$0.16/month
+- cloudflare (pages + r2): ~$1/month
+- audd audio fingerprinting: $5-10/month (usage-based)
+
+live dashboard: https://plyr.fm/costs
 
 </details>
 

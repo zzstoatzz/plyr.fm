@@ -1,0 +1,28 @@
+app = "plyr-redis"
+primary_region = "iad"
+
+[build]
+  image = "redis:7-alpine"
+
+[mounts]
+  source = "redis_data"
+  destination = "/data"
+
+[env]
+  # redis config via command line args in [processes]
+
+[processes]
+  app = "--appendonly yes --maxmemory 200mb --maxmemory-policy allkeys-lru"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 6379
+
+  # only accessible within private network
+  [[services.ports]]
+    port = 6379
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

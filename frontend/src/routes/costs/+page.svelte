@@ -35,10 +35,6 @@
 				breakdown: CostBreakdown;
 				note: string;
 			};
-			upstash?: {
-				amount: number;
-				note: string;
-			};
 			audd: {
 				amount: number;
 				base_cost: number;
@@ -97,7 +93,6 @@
 					data.costs.fly_io.amount,
 					data.costs.neon.amount,
 					data.costs.cloudflare.amount,
-					data.costs.upstash?.amount ?? 0,
 					data.costs.audd.amount
 				)
 			: 1
@@ -226,22 +221,6 @@
 					</div>
 					<span class="cost-note">{data.costs.cloudflare.note}</span>
 				</div>
-
-				{#if data.costs.upstash}
-					<div class="cost-item">
-						<div class="cost-header">
-							<span class="cost-name">upstash</span>
-							<span class="cost-amount">{formatCurrency(data.costs.upstash.amount)}</span>
-						</div>
-						<div class="cost-bar-bg">
-							<div
-								class="cost-bar"
-								style="width: {barWidth(data.costs.upstash.amount, maxCost)}%"
-							></div>
-						</div>
-						<span class="cost-note">{data.costs.upstash.note}</span>
-					</div>
-				{/if}
 
 				<div class="cost-item">
 					<div class="cost-header">
