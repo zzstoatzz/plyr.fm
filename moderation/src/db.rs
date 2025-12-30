@@ -23,6 +23,30 @@ pub struct SensitiveImageRow {
     pub flagged_by: Option<String>,
 }
 
+/// Review batch for mobile-friendly flag review.
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct ReviewBatch {
+    pub id: String,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
+    /// Status: pending, completed.
+    pub status: String,
+    /// Who created this batch.
+    pub created_by: Option<String>,
+}
+
+/// A flag within a review batch.
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct BatchFlag {
+    pub id: i64,
+    pub batch_id: String,
+    pub uri: String,
+    pub reviewed: bool,
+    pub reviewed_at: Option<DateTime<Utc>>,
+    /// Decision: approved, rejected, or null.
+    pub decision: Option<String>,
+}
+
 /// Type alias for context row from database query.
 type ContextRow = (
     Option<i64>,    // track_id
@@ -232,6 +256,42 @@ impl LabelDb {
             .execute(&self.pool)
             .await?;
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_sensitive_images_url ON sensitive_images(url)")
+            .execute(&self.pool)
+            .await?;
+
+        // Review batches for mobile-friendly flag review
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS review_batches (
+                id TEXT PRIMARY KEY,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at TIMESTAMPTZ,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_by TEXT
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Flags within review batches
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS batch_flags (
+                id BIGSERIAL PRIMARY KEY,
+                batch_id TEXT NOT NULL REFERENCES review_batches(id) ON DELETE CASCADE,
+                uri TEXT NOT NULL,
+                reviewed BOOLEAN NOT NULL DEFAULT FALSE,
+                reviewed_at TIMESTAMPTZ,
+                decision TEXT,
+                UNIQUE(batch_id, uri)
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_batch_flags_batch_id ON batch_flags(batch_id)")
             .execute(&self.pool)
             .await?;
 
@@ -631,6 +691,193 @@ impl LabelDb {
             .collect();
 
         Ok(tracks)
+    }
+
+    // -------------------------------------------------------------------------
+    // Review batches
+    // -------------------------------------------------------------------------
+
+    /// Create a review batch with the given flags.
+    pub async fn create_batch(
+        &self,
+        id: &str,
+        uris: &[String],
+        created_by: Option<&str>,
+    ) -> Result<ReviewBatch, sqlx::Error> {
+        let batch = sqlx::query_as::<_, ReviewBatch>(
+            r#"
+            INSERT INTO review_batches (id, created_by)
+            VALUES ($1, $2)
+            RETURNING id, created_at, expires_at, status, created_by
+            "#,
+        )
+        .bind(id)
+        .bind(created_by)
+        .fetch_one(&self.pool)
+        .await?;
+
+        for uri in uris {
+            sqlx::query(
+                r#"
+                INSERT INTO batch_flags (batch_id, uri)
+                VALUES ($1, $2)
+                ON CONFLICT (batch_id, uri) DO NOTHING
+                "#,
+            )
+            .bind(id)
+            .bind(uri)
+            .execute(&self.pool)
+            .await?;
+        }
+
+        Ok(batch)
+    }
+
+    /// Get a batch by ID.
+    pub async fn get_batch(&self, id: &str) -> Result<Option<ReviewBatch>, sqlx::Error> {
+        sqlx::query_as::<_, ReviewBatch>(
+            r#"
+            SELECT id, created_at, expires_at, status, created_by
+            FROM review_batches
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    /// Get all flags in a batch with their context.
+    pub async fn get_batch_flags(&self, batch_id: &str) -> Result<Vec<FlaggedTrack>, sqlx::Error> {
+        let rows: Vec<FlaggedRow> = sqlx::query_as(
+            r#"
+            SELECT l.seq, l.uri, l.val, l.cts,
+                   c.track_id, c.track_title, c.artist_handle, c.artist_did, c.highest_score, c.matches,
+                   c.resolution_reason, c.resolution_notes
+            FROM batch_flags bf
+            JOIN labels l ON l.uri = bf.uri AND l.val = 'copyright-violation' AND l.neg = false
+            LEFT JOIN label_context c ON l.uri = c.uri
+            WHERE bf.batch_id = $1
+            ORDER BY l.seq DESC
+            "#,
+        )
+        .bind(batch_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let batch_uris: Vec<String> = rows.iter().map(|r| r.1.clone()).collect();
+        let negated_uris: std::collections::HashSet<String> = if !batch_uris.is_empty() {
+            sqlx::query_scalar::<_, String>(
+                r#"
+                SELECT DISTINCT uri
+                FROM labels
+                WHERE val = 'copyright-violation' AND neg = true AND uri = ANY($1)
+                "#,
+            )
+            .bind(&batch_uris)
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+
+        let tracks = rows
+            .into_iter()
+            .map(
+                |(
+                    seq,
+                    uri,
+                    val,
+                    cts,
+                    track_id,
+                    track_title,
+                    artist_handle,
+                    artist_did,
+                    highest_score,
+                    matches,
+                    resolution_reason,
+                    resolution_notes,
+                )| {
+                    let context = if track_id.is_some()
+                        || track_title.is_some()
+                        || artist_handle.is_some()
+                        || resolution_reason.is_some()
+                    {
+                        Some(LabelContext {
+                            track_id,
+                            track_title,
+                            artist_handle,
+                            artist_did,
+                            highest_score,
+                            matches: matches.and_then(|v| serde_json::from_value(v).ok()),
+                            resolution_reason: resolution_reason
+                                .and_then(|s| ResolutionReason::from_str(&s)),
+                            resolution_notes,
+                        })
+                    } else {
+                        None
+                    };
+
+                    FlaggedTrack {
+                        seq,
+                        uri: uri.clone(),
+                        val,
+                        created_at: cts.format("%Y-%m-%d %H:%M:%S").to_string(),
+                        resolved: negated_uris.contains(&uri),
+                        context,
+                    }
+                },
+            )
+            .collect();
+
+        Ok(tracks)
+    }
+
+    /// Update batch status.
+    pub async fn update_batch_status(&self, id: &str, status: &str) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query("UPDATE review_batches SET status = $1 WHERE id = $2")
+            .bind(status)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Mark a flag in a batch as reviewed.
+    pub async fn mark_flag_reviewed(
+        &self,
+        batch_id: &str,
+        uri: &str,
+        decision: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
+            r#"
+            UPDATE batch_flags
+            SET reviewed = true, reviewed_at = NOW(), decision = $1
+            WHERE batch_id = $2 AND uri = $3
+            "#,
+        )
+        .bind(decision)
+        .bind(batch_id)
+        .bind(uri)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Get pending (non-reviewed) flags from a batch.
+    pub async fn get_batch_pending_uris(&self, batch_id: &str) -> Result<Vec<String>, sqlx::Error> {
+        sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT uri FROM batch_flags
+            WHERE batch_id = $1 AND reviewed = false
+            "#,
+        )
+        .bind(batch_id)
+        .fetch_all(&self.pool)
+        .await
     }
 
     // -------------------------------------------------------------------------

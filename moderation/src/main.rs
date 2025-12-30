@@ -25,6 +25,7 @@ mod config;
 mod db;
 mod handlers;
 mod labels;
+mod review;
 mod state;
 mod xrpc;
 
@@ -91,6 +92,11 @@ async fn main() -> anyhow::Result<()> {
             "/admin/sensitive-images/remove",
             post(admin::remove_sensitive_image),
         )
+        .route("/admin/batches", post(admin::create_batch))
+        // Review endpoints (auth protected)
+        .route("/review/:id", get(review::review_page))
+        .route("/review/:id/data", get(review::review_data))
+        .route("/review/:id/submit", post(review::submit_review))
         // Static files (CSS, JS for admin UI)
         .nest_service("/static", ServeDir::new("static"))
         // ATProto XRPC endpoints (public)
