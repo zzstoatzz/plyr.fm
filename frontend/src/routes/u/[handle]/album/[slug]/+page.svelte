@@ -27,13 +27,20 @@
 		tracks = [...data.album.tracks];
 	});
 
+	// local mutable copy of tracks for reordering
+	let tracks = $state<Track[]>([...data.album.tracks]);
+
 	// check if current user owns this album
 	const isOwner = $derived(auth.user?.did === albumMetadata.artist_did);
 	// can only reorder if owner and album has an ATProto list
 	const canReorder = $derived(isOwner && !!albumMetadata.list_uri);
 
-	// local mutable copy of tracks for reordering
-	let tracks = $state<Track[]>([...data.album.tracks]);
+	// check if this album is currently playing
+	const isAlbumPlaying = $derived(
+		player.currentTrack !== null &&
+		!player.paused &&
+		tracks.some(t => t.id === player.currentTrack?.id)
+	);
 
 	// edit mode state
 	let isEditMode = $state(false);
@@ -545,11 +552,22 @@
 		</div>
 
 		<div class="album-actions">
-			<button class="play-button" onclick={playNow}>
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-					<path d="M8 5v14l11-7z"/>
-				</svg>
-				play now
+			<button
+				class="play-button"
+				class:is-playing={isAlbumPlaying}
+				onclick={() => isAlbumPlaying ? player.togglePlayPause() : playNow()}
+			>
+				{#if isAlbumPlaying}
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+						<rect x="6" y="4" width="4" height="16" />
+						<rect x="14" y="4" width="4" height="16" />
+					</svg>
+				{:else}
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M8 5v14l11-7z"/>
+					</svg>
+					play now
+				{/if}
 			</button>
 			<button class="queue-button" onclick={addToQueue}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -967,6 +985,10 @@
 
 	.play-button:hover {
 		transform: scale(1.05);
+	}
+
+	.play-button.is-playing {
+		animation: ethereal-glow 3s ease-in-out infinite;
 	}
 
 	.queue-button {

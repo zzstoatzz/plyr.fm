@@ -534,6 +534,16 @@
 		color: var(--accent-muted);
 	}
 
+	/* shared animation for active play buttons */
+	@keyframes -global-ethereal-glow {
+		0%, 100% {
+			box-shadow: 0 0 8px 1px color-mix(in srgb, var(--accent) 25%, transparent);
+		}
+		50% {
+			box-shadow: 0 0 14px 3px color-mix(in srgb, var(--accent) 45%, transparent);
+		}
+	}
+
 	:global(body) {
 		margin: 0;
 		padding: 0;
