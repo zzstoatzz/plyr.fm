@@ -124,6 +124,8 @@
 			root.style.setProperty('--glass-btn-border', isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)');
 			// very subtle text outline for readability against background images
 			root.style.setProperty('--text-shadow', isLight ? '0 0 8px rgba(255, 255, 255, 0.6)' : '0 0 8px rgba(0, 0, 0, 0.6)');
+			// dark overlay in dark mode to keep things darker regardless of artwork brightness
+			root.style.setProperty('--bg-overlay', isLight ? 'transparent' : 'rgba(0, 0, 0, 0.6)');
 		} else {
 			root.style.removeProperty('--bg-image');
 			root.style.removeProperty('--bg-image-mode');
@@ -133,6 +135,7 @@
 			root.style.removeProperty('--glass-btn-bg-hover');
 			root.style.removeProperty('--glass-btn-border');
 			root.style.removeProperty('--text-shadow');
+			root.style.removeProperty('--bg-overlay');
 		}
 	});
 
@@ -564,6 +567,16 @@
 		background-position: center;
 		filter: blur(var(--bg-blur, 0px));
 		transform: scale(1.1); /* prevent blur edge artifacts */
+		z-index: -2;
+		pointer-events: none;
+	}
+
+	/* dark overlay - keeps dark mode darker regardless of artwork brightness */
+	:global(body::after) {
+		content: '';
+		position: fixed;
+		inset: 0;
+		background: var(--bg-overlay, transparent);
 		z-index: -1;
 		pointer-events: none;
 	}
