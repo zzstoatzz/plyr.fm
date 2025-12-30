@@ -35,6 +35,9 @@ pub enum AppError {
     #[error("bad request: {0}")]
     BadRequest(String),
 
+    #[error("not found: {0}")]
+    NotFound(String),
+
     #[error("label error: {0}")]
     Label(#[from] LabelError),
 
@@ -54,6 +57,7 @@ impl IntoResponse for AppError {
                 (StatusCode::SERVICE_UNAVAILABLE, "LabelerNotConfigured")
             }
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, "BadRequest"),
+            AppError::NotFound(_) => (StatusCode::NOT_FOUND, "NotFound"),
             AppError::Label(_) => (StatusCode::INTERNAL_SERVER_ERROR, "LabelError"),
             AppError::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, "DatabaseError"),
             AppError::Io(_) => (StatusCode::INTERNAL_SERVER_ERROR, "IoError"),

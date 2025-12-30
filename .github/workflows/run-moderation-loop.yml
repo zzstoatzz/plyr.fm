@@ -1,0 +1,64 @@
+# run moderation loop via workflow dispatch
+#
+# analyzes pending copyright flags, auto-resolves false positives,
+# creates review batches for human review, sends DM notification
+#
+# required secrets:
+#   MODERATION_SERVICE_URL - moderation service base URL
+#   MODERATION_AUTH_TOKEN - X-Moderation-Key header value
+#   ANTHROPIC_API_KEY - for flag analysis
+#   NOTIFY_BOT_HANDLE - bluesky bot handle for DMs
+#   NOTIFY_BOT_PASSWORD - bluesky bot app password
+#   NOTIFY_RECIPIENT_HANDLE - who receives DM notifications
+
+name: run moderation loop
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "dry run (analyze only, don't resolve or send DMs)"
+        type: boolean
+        default: true
+      limit:
+        description: "max flags to process (leave empty for all)"
+        type: string
+        default: ""
+      env:
+        description: "environment (for DM header)"
+        type: choice
+        options:
+          - prod
+          - staging
+          - dev
+        default: prod
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Run moderation loop
+        run: |
+          ARGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ -n "${{ inputs.limit }}" ]; then
+            ARGS="$ARGS --limit ${{ inputs.limit }}"
+          fi
+          ARGS="$ARGS --env ${{ inputs.env }}"
+
+          echo "Running: uv run scripts/moderation_loop.py $ARGS"
+          uv run scripts/moderation_loop.py $ARGS
+        env:
+          MODERATION_SERVICE_URL: ${{ secrets.MODERATION_SERVICE_URL }}
+          MODERATION_AUTH_TOKEN: ${{ secrets.MODERATION_AUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTIFY_BOT_HANDLE: ${{ secrets.NOTIFY_BOT_HANDLE }}
+          NOTIFY_BOT_PASSWORD: ${{ secrets.NOTIFY_BOT_PASSWORD }}
+          NOTIFY_RECIPIENT_HANDLE: ${{ secrets.NOTIFY_RECIPIENT_HANDLE }}

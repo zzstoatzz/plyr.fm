@@ -137,6 +137,24 @@ pub struct RemoveSensitiveImageResponse {
     pub message: String,
 }
 
+/// Request to create a review batch.
+#[derive(Debug, Deserialize)]
+pub struct CreateBatchRequest {
+    /// URIs to include. If empty, uses all pending flags.
+    #[serde(default)]
+    pub uris: Vec<String>,
+    /// Who created this batch.
+    pub created_by: Option<String>,
+}
+
+/// Response after creating a review batch.
+#[derive(Debug, Serialize)]
+pub struct CreateBatchResponse {
+    pub id: String,
+    pub url: String,
+    pub flag_count: usize,
+}
+
 /// List all flagged tracks - returns JSON for API, HTML for htmx.
 pub async fn list_flagged(
     State(state): State<AppState>,
@@ -325,6 +343,57 @@ pub async fn store_context(
     Ok(Json(StoreContextResponse {
         message: format!("context stored for {}", request.uri),
     }))
+}
+
+/// Create a review batch from pending flags.
+pub async fn create_batch(
+    State(state): State<AppState>,
+    Json(request): Json<CreateBatchRequest>,
+) -> Result<Json<CreateBatchResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    // Get URIs to include
+    let uris = if request.uris.is_empty() {
+        let pending = db.get_pending_flags().await?;
+        pending
+            .into_iter()
+            .filter(|t| !t.resolved)
+            .map(|t| t.uri)
+            .collect()
+    } else {
+        request.uris
+    };
+
+    if uris.is_empty() {
+        return Err(AppError::BadRequest("no flags to review".to_string()));
+    }
+
+    let id = generate_batch_id();
+    let flag_count = uris.len();
+
+    tracing::info!(
+        batch_id = %id,
+        flag_count = flag_count,
+        "creating review batch"
+    );
+
+    db.create_batch(&id, &uris, request.created_by.as_deref())
+        .await?;
+
+    let url = format!("/review/{}", id);
+
+    Ok(Json(CreateBatchResponse { id, url, flag_count }))
+}
+
+/// Generate a short, URL-safe batch ID.
+fn generate_batch_id() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let rand_part: u32 = rand::random();
+    format!("{:x}{:x}", (now as u64) & 0xFFFFFFFF, rand_part & 0xFFFF)
 }
 
 /// Add a sensitive image entry.
