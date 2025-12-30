@@ -653,7 +653,7 @@ $effect(() => {
 		border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
 		border-radius: var(--radius-sm);
 		color: var(--accent);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		text-decoration: none;
 		transition: all 0.2s ease;
 	}
@@ -695,7 +695,7 @@ $effect(() => {
 
 	.handle {
 		color: var(--text-tertiary);
-		font-size: 1.1rem;
+		font-size: var(--text-xl);
 		text-decoration: none;
 		transition: color 0.2s;
 	}
@@ -738,7 +738,7 @@ $effect(() => {
 
 	.section-header span {
 		color: var(--text-tertiary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
 	}
@@ -820,7 +820,7 @@ $effect(() => {
 	.album-card-meta p {
 		margin: 0;
 		color: var(--text-tertiary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
@@ -853,14 +853,14 @@ $effect(() => {
 
 	.stat-label {
 		color: var(--text-tertiary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		text-transform: lowercase;
 		line-height: 1;
 	}
 
 	.stat-duration {
 		margin-top: 0.5rem;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-secondary);
 		font-variant-numeric: tabular-nums;
 	}
@@ -888,7 +888,7 @@ $effect(() => {
 
 	.top-item-plays {
 		color: var(--accent);
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		line-height: 1;
 	}
 
@@ -963,7 +963,7 @@ $effect(() => {
 		border-radius: var(--radius-md);
 		color: var(--text-secondary);
 		font-family: inherit;
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		cursor: pointer;
 		transition: all 0.2s ease;
 	}
@@ -981,7 +981,7 @@ $effect(() => {
 
 	.tracks-loading {
 		margin-left: 0.75rem;
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		color: var(--text-secondary);
 		font-weight: 400;
 		text-transform: lowercase;
@@ -1003,7 +1003,7 @@ $effect(() => {
 
 	.empty-message {
 		color: var(--text-secondary);
-		font-size: 1.25rem;
+		font-size: var(--text-2xl);
 		margin: 0 0 0.5rem 0;
 	}
 
@@ -1015,7 +1015,7 @@ $effect(() => {
 	.bsky-link {
 		color: var(--accent);
 		text-decoration: none;
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		padding: 0.75rem 1.5rem;
 		border: 1px solid var(--accent);
 		border-radius: var(--radius-base);
@@ -1072,7 +1072,7 @@ $effect(() => {
 
 		.support-btn {
 			height: 28px;
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 			padding: 0 0.6rem;
 		}
 
@@ -1116,12 +1116,12 @@ $effect(() => {
 		}
 
 		.album-card-meta h3 {
-			font-size: 0.95rem;
+			font-size: var(--text-base);
 			margin-bottom: 0.25rem;
 		}
 
 		.album-card-meta p {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 		}
 	}
 
@@ -1193,13 +1193,13 @@ $effect(() => {
 
 	.collection-info h3 {
 		margin: 0 0 0.25rem 0;
-		font-size: 1.1rem;
+		font-size: var(--text-xl);
 		color: var(--text-primary);
 	}
 
 	.collection-info p {
 		margin: 0;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		color: var(--text-tertiary);
 	}
 

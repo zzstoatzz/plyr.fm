@@ -67,7 +67,7 @@
 	.message {
 		margin: 0;
 		color: var(--text-secondary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		text-align: center;
 	}
 </style>

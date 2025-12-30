@@ -510,7 +510,7 @@
 		background: transparent;
 		border: none;
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 		transition: background 0.15s;
@@ -544,7 +544,7 @@
 		border: none;
 		border-bottom: 1px solid var(--border-subtle);
 		color: var(--text-secondary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-family: inherit;
 		cursor: pointer;
 		transition: background 0.15s;
@@ -588,7 +588,7 @@
 		background: transparent;
 		border: none;
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 		transition: background 0.15s;
@@ -639,7 +639,7 @@
 		gap: 0.5rem;
 		padding: 1.5rem 1rem;
 		color: var(--text-tertiary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.create-playlist-btn {
@@ -652,7 +652,7 @@
 		border: none;
 		border-top: 1px solid var(--border-subtle);
 		color: var(--accent);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 		transition: background 0.15s;
@@ -678,7 +678,7 @@
 		border-radius: var(--radius-base);
 		color: var(--text-primary);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	.create-form input:focus {
@@ -701,7 +701,7 @@
 		border-radius: var(--radius-base);
 		color: white;
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		cursor: pointer;
 		transition: opacity 0.15s;
@@ -783,7 +783,7 @@
 
 		.menu-item {
 			padding: 1rem 1.25rem;
-			font-size: 1rem;
+			font-size: var(--text-lg);
 		}
 
 		.back-button {

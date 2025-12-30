@@ -68,7 +68,7 @@
 		color: var(--accent);
 		padding: 0.25rem 0.75rem;
 		border-radius: var(--radius-sm);
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		white-space: nowrap;
 		pointer-events: none;
 		animation: fadeIn 0.2s ease-in;

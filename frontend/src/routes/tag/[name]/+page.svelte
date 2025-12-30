@@ -197,7 +197,7 @@
 	}
 
 	.subtitle {
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		color: var(--text-tertiary);
 		margin: 0;
 		text-shadow: var(--text-shadow, none);
@@ -212,7 +212,7 @@
 		border: 1px solid var(--glass-btn-border, var(--accent));
 		color: var(--accent);
 		border-radius: var(--radius-base);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -240,14 +240,14 @@
 	}
 
 	.empty-state h2 {
-		font-size: 1.5rem;
+		font-size: var(--text-3xl);
 		font-weight: 600;
 		color: var(--text-secondary);
 		margin: 0 0 0.5rem 0;
 	}
 
 	.empty-state p {
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		margin: 0;
 	}
 
@@ -264,7 +264,7 @@
 		text-align: center;
 		padding: 4rem 1rem;
 		color: var(--text-tertiary);
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 	}
 
 	.tracks-list {
@@ -292,12 +292,12 @@
 		}
 
 		.empty-state h2 {
-			font-size: 1.25rem;
+			font-size: var(--text-2xl);
 		}
 
 		.btn-queue-all {
 			padding: 0.5rem 0.75rem;
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.btn-queue-all svg {
@@ -330,12 +330,12 @@
 		}
 
 		.subtitle {
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.btn-queue-all {
 			padding: 0.45rem 0.65rem;
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 		}
 
 		.btn-queue-all svg {

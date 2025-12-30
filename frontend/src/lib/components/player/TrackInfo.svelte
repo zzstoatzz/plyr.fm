@@ -197,7 +197,7 @@
 
 	.player-title,
 	.player-title-link {
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-weight: 600;
 		color: var(--text-primary);
 		margin-bottom: 0;
@@ -384,12 +384,12 @@
 
 		.player-title,
 		.player-title-link {
-			font-size: 0.9rem;
+			font-size: var(--text-base);
 			margin-bottom: 0;
 		}
 
 		.player-metadata {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 		}
 
 		.player-title.scrolling,

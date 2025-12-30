@@ -227,7 +227,7 @@
 		}
 
 		.section-header h2 {
-			font-size: 1.25rem;
+			font-size: var(--text-2xl);
 		}
 	}
 </style>

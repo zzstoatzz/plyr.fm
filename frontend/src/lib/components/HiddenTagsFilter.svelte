@@ -126,7 +126,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex-wrap: wrap;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 	}
 
 	.filter-toggle {
@@ -157,14 +157,14 @@
 	}
 
 	.filter-count {
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 	}
 
 	.filter-label {
 		color: var(--text-tertiary);
 		white-space: nowrap;
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		font-family: inherit;
 	}
 
@@ -184,7 +184,7 @@
 		border: 1px solid var(--border-default);
 		color: var(--text-secondary);
 		border-radius: var(--radius-sm);
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -201,7 +201,7 @@
 	}
 
 	.remove-icon {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		line-height: 1;
 		opacity: 0.5;
 	}
@@ -221,7 +221,7 @@
 		border: 1px dashed var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-tertiary);
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		cursor: pointer;
 		transition: all 0.15s;
 	}
@@ -236,7 +236,7 @@
 		background: transparent;
 		border: 1px solid var(--border-default);
 		color: var(--text-primary);
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		font-family: inherit;
 		min-height: 24px;
 		width: 70px;

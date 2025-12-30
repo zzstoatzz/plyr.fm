@@ -345,7 +345,7 @@
 	}
 
 	.count {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-weight: 500;
 		color: var(--text-tertiary);
 		background: var(--bg-tertiary);
@@ -364,7 +364,7 @@
 		padding: 0.75rem 1.5rem;
 		border-radius: var(--radius-2xl);
 		font-weight: 600;
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -419,14 +419,14 @@
 	}
 
 	.empty-state h2 {
-		font-size: 1.5rem;
+		font-size: var(--text-3xl);
 		font-weight: 600;
 		color: var(--text-secondary);
 		margin: 0 0 0.5rem 0;
 	}
 
 	.empty-state p {
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		margin: 0;
 	}
 
@@ -505,11 +505,11 @@
 		}
 
 		.section-header h2 {
-			font-size: 1.25rem;
+			font-size: var(--text-2xl);
 		}
 
 		.count {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 			padding: 0.15rem 0.45rem;
 		}
 
@@ -518,7 +518,7 @@
 		}
 
 		.empty-state h2 {
-			font-size: 1.25rem;
+			font-size: var(--text-2xl);
 		}
 
 		.header-actions {
@@ -528,7 +528,7 @@
 		.queue-button,
 		.reorder-button {
 			padding: 0.6rem 1rem;
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.queue-button svg,

@@ -450,10 +450,19 @@
 		--text-muted: #666666;
 
 		/* typography scale */
-		--text-page-heading: 1.5rem;
+		--text-xs: 0.75rem;
+		--text-sm: 0.85rem;
+		--text-base: 0.9rem;
+		--text-lg: 1rem;
+		--text-xl: 1.1rem;
+		--text-2xl: 1.25rem;
+		--text-3xl: 1.5rem;
+
+		/* semantic typography (aliases) */
+		--text-page-heading: var(--text-3xl);
 		--text-section-heading: 1.2rem;
-		--text-body: 1rem;
-		--text-small: 0.9rem;
+		--text-body: var(--text-lg);
+		--text-small: var(--text-base);
 
 		/* border radius scale */
 		--radius-sm: 4px;

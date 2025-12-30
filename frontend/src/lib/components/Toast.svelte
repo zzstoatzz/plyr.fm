@@ -63,13 +63,13 @@
 		border: 1px solid rgba(255, 255, 255, 0.06);
 		border-radius: var(--radius-md);
 		pointer-events: none;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		max-width: 450px;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 	}
 
 	.toast-icon {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		flex-shrink: 0;
 		opacity: 0.7;
 		margin-top: 0.1rem;
@@ -135,12 +135,12 @@
 
 		.toast {
 			padding: 0.35rem 0.7rem;
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 			max-width: 90vw;
 		}
 
 		.toast-icon {
-			font-size: 0.75rem;
+			font-size: var(--text-xs);
 		}
 
 		.toast-message {

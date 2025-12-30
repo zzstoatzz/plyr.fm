@@ -1400,7 +1400,7 @@
 
 	.art-edit-overlay span {
 		font-family: inherit;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		font-weight: 500;
 	}
 
@@ -1432,7 +1432,7 @@
 
 	.playlist-type {
 		text-transform: uppercase;
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		font-weight: 600;
 		letter-spacing: 0.1em;
 		color: var(--text-tertiary);
@@ -1473,7 +1473,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		color: var(--text-secondary);
 	}
 
@@ -1490,7 +1490,7 @@
 
 	.meta-separator {
 		color: var(--text-muted);
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 	}
 
 	.show-on-profile-toggle {
@@ -1499,7 +1499,7 @@
 		gap: 0.5rem;
 		margin-top: 0.75rem;
 		cursor: pointer;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-secondary);
 	}
 
@@ -1562,7 +1562,7 @@
 		padding: 0.75rem 1.5rem;
 		border-radius: var(--radius-2xl);
 		font-weight: 600;
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -1615,7 +1615,7 @@
 	}
 
 	.section-heading {
-		font-size: 1.25rem;
+		font-size: var(--text-2xl);
 		font-weight: 600;
 		color: var(--text-primary);
 		margin-bottom: 1rem;
@@ -1735,7 +1735,7 @@
 		border-radius: var(--radius-md);
 		color: var(--text-tertiary);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		cursor: pointer;
 		transition: all 0.2s;
 	}
@@ -1769,14 +1769,14 @@
 	}
 
 	.empty-state p {
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-weight: 500;
 		color: var(--text-secondary);
 		margin: 0 0 0.25rem 0;
 	}
 
 	.empty-state span {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 		margin-bottom: 1.5rem;
 	}
@@ -1788,7 +1788,7 @@
 		border: none;
 		border-radius: var(--radius-md);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -1838,7 +1838,7 @@
 	}
 
 	.modal-header h3 {
-		font-size: 1.1rem;
+		font-size: var(--text-xl);
 		font-weight: 600;
 		color: var(--text-primary);
 		margin: 0;
@@ -1877,7 +1877,7 @@
 		background: transparent;
 		border: none;
 		font-family: inherit;
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		color: var(--text-primary);
 		outline: none;
 	}
@@ -1898,7 +1898,7 @@
 		padding: 2rem 1.5rem;
 		text-align: center;
 		color: var(--text-muted);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		margin: 0;
 	}
 
@@ -1947,7 +1947,7 @@
 	}
 
 	.result-title {
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		color: var(--text-primary);
 		white-space: nowrap;
@@ -1956,7 +1956,7 @@
 	}
 
 	.result-artist {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		white-space: nowrap;
 		overflow: hidden;
@@ -1994,7 +1994,7 @@
 	.modal-body p {
 		margin: 0;
 		color: var(--text-secondary);
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 		line-height: 1.5;
 	}
 
@@ -2010,7 +2010,7 @@
 		padding: 0.625rem 1.25rem;
 		border-radius: var(--radius-md);
 		font-family: inherit;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.15s;
@@ -2099,7 +2099,7 @@
 		}
 
 		.playlist-meta {
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.playlist-actions {
@@ -2142,7 +2142,7 @@
 		}
 
 		.playlist-meta {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 			flex-wrap: wrap;
 		}
 	}

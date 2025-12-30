@@ -96,13 +96,13 @@
 	}
 
 	.error-message {
-		font-size: 1.25rem;
+		font-size: var(--text-2xl);
 		color: var(--text-secondary);
 		margin: 0 0 0.5rem 0;
 	}
 
 	.error-detail {
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		color: var(--text-tertiary);
 		margin: 0 0 2rem 0;
 	}
@@ -118,7 +118,7 @@
 	.bsky-link {
 		color: var(--accent);
 		text-decoration: none;
-		font-size: 1.1rem;
+		font-size: var(--text-xl);
 		padding: 0.75rem 1.5rem;
 		border: 1px solid var(--accent);
 		border-radius: var(--radius-base);
@@ -151,7 +151,7 @@
 		}
 
 		.error-message {
-			font-size: 1.1rem;
+			font-size: var(--text-xl);
 		}
 
 		.actions {

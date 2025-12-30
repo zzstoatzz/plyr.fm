@@ -373,7 +373,7 @@
 
 	.subtitle {
 		color: var(--text-tertiary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		margin: 0;
 	}
 
@@ -391,7 +391,7 @@
 
 	.error-state .hint {
 		color: var(--text-tertiary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		margin-top: 0.5rem;
 	}
 
@@ -411,7 +411,7 @@
 	}
 
 	.total-label {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--text-tertiary);
@@ -426,7 +426,7 @@
 
 	.updated {
 		text-align: center;
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 		margin-top: 0.75rem;
 	}
@@ -438,7 +438,7 @@
 
 	.breakdown-section h2,
 	.audd-section h2 {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--text-tertiary);
@@ -496,7 +496,7 @@
 	}
 
 	.cost-note {
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 	}
 
@@ -529,7 +529,7 @@
 	.time-range-toggle button {
 		padding: 0.35rem 0.75rem;
 		font-family: inherit;
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		font-weight: 500;
 		background: transparent;
 		border: none;
@@ -551,7 +551,7 @@
 	.no-data {
 		text-align: center;
 		color: var(--text-tertiary);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		padding: 2rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-subtle);
@@ -566,7 +566,7 @@
 	}
 
 	.audd-explainer {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-secondary);
 		margin-bottom: 1.5rem;
 		line-height: 1.5;
@@ -587,14 +587,14 @@
 	}
 
 	.stat-value {
-		font-size: 1.25rem;
+		font-size: var(--text-2xl);
 		font-weight: 700;
 		color: var(--text-primary);
 		font-variant-numeric: tabular-nums;
 	}
 
 	.stat-label {
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 		text-align: center;
 		margin-top: 0.25rem;
@@ -610,7 +610,7 @@
 	}
 
 	.daily-chart h3 {
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--text-tertiary);
@@ -683,14 +683,14 @@
 
 	.support-text h3 {
 		margin: 0 0 0.5rem;
-		font-size: 1.1rem;
+		font-size: var(--text-xl);
 		color: var(--text-primary);
 	}
 
 	.support-text p {
 		margin: 0 0 1.5rem;
 		color: var(--text-secondary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	.support-button {
@@ -703,7 +703,7 @@
 		border-radius: var(--radius-md);
 		text-decoration: none;
 		font-weight: 600;
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		transition: transform 0.15s, box-shadow 0.15s;
 	}
 
@@ -715,7 +715,7 @@
 	/* footer */
 	.footer-note {
 		text-align: center;
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		padding-bottom: 1rem;
 	}

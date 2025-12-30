@@ -104,7 +104,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-family: inherit;
 		transition: all 0.2s;
 	}
@@ -203,7 +203,7 @@
 	}
 
 	.album-stats {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -212,7 +212,7 @@
 
 	.similar-hint {
 		margin-top: 0.5rem;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--warning);
 		font-style: italic;
 		margin-bottom: 0;

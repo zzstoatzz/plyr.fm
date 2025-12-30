@@ -370,7 +370,7 @@
 
 	.track-index {
 		width: 24px;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-muted);
 		text-align: center;
 		flex-shrink: 0;
@@ -540,7 +540,7 @@
 		align-items: flex-start;
 		gap: 0.15rem;
 		color: var(--text-secondary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 		font-family: inherit;
 		min-width: 0;
 		width: 100%;
@@ -560,7 +560,7 @@
 
 	.metadata-separator {
 		display: none;
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 	}
 
 	.artist-link {
@@ -660,7 +660,7 @@
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		color: var(--accent-hover);
 		border-radius: var(--radius-sm);
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		font-weight: 500;
 		text-decoration: none;
 		transition: all 0.15s;
@@ -680,7 +680,7 @@
 		color: var(--text-muted);
 		border: none;
 		border-radius: var(--radius-sm);
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 		font-weight: 500;
 		font-family: inherit;
 		cursor: pointer;
@@ -695,7 +695,7 @@
 	}
 
 	.track-meta {
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		display: flex;
 		align-items: center;
@@ -709,7 +709,7 @@
 
 	.meta-separator {
 		color: var(--text-muted);
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 	}
 
 	.likes {
@@ -822,16 +822,16 @@
 		}
 
 		.track-title {
-			font-size: 0.9rem;
+			font-size: var(--text-base);
 		}
 
 		.track-metadata {
-			font-size: 0.8rem;
+			font-size: var(--text-sm);
 			gap: 0.35rem;
 		}
 
 		.track-meta {
-			font-size: 0.7rem;
+			font-size: var(--text-xs);
 		}
 
 		.track-actions {
@@ -875,11 +875,11 @@
 		}
 
 		.track-title {
-			font-size: 0.85rem;
+			font-size: var(--text-sm);
 		}
 
 		.track-metadata {
-			font-size: 0.75rem;
+			font-size: var(--text-xs);
 		}
 
 		.metadata-separator {

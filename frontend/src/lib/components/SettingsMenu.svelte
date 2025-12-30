@@ -216,7 +216,7 @@
 		align-items: center;
 		color: var(--text-primary);
 		font-weight: 600;
-		font-size: 0.95rem;
+		font-size: var(--text-base);
 	}
 
 	.close-btn {
@@ -245,7 +245,7 @@
 
 	.settings-section h3 {
 		margin: 0;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--text-tertiary);
@@ -288,7 +288,7 @@
 	}
 
 	.theme-btn span {
-		font-size: 0.7rem;
+		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
@@ -319,7 +319,7 @@
 
 	.color-value {
 		font-family: monospace;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-secondary);
 	}
 
@@ -354,7 +354,7 @@
 		align-items: center;
 		gap: 0.65rem;
 		color: var(--text-primary);
-		font-size: 0.9rem;
+		font-size: var(--text-base);
 	}
 
 	.toggle input {
@@ -403,7 +403,7 @@
 	.toggle-hint {
 		margin: 0;
 		color: var(--text-tertiary);
-		font-size: 0.8rem;
+		font-size: var(--text-sm);
 		line-height: 1.3;
 	}
 
@@ -415,7 +415,7 @@
 		border-top: 1px solid var(--border-subtle);
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		transition: color 0.15s;
 	}
 

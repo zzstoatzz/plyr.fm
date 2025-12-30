@@ -133,7 +133,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		color: var(--text-primary);
-		font-size: 1rem;
+		font-size: var(--text-lg);
 		font-family: inherit;
 		transition: border-color 0.2s;
 		box-sizing: border-box;
@@ -159,7 +159,7 @@
 		top: 50%;
 		transform: translateY(-50%);
 		color: var(--text-muted);
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 	}
 
 	.results {
@@ -252,7 +252,7 @@
 	}
 
 	.handle {
-		font-size: 0.85rem;
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		overflow: hidden;
 		text-overflow: ellipsis;
