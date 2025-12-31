@@ -21,6 +21,7 @@ use tracing::{info, warn};
 mod admin;
 mod audd;
 mod auth;
+mod claude;
 mod config;
 mod db;
 mod handlers;
@@ -60,12 +61,26 @@ async fn main() -> anyhow::Result<()> {
         (None, None, None)
     };
 
+    // Initialize Claude client for image moderation if configured
+    let claude_client = if config.claude_enabled() {
+        let client = claude::ClaudeClient::new(
+            config.claude_api_key.clone().unwrap(),
+            Some(config.claude_model.clone()),
+        );
+        info!(model = %config.claude_model, "claude image moderation enabled");
+        Some(client)
+    } else {
+        warn!("claude not configured - /scan-image endpoint will return 503");
+        None
+    };
+
     let state = AppState {
         audd_api_token: config.audd_api_token,
         audd_api_url: config.audd_api_url,
         db: db.map(Arc::new),
         signer: signer.map(Arc::new),
         label_tx,
+        claude: claude_client.map(Arc::new),
     };
 
     let app = Router::new()
@@ -77,6 +92,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/sensitive-images", get(handlers::get_sensitive_images))
         // AuDD scanning
         .route("/scan", post(audd::scan))
+        // Image moderation via Claude
+        .route("/scan-image", post(handlers::scan_image))
         // Label emission (internal API)
         .route("/emit-label", post(handlers::emit_label))
         // Admin UI and API

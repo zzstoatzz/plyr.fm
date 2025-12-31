@@ -263,6 +263,31 @@ impl LabelDb {
             .execute(&self.pool)
             .await?;
 
+        // Image scans table for tracking automated moderation
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS image_scans (
+                id BIGSERIAL PRIMARY KEY,
+                image_id TEXT NOT NULL,
+                is_safe BOOLEAN NOT NULL,
+                violated_categories JSONB,
+                severity TEXT,
+                explanation TEXT,
+                scanned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                model TEXT
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_image_scans_image_id ON image_scans(image_id)")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_image_scans_is_safe ON image_scans(is_safe)")
+            .execute(&self.pool)
+            .await?;
+
         // Review batches for mobile-friendly flag review
         sqlx::query(
             r#"
@@ -928,6 +953,67 @@ impl LabelDb {
             .await?;
         Ok(result.rows_affected() > 0)
     }
+
+    // -------------------------------------------------------------------------
+    // Image scans
+    // -------------------------------------------------------------------------
+
+    /// Store an image scan result.
+    pub async fn store_image_scan(
+        &self,
+        image_id: &str,
+        is_safe: bool,
+        violated_categories: &[String],
+        severity: &str,
+        explanation: &str,
+        model: &str,
+    ) -> Result<i64, sqlx::Error> {
+        let categories_json = serde_json::to_value(violated_categories).unwrap_or_default();
+        sqlx::query_scalar::<_, i64>(
+            r#"
+            INSERT INTO image_scans (image_id, is_safe, violated_categories, severity, explanation, model)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            "#,
+        )
+        .bind(image_id)
+        .bind(is_safe)
+        .bind(categories_json)
+        .bind(severity)
+        .bind(explanation)
+        .bind(model)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    /// Get image scan stats for cost tracking.
+    pub async fn get_image_scan_stats(&self) -> Result<ImageScanStats, sqlx::Error> {
+        let row: (i64, i64, i64) = sqlx::query_as(
+            r#"
+            SELECT
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE is_safe = true) as safe,
+                COUNT(*) FILTER (WHERE is_safe = false) as flagged
+            FROM image_scans
+            "#,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(ImageScanStats {
+            total: row.0,
+            safe: row.1,
+            flagged: row.2,
+        })
+    }
+}
+
+/// Statistics for image scans.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageScanStats {
+    pub total: i64,
+    pub safe: i64,
+    pub flagged: i64,
 }
 
 impl LabelRow {

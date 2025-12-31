@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from io import BytesIO
 from typing import TYPE_CHECKING, Any
 
@@ -11,11 +12,15 @@ from sqlalchemy.orm import attributes
 
 from backend._internal.atproto.handles import resolve_handle
 from backend._internal.image import ImageFormat
+from backend._internal.moderation_client import get_moderation_client
+from backend.config import settings
 from backend.models import Track
 from backend.storage import storage
 
 from .constants import MAX_FEATURES
 from .services import get_or_create_album
+
+logger = logging.getLogger(__name__)
 
 MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024  # 20MB
 
@@ -111,7 +116,7 @@ async def upload_track_image(image: UploadFile) -> tuple[str, str | None]:
     if not image.filename:
         raise HTTPException(status_code=400, detail="image filename missing")
 
-    _image_format, is_valid = ImageFormat.validate_and_extract(image.filename)
+    image_format, is_valid = ImageFormat.validate_and_extract(image.filename)
     if not is_valid:
         raise HTTPException(
             status_code=400,
@@ -128,5 +133,18 @@ async def upload_track_image(image: UploadFile) -> tuple[str, str | None]:
     image_obj = BytesIO(image_data)
     image_id = await storage.save(image_obj, f"images/{image.filename}")
     image_url = await storage.get_url(image_id, file_type="image")
+
+    # scan image for policy violations (non-blocking)
+    if settings.moderation.image_moderation_enabled:
+        try:
+            client = get_moderation_client()
+            content_type = image_format.mime_type if image_format else "image/png"
+            await client.scan_image(image_data, image_id, content_type)
+            # note: if image is flagged, it's automatically added to sensitive_images
+            # by the moderation service. the image is still saved and returned -
+            # sensitive images are just blurred in the UI, not rejected.
+        except Exception as e:
+            # log but don't block upload - moderation is best-effort
+            logger.warning("image moderation failed for %s: %s", image_id, e)
 
     return image_id, image_url
