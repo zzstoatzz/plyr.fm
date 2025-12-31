@@ -20,10 +20,6 @@
 	<!-- desktop: all items as siblings for even spacing -->
 	<div class="header-content desktop-only">
 		<div class="brand-group">
-			<a href="/" class="brand">
-				<h1>{APP_NAME}{#if APP_STAGE}<sup class="stage-badge">{APP_STAGE}</sup>{/if}</h1>
-				<p>{APP_TAGLINE}</p>
-			</a>
 			<div class="social-links">
 				<a
 					href="https://bsky.app/profile/plyr.fm"
@@ -57,6 +53,10 @@
 					<img src="https://cdn.bsky.app/img/avatar/plain/did:plc:wshs7t2adsemcrrd4snkeqli/bafkreif6z53z4ukqmdgwstspwh5asmhxheblcd2adisoccl4fflozc3kva@jpeg" alt="Tangled" width="18" height="18" class="tangled-icon" />
 				</a>
 			</div>
+			<a href="/" class="brand">
+				<h1>{APP_NAME}{#if APP_STAGE}<sup class="stage-badge">{APP_STAGE}</sup>{/if}</h1>
+				<p>{APP_TAGLINE}</p>
+			</a>
 		</div>
 
 		<button class="nav-link" onclick={() => search.open()} title="search (Cmd+K)">
