@@ -328,7 +328,7 @@ pub async fn scan_image(
         &result.violated_categories,
         &result.severity,
         &result.explanation,
-        "claude-sonnet-4-5-20250514", // TODO: get from client
+        "claude-sonnet-4-5-20250929", // TODO: get from client
     )
     .await?;
 
