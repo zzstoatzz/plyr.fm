@@ -47,6 +47,15 @@ plyr.fm should become:
 
 ### December 2025
 
+#### avatar sync on login (PR #685, Dec 31)
+
+**avatars now stay fresh** - previously set once at artist creation, causing stale/broken avatars throughout the app:
+- on login, avatar is refreshed from Bluesky and synced to both postgres and ATProto profile record
+- added `avatar` field to `fm.plyr.actor.profile` lexicon (optional, URI format)
+- one-time backfill script (`scripts/backfill_avatars.py`) refreshed 28 stale avatars in production
+
+---
+
 #### self-hosted redis (PR #674-675, Dec 30)
 
 **replaced Upstash with self-hosted Redis on Fly.io** - ~$75/month → ~$4/month:
@@ -351,4 +360,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-30.
+this is a living document. last updated 2025-12-31.
