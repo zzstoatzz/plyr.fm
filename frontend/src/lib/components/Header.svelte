@@ -75,8 +75,6 @@
 					</svg>
 					<span>library</span>
 				</a>
-			{:else}
-				<div class="nav-spacer"></div>
 			{/if}
 
 			{#if $page.url.pathname !== '/upload'}
@@ -88,8 +86,6 @@
 					</svg>
 					<span>upload</span>
 				</a>
-			{:else}
-				<div class="nav-spacer"></div>
 			{/if}
 
 			<UserMenu {user} {onLogout} />
@@ -331,9 +327,6 @@
 		flex-shrink: 0;
 	}
 
-	.nav-spacer {
-		width: 80px;
-	}
 
 	.btn-primary {
 		background: transparent;
