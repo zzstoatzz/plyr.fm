@@ -566,6 +566,10 @@ class ModerationSettings(AppSettingsSection):
         default=300,
         description="TTL in seconds for cached copyright label status (default 5 min)",
     )
+    image_moderation_enabled: bool = Field(
+        default=True,
+        description="Enable image moderation via Claude vision on upload",
+    )
 
 
 class DocketSettings(AppSettingsSection):

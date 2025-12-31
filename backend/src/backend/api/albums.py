@@ -25,6 +25,8 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile
 from backend._internal.auth import get_session
+from backend._internal.moderation_client import get_moderation_client
+from backend.config import settings
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
@@ -440,6 +442,23 @@ async def upload_album_cover(
 
         # construct R2 URL directly (images are stored under images/ prefix)
         image_url = f"{storage.public_image_bucket_url}/images/{image_id}{ext}"
+
+        # scan image for policy violations (non-blocking)
+        if settings.moderation.image_moderation_enabled:
+            try:
+                client = get_moderation_client()
+                content_type = {
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".png": "image/png",
+                    ".webp": "image/webp",
+                }.get(ext, "image/png")
+                await client.scan_image(bytes(image_data), image_id, content_type)
+                # if image is flagged, it's automatically added to sensitive_images
+                # by the moderation service. the image is still saved and returned.
+            except Exception as e:
+                # log but don't block upload - moderation is best-effort
+                logger.warning("image moderation failed for %s: %s", image_id, e)
 
         # delete old image if exists (prevent R2 object leaks)
         if album.image_id:

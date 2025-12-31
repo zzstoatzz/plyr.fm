@@ -1,6 +1,10 @@
 //! HTTP request handlers for core endpoints.
 
-use axum::{extract::State, response::Html, Json};
+use axum::{
+    extract::{Multipart, State},
+    response::Html,
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -232,6 +236,124 @@ pub async fn get_sensitive_images(
     let urls: Vec<String> = images.iter().filter_map(|i| i.url.clone()).collect();
 
     Ok(Json(SensitiveImagesResponse { image_ids, urls }))
+}
+
+// --- image moderation ---
+
+/// Response from image scanning endpoint.
+#[derive(Debug, Serialize)]
+pub struct ScanImageResponse {
+    pub is_safe: bool,
+    pub reason: Option<String>,
+    pub severity: String,
+    pub violated_categories: Vec<String>,
+}
+
+/// Scan an image for policy violations using Claude vision.
+///
+/// Accepts multipart form with:
+/// - `image`: the image file to scan
+/// - `image_id`: identifier for tracking (e.g., R2 file ID)
+///
+/// Returns moderation result. If image is not safe, it's automatically
+/// added to the sensitive_images table.
+pub async fn scan_image(
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> Result<Json<ScanImageResponse>, AppError> {
+    let claude = state
+        .claude
+        .as_ref()
+        .ok_or(AppError::ImageModerationNotConfigured)?;
+    let db = state
+        .db
+        .as_ref()
+        .ok_or(AppError::ImageModerationNotConfigured)?;
+
+    let mut image_bytes: Option<Vec<u8>> = None;
+    let mut image_id: Option<String> = None;
+    let mut media_type = "image/png".to_string();
+
+    // Parse multipart form
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("multipart error: {e}")))?
+    {
+        let name = field.name().unwrap_or_default().to_string();
+
+        match name.as_str() {
+            "image" => {
+                // Get content type from field
+                if let Some(ct) = field.content_type() {
+                    media_type = ct.to_string();
+                }
+                image_bytes = Some(
+                    field
+                        .bytes()
+                        .await
+                        .map_err(|e| AppError::BadRequest(format!("failed to read image: {e}")))?
+                        .to_vec(),
+                );
+            }
+            "image_id" => {
+                image_id = Some(
+                    field
+                        .text()
+                        .await
+                        .map_err(|e| AppError::BadRequest(format!("failed to read image_id: {e}")))?,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    let image_bytes =
+        image_bytes.ok_or_else(|| AppError::BadRequest("missing 'image' field".to_string()))?;
+    let image_id =
+        image_id.ok_or_else(|| AppError::BadRequest("missing 'image_id' field".to_string()))?;
+
+    info!(image_id = %image_id, size = image_bytes.len(), "scanning image");
+
+    // Call Claude for analysis
+    let result = claude
+        .analyze_image(&image_bytes, &media_type)
+        .await
+        .map_err(|e| AppError::Claude(e.to_string()))?;
+
+    // Store scan result for cost tracking
+    db.store_image_scan(
+        &image_id,
+        result.is_safe,
+        &result.violated_categories,
+        &result.severity,
+        &result.explanation,
+        "claude-sonnet-4-5-20250514", // TODO: get from client
+    )
+    .await?;
+
+    // If not safe, add to sensitive images
+    if !result.is_safe {
+        info!(image_id = %image_id, severity = %result.severity, "flagging sensitive image");
+        db.add_sensitive_image(
+            Some(&image_id),
+            None,
+            Some(&result.explanation),
+            Some("claude-auto"),
+        )
+        .await?;
+    }
+
+    Ok(Json(ScanImageResponse {
+        is_safe: result.is_safe,
+        reason: if result.is_safe {
+            None
+        } else {
+            Some(result.explanation)
+        },
+        severity: result.severity,
+        violated_categories: result.violated_categories,
+    }))
 }
 
 #[cfg(test)]

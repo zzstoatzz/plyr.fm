@@ -43,6 +43,16 @@ class SensitiveImagesResult:
     urls: list[str]
 
 
+@dataclass
+class ScanImageResult:
+    """result from scanning an image for policy violations."""
+
+    is_safe: bool
+    reason: str | None
+    severity: str
+    violated_categories: list[str]
+
+
 class ModerationClient:
     """client for the plyr.fm moderation service.
 
@@ -183,6 +193,57 @@ class ModerationClient:
                 image_ids=data.get("image_ids", []),
                 urls=data.get("urls", []),
             )
+
+    async def scan_image(
+        self, image_bytes: bytes, image_id: str, content_type: str = "image/png"
+    ) -> ScanImageResult:
+        """scan an image for policy violations using claude vision.
+
+        the moderation service will:
+        - analyze the image using claude
+        - store the scan result for cost tracking
+        - automatically flag the image if it violates policy
+
+        args:
+            image_bytes: raw image bytes
+            image_id: identifier for tracking (e.g., r2 file id)
+            content_type: mime type of the image
+
+        returns:
+            ScanImageResult with moderation decision
+
+        raises:
+            httpx.HTTPStatusError: on non-2xx response
+            httpx.TimeoutException: on timeout
+        """
+        # use a longer timeout for image moderation (claude API call)
+        timeout = httpx.Timeout(30.0)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{self.labeler_url}/scan-image",
+                files={"image": (image_id, image_bytes, content_type)},
+                data={"image_id": image_id},
+                headers=self._headers(),
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            result = ScanImageResult(
+                is_safe=data.get("is_safe", True),
+                reason=data.get("reason"),
+                severity=data.get("severity", "safe"),
+                violated_categories=data.get("violated_categories", []),
+            )
+
+            logfire.info(
+                "image scan completed",
+                image_id=image_id,
+                is_safe=result.is_safe,
+                severity=result.severity,
+            )
+
+            return result
 
     async def get_active_labels(self, uris: list[str]) -> set[str]:
         """check which URIs have active (non-negated) copyright-violation labels.
