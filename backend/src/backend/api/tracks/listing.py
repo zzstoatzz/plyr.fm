@@ -28,6 +28,7 @@ from backend.utilities.aggregations import (
     get_comment_counts,
     get_copyright_info,
     get_like_counts,
+    get_top_track_ids,
     get_track_tags,
 )
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
@@ -270,6 +271,86 @@ async def list_tracks(
         next_cursor=next_cursor,
         has_more=has_more,
     )
+
+
+@router.get("/top")
+async def list_top_tracks(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = 10,
+    session: AuthSession | None = Depends(get_optional_session),
+) -> list[TrackResponse]:
+    """Get top tracks by like count.
+
+    Returns tracks ordered by number of likes (most liked first).
+    Only returns tracks that have at least one like.
+    """
+    limit = max(1, min(limit, 50))
+
+    # get top track IDs by like count
+    top_track_ids = await get_top_track_ids(db, limit)
+    if not top_track_ids:
+        return []
+
+    # fetch tracks with relationships
+    stmt = (
+        select(Track)
+        .join(Artist)
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
+        .where(Track.id.in_(top_track_ids))
+    )
+    result = await db.execute(stmt)
+    tracks_by_id = {track.id: track for track in result.scalars().all()}
+
+    # preserve order from top_track_ids
+    tracks = [tracks_by_id[tid] for tid in top_track_ids if tid in tracks_by_id]
+
+    # get authenticated user's liked tracks
+    liked_track_ids: set[int] | None = None
+    if session:
+        liked_result = await db.execute(
+            select(TrackLike.track_id).where(TrackLike.user_did == session.did)
+        )
+        liked_track_ids = set(liked_result.scalars().all())
+
+    # batch fetch aggregations
+    track_ids = [track.id for track in tracks]
+    like_counts, comment_counts, track_tags = await asyncio.gather(
+        get_like_counts(db, track_ids),
+        get_comment_counts(db, track_ids),
+        get_track_tags(db, track_ids),
+    )
+
+    # resolve supporter status for gated content
+    viewer_did = session.did if session else None
+    supported_artist_dids: set[str] = set()
+    if viewer_did:
+        gated_artist_dids = {
+            t.artist_did
+            for t in tracks
+            if t.support_gate and t.artist_did != viewer_did
+        }
+        if gated_artist_dids:
+            supported_artist_dids = await get_supported_artists(
+                viewer_did, gated_artist_dids
+            )
+
+    # build responses
+    track_responses = await asyncio.gather(
+        *[
+            TrackResponse.from_track(
+                track,
+                liked_track_ids=liked_track_ids,
+                like_counts=like_counts,
+                comment_counts=comment_counts,
+                track_tags=track_tags,
+                viewer_did=viewer_did,
+                supported_artist_dids=supported_artist_dids,
+            )
+            for track in tracks
+        ]
+    )
+
+    return list(track_responses)
 
 
 @router.get("/me")

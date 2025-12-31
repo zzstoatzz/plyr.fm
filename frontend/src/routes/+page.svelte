@@ -7,7 +7,8 @@
 	import HiddenTagsFilter from '$lib/components/HiddenTagsFilter.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
-	import { tracksCache } from '$lib/tracks.svelte';
+	import { tracksCache, fetchTopTracks } from '$lib/tracks.svelte';
+	import type { Track } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
 
@@ -19,6 +20,11 @@
 	let hasTracks = $derived(tracks.length > 0);
 	let initialLoad = $state(true);
 
+	// top tracks (most liked)
+	let topTracks = $state<Track[]>([]);
+	let loadingTopTracks = $state(true);
+	let hasTopTracks = $derived(topTracks.length > 0);
+
 	// show loading during initial load or when actively loading with no cached data
 	let showLoading = $derived((initialLoad && !hasTracks) || (loadingTracks && !hasTracks));
 
@@ -29,8 +35,13 @@
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 
 	onMount(async () => {
-		// fetch tracks from cache (will use cached data if recent)
-		await tracksCache.fetch();
+		// fetch top tracks and latest tracks concurrently
+		const [topResult] = await Promise.all([
+			fetchTopTracks(10),
+			tracksCache.fetch()
+		]);
+		topTracks = topResult;
+		loadingTopTracks = false;
 		initialLoad = false;
 	});
 
@@ -100,7 +111,32 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 
 <main>
-		<section class="tracks">
+	<!-- most liked section -->
+	{#if loadingTopTracks}
+		<section class="top-tracks">
+			<h2>top tracks</h2>
+			<div class="loading-container compact">
+				<WaveLoading size="sm" message="loading..." />
+			</div>
+		</section>
+	{:else if hasTopTracks}
+		<section class="top-tracks">
+			<h2>top tracks</h2>
+			<div class="track-list">
+				{#each topTracks as track, i}
+					<TrackItem
+						{track}
+						index={i}
+						isPlaying={player.currentTrack?.id === track.id}
+						onPlay={(t) => queue.playNow(t)}
+						isAuthenticated={auth.isAuthenticated}
+					/>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
+	<section class="tracks">
 		<div class="section-header">
 			<h2>
 				<button
@@ -157,6 +193,21 @@
 		display: flex;
 		justify-content: center;
 		padding: 3rem 2rem;
+	}
+
+	.loading-container.compact {
+		padding: 1.5rem 1rem;
+	}
+
+	.top-tracks {
+		margin-bottom: 2.5rem;
+	}
+
+	.top-tracks h2 {
+		font-size: var(--text-page-heading);
+		font-weight: 700;
+		color: var(--text-primary);
+		margin: 0 0 1.5rem 0;
 	}
 
 	main {
@@ -226,7 +277,8 @@
 			padding: 0 0.75rem calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px));
 		}
 
-		.section-header h2 {
+		.section-header h2,
+		.top-tracks h2 {
 			font-size: var(--text-2xl);
 		}
 	}
