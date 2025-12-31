@@ -26,6 +26,7 @@ from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile
 from backend._internal.auth import get_session
 from backend._internal.moderation_client import get_moderation_client
+from backend._internal.notifications import notification_service
 from backend.config import settings
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
@@ -453,9 +454,18 @@ async def upload_album_cover(
                     ".png": "image/png",
                     ".webp": "image/webp",
                 }.get(ext, "image/png")
-                await client.scan_image(bytes(image_data), image_id, content_type)
+                result = await client.scan_image(
+                    bytes(image_data), image_id, content_type
+                )
                 # if image is flagged, it's automatically added to sensitive_images
                 # by the moderation service. the image is still saved and returned.
+                if not result.is_safe:
+                    await notification_service.send_image_flag_notification(
+                        image_id=image_id,
+                        severity=result.severity,
+                        categories=result.violated_categories,
+                        context="album cover",
+                    )
             except Exception as e:
                 # log but don't block upload - moderation is best-effort
                 logger.warning("image moderation failed for %s: %s", image_id, e)
