@@ -13,6 +13,7 @@ from sqlalchemy.orm import attributes
 from backend._internal.atproto.handles import resolve_handle
 from backend._internal.image import ImageFormat
 from backend._internal.moderation_client import get_moderation_client
+from backend._internal.notifications import notification_service
 from backend.config import settings
 from backend.models import Track
 from backend.storage import storage
@@ -139,10 +140,17 @@ async def upload_track_image(image: UploadFile) -> tuple[str, str | None]:
         try:
             client = get_moderation_client()
             content_type = image_format.mime_type if image_format else "image/png"
-            await client.scan_image(image_data, image_id, content_type)
+            result = await client.scan_image(image_data, image_id, content_type)
             # note: if image is flagged, it's automatically added to sensitive_images
             # by the moderation service. the image is still saved and returned -
             # sensitive images are just blurred in the UI, not rejected.
+            if not result.is_safe:
+                await notification_service.send_image_flag_notification(
+                    image_id=image_id,
+                    severity=result.severity,
+                    categories=result.violated_categories,
+                    context="track cover",
+                )
         except Exception as e:
             # log but don't block upload - moderation is best-effort
             logger.warning("image moderation failed for %s: %s", image_id, e)

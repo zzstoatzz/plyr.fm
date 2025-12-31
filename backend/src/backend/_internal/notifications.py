@@ -68,6 +68,62 @@ class NotificationService:
             self.dm_client = None
             self.recipient_did = None
 
+    async def send_image_flag_notification(
+        self,
+        image_id: str,
+        severity: str,
+        categories: list[str],
+        context: str,
+    ):
+        """send notification about a flagged image.
+
+        args:
+            image_id: R2 storage ID of the flagged image
+            severity: severity level (low, medium, high)
+            categories: list of violated policy categories
+            context: where the image was uploaded (e.g., "track cover", "album cover")
+        """
+        if not self.dm_client or not self.recipient_did:
+            logger.warning(
+                "dm client not authenticated or recipient not set, skipping notification"
+            )
+            return
+
+        try:
+            dm = self.dm_client.chat.bsky.convo
+
+            convo_response = await dm.get_convo_for_members(
+                models.ChatBskyConvoGetConvoForMembers.Params(
+                    members=[self.recipient_did]
+                )
+            )
+
+            if not convo_response.convo or not convo_response.convo.id:
+                raise ValueError("failed to get conversation ID")
+
+            convo_id = convo_response.convo.id
+
+            categories_str = ", ".join(categories) if categories else "unspecified"
+            message_text = (
+                f"🚨 image flagged on {settings.app.name}\n\n"
+                f"context: {context}\n"
+                f"image_id: {image_id}\n"
+                f"severity: {severity}\n"
+                f"categories: {categories_str}"
+            )
+
+            await dm.send_message(
+                models.ChatBskyConvoSendMessage.Data(
+                    convo_id=convo_id,
+                    message=models.ChatBskyConvoDefs.MessageInput(text=message_text),
+                )
+            )
+
+            logger.info(f"sent image flag notification for {image_id}")
+
+        except Exception:
+            logger.exception(f"error sending image flag notification for {image_id}")
+
     async def send_track_notification(self, track: Track):
         """send notification about a new track."""
         if not self.dm_client or not self.recipient_did:
