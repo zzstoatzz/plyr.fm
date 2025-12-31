@@ -10,6 +10,11 @@
         "type": "object",
         "required": ["createdAt"],
         "properties": {
+          "avatar": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to avatar image."
+          },
           "bio": {
             "type": "string",
             "description": "Artist bio or description.",
