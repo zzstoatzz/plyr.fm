@@ -68,7 +68,8 @@
 		</button>
 
 		{#if isAuthenticated}
-			{#if $page.url.pathname.startsWith('/library')}
+			{@const isCollectionPage = $page.url.pathname.startsWith('/library') || $page.url.pathname.startsWith('/liked') || $page.url.pathname.startsWith('/playlist')}
+			{#if isCollectionPage}
 				<a href="/" class="nav-link" title="feed">
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<circle cx="12" cy="12" r="10"></circle>
@@ -121,7 +122,8 @@
 				</svg>
 			</button>
 			{#if isAuthenticated}
-				{#if $page.url.pathname.startsWith('/library')}
+				{@const isCollectionPage = $page.url.pathname.startsWith('/library') || $page.url.pathname.startsWith('/liked') || $page.url.pathname.startsWith('/playlist')}
+				{#if isCollectionPage}
 					<a href="/" class="nav-icon" title="feed">
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<circle cx="12" cy="12" r="10"></circle>
