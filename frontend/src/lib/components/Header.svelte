@@ -17,21 +17,63 @@
 </script>
 
 <header>
-	<div class="header-content">
-		<div class="left-section">
-			<!-- mobile: info menu (links + stats) -->
-			<div class="mobile-only">
-				<LinksMenu />
-			</div>
+	<!-- desktop: all items as siblings for even spacing -->
+	<div class="header-content desktop-only">
+		<a href="/" class="brand">
+			<h1>{APP_NAME}{#if APP_STAGE}<sup class="stage-badge">{APP_STAGE}</sup>{/if}</h1>
+			<p>{APP_TAGLINE}</p>
+		</a>
 
+		<button class="nav-link" onclick={() => search.open()} title="search (Cmd+K)">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<circle cx="11" cy="11" r="8"></circle>
+				<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+			</svg>
+			<span>search</span>
+		</button>
+
+		{#if isAuthenticated}
+			{#if !$page.url.pathname.startsWith('/library')}
+				<a href="/library" class="nav-link" title="library">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+					</svg>
+					<span>library</span>
+				</a>
+			{:else}
+				<div class="nav-spacer"></div>
+			{/if}
+
+			{#if $page.url.pathname !== '/upload'}
+				<a href="/upload" class="nav-link upload-link" title="upload a track">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+						<polyline points="17 8 12 3 7 8"></polyline>
+						<line x1="12" y1="3" x2="12" y2="15"></line>
+					</svg>
+					<span>upload</span>
+				</a>
+			{:else}
+				<div class="nav-spacer"></div>
+			{/if}
+
+			<UserMenu {user} {onLogout} />
+		{:else}
+			<a href="/login" class="btn-primary">log in</a>
+		{/if}
+	</div>
+
+	<!-- mobile: original nested structure -->
+	<div class="header-content-mobile mobile-only">
+		<div class="left-section">
+			<LinksMenu />
 			<a href="/" class="brand">
 				<h1>{APP_NAME}{#if APP_STAGE}<sup class="stage-badge">{APP_STAGE}</sup>{/if}</h1>
 				<p>{APP_TAGLINE}</p>
 			</a>
 		</div>
 
-		<!-- mobile: navigation icons -->
-		<div class="mobile-center mobile-only">
+		<div class="mobile-center">
 			<button class="nav-icon" onclick={() => search.open()} title="search (Cmd+K)">
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="11" cy="11" r="8"></circle>
@@ -47,59 +89,11 @@
 			{/if}
 		</div>
 
-		<nav>
-			{#if isAuthenticated}
-				<!-- desktop nav: search | library | upload | user menu -->
-				<div class="desktop-nav desktop-only">
-					<button class="nav-link" onclick={() => search.open()} title="search (Cmd+K)">
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<circle cx="11" cy="11" r="8"></circle>
-							<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-						</svg>
-						<span>search</span>
-					</button>
-					{#if !$page.url.pathname.startsWith('/library')}
-						<a href="/library" class="nav-link" title="library">
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-							</svg>
-							<span>library</span>
-						</a>
-					{/if}
-					{#if $page.url.pathname !== '/upload'}
-						<a href="/upload" class="nav-link upload-link" title="upload a track">
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-								<polyline points="17 8 12 3 7 8"></polyline>
-								<line x1="12" y1="3" x2="12" y2="15"></line>
-							</svg>
-							<span>upload</span>
-						</a>
-					{/if}
-					<UserMenu {user} {onLogout} />
-				</div>
-
-				<!-- mobile nav: profile menu -->
-				<div class="mobile-only">
-					<ProfileMenu {user} {onLogout} />
-				</div>
-			{:else}
-				<!-- logged out: search + login -->
-				<div class="desktop-nav desktop-only">
-					<button class="nav-link" onclick={() => search.open()} title="search (Cmd+K)">
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<circle cx="11" cy="11" r="8"></circle>
-							<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-						</svg>
-						<span>search</span>
-					</button>
-					<a href="/login" class="btn-primary">log in</a>
-				</div>
-				<div class="mobile-only">
-					<a href="/login" class="btn-primary">log in</a>
-				</div>
-			{/if}
-		</nav>
+		{#if isAuthenticated}
+			<ProfileMenu {user} {onLogout} />
+		{:else}
+			<a href="/login" class="btn-primary">log in</a>
+		{/if}
 	</div>
 </header>
 
@@ -115,6 +109,7 @@
 		-webkit-backdrop-filter: var(--glass-blur, none);
 	}
 
+	/* desktop: flat structure with space-between */
 	.header-content {
 		max-width: 800px;
 		margin: 0 auto;
@@ -122,7 +117,23 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		gap: 1rem;
+	}
+
+	/* mobile: nested structure */
+	.header-content-mobile {
+		padding: 0.75rem;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.desktop-only {
+		display: flex;
+	}
+
+	.mobile-only {
+		display: none;
 	}
 
 	.left-section {
@@ -144,22 +155,32 @@
 		color: var(--accent);
 	}
 
-	.desktop-only {
-		display: flex;
+	h1 {
+		font-size: var(--text-3xl);
+		margin: 0;
+		color: var(--text-primary);
+		transition: color 0.2s;
 	}
 
-	.mobile-only {
-		display: none;
+	.stage-badge {
+		font-size: 0.5rem;
+		font-weight: 500;
+		color: var(--text-tertiary);
+		margin-left: 0.25rem;
+		vertical-align: super;
+		letter-spacing: 0.03em;
 	}
 
-	.desktop-nav {
-		display: flex;
-		align-items: center;
-		gap: 1.25rem;
+	.brand p {
+		margin: 0;
+		font-size: 0.65rem;
+		color: var(--text-tertiary);
+		letter-spacing: 0.02em;
 	}
 
 	.mobile-center {
 		flex: 1;
+		display: flex;
 		justify-content: space-evenly;
 		align-items: center;
 	}
@@ -188,37 +209,6 @@
 
 	.nav-icon:active {
 		transform: scale(0.94);
-	}
-
-	h1 {
-		font-size: var(--text-3xl);
-		margin: 0;
-		color: var(--text-primary);
-		transition: color 0.2s;
-	}
-
-	.stage-badge {
-		font-size: 0.5rem;
-		font-weight: 500;
-		color: var(--text-tertiary);
-		margin-left: 0.25rem;
-		vertical-align: super;
-		letter-spacing: 0.03em;
-	}
-
-	.brand p {
-		margin: 0;
-		font-size: 0.65rem;
-		color: var(--text-tertiary);
-		letter-spacing: 0.02em;
-	}
-
-	nav {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-		justify-content: flex-end;
 	}
 
 	.nav-link {
@@ -260,6 +250,10 @@
 		flex-shrink: 0;
 	}
 
+	.nav-spacer {
+		width: 80px;
+	}
+
 	.btn-primary {
 		background: transparent;
 		border: 1px solid var(--accent);
@@ -278,7 +272,6 @@
 		color: var(--bg-primary);
 	}
 
-	/* switch to mobile layout */
 	@media (max-width: 768px) {
 		.desktop-only {
 			display: none !important;
@@ -288,25 +281,12 @@
 			display: flex;
 		}
 
-		.header-content {
-			padding: 0.75rem;
-			gap: 0.75rem;
-		}
-
-		.left-section {
-			gap: 0.5rem;
-		}
-
 		.brand h1 {
 			font-size: 1.15rem;
 		}
 
 		.brand p {
 			font-size: 0.55rem;
-		}
-
-		nav {
-			gap: 0.4rem;
 		}
 
 		.btn-primary {
