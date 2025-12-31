@@ -353,6 +353,13 @@
 		color: var(--bg-primary);
 	}
 
+	/* Hide margin-left when viewport is too narrow for left margin */
+	@media (max-width: 1000px) {
+		.margin-left {
+			display: none !important;
+		}
+	}
+
 	@media (max-width: 768px) {
 		.desktop-only {
 			display: none !important;
