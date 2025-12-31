@@ -15,7 +15,7 @@ pub struct Config {
     pub labeler_signing_key: Option<String>,
     /// Anthropic API key for Claude image moderation
     pub claude_api_key: Option<String>,
-    /// Claude model to use (default: claude-sonnet-4-5-20250514)
+    /// Claude model to use (default: claude-sonnet-4-5-20250929)
     pub claude_model: String,
 }
 
@@ -38,7 +38,7 @@ impl Config {
             labeler_signing_key: env::var("MODERATION_LABELER_SIGNING_KEY").ok(),
             claude_api_key: env::var("ANTHROPIC_API_KEY").ok(),
             claude_model: env::var("MODERATION_CLAUDE_MODEL")
-                .unwrap_or_else(|_| "claude-sonnet-4-5-20250514".to_string()),
+                .unwrap_or_else(|_| "claude-sonnet-4-5-20250929".to_string()),
         })
     }
 

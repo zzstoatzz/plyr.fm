@@ -28,7 +28,7 @@ impl ClaudeClient {
     pub fn new(api_key: String, model: Option<String>) -> Self {
         Self {
             api_key,
-            model: model.unwrap_or_else(|| "claude-sonnet-4-5-20250514".to_string()),
+            model: model.unwrap_or_else(|| "claude-sonnet-4-5-20250929".to_string()),
             http: reqwest::Client::new(),
         }
     }
