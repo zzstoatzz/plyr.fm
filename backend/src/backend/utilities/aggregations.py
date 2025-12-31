@@ -134,6 +134,26 @@ def _extract_primary_match(matches: list[dict[str, Any]]) -> str | None:
     return f"{title} by {artist}"
 
 
+async def get_top_track_ids(db: AsyncSession, limit: int = 10) -> list[int]:
+    """get track IDs ordered by like count (descending).
+
+    args:
+        db: database session
+        limit: max number of track IDs to return
+
+    returns:
+        list of track IDs ordered by like count (most liked first)
+    """
+    stmt = (
+        select(TrackLike.track_id)
+        .group_by(TrackLike.track_id)
+        .order_by(func.count(TrackLike.id).desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def get_track_tags(db: AsyncSession, track_ids: list[int]) -> dict[int, set[str]]:
     """get tags for multiple tracks in a single query.
 

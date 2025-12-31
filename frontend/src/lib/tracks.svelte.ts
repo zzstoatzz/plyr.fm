@@ -192,6 +192,23 @@ export async function unlikeTrack(trackId: number): Promise<boolean> {
 	}
 }
 
+export async function fetchTopTracks(limit = 10): Promise<Track[]> {
+	try {
+		const response = await fetch(`${API_URL}/tracks/top?limit=${limit}`, {
+			credentials: 'include'
+		});
+
+		if (!response.ok) {
+			throw new Error(`failed to fetch top tracks: ${response.statusText}`);
+		}
+
+		return await response.json();
+	} catch (e) {
+		console.error('failed to fetch top tracks:', e);
+		return [];
+	}
+}
+
 export async function fetchLikedTracks(): Promise<Track[]> {
 	try {
 		const response = await fetch(`${API_URL}/tracks/liked`, {
