@@ -17,47 +17,47 @@
 </script>
 
 <header>
-	<!-- desktop: all items as siblings for even spacing -->
+	<!-- Social links in left margin, outside main content flow -->
+	<div class="margin-left desktop-only">
+		<a
+			href="https://bsky.app/profile/plyr.fm"
+			target="_blank"
+			rel="noopener noreferrer"
+			class="social-link"
+			title="follow @plyr.fm on bluesky"
+		>
+			<svg width="18" height="18" viewBox="0 0 600 530" fill="currentColor">
+				<path d="m135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46 47.98-36.021 125.72-63.892 125.72 24.795 0 17.712-10.155 148.79-16.111 170.07-20.703 73.984-96.144 92.854-163.25 81.433 117.3 19.964 147.14 86.092 82.697 152.22-122.39 125.59-175.91-31.511-189.63-71.766-2.514-7.3797-3.6904-10.832-3.7077-7.8964-0.0174-2.9357-1.1937 0.51669-3.7077 7.8964-13.714 40.255-67.233 197.36-189.63 71.766-64.444-66.128-34.605-132.26 82.697-152.22-67.108 11.421-142.55-7.4491-163.25-81.433-5.9562-21.282-16.111-152.36-16.111-170.07 0-88.687 77.742-60.816 125.72-24.795z"/>
+			</svg>
+		</a>
+		<a
+			href="https://status.zzstoatzz.io/@plyr.fm"
+			target="_blank"
+			rel="noopener noreferrer"
+			class="social-link"
+			title="view status page"
+		>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+			</svg>
+		</a>
+		<a
+			href="https://tangled.org/@zzstoatzz.io/plyr.fm"
+			target="_blank"
+			rel="noopener noreferrer"
+			class="social-link"
+			title="view source on tangled"
+		>
+			<img src="https://cdn.bsky.app/img/avatar/plain/did:plc:wshs7t2adsemcrrd4snkeqli/bafkreif6z53z4ukqmdgwstspwh5asmhxheblcd2adisoccl4fflozc3kva@jpeg" alt="Tangled" width="18" height="18" class="tangled-icon" />
+		</a>
+	</div>
+
+	<!-- desktop: logo left, nav items evenly spaced right -->
 	<div class="header-content desktop-only">
-		<div class="brand-group">
-			<div class="social-links">
-				<a
-					href="https://bsky.app/profile/plyr.fm"
-					target="_blank"
-					rel="noopener noreferrer"
-					class="social-link"
-					title="follow @plyr.fm on bluesky"
-				>
-					<svg width="18" height="18" viewBox="0 0 600 530" fill="currentColor">
-						<path d="m135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46 47.98-36.021 125.72-63.892 125.72 24.795 0 17.712-10.155 148.79-16.111 170.07-20.703 73.984-96.144 92.854-163.25 81.433 117.3 19.964 147.14 86.092 82.697 152.22-122.39 125.59-175.91-31.511-189.63-71.766-2.514-7.3797-3.6904-10.832-3.7077-7.8964-0.0174-2.9357-1.1937 0.51669-3.7077 7.8964-13.714 40.255-67.233 197.36-189.63 71.766-64.444-66.128-34.605-132.26 82.697-152.22-67.108 11.421-142.55-7.4491-163.25-81.433-5.9562-21.282-16.111-152.36-16.111-170.07 0-88.687 77.742-60.816 125.72-24.795z"/>
-					</svg>
-				</a>
-				<a
-					href="https://status.zzstoatzz.io/@plyr.fm"
-					target="_blank"
-					rel="noopener noreferrer"
-					class="social-link"
-					title="view status page"
-				>
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-					</svg>
-				</a>
-				<a
-					href="https://tangled.org/@zzstoatzz.io/plyr.fm"
-					target="_blank"
-					rel="noopener noreferrer"
-					class="social-link"
-					title="view source on tangled"
-				>
-					<img src="https://cdn.bsky.app/img/avatar/plain/did:plc:wshs7t2adsemcrrd4snkeqli/bafkreif6z53z4ukqmdgwstspwh5asmhxheblcd2adisoccl4fflozc3kva@jpeg" alt="Tangled" width="18" height="18" class="tangled-icon" />
-				</a>
-			</div>
-			<a href="/" class="brand">
-				<h1>{APP_NAME}{#if APP_STAGE}<sup class="stage-badge">{APP_STAGE}</sup>{/if}</h1>
-				<p>{APP_TAGLINE}</p>
-			</a>
-		</div>
+		<a href="/" class="brand">
+			<h1>{APP_NAME}{#if APP_STAGE}<sup class="stage-badge">{APP_STAGE}</sup>{/if}</h1>
+			<p>{APP_TAGLINE}</p>
+		</a>
 
 		<button class="nav-link" onclick={() => search.open()} title="search (Cmd+K)">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -144,6 +144,19 @@
 		-webkit-backdrop-filter: var(--glass-blur, none);
 	}
 
+	.margin-left {
+		position: absolute;
+		left: 0;
+		top: 50%;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		width: calc((100vw - var(--queue-width, 0px) - 800px) / 2);
+		padding: 0 1rem;
+		gap: 0.5rem;
+	}
+
 	/* desktop: flat structure with space-between */
 	.header-content {
 		max-width: 800px;
@@ -177,7 +190,7 @@
 		gap: 0.5rem;
 	}
 
-	.brand-group {
+	.desktop-nav {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
@@ -194,12 +207,6 @@
 
 	.brand:hover h1 {
 		color: var(--accent);
-	}
-
-	.social-links {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
 	}
 
 	.social-link {
