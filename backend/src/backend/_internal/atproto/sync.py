@@ -5,6 +5,7 @@ import logging
 from sqlalchemy import select
 
 from backend._internal import Session as AuthSession
+from backend._internal.atproto.profile import fetch_user_avatar
 from backend._internal.atproto.records.fm_plyr import (
     get_record_public,
     upsert_album_list_record,
@@ -55,21 +56,42 @@ async def sync_atproto_records(
     """
     from backend.models import Album, Artist, Track, TrackLike, UserPreferences
 
-    # sync profile record
+    # sync profile record with avatar refresh
     async with db_session() as session:
         artist_result = await session.execute(
             select(Artist).where(Artist.did == user_did)
         )
         artist = artist_result.scalar_one_or_none()
-        artist_bio = artist.bio if artist else None
 
-    if artist_bio is not None or artist:
-        try:
-            profile_result = await upsert_profile_record(auth_session, bio=artist_bio)
-            if profile_result:
-                logger.info(f"synced ATProto profile record for {user_did}")
-        except Exception as e:
-            logger.warning(f"failed to sync ATProto profile record for {user_did}: {e}")
+        if not artist:
+            logger.debug(
+                f"no artist profile found for {user_did}, skipping profile sync"
+            )
+        else:
+            artist_bio = artist.bio
+            artist_avatar = artist.avatar_url
+
+            # fetch current avatar from bluesky
+            fresh_avatar = await fetch_user_avatar(user_did)
+
+            # update postgres if avatar changed
+            if fresh_avatar != artist_avatar:
+                artist.avatar_url = fresh_avatar
+                await session.commit()
+                logger.info(f"refreshed avatar for {user_did}")
+                artist_avatar = fresh_avatar
+
+            # sync to ATProto profile record
+            try:
+                profile_result = await upsert_profile_record(
+                    auth_session, bio=artist_bio, avatar=artist_avatar
+                )
+                if profile_result:
+                    logger.info(f"synced ATProto profile record for {user_did}")
+            except Exception as e:
+                logger.warning(
+                    f"failed to sync ATProto profile record for {user_did}: {e}"
+                )
 
     # query and sync album list records
     async with db_session() as session:
