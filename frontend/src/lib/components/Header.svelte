@@ -155,7 +155,7 @@
 	.desktop-nav {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 1.25rem;
 	}
 
 	.mobile-center {
