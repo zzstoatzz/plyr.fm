@@ -50,7 +50,6 @@ export async function getAtprotofansProfile(did: string): Promise<AtprotofansPro
 
 /**
  * fetch list of supporters for an artist.
- * enriches with avatars from Bluesky's public API.
  */
 export async function getAtprotofansSupporters(
 	did: string,
@@ -70,33 +69,7 @@ export async function getAtprotofansSupporters(
 			return null;
 		}
 
-		const data: GetSupportersResponse = await response.json();
-
-		// enrich supporters with avatars from Bluesky
-		if (data.supporters.length > 0) {
-			const enriched = await Promise.all(
-				data.supporters.map(async (supporter) => {
-					try {
-						const profileUrl = `https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(supporter.did)}`;
-						const profileRes = await fetch(profileUrl);
-						if (profileRes.ok) {
-							const profile = await profileRes.json();
-							return {
-								...supporter,
-								avatar: profile.avatar || undefined,
-								displayName: profile.displayName || supporter.displayName
-							};
-						}
-					} catch (_e) {
-						// ignore - use supporter without avatar
-					}
-					return supporter;
-				})
-			);
-			data.supporters = enriched;
-		}
-
-		return data;
+		return await response.json();
 	} catch (_e) {
 		console.error('failed to fetch atprotofans supporters:', _e);
 		return null;
