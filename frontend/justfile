@@ -1,10 +1,13 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
-default := "dev"
+default := "run"
+
+alias r := run
+alias dev := run
 
 # run frontend dev server (hot reloads)
-dev:
-    cd {{justfile_directory()}}/frontend && bun run dev --host 0.0.0.0
+run:
+    bun run dev --host 0.0.0.0
 
 # check svelte types
 check:
-    cd {{justfile_directory()}}/frontend && bun run check
+    bun run check

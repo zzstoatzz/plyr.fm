@@ -22,7 +22,7 @@ just dev-services
 DOCKET_URL=redis://localhost:6379 just backend run
 
 # terminal 3: start frontend
-just frontend dev
+just frontend run
 
 # optional: start transcoder
 just transcoder run

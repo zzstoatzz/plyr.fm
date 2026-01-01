@@ -36,3 +36,7 @@ dev-services:
 # stop dev services
 dev-services-down:
     docker compose down
+
+# expose backend via ngrok tunnel
+tunnel:
+    ngrok http 8001 --domain tunnel.zzstoatzz.io

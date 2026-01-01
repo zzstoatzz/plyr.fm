@@ -64,7 +64,7 @@ key namespaces:
 just backend run
 
 # frontend
-just frontend dev
+just frontend run
 
 # run tests
 just backend test
