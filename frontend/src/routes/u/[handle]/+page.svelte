@@ -441,18 +441,18 @@ $effect(() => {
 							target="_blank"
 							rel="noopener"
 							class="supporter-card"
-							title={supporter.displayName || supporter.handle}
+							title={supporter.display_name || supporter.handle}
 						>
-							{#if supporter.avatar && supporter.avatar.length > 0}
-								<img src={supporter.avatar} alt="" class="supporter-avatar" />
+							{#if supporter.avatar_url}
+								<SensitiveImage src={supporter.avatar_url} compact>
+									<img src={supporter.avatar_url} alt="" class="supporter-avatar" />
+								</SensitiveImage>
 							{:else}
 								<div class="supporter-avatar-placeholder">
-									<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-										<path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-									</svg>
+									{(supporter.display_name || supporter.handle).charAt(0).toUpperCase()}
 								</div>
 							{/if}
-							<span class="supporter-name">{supporter.displayName || supporter.handle}</span>
+							<span class="supporter-name">{supporter.display_name || supporter.handle}</span>
 						</a>
 					{/each}
 				</div>
