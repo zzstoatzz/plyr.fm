@@ -33,7 +33,7 @@
 
 ## 💻 Development Commands
 *   **Backend:** `just backend run`
-*   **Frontend:** `just frontend dev`
+*   **Frontend:** `just frontend run`
 *   **Tests:** `just backend test` (run from repo root, not from backend/)
 *   **Linting:** `just backend lint` (Python) / `just frontend check` (Svelte)
 *   **Migrations:** `just backend migrate "message"` (create), `just backend migrate-up` (apply)

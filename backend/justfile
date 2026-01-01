@@ -2,6 +2,8 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 default := "run"
 
+alias r := run
+
 # run backend server (hot reloads)
 run:
     uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port ${PORT:-8001}

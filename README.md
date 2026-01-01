@@ -52,7 +52,7 @@ just dev-services
 just backend run
 
 # run frontend (hot reloads at http://localhost:5173)
-just frontend dev
+just frontend run
 ```
 
 ### useful commands
