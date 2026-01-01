@@ -151,23 +151,6 @@
 		</svg>
 	</button>
 
-	<div class="playback-options">
-		<button
-			class="option-btn"
-			class:active={queue.shuffle}
-			onclick={() => queue.toggleShuffle()}
-			title={queue.shuffle ? 'disable shuffle' : 'enable shuffle'}
-		>
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<polyline points="16 3 21 3 21 8"></polyline>
-				<line x1="4" y1="20" x2="21" y2="3"></line>
-				<polyline points="21 16 21 21 16 21"></polyline>
-				<line x1="15" y1="15" x2="21" y2="21"></line>
-				<line x1="4" y1="4" x2="9" y2="9"></line>
-			</svg>
-		</button>
-	</div>
-
 	<div class="time-control">
 		<span class="time">{formattedCurrentTime}</span>
 		<input
@@ -264,42 +247,6 @@
 	.control-btn.disabled {
 		opacity: 0.4;
 		pointer-events: none;
-	}
-
-	.playback-options {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.option-btn {
-		background: transparent;
-		border: 1px solid var(--border-default);
-		color: var(--text-secondary);
-		cursor: pointer;
-		width: 40px;
-		height: 40px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: var(--radius-base);
-		transition: all 0.2s;
-		position: relative;
-	}
-
-	.option-btn svg {
-		width: 20px;
-		height: 20px;
-	}
-
-	.option-btn:hover {
-		color: var(--text-primary);
-		border-color: var(--accent);
-	}
-
-	.option-btn.active {
-		color: var(--accent);
-		border-color: var(--accent);
 	}
 
 	.time-control {
@@ -472,24 +419,9 @@
 			height: 32px;
 		}
 
-		.playback-options {
-			grid-row: 2;
-			grid-column: 1;
-		}
-
-		.option-btn {
-			width: 36px;
-			height: 36px;
-		}
-
-		.option-btn svg {
-			width: 18px;
-			height: 18px;
-		}
-
 		.time-control {
 			grid-row: 2;
-			grid-column: 2 / 7;
+			grid-column: 1 / 7;
 		}
 
 		.time {

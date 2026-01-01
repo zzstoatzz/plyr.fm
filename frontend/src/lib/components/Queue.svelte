@@ -114,15 +114,31 @@
 	<div class="queue">
 		<div class="queue-header">
 			<h2>queue</h2>
-			{#if upcoming.length > 0}
+			<div class="queue-actions">
 				<button
-					class="clear-btn"
-					onclick={() => queue.clearUpNext()}
-					title="clear upcoming tracks"
+					class="shuffle-btn"
+					class:active={queue.shuffle}
+					onclick={() => queue.toggleShuffle()}
+					title={queue.shuffle ? 'disable shuffle' : 'enable shuffle'}
 				>
-					clear queue
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="16 3 21 3 21 8"></polyline>
+						<line x1="4" y1="20" x2="21" y2="3"></line>
+						<polyline points="21 16 21 21 16 21"></polyline>
+						<line x1="15" y1="15" x2="21" y2="21"></line>
+						<line x1="4" y1="4" x2="9" y2="9"></line>
+					</svg>
 				</button>
-			{/if}
+				{#if upcoming.length > 0}
+					<button
+						class="clear-btn"
+						onclick={() => queue.clearUpNext()}
+						title="clear upcoming tracks"
+					>
+						clear
+					</button>
+				{/if}
+			</div>
 		</div>
 
 		<div class="queue-body">
@@ -259,6 +275,38 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+	}
+
+	.queue-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.shuffle-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-tertiary);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.shuffle-btn:hover {
+		color: var(--text-secondary);
+		border-color: var(--border-default);
+		background: var(--bg-secondary);
+	}
+
+	.shuffle-btn.active {
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 
 	.clear-btn {
