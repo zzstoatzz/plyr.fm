@@ -45,6 +45,28 @@ plyr.fm should become:
 
 ## recent work
 
+### January 2026
+
+#### atprotofans supporters display (PRs #695-696, Jan 1)
+
+**supporters now visible on artist pages** - artists using atprotofans can show their supporters:
+- compact overlapping avatar circles (GitHub sponsors style) with "+N" overflow badge
+- clicks link to supporter's plyr.fm artist page (keeps users in-app)
+- `POST /artists/batch` endpoint enriches supporter DIDs with avatar_url from our Artist table
+- frontend fetches from atprotofans, enriches via backend, renders with consistent avatar pattern
+
+**route ordering fix** (PR #696): FastAPI was matching `/artists/batch` as `/{did}` with did="batch". moved POST route before the catchall GET route.
+
+---
+
+#### UI polish (PRs #692-694, Dec 31 - Jan 1)
+
+- **feed/library toggle** (PR #692): consistent header layout with toggle between feed and library views
+- **shuffle button moved** (PR #693): shuffle now in queue component instead of player controls
+- **justfile consistency** (PR #694): standardized `just run` across frontend/backend modules
+
+---
+
 ### December 2025
 
 #### avatar sync on login (PR #685, Dec 31)
@@ -360,4 +382,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2025-12-31.
+this is a living document. last updated 2026-01-01.

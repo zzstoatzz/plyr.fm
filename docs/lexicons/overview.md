@@ -139,6 +139,22 @@ a Rust-based SDK for this purpose is in development. once complete, the workflow
 
 this removes the manual sync burden and enables type-safe ATProto record handling.
 
+## permission sets
+
+permission sets bundle OAuth permissions under human-readable titles. instead of users seeing "fm.plyr.track, fm.plyr.like, ..." they see "plyr.fm Music Library".
+
+### fm.plyr.authFullApp
+
+full access for the main web app - create/update/delete on all collections.
+
+### enabling permission sets
+
+set `ATPROTO_USE_PERMISSION_SETS=true` to use `include:fm.plyr.authFullApp` instead of granular scopes.
+
+**requirement**: permission set lexicons must be published to `com.atproto.lexicon.schema` collection on the `plyr.fm` authority repo (`did:plc:vs3hnzq2daqbszxlysywzy54`).
+
+see [research doc](../research/2026-01-01-atproto-oauth-permission-sets.md) for implementation details.
+
 ## adding new lexicons
 
 when adding a new record type:

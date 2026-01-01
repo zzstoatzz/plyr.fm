@@ -1,0 +1,25 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.authFullApp",
+  "defs": {
+    "main": {
+      "type": "permission-set",
+      "title": "plyr.fm",
+      "description": "Upload and manage audio content, playlists, likes, and comments.",
+      "permissions": [
+        {
+          "type": "permission",
+          "resource": "repo",
+          "action": ["create", "update", "delete"],
+          "collection": [
+            "fm.plyr.track",
+            "fm.plyr.like",
+            "fm.plyr.comment",
+            "fm.plyr.list",
+            "fm.plyr.actor.profile"
+          ]
+        }
+      ]
+    }
+  }
+}
