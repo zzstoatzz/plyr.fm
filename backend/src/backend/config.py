@@ -362,6 +362,11 @@ class AtprotoSettings(AppSettingsSection):
         validation_alias="ATPROTO_SCOPE_OVERRIDE",
         description="Optional OAuth scope override",
     )
+    use_permission_sets: bool = Field(
+        default=False,
+        validation_alias="ATPROTO_USE_PERMISSION_SETS",
+        description="Use ATProto permission sets instead of granular repo scopes. Requires permission set lexicons to be published to the app namespace authority.",
+    )
     oauth_encryption_key: str = Field(
         default="",
         validation_alias="OAUTH_ENCRYPTION_KEY",
@@ -425,7 +430,11 @@ class AtprotoSettings(AppSettingsSection):
         if self.scope_override:
             return self.scope_override
 
-        # base scopes: our track, like, comment, list, and profile collections
+        # use permission sets if enabled (requires lexicons to be published)
+        if self.use_permission_sets:
+            return f"atproto include:{self.app_namespace}.authFullApp"
+
+        # fallback: granular repo scopes for each collection
         scopes = [
             f"repo:{self.track_collection}",
             f"repo:{self.like_collection}",
