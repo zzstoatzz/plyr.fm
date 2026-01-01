@@ -433,9 +433,7 @@ $effect(() => {
 					<div class="supporters-avatars">
 						{#each supporters.slice(0, 20) as supporter}
 							<a
-								href="https://bsky.app/profile/{supporter.handle}"
-								target="_blank"
-								rel="noopener"
+								href="/u/{supporter.handle}"
 								class="supporter-circle"
 								title={supporter.display_name || supporter.handle}
 							>
