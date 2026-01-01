@@ -428,44 +428,37 @@ $effect(() => {
 
 		{#if artist.support_url === 'atprotofans' && supporters.length > 0}
 			<section class="supporters-section">
-				<div class="section-header">
-					<h2>supporters</h2>
-					{#if supporterCount !== null}
-						<span>{supporterCount} {supporterCount === 1 ? 'supporter' : 'supporters'}</span>
-					{/if}
+				<div class="supporters-row">
+					<span class="supporters-label">{supporterCount ?? supporters.length} {(supporterCount ?? supporters.length) === 1 ? 'supporter' : 'supporters'}</span>
+					<div class="supporters-avatars">
+						{#each supporters.slice(0, 20) as supporter}
+							<a
+								href="https://bsky.app/profile/{supporter.handle}"
+								target="_blank"
+								rel="noopener"
+								class="supporter-circle"
+								title={supporter.display_name || supporter.handle}
+							>
+								{#if supporter.avatar_url}
+									<img src={supporter.avatar_url} alt="" />
+								{:else}
+									<span>{(supporter.display_name || supporter.handle).charAt(0).toUpperCase()}</span>
+								{/if}
+							</a>
+						{/each}
+						{#if (supporterCount ?? supporters.length) > 20}
+							<a
+								href={supportUrl()}
+								target="_blank"
+								rel="noopener"
+								class="supporter-circle more"
+								title="view all supporters"
+							>
+								+{(supporterCount ?? supporters.length) - 20}
+							</a>
+						{/if}
+					</div>
 				</div>
-				<div class="supporters-grid">
-					{#each supporters as supporter}
-						<a
-							href="https://bsky.app/profile/{supporter.handle}"
-							target="_blank"
-							rel="noopener"
-							class="supporter-card"
-							title={supporter.display_name || supporter.handle}
-						>
-							{#if supporter.avatar_url}
-								<SensitiveImage src={supporter.avatar_url} compact>
-									<img src={supporter.avatar_url} alt="" class="supporter-avatar" />
-								</SensitiveImage>
-							{:else}
-								<div class="supporter-avatar-placeholder">
-									{(supporter.display_name || supporter.handle).charAt(0).toUpperCase()}
-								</div>
-							{/if}
-							<span class="supporter-name">{supporter.display_name || supporter.handle}</span>
-						</a>
-					{/each}
-				</div>
-				{#if supporterCount !== null && supporterCount > supporters.length}
-					<a
-						href={supportUrl()}
-						target="_blank"
-						rel="noopener"
-						class="view-all-supporters"
-					>
-						view all {supporterCount} supporters on atprotofans
-					</a>
-				{/if}
 			</section>
 		{/if}
 
@@ -792,77 +785,69 @@ $effect(() => {
 		margin-bottom: 2rem;
 	}
 
-	.supporters-section h2 {
-		margin: 0;
-		color: var(--text-primary);
-		font-size: 1.8rem;
-	}
-
-	.supporters-grid {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.75rem;
-	}
-
-	.supporter-card {
+	.supporters-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-md);
-		color: inherit;
-		text-decoration: none;
-		transition: transform 0.15s ease, border-color 0.15s ease;
+		gap: 1rem;
+		flex-wrap: wrap;
 	}
 
-	.supporter-card:hover {
-		transform: translateY(-1px);
-		border-color: var(--accent);
+	.supporters-label {
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
+		white-space: nowrap;
 	}
 
-	.supporter-avatar {
-		width: 28px;
-		height: 28px;
+	.supporters-avatars {
+		display: flex;
+		align-items: center;
+	}
+
+	.supporter-circle {
+		width: 32px;
+		height: 32px;
 		border-radius: var(--radius-full);
-		object-fit: cover;
-		flex-shrink: 0;
-	}
-
-	.supporter-avatar-placeholder {
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-full);
+		border: 2px solid var(--bg-primary);
 		background: var(--bg-tertiary);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--text-muted);
-		flex-shrink: 0;
-	}
-
-	.supporter-name {
-		font-size: var(--text-sm);
-		color: var(--text-secondary);
-		white-space: nowrap;
 		overflow: hidden;
-		text-overflow: ellipsis;
-		max-width: 120px;
-	}
-
-	.view-all-supporters {
-		display: block;
-		margin-top: 1rem;
-		text-align: center;
-		color: var(--text-tertiary);
-		font-size: var(--text-sm);
+		margin-left: -8px;
+		transition: transform 0.15s ease, z-index 0.15s ease;
+		position: relative;
 		text-decoration: none;
-		padding: 0.5rem;
-		transition: color 0.15s ease;
 	}
 
-	.view-all-supporters:hover {
+	.supporter-circle:first-child {
+		margin-left: 0;
+	}
+
+	.supporter-circle:hover {
+		transform: translateY(-2px) scale(1.1);
+		z-index: 10;
+	}
+
+	.supporter-circle img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.supporter-circle span {
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--text-secondary);
+	}
+
+	.supporter-circle.more {
+		background: var(--bg-secondary);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--text-tertiary);
+	}
+
+	.supporter-circle.more:hover {
 		color: var(--accent);
 	}
 
@@ -1280,26 +1265,10 @@ $effect(() => {
 			font-size: var(--text-sm);
 		}
 
-		.supporters-section h2 {
-			font-size: 1.5rem;
-		}
-
-		.supporters-grid {
-			justify-content: center;
-		}
-
-		.supporter-card {
-			padding: 0.4rem 0.6rem;
-		}
-
-		.supporter-avatar,
-		.supporter-avatar-placeholder {
-			width: 24px;
-			height: 24px;
-		}
-
-		.supporter-name {
-			max-width: 80px;
+		.supporter-circle {
+			width: 28px;
+			height: 28px;
+			margin-left: -6px;
 		}
 	}
 
