@@ -205,6 +205,25 @@ async def update_my_artist_profile(
     return ArtistResponse.model_validate(artist)
 
 
+@router.post("/batch")
+async def get_artists_batch(
+    dids: list[str],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, ArtistResponse]:
+    """get artist profiles for multiple DIDs (public endpoint).
+
+    returns a dict mapping DID -> artist data for any DIDs that exist in our database.
+    DIDs not found are simply omitted from the response.
+    """
+    if not dids:
+        return {}
+
+    result = await db.execute(select(Artist).where(Artist.did.in_(dids)))
+    artists = result.scalars().all()
+
+    return {artist.did: ArtistResponse.model_validate(artist) for artist in artists}
+
+
 @router.get("/by-handle/{handle}")
 async def get_artist_profile_by_handle(
     handle: str, db: Annotated[AsyncSession, Depends(get_db)]
@@ -247,25 +266,6 @@ async def get_artist_profile_by_did(
     response.show_liked_on_profile = prefs.show_liked_on_profile if prefs else False
     response.support_url = prefs.support_url if prefs else None
     return response
-
-
-@router.post("/batch")
-async def get_artists_batch(
-    dids: list[str],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict[str, ArtistResponse]:
-    """get artist profiles for multiple DIDs (public endpoint).
-
-    returns a dict mapping DID -> artist data for any DIDs that exist in our database.
-    DIDs not found are simply omitted from the response.
-    """
-    if not dids:
-        return {}
-
-    result = await db.execute(select(Artist).where(Artist.did.in_(dids)))
-    artists = result.scalars().all()
-
-    return {artist.did: ArtistResponse.model_validate(artist) for artist in artists}
 
 
 @router.get("/{artist_did}/analytics")
