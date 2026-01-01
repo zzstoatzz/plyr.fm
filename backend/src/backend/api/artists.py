@@ -249,6 +249,25 @@ async def get_artist_profile_by_did(
     return response
 
 
+@router.post("/batch")
+async def get_artists_batch(
+    dids: list[str],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, ArtistResponse]:
+    """get artist profiles for multiple DIDs (public endpoint).
+
+    returns a dict mapping DID -> artist data for any DIDs that exist in our database.
+    DIDs not found are simply omitted from the response.
+    """
+    if not dids:
+        return {}
+
+    result = await db.execute(select(Artist).where(Artist.did.in_(dids)))
+    artists = result.scalars().all()
+
+    return {artist.did: ArtistResponse.model_validate(artist) for artist in artists}
+
+
 @router.get("/{artist_did}/analytics")
 async def get_artist_analytics(
     artist_did: str,

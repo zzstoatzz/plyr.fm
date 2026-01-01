@@ -15,6 +15,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { fetchLikedTracks, fetchUserLikes } from '$lib/tracks.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
+	import { getAtprotofansProfile, getAtprotofansSupporters, type Supporter } from '$lib/atprotofans';
 	import type { PageData } from './$types';
 
 
@@ -71,6 +72,10 @@ $effect(() => {
 
 	// supporter status - true if logged-in viewer supports this artist via atprotofans
 	let isSupporter = $state(false);
+
+	// atprotofans data - supporter count and list
+	let supporterCount = $state<number | null>(null);
+	let supporters = $state<Supporter[]>([]);
 
 	// track which artist we've loaded data for to detect navigation
 	let loadedForDid = $state<string | null>(null);
@@ -136,6 +141,33 @@ $effect(() => {
 	}
 
 	/**
+	 * load atprotofans profile and supporters for this artist.
+	 * only called when artist has atprotofans support enabled.
+	 */
+	async function loadAtprotofansData() {
+		// only load if artist has atprotofans enabled
+		if (artist?.support_url !== 'atprotofans' || !artist.did) return;
+
+		try {
+			// fetch profile (for supporter count) and supporters list in parallel
+			const [profile, supportersData] = await Promise.all([
+				getAtprotofansProfile(artist.did),
+				getAtprotofansSupporters(artist.did, 12) // show up to 12 supporters
+			]);
+
+			if (profile) {
+				supporterCount = profile.supporterCount;
+			}
+
+			if (supportersData) {
+				supporters = supportersData.supporters;
+			}
+		} catch (_e) {
+			console.error('failed to load atprotofans data:', _e);
+		}
+	}
+
+	/**
 	 * check if the logged-in viewer supports this artist via atprotofans.
 	 * only called when:
 	 * 1. viewer is authenticated
@@ -186,6 +218,8 @@ $effect(() => {
 			likedTracksCount = null;
 			publicPlaylists = [];
 			isSupporter = false;
+			supporterCount = null;
+			supporters = [];
 
 			// sync tracks and pagination from server data
 			tracks = data.tracks ?? [];
@@ -202,6 +236,7 @@ $effect(() => {
 			void loadLikedTracksCount();
 			void loadPublicPlaylists();
 			void checkSupporterStatus();
+			void loadAtprotofansData();
 		}
 	});
 
@@ -390,6 +425,40 @@ $effect(() => {
 				<ShareButton url={shareUrl} title="share artist" />
 			</div>
 		</section>
+
+		{#if artist.support_url === 'atprotofans' && supporters.length > 0}
+			<section class="supporters-section">
+				<div class="supporters-row">
+					<span class="supporters-label">{supporterCount ?? supporters.length} {(supporterCount ?? supporters.length) === 1 ? 'supporter' : 'supporters'}</span>
+					<div class="supporters-avatars">
+						{#each supporters.slice(0, 20) as supporter}
+							<a
+								href="/u/{supporter.handle}"
+								class="supporter-circle"
+								title={supporter.display_name || supporter.handle}
+							>
+								{#if supporter.avatar_url}
+									<img src={supporter.avatar_url} alt="" />
+								{:else}
+									<span>{(supporter.display_name || supporter.handle).charAt(0).toUpperCase()}</span>
+								{/if}
+							</a>
+						{/each}
+						{#if (supporterCount ?? supporters.length) > 20}
+							<a
+								href={supportUrl()}
+								target="_blank"
+								rel="noopener"
+								class="supporter-circle more"
+								title="view all supporters"
+							>
+								+{(supporterCount ?? supporters.length) - 20}
+							</a>
+						{/if}
+					</div>
+				</div>
+			</section>
+		{/if}
 
 		<section class="analytics">
 			<h2>analytics</h2>
@@ -708,6 +777,76 @@ $effect(() => {
 		color: var(--text-secondary);
 		line-height: 1.6;
 		margin: 0;
+	}
+
+	.supporters-section {
+		margin-bottom: 2rem;
+	}
+
+	.supporters-row {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.supporters-label {
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
+		white-space: nowrap;
+	}
+
+	.supporters-avatars {
+		display: flex;
+		align-items: center;
+	}
+
+	.supporter-circle {
+		width: 32px;
+		height: 32px;
+		border-radius: var(--radius-full);
+		border: 2px solid var(--bg-primary);
+		background: var(--bg-tertiary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		margin-left: -8px;
+		transition: transform 0.15s ease, z-index 0.15s ease;
+		position: relative;
+		text-decoration: none;
+	}
+
+	.supporter-circle:first-child {
+		margin-left: 0;
+	}
+
+	.supporter-circle:hover {
+		transform: translateY(-2px) scale(1.1);
+		z-index: 10;
+	}
+
+	.supporter-circle img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.supporter-circle span {
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--text-secondary);
+	}
+
+	.supporter-circle.more {
+		background: var(--bg-secondary);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--text-tertiary);
+	}
+
+	.supporter-circle.more:hover {
+		color: var(--accent);
 	}
 
 	.analytics {
@@ -1122,6 +1261,12 @@ $effect(() => {
 
 		.album-card-meta p {
 			font-size: var(--text-sm);
+		}
+
+		.supporter-circle {
+			width: 28px;
+			height: 28px;
+			margin-left: -6px;
 		}
 	}
 
