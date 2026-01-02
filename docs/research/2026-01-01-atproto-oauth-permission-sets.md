@@ -128,7 +128,9 @@ await client.com.atproto.repo.putRecord(
 )
 ```
 
-**DNS requirement:** `plyr.fm` must have a TXT record `did=did:plc:...` pointing to the repo containing the lexicons.
+**DNS requirement:** lexicon resolution uses `_lexicon` prefix (distinct from `_atproto` for handles):
+- `_lexicon.plyr.fm` → `did=did:plc:vs3hnzq2daqbszxlysywzy54` (production)
+- `_lexicon.stg.plyr.fm` → `did=did:plc:vs3hnzq2daqbszxlysywzy54` (staging)
 
 ### official bluesky permission sets
 
@@ -177,7 +179,9 @@ additional permission sets (e.g., listener-only, read-only) can be added when th
 
 ## resolved questions
 
-1. **DNS setup**: `_atproto.plyr.fm` already has TXT record `did=did:plc:vs3hnzq2daqbszxlysywzy54`
+1. **DNS setup**: lexicon resolution requires `_lexicon` TXT records (not `_atproto` which is for handles):
+   - production: `_lexicon.plyr.fm` → `did=did:plc:vs3hnzq2daqbszxlysywzy54`
+   - staging: `_lexicon.stg.plyr.fm` → `did=did:plc:vs3hnzq2daqbszxlysywzy54`
 
 2. **which repo?**: the `plyr.fm` account (did:plc:vs3hnzq2daqbszxlysywzy54) on bsky.network - just publish to `com.atproto.lexicon.schema` collection
 
