@@ -47,6 +47,20 @@ plyr.fm should become:
 
 ### January 2026
 
+#### ATProto OAuth permission sets (PRs #697-698, Jan 1-2)
+
+**permission sets enabled** - OAuth now uses `include:fm.plyr.authFullApp` instead of listing individual `repo:` scopes:
+- users see clean "plyr.fm" permission title instead of raw collection names
+- permission set lexicon published to `com.atproto.lexicon.schema` on plyr.fm authority repo
+- DNS TXT records at `_lexicon.plyr.fm` and `_lexicon.stg.plyr.fm` link namespaces to authority DID
+- fixed scope validation in atproto SDK fork to handle PDS permission expansion (`include:` → `repo?collection=`)
+
+**why this matters**: permission sets are ATProto's mechanism for defining platform access tiers. enables future third-party integrations (mobile apps, read-only stats dashboards) to request semantic permission bundles instead of raw collection lists.
+
+**docs**: [lexicons/overview.md](docs/lexicons/overview.md), [research/2026-01-01-atproto-oauth-permission-sets.md](docs/research/2026-01-01-atproto-oauth-permission-sets.md)
+
+---
+
 #### atprotofans supporters display (PRs #695-696, Jan 1)
 
 **supporters now visible on artist pages** - artists using atprotofans can show their supporters:
@@ -382,4 +396,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-01.
+this is a living document. last updated 2026-01-02.
