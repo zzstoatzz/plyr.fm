@@ -91,11 +91,10 @@
 	.rich-text-link {
 		color: var(--accent);
 		text-decoration: none;
-		transition: opacity 0.15s ease;
+		word-break: break-all;
 	}
 
 	.rich-text-link:hover {
-		opacity: 0.8;
 		text-decoration: underline;
 	}
 </style>
