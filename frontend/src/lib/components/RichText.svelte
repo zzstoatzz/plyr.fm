@@ -5,6 +5,7 @@
 	 * supports:
 	 * - bare URLs: https://example.com -> clickable link
 	 * - markdown links: [text](https://example.com) -> "text" as clickable link
+	 * - domain/path URLs: github.com/user/repo -> clickable link
 	 */
 
 	interface Props {
@@ -23,11 +24,12 @@
 	function parseText(input: string): TextPart[] {
 		const parts: TextPart[] = [];
 
-		// combined regex: markdown links OR bare URLs
+		// combined regex: markdown links OR bare URLs OR domain/path
 		// markdown: [text](url)
 		// bare URL: https?://... or www....
+		// domain/path: github.com/... (must have path to avoid false positives)
 		const combinedRegex =
-			/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>)\]]+|www\.[^\s<>)\]]+)/gi;
+			/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>)\]]+|www\.[^\s<>)\]]+|[a-z0-9][-a-z0-9]*\.[a-z]{2,}\/[^\s<>)\]]+)/gi;
 
 		let lastIndex = 0;
 		let match;
@@ -49,9 +51,9 @@
 					href: match[2]
 				});
 			} else if (match[3]) {
-				// bare URL
+				// bare URL or domain/path
 				let href = match[3];
-				if (href.startsWith('www.')) {
+				if (!href.startsWith('http://') && !href.startsWith('https://')) {
 					href = 'https://' + href;
 				}
 				parts.push({
@@ -79,7 +81,7 @@
 </script>
 
 <span class={className}
-	>{#each parsed as part}{#if part.type === 'link'}<a
+	>{#each parsed as part, i (i)}{#if part.type === 'link'}<a
 				href={part.href}
 				target="_blank"
 				rel="noopener noreferrer"
