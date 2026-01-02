@@ -4,12 +4,10 @@ import logging
 from typing import Any
 
 import logfire
-from sqlalchemy import select
-from sqlalchemy.orm import joinedload
 
 from backend._internal.moderation_client import get_moderation_client
 from backend.config import settings
-from backend.models import CopyrightScan, Track
+from backend.models import CopyrightScan
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -80,24 +78,8 @@ async def _store_scan_result(track_id: int, result: Any) -> None:
             match_count=len(scan.matches),
         )
 
-        # emit ATProto label if flagged
-        if result.is_flagged:
-            track = await db.scalar(
-                select(Track)
-                .options(joinedload(Track.artist))
-                .where(Track.id == track_id)
-            )
-            if track and track.atproto_record_uri:
-                await _emit_copyright_label(
-                    uri=track.atproto_record_uri,
-                    cid=track.atproto_record_cid,
-                    track_id=track_id,
-                    track_title=track.title,
-                    artist_handle=track.artist.handle if track.artist else None,
-                    artist_did=track.artist_did,
-                    highest_score=scan.highest_score,
-                    matches=scan.matches,
-                )
+        # auto-label emission removed - see https://github.com/zzstoatzz/plyr.fm/issues/702
+        # labels will be emitted after user notification + grace period (future work)
 
 
 async def _emit_copyright_label(

@@ -81,6 +81,7 @@ async fn main() -> anyhow::Result<()> {
         signer: signer.map(Arc::new),
         label_tx,
         claude: claude_client.map(Arc::new),
+        copyright_score_threshold: config.copyright_score_threshold,
     };
 
     let app = Router::new()

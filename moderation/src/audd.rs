@@ -109,7 +109,7 @@ pub async fn scan(
 
     let matches = extract_matches(&audd_response);
     let highest_score = matches.iter().map(|m| m.score).max().unwrap_or(0);
-    let is_flagged = !matches.is_empty();
+    let is_flagged = highest_score >= state.copyright_score_threshold;
 
     info!(
         match_count = matches.len(),
