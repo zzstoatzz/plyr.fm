@@ -56,6 +56,13 @@ class CopyrightScan(Base):
         server_default="{}",
     )
 
+    # notification tracking
+    notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
+
     __table_args__ = (
         Index("idx_copyright_scans_flagged", "is_flagged"),
         Index("idx_copyright_scans_scanned_at", "scanned_at"),

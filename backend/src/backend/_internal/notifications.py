@@ -68,6 +68,108 @@ class NotificationService:
             self.dm_client = None
             self.recipient_did = None
 
+    async def _send_dm_to_did(self, recipient_did: str, message_text: str) -> bool:
+        """send a DM to a specific DID.
+
+        returns True if sent successfully, False otherwise.
+        """
+        if not self.dm_client:
+            logger.warning("dm client not authenticated, skipping notification")
+            return False
+
+        try:
+            dm = self.dm_client.chat.bsky.convo
+
+            convo_response = await dm.get_convo_for_members(
+                models.ChatBskyConvoGetConvoForMembers.Params(members=[recipient_did])
+            )
+
+            if not convo_response.convo or not convo_response.convo.id:
+                raise ValueError("failed to get conversation ID")
+
+            await dm.send_message(
+                models.ChatBskyConvoSendMessage.Data(
+                    convo_id=convo_response.convo.id,
+                    message=models.ChatBskyConvoDefs.MessageInput(text=message_text),
+                )
+            )
+            return True
+
+        except Exception:
+            logger.exception(f"error sending DM to {recipient_did}")
+            return False
+
+    async def send_copyright_notification(
+        self,
+        track_id: int,
+        track_title: str,
+        artist_did: str,
+        artist_handle: str,
+        highest_score: int,
+        matches: list[dict],
+    ) -> bool:
+        """send notification about a copyright flag to both artist and admin.
+
+        returns True if at least one notification was sent successfully.
+        """
+        if not self.dm_client:
+            logger.warning("dm client not authenticated, skipping notification")
+            return False
+
+        # format match info
+        match_count = len(matches)
+        primary_match = None
+        if matches:
+            m = matches[0]
+            primary_match = (
+                f"{m.get('title', 'Unknown')} by {m.get('artist', 'Unknown')}"
+            )
+
+        # build track URL if available
+        track_url = None
+        frontend_url = settings.frontend.url
+        if frontend_url and "localhost" not in frontend_url:
+            track_url = f"{frontend_url}/track/{track_id}"
+
+        # message for the artist (uploader)
+        artist_message = (
+            f"⚠️ copyright notice for your track on {settings.app.name}\n\n"
+            f"track: '{track_title}'\n"
+            f"match confidence: {highest_score}%\n"
+        )
+        if primary_match:
+            artist_message += f"potential match: {primary_match}\n"
+        artist_message += (
+            "\nif you believe this is an error, please reply to this message. "
+            "otherwise, the track may be removed after review."
+        )
+
+        # message for admin
+        admin_message = (
+            f"🚨 copyright flag on {settings.app.name}\n\n"
+            f"track: '{track_title}'\n"
+            f"artist: @{artist_handle}\n"
+            f"score: {highest_score}%\n"
+            f"matches: {match_count}\n"
+        )
+        if primary_match:
+            admin_message += f"primary: {primary_match}\n"
+        if track_url:
+            admin_message += f"\n{track_url}"
+
+        # send to both
+        artist_sent = await self._send_dm_to_did(artist_did, artist_message)
+        admin_sent = False
+        if self.recipient_did:
+            admin_sent = await self._send_dm_to_did(self.recipient_did, admin_message)
+
+        if artist_sent:
+            logger.info(f"sent copyright notification to artist {artist_handle}")
+        if admin_sent:
+            logger.info(f"sent copyright notification to admin for track {track_id}")
+
+        return artist_sent or admin_sent
+
     async def send_image_flag_notification(
         self,
         image_id: str,
