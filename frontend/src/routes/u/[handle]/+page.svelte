@@ -9,6 +9,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import SupporterBadge from '$lib/components/SupporterBadge.svelte';
+	import RichText from '$lib/components/RichText.svelte';
 	import { checkImageSensitive } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -398,7 +399,7 @@ $effect(() => {
 						{/if}
 					</div>
 					{#if artist.bio}
-						<p class="bio">{artist.bio}</p>
+						<p class="bio"><RichText text={artist.bio} /></p>
 					{/if}
 				</div>
 				<div class="artist-actions-desktop">
