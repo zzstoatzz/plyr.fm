@@ -17,6 +17,8 @@ pub struct Config {
     pub claude_api_key: Option<String>,
     /// Claude model to use (default: claude-sonnet-4-5-20250929)
     pub claude_model: String,
+    /// Minimum AuDD score to flag as potential copyright violation (default: 85)
+    pub copyright_score_threshold: i32,
 }
 
 impl Config {
@@ -39,6 +41,10 @@ impl Config {
             claude_api_key: env::var("ANTHROPIC_API_KEY").ok(),
             claude_model: env::var("MODERATION_CLAUDE_MODEL")
                 .unwrap_or_else(|_| "claude-sonnet-4-5-20250929".to_string()),
+            copyright_score_threshold: env::var("MODERATION_COPYRIGHT_SCORE_THRESHOLD")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(85),
         })
     }
 
