@@ -458,6 +458,26 @@ class AtprotoSettings(AppSettingsSection):
 
     @computed_field
     @property
+    def readable_track_collections(self) -> list[str]:
+        """All collections to read track records from.
+
+        Returns the effective track collection plus any legacy collections
+        that should still be readable for backwards compatibility.
+        """
+        collections = [self.effective_track_collection]
+
+        # include legacy collection if different from effective
+        if self.track_collection not in collections:
+            collections.append(self.track_collection)
+
+        # include old namespace collection if configured
+        if self.old_track_collection and self.old_track_collection not in collections:
+            collections.append(self.old_track_collection)
+
+        return collections
+
+    @computed_field
+    @property
     def resolved_scope(self) -> str:
         """OAuth scope, falling back to the repo scope for the configured namespace(s)."""
 

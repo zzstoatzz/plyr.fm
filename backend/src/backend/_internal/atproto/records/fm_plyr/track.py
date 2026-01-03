@@ -91,27 +91,6 @@ def normalize_track_record(record: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def get_readable_collections() -> list[str]:
-    """Get list of collections to read track records from.
-
-    Returns the effective track collection plus any legacy collections
-    that should still be readable for backwards compatibility.
-    """
-    collections = [settings.atproto.effective_track_collection]
-
-    # always include legacy collection if different from effective
-    legacy = settings.atproto.track_collection
-    if legacy not in collections:
-        collections.append(legacy)
-
-    # include old namespace collection if configured
-    old = settings.atproto.old_track_collection
-    if old and old not in collections:
-        collections.append(old)
-
-    return collections
-
-
 def build_track_record(
     title: str,
     artist: str,

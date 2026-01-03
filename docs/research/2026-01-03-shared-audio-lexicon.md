@@ -135,8 +135,8 @@ OAuth scopes automatically include the shared collection when configured.
 
 ### phase 3: read path (this PR)
 
-- [x] `normalize_track_record()` maps shared schema back to plyr internal model
-- [x] `get_readable_collections()` returns all collections to read from
+- [x] `normalize_track_record()` in `track.py` maps shared schema back to plyr internal model
+- [x] `readable_track_collections` computed field in config returns all collections to read from
 - [ ] update sync endpoints to use normalization (future PR)
 
 ### phase 4: migration (optional)
