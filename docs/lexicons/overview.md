@@ -28,7 +28,7 @@ plyr.fm is adopting [audio.ooo.track](https://ooo.audio) as a shared schema for 
 
 ### why shared lexicons?
 
-without shared lexicons, each audio app defines its own schema (`fm.plyr.track`, `fm.whalefall.track`, etc.). indexers must support every variation, and switching apps means losing your content. shared lexicons solve this:
+without shared lexicons, each audio app defines its own schema. indexers must support every variation, and switching apps means losing your content. shared lexicons solve this:
 
 - one schema for discovery, any app can read it
 - content is truly portable - your tracks live in your PDS, playable anywhere

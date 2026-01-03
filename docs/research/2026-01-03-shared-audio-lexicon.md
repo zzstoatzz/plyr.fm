@@ -6,17 +6,16 @@
 
 ## context
 
-[ooo.audio](https://ooo.audio) defines a shared lexicon (`audio.ooo.track`) for audio content on ATProto. the goal: tracks uploaded to plyr.fm, whalefall, or any future ATProto audio app are discoverable and playable everywhere because everyone writes to the same base schema.
+[ooo.audio](https://ooo.audio) defines a shared lexicon (`audio.ooo.track`) for audio content on ATProto. the goal: tracks uploaded to any ATProto audio app are discoverable and playable everywhere because everyone writes to the same base schema.
 
 this follows the [standard.site](https://standard.site) pattern for long-form publishing, where multiple platforms (Offprint, Leaflet, pckt.blog) adopted `site.standard.document` as a shared schema.
 
 ## the case for adoption
 
 **without shared lexicons:**
-- each app defines its own schema (`fm.plyr.track`, `fm.whalefall.track`, etc.)
+- each app defines its own schema
 - indexers and clients must support every variation
 - switching apps means losing your content or complex migrations
-- the ATProto ecosystem fragments like RSS reader variations
 
 **with shared lexicons:**
 - one schema for discovery, any app can read it
