@@ -27,19 +27,16 @@ the AT Protocol OAuth spec supports a `prompt` parameter with three modes:
 | `select_account` | shows account selection instead of auto-selecting |
 | `consent` | forces consent screen even if previously approved |
 
-**prerequisite:** our atproto SDK fork needs to accept `prompt` in `start_authorization()`. current signature:
+**prerequisite:** our atproto SDK fork needs to accept `prompt` in `start_authorization()`.
+
+**status:** PR opened ([zzstoatzz/atproto#8](https://github.com/zzstoatzz/atproto/pull/8))
 
 ```python
-async def start_authorization(self, handle_or_did: str) -> tuple[str, str]
-```
-
-needs to become:
-
-```python
+# new signature
 async def start_authorization(
     self,
     handle_or_did: str,
-    prompt: Literal["login", "select_account", "consent"] | None = None
+    prompt: Literal["login", "select_account", "consent", "none"] | None = None
 ) -> tuple[str, str]
 ```
 
@@ -213,8 +210,73 @@ educate users to use private/incognito windows for different accounts.
 3. **how to handle account picker on login page?** - show known accounts if cookie exists but session expired?
 4. **mobile app (future)** - will need equivalent session group storage in secure keychain
 
+## bluesky implementation study
+
+studied bluesky's open-source client ([social-app](https://github.com/bluesky-social/social-app)) to inform our design.
+
+### their architecture
+
+**session state shape:**
+```typescript
+interface SessionState {
+  accounts: SessionAccount[]      // all accounts, even expired ones
+  currentAccount: SessionAccount  // active account reference
+  hasSession: boolean
+}
+```
+
+**per-account data:**
+- `did`: primary identifier
+- `accessJwt` / `refreshJwt`: tokens (may be empty if expired)
+- `handle`, `email`, display metadata
+- accounts persist even after logout (tokens cleared, account stays in list)
+
+**key files:**
+- `src/state/session/reducer.ts` - state transitions
+- `src/components/dialogs/SwitchAccount.tsx` - switcher UI
+- `src/lib/hooks/useAccountSwitcher.ts` - switching logic
+- `src/components/AccountList.tsx` - account list rendering
+
+### their UX patterns
+
+1. **account list items:**
+   - 48x48 avatar
+   - display name + @handle
+   - green checkmark (not chevron) on current account
+   - "logged out" italic label for expired sessions
+
+2. **switching flow:**
+   - if tokens valid: `resumeSession()` silently
+   - if tokens expired: show login form for that specific account
+   - race condition protection via `pendingDid` state
+
+3. **logout distinction:**
+   - `logoutCurrentAccount`: clears tokens, account stays in list
+   - `logoutEveryAccount`: clears everything, back to login
+
+4. **cross-tab sync:**
+   - `synced-accounts` action handles changes from other tabs
+   - `needsPersist` flag prevents sync cycles
+
+### what we can adopt
+
+| pattern | bluesky | plyr.fm adaptation |
+|---------|---------|-------------------|
+| account list with avatars | 48x48 + name + handle | same, with our design tokens |
+| checkmark on active | green circle-check | use `var(--success)` |
+| expired session label | "logged out" italic | same |
+| logout vs logout-all | two distinct actions | same approach |
+| token-based resume | client-side jwt check | server-side via session group |
+| cross-tab sync | BroadcastChannel | extend existing player sync |
+
+### key difference
+
+bluesky stores tokens client-side (react native app). we store sessions server-side (HttpOnly cookies). our session group approach achieves the same UX with better web security.
+
 ## references
 
 - [ATProto OAuth spec](https://github.com/bluesky-social/atproto/blob/main/packages/oauth/oauth-provider/src/oauth-provider.ts) - prompt parameter handling
+- [bluesky social-app](https://github.com/bluesky-social/social-app) - multi-account reference implementation
 - [issue #583](https://github.com/zzstoatzz/plyr.fm/issues/583) - original feature request
 - [PRs #578, #582](https://github.com/zzstoatzz/plyr.fm/pull/578) - confidential OAuth client context
+- [atproto SDK fork PR #8](https://github.com/zzstoatzz/atproto/pull/8) - prompt parameter support
