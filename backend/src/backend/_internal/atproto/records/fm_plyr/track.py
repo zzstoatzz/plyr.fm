@@ -1,4 +1,4 @@
-"""fm.plyr.track record operations."""
+"""track record operations (fm.plyr.track and audio.ooo.track)."""
 
 import logging
 from datetime import UTC, datetime
@@ -9,6 +9,107 @@ from backend._internal.atproto.client import make_pds_request, parse_at_uri
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
+
+# file extension to MIME type mapping
+MIME_TYPES: dict[str, str] = {
+    "mp3": "audio/mpeg",
+    "m4a": "audio/mp4",
+    "mp4": "audio/mp4",
+    "flac": "audio/flac",
+    "wav": "audio/wav",
+    "ogg": "audio/ogg",
+    "opus": "audio/opus",
+    "aac": "audio/aac",
+    "webm": "audio/webm",
+}
+
+
+def file_type_to_mime(file_type: str) -> str:
+    """Convert file extension to MIME type."""
+    return MIME_TYPES.get(file_type.lower(), f"audio/{file_type.lower()}")
+
+
+def mime_to_file_type(mime_type: str) -> str:
+    """Convert MIME type back to file extension."""
+    # reverse lookup
+    for ext, mime in MIME_TYPES.items():
+        if mime == mime_type:
+            return ext
+    # fallback: extract from mime type (audio/xyz -> xyz)
+    if "/" in mime_type:
+        return mime_type.split("/")[1]
+    return mime_type
+
+
+def normalize_track_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a track record from either schema to a common format.
+
+    Handles both:
+    - audio.ooo.track (shared schema): uri, mimeType, duration in ms
+    - fm.plyr.track (legacy): audioUrl, fileType, duration in seconds
+
+    Returns a normalized dict with plyr's internal field names.
+    """
+    # detect which schema by presence of 'uri' vs 'audioUrl'
+    is_shared_schema = "uri" in record and "mimeType" in record
+
+    if is_shared_schema:
+        # shared audio.ooo.track schema
+        normalized = {
+            "title": record.get("title"),
+            "audioUrl": record.get("uri"),  # uri -> audioUrl
+            "fileType": record.get("fileType")
+            or mime_to_file_type(record.get("mimeType", "")),
+            "createdAt": record.get("createdAt"),
+        }
+        # duration: shared uses ms, convert to seconds
+        if record.get("duration"):
+            normalized["duration"] = record["duration"] // 1000
+    else:
+        # legacy fm.plyr.track schema
+        normalized = {
+            "title": record.get("title"),
+            "audioUrl": record.get("audioUrl"),
+            "fileType": record.get("fileType"),
+            "createdAt": record.get("createdAt"),
+        }
+        if record.get("duration"):
+            normalized["duration"] = record["duration"]
+
+    # copy extension fields that exist in both schemas
+    for field in [
+        "artist",
+        "album",
+        "features",
+        "imageUrl",
+        "supportGate",
+        "description",
+    ]:
+        if field in record:
+            normalized[field] = record[field]
+
+    return normalized
+
+
+def get_readable_collections() -> list[str]:
+    """Get list of collections to read track records from.
+
+    Returns the effective track collection plus any legacy collections
+    that should still be readable for backwards compatibility.
+    """
+    collections = [settings.atproto.effective_track_collection]
+
+    # always include legacy collection if different from effective
+    legacy = settings.atproto.track_collection
+    if legacy not in collections:
+        collections.append(legacy)
+
+    # include old namespace collection if configured
+    old = settings.atproto.old_track_collection
+    if old and old not in collections:
+        collections.append(old)
+
+    return collections
 
 
 def build_track_record(
@@ -24,6 +125,9 @@ def build_track_record(
 ) -> dict[str, Any]:
     """Build a track record dict for ATProto.
 
+    Builds either a shared audio.ooo.track record (with plyr extensions) or
+    a legacy fm.plyr.track record, depending on configuration.
+
     args:
         title: track title
         artist: artist name
@@ -38,20 +142,45 @@ def build_track_record(
     returns:
         record dict ready for ATProto
     """
-    record: dict[str, Any] = {
-        "$type": settings.atproto.track_collection,
-        "title": title,
-        "artist": artist,
-        "audioUrl": audio_url,
-        "fileType": file_type,
-        "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-    }
+    collection = settings.atproto.effective_track_collection
+    use_shared = (
+        settings.atproto.use_shared_track_writes
+        and settings.atproto.shared_track_collection
+    )
+    created_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
-    # add optional fields
+    if use_shared:
+        # shared audio.ooo.track schema with plyr extensions
+        record: dict[str, Any] = {
+            "$type": collection,
+            # base audio.ooo.track fields
+            "title": title,
+            "uri": audio_url,
+            "mimeType": file_type_to_mime(file_type),
+            "createdAt": created_at,
+            # plyr extensions (pass through validation per standard.site pattern)
+            "artist": artist,
+            "fileType": file_type,  # keep for backwards compat
+        }
+        # duration: shared schema uses milliseconds, plyr uses seconds
+        if duration:
+            record["duration"] = duration * 1000
+    else:
+        # legacy fm.plyr.track schema
+        record = {
+            "$type": collection,
+            "title": title,
+            "artist": artist,
+            "audioUrl": audio_url,
+            "fileType": file_type,
+            "createdAt": created_at,
+        }
+        if duration:
+            record["duration"] = duration
+
+    # add optional fields (same for both schemas, as extensions)
     if album:
         record["album"] = album
-    if duration:
-        record["duration"] = duration
     if features:
         # only include essential fields for ATProto record
         record["features"] = [
@@ -119,7 +248,7 @@ async def create_track_record(
 
     payload = {
         "repo": auth_session.did,
-        "collection": settings.atproto.track_collection,
+        "collection": settings.atproto.effective_track_collection,
         "record": record,
     }
 

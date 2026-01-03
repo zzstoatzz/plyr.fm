@@ -123,21 +123,21 @@ OAuth scopes automatically include the shared collection when configured.
 
 - [x] add `shared_track_collection` and `use_shared_track_writes` config
 - [x] update OAuth scopes to request shared collection permission
-- [ ] define schema mapping functions (fm.plyr.track <-> audio.ooo.track)
-- [ ] add `audio.ooo.track` lexicon JSON to `/lexicons/`
+- [x] define schema mapping functions (fm.plyr.track <-> audio.ooo.track)
+- [x] add `audio.ooo.track` lexicon JSON to `/lexicons/`
 
-### phase 2: write path
+### phase 2: write path (this PR)
 
-- [ ] update track upload to write to `effective_track_collection`
-- [ ] map plyr fields to shared schema + extensions
-- [ ] handle mimeType conversion (mp3 -> audio/mpeg, etc.)
-- [ ] convert duration seconds -> milliseconds
+- [x] update track upload to write to `effective_track_collection`
+- [x] map plyr fields to shared schema + extensions
+- [x] handle mimeType conversion (mp3 -> audio/mpeg, etc.)
+- [x] convert duration seconds -> milliseconds
 
-### phase 3: read path
+### phase 3: read path (this PR)
 
-- [ ] update sync logic to read from both collections
-- [ ] map shared schema back to plyr internal model
-- [ ] update indexing to handle both record types
+- [x] `normalize_track_record()` maps shared schema back to plyr internal model
+- [x] `get_readable_collections()` returns all collections to read from
+- [ ] update sync endpoints to use normalization (future PR)
 
 ### phase 4: migration (optional)
 

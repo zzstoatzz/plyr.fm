@@ -478,7 +478,7 @@ async def _create_atproto_record(
     create_url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
     payload = {
         "repo": auth_session.did,
-        "collection": settings.atproto.track_collection,
+        "collection": settings.atproto.effective_track_collection,
         "rkey": rkey,
         "record": track_record,
     }
