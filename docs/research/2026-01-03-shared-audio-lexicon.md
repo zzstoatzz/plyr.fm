@@ -81,48 +81,28 @@ other apps see the base fields; plyr.fm reads everything.
 
 the `fm.plyr.{env}.audio.` prefix signals "this is our local mirror of the shared schema" while staying firmly in plyr's namespace.
 
-## config changes
+## config
 
-new settings in `AtprotoSettings`:
-
-```python
-shared_track_collection: str | None = Field(
-    default=None,
-    validation_alias="SHARED_TRACK_COLLECTION",
-    description="Collection for shared audio track records (audio.ooo.track).",
-)
-
-use_shared_track_writes: bool = Field(
-    default=False,
-    validation_alias="USE_SHARED_TRACK_WRITES",
-    description="When true, write new tracks to shared collection.",
-)
-```
-
-deploy config:
+set `SHARED_TRACK_COLLECTION` per environment:
 
 ```bash
 # production
 SHARED_TRACK_COLLECTION=audio.ooo.track
-USE_SHARED_TRACK_WRITES=true
 
 # staging
 SHARED_TRACK_COLLECTION=fm.plyr.stg.audio.track
-USE_SHARED_TRACK_WRITES=true
 
 # development
 SHARED_TRACK_COLLECTION=fm.plyr.dev.audio.track
-USE_SHARED_TRACK_WRITES=true
 ```
 
-OAuth scopes automatically include the shared collection when configured.
+when set, new tracks write to the shared collection. legacy `fm.plyr.track` records remain readable.
 
 ## implementation phases
 
 ### phase 1: config + schema mapping (this PR)
 
-- [x] add `shared_track_collection` and `use_shared_track_writes` config
-- [x] update OAuth scopes to request shared collection permission
+- [x] add `shared_track_collection` config
 - [x] define schema mapping functions (fm.plyr.track <-> audio.ooo.track)
 - [x] add `audio.ooo.track` lexicon JSON to `/lexicons/`
 
@@ -146,21 +126,9 @@ OAuth scopes automatically include the shared collection when configured.
 
 ## open questions
 
-1. **artwork blob vs URL**: shared schema uses blobs, plyr uses URLs. do we:
-   - upload artwork as blob (more portable, requires blob handling)
-   - keep URL as extension field (less portable, simpler)
-   - both (blob for standard, URL as extension for CDN optimization)
+1. **artwork blob vs URL**: shared schema uses blobs, plyr uses URLs. keep URL as extension for now.
 
-2. **duration precision**: shared uses milliseconds, plyr uses seconds. straightforward conversion, but existing records have seconds - do we backfill?
-
-3. **mimeType mapping**: need to map file extensions to MIME types:
-   - mp3 -> audio/mpeg
-   - m4a -> audio/mp4
-   - flac -> audio/flac
-   - wav -> audio/wav
-   - ogg -> audio/ogg
-
-4. **backwards compatibility**: how long do we maintain dual-read from `fm.plyr.track`? forever? until all records migrated?
+2. **backwards compatibility**: dual-read from `fm.plyr.track` indefinitely via `readable_track_collections`.
 
 ## references
 

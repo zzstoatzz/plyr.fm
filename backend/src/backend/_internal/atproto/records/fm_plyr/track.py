@@ -2,93 +2,78 @@
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TypedDict
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import make_pds_request, parse_at_uri
+from backend._internal.audio import AudioFormat
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-# file extension to MIME type mapping
-MIME_TYPES: dict[str, str] = {
-    "mp3": "audio/mpeg",
-    "m4a": "audio/mp4",
-    "mp4": "audio/mp4",
-    "flac": "audio/flac",
-    "wav": "audio/wav",
-    "ogg": "audio/ogg",
-    "opus": "audio/opus",
-    "aac": "audio/aac",
-    "webm": "audio/webm",
-}
+
+class NormalizedTrackRecord(TypedDict, total=False):
+    """normalized track record with plyr's internal field names."""
+
+    title: str
+    audioUrl: str
+    fileType: str
+    createdAt: str
+    duration: int  # seconds
+    artist: str
+    album: str
+    features: list[dict[str, Any]]
+    imageUrl: str
+    supportGate: dict[str, Any]
+    description: str
 
 
-def file_type_to_mime(file_type: str) -> str:
-    """Convert file extension to MIME type."""
-    return MIME_TYPES.get(file_type.lower(), f"audio/{file_type.lower()}")
-
-
-def mime_to_file_type(mime_type: str) -> str:
-    """Convert MIME type back to file extension."""
-    # reverse lookup
-    for ext, mime in MIME_TYPES.items():
-        if mime == mime_type:
-            return ext
-    # fallback: extract from mime type (audio/xyz -> xyz)
-    if "/" in mime_type:
-        return mime_type.split("/")[1]
-    return mime_type
-
-
-def normalize_track_record(record: dict[str, Any]) -> dict[str, Any]:
-    """Normalize a track record from either schema to a common format.
+def normalize_track_record(record: dict[str, Any]) -> NormalizedTrackRecord:
+    """Normalize a track record from either schema to plyr's internal format.
 
     Handles both:
-    - audio.ooo.track (shared schema): uri, mimeType, duration in ms
+    - audio.ooo.track (shared): uri, mimeType, duration in ms
     - fm.plyr.track (legacy): audioUrl, fileType, duration in seconds
-
-    Returns a normalized dict with plyr's internal field names.
     """
-    # detect which schema by presence of 'uri' vs 'audioUrl'
-    is_shared_schema = "uri" in record and "mimeType" in record
+    is_shared = "uri" in record and "mimeType" in record
 
-    if is_shared_schema:
-        # shared audio.ooo.track schema
-        normalized = {
-            "title": record.get("title"),
-            "audioUrl": record.get("uri"),  # uri -> audioUrl
-            "fileType": record.get("fileType")
-            or mime_to_file_type(record.get("mimeType", "")),
-            "createdAt": record.get("createdAt"),
+    if is_shared:
+        mime = record.get("mimeType", "")
+        # use AudioFormat if available, fallback to extracting from mime
+        fmt = AudioFormat.from_extension(mime.split("/")[-1]) if "/" in mime else None
+        file_type = fmt.value if fmt else record.get("fileType", mime.split("/")[-1])
+
+        result: NormalizedTrackRecord = {
+            "title": record.get("title", ""),
+            "audioUrl": record.get("uri", ""),
+            "fileType": file_type,
+            "createdAt": record.get("createdAt", ""),
         }
-        # duration: shared uses ms, convert to seconds
         if record.get("duration"):
-            normalized["duration"] = record["duration"] // 1000
+            result["duration"] = record["duration"] // 1000
     else:
-        # legacy fm.plyr.track schema
-        normalized = {
-            "title": record.get("title"),
-            "audioUrl": record.get("audioUrl"),
-            "fileType": record.get("fileType"),
-            "createdAt": record.get("createdAt"),
+        result = {
+            "title": record.get("title", ""),
+            "audioUrl": record.get("audioUrl", ""),
+            "fileType": record.get("fileType", ""),
+            "createdAt": record.get("createdAt", ""),
         }
         if record.get("duration"):
-            normalized["duration"] = record["duration"]
+            result["duration"] = record["duration"]
 
-    # copy extension fields that exist in both schemas
-    for field in [
+    # copy extension fields
+    for field in (
         "artist",
         "album",
         "features",
         "imageUrl",
         "supportGate",
         "description",
-    ]:
+    ):
         if field in record:
-            normalized[field] = record[field]
+            result[field] = record[field]  # type: ignore[literal-required]
 
-    return normalized
+    return result
 
 
 def build_track_record(
@@ -122,28 +107,24 @@ def build_track_record(
         record dict ready for ATProto
     """
     collection = settings.atproto.effective_track_collection
-    use_shared = (
-        settings.atproto.use_shared_track_writes
-        and settings.atproto.shared_track_collection
-    )
+    use_shared = settings.atproto.shared_track_collection is not None
     created_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
     if use_shared:
         # shared audio.ooo.track schema with plyr extensions
+        fmt = AudioFormat.from_extension(file_type)
+        mime_type = fmt.media_type if fmt else f"audio/{file_type.lower()}"
+
         record: dict[str, Any] = {
             "$type": collection,
-            # base audio.ooo.track fields
             "title": title,
             "uri": audio_url,
-            "mimeType": file_type_to_mime(file_type),
+            "mimeType": mime_type,
             "createdAt": created_at,
-            # plyr extensions (pass through validation per standard.site pattern)
             "artist": artist,
-            "fileType": file_type,  # keep for backwards compat
         }
-        # duration: shared schema uses milliseconds, plyr uses seconds
         if duration:
-            record["duration"] = duration * 1000
+            record["duration"] = duration * 1000  # shared uses milliseconds
     else:
         # legacy fm.plyr.track schema
         record = {
