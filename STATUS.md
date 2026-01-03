@@ -47,6 +47,19 @@ plyr.fm should become:
 
 ### January 2026
 
+#### copyright moderation improvements (PRs #703-704, Jan 2)
+
+**per legal advice**, redesigned copyright handling to reduce liability exposure:
+- **disabled auto-labeling** (PR #703): labels are no longer automatically emitted when copyright matches are detected. the system now only flags and notifies, leaving takedown decisions to humans
+- **raised threshold** (PR #703): copyright flag threshold increased from "any match" to configurable score (default 85%). controlled via `MODERATION_COPYRIGHT_SCORE_THRESHOLD` env var
+- **DM notifications** (PR #704): when a track is flagged, both the artist and admin receive BlueSky DMs with details. includes structured error handling for when users have DMs disabled
+- **observability** (PR #704): Logfire spans added to all notification paths (`send_dm`, `copyright_notification`) with error categorization (`dm_blocked`, `network`, `auth`, `unknown`)
+- **notification tracking**: `notified_at` field added to `copyright_scans` table to track which flags have been communicated
+
+**why this matters**: DMCA safe harbor requires taking action on notices, not proactively policing. auto-labeling was creating liability by making assertions about copyright status. human review is now required before any takedown action.
+
+---
+
 #### ATProto OAuth permission sets (PRs #697-698, Jan 1-2)
 
 **permission sets enabled** - OAuth now uses `include:fm.plyr.authFullApp` instead of listing individual `repo:` scopes:
