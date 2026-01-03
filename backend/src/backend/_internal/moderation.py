@@ -1,13 +1,17 @@
 """moderation service integration for copyright scanning."""
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 import logfire
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from backend._internal.moderation_client import get_moderation_client
+from backend._internal.notifications import notification_service
 from backend.config import settings
-from backend.models import CopyrightScan
+from backend.models import CopyrightScan, Track
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -78,8 +82,31 @@ async def _store_scan_result(track_id: int, result: Any) -> None:
             match_count=len(scan.matches),
         )
 
-        # auto-label emission removed - see https://github.com/zzstoatzz/plyr.fm/issues/702
-        # labels will be emitted after user notification + grace period (future work)
+        # send notification if flagged (see #702)
+        if result.is_flagged:
+            track = await db.scalar(
+                select(Track)
+                .options(joinedload(Track.artist))
+                .where(Track.id == track_id)
+            )
+            if track and track.artist:
+                (
+                    artist_result,
+                    admin_result,
+                ) = await notification_service.send_copyright_notification(
+                    track_id=track_id,
+                    track_title=track.title,
+                    artist_did=track.artist_did,
+                    artist_handle=track.artist.handle,
+                    highest_score=scan.highest_score,
+                    matches=scan.matches,
+                )
+                # mark as notified if at least one succeeded
+                if (artist_result and artist_result.success) or (
+                    admin_result and admin_result.success
+                ):
+                    scan.notified_at = datetime.now(UTC)
+                    await db.commit()
 
 
 async def _emit_copyright_label(
