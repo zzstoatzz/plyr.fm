@@ -273,7 +273,7 @@ class NotificationService:
         severity: str,
         categories: list[str],
         context: str,
-    ):
+    ) -> NotificationResult | None:
         """send notification about a flagged image.
 
         args:
@@ -282,107 +282,57 @@ class NotificationService:
             categories: list of violated policy categories
             context: where the image was uploaded (e.g., "track cover", "album cover")
         """
-        if not self.dm_client or not self.recipient_did:
-            logger.warning(
-                "dm client not authenticated or recipient not set, skipping notification"
-            )
-            return
+        if not self.recipient_did:
+            logger.warning("recipient not set, skipping notification")
+            return None
 
-        try:
-            dm = self.dm_client.chat.bsky.convo
+        categories_str = ", ".join(categories) if categories else "unspecified"
+        message_text = (
+            f"🚨 image flagged on {settings.app.name}\n\n"
+            f"context: {context}\n"
+            f"image_id: {image_id}\n"
+            f"severity: {severity}\n"
+            f"categories: {categories_str}"
+        )
 
-            convo_response = await dm.get_convo_for_members(
-                models.ChatBskyConvoGetConvoForMembers.Params(
-                    members=[self.recipient_did]
-                )
-            )
-
-            if not convo_response.convo or not convo_response.convo.id:
-                raise ValueError("failed to get conversation ID")
-
-            convo_id = convo_response.convo.id
-
-            categories_str = ", ".join(categories) if categories else "unspecified"
-            message_text = (
-                f"🚨 image flagged on {settings.app.name}\n\n"
-                f"context: {context}\n"
-                f"image_id: {image_id}\n"
-                f"severity: {severity}\n"
-                f"categories: {categories_str}"
-            )
-
-            await dm.send_message(
-                models.ChatBskyConvoSendMessage.Data(
-                    convo_id=convo_id,
-                    message=models.ChatBskyConvoDefs.MessageInput(text=message_text),
-                )
-            )
-
+        result = await self._send_dm_to_did(self.recipient_did, message_text)
+        if result.success:
             logger.info(f"sent image flag notification for {image_id}")
+        return result
 
-        except Exception:
-            logger.exception(f"error sending image flag notification for {image_id}")
-
-    async def send_track_notification(self, track: Track):
+    async def send_track_notification(self, track: Track) -> NotificationResult | None:
         """send notification about a new track."""
-        if not self.dm_client or not self.recipient_did:
-            logger.warning(
-                "dm client not authenticated or recipient not set, skipping notification"
+        if not self.recipient_did:
+            logger.warning("recipient not set, skipping notification")
+            return None
+
+        artist_handle = track.artist.handle
+
+        # only include link if we have a non-localhost frontend URL
+        track_url = None
+        frontend_url = settings.frontend.url
+        if frontend_url and "localhost" not in frontend_url:
+            track_url = f"{frontend_url}/track/{track.id}"
+
+        if track_url:
+            message_text = (
+                f"🎵 new track on {settings.app.name}!\n\n"
+                f"'{track.title}' by @{artist_handle}\n\n"
+                f"listen: {track_url}\n"
+                f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
             )
-            return
-
-        try:
-            # create shortcut to convo methods
-            dm = self.dm_client.chat.bsky.convo
-
-            # get or create conversation with the target user
-            convo_response = await dm.get_convo_for_members(
-                models.ChatBskyConvoGetConvoForMembers.Params(
-                    members=[self.recipient_did]
-                )
-            )
-
-            if not convo_response.convo or not convo_response.convo.id:
-                raise ValueError("failed to get conversation ID")
-
-            convo_id = convo_response.convo.id
-
-            # format the message with rich information
-            artist_handle = track.artist.handle
-
-            # only include link if we have a non-localhost frontend URL
-            track_url = None
-            frontend_url = settings.frontend.url
-            if frontend_url and "localhost" not in frontend_url:
-                track_url = f"{frontend_url}/track/{track.id}"
-
-            if track_url:
-                message_text: str = (
-                    f"🎵 new track on {settings.app.name}!\n\n"
-                    f"'{track.title}' by @{artist_handle}\n\n"
-                    f"listen: {track_url}\n"
-                    f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
-                )
-            else:
-                # dev environment - no link
-                message_text: str = (
-                    f"🎵 new track on {settings.app.name}!\n\n"
-                    f"'{track.title}' by @{artist_handle}\n"
-                    f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
-                )
-
-            # send the DM
-            await dm.send_message(
-                models.ChatBskyConvoSendMessage.Data(
-                    convo_id=convo_id,
-                    message=models.ChatBskyConvoDefs.MessageInput(text=message_text),
-                )
+        else:
+            # dev environment - no link
+            message_text = (
+                f"🎵 new track on {settings.app.name}!\n\n"
+                f"'{track.title}' by @{artist_handle}\n"
+                f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
             )
 
-            logger.info(f"sent notification for track {track.id} to {convo_id}")
-
-        except Exception:
-            logger.exception(f"error sending notification for track {track.id}")
+        result = await self._send_dm_to_did(self.recipient_did, message_text)
+        if result.success:
+            logger.info(f"sent notification for track {track.id}")
+        return result
 
     async def shutdown(self):
         """cleanup resources."""
