@@ -90,7 +90,10 @@ async def _store_scan_result(track_id: int, result: Any) -> None:
                 .where(Track.id == track_id)
             )
             if track and track.artist:
-                notified = await notification_service.send_copyright_notification(
+                (
+                    artist_result,
+                    admin_result,
+                ) = await notification_service.send_copyright_notification(
                     track_id=track_id,
                     track_title=track.title,
                     artist_did=track.artist_did,
@@ -98,7 +101,10 @@ async def _store_scan_result(track_id: int, result: Any) -> None:
                     highest_score=scan.highest_score,
                     matches=scan.matches,
                 )
-                if notified:
+                # mark as notified if at least one succeeded
+                if (artist_result and artist_result.success) or (
+                    admin_result and admin_result.success
+                ):
                     scan.notified_at = datetime.now(UTC)
                     await db.commit()
 
