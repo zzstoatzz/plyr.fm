@@ -47,6 +47,32 @@ plyr.fm should become:
 
 ### January 2026
 
+#### shared audio lexicon (PR #706, Jan 3) - draft
+
+**adopting [audio.ooo.track](https://ooo.audio) as shared schema** for audio content on ATProto. follows the [standard.site](https://standard.site) pattern where multiple platforms agree on a common schema for interoperability.
+
+**what's implemented:**
+- `shared_track_collection` config setting controls which collection to write to
+- `effective_track_collection` computed field returns shared or legacy collection
+- `readable_track_collections` enables dual-read from shared + legacy collections
+- OAuth scopes automatically include shared collection when configured
+- `normalize_track_record()` maps shared schema back to plyr internal model
+- `build_track_record()` writes to shared schema with plyr extensions (artist, album, supportGate, etc.)
+- MIME conversion uses existing `AudioFormat` enum
+
+**environment isolation:**
+| environment | collection |
+|-------------|------------|
+| production  | `audio.ooo.track` |
+| staging     | `fm.plyr.stg.audio.track` |
+| development | `fm.plyr.dev.audio.track` |
+
+**status:** draft, do not merge. needs more review and possibly integration tests.
+
+**docs:** [research/2026-01-03-shared-audio-lexicon.md](docs/research/2026-01-03-shared-audio-lexicon.md), [lexicons/overview.md](docs/lexicons/overview.md)
+
+---
+
 #### copyright moderation improvements (PRs #703-704, Jan 2)
 
 **per legal advice**, redesigned copyright handling to reduce liability exposure:
@@ -409,4 +435,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-02.
+this is a living document. last updated 2026-01-03.
