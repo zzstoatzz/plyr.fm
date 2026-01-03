@@ -57,7 +57,7 @@ shared lexicons are environment-agnostic. we use plyr-owned sandbox namespaces f
 | staging     | `fm.plyr.stg.audio.track` |
 | development | `fm.plyr.dev.audio.track` |
 
-configure via `SHARED_TRACK_COLLECTION` and `USE_SHARED_TRACK_WRITES` env vars.
+configure via `SHARED_TRACK_COLLECTION` env var.
 
 see [research doc](../research/2026-01-03-shared-audio-lexicon.md) for full design details.
 
