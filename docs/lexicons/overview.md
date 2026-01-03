@@ -22,6 +22,45 @@ plyr.fm uses the `fm.plyr` namespace for all custom record types. this is enviro
 
 **important**: we never use Bluesky's `app.bsky.*` lexicons. even for concepts like "likes" that Bluesky has, we define our own (`fm.plyr.like`) to maintain namespace isolation and avoid coupling to another app's schema evolution.
 
+## shared lexicons
+
+plyr.fm is adopting [audio.ooo.track](https://ooo.audio) as a shared schema for audio content on ATProto. this follows the [standard.site](https://standard.site) pattern where multiple platforms agree on a common schema for interoperability.
+
+### why shared lexicons?
+
+without shared lexicons, each audio app defines its own schema (`fm.plyr.track`, `fm.whalefall.track`, etc.). indexers must support every variation, and switching apps means losing your content. shared lexicons solve this:
+
+- one schema for discovery, any app can read it
+- content is truly portable - your tracks live in your PDS, playable anywhere
+- platform-specific features live as extensions, not forks
+
+### audio.ooo.track
+
+the shared schema for audio tracks. plyr.fm writes to this collection with extensions for plyr-specific features:
+
+```
+base fields (audio.ooo.track):
+  required: title, uri, mimeType, createdAt
+  optional: duration (ms), artwork (blob), description
+
+plyr extensions:
+  artist, album, features, supportGate, imageUrl
+```
+
+### environment isolation for shared lexicons
+
+shared lexicons are environment-agnostic. we use plyr-owned sandbox namespaces for dev/staging:
+
+| environment | shared track collection |
+|-------------|------------------------|
+| production  | `audio.ooo.track` |
+| staging     | `fm.plyr.stg.audio.track` |
+| development | `fm.plyr.dev.audio.track` |
+
+configure via `SHARED_TRACK_COLLECTION` and `USE_SHARED_TRACK_WRITES` env vars.
+
+see [research doc](../research/2026-01-03-shared-audio-lexicon.md) for full design details.
+
 ## current lexicons
 
 ### fm.plyr.track

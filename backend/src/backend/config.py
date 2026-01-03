@@ -378,12 +378,46 @@ class AtprotoSettings(AppSettingsSection):
         description="JSON-serialized ES256 private key for confidential OAuth client. Generate with: uv run python scripts/gen_oauth_jwk.py",
     )
 
+    # shared audio lexicon (audio.ooo.track)
+    # see: https://ooo.audio, https://github.com/zzstoatzz/plyr.fm/issues/705
+    shared_track_collection: str | None = Field(
+        default=None,
+        validation_alias="SHARED_TRACK_COLLECTION",
+        description=(
+            "Collection for shared audio track records (audio.ooo.track). "
+            "When set, new tracks are written to this collection with plyr extensions. "
+            "Use audio.ooo.track in prod, fm.plyr.{env}.audio.track in dev/staging. "
+            "When None, falls back to legacy fm.plyr.track behavior."
+        ),
+    )
+    use_shared_track_writes: bool = Field(
+        default=False,
+        validation_alias="USE_SHARED_TRACK_WRITES",
+        description=(
+            "When true and shared_track_collection is set, write new tracks to the "
+            "shared collection instead of fm.plyr.track. Existing fm.plyr.track "
+            "records are still readable for backwards compatibility."
+        ),
+    )
+
     @computed_field
     @property
     def track_collection(self) -> str:
-        """Collection name for plyr audio records."""
+        """Collection name for plyr audio records (legacy)."""
 
         return f"{self.app_namespace}.track"
+
+    @computed_field
+    @property
+    def effective_track_collection(self) -> str:
+        """Collection to use for new track writes.
+
+        Returns shared_track_collection if shared writes are enabled,
+        otherwise falls back to the legacy plyr track collection.
+        """
+        if self.use_shared_track_writes and self.shared_track_collection:
+            return self.shared_track_collection
+        return self.track_collection
 
     @computed_field
     @property
@@ -446,6 +480,10 @@ class AtprotoSettings(AppSettingsSection):
         # if we have an old namespace, add old track collection too
         if self.old_app_namespace:
             scopes.append(f"repo:{self.old_track_collection}")
+
+        # if shared track collection is configured, request scope for it
+        if self.shared_track_collection:
+            scopes.append(f"repo:{self.shared_track_collection}")
 
         return f"atproto {' '.join(scopes)}"
 
