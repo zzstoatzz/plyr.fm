@@ -52,7 +52,7 @@
 	}
 
 	async function handleSwitchAccount(account: LinkedAccount) {
-		if (account.is_active || switching) return;
+		if (switching) return;
 
 		switching = true;
 		try {
