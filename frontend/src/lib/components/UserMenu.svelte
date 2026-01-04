@@ -12,13 +12,25 @@
 	let showMenu = $state(false);
 	let menuRef = $state<HTMLDivElement | null>(null);
 	let switching = $state(false);
+	let showAddAccountInput = $state(false);
+	let newHandle = $state('');
+	let addAccountError = $state('');
+	let addingAccount = $state(false);
 
 	function toggleMenu() {
 		showMenu = !showMenu;
+		if (!showMenu) {
+			showAddAccountInput = false;
+			newHandle = '';
+			addAccountError = '';
+		}
 	}
 
 	function closeMenu() {
 		showMenu = false;
+		showAddAccountInput = false;
+		newHandle = '';
+		addAccountError = '';
 	}
 
 	async function handleLogout() {
@@ -58,20 +70,50 @@
 		}
 	}
 
-	async function handleAddAccount() {
-		closeMenu();
+	function showAddAccount() {
+		showAddAccountInput = true;
+		addAccountError = '';
+	}
+
+	async function submitAddAccount() {
+		const handle = newHandle.trim();
+		if (!handle) {
+			addAccountError = 'enter a handle';
+			return;
+		}
+
+		addingAccount = true;
+		addAccountError = '';
+
 		try {
 			const response = await fetch(`${API_URL}/auth/add-account/start`, {
 				method: 'POST',
-				credentials: 'include'
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ handle })
 			});
 			if (response.ok) {
 				const data: { auth_url: string } = await response.json();
-				// redirect to OAuth flow
 				window.location.href = data.auth_url;
+			} else {
+				const err = await response.json().catch(() => ({ detail: 'failed to add account' }));
+				addAccountError = err.detail || 'failed to add account';
+				addingAccount = false;
 			}
 		} catch (e) {
 			console.error('add account failed:', e);
+			addAccountError = 'network error';
+			addingAccount = false;
+		}
+	}
+
+	function handleAddAccountKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			submitAddAccount();
+		} else if (event.key === 'Escape') {
+			showAddAccountInput = false;
+			newHandle = '';
 		}
 	}
 
@@ -158,15 +200,44 @@
 				{/each}
 			{/if}
 
-			<button class="dropdown-item" onclick={handleAddAccount}>
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-					<circle cx="9" cy="7" r="4"></circle>
-					<line x1="19" y1="8" x2="19" y2="14"></line>
-					<line x1="22" y1="11" x2="16" y2="11"></line>
-				</svg>
-				<span>add account</span>
-			</button>
+			{#if showAddAccountInput}
+				<div class="add-account-input">
+					<input
+						type="text"
+						bind:value={newHandle}
+						onkeydown={handleAddAccountKeydown}
+						placeholder="handle.bsky.social"
+						disabled={addingAccount}
+						autofocus
+					/>
+					<button
+						class="add-account-submit"
+						onclick={submitAddAccount}
+						disabled={addingAccount || !newHandle.trim()}
+					>
+						{#if addingAccount}
+							...
+						{:else}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="9 18 15 12 9 6"></polyline>
+							</svg>
+						{/if}
+					</button>
+				</div>
+				{#if addAccountError}
+					<div class="add-account-error">{addAccountError}</div>
+				{/if}
+			{:else}
+				<button class="dropdown-item" onclick={showAddAccount}>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+						<circle cx="9" cy="7" r="4"></circle>
+						<line x1="19" y1="8" x2="19" y2="14"></line>
+						<line x1="22" y1="11" x2="16" y2="11"></line>
+					</svg>
+					<span>add account</span>
+				</button>
+			{/if}
 
 			<div class="dropdown-divider"></div>
 
@@ -366,5 +437,59 @@
 		height: 1px;
 		background: var(--border-subtle);
 		margin: 0.25rem 0;
+	}
+
+	.add-account-input {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.5rem 1rem;
+	}
+
+	.add-account-input input {
+		flex: 1;
+		padding: 0.5rem 0.75rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-base);
+		color: var(--text-primary);
+		font-family: inherit;
+		font-size: var(--text-sm);
+	}
+
+	.add-account-input input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.add-account-input input::placeholder {
+		color: var(--text-tertiary);
+	}
+
+	.add-account-submit {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.5rem;
+		background: var(--accent);
+		border: none;
+		border-radius: var(--radius-base);
+		color: var(--bg-primary);
+		cursor: pointer;
+		transition: opacity 0.12s;
+	}
+
+	.add-account-submit:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+
+	.add-account-submit:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.add-account-error {
+		padding: 0.25rem 1rem 0.5rem;
+		color: var(--error);
+		font-size: var(--text-sm);
 	}
 </style>

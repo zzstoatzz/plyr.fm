@@ -482,6 +482,12 @@ async def start_scope_upgrade_flow(
 # multi-account endpoints
 
 
+class AddAccountStartRequest(BaseModel):
+    """request model for starting add-account flow."""
+
+    handle: str
+
+
 class AddAccountStartResponse(BaseModel):
     """response model with OAuth authorization URL for adding account."""
 
@@ -492,22 +498,29 @@ class AddAccountStartResponse(BaseModel):
 @limiter.limit(settings.rate_limit.auth_limit)
 async def start_add_account_flow(
     request: Request,
+    body: AddAccountStartRequest,
     session: Session = Depends(require_auth),
 ) -> AddAccountStartResponse:
     """start OAuth flow to add another account to the session group.
 
+    the user must provide the handle of the account they want to add.
     this initiates a new OAuth authorization flow with prompt=login to force
     fresh authentication. the new account will be linked to the same session
     group as the current account, enabling quick switching between accounts.
 
     returns the authorization URL that the frontend should redirect to.
     """
+    # prevent adding the same account
+    if body.handle.lower() == session.handle.lower():
+        raise HTTPException(
+            status_code=400, detail="cannot add the account you're already logged in as"
+        )
+
     # get or create a group_id for the current session
     group_id = await get_or_create_group_id(session.session_id)
 
-    # start OAuth flow with prompt=login to force fresh auth
-    # we don't specify a handle - the user will enter their handle at the PDS
-    auth_url, state = await start_oauth_flow(session.handle, prompt="login")
+    # start OAuth flow with the NEW handle and prompt=login to force fresh auth
+    auth_url, state = await start_oauth_flow(body.handle, prompt="login")
 
     # save pending add-account metadata keyed by state
     await save_pending_add_account(state=state, group_id=group_id)
