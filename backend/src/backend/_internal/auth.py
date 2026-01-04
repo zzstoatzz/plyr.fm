@@ -918,30 +918,11 @@ async def get_or_create_group_id(session_id: str) -> str:
         return group_id
 
 
-async def deactivate_other_sessions_in_group(
-    group_id: str, active_session_id: str
-) -> None:
-    """deactivate all sessions in a group except the specified one.
-
-    used when adding a new account to mark the new session as the only active one.
-    """
-    async with db_session() as db:
-        result = await db.execute(
-            select(UserSession).where(
-                UserSession.group_id == group_id,
-                UserSession.session_id != active_session_id,
-            )
-        )
-        for session in result.scalars().all():
-            session.is_active = False
-        await db.commit()
-
-
 async def switch_active_account(current_session_id: str, target_session_id: str) -> str:
-    """switch active account within a session group.
+    """switch to a different account within a session group.
 
-    deactivates current session and activates target session.
-    returns the target session_id (for cookie update).
+    validates that the target session exists, is in the same group, and isn't expired.
+    returns the target session_id (caller updates the cookie).
     """
     async with db_session() as db:
         # get current session to find group_id
@@ -970,11 +951,6 @@ async def switch_active_account(current_session_id: str, target_session_id: str)
         # check if target session is expired
         if target_session.expires_at and datetime.now(UTC) > target_session.expires_at:
             raise HTTPException(status_code=401, detail="target session expired")
-
-        # deactivate current, activate target
-        current_session.is_active = False
-        target_session.is_active = True
-        await db.commit()
 
         return target_session_id
 

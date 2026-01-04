@@ -14,7 +14,6 @@ from backend._internal import (
     consume_exchange_token,
     create_exchange_token,
     create_session,
-    deactivate_other_sessions_in_group,
     delete_pending_add_account,
     delete_pending_dev_token,
     delete_pending_scope_upgrade,
@@ -182,11 +181,6 @@ async def oauth_callback(
             handle=handle,
             oauth_session=oauth_session,
             group_id=pending_add_account.group_id,
-        )
-
-        # deactivate other sessions in the group (new session is now active)
-        await deactivate_other_sessions_in_group(
-            pending_add_account.group_id, session_id
         )
 
         # clean up pending record
@@ -578,10 +572,10 @@ async def switch_account(
             detail="target account not found in session group",
         )
 
-    if target.is_active:
+    if target.did == session.did:
         raise HTTPException(
             status_code=400,
-            detail="target account is already active",
+            detail="already logged in as this account",
         )
 
     # switch the active account
