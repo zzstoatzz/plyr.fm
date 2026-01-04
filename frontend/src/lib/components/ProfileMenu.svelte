@@ -2,7 +2,6 @@
 	import { portal } from 'svelte-portal';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
 	import { queue } from '$lib/queue.svelte';
 	import { preferences, type Theme } from '$lib/preferences.svelte';
 	import { API_URL } from '$lib/config';
@@ -49,6 +48,10 @@
 		user?.linked_accounts?.filter((a) => a.did !== user?.did) ?? []
 	);
 	const hasMultipleAccounts = $derived(otherAccounts.length > 0);
+	// get current user's avatar from linked accounts
+	const currentUserAvatar = $derived(
+		user?.linked_accounts?.find((a) => a.did === user?.did)?.avatar_url
+	);
 
 	$effect(() => {
 		if (currentColor) {
@@ -135,7 +138,7 @@
 				method: 'POST',
 				credentials: 'include'
 			});
-			goto('/');
+			window.location.href = '/';
 		} catch (e) {
 			console.error('logout all failed:', e);
 		}
@@ -386,12 +389,16 @@
 				<div class="accounts-content">
 					<!-- current account -->
 					<div class="account-item current">
-						<div class="account-avatar placeholder">
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-								<circle cx="12" cy="7" r="4"></circle>
-							</svg>
-						</div>
+						{#if currentUserAvatar}
+							<img src={currentUserAvatar} alt="" class="account-avatar" />
+						{:else}
+							<div class="account-avatar placeholder">
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+									<circle cx="12" cy="7" r="4"></circle>
+								</svg>
+							</div>
+						{/if}
 						<div class="account-info">
 							<span class="account-handle">@{user?.handle}</span>
 							<span class="account-badge">active</span>

@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, field_validator
+from sqlalchemy import select
 from starlette.responses import Response
 
 from backend._internal import (
@@ -36,6 +37,7 @@ from backend._internal import (
 )
 from backend._internal.background_tasks import schedule_atproto_sync
 from backend.config import settings
+from backend.models import Artist, get_db
 from backend.utilities.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -305,10 +307,19 @@ async def logout(
 @router.get("/me")
 async def get_current_user(
     session: Session = Depends(require_auth),
+    db=Depends(get_db),
 ) -> CurrentUserResponse:
     """get current authenticated user with linked accounts."""
     # get all accounts in the session group
     linked = await get_session_group(session.session_id)
+
+    # look up artist profiles to get fresh avatars
+    dids = [account.did for account in linked]
+    avatar_map: dict[str, str | None] = {}
+    if dids:
+        result = await db.execute(select(Artist).where(Artist.did.in_(dids)))
+        for artist in result.scalars().all():
+            avatar_map[artist.did] = artist.avatar_url
 
     return CurrentUserResponse(
         did=session.did,
@@ -317,7 +328,7 @@ async def get_current_user(
             LinkedAccountResponse(
                 did=account.did,
                 handle=account.handle,
-                avatar_url=account.avatar_url,
+                avatar_url=avatar_map.get(account.did),
             )
             for account in linked
         ],
