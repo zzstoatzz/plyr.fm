@@ -131,9 +131,9 @@
 		}
 	});
 
-	// derive linked accounts (excluding active one)
+	// derive linked accounts (excluding current user)
 	const otherAccounts = $derived(
-		user?.linked_accounts?.filter((a) => !a.is_active) ?? []
+		user?.linked_accounts?.filter((a) => a.did !== user?.did) ?? []
 	);
 	const hasMultipleAccounts = $derived(otherAccounts.length > 0);
 </script>
