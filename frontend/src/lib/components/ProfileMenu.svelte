@@ -20,6 +20,10 @@
 	let showSettings = $state(false);
 	let showAccounts = $state(false);
 	let switching = $state(false);
+	let showAddAccountInput = $state(false);
+	let newHandle = $state('');
+	let addAccountError = $state('');
+	let addingAccount = $state(false);
 
 	const presetColors = [
 		{ name: 'blue', value: '#6a9fff' },
@@ -68,6 +72,9 @@
 		if (!showMenu) {
 			showSettings = false;
 			showAccounts = false;
+			showAddAccountInput = false;
+			newHandle = '';
+			addAccountError = '';
 		}
 	}
 
@@ -75,6 +82,9 @@
 		showMenu = false;
 		showSettings = false;
 		showAccounts = false;
+		showAddAccountInput = false;
+		newHandle = '';
+		addAccountError = '';
 	}
 
 	function applyColorLocally(color: string) {
@@ -149,19 +159,50 @@
 		}
 	}
 
-	async function handleAddAccount() {
-		closeMenu();
+	function showAddAccount() {
+		showAddAccountInput = true;
+		addAccountError = '';
+	}
+
+	async function submitAddAccount() {
+		const handle = newHandle.trim();
+		if (!handle) {
+			addAccountError = 'enter a handle';
+			return;
+		}
+
+		addingAccount = true;
+		addAccountError = '';
+
 		try {
 			const response = await fetch(`${API_URL}/auth/add-account/start`, {
 				method: 'POST',
-				credentials: 'include'
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ handle })
 			});
 			if (response.ok) {
 				const data: { auth_url: string } = await response.json();
 				window.location.href = data.auth_url;
+			} else {
+				const err = await response.json().catch(() => ({ detail: 'failed to add account' }));
+				addAccountError = err.detail || 'failed to add account';
+				addingAccount = false;
 			}
 		} catch (e) {
 			console.error('add account failed:', e);
+			addAccountError = 'network error';
+			addingAccount = false;
+		}
+	}
+
+	function handleAddAccountKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			submitAddAccount();
+		} else if (event.key === 'Escape') {
+			showAddAccountInput = false;
+			newHandle = '';
 		}
 	}
 </script>
@@ -383,15 +424,44 @@
 						{/each}
 					{/if}
 
-					<button class="menu-item add-account" onclick={handleAddAccount}>
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<line x1="12" y1="5" x2="12" y2="19"></line>
-							<line x1="5" y1="12" x2="19" y2="12"></line>
-						</svg>
-						<div class="item-content">
-							<span class="item-title">add account</span>
+					{#if showAddAccountInput}
+						<div class="add-account-input-row">
+							<input
+								type="text"
+								bind:value={newHandle}
+								onkeydown={handleAddAccountKeydown}
+								placeholder="handle.bsky.social"
+								disabled={addingAccount}
+								autofocus
+							/>
+							<button
+								class="add-account-submit"
+								onclick={submitAddAccount}
+								disabled={addingAccount || !newHandle.trim()}
+							>
+								{#if addingAccount}
+									...
+								{:else}
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="9 18 15 12 9 6"></polyline>
+									</svg>
+								{/if}
+							</button>
 						</div>
-					</button>
+						{#if addAccountError}
+							<div class="add-account-error">{addAccountError}</div>
+						{/if}
+					{:else}
+						<button class="menu-item add-account" onclick={showAddAccount}>
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<line x1="12" y1="5" x2="12" y2="19"></line>
+								<line x1="5" y1="12" x2="19" y2="12"></line>
+							</svg>
+							<div class="item-content">
+								<span class="item-title">add account</span>
+							</div>
+						</button>
+					{/if}
 
 					{#if hasMultipleAccounts}
 						<button class="menu-item logout-all" onclick={handleLogoutAll}>
@@ -917,5 +987,59 @@
 			top: calc(50% - var(--player-height, 0px) / 2);
 			max-height: calc(100vh - var(--player-height, 0px) - 3rem - env(safe-area-inset-bottom, 0px));
 		}
+	}
+
+	.add-account-input-row {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+	}
+
+	.add-account-input-row input {
+		flex: 1;
+		padding: 0.5rem 0.75rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-base);
+		color: var(--text-primary);
+		font-family: inherit;
+		font-size: var(--text-sm);
+	}
+
+	.add-account-input-row input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.add-account-input-row input::placeholder {
+		color: var(--text-tertiary);
+	}
+
+	.add-account-submit {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.5rem;
+		background: var(--accent);
+		border: none;
+		border-radius: var(--radius-base);
+		color: var(--bg-primary);
+		cursor: pointer;
+		transition: opacity 0.12s;
+	}
+
+	.add-account-submit:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+
+	.add-account-submit:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.add-account-error {
+		padding: 0 1rem 0.5rem;
+		color: var(--error);
+		font-size: var(--text-sm);
 	}
 </style>
