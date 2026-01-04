@@ -59,9 +59,16 @@ export interface Track {
 	gated?: boolean; // true if track is gated AND viewer lacks access
 }
 
+export interface LinkedAccount {
+	did: string;
+	handle: string;
+	avatar_url: string | null;
+}
+
 export interface User {
 	did: string;
 	handle: string;
+	linked_accounts: LinkedAccount[];
 }
 
 export interface Artist {

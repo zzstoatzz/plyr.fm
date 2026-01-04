@@ -49,7 +49,10 @@
 		searchTimeout = setTimeout(searchHandles, 300);
 	}
 
-	function selectHandle(result: HandleResult) {
+	function selectHandle(event: MouseEvent, result: HandleResult) {
+		// stop propagation to prevent click-outside handlers from firing
+		// after we remove the result elements from the DOM
+		event.stopPropagation();
 		value = result.handle;
 		onSelect(result.handle);
 		results = [];
@@ -97,7 +100,7 @@
 				<button
 					type="button"
 					class="result-item"
-					onclick={() => selectHandle(result)}
+					onclick={(e) => selectHandle(e, result)}
 				>
 					{#if result.avatar_url}
 						<SensitiveImage src={result.avatar_url} compact>

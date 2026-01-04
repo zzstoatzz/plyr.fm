@@ -208,12 +208,6 @@
 		gap: 0.5rem;
 	}
 
-	.desktop-nav {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-	}
-
 	.brand {
 		text-decoration: none;
 		color: inherit;
