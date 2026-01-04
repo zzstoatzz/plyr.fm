@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from atproto_oauth import OAuthClient
+from atproto_oauth import OAuthClient, PromptType
 from atproto_oauth.stores.memory import MemorySessionStore
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -240,6 +240,8 @@ async def create_session(
     expires_in_days: int = 14,
     is_developer_token: bool = False,
     token_name: str | None = None,
+    group_id: str | None = None,
+    avatar_url: str | None = None,
 ) -> str:
     """create a new session for authenticated user with encrypted OAuth data.
 
@@ -250,6 +252,8 @@ async def create_session(
         expires_in_days: session expiration in days (default 14, use 0 for no expiration)
         is_developer_token: whether this is a developer token (for listing/revocation)
         token_name: optional name for the token (only for developer tokens)
+        group_id: optional session group ID for multi-account support
+        avatar_url: optional avatar URL for quick display in account switcher
     """
     session_id = secrets.token_urlsafe(32)
 
@@ -272,6 +276,8 @@ async def create_session(
             expires_at=expires_at,
             is_developer_token=is_developer_token,
             token_name=token_name,
+            group_id=group_id,
+            avatar_url=avatar_url,
         )
         db.add(user_session)
         await db.commit()
@@ -348,10 +354,16 @@ async def _check_teal_preference(did: str) -> bool:
         return pref is True
 
 
-async def start_oauth_flow(handle: str) -> tuple[str, str]:
+async def start_oauth_flow(
+    handle: str, prompt: PromptType | None = None
+) -> tuple[str, str]:
     """start OAuth flow and return (auth_url, state).
 
     uses extended scope if user has enabled teal.fm scrobbling.
+
+    args:
+        handle: user's ATProto handle
+        prompt: optional OAuth prompt parameter (login, select_account, consent, none)
     """
     from backend._internal.atproto.handles import resolve_handle
 
@@ -369,7 +381,7 @@ async def start_oauth_flow(handle: str) -> tuple[str, str]:
             client = get_oauth_client(include_teal=False)
             logger.info(f"starting OAuth for {handle} (resolution failed, using base)")
 
-        auth_url, state = await client.start_authorization(handle)
+        auth_url, state = await client.start_authorization(handle, prompt=prompt)
         return auth_url, state
     except Exception as e:
         raise HTTPException(
@@ -379,17 +391,22 @@ async def start_oauth_flow(handle: str) -> tuple[str, str]:
 
 
 async def start_oauth_flow_with_scopes(
-    handle: str, include_teal: bool
+    handle: str, include_teal: bool, prompt: PromptType | None = None
 ) -> tuple[str, str]:
     """start OAuth flow with explicit scope selection.
 
     unlike start_oauth_flow which checks user preferences, this explicitly
     requests the specified scopes. used for scope upgrade flows.
+
+    args:
+        handle: user's ATProto handle
+        include_teal: whether to include teal.fm scopes
+        prompt: optional OAuth prompt parameter (login, select_account, consent, none)
     """
     try:
         client = get_oauth_client(include_teal=include_teal)
         logger.info(f"starting scope upgrade OAuth for {handle} (teal={include_teal})")
-        auth_url, state = await client.start_authorization(handle)
+        auth_url, state = await client.start_authorization(handle, prompt=prompt)
         return auth_url, state
     except Exception as e:
         raise HTTPException(
@@ -813,6 +830,254 @@ async def delete_pending_scope_upgrade(state: str) -> None:
     async with db_session() as db:
         result = await db.execute(
             select(PendingScopeUpgrade).where(PendingScopeUpgrade.state == state)
+        )
+        if pending := result.scalar_one_or_none():
+            await db.delete(pending)
+            await db.commit()
+
+
+# multi-account session group helpers
+
+
+@dataclass
+class LinkedAccount:
+    """account info for account switcher UI."""
+
+    did: str
+    handle: str
+    avatar_url: str | None
+    is_active: bool
+    session_id: str
+
+
+async def get_session_group(session_id: str) -> list[LinkedAccount]:
+    """get all accounts in the same session group.
+
+    returns empty list if session has no group_id (single account).
+    """
+    async with db_session() as db:
+        # first get the group_id for this session
+        result = await db.execute(
+            select(UserSession.group_id).where(UserSession.session_id == session_id)
+        )
+        group_id = result.scalar_one_or_none()
+
+        if not group_id:
+            return []
+
+        # get all sessions in this group (excluding developer tokens)
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.group_id == group_id,
+                UserSession.is_developer_token == False,  # noqa: E712
+            )
+        )
+        sessions = result.scalars().all()
+
+        accounts = []
+        for session in sessions:
+            # skip expired sessions
+            if session.expires_at and datetime.now(UTC) > session.expires_at:
+                continue
+
+            accounts.append(
+                LinkedAccount(
+                    did=session.did,
+                    handle=session.handle,
+                    avatar_url=session.avatar_url,
+                    is_active=session.is_active,
+                    session_id=session.session_id,
+                )
+            )
+
+        return accounts
+
+
+async def get_or_create_group_id(session_id: str) -> str:
+    """get existing group_id or create one for this session.
+
+    used when adding a second account to create a group.
+    """
+    async with db_session() as db:
+        result = await db.execute(
+            select(UserSession).where(UserSession.session_id == session_id)
+        )
+        session = result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="session not found")
+
+        if session.group_id:
+            return session.group_id
+
+        # create new group_id for this session
+        group_id = secrets.token_urlsafe(32)
+        session.group_id = group_id
+        await db.commit()
+
+        return group_id
+
+
+async def switch_active_account(current_session_id: str, target_session_id: str) -> str:
+    """switch active account within a session group.
+
+    deactivates current session and activates target session.
+    returns the target session_id (for cookie update).
+    """
+    async with db_session() as db:
+        # get current session to find group_id
+        result = await db.execute(
+            select(UserSession).where(UserSession.session_id == current_session_id)
+        )
+        current_session = result.scalar_one_or_none()
+
+        if not current_session or not current_session.group_id:
+            raise HTTPException(status_code=400, detail="no session group found")
+
+        # verify target session is in the same group
+        result = await db.execute(
+            select(UserSession).where(UserSession.session_id == target_session_id)
+        )
+        target_session = result.scalar_one_or_none()
+
+        if not target_session:
+            raise HTTPException(status_code=404, detail="target session not found")
+
+        if target_session.group_id != current_session.group_id:
+            raise HTTPException(
+                status_code=403, detail="target session not in same group"
+            )
+
+        # check if target session is expired
+        if target_session.expires_at and datetime.now(UTC) > target_session.expires_at:
+            raise HTTPException(status_code=401, detail="target session expired")
+
+        # deactivate current, activate target
+        current_session.is_active = False
+        target_session.is_active = True
+        await db.commit()
+
+        return target_session_id
+
+
+async def remove_account_from_group(session_id: str) -> str | None:
+    """remove a session from its group and delete it.
+
+    if other accounts remain in group, returns the session_id of the next active account.
+    if this was the last account, returns None.
+    """
+    async with db_session() as db:
+        result = await db.execute(
+            select(UserSession).where(UserSession.session_id == session_id)
+        )
+        session = result.scalar_one_or_none()
+
+        if not session:
+            return None
+
+        group_id = session.group_id
+        was_active = session.is_active
+
+        # delete the session
+        await db.delete(session)
+        await db.commit()
+
+        if not group_id:
+            return None
+
+        # find remaining sessions in group
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.group_id == group_id,
+                UserSession.is_developer_token == False,  # noqa: E712
+            )
+        )
+        remaining = result.scalars().all()
+
+        if not remaining:
+            return None
+
+        # if the deleted session was active, activate the first remaining one
+        if was_active:
+            remaining[0].is_active = True
+            await db.commit()
+            return remaining[0].session_id
+
+        # return the currently active session
+        for s in remaining:
+            if s.is_active:
+                return s.session_id
+
+        return remaining[0].session_id
+
+
+async def update_session_avatar(session_id: str, avatar_url: str | None) -> None:
+    """update avatar URL for a session."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(UserSession).where(UserSession.session_id == session_id)
+        )
+        if session := result.scalar_one_or_none():
+            session.avatar_url = avatar_url
+            await db.commit()
+
+
+# pending add account flow helpers
+
+
+@dataclass
+class PendingAddAccountData:
+    """metadata for a pending add-account OAuth flow."""
+
+    state: str
+    group_id: str
+
+
+async def save_pending_add_account(state: str, group_id: str) -> None:
+    """save pending add-account metadata keyed by OAuth state."""
+    from backend.models import PendingAddAccount
+
+    async with db_session() as db:
+        pending = PendingAddAccount(
+            state=state,
+            group_id=group_id,
+        )
+        db.add(pending)
+        await db.commit()
+
+
+async def get_pending_add_account(state: str) -> PendingAddAccountData | None:
+    """get pending add-account metadata by OAuth state."""
+    from backend.models import PendingAddAccount
+
+    async with db_session() as db:
+        result = await db.execute(
+            select(PendingAddAccount).where(PendingAddAccount.state == state)
+        )
+        pending = result.scalar_one_or_none()
+
+        if not pending:
+            return None
+
+        # check if expired
+        if datetime.now(UTC) > pending.expires_at:
+            await db.delete(pending)
+            await db.commit()
+            return None
+
+        return PendingAddAccountData(
+            state=pending.state,
+            group_id=pending.group_id,
+        )
+
+
+async def delete_pending_add_account(state: str) -> None:
+    """delete pending add-account metadata after use."""
+    from backend.models import PendingAddAccount
+
+    async with db_session() as db:
+        result = await db.execute(
+            select(PendingAddAccount).where(PendingAddAccount.state == state)
         )
         if pending := result.scalar_one_or_none():
             await db.delete(pending)

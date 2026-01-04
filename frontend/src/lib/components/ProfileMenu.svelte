@@ -2,9 +2,11 @@
 	import { portal } from 'svelte-portal';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { queue } from '$lib/queue.svelte';
 	import { preferences, type Theme } from '$lib/preferences.svelte';
-	import type { User } from '$lib/types';
+	import { API_URL } from '$lib/config';
+	import type { User, LinkedAccount } from '$lib/types';
 
 	interface Props {
 		user: User | null;
@@ -16,6 +18,8 @@
 	let isOnUpload = $derived($page.url.pathname === '/upload');
 	let showMenu = $state(false);
 	let showSettings = $state(false);
+	let showAccounts = $state(false);
+	let switching = $state(false);
 
 	const presetColors = [
 		{ name: 'blue', value: '#6a9fff' },
@@ -35,6 +39,12 @@
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let autoAdvance = $derived(preferences.autoAdvance);
 	let currentTheme = $derived(preferences.theme);
+
+	// derive linked accounts (excluding active one)
+	const otherAccounts = $derived(
+		user?.linked_accounts?.filter((a) => !a.is_active) ?? []
+	);
+	const hasMultipleAccounts = $derived(otherAccounts.length > 0);
 
 	$effect(() => {
 		if (currentColor) {
@@ -57,12 +67,14 @@
 		showMenu = !showMenu;
 		if (!showMenu) {
 			showSettings = false;
+			showAccounts = false;
 		}
 	}
 
 	function closeMenu() {
 		showMenu = false;
 		showSettings = false;
+		showAccounts = false;
 	}
 
 	function applyColorLocally(color: string) {
@@ -105,6 +117,53 @@
 		closeMenu();
 		await onLogout();
 	}
+
+	async function handleLogoutAll() {
+		closeMenu();
+		try {
+			await fetch(`${API_URL}/auth/logout-all`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+			goto('/');
+		} catch (e) {
+			console.error('logout all failed:', e);
+		}
+	}
+
+	async function handleSwitchAccount(account: LinkedAccount) {
+		if (account.is_active || switching) return;
+
+		switching = true;
+		try {
+			await fetch(`${API_URL}/auth/switch-account`, {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ target_did: account.did })
+			});
+			window.location.reload();
+		} catch (e) {
+			console.error('switch account failed:', e);
+			switching = false;
+		}
+	}
+
+	async function handleAddAccount() {
+		closeMenu();
+		try {
+			const response = await fetch(`${API_URL}/auth/add-account/start`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+			if (response.ok) {
+				const data: { auth_url: string } = await response.json();
+				window.location.href = data.auth_url;
+			}
+		} catch (e) {
+			console.error('add account failed:', e);
+		}
+	}
 </script>
 
 <div class="profile-menu">
@@ -122,7 +181,7 @@
 		<div class="menu-backdrop" use:portal={'body'} onclick={closeMenu}></div>
 		<div class="menu-popover" use:portal={'body'}>
 			<div class="menu-header">
-				<span>{showSettings ? 'settings' : 'menu'}</span>
+				<span>{showSettings ? 'settings' : showAccounts ? 'accounts' : 'menu'}</span>
 				<button class="close-btn" onclick={closeMenu} aria-label="close">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
@@ -131,7 +190,7 @@
 				</button>
 			</div>
 
-			{#if !showSettings}
+			{#if !showSettings && !showAccounts}
 				<nav class="menu-items">
 					{#if !isOnPortal}
 						<a href="/portal" class="menu-item" onclick={closeMenu}>
@@ -176,6 +235,22 @@
 						</svg>
 					</button>
 
+					<button class="menu-item" onclick={() => showAccounts = true}>
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+							<circle cx="9" cy="7" r="4"></circle>
+							<line x1="19" y1="8" x2="19" y2="14"></line>
+							<line x1="22" y1="11" x2="16" y2="11"></line>
+						</svg>
+						<div class="item-content">
+							<span class="item-title">accounts</span>
+							<span class="item-subtitle">{hasMultipleAccounts ? `${otherAccounts.length + 1} linked` : 'add another'}</span>
+						</div>
+						<svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<polyline points="9 18 15 12 9 6"></polyline>
+						</svg>
+					</button>
+
 					<button class="menu-item logout" onclick={handleLogout}>
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -187,7 +262,7 @@
 						</div>
 					</button>
 				</nav>
-			{:else}
+			{:else if showSettings}
 				<button class="back-btn" onclick={() => showSettings = false}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<polyline points="15 18 9 12 15 6"></polyline>
@@ -257,6 +332,79 @@
 					<a href="/settings" class="all-settings-link" onclick={closeMenu}>
 						all settings →
 					</a>
+				</div>
+			{:else if showAccounts}
+				<button class="back-btn" onclick={() => showAccounts = false}>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<polyline points="15 18 9 12 15 6"></polyline>
+					</svg>
+					<span>back</span>
+				</button>
+
+				<div class="accounts-content">
+					<!-- current account -->
+					<div class="account-item current">
+						<div class="account-avatar placeholder">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+								<circle cx="12" cy="7" r="4"></circle>
+							</svg>
+						</div>
+						<div class="account-info">
+							<span class="account-handle">@{user?.handle}</span>
+							<span class="account-badge">active</span>
+						</div>
+						<svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success, #4ade80)" stroke-width="2">
+							<polyline points="20 6 9 17 4 12"></polyline>
+						</svg>
+					</div>
+
+					{#if hasMultipleAccounts}
+						{#each otherAccounts as account}
+							<button
+								class="account-item"
+								onclick={() => handleSwitchAccount(account)}
+								disabled={switching}
+							>
+								{#if account.avatar_url}
+									<img src={account.avatar_url} alt="" class="account-avatar" />
+								{:else}
+									<div class="account-avatar placeholder">
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+											<circle cx="12" cy="7" r="4"></circle>
+										</svg>
+									</div>
+								{/if}
+								<div class="account-info">
+									<span class="account-handle">@{account.handle}</span>
+								</div>
+							</button>
+						{/each}
+					{/if}
+
+					<button class="menu-item add-account" onclick={handleAddAccount}>
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<line x1="12" y1="5" x2="12" y2="19"></line>
+							<line x1="5" y1="12" x2="19" y2="12"></line>
+						</svg>
+						<div class="item-content">
+							<span class="item-title">add account</span>
+						</div>
+					</button>
+
+					{#if hasMultipleAccounts}
+						<button class="menu-item logout-all" onclick={handleLogoutAll}>
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+								<polyline points="16 17 21 12 16 7"></polyline>
+								<line x1="21" y1="12" x2="9" y2="12"></line>
+							</svg>
+							<div class="item-content">
+								<span class="item-title">logout all</span>
+							</div>
+						</button>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -391,6 +539,11 @@
 		transform: scale(0.98);
 	}
 
+	.menu-item:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
 	.menu-item svg:first-child {
 		flex-shrink: 0;
 		color: var(--text-secondary);
@@ -401,7 +554,16 @@
 		color: var(--accent);
 	}
 
-	.menu-item.logout:hover svg:first-child {
+	.menu-item.logout:hover svg:first-child,
+	.menu-item.logout-all:hover svg:first-child {
+		color: var(--error);
+	}
+
+	.menu-item.logout-all {
+		color: var(--text-tertiary);
+	}
+
+	.menu-item.logout-all:hover {
 		color: var(--error);
 	}
 
@@ -417,6 +579,10 @@
 		font-size: var(--text-base);
 		font-weight: 500;
 		color: var(--text-primary);
+	}
+
+	.menu-item.logout-all .item-title {
+		color: inherit;
 	}
 
 	.item-subtitle {
@@ -454,11 +620,97 @@
 		background: var(--bg-hover);
 	}
 
-	.settings-content {
+	.settings-content,
+	.accounts-content {
 		padding: 0.75rem 1.25rem 1.25rem;
 		display: flex;
 		flex-direction: column;
 		gap: 1.25rem;
+	}
+
+	.accounts-content {
+		gap: 0.5rem;
+		padding: 0.5rem;
+	}
+
+	.account-item {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem 1rem;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-lg);
+		width: 100%;
+		text-align: left;
+		cursor: pointer;
+		transition: all 0.15s;
+		font-family: inherit;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.account-item:hover {
+		background: var(--bg-hover);
+	}
+
+	.account-item:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.account-item.current {
+		cursor: default;
+		background: color-mix(in srgb, var(--success, #4ade80) 10%, transparent);
+	}
+
+	.account-avatar {
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		object-fit: cover;
+		flex-shrink: 0;
+	}
+
+	.account-avatar.placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--bg-tertiary);
+		color: var(--text-tertiary);
+	}
+
+	.account-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.account-handle {
+		font-size: var(--text-base);
+		color: var(--text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.account-badge {
+		font-size: var(--text-xs);
+		color: var(--success, #4ade80);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.check-icon {
+		flex-shrink: 0;
+	}
+
+	.add-account {
+		margin-top: 0.5rem;
+		border-top: 1px solid var(--border-subtle);
+		border-radius: 0;
+		padding-top: 1rem;
 	}
 
 	.settings-section {

@@ -14,19 +14,25 @@ from backend._internal import (
     consume_exchange_token,
     create_exchange_token,
     create_session,
+    delete_pending_add_account,
     delete_pending_dev_token,
     delete_pending_scope_upgrade,
     delete_session,
+    get_or_create_group_id,
+    get_pending_add_account,
     get_pending_dev_token,
     get_pending_scope_upgrade,
+    get_session_group,
     handle_oauth_callback,
     list_developer_tokens,
     require_auth,
     revoke_developer_token,
+    save_pending_add_account,
     save_pending_dev_token,
     save_pending_scope_upgrade,
     start_oauth_flow,
     start_oauth_flow_with_scopes,
+    switch_active_account,
 )
 from backend._internal.background_tasks import schedule_atproto_sync
 from backend.config import settings
@@ -37,11 +43,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+class LinkedAccountResponse(BaseModel):
+    """account info for account switcher UI."""
+
+    did: str
+    handle: str
+    avatar_url: str | None
+    is_active: bool
+
+
 class CurrentUserResponse(BaseModel):
     """response model for current user endpoint."""
 
     did: str
     handle: str
+    linked_accounts: list[LinkedAccountResponse] = []
 
 
 class DeveloperTokenInfo(BaseModel):
@@ -84,10 +100,11 @@ async def oauth_callback(
     returns exchange token in URL which frontend will exchange for session_id.
     exchange token is short-lived (60s) and one-time use for security.
 
-    handles three flow types based on pending state:
+    handles four flow types based on pending state:
     1. developer token flow - creates dev token session, redirects with dev_token=true
     2. scope upgrade flow - replaces old session with new one, redirects to settings
-    3. regular login flow - creates session, redirects to portal or profile setup
+    3. add account flow - creates session in existing group, redirects to portal
+    4. regular login flow - creates session, redirects to portal or profile setup
     """
     did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
 
@@ -151,6 +168,32 @@ async def oauth_callback(
 
         return RedirectResponse(
             url=f"{settings.frontend.url}/settings?exchange_token={exchange_token}&scope_upgraded=true",
+            status_code=303,
+        )
+
+    # check if this is an add-account OAuth flow
+    pending_add_account = await get_pending_add_account(state)
+
+    if pending_add_account:
+        # create session linked to the existing group
+        session_id = await create_session(
+            did=did,
+            handle=handle,
+            oauth_session=oauth_session,
+            group_id=pending_add_account.group_id,
+        )
+
+        # clean up pending record
+        await delete_pending_add_account(state)
+
+        # create exchange token
+        exchange_token = await create_exchange_token(session_id)
+
+        # schedule ATProto sync
+        await schedule_atproto_sync(session_id, did)
+
+        return RedirectResponse(
+            url=f"{settings.frontend.url}/portal?exchange_token={exchange_token}&account_added=true",
             status_code=303,
         )
 
@@ -264,10 +307,22 @@ async def logout(
 async def get_current_user(
     session: Session = Depends(require_auth),
 ) -> CurrentUserResponse:
-    """get current authenticated user."""
+    """get current authenticated user with linked accounts."""
+    # get all accounts in the session group
+    linked = await get_session_group(session.session_id)
+
     return CurrentUserResponse(
         did=session.did,
         handle=session.handle,
+        linked_accounts=[
+            LinkedAccountResponse(
+                did=account.did,
+                handle=account.handle,
+                avatar_url=account.avatar_url,
+                is_active=account.is_active,
+            )
+            for account in linked
+        ],
     )
 
 
@@ -422,3 +477,145 @@ async def start_scope_upgrade_flow(
     )
 
     return ScopeUpgradeStartResponse(auth_url=auth_url)
+
+
+# multi-account endpoints
+
+
+class AddAccountStartResponse(BaseModel):
+    """response model with OAuth authorization URL for adding account."""
+
+    auth_url: str
+
+
+@router.post("/add-account/start")
+@limiter.limit(settings.rate_limit.auth_limit)
+async def start_add_account_flow(
+    request: Request,
+    session: Session = Depends(require_auth),
+) -> AddAccountStartResponse:
+    """start OAuth flow to add another account to the session group.
+
+    this initiates a new OAuth authorization flow with prompt=login to force
+    fresh authentication. the new account will be linked to the same session
+    group as the current account, enabling quick switching between accounts.
+
+    returns the authorization URL that the frontend should redirect to.
+    """
+    # get or create a group_id for the current session
+    group_id = await get_or_create_group_id(session.session_id)
+
+    # start OAuth flow with prompt=login to force fresh auth
+    # we don't specify a handle - the user will enter their handle at the PDS
+    auth_url, state = await start_oauth_flow(session.handle, prompt="login")
+
+    # save pending add-account metadata keyed by state
+    await save_pending_add_account(state=state, group_id=group_id)
+
+    return AddAccountStartResponse(auth_url=auth_url)
+
+
+class SwitchAccountRequest(BaseModel):
+    """request model for switching to a different account."""
+
+    target_did: str
+
+
+class SwitchAccountResponse(BaseModel):
+    """response model after switching accounts."""
+
+    did: str
+    handle: str
+    session_id: str
+
+
+@router.post("/switch-account")
+async def switch_account(
+    body: SwitchAccountRequest,
+    response: Response,
+    session: Session = Depends(require_auth),
+) -> SwitchAccountResponse:
+    """switch to a different account in the session group.
+
+    switches the active account within the session group. the cookie is updated
+    to point to the new session, and the old session is marked inactive.
+
+    returns the new active account's info.
+    """
+    # get all accounts in the group
+    linked = await get_session_group(session.session_id)
+
+    if not linked:
+        raise HTTPException(
+            status_code=400,
+            detail="no linked accounts - use add-account to link accounts first",
+        )
+
+    # find the target session
+    target = next((a for a in linked if a.did == body.target_did), None)
+    if not target:
+        raise HTTPException(
+            status_code=404,
+            detail="target account not found in session group",
+        )
+
+    if target.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="target account is already active",
+        )
+
+    # switch the active account
+    new_session_id = await switch_active_account(session.session_id, target.session_id)
+
+    # update the cookie to point to the new session
+    if settings.frontend.url:
+        is_localhost = settings.frontend.url.startswith("http://localhost")
+
+        response.set_cookie(
+            key="session_id",
+            value=new_session_id,
+            httponly=True,
+            secure=not is_localhost,
+            samesite="lax",
+            max_age=14 * 24 * 60 * 60,
+        )
+
+    return SwitchAccountResponse(
+        did=target.did,
+        handle=target.handle,
+        session_id=new_session_id,
+    )
+
+
+@router.post("/logout-all")
+async def logout_all(
+    session: Session = Depends(require_auth),
+) -> JSONResponse:
+    """logout all accounts in the session group.
+
+    removes all sessions in the group and clears the cookie.
+    """
+    # get all accounts in the group
+    linked = await get_session_group(session.session_id)
+
+    # delete all sessions (or just this one if not in a group)
+    if linked:
+        for account in linked:
+            await delete_session(account.session_id)
+    else:
+        await delete_session(session.session_id)
+
+    response = JSONResponse(content={"message": "all accounts logged out"})
+
+    if settings.frontend.url:
+        is_localhost = settings.frontend.url.startswith("http://localhost")
+
+        response.delete_cookie(
+            key="session_id",
+            httponly=True,
+            secure=not is_localhost,
+            samesite="lax",
+        )
+
+    return response

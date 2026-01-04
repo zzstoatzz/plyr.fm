@@ -1,5 +1,7 @@
 <script lang="ts">
-	import type { User } from '$lib/types';
+	import type { User, LinkedAccount } from '$lib/types';
+	import { API_URL } from '$lib/config';
+	import { goto } from '$app/navigation';
 
 	interface Props {
 		user: User | null;
@@ -9,6 +11,7 @@
 	let { user, onLogout }: Props = $props();
 	let showMenu = $state(false);
 	let menuRef = $state<HTMLDivElement | null>(null);
+	let switching = $state(false);
 
 	function toggleMenu() {
 		showMenu = !showMenu;
@@ -23,6 +26,55 @@
 		await onLogout();
 	}
 
+	async function handleLogoutAll() {
+		closeMenu();
+		try {
+			await fetch(`${API_URL}/auth/logout-all`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+			goto('/');
+		} catch (e) {
+			console.error('logout all failed:', e);
+		}
+	}
+
+	async function handleSwitchAccount(account: LinkedAccount) {
+		if (account.is_active || switching) return;
+
+		switching = true;
+		try {
+			await fetch(`${API_URL}/auth/switch-account`, {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ target_did: account.did })
+			});
+			// reload the page to update user context
+			window.location.reload();
+		} catch (e) {
+			console.error('switch account failed:', e);
+			switching = false;
+		}
+	}
+
+	async function handleAddAccount() {
+		closeMenu();
+		try {
+			const response = await fetch(`${API_URL}/auth/add-account/start`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+			if (response.ok) {
+				const data: { auth_url: string } = await response.json();
+				// redirect to OAuth flow
+				window.location.href = data.auth_url;
+			}
+		} catch (e) {
+			console.error('add account failed:', e);
+		}
+	}
+
 	function handleClickOutside(event: MouseEvent) {
 		if (menuRef && !menuRef.contains(event.target as Node)) {
 			closeMenu();
@@ -35,6 +87,12 @@
 			return () => document.removeEventListener('click', handleClickOutside);
 		}
 	});
+
+	// derive linked accounts (excluding active one)
+	const otherAccounts = $derived(
+		user?.linked_accounts?.filter((a) => !a.is_active) ?? []
+	);
+	const hasMultipleAccounts = $derived(otherAccounts.length > 0);
 </script>
 
 <div class="user-menu" bind:this={menuRef}>
@@ -74,7 +132,44 @@
 				</svg>
 				<span>settings</span>
 			</a>
+
 			<div class="dropdown-divider"></div>
+
+			{#if hasMultipleAccounts}
+				<div class="section-label">switch account</div>
+				{#each otherAccounts as account}
+					<button
+						class="dropdown-item account-item"
+						onclick={() => handleSwitchAccount(account)}
+						disabled={switching}
+					>
+						{#if account.avatar_url}
+							<img src={account.avatar_url} alt="" class="account-avatar" />
+						{:else}
+							<div class="account-avatar placeholder">
+								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+									<circle cx="12" cy="7" r="4"></circle>
+								</svg>
+							</div>
+						{/if}
+						<span class="account-handle">@{account.handle}</span>
+					</button>
+				{/each}
+			{/if}
+
+			<button class="dropdown-item" onclick={handleAddAccount}>
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+					<circle cx="9" cy="7" r="4"></circle>
+					<line x1="19" y1="8" x2="19" y2="14"></line>
+					<line x1="22" y1="11" x2="16" y2="11"></line>
+				</svg>
+				<span>add account</span>
+			</button>
+
+			<div class="dropdown-divider"></div>
+
 			<button class="dropdown-item logout" onclick={handleLogout}>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -83,6 +178,17 @@
 				</svg>
 				<span>logout</span>
 			</button>
+
+			{#if hasMultipleAccounts}
+				<button class="dropdown-item logout-all" onclick={handleLogoutAll}>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+						<polyline points="16 17 21 12 16 7"></polyline>
+						<line x1="21" y1="12" x2="9" y2="12"></line>
+					</svg>
+					<span>logout all</span>
+				</button>
+			{/if}
 		</div>
 	{/if}
 </div>
@@ -133,7 +239,7 @@
 		position: absolute;
 		top: calc(100% + 0.5rem);
 		right: 0;
-		min-width: 180px;
+		min-width: 200px;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-md);
@@ -152,6 +258,14 @@
 			opacity: 1;
 			transform: translateY(0);
 		}
+	}
+
+	.section-label {
+		padding: 0.5rem 1rem 0.25rem;
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
+		font-weight: 500;
+		text-transform: lowercase;
 	}
 
 	.dropdown-item {
@@ -175,6 +289,11 @@
 		background: var(--bg-hover);
 	}
 
+	.dropdown-item:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
 	.dropdown-item svg {
 		flex-shrink: 0;
 		color: var(--text-secondary);
@@ -182,6 +301,37 @@
 	}
 
 	.dropdown-item:hover svg {
+		color: var(--accent);
+	}
+
+	.account-item {
+		padding: 0.5rem 1rem;
+	}
+
+	.account-avatar {
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;
+		object-fit: cover;
+	}
+
+	.account-avatar.placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--bg-tertiary);
+		color: var(--text-tertiary);
+	}
+
+	.account-handle {
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.account-item:hover .account-handle {
 		color: var(--accent);
 	}
 
@@ -194,6 +344,21 @@
 	}
 
 	.dropdown-item.logout:hover span {
+		color: var(--error);
+	}
+
+	.dropdown-item.logout-all {
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
+		padding: 0.5rem 1rem;
+	}
+
+	.dropdown-item.logout-all:hover {
+		background: color-mix(in srgb, var(--error) 10%, transparent);
+		color: var(--error);
+	}
+
+	.dropdown-item.logout-all:hover svg {
 		color: var(--error);
 	}
 
