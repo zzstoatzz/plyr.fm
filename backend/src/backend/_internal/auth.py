@@ -918,6 +918,25 @@ async def get_or_create_group_id(session_id: str) -> str:
         return group_id
 
 
+async def deactivate_other_sessions_in_group(
+    group_id: str, active_session_id: str
+) -> None:
+    """deactivate all sessions in a group except the specified one.
+
+    used when adding a new account to mark the new session as the only active one.
+    """
+    async with db_session() as db:
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.group_id == group_id,
+                UserSession.session_id != active_session_id,
+            )
+        )
+        for session in result.scalars().all():
+            session.is_active = False
+        await db.commit()
+
+
 async def switch_active_account(current_session_id: str, target_session_id: str) -> str:
     """switch active account within a session group.
 
