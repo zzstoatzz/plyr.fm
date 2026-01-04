@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { User, LinkedAccount } from '$lib/types';
 	import { API_URL } from '$lib/config';
-	import { goto } from '$app/navigation';
 
 	interface Props {
 		user: User | null;
@@ -12,6 +11,7 @@
 	let showMenu = $state(false);
 	let menuRef = $state<HTMLDivElement | null>(null);
 	let switching = $state(false);
+	let showAccountsSubmenu = $state(false);
 	let showAddAccountInput = $state(false);
 	let newHandle = $state('');
 	let addAccountError = $state('');
@@ -20,6 +20,7 @@
 	function toggleMenu() {
 		showMenu = !showMenu;
 		if (!showMenu) {
+			showAccountsSubmenu = false;
 			showAddAccountInput = false;
 			newHandle = '';
 			addAccountError = '';
@@ -28,9 +29,20 @@
 
 	function closeMenu() {
 		showMenu = false;
+		showAccountsSubmenu = false;
 		showAddAccountInput = false;
 		newHandle = '';
 		addAccountError = '';
+	}
+
+	function toggleAccountsSubmenu(event: MouseEvent) {
+		event.stopPropagation();
+		showAccountsSubmenu = !showAccountsSubmenu;
+		if (!showAccountsSubmenu) {
+			showAddAccountInput = false;
+			newHandle = '';
+			addAccountError = '';
+		}
 	}
 
 	async function handleLogout() {
@@ -45,7 +57,7 @@
 				method: 'POST',
 				credentials: 'include'
 			});
-			goto('/');
+			window.location.href = '/';
 		} catch (e) {
 			console.error('logout all failed:', e);
 		}
@@ -178,67 +190,107 @@
 
 			<div class="dropdown-divider"></div>
 
-			{#if hasMultipleAccounts}
-				<div class="section-label">switch account</div>
-				{#each otherAccounts as account}
-					<button
-						class="dropdown-item account-item"
-						onclick={() => handleSwitchAccount(account)}
-						disabled={switching}
-					>
-						{#if account.avatar_url}
-							<img src={account.avatar_url} alt="" class="account-avatar" />
-						{:else}
-							<div class="account-avatar placeholder">
-								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-									<circle cx="12" cy="7" r="4"></circle>
-								</svg>
-							</div>
-						{/if}
-						<span class="account-handle">@{account.handle}</span>
-					</button>
-				{/each}
-			{/if}
-
-			{#if showAddAccountInput}
-				<div class="add-account-input">
-					<input
-						type="text"
-						bind:value={newHandle}
-						onkeydown={handleAddAccountKeydown}
-						placeholder="handle.bsky.social"
-						disabled={addingAccount}
-						autofocus
-					/>
-					<button
-						class="add-account-submit"
-						onclick={submitAddAccount}
-						disabled={addingAccount || !newHandle.trim()}
-					>
-						{#if addingAccount}
-							...
-						{:else}
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<polyline points="9 18 15 12 9 6"></polyline>
-							</svg>
-						{/if}
-					</button>
-				</div>
-				{#if addAccountError}
-					<div class="add-account-error">{addAccountError}</div>
-				{/if}
-			{:else}
-				<button class="dropdown-item" onclick={showAddAccount}>
+			<!-- accounts submenu -->
+			<div class="submenu-container">
+				<button class="dropdown-item has-submenu" onclick={toggleAccountsSubmenu}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
 						<circle cx="9" cy="7" r="4"></circle>
-						<line x1="19" y1="8" x2="19" y2="14"></line>
-						<line x1="22" y1="11" x2="16" y2="11"></line>
+						<path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+						<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
 					</svg>
-					<span>add account</span>
+					<span>accounts</span>
+					<svg
+						class="submenu-chevron"
+						class:open={showAccountsSubmenu}
+						width="12"
+						height="12"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<polyline points="6 9 12 15 18 9"></polyline>
+					</svg>
 				</button>
-			{/if}
+
+				{#if showAccountsSubmenu}
+					<div class="submenu">
+						{#each otherAccounts as account}
+							<button
+								class="dropdown-item account-item"
+								onclick={() => handleSwitchAccount(account)}
+								disabled={switching}
+							>
+								{#if account.avatar_url}
+									<img src={account.avatar_url} alt="" class="account-avatar" />
+								{:else}
+									<div class="account-avatar placeholder">
+										<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+											<circle cx="12" cy="7" r="4"></circle>
+										</svg>
+									</div>
+								{/if}
+								<span class="account-handle">@{account.handle}</span>
+							</button>
+						{/each}
+
+						{#if showAddAccountInput}
+							<div class="add-account-input">
+								<input
+									type="text"
+									bind:value={newHandle}
+									onkeydown={handleAddAccountKeydown}
+									placeholder="handle.bsky.social"
+									disabled={addingAccount}
+									autofocus
+								/>
+								<button
+									class="add-account-submit"
+									onclick={submitAddAccount}
+									disabled={addingAccount || !newHandle.trim()}
+								>
+									{#if addingAccount}
+										...
+									{:else}
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<polyline points="9 18 15 12 9 6"></polyline>
+										</svg>
+									{/if}
+								</button>
+							</div>
+							{#if addAccountError}
+								<div class="add-account-error">{addAccountError}</div>
+							{/if}
+						{:else}
+							<button class="dropdown-item" onclick={showAddAccount}>
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+									<circle cx="9" cy="7" r="4"></circle>
+									<line x1="19" y1="8" x2="19" y2="14"></line>
+									<line x1="22" y1="11" x2="16" y2="11"></line>
+								</svg>
+								<span>add account</span>
+							</button>
+						{/if}
+
+						{#if hasMultipleAccounts}
+							<div class="submenu-divider"></div>
+							<button class="dropdown-item logout-all" onclick={handleLogoutAll}>
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+									<polyline points="16 17 21 12 16 7"></polyline>
+									<line x1="21" y1="12" x2="9" y2="12"></line>
+								</svg>
+								<span>logout all</span>
+							</button>
+						{/if}
+					</div>
+				{/if}
+			</div>
 
 			<div class="dropdown-divider"></div>
 
@@ -250,17 +302,6 @@
 				</svg>
 				<span>logout</span>
 			</button>
-
-			{#if hasMultipleAccounts}
-				<button class="dropdown-item logout-all" onclick={handleLogoutAll}>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-						<polyline points="16 17 21 12 16 7"></polyline>
-						<line x1="21" y1="12" x2="9" y2="12"></line>
-					</svg>
-					<span>logout all</span>
-				</button>
-			{/if}
 		</div>
 	{/if}
 </div>
@@ -330,14 +371,6 @@
 			opacity: 1;
 			transform: translateY(0);
 		}
-	}
-
-	.section-label {
-		padding: 0.5rem 1rem 0.25rem;
-		color: var(--text-tertiary);
-		font-size: var(--text-sm);
-		font-weight: 500;
-		text-transform: lowercase;
 	}
 
 	.dropdown-item {
@@ -438,6 +471,54 @@
 		height: 1px;
 		background: var(--border-subtle);
 		margin: 0.25rem 0;
+	}
+
+	.submenu-container {
+		position: relative;
+	}
+
+	.has-submenu {
+		justify-content: flex-start;
+	}
+
+	.has-submenu span {
+		flex: 1;
+	}
+
+	.submenu-chevron {
+		flex-shrink: 0;
+		margin-left: auto;
+		transition: transform 0.15s;
+		color: var(--text-tertiary);
+	}
+
+	.submenu-chevron.open {
+		transform: rotate(180deg);
+	}
+
+	.submenu {
+		background: var(--bg-tertiary);
+		border-top: 1px solid var(--border-subtle);
+		animation: submenuIn 0.12s ease-out;
+	}
+
+	@keyframes submenuIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	.submenu .dropdown-item {
+		padding-left: 1.5rem;
+	}
+
+	.submenu-divider {
+		height: 1px;
+		background: var(--border-subtle);
+		margin: 0.25rem 0.5rem;
 	}
 
 	.add-account-input {
