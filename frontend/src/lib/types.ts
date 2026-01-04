@@ -63,7 +63,6 @@ export interface LinkedAccount {
 	did: string;
 	handle: string;
 	avatar_url: string | null;
-	is_active: boolean;
 }
 
 export interface User {

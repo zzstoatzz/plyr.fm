@@ -49,7 +49,6 @@ class LinkedAccountResponse(BaseModel):
     did: str
     handle: str
     avatar_url: str | None
-    is_active: bool
 
 
 class CurrentUserResponse(BaseModel):
@@ -319,7 +318,6 @@ async def get_current_user(
                 did=account.did,
                 handle=account.handle,
                 avatar_url=account.avatar_url,
-                is_active=account.is_active,
             )
             for account in linked
         ],
