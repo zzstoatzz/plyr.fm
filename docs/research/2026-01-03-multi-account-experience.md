@@ -216,23 +216,51 @@ studied bluesky's open-source client ([social-app](https://github.com/bluesky-so
 
 ### their architecture
 
+**persistence layer** (`src/state/persisted/`):
+- uses AsyncStorage with single key `'BSKY_STORAGE'`
+- `Schema` type defines all persisted state
+- `currentAccount` stores only DID (lightweight reference)
+- full account data lives in `accounts[]` array
+
 **session state shape:**
 ```typescript
 interface SessionState {
   accounts: SessionAccount[]      // all accounts, even expired ones
-  currentAccount: SessionAccount  // active account reference
+  currentAccount: SessionAccount  // active account reference (DID only)
   hasSession: boolean
+}
+
+interface SessionAccount {
+  did: string
+  handle: string
+  service: string              // PDS URL
+  accessJwt?: string           // may be empty/expired
+  refreshJwt?: string          // may be empty/expired
+  email?: string
+  emailConfirmed?: boolean
+  emailAuthFactor?: boolean
+  pdsUrl?: string
+  active?: boolean
+  status?: 'takendown' | 'suspended' | 'deactivated'
 }
 ```
 
-**per-account data:**
-- `did`: primary identifier
-- `accessJwt` / `refreshJwt`: tokens (may be empty if expired)
-- `handle`, `email`, display metadata
-- accounts persist even after logout (tokens cleared, account stays in list)
+**reducer actions** (`src/state/session/reducer.ts`):
+```typescript
+type Action =
+  | { type: 'switched-to-account'; agent: BskyAgent; did: string }
+  | { type: 'removed-account'; did: string }
+  | { type: 'logged-out-current-account' }
+  | { type: 'logged-out-every-account' }
+  | { type: 'synced-accounts'; accounts: SessionAccount[]; currentAccount?: SessionAccount }
+  | { type: 'received-agent-event'; event: SessionEvent }
+  | { type: 'partial-refresh-session'; patch: Partial<SessionAccount> }
+```
 
 **key files:**
+- `src/state/persisted/schema.ts` - persistence schema with account fields
 - `src/state/session/reducer.ts` - state transitions
+- `src/state/session/agent.ts` - agent creation and token refresh
 - `src/components/dialogs/SwitchAccount.tsx` - switcher UI
 - `src/lib/hooks/useAccountSwitcher.ts` - switching logic
 - `src/components/AccountList.tsx` - account list rendering
@@ -273,10 +301,33 @@ interface SessionState {
 
 bluesky stores tokens client-side (react native app). we store sessions server-side (HttpOnly cookies). our session group approach achieves the same UX with better web security.
 
+### token refresh strategy
+
+bluesky's `createAgentAndResume()` flow:
+1. check if `refreshJwt` exists and is not expired
+2. if valid: restore session, attempt background refresh
+3. if expired: show login form for that account (no silent refresh possible)
+
+for plyr.fm, our server-side sessions handle refresh differently:
+- refresh happens server-side via atproto SDK
+- client never sees tokens
+- "expired" means session row deleted or OAuth refresh failed
+
+### account list UI details
+
+from `AccountList.tsx`:
+- uses `useProfilesQuery` to batch-fetch profile data for all accounts
+- `isJwtExpired()` helper determines "logged out" state
+- `pendingDid` disables interaction during switch (`pointerEvents: 'none'`)
+- profiles fetched by DID array, matched back to accounts
+
 ## references
 
 - [ATProto OAuth spec](https://github.com/bluesky-social/atproto/blob/main/packages/oauth/oauth-provider/src/oauth-provider.ts) - prompt parameter handling
 - [bluesky social-app](https://github.com/bluesky-social/social-app) - multi-account reference implementation
+  - [persisted/schema.ts](https://github.com/bluesky-social/social-app/blob/main/src/state/persisted/schema.ts) - account schema
+  - [session/reducer.ts](https://github.com/bluesky-social/social-app/blob/main/src/state/session/reducer.ts) - state machine
+  - [AccountList.tsx](https://github.com/bluesky-social/social-app/blob/main/src/components/AccountList.tsx) - UI component
 - [issue #583](https://github.com/zzstoatzz/plyr.fm/issues/583) - original feature request
 - [PRs #578, #582](https://github.com/zzstoatzz/plyr.fm/pull/578) - confidential OAuth client context
-- [atproto SDK fork PR #8](https://github.com/zzstoatzz/atproto/pull/8) - prompt parameter support
+- [atproto SDK fork](https://github.com/zzstoatzz/atproto) - prompt parameter support (merged)
