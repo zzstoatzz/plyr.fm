@@ -9,6 +9,7 @@
 	import Toast from '$lib/components/Toast.svelte';
 	import Queue from '$lib/components/Queue.svelte';
 	import SearchModal from '$lib/components/SearchModal.svelte';
+	import LogoutModal from '$lib/components/LogoutModal.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
@@ -414,6 +415,7 @@
 {/if}
 <Toast />
 <SearchModal />
+<LogoutModal />
 
 <style>
 	:global(*),

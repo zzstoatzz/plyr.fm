@@ -8,6 +8,7 @@
 	import { API_URL } from '$lib/config';
 	import type { User, LinkedAccount } from '$lib/types';
 	import HandleAutocomplete from './HandleAutocomplete.svelte';
+	import { logout } from '$lib/logout.svelte';
 
 	interface Props {
 		user: User | null;
@@ -20,7 +21,6 @@
 	let showMenu = $state(false);
 	let showSettings = $state(false);
 	let showAccounts = $state(false);
-	let showLogoutPrompt = $state(false);
 	let switching = $state(false);
 	let showAddAccountForm = $state(false);
 	let newHandle = $state('');
@@ -84,7 +84,6 @@
 		showSettings = false;
 		showAccounts = false;
 		showAddAccountForm = false;
-		showLogoutPrompt = false;
 		newHandle = '';
 		addAccountError = '';
 	}
@@ -133,10 +132,9 @@
 	function handleLogoutClick(event: MouseEvent) {
 		event.stopPropagation();
 		if (hasMultipleAccounts) {
-			// show prompt to choose: switch or logout all
-			showLogoutPrompt = true;
+			closeMenu();
+			logout.open(user, otherAccounts, logoutAll, logoutAndSwitch);
 		} else {
-			// single account - just logout
 			performLogout();
 		}
 	}
@@ -267,7 +265,7 @@
 		<div class="menu-backdrop" use:portal={'body'} onclick={closeMenu}></div>
 		<div class="menu-popover" use:portal={'body'}>
 			<div class="menu-header">
-				<span>{showLogoutPrompt ? 'logout' : showSettings ? 'settings' : showAccounts ? 'accounts' : 'menu'}</span>
+				<span>{showSettings ? 'settings' : showAccounts ? 'accounts' : 'menu'}</span>
 				<button class="close-btn" onclick={closeMenu} aria-label="close">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
@@ -276,50 +274,7 @@
 				</button>
 			</div>
 
-			{#if showLogoutPrompt}
-				<!-- logout prompt for multi-account users -->
-				<div class="logout-prompt">
-					<button class="back-btn" onclick={() => showLogoutPrompt = false}>
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<polyline points="15 18 9 12 15 6"></polyline>
-						</svg>
-						<span>back</span>
-					</button>
-
-					<div class="prompt-content">
-						<div class="prompt-header">stay logged in?</div>
-						<div class="prompt-accounts">
-							{#each otherAccounts as account}
-								<button
-									class="prompt-account"
-									onclick={() => logoutAndSwitch(account)}
-								>
-									{#if account.avatar_url}
-										<img src={account.avatar_url} alt="" class="account-avatar" />
-									{:else}
-										<div class="account-avatar placeholder">
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-												<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-												<circle cx="12" cy="7" r="4"></circle>
-											</svg>
-										</div>
-									{/if}
-									<span>switch to @{account.handle}</span>
-								</button>
-							{/each}
-						</div>
-						<div class="prompt-divider"></div>
-						<button class="prompt-logout-all" onclick={logoutAll}>
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-								<polyline points="16 17 21 12 16 7"></polyline>
-								<line x1="21" y1="12" x2="9" y2="12"></line>
-							</svg>
-							<span>logout completely</span>
-						</button>
-					</div>
-				</div>
-			{:else if !showSettings && !showAccounts}
+			{#if !showSettings && !showAccounts}
 				<nav class="menu-items">
 					{#if !isOnPortal}
 						<a href="/portal" class="menu-item" onclick={closeMenu}>
@@ -1056,92 +1011,6 @@
 			top: calc(50% - var(--player-height, 0px) / 2);
 			max-height: calc(100vh - var(--player-height, 0px) - 3rem - env(safe-area-inset-bottom, 0px));
 		}
-	}
-
-	/* logout prompt styles */
-	.logout-prompt {
-		display: flex;
-		flex-direction: column;
-	}
-
-	.logout-prompt .back-btn {
-		margin: 0.5rem 0.5rem 0;
-	}
-
-	.prompt-content {
-		padding: 1rem 1.25rem 1.25rem;
-	}
-
-	.prompt-header {
-		font-size: var(--text-base);
-		font-weight: 500;
-		color: var(--text-primary);
-		margin-bottom: 0.75rem;
-		text-align: center;
-	}
-
-	.prompt-accounts {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.prompt-account {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		width: 100%;
-		padding: 0.75rem 1rem;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-lg);
-		color: var(--text-primary);
-		font-family: inherit;
-		font-size: var(--text-base);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.prompt-account:hover {
-		border-color: var(--accent);
-		background: var(--bg-hover);
-	}
-
-	.prompt-account:hover span {
-		color: var(--accent);
-	}
-
-	.prompt-divider {
-		height: 1px;
-		background: var(--border-subtle);
-		margin: 1rem 0;
-	}
-
-	.prompt-logout-all {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.75rem 1rem;
-		background: transparent;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-lg);
-		color: var(--text-secondary);
-		font-family: inherit;
-		font-size: var(--text-base);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.prompt-logout-all:hover {
-		border-color: var(--error);
-		color: var(--error);
-		background: color-mix(in srgb, var(--error) 10%, transparent);
-	}
-
-	.prompt-logout-all:hover svg {
-		color: var(--error);
 	}
 
 	/* add account form styles */

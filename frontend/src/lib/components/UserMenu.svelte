@@ -3,6 +3,7 @@
 	import { API_URL } from '$lib/config';
 	import { invalidateAll } from '$app/navigation';
 	import HandleAutocomplete from './HandleAutocomplete.svelte';
+	import { logout } from '$lib/logout.svelte';
 
 	interface Props {
 		user: User | null;
@@ -18,7 +19,6 @@
 	let newHandle = $state('');
 	let addAccountError = $state('');
 	let addingAccount = $state(false);
-	let showLogoutPrompt = $state(false);
 
 	function toggleMenu() {
 		showMenu = !showMenu;
@@ -30,7 +30,6 @@
 	function resetSubmenus() {
 		showAccountsSubmenu = false;
 		showAddAccountForm = false;
-		showLogoutPrompt = false;
 		newHandle = '';
 		addAccountError = '';
 	}
@@ -53,8 +52,9 @@
 	function handleLogoutClick(event: MouseEvent) {
 		event.stopPropagation();
 		if (hasMultipleAccounts) {
-			// show prompt to choose: switch or logout all
-			showLogoutPrompt = true;
+			// close menu and show global logout modal
+			closeMenu();
+			logout.open(user, otherAccounts, logoutAll, logoutAndSwitch);
 		} else {
 			// single account - just logout
 			performLogout();
@@ -212,45 +212,7 @@
 
 	{#if showMenu}
 		<div class="dropdown">
-			{#if showLogoutPrompt}
-				<!-- logout prompt for multi-account users -->
-				<div class="logout-prompt">
-					<div class="prompt-header">stay logged in?</div>
-					<div class="prompt-accounts">
-						{#each otherAccounts as account}
-							<button
-								class="prompt-account"
-								onclick={() => logoutAndSwitch(account)}
-							>
-								{#if account.avatar_url}
-									<img src={account.avatar_url} alt="" class="account-avatar" />
-								{:else}
-									<div class="account-avatar placeholder">
-										<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-											<circle cx="12" cy="7" r="4"></circle>
-										</svg>
-									</div>
-								{/if}
-								<span>switch to @{account.handle}</span>
-							</button>
-						{/each}
-					</div>
-					<div class="prompt-divider"></div>
-					<button class="prompt-logout-all" onclick={logoutAll}>
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-							<polyline points="16 17 21 12 16 7"></polyline>
-							<line x1="21" y1="12" x2="9" y2="12"></line>
-						</svg>
-						<span>logout completely</span>
-					</button>
-					<button class="prompt-cancel" onclick={() => showLogoutPrompt = false}>
-						cancel
-					</button>
-				</div>
-			{:else}
-				<a href="/portal" class="dropdown-item" onclick={closeMenu}>
+			<a href="/portal" class="dropdown-item" onclick={closeMenu}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<rect x="3" y="3" width="7" height="7"></rect>
 						<rect x="14" y="3" width="7" height="7"></rect>
@@ -370,10 +332,10 @@
 					</svg>
 					<span>logout</span>
 				</button>
-			{/if}
 		</div>
 	{/if}
 </div>
+
 
 <style>
 	.user-menu {
@@ -657,99 +619,5 @@
 
 	.add-account-trigger svg {
 		color: var(--accent);
-	}
-
-	/* logout prompt */
-	.logout-prompt {
-		padding: 1rem;
-	}
-
-	.prompt-header {
-		font-size: var(--text-base);
-		font-weight: 500;
-		color: var(--text-primary);
-		margin-bottom: 0.75rem;
-		text-align: center;
-	}
-
-	.prompt-accounts {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.prompt-account {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		width: 100%;
-		padding: 0.75rem;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-base);
-		color: var(--text-primary);
-		font-family: inherit;
-		font-size: var(--text-base);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.prompt-account:hover {
-		border-color: var(--accent);
-		background: var(--bg-hover);
-	}
-
-	.prompt-account:hover span {
-		color: var(--accent);
-	}
-
-	.prompt-divider {
-		height: 1px;
-		background: var(--border-subtle);
-		margin: 0.75rem 0;
-	}
-
-	.prompt-logout-all {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.625rem 1rem;
-		background: transparent;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-base);
-		color: var(--text-secondary);
-		font-family: inherit;
-		font-size: var(--text-sm);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.prompt-logout-all:hover {
-		border-color: var(--error);
-		color: var(--error);
-		background: color-mix(in srgb, var(--error) 10%, transparent);
-	}
-
-	.prompt-logout-all:hover svg {
-		color: var(--error);
-	}
-
-	.prompt-cancel {
-		width: 100%;
-		padding: 0.5rem;
-		margin-top: 0.5rem;
-		background: transparent;
-		border: none;
-		color: var(--text-tertiary);
-		font-family: inherit;
-		font-size: var(--text-sm);
-		cursor: pointer;
-		transition: color 0.15s;
-	}
-
-	.prompt-cancel:hover {
-		color: var(--text-primary);
 	}
 </style>
