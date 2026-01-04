@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # uses LRUCache (not TTLCache) to bound memory - LRU eviction is safe because:
 # 1. recently-used locks won't be evicted while in use
 # 2. TTL expiration could evict a lock while a coroutine holds it, breaking mutual exclusion
-_refresh_locks: LRUCache[str, asyncio.Lock] = LRUCache(maxsize=10000)
+_refresh_locks: LRUCache[str, asyncio.Lock] = LRUCache(maxsize=10_000)
 
 
 def reconstruct_oauth_session(oauth_data: dict[str, Any]) -> OAuthSession:
