@@ -70,7 +70,8 @@
 		}
 	}
 
-	function showAddAccount() {
+	function showAddAccount(event: MouseEvent) {
+		event.stopPropagation();
 		showAddAccountInput = true;
 		addAccountError = '';
 	}
