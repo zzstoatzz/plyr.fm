@@ -6,13 +6,19 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from backend.config import settings
 
-# per-event-loop engine cache
+# per-event-loop engine and sessionmaker cache.
+# sessionmaker is cached alongside engine since it's bound to a specific engine.
 ENGINES: dict[tuple[Any, ...], AsyncEngine] = {}
+SESSION_MAKERS: dict[tuple[Any, ...], async_sessionmaker[AsyncSession]] = {}
 
 
 def get_engine() -> AsyncEngine:
@@ -73,16 +79,34 @@ def get_engine() -> AsyncEngine:
     return ENGINES[cache_key]
 
 
+def get_session_maker() -> async_sessionmaker[AsyncSession]:
+    """retrieve a cached async sessionmaker.
+
+    the sessionmaker is cached per event loop alongside the engine.
+    this avoids recreating the sessionmaker on every db_session() call.
+
+    returns:
+        async_sessionmaker bound to the current event loop's engine
+    """
+    loop = get_running_loop()
+    cache_key = (loop, settings.database.url)
+
+    if cache_key not in SESSION_MAKERS:
+        engine = get_engine()
+        SESSION_MAKERS[cache_key] = async_sessionmaker(
+            bind=engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+
+    return SESSION_MAKERS[cache_key]
+
+
 @asynccontextmanager
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """get async database session."""
-    engine = get_engine()
-    async_session_maker = sessionmaker(  # type: ignore
-        bind=engine,  # type: ignore
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-    async with async_session_maker() as session:
+    session_maker = get_session_maker()
+    async with session_maker() as session:
         yield session
 
 
