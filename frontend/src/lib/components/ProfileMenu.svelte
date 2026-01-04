@@ -2,10 +2,12 @@
 	import { portal } from 'svelte-portal';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { invalidateAll } from '$app/navigation';
 	import { queue } from '$lib/queue.svelte';
 	import { preferences, type Theme } from '$lib/preferences.svelte';
 	import { API_URL } from '$lib/config';
 	import type { User, LinkedAccount } from '$lib/types';
+	import HandleAutocomplete from './HandleAutocomplete.svelte';
 
 	interface Props {
 		user: User | null;
@@ -18,8 +20,9 @@
 	let showMenu = $state(false);
 	let showSettings = $state(false);
 	let showAccounts = $state(false);
+	let showLogoutPrompt = $state(false);
 	let switching = $state(false);
-	let showAddAccountInput = $state(false);
+	let showAddAccountForm = $state(false);
 	let newHandle = $state('');
 	let addAccountError = $state('');
 	let addingAccount = $state(false);
@@ -73,21 +76,22 @@
 	function toggleMenu() {
 		showMenu = !showMenu;
 		if (!showMenu) {
-			showSettings = false;
-			showAccounts = false;
-			showAddAccountInput = false;
-			newHandle = '';
-			addAccountError = '';
+			resetSubmenus();
 		}
+	}
+
+	function resetSubmenus() {
+		showSettings = false;
+		showAccounts = false;
+		showAddAccountForm = false;
+		showLogoutPrompt = false;
+		newHandle = '';
+		addAccountError = '';
 	}
 
 	function closeMenu() {
 		showMenu = false;
-		showSettings = false;
-		showAccounts = false;
-		showAddAccountInput = false;
-		newHandle = '';
-		addAccountError = '';
+		resetSubmenus();
 	}
 
 	function applyColorLocally(color: string) {
@@ -126,12 +130,39 @@
 		preferences.setTheme(theme);
 	}
 
-	async function handleLogout() {
+	function handleLogoutClick() {
+		if (hasMultipleAccounts) {
+			// show prompt to choose: switch or logout all
+			showLogoutPrompt = true;
+		} else {
+			// single account - just logout
+			performLogout();
+		}
+	}
+
+	async function performLogout() {
 		closeMenu();
 		await onLogout();
 	}
 
-	async function handleLogoutAll() {
+	async function logoutAndSwitch(account: LinkedAccount) {
+		closeMenu();
+		try {
+			const response = await fetch(`${API_URL}/auth/logout?switch_to=${encodeURIComponent(account.did)}`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+			if (response.ok) {
+				await invalidateAll();
+			} else {
+				console.error('logout with switch failed');
+			}
+		} catch (e) {
+			console.error('logout with switch failed:', e);
+		}
+	}
+
+	async function logoutAll() {
 		closeMenu();
 		try {
 			await fetch(`${API_URL}/auth/logout-all`, {
@@ -148,6 +179,7 @@
 		if (switching) return;
 
 		switching = true;
+		closeMenu();
 		try {
 			await fetch(`${API_URL}/auth/switch-account`, {
 				method: 'POST',
@@ -155,17 +187,35 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ target_did: account.did })
 			});
-			window.location.reload();
+			await invalidateAll();
 		} catch (e) {
 			console.error('switch account failed:', e);
+		} finally {
 			switching = false;
 		}
 	}
 
 	function showAddAccount(event: MouseEvent) {
 		event.stopPropagation();
-		showAddAccountInput = true;
+		showAddAccountForm = true;
 		addAccountError = '';
+	}
+
+	function hideAddAccount() {
+		showAddAccountForm = false;
+		newHandle = '';
+		addAccountError = '';
+	}
+
+	function handleSelectHandle(handle: string) {
+		newHandle = handle;
+		// immediately submit when selecting from autocomplete
+		submitAddAccount();
+	}
+
+	function handleFormSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		submitAddAccount();
 	}
 
 	async function submitAddAccount() {
@@ -199,16 +249,6 @@
 			addingAccount = false;
 		}
 	}
-
-	function handleAddAccountKeydown(event: KeyboardEvent) {
-		if (event.key === 'Enter') {
-			event.preventDefault();
-			submitAddAccount();
-		} else if (event.key === 'Escape') {
-			showAddAccountInput = false;
-			newHandle = '';
-		}
-	}
 </script>
 
 <div class="profile-menu">
@@ -226,7 +266,7 @@
 		<div class="menu-backdrop" use:portal={'body'} onclick={closeMenu}></div>
 		<div class="menu-popover" use:portal={'body'}>
 			<div class="menu-header">
-				<span>{showSettings ? 'settings' : showAccounts ? 'accounts' : 'menu'}</span>
+				<span>{showLogoutPrompt ? 'logout' : showSettings ? 'settings' : showAccounts ? 'accounts' : 'menu'}</span>
 				<button class="close-btn" onclick={closeMenu} aria-label="close">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
@@ -235,7 +275,50 @@
 				</button>
 			</div>
 
-			{#if !showSettings && !showAccounts}
+			{#if showLogoutPrompt}
+				<!-- logout prompt for multi-account users -->
+				<div class="logout-prompt">
+					<button class="back-btn" onclick={() => showLogoutPrompt = false}>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<polyline points="15 18 9 12 15 6"></polyline>
+						</svg>
+						<span>back</span>
+					</button>
+
+					<div class="prompt-content">
+						<div class="prompt-header">stay logged in?</div>
+						<div class="prompt-accounts">
+							{#each otherAccounts as account}
+								<button
+									class="prompt-account"
+									onclick={() => logoutAndSwitch(account)}
+								>
+									{#if account.avatar_url}
+										<img src={account.avatar_url} alt="" class="account-avatar" />
+									{:else}
+										<div class="account-avatar placeholder">
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+												<circle cx="12" cy="7" r="4"></circle>
+											</svg>
+										</div>
+									{/if}
+									<span>switch to @{account.handle}</span>
+								</button>
+							{/each}
+						</div>
+						<div class="prompt-divider"></div>
+						<button class="prompt-logout-all" onclick={logoutAll}>
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+								<polyline points="16 17 21 12 16 7"></polyline>
+								<line x1="21" y1="12" x2="9" y2="12"></line>
+							</svg>
+							<span>logout completely</span>
+						</button>
+					</div>
+				</div>
+			{:else if !showSettings && !showAccounts}
 				<nav class="menu-items">
 					{#if !isOnPortal}
 						<a href="/portal" class="menu-item" onclick={closeMenu}>
@@ -296,7 +379,7 @@
 						</svg>
 					</button>
 
-					<button class="menu-item logout" onclick={handleLogout}>
+					<button class="menu-item logout" onclick={handleLogoutClick}>
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
 							<polyline points="16 17 21 12 16 7"></polyline>
@@ -432,33 +515,36 @@
 						{/each}
 					{/if}
 
-					{#if showAddAccountInput}
-						<div class="add-account-input-row">
-							<input
-								type="text"
+					{#if showAddAccountForm}
+						<!-- add account form with back button -->
+						<button class="back-btn" onclick={hideAddAccount}>
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<polyline points="15 18 9 12 15 6"></polyline>
+							</svg>
+							<span>back</span>
+						</button>
+						<form class="add-account-form" onsubmit={handleFormSubmit}>
+							<HandleAutocomplete
 								bind:value={newHandle}
-								onkeydown={handleAddAccountKeydown}
+								onSelect={handleSelectHandle}
 								placeholder="handle.bsky.social"
 								disabled={addingAccount}
-								autofocus
 							/>
 							<button
-								class="add-account-submit"
-								onclick={submitAddAccount}
+								type="submit"
+								class="add-account-btn"
 								disabled={addingAccount || !newHandle.trim()}
 							>
 								{#if addingAccount}
-									...
+									adding...
 								{:else}
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<polyline points="9 18 15 12 9 6"></polyline>
-									</svg>
+									add account
 								{/if}
 							</button>
-						</div>
-						{#if addAccountError}
-							<div class="add-account-error">{addAccountError}</div>
-						{/if}
+							{#if addAccountError}
+								<div class="add-account-error">{addAccountError}</div>
+							{/if}
+						</form>
 					{:else}
 						<button class="menu-item add-account" onclick={showAddAccount}>
 							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -467,19 +553,6 @@
 							</svg>
 							<div class="item-content">
 								<span class="item-title">add account</span>
-							</div>
-						</button>
-					{/if}
-
-					{#if hasMultipleAccounts}
-						<button class="menu-item logout-all" onclick={handleLogoutAll}>
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-								<polyline points="16 17 21 12 16 7"></polyline>
-								<line x1="21" y1="12" x2="9" y2="12"></line>
-							</svg>
-							<div class="item-content">
-								<span class="item-title">logout all</span>
 							</div>
 						</button>
 					{/if}
@@ -632,16 +705,7 @@
 		color: var(--accent);
 	}
 
-	.menu-item.logout:hover svg:first-child,
-	.menu-item.logout-all:hover svg:first-child {
-		color: var(--error);
-	}
-
-	.menu-item.logout-all {
-		color: var(--text-tertiary);
-	}
-
-	.menu-item.logout-all:hover {
+	.menu-item.logout:hover svg:first-child {
 		color: var(--error);
 	}
 
@@ -657,10 +721,6 @@
 		font-size: var(--text-base);
 		font-weight: 500;
 		color: var(--text-primary);
-	}
-
-	.menu-item.logout-all .item-title {
-		color: inherit;
 	}
 
 	.item-subtitle {
@@ -997,56 +1057,161 @@
 		}
 	}
 
-	.add-account-input-row {
+	/* logout prompt styles */
+	.logout-prompt {
 		display: flex;
-		gap: 0.5rem;
-		padding: 0.75rem 1rem;
+		flex-direction: column;
 	}
 
-	.add-account-input-row input {
-		flex: 1;
-		padding: 0.5rem 0.75rem;
+	.logout-prompt .back-btn {
+		margin: 0.5rem 0.5rem 0;
+	}
+
+	.prompt-content {
+		padding: 1rem 1.25rem 1.25rem;
+	}
+
+	.prompt-header {
+		font-size: var(--text-base);
+		font-weight: 500;
+		color: var(--text-primary);
+		margin-bottom: 0.75rem;
+		text-align: center;
+	}
+
+	.prompt-accounts {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.prompt-account {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		width: 100%;
+		padding: 0.75rem 1rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
-		border-radius: var(--radius-base);
+		border-radius: var(--radius-lg);
 		color: var(--text-primary);
 		font-family: inherit;
-		font-size: var(--text-sm);
+		font-size: var(--text-base);
+		cursor: pointer;
+		transition: all 0.15s;
 	}
 
-	.add-account-input-row input:focus {
-		outline: none;
+	.prompt-account:hover {
 		border-color: var(--accent);
+		background: var(--bg-hover);
 	}
 
-	.add-account-input-row input::placeholder {
-		color: var(--text-tertiary);
+	.prompt-account:hover span {
+		color: var(--accent);
 	}
 
-	.add-account-submit {
+	.prompt-divider {
+		height: 1px;
+		background: var(--border-subtle);
+		margin: 1rem 0;
+	}
+
+	.prompt-logout-all {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 0.5rem;
-		background: var(--accent);
-		border: none;
-		border-radius: var(--radius-base);
-		color: var(--bg-primary);
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.75rem 1rem;
+		background: transparent;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-lg);
+		color: var(--text-secondary);
+		font-family: inherit;
+		font-size: var(--text-base);
 		cursor: pointer;
-		transition: opacity 0.12s;
+		transition: all 0.15s;
 	}
 
-	.add-account-submit:hover:not(:disabled) {
+	.prompt-logout-all:hover {
+		border-color: var(--error);
+		color: var(--error);
+		background: color-mix(in srgb, var(--error) 10%, transparent);
+	}
+
+	.prompt-logout-all:hover svg {
+		color: var(--error);
+	}
+
+	/* add account form styles */
+	.add-account-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 0.5rem 1rem 1rem;
+	}
+
+	.add-account-form :global(.handle-autocomplete) {
+		width: 100%;
+	}
+
+	.add-account-form :global(.handle-autocomplete .input-wrapper input) {
+		padding: 0.625rem 0.75rem;
+		font-size: 16px; /* prevents zoom on iOS */
+		background: var(--bg-tertiary);
+	}
+
+	.add-account-form :global(.handle-autocomplete .results) {
+		max-height: 150px;
+		z-index: 200;
+	}
+
+	.add-account-form :global(.handle-autocomplete .result-item) {
+		padding: 0.5rem 0.75rem;
+		gap: 0.5rem;
+	}
+
+	.add-account-form :global(.handle-autocomplete .avatar),
+	.add-account-form :global(.handle-autocomplete .avatar-placeholder) {
+		width: 28px;
+		height: 28px;
+	}
+
+	.add-account-form :global(.handle-autocomplete .display-name) {
+		font-size: var(--text-sm);
+	}
+
+	.add-account-form :global(.handle-autocomplete .handle) {
+		font-size: var(--text-xs);
+	}
+
+	.add-account-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		background: var(--accent);
+		border: none;
+		border-radius: var(--radius-lg);
+		color: white;
+		font-family: inherit;
+		font-size: var(--text-base);
+		font-weight: 500;
+		cursor: pointer;
+		transition: opacity 0.15s;
+	}
+
+	.add-account-btn:hover:not(:disabled) {
 		opacity: 0.9;
 	}
 
-	.add-account-submit:disabled {
+	.add-account-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
 
 	.add-account-error {
-		padding: 0 1rem 0.5rem;
 		color: var(--error);
 		font-size: var(--text-sm);
 	}
