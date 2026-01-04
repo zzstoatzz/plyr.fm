@@ -286,8 +286,52 @@ async def exchange_token(
 @router.post("/logout")
 async def logout(
     session: Session = Depends(require_auth),
+    switch_to: Annotated[
+        str | None, Query(description="DID to switch to after logout")
+    ] = None,
 ) -> JSONResponse:
-    """logout current user."""
+    """logout current user.
+
+    if switch_to is provided and valid, deletes current session and switches
+    to the specified account. otherwise, fully logs out.
+    """
+    if switch_to:
+        # validate target is in same group
+        linked = await get_session_group(session.session_id)
+        target = next((a for a in linked if a.did == switch_to), None)
+
+        if not target:
+            raise HTTPException(
+                status_code=400, detail="target account not in session group"
+            )
+
+        if target.did == session.did:
+            raise HTTPException(
+                status_code=400, detail="cannot switch to current account"
+            )
+
+        # delete current session
+        await delete_session(session.session_id)
+
+        # set cookie to target session
+        response = JSONResponse(
+            content={"switched_to": {"did": target.did, "handle": target.handle}}
+        )
+
+        if settings.frontend.url:
+            is_localhost = settings.frontend.url.startswith("http://localhost")
+            response.set_cookie(
+                key="session_id",
+                value=target.session_id,
+                httponly=True,
+                secure=not is_localhost,
+                samesite="lax",
+                max_age=14 * 24 * 60 * 60,
+            )
+
+        return response
+
+    # no switch_to - full logout
     await delete_session(session.session_id)
     response = JSONResponse(content={"message": "logged out successfully"})
 
@@ -519,11 +563,14 @@ async def start_add_account_flow(
 
     returns the authorization URL that the frontend should redirect to.
     """
-    # prevent adding the same account
-    if body.handle.lower() == session.handle.lower():
-        raise HTTPException(
-            status_code=400, detail="cannot add the account you're already logged in as"
-        )
+    # check if the handle is already in the session group
+    linked_accounts = await get_session_group(session.session_id)
+    for account in linked_accounts:
+        if body.handle.lower() == account.handle.lower():
+            raise HTTPException(
+                status_code=400,
+                detail="you're already logged into this account",
+            )
 
     # get or create a group_id for the current session
     group_id = await get_or_create_group_id(session.session_id)
