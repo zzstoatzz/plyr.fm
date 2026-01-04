@@ -46,6 +46,7 @@ from backend.api.albums import router as albums_router
 from backend.api.lists import router as lists_router
 from backend.api.migration import router as migration_router
 from backend.config import settings
+from backend.utilities.http import close_http_client
 from backend.utilities.rate_limit import limiter
 
 # configure logfire if enabled
@@ -158,6 +159,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
 
     # shutdown: cleanup resources
+    await close_http_client()
     await notification_service.shutdown()
     await queue_service.shutdown()
 

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
 from backend.models import Track, get_db
+from backend.utilities.http import get_http_client
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -62,14 +63,14 @@ async def get_costs() -> Response:
     if not costs_url:
         raise HTTPException(status_code=404, detail="costs dashboard not configured")
 
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.get(costs_url, timeout=10)
-            resp.raise_for_status()
-        except httpx.HTTPError as e:
-            raise HTTPException(
-                status_code=502, detail=f"failed to fetch costs: {e}"
-            ) from e
+    client = get_http_client()
+    try:
+        resp = await client.get(costs_url, timeout=10)
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=502, detail=f"failed to fetch costs: {e}"
+        ) from e
 
     return Response(
         content=resp.content,

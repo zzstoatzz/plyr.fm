@@ -3,7 +3,7 @@
 import logging
 from urllib.parse import parse_qs, urlparse
 
-import httpx
+from backend.utilities.http import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -61,24 +61,22 @@ async def fetch_user_avatar(did: str) -> str | None:
     profile_url = f"{BSKY_API_BASE}/app.bsky.actor.getProfile?actor={did}"
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(profile_url, timeout=10.0)
+        client = get_http_client()
+        response = await client.get(profile_url, timeout=10.0)
 
-            if response.status_code == 200:
-                profile_data = response.json()
-                avatar = profile_data.get("avatar")
+        if response.status_code == 200:
+            profile_data = response.json()
+            avatar = profile_data.get("avatar")
 
-                if avatar:
-                    logger.info(f"discovered avatar for {did}: {avatar}")
-                    return normalize_avatar_url(avatar)
-                else:
-                    logger.info(f"no avatar found for {did}")
-                    return None
+            if avatar:
+                logger.info(f"discovered avatar for {did}: {avatar}")
+                return normalize_avatar_url(avatar)
             else:
-                logger.warning(
-                    f"failed to fetch profile for {did}: {response.status_code}"
-                )
+                logger.info(f"no avatar found for {did}")
                 return None
+        else:
+            logger.warning(f"failed to fetch profile for {did}: {response.status_code}")
+            return None
 
     except Exception as e:
         logger.error(f"error fetching avatar for {did}: {e}", exc_info=True)
@@ -97,20 +95,16 @@ async def fetch_user_profile(did: str) -> dict | None:
     profile_url = f"{BSKY_API_BASE}/app.bsky.actor.getProfile?actor={did}"
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(profile_url, timeout=10.0)
+        client = get_http_client()
+        response = await client.get(profile_url, timeout=10.0)
 
-            if response.status_code == 200:
-                profile_data = response.json()
-                logger.info(
-                    f"discovered profile for {did}: {profile_data.get('handle')}"
-                )
-                return profile_data
-            else:
-                logger.warning(
-                    f"failed to fetch profile for {did}: {response.status_code}"
-                )
-                return None
+        if response.status_code == 200:
+            profile_data = response.json()
+            logger.info(f"discovered profile for {did}: {profile_data.get('handle')}")
+            return profile_data
+        else:
+            logger.warning(f"failed to fetch profile for {did}: {response.status_code}")
+            return None
 
     except Exception as e:
         logger.error(f"error fetching profile for {did}: {e}", exc_info=True)

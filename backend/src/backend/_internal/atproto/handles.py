@@ -6,6 +6,8 @@ from typing import Any
 import httpx
 from atproto import AsyncIdResolver
 
+from backend.utilities.http import get_http_client
+
 logger = logging.getLogger(__name__)
 
 # shared resolver instance for DID/handle resolution
@@ -34,32 +36,32 @@ async def resolve_handle(handle: str) -> dict[str, Any] | None:
 
         # fetch profile info from Bluesky appview (for display name/avatar)
         # this is acceptable since we're fetching Bluesky profile data specifically
-        async with httpx.AsyncClient() as client:
-            profile_response = await client.get(
-                "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile",
-                params={"actor": did},
-                timeout=5.0,
+        client = get_http_client()
+        profile_response = await client.get(
+            "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile",
+            params={"actor": did},
+            timeout=5.0,
+        )
+
+        if profile_response.status_code != 200:
+            logger.warning(
+                f"failed to fetch profile for {did}: {profile_response.status_code}"
             )
-
-            if profile_response.status_code != 200:
-                logger.warning(
-                    f"failed to fetch profile for {did}: {profile_response.status_code}"
-                )
-                # return basic info even if profile fetch fails
-                return {
-                    "did": did,
-                    "handle": handle,
-                    "display_name": handle,
-                    "avatar_url": None,
-                }
-
-            profile = profile_response.json()
+            # return basic info even if profile fetch fails
             return {
                 "did": did,
                 "handle": handle,
-                "display_name": profile.get("displayName") or handle,
-                "avatar_url": profile.get("avatar"),
+                "display_name": handle,
+                "avatar_url": None,
             }
+
+        profile = profile_response.json()
+        return {
+            "did": did,
+            "handle": handle,
+            "display_name": profile.get("displayName") or handle,
+            "avatar_url": profile.get("avatar"),
+        }
 
     except httpx.TimeoutException:
         logger.error(f"timeout resolving handle {handle}")
@@ -133,29 +135,27 @@ async def search_handles(query: str, limit: int = 10) -> list[dict]:
         return []
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                "https://public.api.bsky.app/xrpc/app.bsky.actor.searchActorsTypeahead",
-                params={"q": query, "limit": min(limit, 25)},
-                timeout=5.0,
-            )
+        client = get_http_client()
+        response = await client.get(
+            "https://public.api.bsky.app/xrpc/app.bsky.actor.searchActorsTypeahead",
+            params={"q": query, "limit": min(limit, 25)},
+            timeout=5.0,
+        )
 
-            if response.status_code != 200:
-                logger.warning(
-                    f"search failed for query {query}: {response.status_code}"
-                )
-                return []
+        if response.status_code != 200:
+            logger.warning(f"search failed for query {query}: {response.status_code}")
+            return []
 
-            actors = response.json().get("actors", [])
-            return [
-                {
-                    "did": actor["did"],
-                    "handle": actor["handle"],
-                    "display_name": actor.get("displayName") or actor["handle"],
-                    "avatar_url": actor.get("avatar"),
-                }
-                for actor in actors
-            ]
+        actors = response.json().get("actors", [])
+        return [
+            {
+                "did": actor["did"],
+                "handle": actor["handle"],
+                "display_name": actor.get("displayName") or actor["handle"],
+                "avatar_url": actor.get("avatar"),
+            }
+            for actor in actors
+        ]
 
     except httpx.TimeoutException:
         logger.error(f"timeout searching for {query}")

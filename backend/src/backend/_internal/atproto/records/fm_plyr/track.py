@@ -150,7 +150,7 @@ async def get_record_public(
         ValueError: if URI is malformed
         Exception: if fetch fails
     """
-    import httpx
+    from backend.utilities.http import get_http_client
 
     repo, collection, rkey = parse_at_uri(record_uri)
 
@@ -158,8 +158,8 @@ async def get_record_public(
     url = f"{base_url}/xrpc/com.atproto.repo.getRecord"
     params = {"repo": repo, "collection": collection, "rkey": rkey}
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, params=params, timeout=10.0)
+    client = get_http_client()
+    response = await client.get(url, params=params, timeout=10.0)
 
     if response.status_code != 200:
         raise Exception(
