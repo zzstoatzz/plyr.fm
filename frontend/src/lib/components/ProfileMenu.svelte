@@ -130,7 +130,8 @@
 		preferences.setTheme(theme);
 	}
 
-	function handleLogoutClick() {
+	function handleLogoutClick(event: MouseEvent) {
+		event.stopPropagation();
 		if (hasMultipleAccounts) {
 			// show prompt to choose: switch or logout all
 			showLogoutPrompt = true;
