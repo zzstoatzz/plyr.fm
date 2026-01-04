@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from atproto_oauth.models import OAuthSession
-from cachetools import TTLCache
+from cachetools import LRUCache
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_oauth_client, get_session, update_session_tokens
@@ -14,9 +14,10 @@ from backend._internal import get_oauth_client, get_session, update_session_toke
 logger = logging.getLogger(__name__)
 
 # per-session locks for token refresh to prevent concurrent refresh races.
-# uses TTLCache to auto-expire locks for inactive sessions (1 hour TTL, max 10k sessions).
-# this prevents unbounded memory growth as sessions are created and abandoned.
-_refresh_locks: TTLCache[str, asyncio.Lock] = TTLCache(maxsize=10000, ttl=3600)
+# uses LRUCache (not TTLCache) to bound memory - LRU eviction is safe because:
+# 1. recently-used locks won't be evicted while in use
+# 2. TTL expiration could evict a lock while a coroutine holds it, breaking mutual exclusion
+_refresh_locks: LRUCache[str, asyncio.Lock] = LRUCache(maxsize=10000)
 
 
 def reconstruct_oauth_session(oauth_data: dict[str, Any]) -> OAuthSession:

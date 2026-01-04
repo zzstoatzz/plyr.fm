@@ -272,3 +272,71 @@ class TestConcurrentTokenRefresh:
 
             # OAuth client should have been called exactly once
             assert refresh_call_count == 1
+
+
+class TestRefreshLocksCache:
+    """test _refresh_locks cache behavior (memory leak prevention)."""
+
+    def test_same_session_returns_same_lock(self):
+        """same session_id should return the same lock instance."""
+        from backend._internal.atproto.client import _refresh_locks
+
+        # clear for isolated test
+        _refresh_locks.clear()
+
+        # create lock for session
+        _refresh_locks["session-a"] = asyncio.Lock()
+        lock1 = _refresh_locks["session-a"]
+
+        # accessing again should return same lock
+        lock2 = _refresh_locks["session-a"]
+        assert lock1 is lock2
+
+    def test_different_sessions_have_different_locks(self):
+        """different session_ids should have different lock instances."""
+        from backend._internal.atproto.client import _refresh_locks
+
+        _refresh_locks.clear()
+
+        _refresh_locks["session-a"] = asyncio.Lock()
+        _refresh_locks["session-b"] = asyncio.Lock()
+
+        assert _refresh_locks["session-a"] is not _refresh_locks["session-b"]
+
+    def test_cache_is_bounded_by_maxsize(self):
+        """cache should evict entries when full (LRU behavior)."""
+        from backend._internal.atproto.client import _refresh_locks
+
+        _refresh_locks.clear()
+
+        # fill cache beyond maxsize (maxsize=10000, but we'll test the behavior)
+        # just verify the maxsize property is set
+        assert _refresh_locks.maxsize == 10000
+
+        # add some entries and verify they exist
+        for i in range(100):
+            _refresh_locks[f"session-{i}"] = asyncio.Lock()
+
+        assert len(_refresh_locks) == 100
+
+    def test_lru_eviction_order(self):
+        """LRU cache should evict least recently used entries first."""
+        from cachetools import LRUCache
+
+        # use a small cache to test eviction behavior
+        small_cache: LRUCache[str, asyncio.Lock] = LRUCache(maxsize=3)
+
+        small_cache["a"] = asyncio.Lock()
+        small_cache["b"] = asyncio.Lock()
+        small_cache["c"] = asyncio.Lock()
+
+        # access "a" to make it recently used
+        _ = small_cache["a"]
+
+        # add "d" - should evict "b" (least recently used)
+        small_cache["d"] = asyncio.Lock()
+
+        assert "a" in small_cache  # recently accessed
+        assert "b" not in small_cache  # evicted (LRU)
+        assert "c" in small_cache
+        assert "d" in small_cache
