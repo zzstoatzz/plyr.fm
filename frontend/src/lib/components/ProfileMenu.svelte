@@ -2,7 +2,6 @@
 	import { portal } from 'svelte-portal';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { invalidateAll } from '$app/navigation';
 	import { queue } from '$lib/queue.svelte';
 	import { preferences, type Theme } from '$lib/preferences.svelte';
 	import { API_URL } from '$lib/config';
@@ -152,7 +151,7 @@
 				credentials: 'include'
 			});
 			if (response.ok) {
-				await invalidateAll();
+				window.location.reload();
 			} else {
 				console.error('logout with switch failed');
 			}
@@ -186,7 +185,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ target_did: account.did })
 			});
-			await invalidateAll();
+			window.location.reload();
 		} catch (e) {
 			console.error('switch account failed:', e);
 		} finally {
