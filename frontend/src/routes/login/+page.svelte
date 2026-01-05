@@ -126,6 +126,8 @@
 				</div>
 			{/if}
 		</div>
+
+		<a href="/" class="back-link">← back to home</a>
 	</div>
 </div>
 
@@ -261,6 +263,19 @@
 		padding: 0.15rem 0.4rem;
 		border-radius: var(--radius-sm);
 		font-size: 0.85em;
+	}
+
+	.back-link {
+		display: block;
+		text-align: center;
+		margin-top: 1.5rem;
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
+		text-decoration: none;
+	}
+
+	.back-link:hover {
+		color: var(--text-secondary);
 	}
 
 	@media (max-width: 480px) {
