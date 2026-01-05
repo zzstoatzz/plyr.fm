@@ -47,6 +47,24 @@ plyr.fm should become:
 
 ### January 2026
 
+#### multi-account experience (PRs #707, #710, #712-714, Jan 3-5)
+
+**multiple ATProto identities now supported** - users can link additional accounts and switch instantly:
+- session groups: new `group_id` column links accounts in the same browser session
+- `POST /auth/add-account/start` initiates OAuth with `prompt=login` to force re-authentication
+- `POST /auth/switch-account` swaps active session without re-authenticating
+- frontend shows account switcher in UserMenu (desktop) and ProfileMenu (mobile)
+- avatars fetched fresh from Artist profiles at request time
+
+**performance optimizations** (PRs #710, #712, #714):
+- fixed memory leak in token refresh locks (TTLCache with 1-hour expiry, 10k max)
+- cache sessionmaker per engine to avoid recreation overhead
+- pass db session through call chain to reuse Neon connections (~150ms saved per request)
+
+**why this matters**: users with personal + artist accounts can now switch without logging out. ATProto OAuth's `prompt=login` flag forces the PDS to re-authenticate rather than auto-selecting the last account.
+
+---
+
 #### copyright moderation improvements (PRs #703-704, Jan 2)
 
 **per legal advice**, redesigned copyright handling to reduce liability exposure:
@@ -238,13 +256,16 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ## immediate priorities
 
-### quality of life mode (Dec 29-31)
+### stabilization mode (Jan 2026)
 
-end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) complete. remaining days before 2026 are for minor polish and bug fixes as they arise.
+end-of-year sprint complete. focus is on bug fixes, polish, and infrastructure improvements.
 
-**what shipped in the sprint:**
-- moderation consolidation: sensitive images moved to moderation service (#644)
-- atprotofans: supporter badges (#627) and content gating (#637)
+**shipped since last update (Dec 23):**
+- multi-account support (#707)
+- self-hosted Redis migration (~$75/mo → ~$2/mo) (#674-677)
+- copyright DM notifications (#704)
+- OAuth permission sets (#697)
+- image moderation via Claude vision (#687)
 
 **aspirational (deferred until scale justifies):**
 - configurable rules engine for moderation
@@ -290,6 +311,7 @@ end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) compl
 
 **core functionality**
 - ✅ ATProto OAuth 2.1 authentication
+- ✅ multi-account support with instant switching
 - ✅ secure session management via HttpOnly cookies
 - ✅ developer tokens with independent OAuth grants
 - ✅ platform stats and Media Session API
@@ -409,4 +431,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-02.
+this is a living document. last updated 2026-01-05.
