@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from fastapi import Cookie, Header, HTTPException
 from jose import jwk
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.oauth_stores import PostgresStateStore
 from backend.config import settings
@@ -843,42 +844,58 @@ class LinkedAccount:
     session_id: str
 
 
-async def get_session_group(session_id: str) -> list[LinkedAccount]:
+async def _get_session_group_impl(
+    session_id: str, db: AsyncSession
+) -> list[LinkedAccount]:
+    """implementation of get_session_group using provided db session."""
+    result = await db.execute(
+        select(UserSession.group_id).where(UserSession.session_id == session_id)
+    )
+    group_id = result.scalar_one_or_none()
+
+    if not group_id:
+        return []
+
+    result = await db.execute(
+        select(UserSession).where(
+            UserSession.group_id == group_id,
+            UserSession.is_developer_token == False,  # noqa: E712
+        )
+    )
+    sessions = result.scalars().all()
+
+    accounts = []
+    for session in sessions:
+        if session.expires_at and datetime.now(UTC) > session.expires_at:
+            continue
+
+        accounts.append(
+            LinkedAccount(
+                did=session.did,
+                handle=session.handle,
+                session_id=session.session_id,
+            )
+        )
+
+    return accounts
+
+
+async def get_session_group(
+    session_id: str, db: AsyncSession | None = None
+) -> list[LinkedAccount]:
     """get all accounts in the same session group.
 
     returns empty list if session has no group_id (single account).
+
+    args:
+        session_id: the session to look up
+        db: optional database session to reuse (avoids new connection)
     """
-    async with db_session() as db:
-        result = await db.execute(
-            select(UserSession.group_id).where(UserSession.session_id == session_id)
-        )
-        group_id = result.scalar_one_or_none()
+    if db is not None:
+        return await _get_session_group_impl(session_id, db)
 
-        if not group_id:
-            return []
-
-        result = await db.execute(
-            select(UserSession).where(
-                UserSession.group_id == group_id,
-                UserSession.is_developer_token == False,  # noqa: E712
-            )
-        )
-        sessions = result.scalars().all()
-
-        accounts = []
-        for session in sessions:
-            if session.expires_at and datetime.now(UTC) > session.expires_at:
-                continue
-
-            accounts.append(
-                LinkedAccount(
-                    did=session.did,
-                    handle=session.handle,
-                    session_id=session.session_id,
-                )
-            )
-
-        return accounts
+    async with db_session() as new_db:
+        return await _get_session_group_impl(session_id, new_db)
 
 
 async def get_or_create_group_id(session_id: str) -> str:
@@ -906,41 +923,57 @@ async def get_or_create_group_id(session_id: str) -> str:
         return group_id
 
 
-async def switch_active_account(current_session_id: str, target_session_id: str) -> str:
+async def _switch_active_account_impl(
+    current_session_id: str, target_session_id: str, db: AsyncSession
+) -> str:
+    """implementation of switch_active_account using provided db session."""
+    result = await db.execute(
+        select(UserSession).where(UserSession.session_id == current_session_id)
+    )
+    current_session = result.scalar_one_or_none()
+
+    if not current_session or not current_session.group_id:
+        raise HTTPException(status_code=400, detail="no session group found")
+
+    result = await db.execute(
+        select(UserSession).where(UserSession.session_id == target_session_id)
+    )
+    target_session = result.scalar_one_or_none()
+
+    if not target_session:
+        raise HTTPException(status_code=404, detail="target session not found")
+
+    if target_session.group_id != current_session.group_id:
+        raise HTTPException(status_code=403, detail="target session not in same group")
+
+    if target_session.expires_at and datetime.now(UTC) > target_session.expires_at:
+        raise HTTPException(status_code=401, detail="target session expired")
+
+    return target_session_id
+
+
+async def switch_active_account(
+    current_session_id: str, target_session_id: str, db: AsyncSession | None = None
+) -> str:
     """switch to a different account within a session group.
 
     validates that the target session exists, is in the same group, and isn't expired.
     returns the target session_id (caller updates the cookie).
+
+    args:
+        current_session_id: the current session
+        target_session_id: the session to switch to
+        db: optional database session to reuse (avoids new connection)
     """
-    async with db_session() as db:
-        # get current session to find group_id
-        result = await db.execute(
-            select(UserSession).where(UserSession.session_id == current_session_id)
+    if db is not None:
+        return await _switch_active_account_impl(
+            current_session_id, target_session_id, db
         )
-        current_session = result.scalar_one_or_none()
 
-        if not current_session or not current_session.group_id:
-            raise HTTPException(status_code=400, detail="no session group found")
-
-        # verify target session is in the same group
-        result = await db.execute(
-            select(UserSession).where(UserSession.session_id == target_session_id)
+    async with db_session() as new_db:
+        return await _switch_active_account_impl(
+            current_session_id, target_session_id, new_db
         )
-        target_session = result.scalar_one_or_none()
-
-        if not target_session:
-            raise HTTPException(status_code=404, detail="target session not found")
-
-        if target_session.group_id != current_session.group_id:
-            raise HTTPException(
-                status_code=403, detail="target session not in same group"
-            )
-
-        # check if target session is expired
-        if target_session.expires_at and datetime.now(UTC) > target_session.expires_at:
-            raise HTTPException(status_code=401, detail="target session expired")
-
-        return target_session_id
 
 
 async def remove_account_from_group(session_id: str) -> str | None:
