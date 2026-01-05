@@ -60,6 +60,9 @@ if settings.observability.enabled:
         environment=settings.observability.environment,
     )
 
+    # instrument httpx for external HTTP call visibility
+    logfire.instrument_httpx()
+
     # configure logging with logfire handler
     logging.basicConfig(
         level=logging.DEBUG if settings.app.debug else logging.INFO,
