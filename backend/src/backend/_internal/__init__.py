@@ -35,7 +35,6 @@ from backend._internal.auth import (
     start_oauth_flow,
     start_oauth_flow_with_scopes,
     switch_active_account,
-    update_session_avatar,
     update_session_tokens,
 )
 from backend._internal.constellation import get_like_count_safe
@@ -84,7 +83,6 @@ __all__ = [
     "start_oauth_flow",
     "start_oauth_flow_with_scopes",
     "switch_active_account",
-    "update_session_avatar",
     "update_session_tokens",
     "validate_supporter",
 ]

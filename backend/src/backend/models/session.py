@@ -32,9 +32,5 @@ class UserSession(Base):
         Boolean, default=False, nullable=False, server_default="false"
     )
     token_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    # multi-account session group fields
+    # multi-account session group
     group_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, default=True, nullable=False, server_default="true"
-    )
-    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

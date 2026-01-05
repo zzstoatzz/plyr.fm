@@ -21,30 +21,14 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Add session groups for multi-account support."""
-    # add group_id to user_sessions (nullable initially for existing sessions)
     op.add_column(
         "user_sessions",
         sa.Column("group_id", sa.String(64), nullable=True),
     )
-    # add is_active flag (default true for existing sessions)
-    op.add_column(
-        "user_sessions",
-        sa.Column(
-            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
-        ),
-    )
-    # add avatar_url for quick display in account switcher
-    op.add_column(
-        "user_sessions",
-        sa.Column("avatar_url", sa.String(500), nullable=True),
-    )
-    # index for fast group lookups
     op.create_index("ix_user_sessions_group_id", "user_sessions", ["group_id"])
 
 
 def downgrade() -> None:
     """Remove session groups."""
     op.drop_index("ix_user_sessions_group_id", table_name="user_sessions")
-    op.drop_column("user_sessions", "avatar_url")
-    op.drop_column("user_sessions", "is_active")
     op.drop_column("user_sessions", "group_id")

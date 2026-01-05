@@ -241,7 +241,6 @@ async def create_session(
     is_developer_token: bool = False,
     token_name: str | None = None,
     group_id: str | None = None,
-    avatar_url: str | None = None,
 ) -> str:
     """create a new session for authenticated user with encrypted OAuth data.
 
@@ -253,14 +252,11 @@ async def create_session(
         is_developer_token: whether this is a developer token (for listing/revocation)
         token_name: optional name for the token (only for developer tokens)
         group_id: optional session group ID for multi-account support
-        avatar_url: optional avatar URL for quick display in account switcher
     """
     session_id = secrets.token_urlsafe(32)
 
-    # encrypt sensitive OAuth session data before storing
     encrypted_data = _encrypt_data(json.dumps(oauth_session))
 
-    # store in database with expiration
     expires_at = (
         datetime.now(UTC) + timedelta(days=expires_in_days)
         if expires_in_days > 0
@@ -277,7 +273,6 @@ async def create_session(
             is_developer_token=is_developer_token,
             token_name=token_name,
             group_id=group_id,
-            avatar_url=avatar_url,
         )
         db.add(user_session)
         await db.commit()
@@ -845,8 +840,6 @@ class LinkedAccount:
 
     did: str
     handle: str
-    avatar_url: str | None
-    is_active: bool
     session_id: str
 
 
@@ -856,7 +849,6 @@ async def get_session_group(session_id: str) -> list[LinkedAccount]:
     returns empty list if session has no group_id (single account).
     """
     async with db_session() as db:
-        # first get the group_id for this session
         result = await db.execute(
             select(UserSession.group_id).where(UserSession.session_id == session_id)
         )
@@ -865,7 +857,6 @@ async def get_session_group(session_id: str) -> list[LinkedAccount]:
         if not group_id:
             return []
 
-        # get all sessions in this group (excluding developer tokens)
         result = await db.execute(
             select(UserSession).where(
                 UserSession.group_id == group_id,
@@ -876,7 +867,6 @@ async def get_session_group(session_id: str) -> list[LinkedAccount]:
 
         accounts = []
         for session in sessions:
-            # skip expired sessions
             if session.expires_at and datetime.now(UTC) > session.expires_at:
                 continue
 
@@ -884,8 +874,6 @@ async def get_session_group(session_id: str) -> list[LinkedAccount]:
                 LinkedAccount(
                     did=session.did,
                     handle=session.handle,
-                    avatar_url=session.avatar_url,
-                    is_active=session.is_active,
                     session_id=session.session_id,
                 )
             )
@@ -958,8 +946,7 @@ async def switch_active_account(current_session_id: str, target_session_id: str)
 async def remove_account_from_group(session_id: str) -> str | None:
     """remove a session from its group and delete it.
 
-    if other accounts remain in group, returns the session_id of the next active account.
-    if this was the last account, returns None.
+    returns session_id of another account in the group, or None if last account.
     """
     async with db_session() as db:
         result = await db.execute(
@@ -971,50 +958,22 @@ async def remove_account_from_group(session_id: str) -> str | None:
             return None
 
         group_id = session.group_id
-        was_active = session.is_active
 
-        # delete the session
         await db.delete(session)
         await db.commit()
 
         if not group_id:
             return None
 
-        # find remaining sessions in group
         result = await db.execute(
             select(UserSession).where(
                 UserSession.group_id == group_id,
                 UserSession.is_developer_token == False,  # noqa: E712
             )
         )
-        remaining = result.scalars().all()
+        remaining = result.scalars().first()
 
-        if not remaining:
-            return None
-
-        # if the deleted session was active, activate the first remaining one
-        if was_active:
-            remaining[0].is_active = True
-            await db.commit()
-            return remaining[0].session_id
-
-        # return the currently active session
-        for s in remaining:
-            if s.is_active:
-                return s.session_id
-
-        return remaining[0].session_id
-
-
-async def update_session_avatar(session_id: str, avatar_url: str | None) -> None:
-    """update avatar URL for a session."""
-    async with db_session() as db:
-        result = await db.execute(
-            select(UserSession).where(UserSession.session_id == session_id)
-        )
-        if session := result.scalar_one_or_none():
-            session.avatar_url = avatar_url
-            await db.commit()
+        return remaining.session_id if remaining else None
 
 
 # pending add account flow helpers
