@@ -151,6 +151,7 @@ async def get_record_public(
         Exception: if fetch fails
     """
     import httpx
+    import logfire
 
     repo, collection, rkey = parse_at_uri(record_uri)
 
@@ -158,8 +159,14 @@ async def get_record_public(
     url = f"{base_url}/xrpc/com.atproto.repo.getRecord"
     params = {"repo": repo, "collection": collection, "rkey": rkey}
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, params=params, timeout=10.0)
+    with logfire.span(
+        "pds_get_record {collection}",
+        collection=collection,
+        rkey=rkey,
+        pds_host=base_url.replace("https://", ""),
+    ):
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, timeout=10.0)
 
     if response.status_code != 200:
         raise Exception(
