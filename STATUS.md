@@ -47,7 +47,48 @@ plyr.fm should become:
 
 ### January 2026
 
-#### copyright moderation improvements (PRs #703-704, Jan 2)
+#### multi-account experience (PRs #707, #710, #712-714, Jan 3-5)
+
+**why**: many users have multiple Bluesky identities (personal, artist, label). forcing re-authentication to switch was friction that discouraged uploads from secondary accounts.
+
+**users can now link multiple Bluesky accounts** to a single browser session:
+- add additional accounts via "add account" in user menu (triggers OAuth with `prompt=login`)
+- switch between linked accounts instantly without re-authenticating
+- logout from individual accounts or all at once
+- updated `/auth/me` returns `linked_accounts` array with avatars
+
+**backend changes**:
+- new `group_id` column on `user_sessions` links accounts together
+- new `pending_add_accounts` table tracks in-progress OAuth flows
+- new endpoints: `POST /auth/add-account/start`, `POST /auth/switch-account`, `POST /auth/logout-all`
+
+**infrastructure fixes** (PRs #710, #712, #714):
+these fixes came from reviewing [Bluesky's architecture deep dive](https://newsletter.pragmaticengineer.com/p/bluesky) which highlighted connection/resource management as scaling concerns. applied learnings to our own codebase:
+- identified Neon serverless connection overhead (~77ms per connection) via Logfire
+- cached `async_sessionmaker` per engine instead of recreating on every request (PR #712)
+- changed `_refresh_locks` from unbounded dict to LRUCache (10k max, 1hr TTL) to prevent memory leak (PR #710)
+- pass db session through auth helpers to reduce connections per request (PR #714)
+- result: `/auth/switch-account` ~1100ms → ~800ms, `/auth/me` ~940ms → ~720ms
+
+**frontend changes**:
+- UserMenu (desktop): collapsible accounts submenu with linked accounts, add account, logout all
+- ProfileMenu (mobile): dedicated accounts panel with avatars
+- fixed `invalidateAll()` not refreshing client-side loaded data by using `window.location.reload()` (PR #713)
+
+**docs**: [research/2026-01-03-multi-account-experience.md](docs/research/2026-01-03-multi-account-experience.md)
+
+---
+
+#### artist bio links (PRs #700-701, Jan 2)
+
+**links in artist bios now render as clickable** - supports full URLs and bare domains (e.g., "example.com"):
+- regex extracts URLs from bio text
+- bare domain/path URLs handled correctly
+- links open in new tab
+
+---
+
+#### copyright moderation improvements (PRs #703-704, Jan 2-3)
 
 **per legal advice**, redesigned copyright handling to reduce liability exposure:
 - **disabled auto-labeling** (PR #703): labels are no longer automatically emitted when copyright matches are detected. the system now only flags and notifies, leaving takedown decisions to humans
@@ -96,6 +137,22 @@ plyr.fm should become:
 
 ### December 2025
 
+#### header redesign (PR #691, Dec 31)
+
+**new header layout** with UserMenu dropdown and even spacing across the top bar.
+
+---
+
+#### automated image moderation (PRs #687-690, Dec 31)
+
+**Claude vision integration** for sensitive image detection:
+- images analyzed on upload via Claude Sonnet 4.5 (had to fix model ID - was using wrong identifier)
+- flagged images trigger DM notifications to admin
+- non-false-positive flags sent to batch review queue
+- complements the batch review system built earlier in the sprint
+
+---
+
 #### avatar sync on login (PR #685, Dec 31)
 
 **avatars now stay fresh** - previously set once at artist creation, causing stale/broken avatars throughout the app:
@@ -105,15 +162,44 @@ plyr.fm should become:
 
 ---
 
-#### self-hosted redis (PR #674-675, Dec 30)
+#### top tracks homepage (PR #684, Dec 31)
+
+**homepage now shows top tracks** - quick access to popular content for new visitors.
+
+---
+
+#### batch review system (PR #672, Dec 30)
+
+**moderation batch review UI** - mobile-friendly interface for reviewing flagged content:
+- filter by flag status, paginated results
+- auto-resolve flags for deleted tracks (PR #681)
+- full URL in DM notifications (PR #678)
+- required auth flow fix (PR #679) - review page was accessible without login
+
+---
+
+#### CSS design tokens (PRs #662-664, Dec 29-30)
+
+**design system foundations**:
+- border-radius tokens (`--radius-sm`, `--radius-md`, etc.)
+- typography scale tokens
+- consolidated form styles
+- documented in `docs/frontend/design-tokens.md`
+
+---
+
+#### self-hosted redis (PRs #674-675, Dec 30)
 
 **replaced Upstash with self-hosted Redis on Fly.io** - ~$75/month → ~$4/month:
-- Upstash pay-as-you-go was charging per command (37M commands = $75)
+- Upstash pay-as-you-go was charging per command (37M commands = $75) - discovered when reviewing December costs
+- docket's heartbeat mechanism is chatty by design, making pay-per-command pricing unsuitable
 - self-hosted Redis on 256MB Fly VMs costs fixed ~$2/month per environment
 - deployed `plyr-redis` (prod) and `plyr-redis-stg` (staging)
 - added CI workflow for redis deployments on merge
 
 **no state migration needed** - docket stores ephemeral task queue data, job progress lives in postgres.
+
+**incident (Dec 30)**: while optimizing redis overhead, a `heartbeat_interval=30s` change broke docket task execution. likes created Dec 29-30 were missing ATProto records. reverted in PR #669, documented in `docs/backend/background-tasks.md`. filed upstream: https://github.com/chrisguidry/docket/issues/267
 
 ---
 
@@ -126,15 +212,18 @@ plyr.fm should become:
 
 **backend architecture**:
 - audio endpoint validates supporter status via atprotofans API before serving gated content
-- HEAD requests return 200/401/402 for pre-flight auth checks (avoids CORS issues)
+- HEAD requests return 200/401/402 for pre-flight auth checks (avoids CORS issues with cross-origin redirects)
+- gated files stored in private R2 bucket, served via presigned URLs (SigV4 signatures)
 - `R2Storage.move_audio()` moves files between public/private buckets when toggling gate
 - background task handles bucket migration asynchronously
-- ATProto record syncs when toggling gate (updates `supportGate` field and `audioUrl`)
+- ATProto record syncs when toggling gate (updates `supportGate` field and `audioUrl` to point at our endpoint instead of R2)
 
 **frontend**:
 - `playback.svelte.ts` guards queue operations with gated checks BEFORE modifying state
 - clicking locked track shows toast with CTA - does NOT interrupt current playback
 - portal shows support gate toggle in track edit UI
+
+**key decision**: gated status is resolved server-side in track listings, not client-side. this means the lock icon appears instantly without additional API calls, and prevents information leakage about which tracks are gated vs which the user simply can't access.
 
 ---
 
@@ -149,18 +238,18 @@ plyr.fm should become:
 
 #### rate limit moderation endpoint (PR #629, Dec 21)
 
-**incident response**: detected suspicious activity - 72 requests in 17 seconds from a single IP targeting `/moderation/sensitive-images`. added `10/minute` rate limit using existing slowapi infrastructure.
+**incident response**: detected suspicious activity - 72 requests in 17 seconds from a single IP targeting `/moderation/sensitive-images`. added `10/minute` rate limit using existing slowapi infrastructure. this was the first real probe of our moderation endpoints, validating the decision to add rate limiting before it became a problem.
 
 ---
 
-#### end-of-year sprint planning (PR #626, Dec 20)
+#### end-of-year sprint (PR #626, Dec 20)
 
-**focus**: two foundational systems need solid experimental implementations by 2026.
+**focus**: two foundational systems with experimental implementations.
 
 | track | focus | status |
 |-------|-------|--------|
-| moderation | consolidate architecture, add rules engine | in progress |
-| atprotofans | supporter validation, content gating | shipped (phase 1-3) |
+| moderation | consolidate architecture, batch review, Claude vision | shipped |
+| atprotofans | supporter validation, content gating | shipped |
 
 **research docs**:
 - [moderation architecture overhaul](docs/research/2025-12-20-moderation-architecture-overhaul.md)
@@ -236,19 +325,16 @@ See `.status_history/2025-11.md` for detailed history including:
 - export & upload reliability (PRs #337-344)
 - transcoder API deployment (PR #156)
 
-## immediate priorities
+## priorities
 
-### quality of life mode (Dec 29-31)
+### current focus
 
-end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) complete. remaining days before 2026 are for minor polish and bug fixes as they arise.
+stabilization and polish after multi-account release. monitoring production for issues.
 
-**what shipped in the sprint:**
+**end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) shipped:**
 - moderation consolidation: sensitive images moved to moderation service (#644)
+- moderation batch review UI with Claude vision integration (#672, #687-690)
 - atprotofans: supporter badges (#627) and content gating (#637)
-
-**aspirational (deferred until scale justifies):**
-- configurable rules engine for moderation
-- time-release gating (#642)
 
 ### known issues
 - playback auto-start on refresh (#225)
@@ -258,6 +344,8 @@ end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) compl
 - audio transcoding pipeline integration (#153) - transcoder service deployed, integration deferred
 - share to bluesky (#334)
 - lyrics and annotations (#373)
+- configurable rules engine for moderation
+- time-release gating (#642)
 
 ## technical state
 
@@ -290,6 +378,7 @@ end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) compl
 
 **core functionality**
 - ✅ ATProto OAuth 2.1 authentication
+- ✅ multi-account support (link multiple Bluesky accounts)
 - ✅ secure session management via HttpOnly cookies
 - ✅ developer tokens with independent OAuth grants
 - ✅ platform stats and Media Session API
@@ -409,4 +498,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-02.
+this is a living document. last updated 2026-01-05.
