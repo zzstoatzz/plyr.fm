@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { User, LinkedAccount } from '$lib/types';
 	import { API_URL } from '$lib/config';
-	import { invalidateAll } from '$app/navigation';
 	import HandleAutocomplete from './HandleAutocomplete.svelte';
 	import { logout } from '$lib/logout.svelte';
 
@@ -74,7 +73,7 @@
 				credentials: 'include'
 			});
 			if (response.ok) {
-				await invalidateAll();
+				window.location.reload();
 			} else {
 				console.error('logout with switch failed');
 			}
@@ -108,7 +107,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ target_did: account.did })
 			});
-			await invalidateAll();
+			window.location.reload();
 		} catch (e) {
 			console.error('switch account failed:', e);
 		} finally {
