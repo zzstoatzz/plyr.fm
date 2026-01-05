@@ -298,32 +298,11 @@ these fixes came from reviewing [Bluesky's architecture deep dive](https://newsl
 
 ---
 
-### Earlier December 2025
+### Earlier Work
 
-See `.status_history/2025-12.md` for detailed history including:
-- visual customization with custom backgrounds (PRs #595-596, Dec 16)
-- performance & moderation polish (PRs #586-593, Dec 14-15)
-- mobile UI polish & background task expansion (PRs #558-572, Dec 10-12)
-- confidential OAuth client for 180-day sessions (PRs #578-582, Dec 12-13)
-- pagination & album management (PRs #550-554, Dec 9-10)
-- public cost dashboard (PRs #548-549, Dec 9)
-- docket background tasks & concurrent exports (PRs #534-546, Dec 9)
-- artist support links & inline playlist editing (PRs #520-532, Dec 8)
-- playlist fast-follow fixes (PRs #507-519, Dec 7-8)
-- playlists, ATProto sync, and library hub (PR #499, Dec 6-7)
-- sensitive image moderation (PRs #471-488, Dec 5-6)
-- teal.fm scrobbling (PR #467, Dec 4)
-- unified search with Cmd+K (PR #447, Dec 3)
-- light/dark theme system (PR #441, Dec 2-3)
-- tag filtering and bufo easter egg (PRs #431-438, Dec 2)
-
-### November 2025
-
-See `.status_history/2025-11.md` for detailed history including:
-- developer tokens (PR #367)
-- copyright moderation system (PRs #382-395)
-- export & upload reliability (PRs #337-344)
-- transcoder API deployment (PR #156)
+See `.status_history/` for detailed history:
+- **2025-12.md**: playlists, themes, search, moderation, OAuth, docket, atproto sync
+- **2025-11.md**: developer tokens, copyright moderation, export, transcoder
 
 ## priorities
 
