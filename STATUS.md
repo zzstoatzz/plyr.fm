@@ -47,7 +47,37 @@ plyr.fm should become:
 
 ### January 2026
 
-#### copyright moderation improvements (PRs #703-704, Jan 2)
+#### multi-account experience (PR #707, Jan 3-5)
+
+**users can now link multiple ATProto accounts** and switch between them without logging out:
+- **session groups**: new `group_id` column on `user_sessions` links related sessions together
+- **add account flow**: `POST /auth/add-account/start` initiates OAuth with `prompt=login` to force re-authentication (no silent auto-approve)
+- **instant switching**: `POST /auth/switch-account` rotates the active session cookie within a group
+- **logout granularity**: logout single account or "logout all" to clear entire group
+- **avatar enrichment**: `/auth/me` returns `linked_accounts` with avatars looked up from Artist profiles
+
+**frontend**:
+- `UserMenu` (desktop): collapsible "accounts" submenu with linked accounts and add/switch/logout options
+- `ProfileMenu` (mobile): dedicated accounts panel with avatars for touch-friendly switching
+- full page reload on logout-all to clear client state
+
+**simplifications**: cookie determines active session (no separate `is_active` tracking needed). avatars fetched from Artist profiles at request time (always fresh).
+
+**docs**: [research/2026-01-03-multi-account-experience.md](docs/research/2026-01-03-multi-account-experience.md)
+
+---
+
+#### performance fixes (PRs #710, #712, #714, Jan 4-5)
+
+**database session overhead reduction**:
+- **sessionmaker caching** (PR #712): cache `async_sessionmaker` per engine instead of recreating on every `db_session()` call. follows SQLAlchemy 2.0's intended pattern
+- **db session reuse** (PR #714): multi-account endpoints were creating 3 separate Neon connections per request (~231ms overhead). now pass injected db session through to helpers, saving ~154ms
+
+**memory leak fix** (PR #710): `_refresh_locks` dict for token refresh was growing unbounded. replaced with `LRUCache` (10k entries, 1hr TTL) to auto-expire locks for inactive sessions.
+
+---
+
+#### copyright moderation improvements (PRs #703-704, Jan 2-3)
 
 **per legal advice**, redesigned copyright handling to reduce liability exposure:
 - **disabled auto-labeling** (PR #703): labels are no longer automatically emitted when copyright matches are detected. the system now only flags and notifies, leaving takedown decisions to humans
@@ -86,8 +116,9 @@ plyr.fm should become:
 
 ---
 
-#### UI polish (PRs #692-694, Dec 31 - Jan 1)
+#### UI polish (PRs #691-694, Dec 31 - Jan 1)
 
+- **header redesign** (PR #691): new `UserMenu` dropdown combining handle, portal, settings, and logout. flattened desktop header with `space-between` distribution. removed unused `SearchTrigger` and `SettingsMenu` components
 - **feed/library toggle** (PR #692): consistent header layout with toggle between feed and library views
 - **shuffle button moved** (PR #693): shuffle now in queue component instead of player controls
 - **justfile consistency** (PR #694): standardized `just run` across frontend/backend modules
@@ -95,6 +126,29 @@ plyr.fm should become:
 ---
 
 ### December 2025
+
+#### image moderation via Claude vision (PR #687, Dec 31)
+
+**automated image scanning** for uploaded track covers and album covers:
+- moderation service calls Claude Sonnet API with vision capabilities
+- checks for: explicit content, violence, hate symbols, illegal content, graphic drug imagery
+- unsafe images automatically flagged to `sensitive_images` table (blurred in UI)
+- cost tracking via `image_scans` table with Anthropic usage data
+- DM notifications sent when images are flagged (PR #690)
+
+**behavior**: moderation is best-effort - failures logged but don't block uploads. existing `SensitiveImage.svelte` handles blur display.
+
+---
+
+#### top tracks homepage section (PR #684, Dec 31)
+
+**surfacing quality content**: new "top tracks" section above the existing "latest tracks" feed shows the 10 most-liked tracks on the platform. helps surface quality content instead of homepage being dominated by bulk uploads from a single user.
+
+- new `/tracks/top` endpoint returning tracks ordered by like count
+- `get_top_track_ids()` aggregation helper for efficient query
+- section only appears when there are liked tracks
+
+---
 
 #### avatar sync on login (PR #685, Dec 31)
 
@@ -238,13 +292,16 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ## immediate priorities
 
-### quality of life mode (Dec 29-31)
+### post-holiday polish (Jan 2026)
 
-end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) complete. remaining days before 2026 are for minor polish and bug fixes as they arise.
+end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) complete. January focus is on performance and UX polish.
 
-**what shipped in the sprint:**
-- moderation consolidation: sensitive images moved to moderation service (#644)
-- atprotofans: supporter badges (#627) and content gating (#637)
+**what shipped since Dec 23:**
+- multi-account support (#707) - link and switch between ATProto identities
+- copyright moderation redesign (#703-704) - DMCA-compliant human review flow
+- image moderation via Claude vision (#687) - automated cover art scanning
+- ATProto OAuth permission sets (#697-698) - cleaner consent UX
+- performance: db session reuse, sessionmaker caching, memory leak fixes (#710, #712, #714)
 
 **aspirational (deferred until scale justifies):**
 - configurable rules engine for moderation
@@ -409,4 +466,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-02.
+this is a living document. last updated 2026-01-05.
