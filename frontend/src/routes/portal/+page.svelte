@@ -753,7 +753,7 @@
 										</div>
 										{#if atprotofansEligible || track.support_gate}
 											<div class="edit-field-group">
-												<label class="edit-label">supporter access</label>
+												<span class="edit-label">supporter access</span>
 												<label class="toggle-row">
 													<input
 														type="checkbox"

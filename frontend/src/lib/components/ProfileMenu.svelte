@@ -2,9 +2,13 @@
 	import { portal } from 'svelte-portal';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { invalidateAll } from '$app/navigation';
 	import { queue } from '$lib/queue.svelte';
 	import { preferences, type Theme } from '$lib/preferences.svelte';
-	import type { User } from '$lib/types';
+	import { API_URL } from '$lib/config';
+	import type { User, LinkedAccount } from '$lib/types';
+	import HandleAutocomplete from './HandleAutocomplete.svelte';
+	import { logout } from '$lib/logout.svelte';
 
 	interface Props {
 		user: User | null;
@@ -16,6 +20,12 @@
 	let isOnUpload = $derived($page.url.pathname === '/upload');
 	let showMenu = $state(false);
 	let showSettings = $state(false);
+	let showAccounts = $state(false);
+	let switching = $state(false);
+	let showAddAccountForm = $state(false);
+	let newHandle = $state('');
+	let addAccountError = $state('');
+	let addingAccount = $state(false);
 
 	const presetColors = [
 		{ name: 'blue', value: '#6a9fff' },
@@ -35,6 +45,16 @@
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let autoAdvance = $derived(preferences.autoAdvance);
 	let currentTheme = $derived(preferences.theme);
+
+	// derive linked accounts (excluding current user)
+	const otherAccounts = $derived(
+		user?.linked_accounts?.filter((a) => a.did !== user?.did) ?? []
+	);
+	const hasMultipleAccounts = $derived(otherAccounts.length > 0);
+	// get current user's avatar from linked accounts
+	const currentUserAvatar = $derived(
+		user?.linked_accounts?.find((a) => a.did === user?.did)?.avatar_url
+	);
 
 	$effect(() => {
 		if (currentColor) {
@@ -56,13 +76,21 @@
 	function toggleMenu() {
 		showMenu = !showMenu;
 		if (!showMenu) {
-			showSettings = false;
+			resetSubmenus();
 		}
+	}
+
+	function resetSubmenus() {
+		showSettings = false;
+		showAccounts = false;
+		showAddAccountForm = false;
+		newHandle = '';
+		addAccountError = '';
 	}
 
 	function closeMenu() {
 		showMenu = false;
-		showSettings = false;
+		resetSubmenus();
 	}
 
 	function applyColorLocally(color: string) {
@@ -101,9 +129,124 @@
 		preferences.setTheme(theme);
 	}
 
-	async function handleLogout() {
+	function handleLogoutClick(event: MouseEvent) {
+		event.stopPropagation();
+		if (hasMultipleAccounts) {
+			closeMenu();
+			logout.open(user, otherAccounts, logoutAll, logoutAndSwitch);
+		} else {
+			performLogout();
+		}
+	}
+
+	async function performLogout() {
 		closeMenu();
 		await onLogout();
+	}
+
+	async function logoutAndSwitch(account: LinkedAccount) {
+		closeMenu();
+		try {
+			const response = await fetch(`${API_URL}/auth/logout?switch_to=${encodeURIComponent(account.did)}`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+			if (response.ok) {
+				await invalidateAll();
+			} else {
+				console.error('logout with switch failed');
+			}
+		} catch (e) {
+			console.error('logout with switch failed:', e);
+		}
+	}
+
+	async function logoutAll() {
+		closeMenu();
+		try {
+			await fetch(`${API_URL}/auth/logout-all`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+			window.location.href = '/';
+		} catch (e) {
+			console.error('logout all failed:', e);
+		}
+	}
+
+	async function handleSwitchAccount(account: LinkedAccount) {
+		if (switching) return;
+
+		switching = true;
+		closeMenu();
+		try {
+			await fetch(`${API_URL}/auth/switch-account`, {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ target_did: account.did })
+			});
+			await invalidateAll();
+		} catch (e) {
+			console.error('switch account failed:', e);
+		} finally {
+			switching = false;
+		}
+	}
+
+	function showAddAccount(event: MouseEvent) {
+		event.stopPropagation();
+		showAddAccountForm = true;
+		addAccountError = '';
+	}
+
+	function hideAddAccount() {
+		showAddAccountForm = false;
+		newHandle = '';
+		addAccountError = '';
+	}
+
+	function handleSelectHandle(handle: string) {
+		newHandle = handle;
+		// immediately submit when selecting from autocomplete
+		submitAddAccount();
+	}
+
+	function handleFormSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		submitAddAccount();
+	}
+
+	async function submitAddAccount() {
+		const handle = newHandle.trim();
+		if (!handle) {
+			addAccountError = 'enter a handle';
+			return;
+		}
+
+		addingAccount = true;
+		addAccountError = '';
+
+		try {
+			const response = await fetch(`${API_URL}/auth/add-account/start`, {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ handle })
+			});
+			if (response.ok) {
+				const data: { auth_url: string } = await response.json();
+				window.location.href = data.auth_url;
+			} else {
+				const err = await response.json().catch(() => ({ detail: 'failed to add account' }));
+				addAccountError = err.detail || 'failed to add account';
+				addingAccount = false;
+			}
+		} catch (e) {
+			console.error('add account failed:', e);
+			addAccountError = 'network error';
+			addingAccount = false;
+		}
 	}
 </script>
 
@@ -122,7 +265,7 @@
 		<div class="menu-backdrop" use:portal={'body'} onclick={closeMenu}></div>
 		<div class="menu-popover" use:portal={'body'}>
 			<div class="menu-header">
-				<span>{showSettings ? 'settings' : 'menu'}</span>
+				<span>{showSettings ? 'settings' : showAccounts ? 'accounts' : 'menu'}</span>
 				<button class="close-btn" onclick={closeMenu} aria-label="close">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
@@ -131,7 +274,7 @@
 				</button>
 			</div>
 
-			{#if !showSettings}
+			{#if !showSettings && !showAccounts}
 				<nav class="menu-items">
 					{#if !isOnPortal}
 						<a href="/portal" class="menu-item" onclick={closeMenu}>
@@ -176,7 +319,23 @@
 						</svg>
 					</button>
 
-					<button class="menu-item logout" onclick={handleLogout}>
+					<button class="menu-item" onclick={() => showAccounts = true}>
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+							<circle cx="9" cy="7" r="4"></circle>
+							<line x1="19" y1="8" x2="19" y2="14"></line>
+							<line x1="22" y1="11" x2="16" y2="11"></line>
+						</svg>
+						<div class="item-content">
+							<span class="item-title">accounts</span>
+							<span class="item-subtitle">{hasMultipleAccounts ? `${otherAccounts.length + 1} linked` : 'add another'}</span>
+						</div>
+						<svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<polyline points="9 18 15 12 9 6"></polyline>
+						</svg>
+					</button>
+
+					<button class="menu-item logout" onclick={handleLogoutClick}>
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
 							<polyline points="16 17 21 12 16 7"></polyline>
@@ -187,7 +346,7 @@
 						</div>
 					</button>
 				</nav>
-			{:else}
+			{:else if showSettings}
 				<button class="back-btn" onclick={() => showSettings = false}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<polyline points="15 18 9 12 15 6"></polyline>
@@ -257,6 +416,102 @@
 					<a href="/settings" class="all-settings-link" onclick={closeMenu}>
 						all settings →
 					</a>
+				</div>
+			{:else if showAccounts}
+				<button class="back-btn" onclick={() => showAccounts = false}>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<polyline points="15 18 9 12 15 6"></polyline>
+					</svg>
+					<span>back</span>
+				</button>
+
+				<div class="accounts-content">
+					<!-- current account -->
+					<div class="account-item current">
+						{#if currentUserAvatar}
+							<img src={currentUserAvatar} alt="" class="account-avatar" />
+						{:else}
+							<div class="account-avatar placeholder">
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+									<circle cx="12" cy="7" r="4"></circle>
+								</svg>
+							</div>
+						{/if}
+						<div class="account-info">
+							<span class="account-handle">@{user?.handle}</span>
+							<span class="account-badge">active</span>
+						</div>
+						<svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success, #4ade80)" stroke-width="2">
+							<polyline points="20 6 9 17 4 12"></polyline>
+						</svg>
+					</div>
+
+					{#if hasMultipleAccounts}
+						{#each otherAccounts as account}
+							<button
+								class="account-item"
+								onclick={() => handleSwitchAccount(account)}
+								disabled={switching}
+							>
+								{#if account.avatar_url}
+									<img src={account.avatar_url} alt="" class="account-avatar" />
+								{:else}
+									<div class="account-avatar placeholder">
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+											<circle cx="12" cy="7" r="4"></circle>
+										</svg>
+									</div>
+								{/if}
+								<div class="account-info">
+									<span class="account-handle">@{account.handle}</span>
+								</div>
+							</button>
+						{/each}
+					{/if}
+
+					{#if showAddAccountForm}
+						<!-- add account form with back button -->
+						<button class="back-btn" onclick={hideAddAccount}>
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<polyline points="15 18 9 12 15 6"></polyline>
+							</svg>
+							<span>back</span>
+						</button>
+						<form class="add-account-form" onsubmit={handleFormSubmit}>
+							<HandleAutocomplete
+								bind:value={newHandle}
+								onSelect={handleSelectHandle}
+								placeholder="handle.bsky.social"
+								disabled={addingAccount}
+							/>
+							<button
+								type="submit"
+								class="add-account-btn"
+								disabled={addingAccount || !newHandle.trim()}
+							>
+								{#if addingAccount}
+									adding...
+								{:else}
+									add account
+								{/if}
+							</button>
+							{#if addAccountError}
+								<div class="add-account-error">{addAccountError}</div>
+							{/if}
+						</form>
+					{:else}
+						<button class="menu-item add-account" onclick={showAddAccount}>
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<line x1="12" y1="5" x2="12" y2="19"></line>
+								<line x1="5" y1="12" x2="19" y2="12"></line>
+							</svg>
+							<div class="item-content">
+								<span class="item-title">add account</span>
+							</div>
+						</button>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -391,6 +646,11 @@
 		transform: scale(0.98);
 	}
 
+	.menu-item:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
 	.menu-item svg:first-child {
 		flex-shrink: 0;
 		color: var(--text-secondary);
@@ -454,11 +714,97 @@
 		background: var(--bg-hover);
 	}
 
-	.settings-content {
+	.settings-content,
+	.accounts-content {
 		padding: 0.75rem 1.25rem 1.25rem;
 		display: flex;
 		flex-direction: column;
 		gap: 1.25rem;
+	}
+
+	.accounts-content {
+		gap: 0.5rem;
+		padding: 0.5rem;
+	}
+
+	.account-item {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem 1rem;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-lg);
+		width: 100%;
+		text-align: left;
+		cursor: pointer;
+		transition: all 0.15s;
+		font-family: inherit;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.account-item:hover {
+		background: var(--bg-hover);
+	}
+
+	.account-item:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.account-item.current {
+		cursor: default;
+		background: color-mix(in srgb, var(--success, #4ade80) 10%, transparent);
+	}
+
+	.account-avatar {
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		object-fit: cover;
+		flex-shrink: 0;
+	}
+
+	.account-avatar.placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--bg-tertiary);
+		color: var(--text-tertiary);
+	}
+
+	.account-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.account-handle {
+		font-size: var(--text-base);
+		color: var(--text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.account-badge {
+		font-size: var(--text-xs);
+		color: var(--success, #4ade80);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.check-icon {
+		flex-shrink: 0;
+	}
+
+	.add-account {
+		margin-top: 0.5rem;
+		border-top: 1px solid var(--border-subtle);
+		border-radius: 0;
+		padding-top: 1rem;
 	}
 
 	.settings-section {
@@ -665,5 +1011,78 @@
 			top: calc(50% - var(--player-height, 0px) / 2);
 			max-height: calc(100vh - var(--player-height, 0px) - 3rem - env(safe-area-inset-bottom, 0px));
 		}
+	}
+
+	/* add account form styles */
+	.add-account-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 0.5rem 1rem 1rem;
+	}
+
+	.add-account-form :global(.handle-autocomplete) {
+		width: 100%;
+	}
+
+	.add-account-form :global(.handle-autocomplete .input-wrapper input) {
+		padding: 0.625rem 0.75rem;
+		font-size: 16px; /* prevents zoom on iOS */
+		background: var(--bg-tertiary);
+	}
+
+	.add-account-form :global(.handle-autocomplete .results) {
+		max-height: 150px;
+		z-index: 200;
+	}
+
+	.add-account-form :global(.handle-autocomplete .result-item) {
+		padding: 0.5rem 0.75rem;
+		gap: 0.5rem;
+	}
+
+	.add-account-form :global(.handle-autocomplete .avatar),
+	.add-account-form :global(.handle-autocomplete .avatar-placeholder) {
+		width: 28px;
+		height: 28px;
+	}
+
+	.add-account-form :global(.handle-autocomplete .display-name) {
+		font-size: var(--text-sm);
+	}
+
+	.add-account-form :global(.handle-autocomplete .handle) {
+		font-size: var(--text-xs);
+	}
+
+	.add-account-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		background: var(--accent);
+		border: none;
+		border-radius: var(--radius-lg);
+		color: white;
+		font-family: inherit;
+		font-size: var(--text-base);
+		font-weight: 500;
+		cursor: pointer;
+		transition: opacity 0.15s;
+	}
+
+	.add-account-btn:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+
+	.add-account-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.add-account-error {
+		color: var(--error);
+		font-size: var(--text-sm);
 	}
 </style>

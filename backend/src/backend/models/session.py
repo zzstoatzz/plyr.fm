@@ -32,3 +32,5 @@ class UserSession(Base):
         Boolean, default=False, nullable=False, server_default="false"
     )
     token_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # multi-account session group
+    group_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

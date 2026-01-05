@@ -4,6 +4,8 @@ import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -391,3 +393,169 @@ def test_get_public_jwks_returns_public_key():
         assert public_key["use"] == "sig"
         # should preserve kid from original JWK
         assert public_key["kid"] == "test-key-id"
+
+
+# multi-account tests
+
+
+async def test_get_or_create_group_id_creates_new(db_session: AsyncSession):
+    """verify group_id is created when session has none."""
+    from backend._internal.auth import get_or_create_group_id
+
+    session_id = await create_session(
+        "did:plc:group1", "group1.bsky.social", {"access_token": "t1"}
+    )
+
+    group_id = await get_or_create_group_id(session_id)
+    assert group_id is not None
+
+    # calling again returns same group_id
+    assert await get_or_create_group_id(session_id) == group_id
+
+
+async def test_get_session_group_empty_without_group(db_session: AsyncSession):
+    """verify get_session_group returns empty list for ungrouped session."""
+    from backend._internal.auth import get_session_group
+
+    session_id = await create_session(
+        "did:plc:solo", "solo.bsky.social", {"access_token": "t1"}
+    )
+
+    accounts = await get_session_group(session_id)
+    assert accounts == []
+
+
+async def test_get_session_group_returns_linked_accounts(db_session: AsyncSession):
+    """verify get_session_group returns all accounts in group."""
+    from backend._internal.auth import get_or_create_group_id, get_session_group
+
+    session1 = await create_session(
+        "did:plc:user1", "user1.bsky.social", {"access_token": "t1"}
+    )
+    session2 = await create_session(
+        "did:plc:user2", "user2.bsky.social", {"access_token": "t2"}
+    )
+
+    # link sessions to same group
+    group_id = await get_or_create_group_id(session1)
+
+    result = await db_session.execute(
+        select(UserSession).where(UserSession.session_id == session2)
+    )
+    s2 = result.scalar_one()
+    s2.group_id = group_id
+    await db_session.commit()
+
+    accounts = await get_session_group(session1)
+    assert len(accounts) == 2
+    dids = {a.did for a in accounts}
+    assert dids == {"did:plc:user1", "did:plc:user2"}
+
+
+async def test_switch_active_account_validates_group(db_session: AsyncSession):
+    """verify switch_active_account rejects sessions not in same group."""
+    from backend._internal.auth import get_or_create_group_id, switch_active_account
+
+    session1 = await create_session(
+        "did:plc:s1", "s1.bsky.social", {"access_token": "t1"}
+    )
+    session2 = await create_session(
+        "did:plc:s2", "s2.bsky.social", {"access_token": "t2"}
+    )
+
+    await get_or_create_group_id(session1)
+
+    # session2 not in group - should fail
+    with pytest.raises(HTTPException) as exc_info:
+        await switch_active_account(session1, session2)
+    assert isinstance(exc_info.value, HTTPException)
+    assert exc_info.value.status_code == 403
+
+
+async def test_switch_active_account_success(db_session: AsyncSession):
+    """verify switch_active_account works for same-group sessions."""
+    from backend._internal.auth import get_or_create_group_id, switch_active_account
+
+    session1 = await create_session(
+        "did:plc:sw1", "sw1.bsky.social", {"access_token": "t1"}
+    )
+    session2 = await create_session(
+        "did:plc:sw2", "sw2.bsky.social", {"access_token": "t2"}
+    )
+
+    group_id = await get_or_create_group_id(session1)
+
+    result = await db_session.execute(
+        select(UserSession).where(UserSession.session_id == session2)
+    )
+    s2 = result.scalar_one()
+    s2.group_id = group_id
+    await db_session.commit()
+
+    target = await switch_active_account(session1, session2)
+    assert target == session2
+
+
+async def test_remove_account_from_group_last_account(db_session: AsyncSession):
+    """verify remove_account_from_group returns None when last account removed."""
+    from backend._internal.auth import remove_account_from_group
+
+    session_id = await create_session(
+        "did:plc:last", "last.bsky.social", {"access_token": "t1"}
+    )
+
+    result = await remove_account_from_group(session_id)
+    assert result is None
+
+    # session should be deleted
+    assert await get_session(session_id) is None
+
+
+async def test_remove_account_from_group_returns_next(db_session: AsyncSession):
+    """verify remove_account_from_group returns next session when others remain."""
+    from backend._internal.auth import get_or_create_group_id, remove_account_from_group
+
+    session1 = await create_session(
+        "did:plc:rem1", "rem1.bsky.social", {"access_token": "t1"}
+    )
+    session2 = await create_session(
+        "did:plc:rem2", "rem2.bsky.social", {"access_token": "t2"}
+    )
+
+    group_id = await get_or_create_group_id(session1)
+
+    result = await db_session.execute(
+        select(UserSession).where(UserSession.session_id == session2)
+    )
+    s2 = result.scalar_one()
+    s2.group_id = group_id
+    await db_session.commit()
+
+    next_session = await remove_account_from_group(session1)
+    assert next_session == session2
+
+    # session1 deleted, session2 remains
+    assert await get_session(session1) is None
+    assert await get_session(session2) is not None
+
+
+async def test_pending_add_account_crud(db_session: AsyncSession):
+    """verify pending add account save/get/delete cycle."""
+    from backend._internal.auth import (
+        delete_pending_add_account,
+        get_pending_add_account,
+        save_pending_add_account,
+    )
+
+    state = "test-oauth-state-123"
+    group_id = "test-group-id-456"
+
+    await save_pending_add_account(state, group_id)
+
+    pending = await get_pending_add_account(state)
+    assert pending is not None
+    assert pending.state == state
+    assert pending.group_id == group_id
+
+    await delete_pending_add_account(state)
+    assert await get_pending_add_account(state) is None
