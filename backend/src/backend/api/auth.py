@@ -289,6 +289,7 @@ async def logout(
     switch_to: Annotated[
         str | None, Query(description="DID to switch to after logout")
     ] = None,
+    db=Depends(get_db),
 ) -> JSONResponse:
     """logout current user.
 
@@ -296,8 +297,8 @@ async def logout(
     to the specified account. otherwise, fully logs out.
     """
     if switch_to:
-        # validate target is in same group
-        linked = await get_session_group(session.session_id)
+        # validate target is in same group (reuse db connection)
+        linked = await get_session_group(session.session_id, db=db)
         target = next((a for a in linked if a.did == switch_to), None)
 
         if not target:
@@ -354,8 +355,8 @@ async def get_current_user(
     db=Depends(get_db),
 ) -> CurrentUserResponse:
     """get current authenticated user with linked accounts."""
-    # get all accounts in the session group
-    linked = await get_session_group(session.session_id)
+    # get all accounts in the session group (reuse db connection)
+    linked = await get_session_group(session.session_id, db=db)
 
     # look up artist profiles to get fresh avatars
     dids = [account.did for account in linked]
@@ -603,6 +604,7 @@ async def switch_account(
     body: SwitchAccountRequest,
     response: Response,
     session: Session = Depends(require_auth),
+    db=Depends(get_db),
 ) -> SwitchAccountResponse:
     """switch to a different account in the session group.
 
@@ -611,8 +613,8 @@ async def switch_account(
 
     returns the new active account's info.
     """
-    # get all accounts in the group
-    linked = await get_session_group(session.session_id)
+    # get all accounts in the group (reuse db connection)
+    linked = await get_session_group(session.session_id, db=db)
 
     if not linked:
         raise HTTPException(
@@ -634,8 +636,10 @@ async def switch_account(
             detail="already logged in as this account",
         )
 
-    # switch the active account
-    new_session_id = await switch_active_account(session.session_id, target.session_id)
+    # switch the active account (reuse db connection)
+    new_session_id = await switch_active_account(
+        session.session_id, target.session_id, db=db
+    )
 
     # update the cookie to point to the new session
     if settings.frontend.url:
@@ -660,13 +664,14 @@ async def switch_account(
 @router.post("/logout-all")
 async def logout_all(
     session: Session = Depends(require_auth),
+    db=Depends(get_db),
 ) -> JSONResponse:
     """logout all accounts in the session group.
 
     removes all sessions in the group and clears the cookie.
     """
-    # get all accounts in the group
-    linked = await get_session_group(session.session_id)
+    # get all accounts in the group (reuse db connection)
+    linked = await get_session_group(session.session_id, db=db)
 
     # delete all sessions (or just this one if not in a group)
     if linked:
