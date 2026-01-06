@@ -80,28 +80,39 @@ jobs:
 
             IMPORTANT: the time window for this maintenance run is from the last merged status-maintenance PR until now. if the last PR was merged on Dec 2nd and today is Dec 8th, you should focus on everything from Dec 3rd onwards, NOT just "the last week".
 
-            ## task 2: archive old sections (MANDATORY if over 250 lines)
+            ## task 2: archive old month sections
 
-            if STATUS.md > 500 lines:
+            **line count targets**:
+            - ideal: ~200 lines (concise overview)
+            - acceptable: 300-450 lines
+            - maximum: 500 lines (MUST NOT exceed)
+
+            **when to archive**: if STATUS.md > 400 lines OR contains detailed sections from previous months
+
+            **what to archive**: content from months BEFORE the current month
+            - if today is January 2026, move December 2025 sections to .status_history/2025-12.md
+            - if today is February 2026, move January 2026 sections to .status_history/2026-01.md
+            - current month content stays in STATUS.md
+
+            **how to archive** (this means MOVING content, not summarizing):
             1. create .status_history/ directory if it doesn't exist
-            2. identify section boundaries (look for "---" separators and "### " headers with dates)
-            3. move OLDEST sections to .status_history/YYYY-MM.md (grouped by month)
-            4. compact the meaning of the original entire STATUS.md into about 500 lines or less
-            5. generally preserve the document structure (keep "## recent work" header, "## immediate priorities", etc)
-            6. do NOT summarize archived content - move it verbatim and organize it chronologically
+            2. identify "### Month Year" sections from previous months in STATUS.md
+            3. CUT the full section content (headers, bullet points, everything)
+            4. PASTE/APPEND to .status_history/YYYY-MM.md
+               - if archive file exists: append to end of file
+               - if archive file doesn't exist: create with header "# plyr.fm Status History - Month Year"
+            5. REPLACE the moved section in STATUS.md with a brief cross-reference:
+               ```
+               ### December 2025
 
-            ARCHIVE FILE NAMING - CRITICAL:
-            - archive files are organized BY MONTH: .status_history/YYYY-MM.md
-            - if today is December 2025, archived December content goes to .status_history/2025-12.md
-            - if today is January 2026, archived January content goes to .status_history/2026-01.md
-            - check what files already exist in .status_history/ and ADD to the appropriate month file if it exists
-            - each month gets ONE file - append to existing month files, don't create duplicates
+               See `.status_history/2025-12.md` for detailed history.
+               ```
+            6. preserve document structure (keep "## recent work", "## priorities", "## technical state" headers)
 
-            so STATUS.md is the living overview, slightly recency biased, but a good general overview of the project.
+            CRITICAL: "archiving" = moving actual content to archive files, NOT condensing or summarizing in place.
+            the detailed write-ups must be preserved in .status_history/, not deleted.
 
-            .status_history/ is the archive of temporally specific sections of STATUS.md that are worth preserving for historical context, but not significant enough to be stated literally in STATUS.md in perpetuity.
-
-            VERIFY: run `wc -l STATUS.md` after archiving. it MUST be under 500 lines.
+            VERIFY: run `wc -l STATUS.md` after archiving. target 300-450 lines, must be under 500.
 
             ## task 3: generate audio overview (if skip_audio is false)
 
