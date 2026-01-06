@@ -49,9 +49,9 @@ plyr.fm should become:
 
 #### multi-account experience (PRs #707, #710, #712-714, Jan 3-5)
 
-**why**: many users have multiple Bluesky identities (personal, artist, label). forcing re-authentication to switch was friction that discouraged uploads from secondary accounts.
+**why**: many users have multiple ATProto identities (personal, artist, label). forcing re-authentication to switch was friction that discouraged uploads from secondary accounts.
 
-**users can now link multiple Bluesky accounts** to a single browser session:
+**users can now link multiple identities** to a single browser session:
 - add additional accounts via "add account" in user menu (triggers OAuth with `prompt=login`)
 - switch between linked accounts instantly without re-authenticating
 - logout from individual accounts or all at once
@@ -378,7 +378,7 @@ stabilization and polish after multi-account release. monitoring production for 
 
 **core functionality**
 - ✅ ATProto OAuth 2.1 authentication
-- ✅ multi-account support (link multiple Bluesky accounts)
+- ✅ multi-account support (link multiple ATProto identities)
 - ✅ secure session management via HttpOnly cookies
 - ✅ developer tokens with independent OAuth grants
 - ✅ platform stats and Media Session API
