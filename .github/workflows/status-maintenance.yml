@@ -65,7 +65,8 @@ jobs:
             ```bash
             date
             # get the most recently merged status-maintenance PR (filter by branch name, sort by merge date)
-            gh pr list --state merged --search "status-maintenance" --limit 20 --json number,title,mergedAt,headRefName | jq '[.[] | select(.headRefName | startswith("status-maintenance-"))] | sort_by(.mergedAt) | reverse | .[0]'
+            # NOTE: excluding #724 which was reverted - remove this exclusion after next successful run
+            gh pr list --state merged --search "status-maintenance" --limit 20 --json number,title,mergedAt,headRefName | jq '[.[] | select(.headRefName | startswith("status-maintenance-")) | select(.number != 724)] | sort_by(.mergedAt) | reverse | .[0]'
             git log --oneline -50
             ls -la .status_history/ 2>/dev/null || echo "no archive directory yet"
             wc -l STATUS.md
@@ -211,6 +212,11 @@ jobs:
 
             the TTS engine will mispronounce "plyr" as "plir" or "p-l-y-r" if you write it that way.
             write phonetically for correct pronunciation: "player FM", "player dot FM".
+
+            ### terminology
+
+            plyr.fm is built on **ATProto** (the protocol), not Bluesky (the app).
+            say "ATProto identities" or just "identities" - never "Bluesky accounts".
 
             ### identifying what actually shipped
 
