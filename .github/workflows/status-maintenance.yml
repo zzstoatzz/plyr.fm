@@ -299,6 +299,6 @@ jobs:
           fi
 
           echo "Uploading as: $TITLE"
-          uv run --with plyrfm -- plyrfm upload update.wav "$TITLE" --album "$YEAR" -t '["ai"]'
+          uv run --with plyrfm -- plyrfm upload update.wav "$TITLE" --album "$YEAR" -t "ai"
         env:
           PLYR_TOKEN: ${{ secrets.PLYR_BOT_TOKEN }}
