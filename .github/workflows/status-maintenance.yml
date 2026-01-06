@@ -212,6 +212,11 @@ jobs:
             the TTS engine will mispronounce "plyr" as "plir" or "p-l-y-r" if you write it that way.
             write phonetically for correct pronunciation: "player FM", "player dot FM".
 
+            ### terminology
+
+            plyr.fm is built on **ATProto** (the protocol), not Bluesky (the app).
+            say "ATProto identities" or just "identities" - never "Bluesky accounts".
+
             ### identifying what actually shipped
 
             read the commit messages and PR bodies carefully to understand what changed.
