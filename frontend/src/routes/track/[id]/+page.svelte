@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { fade } from 'svelte/transition';
 	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
 	import type { PageData } from './$types';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { API_URL } from '$lib/config';
@@ -231,6 +232,13 @@
 		}
 	}
 
+	async function copyCommentLink(timestampMs: number) {
+		const seconds = Math.floor(timestampMs / 1000);
+		const url = `${window.location.origin}/track/${track.id}?t=${seconds}`;
+		await navigator.clipboard.writeText(url);
+		toast.success('link copied');
+	}
+
 	function formatRelativeTime(isoString: string): string {
 		const date = new Date(isoString);
 		const now = new Date();
@@ -308,6 +316,9 @@ let loadedForTrackId = $state<number | null>(null);
 // track if we've loaded liked state for this track (separate from general load)
 let likedStateLoadedForTrackId = $state<number | null>(null);
 
+// track if we've handled the ?t= timestamp param for this page load
+let hasHandledTimestampParam = $state(false);
+
 // reload data when navigating between track pages
 // watch data.track.id (from server) not track.id (local state)
 $effect(() => {
@@ -324,6 +335,7 @@ $effect(() => {
 		editingCommentId = null;
 		editingCommentText = '';
 		likedStateLoadedForTrackId = null; // reset liked state tracking
+		hasHandledTimestampParam = false; // reset timestamp handling
 
 		// sync track from server data
 		track = data.track;
@@ -353,6 +365,20 @@ let shareUrl = $state('');
 $effect(() => {
 	if (typeof window !== 'undefined') {
 		shareUrl = `${window.location.origin}/track/${track.id}`;
+	}
+});
+
+// handle ?t= timestamp param for deep linking (youtube-style)
+$effect(() => {
+	if (!browser || hasHandledTimestampParam) return;
+
+	const t = $page.url.searchParams.get('t');
+	if (t && track) {
+		const seconds = parseInt(t, 10);
+		if (!isNaN(seconds) && seconds >= 0) {
+			hasHandledTimestampParam = true;
+			void seekToTimestamp(seconds * 1000);
+		}
 	}
 });
 </script>
@@ -647,12 +673,13 @@ $effect(() => {
 												</div>
 											{:else}
 												<p class="comment-text">{#each parseTextWithLinks(comment.text) as segment}{#if segment.type === 'link'}<a href={segment.url} target="_blank" rel="noopener noreferrer" class="comment-link">{segment.url}</a>{:else}{segment.content}{/if}{/each}</p>
-												{#if auth.user?.did === comment.user_did}
-													<div class="comment-actions">
+												<div class="comment-actions">
+													<button class="comment-action-btn" onclick={() => copyCommentLink(comment.timestamp_ms)}>link</button>
+													{#if auth.user?.did === comment.user_did}
 														<button class="comment-action-btn" onclick={() => startEditing(comment)}>edit</button>
 														<button class="comment-action-btn delete" onclick={() => deleteComment(comment.id)}>delete</button>
-													</div>
-												{/if}
+													{/if}
+												</div>
 											{/if}
 										</div>
 									</div>
