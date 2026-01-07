@@ -666,7 +666,7 @@ class AuthSettings(AppSettingsSection):
 
     developer_token_default_days: int = Field(
         default=90,
-        description="Default expiration in days for developer tokens (0 = no expiration)",
+        description="Default expiration in days for developer tokens (capped by refresh lifetime)",
     )
     developer_token_max_days: int = Field(
         default=365,
