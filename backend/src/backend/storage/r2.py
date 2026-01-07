@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import Callable
+from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO
 
@@ -120,7 +121,7 @@ class R2Storage:
 
     async def save(
         self,
-        file: BinaryIO,
+        file: BinaryIO | BytesIO,
         filename: str,
         progress_callback: Callable[[float], None] | None = None,
     ) -> str:
@@ -444,7 +445,7 @@ class R2Storage:
 
     async def save_gated(
         self,
-        file: BinaryIO,
+        file: BinaryIO | BytesIO,
         filename: str,
         progress_callback: Callable[[float], None] | None = None,
     ) -> str:
