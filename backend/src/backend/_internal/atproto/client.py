@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from atproto_oauth.models import OAuthSession
@@ -10,6 +11,10 @@ from cachetools import LRUCache
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_oauth_client, get_session, update_session_tokens
+from backend._internal.auth import (
+    get_client_auth_method,
+    get_refresh_token_lifetime_days,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +128,16 @@ async def _refresh_session_tokens(
                 "dpop_authserver_nonce": refreshed_session.dpop_authserver_nonce,
                 "dpop_pds_nonce": refreshed_session.dpop_pds_nonce or "",
             }
+            client_auth_method = get_client_auth_method(updated_oauth_data)
+            refresh_lifetime_days = get_refresh_token_lifetime_days(client_auth_method)
+            refresh_expires_at = datetime.now(UTC) + timedelta(
+                days=refresh_lifetime_days
+            )
+            updated_session_data["client_auth_method"] = client_auth_method
+            updated_session_data["refresh_token_lifetime_days"] = refresh_lifetime_days
+            updated_session_data["refresh_token_expires_at"] = (
+                refresh_expires_at.isoformat()
+            )
 
             # update session in database
             await update_session_tokens(session_id, updated_session_data)

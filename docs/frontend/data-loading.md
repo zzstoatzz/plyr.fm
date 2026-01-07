@@ -44,26 +44,25 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 
 used for:
 - auth-dependent data (liked tracks, user preferences)
-- data that needs client context (localStorage, cookies)
+- data that needs client context (local caches, media state)
 - progressive enhancement
 
 ```typescript
 // frontend/src/routes/liked/+page.ts
 export const load: PageLoad = async ({ fetch }) => {
-	const sessionId = localStorage.getItem('session_id');
-	if (!sessionId) return { tracks: [] };
-
 	const response = await fetch(`${API_URL}/tracks/liked`, {
-		headers: { 'Authorization': `Bearer ${sessionId}` }
+		credentials: 'include'
 	});
+
+	if (!response.ok) return { tracks: [] };
 
 	return { tracks: await response.json() };
 };
 ```
 
 **benefits**:
-- access to browser APIs (localStorage, cookies)
-- runs on client, can use session tokens
+- access to browser APIs (window, local caches)
+- runs on client, can use HttpOnly cookie auth
 - still loads before component mounts (faster than `onMount`)
 
 ### layout loading (`+layout.ts`)
@@ -75,11 +74,8 @@ used for:
 ```typescript
 // frontend/src/routes/+layout.ts
 export async function load({ fetch }: LoadEvent) {
-	const sessionId = localStorage.getItem('session_id');
-	if (!sessionId) return { user: null, isAuthenticated: false };
-
 	const response = await fetch(`${API_URL}/auth/me`, {
-		headers: { 'Authorization': `Bearer ${sessionId}` }
+		credentials: 'include'
 	});
 
 	if (response.ok) {

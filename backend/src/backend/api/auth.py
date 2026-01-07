@@ -35,6 +35,7 @@ from backend._internal import (
     start_oauth_flow_with_scopes,
     switch_active_account,
 )
+from backend._internal.auth import get_refresh_token_lifetime_days
 from backend._internal.background_tasks import schedule_atproto_sync
 from backend.config import settings
 from backend.models import Artist, get_db
@@ -466,8 +467,12 @@ async def start_developer_token_flow(
     if expires_in_days > max_days:
         raise HTTPException(
             status_code=400,
-            detail=f"expires_in_days cannot exceed {max_days} (use 0 for no expiration)",
+            detail=f"expires_in_days cannot exceed {max_days}",
         )
+
+    refresh_lifetime_days = get_refresh_token_lifetime_days(None)
+    if expires_in_days <= 0 or expires_in_days > refresh_lifetime_days:
+        expires_in_days = refresh_lifetime_days
 
     # start OAuth flow using the user's handle
     auth_url, state = await start_oauth_flow(session.handle)

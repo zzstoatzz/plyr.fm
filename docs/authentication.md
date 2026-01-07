@@ -439,7 +439,7 @@ PLYR_API_URL=https://api.plyr.fm uv run scripts/plyr.py delete 42 -y
 backend settings in `AuthSettings`:
 - `developer_token_default_days`: default expiration (90 days)
 - `developer_token_max_days`: max allowed expiration (365 days)
-- use `expires_in_days: 0` for tokens that never expire
+- use `expires_in_days: 0` to request the maximum allowed by refresh lifetime
 
 ### how it works
 
@@ -485,9 +485,9 @@ a **confidential client** is an OAuth client that can prove its identity to the 
 with public clients, the underlying ATProto refresh token expires after 2 weeks regardless of what we store in our database. users would need to re-authenticate with their PDS every 2 weeks.
 
 with confidential clients:
-- **developer tokens actually work long-term** - not limited to 2 weeks
+- **developer tokens work long-term** - not limited to 2 weeks
 - **users don't get randomly kicked out** after 2 weeks of inactivity
-- **sessions last effectively forever** as long as tokens are refreshed within 180 days
+- **sessions last up to refresh lifetime** as long as tokens are refreshed within 180 days
 
 ### how it works
 
