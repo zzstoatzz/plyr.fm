@@ -79,6 +79,27 @@ these fixes came from reviewing [Bluesky's architecture deep dive](https://newsl
 
 ---
 
+#### auth stabilization (PRs #734-736, Jan 6-7)
+
+**why**: multi-account support introduced edge cases where auth state could become inconsistent between frontend components, and sessions could outlive their refresh tokens.
+
+**session expiry alignment** (PR #734):
+- sessions now track refresh token lifetime and respect it during validation
+- prevents sessions from appearing valid after their underlying OAuth grant expires
+- dev token expiration handling aligned with same pattern
+
+**queue auth boundary fix** (PR #735):
+- queue component now uses shared layout auth state instead of localStorage session IDs
+- fixes race condition where queue could attempt authenticated requests before layout resolved auth
+- ensures remote queue snapshots don't inherit local update flags during hydration
+
+**playlist cover upload fix** (PR #736):
+- `R2Storage.save()` was rejecting `BytesIO` objects due to beartype's strict `BinaryIO` protocol checking
+- changed type hint to `BinaryIO | BytesIO` to explicitly accept both
+- found via Logfire: only 2 failures in production, both on Jan 3
+
+---
+
 #### artist bio links (PRs #700-701, Jan 2)
 
 **links in artist bios now render as clickable** - supports full URLs and bare domains (e.g., "example.com"):
@@ -347,4 +368,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-06.
+this is a living document. last updated 2026-01-07.
