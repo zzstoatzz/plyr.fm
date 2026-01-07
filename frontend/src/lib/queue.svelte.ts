@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import type { QueueResponse, QueueState, Track } from './types';
 import { API_URL } from './config';
 import { APP_BROADCAST_PREFIX } from './branding';
+import { auth } from './auth.svelte';
 
 const SYNC_DEBOUNCE_MS = 250;
 
@@ -141,7 +142,7 @@ class Queue {
 
 	private isAuthenticated(): boolean {
 		if (!browser) return false;
-		return !!localStorage.getItem('session_id');
+		return auth.isAuthenticated;
 	}
 
 	async fetchQueue(force = false) {
@@ -188,6 +189,7 @@ class Queue {
 			this.revision = data.revision;
 			this.etag = newEtag;
 
+			this.lastUpdateWasLocal = false;
 			this.applySnapshot(data);
 		} catch (error) {
 			console.error('failed to fetch queue:', error);

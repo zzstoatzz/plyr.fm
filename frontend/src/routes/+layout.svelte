@@ -47,6 +47,9 @@
 			preferences.data = data.preferences;
 			// fetch explicit images list (public, no auth needed)
 			moderation.initialize();
+			if (data.isAuthenticated && queue.revision === null) {
+				void queue.fetchQueue();
+			}
 		}
 	});
 
