@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { fade } from 'svelte/transition';
+	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import type { PageData } from './$types';
@@ -369,11 +370,26 @@ $effect(() => {
 });
 
 // handle ?t= timestamp param for deep linking (youtube-style)
+onMount(() => {
+	const t = $page.url.searchParams.get('t');
+	if (t) {
+		const seconds = parseInt(t, 10);
+		if (!isNaN(seconds) && seconds >= 0) {
+			hasHandledTimestampParam = true;
+			// small delay to ensure player is ready
+			setTimeout(() => {
+				void seekToTimestamp(seconds * 1000);
+			}, 100);
+		}
+	}
+});
+
+// also handle ?t= for SPA navigation between tracks
 $effect(() => {
 	if (!browser || hasHandledTimestampParam) return;
 
 	const t = $page.url.searchParams.get('t');
-	if (t && track) {
+	if (t && track && loadedForTrackId === track.id) {
 		const seconds = parseInt(t, 10);
 		if (!isNaN(seconds) && seconds >= 0) {
 			hasHandledTimestampParam = true;
@@ -674,7 +690,7 @@ $effect(() => {
 											{:else}
 												<p class="comment-text">{#each parseTextWithLinks(comment.text) as segment}{#if segment.type === 'link'}<a href={segment.url} target="_blank" rel="noopener noreferrer" class="comment-link">{segment.url}</a>{:else}{segment.content}{/if}{/each}</p>
 												<div class="comment-actions">
-													<button class="comment-action-btn" onclick={() => copyCommentLink(comment.timestamp_ms)}>link</button>
+													<button class="comment-action-btn" onclick={() => copyCommentLink(comment.timestamp_ms)}>share</button>
 													{#if auth.user?.did === comment.user_did}
 														<button class="comment-action-btn" onclick={() => startEditing(comment)}>edit</button>
 														<button class="comment-action-btn delete" onclick={() => deleteComment(comment.id)}>delete</button>
