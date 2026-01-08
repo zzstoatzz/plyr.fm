@@ -317,8 +317,8 @@ let loadedForTrackId = $state<number | null>(null);
 // track if we've loaded liked state for this track (separate from general load)
 let likedStateLoadedForTrackId = $state<number | null>(null);
 
-// track if we've handled the ?t= timestamp param for this page load
-let hasHandledTimestampParam = $state(false);
+// pending seek time from ?t= URL param (milliseconds)
+let pendingSeekMs = $state<number | null>(null);
 
 // reload data when navigating between track pages
 // watch data.track.id (from server) not track.id (local state)
@@ -336,7 +336,7 @@ $effect(() => {
 		editingCommentId = null;
 		editingCommentText = '';
 		likedStateLoadedForTrackId = null; // reset liked state tracking
-		hasHandledTimestampParam = false; // reset timestamp handling
+		pendingSeekMs = null; // reset pending seek
 
 		// sync track from server data
 		track = data.track;
@@ -375,26 +375,27 @@ onMount(() => {
 	if (t) {
 		const seconds = parseInt(t, 10);
 		if (!isNaN(seconds) && seconds >= 0) {
-			hasHandledTimestampParam = true;
-			// small delay to ensure player is ready
-			setTimeout(() => {
-				void seekToTimestamp(seconds * 1000);
-			}, 100);
+			pendingSeekMs = seconds * 1000;
+			// start playing the track
+			if (track.gated) {
+				void playTrack(track);
+			} else {
+				queue.playNow(track);
+			}
 		}
 	}
 });
 
-// also handle ?t= for SPA navigation between tracks
+// perform pending seek once track is loaded and ready
 $effect(() => {
-	if (!browser || hasHandledTimestampParam) return;
-
-	const t = $page.url.searchParams.get('t');
-	if (t && track && loadedForTrackId === track.id) {
-		const seconds = parseInt(t, 10);
-		if (!isNaN(seconds) && seconds >= 0) {
-			hasHandledTimestampParam = true;
-			void seekToTimestamp(seconds * 1000);
-		}
+	if (
+		pendingSeekMs !== null &&
+		player.currentTrack?.id === track.id &&
+		player.audioElement &&
+		player.audioElement.readyState >= 1
+	) {
+		player.audioElement.currentTime = pendingSeekMs / 1000;
+		pendingSeekMs = null;
 	}
 });
 </script>
