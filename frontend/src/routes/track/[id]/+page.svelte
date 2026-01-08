@@ -397,8 +397,8 @@ $effect(() => {
 		const seekTo = pendingSeekMs / 1000;
 		pendingSeekMs = null;
 		player.audioElement.currentTime = seekTo;
-		// ensure playback continues after seek (some browsers pause briefly during seek)
-		player.paused = false;
+		// don't auto-play - browser policy blocks it without user interaction
+		// user will click play themselves
 	}
 });
 </script>
