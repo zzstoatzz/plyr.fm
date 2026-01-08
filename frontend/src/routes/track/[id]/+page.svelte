@@ -376,11 +376,11 @@ onMount(() => {
 		const seconds = parseInt(t, 10);
 		if (!isNaN(seconds) && seconds >= 0) {
 			pendingSeekMs = seconds * 1000;
-			// start playing the track
+			// load the track without auto-playing (browser blocks autoplay without interaction)
 			if (track.gated) {
 				void playTrack(track);
 			} else {
-				queue.playNow(track);
+				queue.playNow(track, false);
 			}
 		}
 	}

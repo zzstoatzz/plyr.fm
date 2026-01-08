@@ -416,8 +416,8 @@ class Queue {
 		this.schedulePush();
 	}
 
-	playNow(track: Track) {
-		this.lastUpdateWasLocal = true;
+	playNow(track: Track, autoPlay = true) {
+		this.lastUpdateWasLocal = autoPlay;
 		const upNext = this.tracks.slice(this.currentIndex + 1);
 		this.tracks = [track, ...upNext];
 		this.originalOrder = [...this.tracks];
