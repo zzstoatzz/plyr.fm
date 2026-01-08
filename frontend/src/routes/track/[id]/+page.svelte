@@ -394,8 +394,11 @@ $effect(() => {
 		player.audioElement &&
 		player.audioElement.readyState >= 1
 	) {
-		player.audioElement.currentTime = pendingSeekMs / 1000;
+		const seekTo = pendingSeekMs / 1000;
 		pendingSeekMs = null;
+		player.audioElement.currentTime = seekTo;
+		// ensure playback continues after seek (some browsers pause briefly during seek)
+		player.paused = false;
 	}
 });
 </script>
