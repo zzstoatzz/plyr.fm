@@ -133,6 +133,59 @@ let loading = $state(true); // ✅ now reactive
 2. no console errors about "Cannot access X before initialization"
 3. UI reflects current variable value
 
+### waiting for async conditions with `$effect`
+
+when you need to perform an action after some async condition is met (like audio being ready), **don't rely on event listeners** - they may not attach in time if the target element doesn't exist yet or the event fires before your listener is registered.
+
+**instead, use a reactive `$effect` that watches for the conditions to be met:**
+
+```typescript
+// ❌ WRONG - event listener may not attach in time
+onMount(() => {
+    queue.playNow(track); // triggers async loading in Player component
+
+    // player.audioElement might be undefined here!
+    // even if it exists, loadedmetadata may fire before this runs
+    player.audioElement?.addEventListener('loadedmetadata', () => {
+        player.audioElement.currentTime = seekTime;
+    });
+});
+```
+
+```typescript
+// ✅ CORRECT - reactive effect waits for conditions
+let pendingSeekMs = $state<number | null>(null);
+
+onMount(() => {
+    pendingSeekMs = 11000; // store the pending action
+    queue.playNow(track);  // trigger the async operation
+});
+
+// effect runs whenever dependencies change, including when audio becomes ready
+$effect(() => {
+    if (
+        pendingSeekMs !== null &&
+        player.currentTrack?.id === track.id &&
+        player.audioElement &&
+        player.audioElement.readyState >= 1
+    ) {
+        player.audioElement.currentTime = pendingSeekMs / 1000;
+        pendingSeekMs = null; // clear after performing action
+    }
+});
+```
+
+**why this works:**
+- `$effect` re-runs whenever any of its dependencies change
+- when `player.audioElement` becomes available and ready, the effect fires
+- no race condition - the effect will catch the ready state even if it happened "in the past"
+- setting `pendingSeekMs = null` ensures the action only runs once
+
+**use this pattern when:**
+- waiting for DOM elements to exist
+- waiting for async operations to complete
+- coordinating between components that load independently
+
 ## global state management
 
 ### overview

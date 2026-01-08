@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { fade } from 'svelte/transition';
+	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
 	import type { PageData } from './$types';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { API_URL } from '$lib/config';
@@ -231,6 +233,13 @@
 		}
 	}
 
+	async function copyCommentLink(timestampMs: number) {
+		const seconds = Math.floor(timestampMs / 1000);
+		const url = `${window.location.origin}/track/${track.id}?t=${seconds}`;
+		await navigator.clipboard.writeText(url);
+		toast.success('link copied');
+	}
+
 	function formatRelativeTime(isoString: string): string {
 		const date = new Date(isoString);
 		const now = new Date();
@@ -308,6 +317,9 @@ let loadedForTrackId = $state<number | null>(null);
 // track if we've loaded liked state for this track (separate from general load)
 let likedStateLoadedForTrackId = $state<number | null>(null);
 
+// pending seek time from ?t= URL param (milliseconds)
+let pendingSeekMs = $state<number | null>(null);
+
 // reload data when navigating between track pages
 // watch data.track.id (from server) not track.id (local state)
 $effect(() => {
@@ -324,6 +336,7 @@ $effect(() => {
 		editingCommentId = null;
 		editingCommentText = '';
 		likedStateLoadedForTrackId = null; // reset liked state tracking
+		pendingSeekMs = null; // reset pending seek
 
 		// sync track from server data
 		track = data.track;
@@ -353,6 +366,39 @@ let shareUrl = $state('');
 $effect(() => {
 	if (typeof window !== 'undefined') {
 		shareUrl = `${window.location.origin}/track/${track.id}`;
+	}
+});
+
+// handle ?t= timestamp param for deep linking (youtube-style)
+onMount(() => {
+	const t = $page.url.searchParams.get('t');
+	if (t) {
+		const seconds = parseInt(t, 10);
+		if (!isNaN(seconds) && seconds >= 0) {
+			pendingSeekMs = seconds * 1000;
+			// start playing the track
+			if (track.gated) {
+				void playTrack(track);
+			} else {
+				queue.playNow(track);
+			}
+		}
+	}
+});
+
+// perform pending seek once track is loaded and ready
+$effect(() => {
+	if (
+		pendingSeekMs !== null &&
+		player.currentTrack?.id === track.id &&
+		player.audioElement &&
+		player.audioElement.readyState >= 1
+	) {
+		const seekTo = pendingSeekMs / 1000;
+		pendingSeekMs = null;
+		player.audioElement.currentTime = seekTo;
+		// don't auto-play - browser policy blocks it without user interaction
+		// user will click play themselves
 	}
 });
 </script>
@@ -647,12 +693,13 @@ $effect(() => {
 												</div>
 											{:else}
 												<p class="comment-text">{#each parseTextWithLinks(comment.text) as segment}{#if segment.type === 'link'}<a href={segment.url} target="_blank" rel="noopener noreferrer" class="comment-link">{segment.url}</a>{:else}{segment.content}{/if}{/each}</p>
-												{#if auth.user?.did === comment.user_did}
-													<div class="comment-actions">
+												<div class="comment-actions">
+													<button class="comment-action-btn" onclick={() => copyCommentLink(comment.timestamp_ms)}>share</button>
+													{#if auth.user?.did === comment.user_did}
 														<button class="comment-action-btn" onclick={() => startEditing(comment)}>edit</button>
 														<button class="comment-action-btn delete" onclick={() => deleteComment(comment.id)}>delete</button>
-													</div>
-												{/if}
+													{/if}
+												</div>
 											{/if}
 										</div>
 									</div>
