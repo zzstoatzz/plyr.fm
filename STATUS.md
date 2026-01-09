@@ -79,6 +79,32 @@ these fixes came from reviewing [Bluesky's architecture deep dive](https://newsl
 
 ---
 
+#### track edit UX improvements (PRs #741-742, Jan 9)
+
+**why**: the portal track editing experience had several UX issues - users couldn't remove artwork (only replace), no preview when selecting new images, and buttons were poorly styled icon-only squares with overly aggressive hover effects.
+
+**artwork management** (PR #742):
+- add ability to **remove track artwork** via new `remove_image` form field on `PATCH /tracks/{id}`
+- show **image preview** when selecting new artwork before saving
+- hover overlay on current artwork with trash icon to remove
+- "undo" option when artwork is marked for removal
+- clear status labels: "current artwork", "new artwork selected", "artwork will be removed"
+
+**button styling** (PR #742):
+- replace icon-only squares with labeled pill buttons (`edit`, `delete`)
+- subtle outlined save/cancel buttons in edit mode
+- fix global button hover styles bleeding into all buttons (scoped to form submit only)
+
+**shutdown fix** (PR #742):
+- add 2s timeouts to docket worker and service shutdown
+- prevents backend hanging on Ctrl+C or hot-reload during development
+
+**beartype fix** (PR #741):
+- `starlette.UploadFile` vs `fastapi.UploadFile` type mismatch was causing 500 errors on image upload
+- fixed by importing UploadFile from starlette in metadata_service.py
+
+---
+
 #### auth stabilization (PRs #734-736, Jan 6-7)
 
 **why**: multi-account support introduced edge cases where auth state could become inconsistent between frontend components, and sessions could outlive their refresh tokens.
@@ -97,6 +123,19 @@ these fixes came from reviewing [Bluesky's architecture deep dive](https://newsl
 - `R2Storage.save()` was rejecting `BytesIO` objects due to beartype's strict `BinaryIO` protocol checking
 - changed type hint to `BinaryIO | BytesIO` to explicitly accept both
 - found via Logfire: only 2 failures in production, both on Jan 3
+
+---
+
+#### timestamp deep links (PRs #739-740, Jan 8)
+
+**timestamped comment sharing** (PR #739):
+- timed comments now show share button on hover
+- copies URL with `?t=` parameter (e.g., `plyr.fm/track/123?t=45`)
+- visiting timestamped URL auto-seeks to that position on play
+
+**autoplay error suppression** (PR #740):
+- suppress browser autoplay errors when deep linking to timestamps
+- browsers block autoplay without user interaction; now fails silently
 
 ---
 
@@ -199,7 +238,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-stabilization and polish after multi-account release. monitoring production for issues.
+stabilization and UX polish. track editing experience improved, shutdown reliability fixed.
 
 **end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) shipped:**
 - moderation consolidation: sensitive images moved to moderation service (#644)
@@ -368,4 +407,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-07.
+this is a living document. last updated 2026-01-09.
