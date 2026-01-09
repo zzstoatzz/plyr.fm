@@ -649,7 +649,7 @@ class RateLimitSettings(AppSettingsSection):
         description="Rate limit for authentication endpoints",
     )
     upload_limit: str = Field(
-        default="5/minute",
+        default="20/minute",
         description="Rate limit for file uploads",
     )
 
