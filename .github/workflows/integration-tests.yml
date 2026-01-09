@@ -17,6 +17,11 @@ on:
         type: boolean
         default: true
 
+  # TODO: remove after testing PR #744
+  push:
+    branches:
+      - feat/integration-tests
+
 permissions:
   contents: read
 
