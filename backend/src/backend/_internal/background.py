@@ -92,11 +92,14 @@ async def background_worker_lifespan() -> AsyncGenerator[Docket, None]:
                 )
                 yield docket
         finally:
-            # cancel the worker task and wait for it to finish
+            # cancel the worker task with timeout to avoid hanging on shutdown
             if worker_task:
                 worker_task.cancel()
                 try:
-                    await worker_task
+                    # wait briefly for clean shutdown, but don't block forever
+                    await asyncio.wait_for(worker_task, timeout=2.0)
+                except TimeoutError:
+                    logger.warning("docket worker did not stop within timeout")
                 except asyncio.CancelledError:
                     logger.debug("docket worker task cancelled")
             # clear global after worker is fully stopped

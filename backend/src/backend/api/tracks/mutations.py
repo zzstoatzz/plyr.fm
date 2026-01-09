@@ -180,6 +180,10 @@ async def update_track_metadata(
         Form(description="JSON object for supporter gating, or 'null' to remove"),
     ] = None,
     image: UploadFile | None = File(None),
+    remove_image: Annotated[
+        str | None,
+        Form(description="Set to 'true' to remove artwork"),
+    ] = None,
 ) -> TrackResponse:
     """Update track metadata (only by owner)."""
     result = await db.execute(
@@ -250,7 +254,21 @@ async def update_track_metadata(
 
     image_changed = False
     image_url = None
-    if image and image.filename:
+
+    # handle image removal
+    if remove_image and remove_image.lower() == "true" and track.image_id:
+        # only delete image from R2 if album doesn't share it
+        album_shares_image = (
+            track.album_rel and track.album_rel.image_id == track.image_id
+        )
+        if not album_shares_image:
+            with contextlib.suppress(Exception):
+                await storage.delete(track.image_id)
+        track.image_id = None
+        track.image_url = None
+        image_changed = True
+    elif image and image.filename:
+        # handle image upload/replacement
         image_id, image_url = await upload_track_image(image)
 
         if track.image_id:
