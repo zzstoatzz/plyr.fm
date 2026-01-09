@@ -305,9 +305,9 @@ async def update_track_metadata(
         try:
             await _update_atproto_record(track, auth_session, image_url)
         except Exception as exc:
-            logger.error(
-                f"failed to update ATProto record for track {track.id}: {exc}",
-                exc_info=True,
+            logfire.exception(
+                "failed to update ATProto record",
+                track_id=track.id,
             )
             await db.rollback()
             raise HTTPException(
