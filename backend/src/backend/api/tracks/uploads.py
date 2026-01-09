@@ -469,7 +469,13 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                     await _add_tags_to_track(db, track.id, ctx.tags, ctx.artist_did)
                     await _send_track_notification(db, track)
 
-                    if r2_url:
+                    # skip copyright scan for integration tests on staging
+                    # (synthetic audio, no point paying for AudD API calls)
+                    is_integration_test = (
+                        settings.observability.environment == "staging"
+                        and "integration-test" in (ctx.tags or [])
+                    )
+                    if r2_url and not is_integration_test:
                         await schedule_copyright_scan(track.id, r2_url)
 
                     # sync album list record if track is in an album
