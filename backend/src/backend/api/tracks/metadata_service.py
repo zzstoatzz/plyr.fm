@@ -6,9 +6,10 @@ import logging
 from io import BytesIO
 from typing import TYPE_CHECKING, Any
 
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
+from starlette.datastructures import UploadFile
 
 from backend._internal.atproto.handles import resolve_handle
 from backend._internal.image import ImageFormat
