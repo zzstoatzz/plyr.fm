@@ -23,6 +23,7 @@ data/
 .env
 .env.local
 test-audio/
+plyr_test_tokens.env
 
 # Development/sandbox
 sandbox/
