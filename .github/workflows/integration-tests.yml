@@ -29,9 +29,10 @@ jobs:
   integration:
     name: run integration tests
     runs-on: ubuntu-latest
-    # only run if staging deploy succeeded (or manual trigger)
+    # only run if staging deploy succeeded (or manual/push trigger)
     if: >
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
       github.event.workflow_run.conclusion == 'success'
     timeout-minutes: 15
     steps:
