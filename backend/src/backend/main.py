@@ -1,5 +1,6 @@
 """relay fastapi application."""
 
+import asyncio
 import logging
 import re
 import warnings
@@ -157,9 +158,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.docket = docket
         yield
 
-    # shutdown: cleanup resources
-    await notification_service.shutdown()
-    await queue_service.shutdown()
+    # shutdown: cleanup resources with timeouts to avoid hanging
+    try:
+        await asyncio.wait_for(notification_service.shutdown(), timeout=2.0)
+    except TimeoutError:
+        logging.warning("notification_service.shutdown() timed out")
+    try:
+        await asyncio.wait_for(queue_service.shutdown(), timeout=2.0)
+    except TimeoutError:
+        logging.warning("queue_service.shutdown() timed out")
 
 
 app = FastAPI(

@@ -28,6 +28,8 @@
 	let editFeaturedArtists = $state<FeaturedArtist[]>([]);
 	let editTags = $state<string[]>([]);
 	let editImageFile = $state<File | null>(null);
+	let editImagePreviewUrl = $state<string | null>(null);
+	let editRemoveImage = $state(false);
 	let editSupportGate = $state(false);
 	let hasUnresolvedEditFeaturesInput = $state(false);
 
@@ -328,6 +330,11 @@
 		editFeaturedArtists = [];
 		editTags = [];
 		editImageFile = null;
+		if (editImagePreviewUrl) {
+			URL.revokeObjectURL(editImagePreviewUrl);
+		}
+		editImagePreviewUrl = null;
+		editRemoveImage = false;
 		editSupportGate = false;
 	}
 
@@ -351,7 +358,10 @@
 		} else {
 			formData.append('support_gate', 'null');
 		}
-		if (editImageFile) {
+		// handle artwork: remove, replace, or leave unchanged
+		if (editRemoveImage) {
+			formData.append('remove_image', 'true');
+		} else if (editImageFile) {
 			formData.append('image', editImageFile);
 		}
 
@@ -730,26 +740,106 @@
 											/>
 										</div>
 										<div class="edit-field-group">
-											<label for="edit-image" class="edit-label">artwork (optional)</label>
-											{#if track.image_url && !editImageFile}
-												<div class="current-image-preview">
-													<img src={track.image_url} alt="current artwork" />
-													<span class="current-image-label">current artwork</span>
-												</div>
-											{/if}
-											<input
-												id="edit-image"
-												type="file"
-												accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
-												onchange={(e) => {
-													const target = e.target as HTMLInputElement;
-													editImageFile = target.files?.[0] ?? null;
-												}}
-												class="edit-input"
-											/>
-											{#if editImageFile}
-												<p class="file-info">{editImageFile.name} (will replace current)</p>
-											{/if}
+											<span class="edit-label">artwork (optional)</span>
+											<div class="artwork-editor">
+												{#if editImagePreviewUrl}
+													<!-- New image selected - show preview -->
+													<div class="artwork-preview">
+														<img src={editImagePreviewUrl} alt="new artwork preview" />
+														<div class="artwork-preview-overlay">
+															<button
+																type="button"
+																class="artwork-action-btn"
+																onclick={() => {
+																	editImageFile = null;
+																	if (editImagePreviewUrl) {
+																		URL.revokeObjectURL(editImagePreviewUrl);
+																	}
+																	editImagePreviewUrl = null;
+																}}
+																title="remove selection"
+															>
+																<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+																	<line x1="18" y1="6" x2="6" y2="18"></line>
+																	<line x1="6" y1="6" x2="18" y2="18"></line>
+																</svg>
+															</button>
+														</div>
+													</div>
+													<span class="artwork-status">new artwork selected</span>
+												{:else if editRemoveImage}
+													<!-- User chose to remove artwork -->
+													<div class="artwork-removed">
+														<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+															<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+															<line x1="9" y1="9" x2="15" y2="15"></line>
+															<line x1="15" y1="9" x2="9" y2="15"></line>
+														</svg>
+														<span>artwork will be removed</span>
+														<button
+															type="button"
+															class="undo-remove-btn"
+															onclick={() => { editRemoveImage = false; }}
+														>
+															undo
+														</button>
+													</div>
+												{:else if track.image_url}
+													<!-- Current artwork exists -->
+													<div class="artwork-preview">
+														<img src={track.image_url} alt="current artwork" />
+														<div class="artwork-preview-overlay">
+															<button
+																type="button"
+																class="artwork-action-btn"
+																onclick={() => { editRemoveImage = true; }}
+																title="remove artwork"
+															>
+																<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+																	<polyline points="3 6 5 6 21 6"></polyline>
+																	<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+																</svg>
+															</button>
+														</div>
+													</div>
+													<span class="artwork-status current">current artwork</span>
+												{:else}
+													<!-- No artwork -->
+													<div class="artwork-empty">
+														<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+															<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+															<circle cx="8.5" cy="8.5" r="1.5"></circle>
+															<polyline points="21 15 16 10 5 21"></polyline>
+														</svg>
+														<span>no artwork</span>
+													</div>
+												{/if}
+												{#if !editRemoveImage}
+													<label class="artwork-upload-btn">
+														<input
+															type="file"
+															accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
+															onchange={(e) => {
+																const target = e.target as HTMLInputElement;
+																const file = target.files?.[0];
+																if (file) {
+																	editImageFile = file;
+																	if (editImagePreviewUrl) {
+																		URL.revokeObjectURL(editImagePreviewUrl);
+																	}
+																	editImagePreviewUrl = URL.createObjectURL(file);
+																}
+															}}
+														/>
+														<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+															<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+															<polyline points="17 8 12 3 7 8"></polyline>
+															<line x1="12" y1="3" x2="12" y2="15"></line>
+														</svg>
+														{track.image_url || editImagePreviewUrl ? 'replace' : 'upload'}
+													</label>
+												{/if}
+											</div>
 										</div>
 										{#if atprotofansEligible || track.support_gate}
 											<div class="edit-field-group">
@@ -771,24 +861,20 @@
 									</div>
 									<div class="edit-actions">
 										<button
-											class="action-btn save-btn"
+											type="button"
+											class="edit-cancel-btn"
+											onclick={cancelEdit}
+										>
+											cancel
+										</button>
+										<button
+											type="button"
+											class="edit-save-btn"
 											onclick={() => saveTrackEdit(track.id)}
 											disabled={hasUnresolvedEditFeaturesInput}
 											title={hasUnresolvedEditFeaturesInput ? "please select or clear featured artist" : "save changes"}
 										>
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-												<polyline points="20 6 9 17 4 12"></polyline>
-											</svg>
-										</button>
-										<button
-											class="action-btn cancel-btn"
-											onclick={cancelEdit}
-											title="cancel"
-										>
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-												<line x1="18" y1="6" x2="6" y2="18"></line>
-												<line x1="6" y1="6" x2="18" y2="18"></line>
-											</svg>
+											save changes
 										</button>
 									</div>
 								</div>
@@ -880,24 +966,26 @@
 								</div>
 								<div class="track-actions">
 									<button
-										class="action-btn edit-btn"
+										type="button"
+										class="track-action-btn edit"
 										onclick={() => startEditTrack(track)}
-										title="edit track"
 									>
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 											<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
 											<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
 										</svg>
+										edit
 									</button>
 									<button
-										class="action-btn delete-btn"
+										type="button"
+										class="track-action-btn delete"
 										onclick={() => deleteTrack(track.id, track.title)}
-										title="delete track"
 									>
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 											<polyline points="3 6 5 6 21 6"></polyline>
 											<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
 										</svg>
+										delete
 									</button>
 								</div>
 							{/if}
@@ -1451,13 +1539,8 @@
 		cursor: not-allowed;
 	}
 
-	.file-info {
-		margin-top: 0.5rem;
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-	}
-
-	button {
+	/* form submit buttons only */
+	form button[type="submit"] {
 		width: 100%;
 		padding: 0.75rem;
 		background: var(--accent);
@@ -1471,19 +1554,19 @@
 		transition: all 0.2s;
 	}
 
-	button:hover:not(:disabled) {
+	form button[type="submit"]:hover:not(:disabled) {
 		background: var(--accent-hover);
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
-	button:disabled {
+	form button[type="submit"]:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 		transform: none;
 	}
 
-	button:active:not(:disabled) {
+	form button[type="submit"]:active:not(:disabled) {
 		transform: translateY(0);
 	}
 
@@ -1787,53 +1870,88 @@
 		align-self: flex-start;
 	}
 
-	.action-btn {
-		display: flex;
+	/* track action buttons (edit/delete in non-editing state) */
+	.track-action-btn {
+		display: inline-flex;
 		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		padding: 0;
+		gap: 0.35rem;
+		padding: 0.4rem 0.65rem;
+		background: transparent;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-full);
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
+		font-family: inherit;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s;
+		white-space: nowrap;
+		width: auto;
+	}
+
+	.track-action-btn:hover {
+		transform: none;
+		box-shadow: none;
+		border-color: var(--border-emphasis);
+		color: var(--text-secondary);
+	}
+
+	.track-action-btn.delete:hover {
+		color: var(--text-secondary);
+	}
+
+	/* edit mode action buttons */
+	.edit-actions {
+		display: flex;
+		gap: 0.75rem;
+		justify-content: flex-end;
+		padding-top: 0.75rem;
+		border-top: 1px solid var(--border-subtle);
+		margin-top: 0.5rem;
+	}
+
+	.edit-cancel-btn {
+		padding: 0.6rem 1.25rem;
 		background: transparent;
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-base);
-		color: var(--text-tertiary);
+		color: var(--text-secondary);
+		font-size: var(--text-base);
+		font-weight: 500;
+		font-family: inherit;
 		cursor: pointer;
 		transition: all 0.15s;
-		flex-shrink: 0;
+		width: auto;
 	}
 
-	.action-btn svg {
-		flex-shrink: 0;
-	}
-
-	.action-btn:hover {
+	.edit-cancel-btn:hover {
+		border-color: var(--text-tertiary);
+		background: var(--bg-hover);
 		transform: none;
 		box-shadow: none;
 	}
 
-	.edit-btn:hover {
-		background: color-mix(in srgb, var(--accent) 12%, transparent);
-		border-color: var(--accent);
+	.edit-save-btn {
+		padding: 0.6rem 1.25rem;
+		background: transparent;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-base);
 		color: var(--accent);
+		font-size: var(--text-base);
+		font-weight: 500;
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.15s;
+		width: auto;
 	}
 
-	.delete-btn:hover {
-		background: color-mix(in srgb, var(--error) 12%, transparent);
-		border-color: var(--error);
-		color: var(--error);
+	.edit-save-btn:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
 	}
 
-	.save-btn:hover {
-		background: color-mix(in srgb, var(--success) 12%, transparent);
-		border-color: var(--success);
-		color: var(--success);
-	}
-
-	.cancel-btn:hover {
-		background: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
-		border-color: var(--text-tertiary);
-		color: var(--text-secondary);
+	.edit-save-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.edit-input {
@@ -1847,27 +1965,147 @@
 		font-family: inherit;
 	}
 
-	.current-image-preview {
+	/* artwork editor */
+	.artwork-editor {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.5rem;
+		gap: 1rem;
+		padding: 0.75rem;
 		background: var(--bg-primary);
 		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		margin-bottom: 0.5rem;
+		border-radius: var(--radius-base);
 	}
 
-	.current-image-preview img {
-		width: 48px;
-		height: 48px;
-		border-radius: var(--radius-sm);
+	.artwork-preview {
+		position: relative;
+		width: 80px;
+		height: 80px;
+		border-radius: var(--radius-base);
+		overflow: hidden;
+		flex-shrink: 0;
+	}
+
+	.artwork-preview img {
+		width: 100%;
+		height: 100%;
 		object-fit: cover;
 	}
 
-	.current-image-label {
-		color: var(--text-tertiary);
+	.artwork-preview-overlay {
+		position: absolute;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		transition: opacity 0.15s;
+	}
+
+	.artwork-preview:hover .artwork-preview-overlay {
+		opacity: 1;
+	}
+
+	.artwork-action-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		background: rgba(255, 255, 255, 0.15);
+		border: none;
+		border-radius: var(--radius-full);
+		color: white;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.artwork-action-btn:hover {
+		background: var(--error);
+		transform: scale(1.1);
+		box-shadow: none;
+	}
+
+	.artwork-status {
 		font-size: var(--text-sm);
+		color: var(--accent);
+		font-weight: 500;
+	}
+
+	.artwork-status.current {
+		color: var(--text-tertiary);
+		font-weight: 400;
+	}
+
+	.artwork-removed {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		color: var(--text-tertiary);
+	}
+
+	.artwork-removed span {
+		font-size: var(--text-sm);
+	}
+
+	.undo-remove-btn {
+		padding: 0.25rem 0.75rem;
+		background: transparent;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-full);
+		color: var(--accent);
+		font-size: var(--text-sm);
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.15s;
+		width: auto;
+	}
+
+	.undo-remove-btn:hover {
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		transform: none;
+		box-shadow: none;
+	}
+
+	.artwork-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		color: var(--text-muted);
+	}
+
+	.artwork-empty span {
+		font-size: var(--text-sm);
+	}
+
+	.artwork-upload-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.5rem 0.85rem;
+		background: transparent;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-full);
+		color: var(--accent);
+		font-size: var(--text-sm);
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s;
+		margin-left: auto;
+	}
+
+	.artwork-upload-btn:hover {
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+	}
+
+	.artwork-upload-btn input {
+		display: none;
 	}
 
 	.edit-input:focus {
@@ -2424,16 +2662,17 @@
 		.track-actions {
 			margin-left: 0.5rem;
 			gap: 0.35rem;
+			flex-direction: column;
 		}
 
-		.action-btn {
-			width: 30px;
-			height: 30px;
+		.track-action-btn {
+			padding: 0.35rem 0.55rem;
+			font-size: var(--text-xs);
 		}
 
-		.action-btn svg {
-			width: 14px;
-			height: 14px;
+		.track-action-btn svg {
+			width: 12px;
+			height: 12px;
 		}
 
 		/* edit mode mobile */
@@ -2455,7 +2694,31 @@
 		}
 
 		.edit-actions {
-			gap: 0.35rem;
+			gap: 0.5rem;
+			flex-direction: column;
+		}
+
+		.edit-cancel-btn,
+		.edit-save-btn {
+			width: 100%;
+			padding: 0.6rem;
+			font-size: var(--text-sm);
+		}
+
+		/* artwork editor mobile */
+		.artwork-editor {
+			flex-direction: column;
+			gap: 0.75rem;
+			padding: 0.65rem;
+		}
+
+		.artwork-preview {
+			width: 64px;
+			height: 64px;
+		}
+
+		.artwork-upload-btn {
+			margin-left: 0;
 		}
 
 		/* data section mobile */
