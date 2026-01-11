@@ -24,7 +24,7 @@ pub struct AppState {
     pub label_tx: Option<broadcast::Sender<(i64, Label)>>,
     /// Claude client for image moderation (if configured)
     pub claude: Option<Arc<ClaudeClient>>,
-    /// Minimum AuDD score to flag as potential copyright violation
+    /// Minimum percentage of matches that must belong to a single song to flag
     pub copyright_score_threshold: i32,
 }
 

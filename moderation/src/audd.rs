@@ -1,5 +1,7 @@
 //! AuDD audio fingerprinting integration.
 
+use std::collections::HashMap;
+
 use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -17,6 +19,12 @@ pub struct ScanRequest {
 pub struct ScanResponse {
     pub matches: Vec<AuddMatch>,
     pub is_flagged: bool,
+    /// Percentage of matched segments belonging to the dominant song (0-100)
+    pub dominant_match_pct: i32,
+    /// The dominant song if one exists (artist - title)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dominant_match: Option<String>,
+    /// Legacy field - always 0 since AudD doesn't return scores
     pub highest_score: i32,
     pub raw_response: serde_json::Value,
 }
@@ -108,18 +116,26 @@ pub async fn scan(
     }
 
     let matches = extract_matches(&audd_response);
-    let highest_score = matches.iter().map(|m| m.score).max().unwrap_or(0);
-    let is_flagged = highest_score >= state.copyright_score_threshold;
+    let (dominant_match, dominant_match_pct) = find_dominant_match(&matches);
+
+    // Flag if any single song dominates the matches (>= threshold % of segments)
+    // This filters out false positives where random segments match different songs
+    let is_flagged = dominant_match_pct >= state.copyright_score_threshold;
 
     info!(
         match_count = matches.len(),
-        highest_score, is_flagged, "scan complete"
+        dominant_match_pct,
+        dominant_match = dominant_match.as_deref().unwrap_or("none"),
+        is_flagged,
+        "scan complete"
     );
 
     Ok(Json(ScanResponse {
         matches,
         is_flagged,
-        highest_score,
+        dominant_match_pct,
+        dominant_match,
+        highest_score: 0, // AudD doesn't return scores
         raw_response,
     }))
 }
@@ -185,4 +201,34 @@ fn parse_timecode_to_ms(timecode: &str) -> Option<i64> {
         }
         _ => None,
     }
+}
+
+/// Find the dominant song in matches (the one that appears most frequently).
+/// Returns (dominant_song_name, percentage_of_total_matches).
+///
+/// AudD doesn't return confidence scores, so we use match frequency as a proxy:
+/// if the same song matches across many segments of the track, it's likely real.
+/// Random false positives tend to be scattered across different songs.
+fn find_dominant_match(matches: &[AuddMatch]) -> (Option<String>, i32) {
+    if matches.is_empty() {
+        return (None, 0);
+    }
+
+    // Count matches per unique song (artist + title)
+    let mut song_counts: HashMap<(String, String), usize> = HashMap::new();
+    for m in matches {
+        let key = (m.artist.to_lowercase(), m.title.to_lowercase());
+        *song_counts.entry(key).or_insert(0) += 1;
+    }
+
+    // Find the song with the most matches
+    let (dominant_key, dominant_count) = song_counts
+        .into_iter()
+        .max_by_key(|(_, count)| *count)
+        .unwrap(); // Safe: matches is non-empty
+
+    let pct = (dominant_count * 100 / matches.len()) as i32;
+    let dominant_name = format!("{} - {}", dominant_key.0, dominant_key.1);
+
+    (Some(dominant_name), pct)
 }
