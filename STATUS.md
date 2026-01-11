@@ -47,6 +47,22 @@ plyr.fm should become:
 
 ### January 2026
 
+#### Neon cold start fix (Jan 11)
+
+**why**: first requests after idle periods would fail with 500 errors due to Neon serverless scaling to zero after 5 minutes of inactivity. previous mitigations (larger pool, longer timeouts) helped but didn't eliminate the problem.
+
+**fix**: disabled scale-to-zero on `plyr-prd` via Neon console. this is the [recommended approach](https://neon.com/blog/6-best-practices-for-running-neon-in-production) for production workloads.
+
+**configuration**:
+- `plyr-prd`: scale-to-zero **disabled** (`suspend_timeout_seconds: -1`)
+- `plyr-stg`, `plyr-dev`: scale-to-zero enabled (cold starts acceptable)
+
+**docs**: updated [connection-pooling.md](docs/backend/database/connection-pooling.md) with production guidance and how to verify settings via Neon MCP.
+
+closes #733
+
+---
+
 #### multi-account experience (PRs #707, #710, #712-714, Jan 3-5)
 
 **why**: many users have multiple ATProto identities (personal, artist, label). forcing re-authentication to switch was friction that discouraged uploads from secondary accounts.
@@ -407,4 +423,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-09.
+this is a living document. last updated 2026-01-11.

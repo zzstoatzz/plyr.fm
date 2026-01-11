@@ -76,16 +76,43 @@ total max connections = `pool_size` + `max_overflow` = 15 by default
 
 ## Neon serverless considerations
 
-plyr.fm uses Neon PostgreSQL, which scales to zero after periods of inactivity. this introduces **cold start latency** that affects connection pooling:
+plyr.fm uses Neon PostgreSQL, which can scale to zero after periods of inactivity. this introduces **cold start latency** that affects connection pooling.
 
 ### the cold start problem
 
 1. site is idle for several minutes → Neon scales down
-2. first request arrives → Neon needs 5-10s to wake up
+2. first request arrives → Neon needs 500ms-10s to wake up
 3. if pool_size is too small, all connections hang waiting for Neon
 4. new requests can't get connections → 500 errors
 
-### how we mitigate this
+### production solution: disable scale-to-zero
+
+**for production workloads, disable scale-to-zero in Neon console.** this is the recommended approach per [Neon's production best practices](https://neon.com/blog/6-best-practices-for-running-neon-in-production).
+
+**current configuration (Jan 2026):**
+
+| project | scale-to-zero | reason |
+|---------|---------------|--------|
+| plyr-prd | **disabled** | customer-facing, no cold starts |
+| plyr-stg | enabled | ok to have cold starts on staging |
+| plyr-dev | enabled | ok to have cold starts on dev |
+
+**to verify via Neon MCP:**
+
+```
+mcp__neon__list_branch_computes({ "projectId": "cold-butterfly-11920742" })
+```
+
+check `suspend_timeout_seconds` on the compute:
+- `-1` = scale-to-zero disabled (never suspend)
+- `0` = scale-to-zero enabled (uses default 5 min timeout)
+- `>0` = custom suspend timeout in seconds
+
+**to change:** Neon Console → Project → Computes → Edit → Scale to zero toggle
+
+### fallback mitigations (if scale-to-zero is enabled)
+
+if you must keep scale-to-zero enabled, these settings help survive cold starts:
 
 **larger connection pool (pool_size=10, max_overflow=5):**
 - allows 15 concurrent requests to wait for Neon wake-up
@@ -96,14 +123,16 @@ plyr.fm uses Neon PostgreSQL, which scales to zero after periods of inactivity. 
 - short enough to fail fast on true database outages
 
 **queue listener heartbeat:**
-- background task pings database every 5s
+- background task pings database every 5s via separate asyncpg connection
 - detects connection death before user requests fail
 - triggers reconnection with exponential backoff
+- note: this keeps the queue listener's connection warm, not the SQLAlchemy pool
 
 ### incident history
 
 - **2025-11-17**: first pool exhaustion outage - queue listener hung indefinitely on slow database. fix: added 15s timeout to asyncpg.connect() in queue service.
 - **2025-12-02**: cold start recurrence - 5 minute idle period caused Neon to scale down. first 5 requests after wake-up hung for 3-5 minutes each, exhausting pool. fix: increased pool_size to 10, max_overflow to 5, connection_timeout to 10s.
+- **2026-01-11**: disabled scale-to-zero on plyr-prd to eliminate cold starts entirely. kept enabled on dev/staging where cold starts are acceptable.
 
 ## production best practices
 
