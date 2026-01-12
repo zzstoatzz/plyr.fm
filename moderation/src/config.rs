@@ -17,7 +17,8 @@ pub struct Config {
     pub claude_api_key: Option<String>,
     /// Claude model to use (default: claude-sonnet-4-5-20250929)
     pub claude_model: String,
-    /// Minimum AuDD score to flag as potential copyright violation (default: 85)
+    /// Minimum percentage of matches that must belong to a single song to flag (default: 30)
+    /// AudD doesn't return confidence scores, so we use match frequency as a proxy.
     pub copyright_score_threshold: i32,
 }
 
@@ -44,7 +45,7 @@ impl Config {
             copyright_score_threshold: env::var("MODERATION_COPYRIGHT_SCORE_THRESHOLD")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(85),
+                .unwrap_or(30),
         })
     }
 
