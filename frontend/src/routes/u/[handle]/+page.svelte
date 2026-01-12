@@ -81,6 +81,37 @@ $effect(() => {
 	// track which artist we've loaded data for to detect navigation
 	let loadedForDid = $state<string | null>(null);
 
+	// track avatar load errors for fallback
+	let avatarError = $state(false);
+	let refreshedAvatarUrl = $state<string | null>(null);
+	const avatarUrl = $derived(refreshedAvatarUrl || artist?.avatar_url);
+
+	/**
+	 * called when avatar image fails to load (404/broken URL).
+	 * triggers a backend refresh from Bluesky and updates the display.
+	 */
+	async function handleAvatarError() {
+		avatarError = true;
+
+		// don't retry if we've already refreshed
+		if (refreshedAvatarUrl !== null || !artist?.did) return;
+
+		try {
+			const response = await fetch(`${API_URL}/artists/${artist.did}/refresh-avatar`, {
+				method: 'POST'
+			});
+			if (response.ok) {
+				const data = await response.json();
+				if (data.avatar_url) {
+					refreshedAvatarUrl = data.avatar_url;
+					avatarError = false; // try loading the new URL
+				}
+			}
+		} catch (_e) {
+			// silently fail - placeholder is already showing
+		}
+	}
+
 	async function handleLogout() {
 		await auth.logout();
 		window.location.href = '/';
@@ -221,6 +252,8 @@ $effect(() => {
 			isSupporter = false;
 			supporterCount = null;
 			supporters = [];
+			avatarError = false;
+			refreshedAvatarUrl = null;
 
 			// sync tracks and pagination from server data
 			tracks = data.tracks ?? [];
@@ -382,10 +415,22 @@ $effect(() => {
 
 	<main>
 		<section class="artist-header">
-			{#if artist.avatar_url}
-				<SensitiveImage src={artist.avatar_url}>
-					<img src={artist.avatar_url} alt={artist.display_name} class="artist-avatar" />
+			{#if avatarUrl && !avatarError}
+				<SensitiveImage src={avatarUrl}>
+					<img
+						src={avatarUrl}
+						alt={artist.display_name}
+						class="artist-avatar"
+						onerror={handleAvatarError}
+					/>
 				</SensitiveImage>
+			{:else}
+				<div class="artist-avatar-placeholder">
+					<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
+						<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+					</svg>
+				</div>
 			{/if}
 			<div class="artist-details">
 				<div class="artist-info">
@@ -744,6 +789,23 @@ $effect(() => {
 		border-radius: var(--radius-full);
 		object-fit: cover;
 		border: 3px solid var(--border-default);
+	}
+
+	.artist-avatar-placeholder {
+		width: 120px;
+		height: 120px;
+		border-radius: var(--radius-full);
+		border: 3px solid var(--border-default);
+		background: var(--bg-tertiary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-muted);
+	}
+
+	.artist-avatar-placeholder svg {
+		width: 48px;
+		height: 48px;
 	}
 
 	.artist-info h1 {
@@ -1224,6 +1286,16 @@ $effect(() => {
 		.artist-avatar {
 			width: 100px;
 			height: 100px;
+		}
+
+		.artist-avatar-placeholder {
+			width: 100px;
+			height: 100px;
+		}
+
+		.artist-avatar-placeholder svg {
+			width: 40px;
+			height: 40px;
 		}
 
 		.artist-info h1 {

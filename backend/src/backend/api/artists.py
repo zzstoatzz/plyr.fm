@@ -345,3 +345,37 @@ async def get_my_analytics(
     returns zeros if artist has no tracks - no need to verify artist exists.
     """
     return await get_artist_analytics(auth_session.did, db)
+
+
+class RefreshAvatarResponse(BaseModel):
+    """response from avatar refresh."""
+
+    avatar_url: str | None
+
+
+@router.post("/{did}/refresh-avatar")
+async def refresh_artist_avatar(
+    did: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> RefreshAvatarResponse:
+    """refresh an artist's avatar from Bluesky (public endpoint).
+
+    called when the frontend detects a stale/broken avatar URL (404).
+    fetches the current avatar from Bluesky and updates the database.
+    """
+    result = await db.execute(select(Artist).where(Artist.did == did))
+    artist = result.scalar_one_or_none()
+    if not artist:
+        raise HTTPException(status_code=404, detail="artist not found")
+
+    # fetch fresh avatar from Bluesky
+    fresh_avatar = await fetch_user_avatar(did)
+
+    # update database if changed
+    if fresh_avatar != artist.avatar_url:
+        artist.avatar_url = fresh_avatar
+        artist.updated_at = datetime.now(UTC)
+        await db.commit()
+        logger.info(f"refreshed avatar for {did}: {fresh_avatar}")
+
+    return RefreshAvatarResponse(avatar_url=fresh_avatar)
