@@ -238,7 +238,7 @@
 		justify-content: center;
 		overflow-x: auto;
 		max-width: 240px;
-		padding: 0.125rem 0;
+		padding: 0.5rem 0 0.125rem 0;
 		scrollbar-width: none;
 	}
 
