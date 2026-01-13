@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { API_URL } from '$lib/config';
-	import { getLikers, setLikers, type LikerData } from '$lib/tooltip-cache.svelte';
+	import { getCommenters, setCommenters, type CommenterData } from '$lib/tooltip-cache.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
 
 	interface Props {
 		trackId: number;
-		likeCount: number;
+		commentCount: number;
 		onMouseEnter?: () => void;
 		onMouseLeave?: () => void;
 	}
 
-	let { trackId, likeCount, onMouseEnter, onMouseLeave }: Props = $props();
+	let { trackId, commentCount, onMouseEnter, onMouseLeave }: Props = $props();
 
-	let likers = $state<LikerData[]>([]);
+	let commenters = $state<CommenterData[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let tooltipElement: HTMLDivElement | null = $state(null);
@@ -30,59 +30,61 @@
 	});
 
 	$effect(() => {
-		if (likeCount === 0) {
+		if (commentCount === 0) {
 			loading = false;
 			return;
 		}
 
 		// check cache first
-		const cached = getLikers(trackId);
+		const cached = getCommenters(trackId);
 		if (cached) {
-			likers = cached;
+			commenters = cached;
 			loading = false;
 			return;
 		}
 
-		const fetchLikers = async () => {
+		const fetchCommenters = async () => {
 			try {
-				const url = `${API_URL}/tracks/${trackId}/likes`;
+				const url = `${API_URL}/tracks/${trackId}/comments`;
 				const response = await fetch(url);
 
 				if (!response.ok) {
-					throw new Error(`failed to fetch likers: ${response.status}`);
+					throw new Error(`failed to fetch comments: ${response.status}`);
 				}
 
 				const data = await response.json();
-				const users = data.users || [];
-				likers = users;
-				setLikers(trackId, users);
+				const comments = data.comments || [];
+
+				// extract unique commenters by did
+				const uniqueMap = new Map<string, CommenterData>();
+				for (const comment of comments) {
+					if (!uniqueMap.has(comment.user_did)) {
+						uniqueMap.set(comment.user_did, {
+							did: comment.user_did,
+							handle: comment.user_handle,
+							display_name: comment.user_display_name,
+							avatar_url: comment.user_avatar_url
+						});
+					}
+				}
+				const uniqueCommenters = Array.from(uniqueMap.values());
+				commenters = uniqueCommenters;
+				setCommenters(trackId, uniqueCommenters);
 			} catch (err) {
 				error = 'failed to load';
-				console.error('error fetching likers:', err);
+				console.error('error fetching commenters:', err);
 			} finally {
 				loading = false;
 			}
 		};
 
-		fetchLikers();
+		fetchCommenters();
 	});
-
-	function formatTime(isoString: string): string {
-		const date = new Date(isoString);
-		const now = new Date();
-		const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-		if (seconds < 60) return 'just now';
-		if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-		if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-		if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-		return `${Math.floor(seconds / 604800)}w ago`;
-	}
 </script>
 
 <div
 	bind:this={tooltipElement}
-	class="likers-tooltip"
+	class="commenters-tooltip"
 	class:position-below={positionBelow}
 	role="tooltip"
 	onmouseenter={onMouseEnter}
@@ -98,31 +100,31 @@
 		</div>
 	{:else if error}
 		<div class="error">{error}</div>
-	{:else if likers.length > 0}
-		<div class="likers-avatars">
-			{#each likers as liker (liker.did)}
+	{:else if commenters.length > 0}
+		<div class="commenters-avatars">
+			{#each commenters as commenter (commenter.did)}
 				<a
-					href="/u/{liker.handle}/liked"
-					class="liker-circle"
-					title="{liker.display_name} (@{liker.handle}) • {formatTime(liker.liked_at)}"
+					href="/u/{commenter.handle}"
+					class="commenter-circle"
+					title="{commenter.display_name || commenter.handle} (@{commenter.handle})"
 				>
-					{#if liker.avatar_url}
-						<SensitiveImage src={liker.avatar_url} compact>
-							<img src={liker.avatar_url} alt="" />
+					{#if commenter.avatar_url}
+						<SensitiveImage src={commenter.avatar_url} compact>
+							<img src={commenter.avatar_url} alt="" />
 						</SensitiveImage>
 					{:else}
-						<span>{liker.display_name.charAt(0).toUpperCase()}</span>
+						<span>{(commenter.display_name || commenter.handle).charAt(0).toUpperCase()}</span>
 					{/if}
 				</a>
 			{/each}
 		</div>
 	{:else}
-		<div class="empty">be the first to like this</div>
+		<div class="empty">no comments yet</div>
 	{/if}
 </div>
 
 <style>
-	.likers-tooltip {
+	.commenters-tooltip {
 		position: absolute;
 		bottom: 100%;
 		left: 50%;
@@ -139,7 +141,7 @@
 		pointer-events: auto;
 	}
 
-	.likers-tooltip.position-below {
+	.commenters-tooltip.position-below {
 		bottom: auto;
 		top: 100%;
 		margin-bottom: 0;
@@ -191,7 +193,7 @@
 		100% { background-position: -200% 0; }
 	}
 
-	.likers-avatars {
+	.commenters-avatars {
 		display: flex;
 		justify-content: center;
 		overflow-x: auto;
@@ -200,11 +202,11 @@
 		scrollbar-width: none;
 	}
 
-	.likers-avatars::-webkit-scrollbar {
+	.commenters-avatars::-webkit-scrollbar {
 		display: none;
 	}
 
-	.liker-circle {
+	.commenter-circle {
 		width: 32px;
 		height: 32px;
 		border-radius: var(--radius-full);
@@ -223,22 +225,22 @@
 		flex-shrink: 0;
 	}
 
-	.liker-circle:first-child {
+	.commenter-circle:first-child {
 		margin-left: 0;
 	}
 
-	.liker-circle:hover {
+	.commenter-circle:hover {
 		transform: translateY(-3px) scale(1.2);
 		z-index: 10;
 	}
 
-	.liker-circle img {
+	.commenter-circle img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 	}
 
-	.liker-circle span {
+	.commenter-circle span {
 		font-size: var(--text-xs);
 		font-weight: 600;
 		color: var(--text-secondary);
@@ -248,7 +250,7 @@
 		.avatar-skeleton {
 			animation: none;
 		}
-		.liker-circle {
+		.commenter-circle {
 			transition: none;
 		}
 	}

@@ -2,6 +2,7 @@ import { API_URL } from './config';
 import type { Track } from './types';
 import { preferences } from './preferences.svelte';
 import { downloadAudio, isDownloaded } from './storage';
+import { invalidateLikers } from './tooltip-cache.svelte';
 
 interface TracksApiResponse {
 	tracks: Track[];
@@ -145,8 +146,9 @@ export async function likeTrack(trackId: number, fileId?: string, gated?: boolea
 			throw new Error(`failed to like track: ${response.statusText}`);
 		}
 
-		// invalidate cache so next fetch gets updated like status
+		// invalidate caches so next fetch gets updated like status
 		tracksCache.invalidate();
+		invalidateLikers(trackId);
 
 		// auto-download if preference is enabled and file_id provided
 		// skip download only if track is gated AND viewer lacks access (gated === true)
@@ -182,8 +184,9 @@ export async function unlikeTrack(trackId: number): Promise<boolean> {
 			throw new Error(`failed to unlike track: ${response.statusText}`);
 		}
 
-		// invalidate cache so next fetch gets updated like status
+		// invalidate caches so next fetch gets updated like status
 		tracksCache.invalidate();
+		invalidateLikers(trackId);
 
 		return true;
 	} catch (e) {

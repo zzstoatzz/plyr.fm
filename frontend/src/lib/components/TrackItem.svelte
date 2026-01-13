@@ -3,6 +3,7 @@
 	import AddToMenu from './AddToMenu.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
 	import LikersTooltip from './LikersTooltip.svelte';
+	import CommentersTooltip from './CommentersTooltip.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
@@ -38,6 +39,7 @@
 	const imageFetchPriority = index < 2 ? 'high' : undefined;
 
 	let showLikersTooltip = $state(false);
+	let showCommentersTooltip = $state(false);
 	// use overridable $derived (Svelte 5.25+) - syncs with prop but can be overridden for optimistic UI
 	let likeCount = $derived(track.like_count || 0);
 	let commentCount = $derived(track.comment_count || 0);
@@ -112,6 +114,32 @@
 		}
 		if (event.key === 'Escape') {
 			showLikersTooltip = false;
+		}
+	}
+
+	let commentersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function handleCommentsMouseEnter() {
+		if (commentersTooltipTimeout) {
+			clearTimeout(commentersTooltipTimeout);
+			commentersTooltipTimeout = null;
+		}
+		showCommentersTooltip = true;
+	}
+
+	function handleCommentsMouseLeave() {
+		commentersTooltipTimeout = setTimeout(() => {
+			showCommentersTooltip = false;
+			commentersTooltipTimeout = null;
+		}, 150);
+	}
+
+	function handleCommentsKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter' || event.key === ' ') {
+			// don't prevent default - let the link navigate
+		}
+		if (event.key === 'Escape') {
+			showCommentersTooltip = false;
 		}
 	}
 
@@ -282,16 +310,37 @@
 				{/if}
 				{#if commentCount > 0}
 					<span class="meta-separator">•</span>
-					<a
-						href="/track/{track.id}"
-						class="comments"
-						title="view comments"
+					<span
+						class="comments-wrapper"
+						role="button"
+						tabindex="0"
+						aria-label="{commentCount} {commentCount === 1 ? 'comment' : 'comments'} (focus to view participants)"
+						aria-expanded={showCommentersTooltip}
+						onmouseenter={handleCommentsMouseEnter}
+						onmouseleave={handleCommentsMouseLeave}
+						onfocus={handleCommentsMouseEnter}
+						onblur={handleCommentsMouseLeave}
+						onkeydown={handleCommentsKeydown}
 					>
-						<svg class="comment-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-							<path d="M2 3h12v8H5l-3 3V3z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
-						</svg>
-						<span class="comment-count">{commentCount}</span>
-					</a>
+						<a
+							href="/track/{track.id}"
+							class="comments"
+							title="view comments"
+						>
+							<svg class="comment-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<path d="M2 3h12v8H5l-3 3V3z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
+							</svg>
+							<span class="comment-count">{commentCount}</span>
+						</a>
+						{#if showCommentersTooltip}
+							<CommentersTooltip
+								trackId={track.id}
+								commentCount={commentCount}
+								onMouseEnter={handleCommentsMouseEnter}
+								onMouseLeave={handleCommentsMouseLeave}
+							/>
+						{/if}
+					</span>
 				{/if}
 			</div>
 		</div>
@@ -722,6 +771,20 @@
 
 	.likes:hover {
 		color: var(--accent);
+	}
+
+	.comments-wrapper {
+		position: relative;
+		cursor: help;
+	}
+
+	.comments-wrapper:hover .comments,
+	.comments-wrapper:focus .comments {
+		color: var(--accent);
+	}
+
+	.comments-wrapper:focus {
+		outline: none;
 	}
 
 	.comments {
