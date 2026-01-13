@@ -272,7 +272,7 @@
 	}
 
 	.commenter-circle:hover {
-		transform: translateY(-3px) scale(1.2);
+		transform: translateY(-2px) scale(1.08);
 		z-index: 10;
 	}
 
