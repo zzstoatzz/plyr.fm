@@ -11,6 +11,7 @@
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import TagEffects from '$lib/components/TagEffects.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import LikersTooltip from '$lib/components/LikersTooltip.svelte';
 	import { checkImageSensitive } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -55,6 +56,35 @@
 	let isCurrentlyPlaying = $derived(
 		player.currentTrack?.id === track.id && !player.paused
 	);
+
+	// likers tooltip state
+	let showLikersTooltip = $state(false);
+	let likersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function handleLikesMouseEnter() {
+		if (likersTooltipTimeout) {
+			clearTimeout(likersTooltipTimeout);
+			likersTooltipTimeout = null;
+		}
+		showLikersTooltip = true;
+	}
+
+	function handleLikesMouseLeave() {
+		likersTooltipTimeout = setTimeout(() => {
+			showLikersTooltip = false;
+			likersTooltipTimeout = null;
+		}, 150);
+	}
+
+	function handleLikesKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			showLikersTooltip = true;
+		}
+		if (event.key === 'Escape') {
+			showLikersTooltip = false;
+		}
+	}
 
 	// URL regex pattern for linkifying comment text
 	const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
@@ -538,7 +568,28 @@ $effect(() => {
 						<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
 						{#if track.like_count && track.like_count > 0}
 							<span class="separator">•</span>
-							<span class="likes">{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}</span>
+							<span
+								class="likes"
+								role="button"
+								tabindex="0"
+								aria-label={`${track.like_count} ${track.like_count === 1 ? 'like' : 'likes'} (focus to view users)`}
+								aria-expanded={showLikersTooltip}
+								onmouseenter={handleLikesMouseEnter}
+								onmouseleave={handleLikesMouseLeave}
+								onfocus={handleLikesMouseEnter}
+								onblur={handleLikesMouseLeave}
+								onkeydown={handleLikesKeydown}
+							>
+								{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}
+								{#if showLikersTooltip}
+									<LikersTooltip
+										trackId={track.id}
+										likeCount={track.like_count}
+										onMouseEnter={handleLikesMouseEnter}
+										onMouseLeave={handleLikesMouseLeave}
+									/>
+								{/if}
+							</span>
 						{/if}
 					</div>
 
@@ -911,6 +962,22 @@ $effect(() => {
 
 	.track-stats .separator {
 		font-size: var(--text-xs);
+	}
+
+	.track-stats .likes {
+		position: relative;
+		cursor: pointer;
+		padding: 0.125rem 0.25rem;
+		margin: -0.125rem -0.25rem;
+		border-radius: var(--radius-sm);
+		transition: background 0.15s, color 0.15s;
+	}
+
+	.track-stats .likes:hover,
+	.track-stats .likes:focus {
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		color: var(--accent);
+		outline: none;
 	}
 
 	.track-tags {

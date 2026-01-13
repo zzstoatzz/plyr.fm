@@ -1,24 +1,7 @@
-import { browser } from '$app/environment';
-import { error } from '@sveltejs/kit';
-import { fetchUserLikes, type UserLikesResponse } from '$lib/tracks.svelte';
+import { redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 
-export interface PageData {
-	userLikes: UserLikesResponse;
-}
-
-export const ssr = false;
-
+// redirect old /liked/[handle] URLs to new /u/[handle]/liked
 export const load: PageLoad = async ({ params }) => {
-	if (!browser) {
-		return { userLikes: null };
-	}
-
-	const userLikes = await fetchUserLikes(params.handle);
-
-	if (!userLikes) {
-		throw error(404, 'user not found');
-	}
-
-	return { userLikes };
+	throw redirect(301, `/u/${params.handle}/liked`);
 };
