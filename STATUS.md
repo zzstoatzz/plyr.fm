@@ -47,6 +47,28 @@ plyr.fm should become:
 
 ### January 2026
 
+#### avatar refresh and tooltip polish (PRs #750-752, Jan 13)
+
+**avatar refresh from anywhere** (PR #751):
+- previously, stale avatar URLs were only fixed when visiting the artist detail page
+- now any broken avatar triggers a background refresh from Bluesky
+- shared `avatar-refresh.svelte.ts` provides global cache and request deduplication
+- works from: track items, likers tooltip, commenters tooltip, profile page
+
+**interactive tooltips** (PR #750):
+- hovering on like count shows avatar circles of users who liked
+- hovering on comment count shows avatar circles of commenters
+- lazy-loaded with 5-minute cache, invalidated when likes/comments change
+- elegant centered layout with horizontal scroll when needed
+
+**UX polish** (PR #752):
+- added prettier config with `useTabs: true` to match existing style
+- reduced avatar hover effect intensity (scale 1.2 → 1.08)
+- fixed avatar hover clipping at tooltip edge (added top padding)
+- track title now links to detail page (color change on hover)
+
+---
+
 #### Neon cold start fix (Jan 11)
 
 **why**: first requests after idle periods would fail with 500 errors due to Neon serverless scaling to zero after 5 minutes of inactivity. previous mitigations (larger pool, longer timeouts) helped but didn't eliminate the problem.

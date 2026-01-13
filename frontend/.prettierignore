@@ -1,0 +1,11 @@
+# Package manager
+node_modules
+bun.lockb
+
+# Build output
+.svelte-kit
+build
+
+# Generated
+.env
+.env.*

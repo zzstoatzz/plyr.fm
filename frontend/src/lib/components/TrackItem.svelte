@@ -242,7 +242,7 @@
 			{/if}
 		</div>
 		<div class="track-info">
-			<div class="track-title">{track.title}</div>
+			<a href="/track/{track.id}" class="track-title">{track.title}</a>
 			<div class="track-metadata">
 				{#if (!hideArtist) || (track.features && track.features.length > 0)}
 					<div class="artist-line"
@@ -600,6 +600,12 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		text-decoration: none;
+		transition: color 0.15s;
+	}
+
+	.track-title:hover {
+		color: var(--accent);
 	}
 
 	.track-metadata {

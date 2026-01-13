@@ -240,7 +240,7 @@
 		justify-content: center;
 		overflow-x: auto;
 		max-width: 240px;
-		padding: 0.125rem 0;
+		padding: 0.5rem 0 0.125rem 0;
 		scrollbar-width: none;
 	}
 
@@ -272,7 +272,7 @@
 	}
 
 	.commenter-circle:hover {
-		transform: translateY(-3px) scale(1.2);
+		transform: translateY(-2px) scale(1.08);
 		z-index: 10;
 	}
 
