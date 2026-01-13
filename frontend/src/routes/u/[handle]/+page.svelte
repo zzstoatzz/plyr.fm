@@ -15,6 +15,11 @@
 	import { queue } from '$lib/queue.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { fetchLikedTracks, fetchUserLikes } from '$lib/tracks.svelte';
+	import {
+		getRefreshedAvatar,
+		triggerAvatarRefresh,
+		hasAttemptedRefresh
+	} from '$lib/avatar-refresh.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { getAtprotofansProfile, getAtprotofansSupporters, type Supporter } from '$lib/atprotofans';
 	import type { PageData } from './$types';
@@ -83,32 +88,21 @@ $effect(() => {
 
 	// track avatar load errors for fallback
 	let avatarError = $state(false);
-	let refreshedAvatarUrl = $state<string | null>(null);
-	const avatarUrl = $derived(refreshedAvatarUrl || artist?.avatar_url);
+
+	// get refreshed avatar from global cache (may have been fixed elsewhere)
+	let refreshedAvatarUrl = $derived(getRefreshedAvatar(artist?.did));
+	const avatarUrl = $derived(refreshedAvatarUrl ?? artist?.avatar_url);
 
 	/**
 	 * called when avatar image fails to load (404/broken URL).
 	 * triggers a backend refresh from Bluesky and updates the display.
 	 */
-	async function handleAvatarError() {
+	function handleAvatarError() {
 		avatarError = true;
 
-		// don't retry if we've already refreshed
-		if (refreshedAvatarUrl !== null || !artist?.did) return;
-
-		try {
-			const response = await fetch(`${API_URL}/artists/${artist.did}/refresh-avatar`, {
-				method: 'POST'
-			});
-			if (response.ok) {
-				const data = await response.json();
-				if (data.avatar_url) {
-					refreshedAvatarUrl = data.avatar_url;
-					avatarError = false; // try loading the new URL
-				}
-			}
-		} catch (_e) {
-			// silently fail - placeholder is already showing
+		// trigger refresh via shared system (handles deduplication)
+		if (artist?.did && !hasAttemptedRefresh(artist.did)) {
+			triggerAvatarRefresh(artist.did);
 		}
 	}
 
@@ -253,7 +247,6 @@ $effect(() => {
 			supporterCount = null;
 			supporters = [];
 			avatarError = false;
-			refreshedAvatarUrl = null;
 
 			// sync tracks and pagination from server data
 			tracks = data.tracks ?? [];

@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { API_URL } from '$lib/config';
 	import { getLikers, setLikers, type LikerData } from '$lib/tooltip-cache.svelte';
+	import {
+		getRefreshedAvatar,
+		triggerAvatarRefresh,
+		hasAttemptedRefresh
+	} from '$lib/avatar-refresh.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
 
 	interface Props {
@@ -17,6 +22,37 @@
 	let error = $state<string | null>(null);
 	let tooltipElement: HTMLDivElement | null = $state(null);
 	let positionBelow = $state(false);
+
+	// track which avatars have errored (by DID)
+	let avatarErrors = $state<Set<string>>(new Set());
+
+	/**
+	 * get the display URL for a liker's avatar.
+	 * prefers refreshed URL from global cache, falls back to original.
+	 */
+	function getDisplayUrl(liker: LikerData): string | null {
+		const refreshed = getRefreshedAvatar(liker.did);
+		return refreshed ?? liker.avatar_url;
+	}
+
+	/**
+	 * handle avatar load error - show fallback and trigger refresh.
+	 */
+	function handleAvatarError(did: string) {
+		avatarErrors = new Set([...avatarErrors, did]);
+
+		if (!hasAttemptedRefresh(did)) {
+			triggerAvatarRefresh(did);
+		}
+	}
+
+	/**
+	 * check if avatar should show fallback.
+	 */
+	function shouldShowFallback(liker: LikerData): boolean {
+		const url = getDisplayUrl(liker);
+		return !url || avatarErrors.has(liker.did);
+	}
 
 	// check if tooltip should flip below based on viewport position
 	$effect(() => {
@@ -101,17 +137,23 @@
 	{:else if likers.length > 0}
 		<div class="likers-avatars">
 			{#each likers as liker (liker.did)}
+				{@const displayUrl = getDisplayUrl(liker)}
+				{@const showFallback = shouldShowFallback(liker)}
 				<a
 					href="/u/{liker.handle}/liked"
 					class="liker-circle"
 					title="{liker.display_name} (@{liker.handle}) • {formatTime(liker.liked_at)}"
 				>
-					{#if liker.avatar_url}
-						<SensitiveImage src={liker.avatar_url} compact>
-							<img src={liker.avatar_url} alt="" />
+					{#if displayUrl && !showFallback}
+						<SensitiveImage src={displayUrl} compact>
+							<img
+								src={displayUrl}
+								alt=""
+								onerror={() => handleAvatarError(liker.did)}
+							/>
 						</SensitiveImage>
 					{:else}
-						<span>{liker.display_name.charAt(0).toUpperCase()}</span>
+						<span>{(liker.display_name || liker.handle).charAt(0).toUpperCase()}</span>
 					{/if}
 				</a>
 			{/each}
