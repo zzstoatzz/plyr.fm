@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { API_URL } from '$lib/config';
 	import { getCommenters, setCommenters, type CommenterData } from '$lib/tooltip-cache.svelte';
+	import {
+		getRefreshedAvatar,
+		triggerAvatarRefresh,
+		hasAttemptedRefresh
+	} from '$lib/avatar-refresh.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
 
 	interface Props {
@@ -17,6 +22,37 @@
 	let error = $state<string | null>(null);
 	let tooltipElement: HTMLDivElement | null = $state(null);
 	let positionBelow = $state(false);
+
+	// track which avatars have errored (by DID)
+	let avatarErrors = $state<Set<string>>(new Set());
+
+	/**
+	 * get the display URL for a commenter's avatar.
+	 * prefers refreshed URL from global cache, falls back to original.
+	 */
+	function getDisplayUrl(commenter: CommenterData): string | null {
+		const refreshed = getRefreshedAvatar(commenter.did);
+		return refreshed ?? commenter.avatar_url;
+	}
+
+	/**
+	 * handle avatar load error - show fallback and trigger refresh.
+	 */
+	function handleAvatarError(did: string) {
+		avatarErrors = new Set([...avatarErrors, did]);
+
+		if (!hasAttemptedRefresh(did)) {
+			triggerAvatarRefresh(did);
+		}
+	}
+
+	/**
+	 * check if avatar should show fallback.
+	 */
+	function shouldShowFallback(commenter: CommenterData): boolean {
+		const url = getDisplayUrl(commenter);
+		return !url || avatarErrors.has(commenter.did);
+	}
 
 	// check if tooltip should flip below based on viewport position
 	$effect(() => {
@@ -103,14 +139,20 @@
 	{:else if commenters.length > 0}
 		<div class="commenters-avatars">
 			{#each commenters as commenter (commenter.did)}
+				{@const displayUrl = getDisplayUrl(commenter)}
+				{@const showFallback = shouldShowFallback(commenter)}
 				<a
 					href="/u/{commenter.handle}"
 					class="commenter-circle"
 					title="{commenter.display_name || commenter.handle} (@{commenter.handle})"
 				>
-					{#if commenter.avatar_url}
-						<SensitiveImage src={commenter.avatar_url} compact>
-							<img src={commenter.avatar_url} alt="" />
+					{#if displayUrl && !showFallback}
+						<SensitiveImage src={displayUrl} compact>
+							<img
+								src={displayUrl}
+								alt=""
+								onerror={() => handleAvatarError(commenter.did)}
+							/>
 						</SensitiveImage>
 					{:else}
 						<span>{(commenter.display_name || commenter.handle).charAt(0).toUpperCase()}</span>

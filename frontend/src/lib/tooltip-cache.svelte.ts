@@ -19,8 +19,8 @@ const commentersCache = new Map<number, CacheEntry<CommenterData[]>>();
 export interface LikerData {
 	did: string;
 	handle: string;
-	display_name: string;
-	avatar_url?: string;
+	display_name: string | null;
+	avatar_url: string | null;
 	liked_at: string;
 }
 

@@ -9,6 +9,11 @@
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
+	import {
+		getRefreshedAvatar,
+		triggerAvatarRefresh,
+		hasAttemptedRefresh
+	} from '$lib/avatar-refresh.svelte';
 
 	interface Props {
 		track: Track;
@@ -49,6 +54,10 @@
 	let tagsExpanded = $state(false);
 	let prevTrackId: number | undefined;
 
+	// get refreshed avatar URL if available
+	let refreshedAvatarUrl = $derived(getRefreshedAvatar(track.artist_did));
+	let artistAvatarUrl = $derived(refreshedAvatarUrl ?? track.artist_avatar_url);
+
 	// reset local UI state when track changes (component may be recycled)
 	// using $effect.pre so state is ready before render
 	$effect.pre(() => {
@@ -59,6 +68,16 @@
 		}
 		prevTrackId = track.id;
 	});
+
+	/**
+	 * handle avatar error - show placeholder and trigger background refresh.
+	 */
+	function handleAvatarError() {
+		avatarError = true;
+		if (track.artist_did && !hasAttemptedRefresh(track.artist_did)) {
+			triggerAvatarRefresh(track.artist_did);
+		}
+	}
 
 	// limit visible tags to prevent vertical sprawl (max 2 shown)
 	const MAX_VISIBLE_TAGS = 2;
@@ -189,20 +208,20 @@
 						/>
 					</div>
 				</SensitiveImage>
-			{:else if track.artist_avatar_url && !avatarError}
-				<SensitiveImage src={track.artist_avatar_url}>
+			{:else if artistAvatarUrl && !avatarError}
+				<SensitiveImage src={artistAvatarUrl}>
 					<a
 						href="/u/{track.artist_handle}"
 						class="track-avatar"
 					>
 						<img
-							src={track.artist_avatar_url}
+							src={artistAvatarUrl}
 							alt={track.artist}
 							width="48"
 							height="48"
 							loading={imageLoading}
 							fetchpriority={imageFetchPriority}
-							onerror={() => avatarError = true}
+							onerror={handleAvatarError}
 						/>
 					</a>
 				</SensitiveImage>
