@@ -602,6 +602,8 @@
 		text-overflow: ellipsis;
 		text-decoration: none;
 		transition: color 0.15s;
+		width: fit-content;
+		max-width: 100%;
 	}
 
 	.track-title:hover {
