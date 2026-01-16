@@ -1,16 +1,19 @@
 """tests for teal.fm scrobbling integration."""
 
+from datetime import UTC, datetime
+
 from backend._internal.atproto.teal import (
     build_teal_play_record,
     build_teal_status_record,
 )
+from backend._internal.atproto.tid import datetime_to_tid
 from backend.config import TealSettings, settings
 
 
 class TestBuildTealPlayRecord:
     """tests for build_teal_play_record."""
 
-    def test_builds_minimal_record(self):
+    def test_builds_minimal_record(self) -> None:
         """should build record with required fields only."""
         record = build_teal_play_record(
             track_name="Test Track",
@@ -24,7 +27,7 @@ class TestBuildTealPlayRecord:
         assert record["submissionClientAgent"] == "plyr.fm/1.0"
         assert "playedTime" in record
 
-    def test_includes_optional_fields(self):
+    def test_includes_optional_fields(self) -> None:
         """should include optional fields when provided."""
         record = build_teal_play_record(
             track_name="Test Track",
@@ -37,6 +40,37 @@ class TestBuildTealPlayRecord:
         assert record["duration"] == 180
         assert record["releaseName"] == "Test Album"
         assert record["originUrl"] == "https://plyr.fm/track/123"
+
+    def test_uses_provided_played_time(self) -> None:
+        """should use provided played_time instead of now."""
+        specific_time = datetime(2026, 1, 15, 12, 30, 0, tzinfo=UTC)
+        record = build_teal_play_record(
+            track_name="Test Track",
+            artist_name="Test Artist",
+            played_time=specific_time,
+        )
+
+        assert record["playedTime"] == "2026-01-15T12:30:00Z"
+
+    def test_deterministic_tid_for_same_played_time(self) -> None:
+        """same played_time should generate same TID for idempotent upserts."""
+        played_time = datetime(2026, 1, 15, 12, 30, 0, tzinfo=UTC)
+
+        tid1 = datetime_to_tid(played_time)
+        tid2 = datetime_to_tid(played_time)
+
+        assert tid1 == tid2
+        assert len(tid1) == 13  # TIDs are 13 chars
+
+    def test_different_played_times_generate_different_tids(self) -> None:
+        """different played_times should generate different TIDs."""
+        time1 = datetime(2026, 1, 15, 12, 30, 0, tzinfo=UTC)
+        time2 = datetime(2026, 1, 15, 12, 30, 1, tzinfo=UTC)  # 1 second later
+
+        tid1 = datetime_to_tid(time1)
+        tid2 = datetime_to_tid(time2)
+
+        assert tid1 != tid2
 
 
 class TestBuildTealStatusRecord:
