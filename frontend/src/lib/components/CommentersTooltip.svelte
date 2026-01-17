@@ -237,7 +237,9 @@
 
 	.commenters-avatars {
 		display: flex;
-		justify-content: center;
+		/* start from left so most recent (leftmost) is always visible */
+		/* scroll right to see older commenters */
+		justify-content: flex-start;
 		overflow-x: auto;
 		max-width: 240px;
 		padding: 0.5rem 0 0.125rem 0;
