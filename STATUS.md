@@ -47,6 +47,30 @@ plyr.fm should become:
 
 ### January 2026
 
+#### content gating research (Jan 18)
+
+researched ATProtoFans architecture and JSONLogic rule evaluation. documented findings in `docs/content-gating-roadmap.md`:
+- current ATProtoFans records and API (supporter, supporterProof, brokerProof, terms)
+- the gap: terms exist but aren't exposed via validateSupporter
+- how magazi uses datalogic-rs for flexible rule evaluation
+- open questions about upcoming metadata extensions
+
+no implementation changes - waiting to align with what ATProtoFans will support.
+
+#### logout modal UX (PRs #755-757, Jan 17-18)
+
+**tooltip scroll fix** (PR #755):
+- leftmost avatar in likers/commenters tooltip was clipped with no way to scroll to it
+- changed `justify-content: center` to `flex-start` so most recent (leftmost) is always visible
+
+**logout modal copy** (PRs #756-757):
+- simplified from two confusing questions to one clear question
+- before: "stay logged in?" + "you're logging out of @handle?"
+- after: "switch accounts?"
+- "logout completely" → "log out of all accounts"
+
+---
+
 #### avatar refresh and tooltip polish (PRs #750-752, Jan 13)
 
 **avatar refresh from anywhere** (PR #751):
@@ -445,4 +469,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-11.
+this is a living document. last updated 2026-01-18.
