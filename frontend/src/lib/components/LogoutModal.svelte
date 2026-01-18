@@ -16,8 +16,7 @@
 	onclick={handleBackdropClick}
 >
 	<div class="logout-modal" role="dialog" aria-modal="true" aria-label="logout options">
-		<div class="logout-modal-header">stay logged in?</div>
-		<p class="logout-modal-subtext">leaving @{logout.user?.handle}?</p>
+		<div class="logout-modal-header">switch accounts?</div>
 		<div class="logout-modal-accounts">
 			{#each logout.otherAccounts as account}
 				<button class="logout-modal-account" onclick={() => logout.logoutAndSwitch(account)}>
@@ -92,14 +91,7 @@
 		font-weight: 600;
 		color: var(--text-primary);
 		text-align: center;
-		margin-bottom: 0.25rem;
-	}
-
-	.logout-modal-subtext {
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
-		text-align: center;
-		margin: 0 0 1.25rem;
+		margin-bottom: 1.25rem;
 	}
 
 	.logout-modal-accounts {
