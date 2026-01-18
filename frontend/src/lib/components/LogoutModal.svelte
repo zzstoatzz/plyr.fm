@@ -17,7 +17,7 @@
 >
 	<div class="logout-modal" role="dialog" aria-modal="true" aria-label="logout options">
 		<div class="logout-modal-header">stay logged in?</div>
-		<p class="logout-modal-subtext">you're logging out of @{logout.user?.handle}</p>
+		<p class="logout-modal-subtext">leaving @{logout.user?.handle}?</p>
 		<div class="logout-modal-accounts">
 			{#each logout.otherAccounts as account}
 				<button class="logout-modal-account" onclick={() => logout.logoutAndSwitch(account)}>
@@ -42,7 +42,7 @@
 					<polyline points="16 17 21 12 16 7"></polyline>
 					<line x1="21" y1="12" x2="9" y2="12"></line>
 				</svg>
-				<span>logout completely</span>
+				<span>log out of all accounts</span>
 			</button>
 			<button class="logout-modal-cancel" onclick={() => logout.close()}>
 				cancel
