@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { APP_NAME } from '$lib/branding';
 	import { auth } from '$lib/auth.svelte';
-	import { preferences } from '$lib/preferences.svelte';
+	import { account } from '$lib/account.svelte';
 
 	let accepting = $state(false);
 	let error = $state<string | null>(null);
@@ -10,12 +10,12 @@
 		accepting = true;
 		error = null;
 
-		const success = await preferences.acceptTerms();
+		const success = await account.acceptTerms();
 
 		if (!success) {
 			error = 'failed to accept terms. please try again.';
-			accepting = false;
 		}
+		accepting = false;
 	}
 
 	async function handleDecline() {

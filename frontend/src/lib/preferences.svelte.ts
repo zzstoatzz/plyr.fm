@@ -100,14 +100,6 @@ class PreferencesManager {
 		return this.data?.auto_download_liked ?? DEFAULT_PREFERENCES.auto_download_liked;
 	}
 
-	get termsAcceptedAt(): string | null {
-		return this.data?.terms_accepted_at ?? null;
-	}
-
-	get hasAcceptedTerms(): boolean {
-		return this.data?.terms_accepted_at !== null;
-	}
-
 	setAutoDownloadLiked(enabled: boolean): void {
 		if (browser) {
 			localStorage.setItem('autoDownloadLiked', enabled ? '1' : '0');
@@ -247,28 +239,6 @@ class PreferencesManager {
 	clear(): void {
 		this.data = null;
 		this.initialized = false;
-	}
-
-	async acceptTerms(): Promise<boolean> {
-		if (!browser || !auth.isAuthenticated) return false;
-
-		try {
-			const response = await fetch(`${API_URL}/account/accept-terms`, {
-				method: 'POST',
-				credentials: 'include'
-			});
-			if (response.ok) {
-				const data = await response.json();
-				if (this.data) {
-					this.data = { ...this.data, terms_accepted_at: data.terms_accepted_at };
-				}
-				return true;
-			}
-			return false;
-		} catch (error) {
-			console.error('failed to accept terms:', error);
-			return false;
-		}
 	}
 }
 
