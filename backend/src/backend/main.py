@@ -226,7 +226,7 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/config")
-async def get_public_config() -> dict[str, int | list[str]]:
+async def get_public_config() -> dict[str, int | str | list[str]]:
     """expose public configuration to frontend."""
     from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
@@ -236,6 +236,10 @@ async def get_public_config() -> dict[str, int | list[str]]:
         "default_hidden_tags": DEFAULT_HIDDEN_TAGS,
         "bufo_exclude_patterns": list(settings.bufo.exclude_patterns),
         "bufo_include_patterns": list(settings.bufo.include_patterns),
+        "contact_email": settings.legal.contact_email,
+        "privacy_email": settings.legal.resolved_privacy_email,
+        "dmca_email": settings.legal.resolved_dmca_email,
+        "dmca_registration_number": settings.legal.dmca_registration_number,
     }
 
 
