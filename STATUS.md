@@ -308,7 +308,6 @@ stabilization and UX polish. track editing experience improved, shutdown reliabi
 - atprotofans: supporter badges (#627) and content gating (#637)
 
 ### known issues
-- playback auto-start on refresh (#225)
 - iOS PWA audio may hang on first play after backgrounding
 
 ### backlog
