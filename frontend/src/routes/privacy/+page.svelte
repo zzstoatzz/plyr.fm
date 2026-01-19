@@ -65,7 +65,8 @@
 				<li><strong>Fly.io</strong> - backend hosting</li>
 				<li><strong>Neon</strong> - database</li>
 				<li><strong>Logfire</strong> - error monitoring</li>
-				<li><strong>AT Protocol network</strong> - public data federation</li>
+				<li><strong>AudD</strong> - audio fingerprinting for copyright detection</li>
+				<li><strong>Anthropic</strong> - image analysis for content moderation</li>
 			</ul>
 		</section>
 

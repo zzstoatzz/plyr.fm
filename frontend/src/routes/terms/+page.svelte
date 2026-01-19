@@ -80,9 +80,9 @@
 				we terminate accounts of repeat infringers.
 			</p>
 			<p>
-				<strong>AT Protocol limitation:</strong> we can only remove content from our
-				servers. we cannot delete content that has been published to other AT Protocol
-				servers or your PDS.
+				<strong>AT Protocol limitation:</strong> audio files are stored on our servers
+				and we can remove them at any time. track records on ATProto may be indexed
+				elsewhere as metadata, but without the audio files they reference.
 			</p>
 		</section>
 
