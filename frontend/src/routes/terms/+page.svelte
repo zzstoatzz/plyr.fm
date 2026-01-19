@@ -80,9 +80,9 @@
 				we terminate accounts of repeat infringers.
 			</p>
 			<p>
-				<strong>AT Protocol limitation:</strong> we can remove content from our servers
-				and delete records from your PDS while you're authenticated. we cannot remove
-				content that has been indexed or cached by other AT Protocol services.
+				<strong>AT Protocol limitation:</strong> audio files are stored on our servers
+				and we can remove them at any time. track records on ATProto may be indexed
+				elsewhere as metadata, but without the audio files they reference.
 			</p>
 		</section>
 
