@@ -41,10 +41,11 @@
 
 	// show terms overlay if authenticated but hasn't accepted terms
 	// exclude legal pages so users can read full terms/privacy/cookies
+	// uses preferences.data (client state) since acceptTerms() updates it
 	let showTermsOverlay = $derived(
 		data.isAuthenticated &&
-		data.preferences &&
-		!data.preferences.terms_accepted_at &&
+		preferences.data &&
+		!preferences.data.terms_accepted_at &&
 		!$page.url.pathname.startsWith('/terms') &&
 		!$page.url.pathname.startsWith('/privacy') &&
 		!$page.url.pathname.startsWith('/cookies')
