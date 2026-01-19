@@ -35,8 +35,8 @@
 			<ul>
 				<li>
 					<strong>your content:</strong> you own what you upload. audio files are stored
-					on our servers; track metadata is written to your PDS. delete through {APP_NAME}
-					and we remove it from our servers.
+					in public blob storage we control; track metadata is written to your PDS. delete
+					through {APP_NAME} and we remove the audio from storage.
 				</li>
 				<li>
 					<strong>copyright:</strong> don't upload content you don't have rights to.
