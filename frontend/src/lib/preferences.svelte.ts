@@ -253,7 +253,7 @@ class PreferencesManager {
 		if (!browser || !auth.isAuthenticated) return false;
 
 		try {
-			const response = await fetch(`${API_URL}/preferences/accept-terms`, {
+			const response = await fetch(`${API_URL}/account/accept-terms`, {
 				method: 'POST',
 				credentials: 'include'
 			});

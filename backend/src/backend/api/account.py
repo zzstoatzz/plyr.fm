@@ -1,6 +1,7 @@
 """account management endpoints."""
 
 import logging
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,6 +23,7 @@ from backend.models import (
     get_db,
 )
 from backend.storage import storage
+from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 logger = logging.getLogger(__name__)
 
@@ -210,3 +212,39 @@ async def delete_account(
     )
 
     return AccountDeleteResponse(deleted=deleted_counts)
+
+
+class TermsAcceptanceResponse(BaseModel):
+    """response after accepting terms."""
+
+    terms_accepted_at: datetime
+
+
+@router.post("/accept-terms")
+async def accept_terms(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    session: Session = Depends(require_auth),
+) -> TermsAcceptanceResponse:
+    """accept terms of service. records timestamp of acceptance."""
+    result = await db.execute(
+        select(UserPreferences).where(UserPreferences.did == session.did)
+    )
+    prefs = result.scalar_one_or_none()
+
+    now = datetime.now(UTC)
+
+    if not prefs:
+        # create preferences with terms accepted
+        prefs = UserPreferences(
+            did=session.did,
+            accent_color="#6a9fff",
+            hidden_tags=list(DEFAULT_HIDDEN_TAGS),
+            terms_accepted_at=now,
+        )
+        db.add(prefs)
+    else:
+        prefs.terms_accepted_at = now
+
+    await db.commit()
+
+    return TermsAcceptanceResponse(terms_accepted_at=now)
