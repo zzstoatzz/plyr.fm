@@ -1,8 +1,13 @@
 <script lang="ts">
-	import { APP_NAME } from '$lib/branding';
+	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
+	const FALLBACK_EMAIL = 'plyrdotfm@proton.me';
+
 	let { data } = $props<{ data: PageData }>();
+
+	const privacyEmail = data.privacyEmail || FALLBACK_EMAIL;
+	const contactEmail = data.contactEmail || FALLBACK_EMAIL;
 </script>
 
 <svelte:head>
@@ -16,7 +21,19 @@
 		<p class="last-updated">last updated: january 19, 2026</p>
 
 		<p class="intro">
-			this policy explains what data we collect, what's public by design on the AT Protocol,
+			{APP_NAME} ("we", "us", or "our") is a music streaming application built on the
+			<a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>.
+			this privacy policy applies to the instance at
+			<a href={APP_CANONICAL_URL}>{APP_CANONICAL_URL}</a> (the "site").
+		</p>
+
+		<p class="intro">
+			{APP_NAME} is open source under the MIT license. other instances or derivatives
+			hosted elsewhere are not covered by this policy.
+		</p>
+
+		<p class="intro-secondary">
+			this policy explains what data we collect, what's public by design on ATProto,
 			and your rights.
 		</p>
 
@@ -84,7 +101,7 @@
 			<h2>6. security</h2>
 			<p>we use HTTPS, encrypt sensitive data, and use HttpOnly cookies. no system is
 				perfectly secure—report vulnerabilities to
-				<a href="mailto:{data.contactEmail}">{data.contactEmail}</a>.</p>
+				<a href="mailto:{contactEmail}">{contactEmail}</a>.</p>
 		</section>
 
 		<section>
@@ -101,7 +118,7 @@
 		<section class="contact">
 			<h2>contact</h2>
 			<p>
-				questions? <a href="mailto:{data.privacyEmail}">{data.privacyEmail}</a>
+				questions? <a href="mailto:{privacyEmail}">{privacyEmail}</a>
 			</p>
 		</section>
 
@@ -135,6 +152,12 @@
 	}
 
 	.intro {
+		font-size: 1.05rem;
+		color: var(--text-secondary);
+		margin-bottom: 1rem;
+	}
+
+	.intro-secondary {
 		font-size: 1.05rem;
 		color: var(--text-secondary);
 		margin-bottom: 2rem;
