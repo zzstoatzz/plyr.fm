@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { APP_NAME } from '$lib/branding';
+	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
 	const FALLBACK_EMAIL = 'plyrdotfm@proton.me';
@@ -21,23 +21,28 @@
 		<p class="last-updated">last updated: january 19, 2026</p>
 
 		<p class="intro">
-			these terms govern your use of {APP_NAME}, a music streaming platform built on the AT
-			Protocol. by using the service, you agree to these terms.
+			{APP_NAME} ("we", "us", or "our") is a music streaming application built on the
+			<a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>.
+			these terms of service apply to the instance at
+			<a href={APP_CANONICAL_URL}>{APP_CANONICAL_URL}</a> (the "site").
+		</p>
+
+		<p class="intro">
+			{APP_NAME} is open source under the MIT license. other instances or derivatives
+			hosted elsewhere are not covered by these terms.
+		</p>
+
+		<p class="intro-secondary">
+			by using the service, you agree to these terms. if you disagree with any part,
+			you may not use the service.
 		</p>
 
 		<section>
-			<h2>1. acceptance of terms</h2>
+			<h2>1. accounts</h2>
 			<p>
-				by accessing or using {APP_NAME}, you agree to be bound by these terms. if you disagree with
-				any part, you may not use the service.
-			</p>
-		</section>
-
-		<section>
-			<h2>2. accounts</h2>
-			<p>
-				{APP_NAME} uses AT Protocol for authentication. your identity is your DID (decentralized identifier),
-				not an account we control. we do not store passwords.
+				{APP_NAME} uses the <a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>
+				for authentication. your identity is your DID (decentralized identifier), not an account we
+				control. we do not store passwords.
 			</p>
 			<p>
 				we may terminate or suspend your access at any time, for any reason. termination removes
@@ -47,7 +52,7 @@
 		</section>
 
 		<section>
-			<h2>3. content</h2>
+			<h2>2. content</h2>
 			<p>
 				you retain ownership of content you upload. by uploading, you grant us a non-exclusive,
 				worldwide, royalty-free license to use, reproduce, modify, and distribute your content as
@@ -60,7 +65,7 @@
 		</section>
 
 		<section>
-			<h2>4. acceptable use</h2>
+			<h2>3. acceptable use</h2>
 			<p>you agree not to:</p>
 			<ul>
 				<li>violate any applicable laws</li>
@@ -72,7 +77,7 @@
 		</section>
 
 		<section>
-			<h2>5. copyright & DMCA</h2>
+			<h2>4. copyright & DMCA</h2>
 			<p>we respond to valid DMCA takedown notices. our designated agent is:</p>
 			<address class="dmca-agent">
 				Nathan Nowack<br />
@@ -81,15 +86,16 @@
 			</address>
 			<p>we terminate accounts of repeat infringers.</p>
 			<p>
-				<strong>AT Protocol limitation:</strong> audio files are stored in public blob storage that {APP_NAME}
-				controls and can remove at any time for policy violations. ATProto records referring to deleted
-				audio files may persist in user personal data servers (which {APP_NAME} does not control), but
-				{APP_NAME} will not provide access to violating or deleted content.
+				<strong><a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a> limitation:</strong>
+				audio files are stored in public blob storage that {APP_NAME} controls and can remove at any time
+				for policy violations. AT Protocol records referring to deleted audio files may persist in user
+				personal data servers (which {APP_NAME} does not control), but {APP_NAME} will not provide access
+				to violating or deleted content.
 			</p>
 		</section>
 
 		<section>
-			<h2>6. disclaimers</h2>
+			<h2>5. disclaimers</h2>
 			<p>
 				the service is provided "as is" and "as available" without warranties of any kind. we do not
 				guarantee uptime or that the service will be error-free.
@@ -101,7 +107,7 @@
 		</section>
 
 		<section>
-			<h2>7. changes</h2>
+			<h2>6. changes</h2>
 			<p>
 				we may update these terms. material changes will be posted with notice. continued use after
 				changes constitutes acceptance.
@@ -145,6 +151,12 @@
 	}
 
 	.intro {
+		font-size: 1.05rem;
+		color: var(--text-secondary);
+		margin-bottom: 1rem;
+	}
+
+	.intro-secondary {
 		font-size: 1.05rem;
 		color: var(--text-secondary);
 		margin-bottom: 2rem;

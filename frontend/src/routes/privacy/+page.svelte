@@ -33,7 +33,8 @@
 		</p>
 
 		<p class="intro-secondary">
-			this policy explains what data we collect, what's public by design on ATProto,
+			this policy explains what data we collect, what's public by design on the
+			<a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>,
 			and your rights.
 		</p>
 
@@ -46,8 +47,8 @@
 			<p>
 				<strong>public by design:</strong> your DID, handle, profile, tracks, likes, comments,
 				and playlists are stored on your PDS (Personal Data Server) and remain under your
-				control. ATProto is a public data protocol—this data is accessible to any ATProto
-				application, not just {APP_NAME}.
+				control. the AT Protocol is a public data protocol—this data is accessible to any
+				AT Protocol application, not just {APP_NAME}.
 			</p>
 			<p>
 				<strong>your PDS:</strong> {APP_NAME} does not operate a PDS—we write records to
@@ -62,7 +63,7 @@
 
 		<section>
 			<h2>2. data we collect</h2>
-			<p><strong>you provide:</strong> your ATProto identity when you log in, audio files
+			<p><strong>you provide:</strong> your AT Protocol identity when you log in, audio files
 				and metadata you upload, and preferences like accent color.</p>
 			<p><strong>automatically:</strong> play counts, IP addresses, browser info, and
 				session cookies for authentication.</p>
@@ -78,12 +79,12 @@
 			<h2>4. third parties</h2>
 			<p>we use:</p>
 			<ul>
-				<li><strong>Cloudflare</strong> - CDN, storage (R2)</li>
-				<li><strong>Fly.io</strong> - backend hosting</li>
-				<li><strong>Neon</strong> - database</li>
-				<li><strong>Logfire</strong> - error monitoring</li>
-				<li><strong>AudD</strong> - audio fingerprinting for copyright detection</li>
-				<li><strong>Anthropic</strong> - image analysis for content moderation</li>
+				<li><strong><a href="https://cloudflare.com" target="_blank" rel="noopener">Cloudflare</a></strong> - CDN, storage (R2)</li>
+				<li><strong><a href="https://fly.io" target="_blank" rel="noopener">Fly.io</a></strong> - backend hosting</li>
+				<li><strong><a href="https://neon.tech" target="_blank" rel="noopener">Neon</a></strong> - database</li>
+				<li><strong><a href="https://logfire.pydantic.dev" target="_blank" rel="noopener">Logfire</a></strong> - error monitoring</li>
+				<li><strong><a href="https://audd.io" target="_blank" rel="noopener">AudD</a></strong> - audio fingerprinting for copyright detection</li>
+				<li><strong><a href="https://anthropic.com" target="_blank" rel="noopener">Anthropic</a></strong> - image analysis for content moderation</li>
 			</ul>
 		</section>
 
@@ -92,7 +93,7 @@
 			<p>you can access, correct, or delete your data through settings. when you delete your
 				account, we remove your files from our storage and your data from our database.</p>
 			<p>
-				<strong>we cannot delete:</strong> your DID (you control it), data on other ATProto
+				<strong>we cannot delete:</strong> your DID (you control it), data on other AT Protocol
 				servers, or records in other users' PDSes.
 			</p>
 		</section>
