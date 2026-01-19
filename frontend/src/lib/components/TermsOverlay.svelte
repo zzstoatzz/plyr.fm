@@ -34,17 +34,17 @@
 			<h2>key points</h2>
 			<ul>
 				<li>
-					<strong>your content:</strong> you own what you upload. we store it, stream it,
-					and transcode it. delete through {APP_NAME} and we clean up everything.
+					<strong>your content:</strong> you own what you upload. we store and stream it.
+					delete through {APP_NAME} and we remove it from our servers.
 				</li>
 				<li>
 					<strong>copyright:</strong> don't upload content you don't have rights to.
 					we follow DMCA takedown procedures.
 				</li>
 				<li>
-					<strong>AT Protocol:</strong> your identity is on your
+					<strong>AT Protocol:</strong> your identity lives on your
 					<a href="https://atproto.com/guides/glossary#pds-personal-data-server" target="_blank" rel="noopener">PDS</a>.
-					public interactions (likes, comments) are written to the network.
+					likes and comments are stored there as public records.
 				</li>
 				<li>
 					<strong>privacy:</strong> we don't sell your data or use it for ads.

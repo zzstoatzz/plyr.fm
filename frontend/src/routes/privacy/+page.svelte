@@ -13,7 +13,7 @@
 <div class="legal-container">
 	<article class="legal-content">
 		<h1>privacy policy</h1>
-		<p class="last-updated">last updated: december 16, 2025</p>
+		<p class="last-updated">last updated: january 19, 2026</p>
 
 		<p class="intro">
 			this policy explains what data we collect, what's public by design on the AT Protocol,
@@ -28,8 +28,8 @@
 			</p>
 			<p>
 				<strong>public by design:</strong> your DID, handle, profile, tracks, likes, and comments
-				are stored on the decentralized AT Protocol network. this data is visible to anyone
-				on the network, not just {APP_NAME} users.
+				are stored on your PDS (Personal Data Server). for most users, this is Bluesky's servers.
+				this data is public and can be read by any AT Protocol application.
 			</p>
 			<p>
 				<strong>external PDS:</strong> if your account is hosted on Bluesky's PDS or another
