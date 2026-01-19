@@ -2,7 +2,12 @@
 	import { APP_NAME } from '$lib/branding';
 	import type { PageData } from './$types';
 
+	const FALLBACK_EMAIL = 'plyrdotfm@proton.me';
+
 	let { data } = $props<{ data: PageData }>();
+
+	const contactEmail = data.contactEmail || FALLBACK_EMAIL;
+	const dmcaEmail = data.dmcaEmail || FALLBACK_EMAIL;
 </script>
 
 <svelte:head>
@@ -72,7 +77,7 @@
 			<address class="dmca-agent">
 				Nathan Nowack<br />
 				DMCA Registration: {data.dmcaRegistrationNumber}<br />
-				Email: <a href="mailto:{data.dmcaEmail}">{data.dmcaEmail}</a>
+				Email: <a href="mailto:{dmcaEmail}">{dmcaEmail}</a>
 			</address>
 			<p>we terminate accounts of repeat infringers.</p>
 			<p>
@@ -106,7 +111,7 @@
 		<section class="contact">
 			<h2>contact</h2>
 			<p>
-				questions? <a href="mailto:{data.contactEmail}">{data.contactEmail}</a>
+				questions? <a href="mailto:{contactEmail}">{contactEmail}</a>
 			</p>
 		</section>
 
