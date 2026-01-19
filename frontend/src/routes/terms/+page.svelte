@@ -13,7 +13,7 @@
 <div class="legal-container">
 	<article class="legal-content">
 		<h1>terms of service</h1>
-		<p class="last-updated">last updated: december 16, 2025</p>
+		<p class="last-updated">last updated: january 19, 2026</p>
 
 		<p class="intro">
 			these terms govern your use of {APP_NAME}, a music streaming platform built on the

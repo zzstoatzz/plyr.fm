@@ -13,7 +13,7 @@
 <div class="legal-container">
 	<article class="legal-content">
 		<h1>privacy policy</h1>
-		<p class="last-updated">last updated: december 16, 2025</p>
+		<p class="last-updated">last updated: january 19, 2026</p>
 
 		<p class="intro">
 			this policy explains what data we collect, what's public by design on the AT Protocol,
@@ -27,13 +27,15 @@
 				for identity and social features. this has important implications:
 			</p>
 			<p>
-				<strong>public by design:</strong> your DID, handle, profile, tracks, likes, and comments
-				are stored on the decentralized AT Protocol network. this data is visible to anyone
-				on the network, not just {APP_NAME} users.
+				<strong>public by design:</strong> your DID, handle, profile, tracks, likes, comments,
+				and playlists are stored on your PDS (Personal Data Server) and remain under your
+				control. ATProto is a public data protocol—this data is accessible to any ATProto
+				application, not just {APP_NAME}.
 			</p>
 			<p>
-				<strong>external PDS:</strong> if your account is hosted on Bluesky's PDS or another
-				provider (not ours), we do not control that data. their privacy policies govern it.
+				<strong>your PDS:</strong> {APP_NAME} does not operate a PDS—we write records to
+				wherever your account is hosted (e.g., bsky.social or a self-hosted PDS). we do not
+				control that data; their privacy policies govern it.
 			</p>
 			<p>
 				<strong>private data:</strong> session tokens, preferences, and server logs are stored
