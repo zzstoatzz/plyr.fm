@@ -80,9 +80,9 @@
 				we terminate accounts of repeat infringers.
 			</p>
 			<p>
-				<strong>AT Protocol limitation:</strong> we can only remove content from our
-				servers. we cannot delete content that has been published to other AT Protocol
-				servers or your PDS.
+				<strong>AT Protocol limitation:</strong> we can remove content from our servers
+				and delete records from your PDS while you're authenticated. we cannot remove
+				content that has been indexed or cached by other AT Protocol services.
 			</p>
 		</section>
 
