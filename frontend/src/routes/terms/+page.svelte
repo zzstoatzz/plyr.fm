@@ -80,9 +80,10 @@
 				we terminate accounts of repeat infringers.
 			</p>
 			<p>
-				<strong>AT Protocol limitation:</strong> audio files are stored on our servers
-				and we can remove them at any time. track records on ATProto may be indexed
-				elsewhere as metadata, but without the audio files they reference.
+				<strong>AT Protocol limitation:</strong> audio files are stored in public blob
+				storage that {APP_NAME} controls and can remove at any time for policy violations.
+				ATProto records may persist elsewhere as metadata, but the audio they reference
+				remains under our control.
 			</p>
 		</section>
 
