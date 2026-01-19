@@ -1,6 +1,6 @@
 """user preferences api endpoints."""
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
@@ -196,39 +196,3 @@ async def update_preferences(
         ui_settings=prefs.ui_settings or {},
         terms_accepted_at=prefs.terms_accepted_at,
     )
-
-
-class TermsAcceptanceResponse(BaseModel):
-    """response after accepting terms."""
-
-    terms_accepted_at: datetime
-
-
-@router.post("/accept-terms")
-async def accept_terms(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    session: Session = Depends(require_auth),
-) -> TermsAcceptanceResponse:
-    """accept terms of service. records timestamp of acceptance."""
-    result = await db.execute(
-        select(UserPreferences).where(UserPreferences.did == session.did)
-    )
-    prefs = result.scalar_one_or_none()
-
-    now = datetime.now(UTC)
-
-    if not prefs:
-        # create preferences with terms accepted
-        prefs = UserPreferences(
-            did=session.did,
-            accent_color="#6a9fff",
-            hidden_tags=list(DEFAULT_HIDDEN_TAGS),
-            terms_accepted_at=now,
-        )
-        db.add(prefs)
-    else:
-        prefs.terms_accepted_at = now
-
-    await db.commit()
-
-    return TermsAcceptanceResponse(terms_accepted_at=now)
