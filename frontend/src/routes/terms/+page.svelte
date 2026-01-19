@@ -16,41 +16,41 @@
 		<p class="last-updated">last updated: january 19, 2026</p>
 
 		<p class="intro">
-			these terms govern your use of {APP_NAME}, a music streaming platform built on the
-			AT Protocol. by using the service, you agree to these terms.
+			these terms govern your use of {APP_NAME}, a music streaming platform built on the AT
+			Protocol. by using the service, you agree to these terms.
 		</p>
 
 		<section>
 			<h2>1. acceptance of terms</h2>
 			<p>
-				by accessing or using {APP_NAME}, you agree to be bound by these terms. if you
-				disagree with any part, you may not use the service.
+				by accessing or using {APP_NAME}, you agree to be bound by these terms. if you disagree with
+				any part, you may not use the service.
 			</p>
 		</section>
 
 		<section>
 			<h2>2. accounts</h2>
 			<p>
-				{APP_NAME} uses AT Protocol for authentication. your identity is your DID
-				(decentralized identifier), not an account we control. we do not store passwords.
+				{APP_NAME} uses AT Protocol for authentication. your identity is your DID (decentralized identifier),
+				not an account we control. we do not store passwords.
 			</p>
 			<p>
-				we may terminate or suspend your access at any time, for any reason. termination
-				removes your content from {APP_NAME} but does not affect your DID or data on your
-				PDS—we don't control those.
+				we may terminate or suspend your access at any time, for any reason. termination removes
+				your content from {APP_NAME} but does not affect your DID or data on your PDS—we don't control
+				those.
 			</p>
 		</section>
 
 		<section>
 			<h2>3. content</h2>
 			<p>
-				you retain ownership of content you upload. by uploading, you grant us a
-				non-exclusive, worldwide, royalty-free license to use, reproduce, modify, and
-				distribute your content as necessary to provide the service.
+				you retain ownership of content you upload. by uploading, you grant us a non-exclusive,
+				worldwide, royalty-free license to use, reproduce, modify, and distribute your content as
+				necessary to provide the service.
 			</p>
 			<p>
-				you represent that you own or have the necessary rights to the content you upload,
-				and that it does not infringe any third party's rights.
+				you represent that you own or have the necessary rights to the content you upload, and that
+				it does not infringe any third party's rights.
 			</p>
 		</section>
 
@@ -68,42 +68,38 @@
 
 		<section>
 			<h2>5. copyright & DMCA</h2>
-			<p>
-				we respond to valid DMCA takedown notices. our designated agent is:
-			</p>
+			<p>we respond to valid DMCA takedown notices. our designated agent is:</p>
 			<address class="dmca-agent">
 				Nathan Nowack<br />
 				DMCA Registration: {data.dmcaRegistrationNumber}<br />
 				Email: <a href="mailto:{data.dmcaEmail}">{data.dmcaEmail}</a>
 			</address>
+			<p>we terminate accounts of repeat infringers.</p>
 			<p>
-				we terminate accounts of repeat infringers.
-			</p>
-			<p>
-				<strong>AT Protocol limitation:</strong> audio files are stored in public blob
-				storage that {APP_NAME} controls and can remove at any time for policy violations.
-				ATProto records may persist elsewhere as metadata, but the audio they reference
-				remains under our control.
+				<strong>AT Protocol limitation:</strong> audio files are stored in public blob storage that {APP_NAME}
+				controls and can remove at any time for policy violations. ATProto records referring to deleted
+				audio files may persist in user personal data servers (which {APP_NAME} does not control), but
+				{APP_NAME} will not provide access to violating or deleted content.
 			</p>
 		</section>
 
 		<section>
 			<h2>6. disclaimers</h2>
 			<p>
-				the service is provided "as is" and "as available" without warranties of any kind.
-				we do not guarantee uptime or that the service will be error-free.
+				the service is provided "as is" and "as available" without warranties of any kind. we do not
+				guarantee uptime or that the service will be error-free.
 			</p>
 			<p>
-				we are not liable for any indirect, incidental, special, or consequential damages
-				resulting from your use of the service.
+				we are not liable for any indirect, incidental, special, or consequential damages resulting
+				from your use of the service.
 			</p>
 		</section>
 
 		<section>
 			<h2>7. changes</h2>
 			<p>
-				we may update these terms. material changes will be posted with notice. continued
-				use after changes constitutes acceptance.
+				we may update these terms. material changes will be posted with notice. continued use after
+				changes constitutes acceptance.
 			</p>
 		</section>
 
