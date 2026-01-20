@@ -11,14 +11,14 @@
 </script>
 
 <svelte:head>
-	<title>privacy policy - {APP_NAME}</title>
+	<title>Privacy Policy - {APP_NAME}</title>
 	<meta name="description" content="Privacy Policy for {APP_NAME}" />
 </svelte:head>
 
 <div class="legal-container">
 	<article class="legal-content">
-		<h1>privacy policy</h1>
-		<p class="last-updated">last updated: january 19, 2026</p>
+		<h1>Privacy Policy</h1>
+		<p class="last-updated">Last updated: January 20, 2026</p>
 
 		<p class="intro">
 			{APP_NAME} ("we", "us", or "our") is a music streaming application built on the
@@ -39,7 +39,7 @@
 		</p>
 
 		<section>
-			<h2>1. the AT Protocol</h2>
+			<h2>1. The AT Protocol</h2>
 			<p>
 				{APP_NAME} uses the <a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>
 				for identity and social features. this has important implications:
@@ -62,7 +62,7 @@
 		</section>
 
 		<section>
-			<h2>2. data we collect</h2>
+			<h2>2. Data We Collect</h2>
 			<p><strong>you provide:</strong> your AT Protocol identity when you log in, audio files
 				and metadata you upload, and preferences like accent color.</p>
 			<p><strong>automatically:</strong> play counts, IP addresses, browser info, and
@@ -70,14 +70,14 @@
 		</section>
 
 		<section>
-			<h2>3. how we use it</h2>
+			<h2>3. How We Use It</h2>
 			<p>we use your data to provide the service, maintain your session, and improve the
 				platform. we do not sell your data or use it for advertising.</p>
 		</section>
 
 		<section>
-			<h2>4. third parties</h2>
-			<p>we use:</p>
+			<h2>4. Third Parties</h2>
+			<p>We use:</p>
 			<ul>
 				<li><strong><a href="https://cloudflare.com" target="_blank" rel="noopener">Cloudflare</a></strong> - CDN, storage (R2)</li>
 				<li><strong><a href="https://fly.io" target="_blank" rel="noopener">Fly.io</a></strong> - backend hosting</li>
@@ -85,11 +85,17 @@
 				<li><strong><a href="https://logfire.pydantic.dev" target="_blank" rel="noopener">Logfire</a></strong> - error monitoring</li>
 				<li><strong><a href="https://audd.io" target="_blank" rel="noopener">AudD</a></strong> - audio fingerprinting for copyright detection</li>
 				<li><strong><a href="https://anthropic.com" target="_blank" rel="noopener">Anthropic</a></strong> - image analysis for content moderation</li>
+				<li><strong><a href="https://atprotofans.com" target="_blank" rel="noopener">ATProtoFans</a></strong> - supporter validation for gated content</li>
 			</ul>
+			<p>
+				We may also write records to your PDS using third-party lexicon namespaces
+				(e.g., <a href="https://teal.fm" target="_blank" rel="noopener">teal.fm</a> for scrobbling)
+				when you enable those features.
+			</p>
 		</section>
 
 		<section>
-			<h2>5. your rights</h2>
+			<h2>5. Your Rights</h2>
 			<p>you can access, correct, or delete your data through settings. when you delete your
 				account, we remove your files from our storage and your data from our database.</p>
 			<p>
@@ -99,32 +105,32 @@
 		</section>
 
 		<section>
-			<h2>6. security</h2>
+			<h2>6. Security</h2>
 			<p>we use HTTPS, encrypt sensitive data, and use HttpOnly cookies. no system is
 				perfectly secure—report vulnerabilities to
 				<a href="mailto:{contactEmail}">{contactEmail}</a>.</p>
 		</section>
 
 		<section>
-			<h2>7. children</h2>
+			<h2>7. Children</h2>
 			<p>{APP_NAME} is not for children under 13. we do not knowingly collect data from
 				children.</p>
 		</section>
 
 		<section>
-			<h2>8. changes</h2>
+			<h2>8. Changes</h2>
 			<p>we may update this policy. material changes will be posted with notice.</p>
 		</section>
 
 		<section class="contact">
-			<h2>contact</h2>
+			<h2>Contact</h2>
 			<p>
 				questions? <a href="mailto:{privacyEmail}">{privacyEmail}</a>
 			</p>
 		</section>
 
 		<nav class="legal-nav">
-			<a href="/terms">terms of service</a>
+			<a href="/terms">Terms of Service</a>
 		</nav>
 	</article>
 </div>

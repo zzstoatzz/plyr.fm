@@ -11,14 +11,14 @@
 </script>
 
 <svelte:head>
-	<title>terms of service - {APP_NAME}</title>
+	<title>Terms of Service - {APP_NAME}</title>
 	<meta name="description" content="Terms of Service for {APP_NAME}" />
 </svelte:head>
 
 <div class="legal-container">
 	<article class="legal-content">
-		<h1>terms of service</h1>
-		<p class="last-updated">last updated: january 19, 2026</p>
+		<h1>Terms of Service</h1>
+		<p class="last-updated">Last updated: January 20, 2026</p>
 
 		<p class="intro">
 			{APP_NAME} ("we", "us", or "our") is a music streaming application built on the
@@ -38,7 +38,7 @@
 		</p>
 
 		<section>
-			<h2>1. accounts</h2>
+			<h2>1. Accounts</h2>
 			<p>
 				{APP_NAME} uses the <a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>
 				for authentication. your identity is your DID (decentralized identifier), not an account we
@@ -52,7 +52,7 @@
 		</section>
 
 		<section>
-			<h2>2. content</h2>
+			<h2>2. Content</h2>
 			<p>
 				you retain ownership of content you upload. by uploading, you grant us a non-exclusive,
 				worldwide, royalty-free license to use, reproduce, modify, and distribute your content as
@@ -65,7 +65,7 @@
 		</section>
 
 		<section>
-			<h2>3. acceptable use</h2>
+			<h2>3. Acceptable Use</h2>
 			<p>you agree not to:</p>
 			<ul>
 				<li>violate any applicable laws</li>
@@ -77,7 +77,7 @@
 		</section>
 
 		<section>
-			<h2>4. copyright & DMCA</h2>
+			<h2>4. Copyright & DMCA</h2>
 			<p>we respond to valid DMCA takedown notices. our designated agent is:</p>
 			<address class="dmca-agent">
 				Nathan Nowack<br />
@@ -95,7 +95,7 @@
 		</section>
 
 		<section>
-			<h2>5. disclaimers</h2>
+			<h2>5. Disclaimers</h2>
 			<p>
 				the service is provided "as is" and "as available" without warranties of any kind. we do not
 				guarantee uptime or that the service will be error-free.
@@ -107,7 +107,14 @@
 		</section>
 
 		<section>
-			<h2>6. changes</h2>
+			<h2>6. Governing Law</h2>
+			<p>
+				these terms are governed by United States law, without regard to conflict-of-law provisions.
+			</p>
+		</section>
+
+		<section>
+			<h2>7. Changes</h2>
 			<p>
 				we may update these terms. material changes will be posted with notice. continued use after
 				changes constitutes acceptance.
@@ -115,14 +122,14 @@
 		</section>
 
 		<section class="contact">
-			<h2>contact</h2>
+			<h2>Contact</h2>
 			<p>
 				questions? <a href="mailto:{contactEmail}">{contactEmail}</a>
 			</p>
 		</section>
 
 		<nav class="legal-nav">
-			<a href="/privacy">privacy policy</a>
+			<a href="/privacy">Privacy Policy</a>
 		</nav>
 	</article>
 </div>

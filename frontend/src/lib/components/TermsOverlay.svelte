@@ -27,11 +27,11 @@
 
 <div class="terms-overlay">
 	<div class="terms-modal">
-		<h1>welcome to {APP_NAME}</h1>
-		<p class="subtitle">please review and accept our terms to continue</p>
+		<h1>Welcome to {APP_NAME}</h1>
+		<p class="subtitle">Please review and accept our terms to continue.</p>
 
 		<div class="terms-summary">
-			<h2>key points</h2>
+			<h2>Key Points</h2>
 			<ul>
 				<li>
 					<strong>your content:</strong> you own what you upload. audio files are stored
@@ -56,8 +56,8 @@
 
 		<div class="full-terms-link">
 			<p>
-				read the full <a href="/terms" target="_blank">terms of service</a> and
-				<a href="/privacy" target="_blank">privacy policy</a>
+				Read the full <a href="/terms" target="_blank">Terms of Service</a> and
+				<a href="/privacy" target="_blank">Privacy Policy</a>.
 			</p>
 		</div>
 
@@ -67,10 +67,10 @@
 
 		<div class="actions">
 			<button class="accept-btn" onclick={handleAccept} disabled={accepting}>
-				{accepting ? 'accepting...' : 'i accept'}
+				{accepting ? 'Accepting...' : 'I Accept'}
 			</button>
 			<button class="decline-btn" onclick={handleDecline} disabled={accepting}>
-				decline & logout
+				Decline & Logout
 			</button>
 		</div>
 	</div>
