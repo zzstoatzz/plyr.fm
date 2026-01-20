@@ -115,9 +115,6 @@
 
 <style>
 	:global(body) {
-		margin: 0;
-		padding: 0;
-		overflow: hidden;
 		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
 		background: var(--bg-primary);
 		color: var(--text-primary);
@@ -125,10 +122,12 @@
 
 	.embed-container {
 		display: flex;
-		height: 165px;
+		min-height: 165px;
+		height: 100%;
 		background: var(--bg-tertiary);
 		overflow: hidden;
 		position: relative;
+		container-type: size;
 	}
 
 	/* background image - hidden on desktop */
@@ -141,10 +140,13 @@
 	}
 
 	.art-container {
-		width: 165px;
-		height: 165px;
+		width: auto;
+		height: 100%;
+		aspect-ratio: 1;
 		flex-shrink: 0;
 		position: relative;
+		min-width: 120px;
+		max-width: 200px;
 	}
 
 	.art {
@@ -303,10 +305,150 @@
 		background: var(--accent);
 	}
 
+	/* square-ish container: stack artwork on top */
+	@container (aspect-ratio <= 1.5) and (min-height: 200px) {
+		.embed-container {
+			flex-direction: column;
+		}
+
+		.art-container {
+			width: 100%;
+			height: auto;
+			flex: 1;
+			min-height: 80px;
+			max-height: calc(100% - 100px); /* leave room for controls */
+		}
+
+		.art {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+
+		.art-placeholder {
+			font-size: 36px;
+		}
+
+		.content {
+			flex: none;
+			padding: 12px 16px;
+		}
+
+		.header {
+			gap: 12px;
+		}
+
+		.play-btn {
+			width: 40px;
+			height: 40px;
+		}
+
+		.icon {
+			width: 20px;
+			height: 20px;
+		}
+
+		.meta {
+			padding-top: 2px;
+		}
+
+		.title {
+			font-size: 15px;
+			margin-bottom: 2px;
+		}
+
+		.artist {
+			font-size: 12px;
+		}
+
+		.logo {
+			top: auto;
+			bottom: auto;
+			font-size: 10px;
+		}
+
+		.player-controls {
+			margin-top: 8px;
+			margin-bottom: 0;
+			gap: 10px;
+		}
+
+		.time {
+			font-size: 11px;
+			width: 32px;
+		}
+	}
+
+	/* very square/tall: use blurred background like mobile */
+	@container (aspect-ratio <= 1) and (min-height: 165px) {
+		/* show blurred background */
+		.bg-image {
+			display: block;
+			position: absolute;
+			inset: 0;
+			background-size: cover;
+			background-position: center;
+			filter: blur(20px);
+			transform: scale(1.2);
+			z-index: 0;
+			pointer-events: none;
+		}
+
+		.bg-overlay {
+			display: block;
+			position: absolute;
+			inset: 0;
+			background: rgba(0, 0, 0, 0.3);
+			z-index: 0;
+			pointer-events: none;
+		}
+
+		/* hide side art for very square containers */
+		.art-container {
+			display: none;
+		}
+
+		.content {
+			flex: 1;
+			justify-content: center;
+		}
+
+		.title {
+			color: #fff;
+			text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+		}
+
+		.artist {
+			color: rgba(255, 255, 255, 0.8);
+			text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+		}
+
+		.logo {
+			color: rgba(255, 255, 255, 0.5);
+		}
+
+		.logo:hover {
+			color: rgba(255, 255, 255, 0.7);
+		}
+
+		.time {
+			color: rgba(255, 255, 255, 0.6);
+		}
+
+		.progress-bg {
+			background: rgba(255, 255, 255, 0.2);
+		}
+
+		.progress-fill {
+			background: #fff;
+		}
+	}
+
 	/* mobile: background image layout */
 	@media (max-width: 400px) {
 		.embed-container {
-			height: 165px; /* match bluesky iframe height */
+			min-height: 165px;
+			height: 100%;
 			flex-direction: column;
 		}
 
