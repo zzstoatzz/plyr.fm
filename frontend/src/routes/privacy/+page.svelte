@@ -23,17 +23,17 @@
 		<p class="intro">
 			{APP_NAME} ("we", "us", or "our") is a music streaming application built on the
 			<a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>.
-			this privacy policy applies to the instance at
+			This privacy policy applies to the instance at
 			<a href={APP_CANONICAL_URL}>{APP_CANONICAL_URL}</a> (the "site").
 		</p>
 
 		<p class="intro">
-			{APP_NAME} is open source under the MIT license. other instances or derivatives
+			{APP_NAME} is open source under the MIT license. Other instances or derivatives
 			hosted elsewhere are not covered by this policy.
 		</p>
 
 		<p class="intro-secondary">
-			this policy explains what data we collect, what's public by design on the
+			This policy explains what data we collect, what's public by design on the
 			<a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>,
 			and your rights.
 		</p>
@@ -42,37 +42,37 @@
 			<h2>1. The AT Protocol</h2>
 			<p>
 				{APP_NAME} uses the <a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>
-				for identity and social features. this has important implications:
+				for identity and social features. This has important implications:
 			</p>
 			<p>
-				<strong>public by design:</strong> your DID, handle, profile, tracks, likes, comments,
+				<strong>Public by design:</strong> Your DID, handle, profile, tracks, likes, comments,
 				and playlists are stored on your PDS (Personal Data Server) and remain under your
-				control. the AT Protocol is a public data protocol—this data is accessible to any
+				control. The AT Protocol is a public data protocol—this data is accessible to any
 				AT Protocol application, not just {APP_NAME}.
 			</p>
 			<p>
-				<strong>your PDS:</strong> {APP_NAME} does not operate a PDS—we write records to
-				wherever your account is hosted (e.g., bsky.social or a self-hosted PDS). we do not
+				<strong>Your PDS:</strong> {APP_NAME} does not operate a PDS—we write records to
+				wherever your account is hosted (e.g., bsky.social or a self-hosted PDS). We do not
 				control that data; their privacy policies govern it.
 			</p>
 			<p>
-				<strong>private data:</strong> session tokens, preferences, and server logs are stored
+				<strong>Private data:</strong> Session tokens, preferences, and server logs are stored
 				only on our servers.
 			</p>
 		</section>
 
 		<section>
 			<h2>2. Data We Collect</h2>
-			<p><strong>you provide:</strong> your AT Protocol identity when you log in, audio files
+			<p><strong>You provide:</strong> Your AT Protocol identity when you log in, audio files
 				and metadata you upload, and preferences like accent color.</p>
-			<p><strong>automatically:</strong> play counts, IP addresses, browser info, and
+			<p><strong>Automatically:</strong> Play counts, IP addresses, browser info, and
 				session cookies for authentication.</p>
 		</section>
 
 		<section>
 			<h2>3. How We Use It</h2>
-			<p>we use your data to provide the service, maintain your session, and improve the
-				platform. we do not sell your data or use it for advertising.</p>
+			<p>We use your data to provide the service, maintain your session, and improve the
+				platform. We do not sell your data or use it for advertising.</p>
 		</section>
 
 		<section>
@@ -96,36 +96,36 @@
 
 		<section>
 			<h2>5. Your Rights</h2>
-			<p>you can access, correct, or delete your data through settings. when you delete your
+			<p>You can access, correct, or delete your data through settings. When you delete your
 				account, we remove your files from our storage and your data from our database.</p>
 			<p>
-				<strong>we cannot delete:</strong> your DID (you control it), data on other AT Protocol
+				<strong>We cannot delete:</strong> Your DID (you control it), data on other AT Protocol
 				servers, or records in other users' PDSes.
 			</p>
 		</section>
 
 		<section>
 			<h2>6. Security</h2>
-			<p>we use HTTPS, encrypt sensitive data, and use HttpOnly cookies. no system is
+			<p>We use HTTPS, encrypt sensitive data, and use HttpOnly cookies. No system is
 				perfectly secure—report vulnerabilities to
 				<a href="mailto:{contactEmail}">{contactEmail}</a>.</p>
 		</section>
 
 		<section>
 			<h2>7. Children</h2>
-			<p>{APP_NAME} is not for children under 13. we do not knowingly collect data from
+			<p>{APP_NAME} is not for children under 13. We do not knowingly collect data from
 				children.</p>
 		</section>
 
 		<section>
 			<h2>8. Changes</h2>
-			<p>we may update this policy. material changes will be posted with notice.</p>
+			<p>We may update this policy. Material changes will be posted with notice.</p>
 		</section>
 
 		<section class="contact">
 			<h2>Contact</h2>
 			<p>
-				questions? <a href="mailto:{privacyEmail}">{privacyEmail}</a>
+				Questions? <a href="mailto:{privacyEmail}">{privacyEmail}</a>
 			</p>
 		</section>
 

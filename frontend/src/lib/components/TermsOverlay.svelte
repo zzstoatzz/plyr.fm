@@ -13,7 +13,7 @@
 		const success = await account.acceptTerms();
 
 		if (!success) {
-			error = 'failed to accept terms. please try again.';
+			error = 'Failed to accept terms. Please try again.';
 		}
 		accepting = false;
 	}
@@ -34,22 +34,22 @@
 			<h2>Key Points</h2>
 			<ul>
 				<li>
-					<strong>your content:</strong> you own what you upload. audio files are stored
-					in public blob storage we control; track metadata is written to your PDS. delete
+					<strong>Your content:</strong> You own what you upload. Audio files are stored
+					in public blob storage we control; track metadata is written to your PDS. Delete
 					through {APP_NAME} and we remove the audio from storage.
 				</li>
 				<li>
-					<strong>copyright:</strong> don't upload content you don't have rights to.
-					we follow DMCA takedown procedures.
+					<strong>Copyright:</strong> Don't upload content you don't have rights to.
+					We follow DMCA takedown procedures.
 				</li>
 				<li>
-					<strong>AT Protocol:</strong> your identity and public data (likes, comments,
+					<strong>AT Protocol:</strong> Your identity and public data (likes, comments,
 					playlists) are stored on your
 					<a href="https://atproto.com/guides/glossary#pds-personal-data-server" target="_blank" rel="noopener">PDS</a>.
-					this data is public and accessible via ATProto.
+					This data is public and accessible via ATProto.
 				</li>
 				<li>
-					<strong>privacy:</strong> we don't sell your data or use it for ads.
+					<strong>Privacy:</strong> We don't sell your data or use it for ads.
 				</li>
 			</ul>
 		</div>
@@ -124,7 +124,6 @@
 		font-size: 0.9rem;
 		margin: 0 0 0.75rem 0;
 		color: var(--text-secondary);
-		text-transform: lowercase;
 	}
 
 	.terms-summary ul {

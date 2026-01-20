@@ -23,17 +23,17 @@
 		<p class="intro">
 			{APP_NAME} ("we", "us", or "our") is a music streaming application built on the
 			<a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>.
-			these terms of service apply to the instance at
+			These terms of service apply to the instance at
 			<a href={APP_CANONICAL_URL}>{APP_CANONICAL_URL}</a> (the "site").
 		</p>
 
 		<p class="intro">
-			{APP_NAME} is open source under the MIT license. other instances or derivatives
+			{APP_NAME} is open source under the MIT license. Other instances or derivatives
 			hosted elsewhere are not covered by these terms.
 		</p>
 
 		<p class="intro-secondary">
-			by using the service, you agree to these terms. if you disagree with any part,
+			By using the service, you agree to these terms. If you disagree with any part,
 			you may not use the service.
 		</p>
 
@@ -41,11 +41,11 @@
 			<h2>1. Accounts</h2>
 			<p>
 				{APP_NAME} uses the <a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>
-				for authentication. your identity is your DID (decentralized identifier), not an account we
-				control. we do not store passwords.
+				for authentication. Your identity is your DID (decentralized identifier), not an account we
+				control. We do not store passwords.
 			</p>
 			<p>
-				we may terminate or suspend your access at any time, for any reason. termination removes
+				We may terminate or suspend your access at any time, for any reason. Termination removes
 				your content from {APP_NAME} but does not affect your DID or data on your PDS—we don't control
 				those.
 			</p>
@@ -54,40 +54,40 @@
 		<section>
 			<h2>2. Content</h2>
 			<p>
-				you retain ownership of content you upload. by uploading, you grant us a non-exclusive,
+				You retain ownership of content you upload. By uploading, you grant us a non-exclusive,
 				worldwide, royalty-free license to use, reproduce, modify, and distribute your content as
 				necessary to provide the service.
 			</p>
 			<p>
-				you represent that you own or have the necessary rights to the content you upload, and that
+				You represent that you own or have the necessary rights to the content you upload, and that
 				it does not infringe any third party's rights.
 			</p>
 		</section>
 
 		<section>
 			<h2>3. Acceptable Use</h2>
-			<p>you agree not to:</p>
+			<p>You agree not to:</p>
 			<ul>
-				<li>violate any applicable laws</li>
-				<li>infringe on others' rights</li>
-				<li>upload content that is illegal or infringes copyright</li>
-				<li>attempt unauthorized access to the service</li>
-				<li>interfere with or disrupt the service</li>
+				<li>Violate any applicable laws</li>
+				<li>Infringe on others' rights</li>
+				<li>Upload content that is illegal or infringes copyright</li>
+				<li>Attempt unauthorized access to the service</li>
+				<li>Interfere with or disrupt the service</li>
 			</ul>
 		</section>
 
 		<section>
 			<h2>4. Copyright & DMCA</h2>
-			<p>we respond to valid DMCA takedown notices. our designated agent is:</p>
+			<p>We respond to valid DMCA takedown notices. Our designated agent is:</p>
 			<address class="dmca-agent">
 				Nathan Nowack<br />
 				DMCA Registration: {data.dmcaRegistrationNumber}<br />
 				Email: <a href="mailto:{dmcaEmail}">{dmcaEmail}</a>
 			</address>
-			<p>we terminate accounts of repeat infringers.</p>
+			<p>We terminate accounts of repeat infringers.</p>
 			<p>
 				<strong><a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a> limitation:</strong>
-				audio files are stored in public blob storage that {APP_NAME} controls and can remove at any time
+				Audio files are stored in public blob storage that {APP_NAME} controls and can remove at any time
 				for policy violations. AT Protocol records referring to deleted audio files may persist in user
 				personal data servers (which {APP_NAME} does not control), but {APP_NAME} will not provide access
 				to violating or deleted content.
@@ -97,11 +97,11 @@
 		<section>
 			<h2>5. Disclaimers</h2>
 			<p>
-				the service is provided "as is" and "as available" without warranties of any kind. we do not
+				The service is provided "as is" and "as available" without warranties of any kind. We do not
 				guarantee uptime or that the service will be error-free.
 			</p>
 			<p>
-				we are not liable for any indirect, incidental, special, or consequential damages resulting
+				We are not liable for any indirect, incidental, special, or consequential damages resulting
 				from your use of the service.
 			</p>
 		</section>
@@ -109,14 +109,14 @@
 		<section>
 			<h2>6. Governing Law</h2>
 			<p>
-				these terms are governed by United States law, without regard to conflict-of-law provisions.
+				These terms are governed by United States law, without regard to conflict-of-law provisions.
 			</p>
 		</section>
 
 		<section>
 			<h2>7. Changes</h2>
 			<p>
-				we may update these terms. material changes will be posted with notice. continued use after
+				We may update these terms. Material changes will be posted with notice. Continued use after
 				changes constitutes acceptance.
 			</p>
 		</section>
@@ -124,7 +124,7 @@
 		<section class="contact">
 			<h2>Contact</h2>
 			<p>
-				questions? <a href="mailto:{contactEmail}">{contactEmail}</a>
+				Questions? <a href="mailto:{contactEmail}">{contactEmail}</a>
 			</p>
 		</section>
 
