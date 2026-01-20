@@ -1,6 +1,5 @@
 
 <script lang="ts">
-	import { APP_NAME } from '$lib/branding';
 	import { onMount } from 'svelte';
 	import { invalidateAll, replaceState } from '$app/navigation';
 	import { API_URL } from '$lib/config';
@@ -129,7 +128,7 @@
 		<div class="setup-container">
 			<h1>set up your artist profile</h1>
 			<p class="subtitle">
-			welcome to {APP_NAME}! please set up your artist profile to start uploading audio.
+			one more step - set up your artist profile to start uploading audio.
 			</p>
 
 			{#if error}
@@ -298,6 +297,7 @@
 		color: white;
 		border: none;
 		border-radius: var(--radius-sm);
+		font-family: inherit;
 		font-size: var(--text-lg);
 		font-weight: 600;
 		cursor: pointer;
