@@ -44,6 +44,12 @@ class TracksListResponse(BaseModel):
     has_more: bool = False
 
 
+class MyTracksResponse(BaseModel):
+    """Response for listing authenticated user's tracks."""
+
+    tracks: list[TrackResponse]
+
+
 @router.get("/")
 async def list_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -357,7 +363,7 @@ async def list_top_tracks(
 async def list_my_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
-) -> dict:
+) -> MyTracksResponse:
     """List tracks uploaded by authenticated user."""
     stmt = (
         select(Track)
@@ -386,7 +392,7 @@ async def list_my_tracks(
         ]
     )
 
-    return {"tracks": track_responses}
+    return MyTracksResponse(tracks=track_responses)
 
 
 class BrokenTracksResponse(BaseModel):

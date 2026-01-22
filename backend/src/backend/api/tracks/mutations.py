@@ -31,7 +31,7 @@ from backend._internal.background_tasks import (
 )
 from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackTag, get_db
-from backend.schemas import TrackResponse
+from backend.schemas import MessageResponse, TrackResponse
 from backend.storage import storage
 from backend.utilities.tags import parse_tags_json
 
@@ -86,7 +86,7 @@ async def delete_track(
     track_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
-) -> dict:
+) -> MessageResponse:
     """Delete a track (only by owner)."""
     result = await db.execute(
         select(Track).options(selectinload(Track.album_rel)).where(Track.id == track_id)
@@ -163,7 +163,7 @@ async def delete_track(
     if album_id_to_sync:
         await schedule_album_list_sync(auth_session.session_id, album_id_to_sync)
 
-    return {"message": "track deleted successfully"}
+    return MessageResponse(message="track deleted successfully")
 
 
 @router.patch("/{track_id}")

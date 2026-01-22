@@ -8,7 +8,6 @@
 	import { API_URL } from '$lib/config';
 	import Header from '$lib/components/Header.svelte';
 	import AddToMenu from '$lib/components/AddToMenu.svelte';
-	import ShareButton from '$lib/components/ShareButton.svelte';
 	import TagEffects from '$lib/components/TagEffects.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import LikersTooltip from '$lib/components/LikersTooltip.svelte';
@@ -392,6 +391,8 @@ $effect(() => {
 });
 
 let shareUrl = $state('');
+let sharingInProgress = $state(false);
+let showShareCopied = $state(false);
 
 $effect(() => {
 	if (typeof window !== 'undefined') {
@@ -399,7 +400,48 @@ $effect(() => {
 	}
 });
 
+async function handleShareClick() {
+	if (sharingInProgress) return;
+
+	// if not authenticated, just copy the plain URL
+	if (!auth.isAuthenticated) {
+		await navigator.clipboard.writeText(shareUrl);
+		showShareCopied = true;
+		setTimeout(() => { showShareCopied = false; }, 2000);
+		return;
+	}
+
+	sharingInProgress = true;
+	try {
+		// create a tracked share link
+		const response = await fetch(`${API_URL}/tracks/${track.id}/share`, {
+			method: 'POST',
+			credentials: 'include'
+		});
+
+		if (response.ok) {
+			const data = await response.json();
+			await navigator.clipboard.writeText(data.url);
+		} else {
+			// fallback to plain URL if share link creation fails
+			await navigator.clipboard.writeText(shareUrl);
+		}
+
+		showShareCopied = true;
+		setTimeout(() => { showShareCopied = false; }, 2000);
+	} catch (err) {
+		console.error('failed to create share link:', err);
+		// fallback to plain URL
+		await navigator.clipboard.writeText(shareUrl);
+		showShareCopied = true;
+		setTimeout(() => { showShareCopied = false; }, 2000);
+	} finally {
+		sharingInProgress = false;
+	}
+}
+
 // handle ?t= timestamp param for deep linking (youtube-style)
+// handle ?ref= param for share link tracking
 onMount(() => {
 	const t = $page.url.searchParams.get('t');
 	if (t) {
@@ -413,6 +455,21 @@ onMount(() => {
 				queue.playNow(track, false);
 			}
 		}
+	}
+
+	// capture ref for share link tracking
+	const ref = $page.url.searchParams.get('ref');
+	if (ref) {
+		// store ref in player state for attribution on play
+		player.setRef(ref, track.id);
+
+		// record click event (fire-and-forget)
+		fetch(`${API_URL}/tracks/${track.id}/ref/${ref}/click`, {
+			method: 'POST',
+			credentials: 'include'
+		}).catch(() => {
+			// silently ignore errors - tracking is best-effort
+		});
 	}
 });
 
@@ -607,7 +664,24 @@ $effect(() => {
 								onQueue={addToQueue}
 							/>
 						{/if}
-						<ShareButton url={shareUrl} title="share track" />
+						<button
+							class="share-btn"
+							onclick={handleShareClick}
+							disabled={sharingInProgress}
+							title="share track"
+						>
+							{#if showShareCopied}
+								copied!
+							{:else}
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<circle cx="18" cy="5" r="3"></circle>
+									<circle cx="6" cy="12" r="3"></circle>
+									<circle cx="18" cy="19" r="3"></circle>
+									<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+									<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+								</svg>
+							{/if}
+						</button>
 					</div>
 
 					<!-- actions -->
@@ -1009,6 +1083,35 @@ $effect(() => {
 		gap: 0.75rem;
 		justify-content: center;
 		align-items: center;
+	}
+
+	.share-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		padding: 0;
+		background: transparent;
+		color: var(--text-secondary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-full);
+		cursor: pointer;
+		transition: all 0.2s;
+		font-size: var(--text-xs);
+		font-family: inherit;
+		font-weight: 500;
+	}
+
+	.share-btn:hover:not(:disabled) {
+		color: var(--accent);
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.share-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.track-actions {

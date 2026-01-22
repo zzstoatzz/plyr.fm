@@ -33,6 +33,13 @@ class TagDetail(BaseModel):
 
     name: str
     track_count: int
+
+
+class TagTracksResponse(BaseModel):
+    """response for getting tracks by tag."""
+
+    tag: TagDetail
+    tracks: list[TrackResponse]
     created_by_handle: str | None = None
 
 
@@ -42,7 +49,7 @@ async def get_tracks_by_tag(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
-) -> dict:
+) -> TagTracksResponse:
     """get all tracks with a specific tag.
 
     returns tag info and list of tracks tagged with that tag.
@@ -104,14 +111,14 @@ async def get_tracks_by_tag(
         ]
     )
 
-    return {
-        "tag": TagDetail(
+    return TagTracksResponse(
+        tag=TagDetail(
             name=tag.name,
             track_count=len(tracks),
             created_by_handle=tag.creator.handle if tag.creator else None,
         ),
-        "tracks": track_responses,
-    }
+        tracks=track_responses,
+    )
 
 
 @router.get("/tags")

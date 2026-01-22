@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session, now_playing_service, require_auth
 from backend.config import settings
 from backend.models import Artist, get_db
+from backend.schemas import StatusResponse
 from backend.utilities.rate_limit import limiter
 
 router = APIRouter(prefix="/now-playing", tags=["now-playing"])
@@ -67,7 +68,7 @@ class NowPlayingResponse(BaseModel):
 async def update_now_playing(
     update: NowPlayingUpdate,
     session: Session = Depends(require_auth),
-) -> dict:
+) -> StatusResponse:
     """update now playing state (authenticated).
 
     called by frontend to report current playback state.
@@ -89,20 +90,20 @@ async def update_now_playing(
         is_playing=update.is_playing,
     )
 
-    return {"status": "ok"}
+    return StatusResponse(status="ok")
 
 
 @router.delete("/")
 @limiter.exempt
 async def clear_now_playing(
     session: Session = Depends(require_auth),
-) -> dict:
+) -> StatusResponse:
     """clear now playing state (authenticated).
 
     called when user explicitly stops playback.
     """
     now_playing_service.clear(session.did)
-    return {"status": "ok"}
+    return StatusResponse(status="ok")
 
 
 @router.get("/by-handle/{handle}")

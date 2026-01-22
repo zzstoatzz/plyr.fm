@@ -1,16 +1,47 @@
 <script lang="ts">
+	import { auth } from '$lib/auth.svelte';
+	import { API_URL } from '$lib/config';
+
 	interface Props {
 		url: string;
 		title?: string;
+		trackId?: number; // if provided, creates a tracked share link
 	}
 
-	let { url, title = 'share' }: Props = $props();
+	let { url, title = 'share', trackId }: Props = $props();
 
 	let showCopied = $state(false);
+	let sharing = $state(false);
 
 	async function copyLink() {
+		if (sharing) return;
+
+		let urlToCopy = url;
+
+		// if trackId provided and user is authenticated, create a tracked share link
+		if (trackId && auth.isAuthenticated) {
+			sharing = true;
+			try {
+				const response = await fetch(`${API_URL}/tracks/${trackId}/share`, {
+					method: 'POST',
+					credentials: 'include'
+				});
+
+				if (response.ok) {
+					const data = await response.json();
+					urlToCopy = data.url;
+				}
+				// fallback to plain url if api fails
+			} catch (err) {
+				console.error('failed to create share link:', err);
+				// fallback to plain url
+			} finally {
+				sharing = false;
+			}
+		}
+
 		try {
-			await navigator.clipboard.writeText(url);
+			await navigator.clipboard.writeText(urlToCopy);
 			showCopied = true;
 			setTimeout(() => {
 				showCopied = false;

@@ -73,6 +73,21 @@ class PlaylistSearchResult(BaseModel):
     relevance: float
 
 
+class HandleSearchResult(BaseModel):
+    """ATProto handle search result."""
+
+    did: str
+    handle: str
+    display_name: str | None
+    avatar_url: str | None
+
+
+class HandleSearchResponse(BaseModel):
+    """response for handle search."""
+
+    results: list[HandleSearchResult]
+
+
 SearchResult = (
     TrackSearchResult
     | ArtistSearchResult
@@ -93,13 +108,10 @@ class SearchResponse(BaseModel):
 async def search_atproto_handles(
     q: str = Query(..., min_length=2, description="search query (handle prefix)"),
     limit: int = Query(10, ge=1, le=25, description="max results"),
-) -> dict:
-    """search for ATProto handles by prefix.
-
-    returns list of {did, handle, display_name, avatar_url}
-    """
+) -> HandleSearchResponse:
+    """search for ATProto handles by prefix."""
     results = await search_handles(q, limit=limit)
-    return {"results": results}
+    return HandleSearchResponse(results=[HandleSearchResult(**r) for r in results])
 
 
 @router.get("/")

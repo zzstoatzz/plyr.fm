@@ -7,6 +7,44 @@ from pydantic import BaseModel
 from backend.models import Album, Track
 from backend.utilities.aggregations import CopyrightInfo
 
+# --- common simple response types ---
+
+
+class OkResponse(BaseModel):
+    """simple success response."""
+
+    ok: bool = True
+
+
+class StatusResponse(BaseModel):
+    """status response for operations that return a status string."""
+
+    status: str
+
+
+class MessageResponse(BaseModel):
+    """response containing a message."""
+
+    message: str
+
+
+class DeletedResponse(BaseModel):
+    """response for delete operations."""
+
+    deleted: bool = True
+
+
+class LikedResponse(BaseModel):
+    """response for like/unlike operations."""
+
+    liked: bool
+
+
+class PlayCountResponse(BaseModel):
+    """response for play count increment."""
+
+    play_count: int
+
 
 class AlbumSummary(BaseModel):
     """album summary for embedding in track responses."""

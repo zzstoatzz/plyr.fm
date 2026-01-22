@@ -17,6 +17,7 @@ from backend._internal.background_tasks import (
     schedule_pds_update_comment,
 )
 from backend.models import Artist, Track, TrackComment, UserPreferences, get_db
+from backend.schemas import DeletedResponse
 
 from .router import router
 
@@ -219,7 +220,7 @@ async def delete_comment(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
-) -> dict:
+) -> DeletedResponse:
     """delete a comment. only the author can delete their own comments.
 
     the comment is removed immediately; the ATProto record is deleted in background.
@@ -252,7 +253,7 @@ async def delete_comment(
             comment_uri=comment_uri,
         )
 
-    return {"deleted": True}
+    return DeletedResponse()
 
 
 @router.patch("/comments/{comment_id}")

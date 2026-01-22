@@ -8,6 +8,9 @@ from .router import router
 from . import listing as _listing  # /, /me, /me/broken
 from . import tags as _tags  # /tags
 from . import likes as _likes  # /liked, /{track_id}/like, /{track_id}/likes
+from . import (
+    shares as _shares,
+)  # /me/shares, /{track_id}/share, /{track_id}/ref/{code}/click
 from . import uploads as _uploads  # /, /uploads/{upload_id}/progress
 from . import comments as _comments  # /{track_id}/comments, /comments/{comment_id}
 from . import mutations as _mutations  # /{track_id}, /{track_id}/restore-record

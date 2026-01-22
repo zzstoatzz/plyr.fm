@@ -21,6 +21,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +52,14 @@ from .router import router
 from .services import get_or_create_album
 
 logger = logging.getLogger(__name__)
+
+
+class UploadStartResponse(BaseModel):
+    """response when upload is queued for processing."""
+
+    upload_id: str
+    status: str
+    message: str
 
 
 @dataclass
@@ -536,7 +545,7 @@ async def upload_track(
     ] = None,
     file: UploadFile = File(...),
     image: UploadFile | None = File(None),
-) -> dict:
+) -> UploadStartResponse:
     """Upload a new track (requires authentication and artist profile).
 
     Parameters:
@@ -679,11 +688,11 @@ async def upload_track(
                 Path(image_path).unlink(missing_ok=True)
         raise
 
-    return {
-        "upload_id": upload_id,
-        "status": "pending",
-        "message": "upload queued for processing",
-    }
+    return UploadStartResponse(
+        upload_id=upload_id,
+        status="pending",
+        message="upload queued for processing",
+    )
 
 
 @router.get("/uploads/{upload_id}/progress")
