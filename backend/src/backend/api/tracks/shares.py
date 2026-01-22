@@ -185,47 +185,42 @@ async def list_my_shares(
             )
         )
 
-        # get authenticated user breakdown
+        # get authenticated user breakdown with artist info in single query
         user_stmt = (
             select(
                 ShareLinkEvent.visitor_did,
                 func.count(ShareLinkEvent.id).label("event_count"),
+                Artist.handle,
+                Artist.display_name,
+                Artist.avatar_url,
             )
+            .outerjoin(Artist, Artist.did == ShareLinkEvent.visitor_did)
             .where(
                 ShareLinkEvent.share_link_id == share_link_id,
                 ShareLinkEvent.event_type == event_type,
                 ShareLinkEvent.visitor_did.isnot(None),
             )
-            .group_by(ShareLinkEvent.visitor_did)
+            .group_by(
+                ShareLinkEvent.visitor_did,
+                Artist.handle,
+                Artist.display_name,
+                Artist.avatar_url,
+            )
             .order_by(func.count(ShareLinkEvent.id).desc())
         )
         user_result = await db.execute(user_stmt)
         user_rows = user_result.all()
 
-        # enrich with artist info
-        users = []
-        for visitor_did, event_count in user_rows:
-            artist = await db.scalar(select(Artist).where(Artist.did == visitor_did))
-            if artist:
-                users.append(
-                    UserStats(
-                        did=visitor_did,
-                        handle=artist.handle,
-                        display_name=artist.display_name,
-                        avatar_url=artist.avatar_url,
-                        count=event_count,
-                    )
-                )
-            else:
-                users.append(
-                    UserStats(
-                        did=visitor_did,
-                        handle=visitor_did,
-                        display_name=None,
-                        avatar_url=None,
-                        count=event_count,
-                    )
-                )
+        users = [
+            UserStats(
+                did=visitor_did,
+                handle=handle or visitor_did,
+                display_name=display_name,
+                avatar_url=avatar_url,
+                count=event_count,
+            )
+            for visitor_did, event_count, handle, display_name, avatar_url in user_rows
+        ]
 
         return users, anonymous_count or 0
 
