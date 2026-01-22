@@ -565,6 +565,38 @@ async def check_artist_profile_exists(did: str) -> bool:
         return artist is not None
 
 
+async def ensure_artist_exists(did: str, handle: str) -> bool:
+    """ensure an Artist record exists for the given DID, creating a minimal one if needed.
+
+    this ensures all authenticated users have at least a basic Artist record,
+    which is needed for displaying handles in share link stats, comments, etc.
+
+    returns True if artist was created, False if it already existed.
+    """
+    from backend._internal.atproto.profile import fetch_user_avatar
+    from backend.models import Artist
+
+    async with db_session() as db:
+        result = await db.execute(select(Artist).where(Artist.did == did))
+        if result.scalar_one_or_none():
+            return False  # already exists
+
+        # fetch avatar from Bluesky
+        avatar_url = await fetch_user_avatar(did)
+
+        # create minimal artist record
+        artist = Artist(
+            did=did,
+            handle=handle,
+            display_name=handle,  # use handle as initial display name
+            avatar_url=avatar_url,
+        )
+        db.add(artist)
+        await db.commit()
+        logger.info(f"created minimal artist record for {did} (@{handle})")
+        return True
+
+
 async def create_exchange_token(session_id: str, is_dev_token: bool = False) -> str:
     """create a one-time use exchange token for secure OAuth callback.
 

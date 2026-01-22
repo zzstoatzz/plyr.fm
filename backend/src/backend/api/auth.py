@@ -19,6 +19,7 @@ from backend._internal import (
     delete_pending_dev_token,
     delete_pending_scope_upgrade,
     delete_session,
+    ensure_artist_exists,
     get_or_create_group_id,
     get_pending_add_account,
     get_pending_dev_token,
@@ -109,6 +110,11 @@ async def oauth_callback(
     4. regular login flow - creates session, redirects to portal or profile setup
     """
     did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
+
+    # ensure Artist record exists for all authenticated users
+    # this creates a minimal record if needed, so we can display handles in
+    # share link stats, comments, track likers, etc.
+    await ensure_artist_exists(did, handle)
 
     # check if this is a developer token OAuth flow
     pending_dev_token = await get_pending_dev_token(state)

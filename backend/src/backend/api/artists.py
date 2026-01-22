@@ -86,15 +86,14 @@ async def create_artist(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: Session = Depends(require_auth),
 ) -> ArtistResponse:
-    """create artist profile for authenticated user.
+    """create or update artist profile for authenticated user.
 
-    this should be called on first login if artist profile doesn't exist.
+    if a minimal Artist record was created during OAuth login, this updates it
+    with the user's profile setup choices. otherwise creates a new record.
     """
-    # check if artist already exists
+    # check if artist already exists (may be a minimal record from OAuth)
     result = await db.execute(select(Artist).where(Artist.did == auth_session.did))
     existing = result.scalar_one_or_none()
-    if existing:
-        raise HTTPException(status_code=400, detail="artist profile already exists")
 
     # fetch avatar from Bluesky if not provided
     avatar_url = request.avatar_url
@@ -114,22 +113,35 @@ async def create_artist(
     except Exception as e:
         logger.warning(f"failed to resolve PDS for {auth_session.did}: {e}")
 
-    # create artist
-    artist = Artist(
-        did=auth_session.did,
-        handle=auth_session.handle,
-        display_name=request.display_name or auth_session.handle,
-        bio=request.bio,
-        avatar_url=avatar_url,
-        pds_url=pds_url,
-    )
-    db.add(artist)
+    if existing:
+        # update existing minimal record with profile setup data
+        existing.handle = auth_session.handle
+        existing.display_name = request.display_name or auth_session.handle
+        existing.bio = request.bio
+        existing.avatar_url = avatar_url
+        if pds_url:
+            existing.pds_url = pds_url
+        artist = existing
+        logger.info(
+            f"updated artist profile for {auth_session.did} (@{auth_session.handle})"
+        )
+    else:
+        # create new artist record
+        artist = Artist(
+            did=auth_session.did,
+            handle=auth_session.handle,
+            display_name=request.display_name or auth_session.handle,
+            bio=request.bio,
+            avatar_url=avatar_url,
+            pds_url=pds_url,
+        )
+        db.add(artist)
+        logger.info(
+            f"created artist profile for {auth_session.did} (@{auth_session.handle})"
+        )
+
     await db.commit()
     await db.refresh(artist)
-
-    logger.info(
-        f"created artist profile for {auth_session.did} (@{auth_session.handle})"
-    )
 
     # create ATProto profile record if bio was provided
     if request.bio:
