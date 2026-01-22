@@ -23,7 +23,7 @@ class SensitiveImagesResponse(BaseModel):
 
 
 @router.get("/sensitive-images")
-@limiter.limit("10/minute")
+@limiter.limit("120/minute")
 async def get_sensitive_images(
     request: Request,
 ) -> SensitiveImagesResponse:
