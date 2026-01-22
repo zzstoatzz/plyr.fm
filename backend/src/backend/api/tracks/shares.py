@@ -13,15 +13,9 @@ from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, require_auth
 from backend.config import settings
 from backend.models import Artist, ShareLink, ShareLinkEvent, Track, get_db
-from backend.schemas import TrackResponse
+from backend.schemas import OkResponse, TrackResponse
 
 from .router import router
-
-
-class OkResponse(BaseModel):
-    """simple success response."""
-
-    ok: bool = True
 
 
 class ShareLinkResponse(BaseModel):

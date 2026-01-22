@@ -77,8 +77,20 @@ class AlbumListItem(BaseModel):
     artist: str
     artist_handle: str
     track_count: int
-    total_plays: int
-    image_url: str | None
+
+
+class RemoveTrackFromAlbumResponse(BaseModel):
+    """response for removing a track from an album."""
+
+    removed: bool = True
+    track_id: int
+
+
+class DeleteAlbumResponse(BaseModel):
+    """response for deleting an album."""
+
+    deleted: bool = True
+    cascade: bool
 
 
 class ArtistAlbumListItem(BaseModel):
@@ -601,7 +613,7 @@ async def remove_track_from_album(
     track_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: Annotated[AuthSession, Depends(require_artist_profile)],
-) -> dict:
+) -> RemoveTrackFromAlbumResponse:
     """remove a track from an album (orphan it, don't delete).
 
     the track remains available as a standalone track.
@@ -628,7 +640,7 @@ async def remove_track_from_album(
     track.album_id = None
     await db.commit()
 
-    return {"removed": True, "track_id": track_id}
+    return RemoveTrackFromAlbumResponse(track_id=track_id)
 
 
 @router.delete("/{album_id}")
@@ -640,7 +652,7 @@ async def delete_album(
         bool,
         Query(description="if true, also delete all tracks in the album"),
     ] = False,
-) -> dict:
+) -> DeleteAlbumResponse:
     """delete an album.
 
     by default, tracks are orphaned (album_id set to null) and remain
@@ -699,4 +711,4 @@ async def delete_album(
     await db.delete(album)
     await db.commit()
 
-    return {"deleted": True, "cascade": cascade}
+    return DeleteAlbumResponse(cascade=cascade)

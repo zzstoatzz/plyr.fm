@@ -22,7 +22,7 @@ from backend.models import (
     UserPreferences,
     get_db,
 )
-from backend.schemas import TrackResponse
+from backend.schemas import PlayCountResponse, TrackResponse
 from backend.utilities.aggregations import get_like_counts, get_track_tags
 
 from .router import router
@@ -79,7 +79,7 @@ async def increment_play_count(
     db: Annotated[AsyncSession, Depends(get_db)],
     session: Session | None = Depends(get_optional_session),
     body: PlayRequest | None = Body(default=None),
-) -> dict:
+) -> PlayCountResponse:
     """Increment play count for a track (called after 30 seconds of playback).
 
     If user has teal.fm scrobbling enabled and has the required scopes,
@@ -138,4 +138,4 @@ async def increment_play_count(
                     album_name=track.album_rel.title if track.album_rel else None,
                 )
 
-    return {"play_count": track.play_count}
+    return PlayCountResponse(play_count=track.play_count)

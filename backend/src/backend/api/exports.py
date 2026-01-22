@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,11 +21,20 @@ router = APIRouter(prefix="/exports", tags=["exports"])
 logger = logging.getLogger(__name__)
 
 
+class ExportStartResponse(BaseModel):
+    """response when export is queued for processing."""
+
+    export_id: str
+    status: str
+    message: str
+    track_count: int
+
+
 @router.post("/media")
 async def export_media(
     session: Annotated[Session, Depends(require_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
+) -> ExportStartResponse:
     """start export of all tracks for authenticated user.
 
     returns an export_id for tracking progress via SSE.
@@ -45,12 +55,12 @@ async def export_media(
     # schedule background processing via docket (or asyncio fallback)
     await schedule_export(export_id, session.did)
 
-    return {
-        "export_id": export_id,
-        "status": "pending",
-        "message": "export queued for processing",
-        "track_count": len(tracks),
-    }
+    return ExportStartResponse(
+        export_id=export_id,
+        status="pending",
+        message="export queued for processing",
+        track_count=len(tracks),
+    )
 
 
 @router.get("/{export_id}/progress")

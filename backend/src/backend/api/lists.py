@@ -30,7 +30,7 @@ from backend._internal.atproto.records import (
 )
 from backend._internal.auth import get_session
 from backend.models import Artist, Playlist, Track, TrackLike, UserPreferences, get_db
-from backend.schemas import TrackResponse
+from backend.schemas import DeletedResponse, TrackResponse
 from backend.storage import storage
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
 from backend.utilities.hashing import CHUNK_SIZE
@@ -657,7 +657,7 @@ async def delete_playlist(
     playlist_id: str,
     session: AuthSession = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> DeletedResponse:
     """delete a playlist.
 
     deletes both the ATProto list record and the database cache.
@@ -685,7 +685,7 @@ async def delete_playlist(
     await db.delete(playlist)
     await db.commit()
 
-    return {"deleted": True}
+    return DeletedResponse()
 
 
 @router.post("/playlists/{playlist_id}/cover")

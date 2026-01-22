@@ -4,6 +4,7 @@ import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,12 +17,29 @@ from backend.utilities.aggregations import get_comment_counts, get_like_counts
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+class UserInfo(BaseModel):
+    """basic user info."""
+
+    did: str
+    handle: str
+    display_name: str | None
+    avatar_url: str | None
+
+
+class UserLikedTracksResponse(BaseModel):
+    """response for user's liked tracks."""
+
+    user: UserInfo
+    tracks: list[TrackResponse]
+    count: int
+
+
 @router.get("/{handle}/likes")
 async def get_user_liked_tracks(
     handle: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     session: Session | None = Depends(get_optional_session),
-) -> dict:
+) -> UserLikedTracksResponse:
     """get tracks liked by a user (public).
 
     likes are stored on the user's PDS as ATProto records, making them
@@ -80,13 +98,13 @@ async def get_user_liked_tracks(
     )
     total_count = await db.scalar(count_stmt)
 
-    return {
-        "user": {
-            "did": artist.did,
-            "handle": artist.handle,
-            "display_name": artist.display_name,
-            "avatar_url": artist.avatar_url,
-        },
-        "tracks": track_responses,
-        "count": total_count or 0,
-    }
+    return UserLikedTracksResponse(
+        user=UserInfo(
+            did=artist.did,
+            handle=artist.handle,
+            display_name=artist.display_name,
+            avatar_url=artist.avatar_url,
+        ),
+        tracks=list(track_responses),
+        count=total_count or 0,
+    )

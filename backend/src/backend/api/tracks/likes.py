@@ -5,6 +5,7 @@ import logging
 from typing import Annotated
 
 from fastapi import Cookie, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,7 +17,7 @@ from backend._internal.background_tasks import (
     schedule_pds_delete_like,
 )
 from backend.models import Artist, Track, TrackLike, get_db
-from backend.schemas import TrackResponse
+from backend.schemas import LikedResponse, TrackResponse
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
 
 from .router import router
@@ -24,11 +25,34 @@ from .router import router
 logger = logging.getLogger(__name__)
 
 
+class LikedTracksResponse(BaseModel):
+    """response for listing liked tracks."""
+
+    tracks: list[TrackResponse]
+
+
+class LikerInfo(BaseModel):
+    """user who liked a track."""
+
+    did: str
+    handle: str
+    display_name: str | None
+    avatar_url: str | None
+    liked_at: str
+
+
+class TrackLikersResponse(BaseModel):
+    """response for getting users who liked a track."""
+
+    users: list[LikerInfo]
+    count: int
+
+
 @router.get("/liked")
 async def list_liked_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
-) -> dict:
+) -> LikedTracksResponse:
     """List tracks liked by authenticated user (queried from local index)."""
     stmt = (
         select(Track)
@@ -61,7 +85,7 @@ async def list_liked_tracks(
         ]
     )
 
-    return {"tracks": track_responses}
+    return LikedTracksResponse(tracks=track_responses)
 
 
 @router.post("/{track_id}/like")
@@ -71,7 +95,7 @@ async def like_track(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
-) -> dict:
+) -> LikedResponse:
     """Like a track - stores in database immediately, creates ATProto record in background.
 
     The like is visible immediately in the UI. The ATProto record is created
@@ -98,7 +122,7 @@ async def like_track(
         )
     )
     if existing_like.scalar_one_or_none():
-        return {"liked": True}
+        return LikedResponse(liked=True)
 
     # create database record immediately (optimistic)
     like = TrackLike(
@@ -121,7 +145,7 @@ async def like_track(
         subject_cid=track.atproto_record_cid,
     )
 
-    return {"liked": True}
+    return LikedResponse(liked=True)
 
 
 @router.delete("/{track_id}/like")
@@ -131,7 +155,7 @@ async def unlike_track(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
-) -> dict:
+) -> LikedResponse:
     """Unlike a track - removes from database immediately, deletes ATProto record in background.
 
     The unlike is reflected immediately in the UI. The ATProto record deletion
@@ -145,7 +169,7 @@ async def unlike_track(
     like = result.scalar_one_or_none()
 
     if not like:
-        return {"liked": False}
+        return LikedResponse(liked=False)
 
     # capture the ATProto URI before deleting the DB record
     like_uri = like.atproto_like_uri
@@ -164,14 +188,14 @@ async def unlike_track(
             like_uri=like_uri,
         )
 
-    return {"liked": False}
+    return LikedResponse(liked=False)
 
 
 @router.get("/{track_id}/likes")
 async def get_track_likes(
     track_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
+) -> TrackLikersResponse:
     """Public endpoint returning users who liked a track.
 
     Returns a list of user display info (handle, display name, avatar, liked_at
@@ -193,14 +217,14 @@ async def get_track_likes(
     likes_with_artists = result.all()
 
     users = [
-        {
-            "did": artist.did,
-            "handle": artist.handle,
-            "display_name": artist.display_name,
-            "avatar_url": artist.avatar_url,
-            "liked_at": like.created_at.isoformat(),
-        }
+        LikerInfo(
+            did=artist.did,
+            handle=artist.handle,
+            display_name=artist.display_name,
+            avatar_url=artist.avatar_url,
+            liked_at=like.created_at.isoformat(),
+        )
         for like, artist in likes_with_artists
     ]
 
-    return {"users": users, "count": len(users)}
+    return TrackLikersResponse(users=users, count=len(users))
