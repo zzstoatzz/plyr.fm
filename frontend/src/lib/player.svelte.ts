@@ -12,16 +12,29 @@ class PlayerState {
 	volume = $state(0.7);
 	playCountedForTrack = $state<number | null>(null);
 
+	// share link tracking: ref code from ?ref= URL param
+	ref = $state<string | null>(null);
+	private _refTrackId: number | null = null; // track the ref is associated with
+
 	// synchronous guard to prevent duplicate play count requests
 	// (reactive state updates are batched, so we need this to block rapid-fire calls)
 	private _playCountPending: number | null = null;
+
+	setRef(code: string | null, trackId: number | null = null) {
+		this.ref = code;
+		this._refTrackId = trackId;
+	}
 
 	playTrack(track: Track) {
 		if (this.currentTrack?.id === track.id) {
 			// toggle play/pause for same track
 			this.paused = !this.paused;
 		} else {
-			// switch tracks
+			// switch tracks - clear ref if it's for a different track
+			if (this._refTrackId !== null && this._refTrackId !== track.id) {
+				this.ref = null;
+				this._refTrackId = null;
+			}
 			this.currentTrack = track;
 			this.paused = false;
 		}
@@ -49,9 +62,14 @@ class PlayerState {
 			this._playCountPending = this.currentTrack.id;
 			this.playCountedForTrack = this.currentTrack.id;
 
+			// include ref if it's for this track (for share link tracking)
+			const refForTrack = this._refTrackId === this.currentTrack.id ? this.ref : null;
+
 			fetch(`${API_URL}/tracks/${this.currentTrack.id}/play`, {
 				method: 'POST',
-				credentials: 'include'
+				credentials: 'include',
+				headers: refForTrack ? { 'Content-Type': 'application/json' } : undefined,
+				body: refForTrack ? JSON.stringify({ ref: refForTrack }) : undefined
 			}).catch(err => {
 				console.error('failed to increment play count:', err);
 			});

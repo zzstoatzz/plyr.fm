@@ -15,6 +15,7 @@ from backend.models.playlist import Playlist
 from backend.models.preferences import UserPreferences
 from backend.models.queue import QueueState
 from backend.models.session import UserSession
+from backend.models.share_link import ShareLink, ShareLinkEvent
 from backend.models.tag import Tag, TrackTag
 from backend.models.track import Track
 from backend.models.track_comment import TrackComment
@@ -35,6 +36,8 @@ __all__ = [
     "Playlist",
     "QueueState",
     "SensitiveImage",
+    "ShareLink",
+    "ShareLinkEvent",
     "Tag",
     "Track",
     "TrackComment",
