@@ -25,14 +25,14 @@ class ShareLinkResponse(BaseModel):
     url: str
 
 
-class ListenerStats(BaseModel):
-    """stats for a listener on a share link."""
+class UserStats(BaseModel):
+    """stats for a user who interacted with a share link."""
 
     did: str
     handle: str
     display_name: str | None
     avatar_url: str | None
-    play_count: int
+    count: int  # click_count or play_count depending on context
 
 
 class ShareLinkStats(BaseModel):
@@ -42,8 +42,10 @@ class ShareLinkStats(BaseModel):
     track: TrackResponse
     click_count: int
     play_count: int
+    anonymous_clicks: int
     anonymous_plays: int
-    listeners: list[ListenerStats]
+    visitors: list[UserStats]  # authenticated users who clicked
+    listeners: list[UserStats]  # authenticated users who played
     created_at: str
 
 
@@ -170,71 +172,74 @@ async def list_my_shares(
     result = await db.execute(stmt)
     share_links = result.scalars().all()
 
-    shares = []
-    for share_link in share_links:
-        # get event counts
-        click_count = await db.scalar(
+    async def get_user_stats(
+        event_type: str, share_link_id: int
+    ) -> tuple[list[UserStats], int]:
+        """get authenticated user stats and anonymous count for an event type."""
+        # get anonymous count
+        anonymous_count = await db.scalar(
             select(func.count(ShareLinkEvent.id)).where(
-                ShareLinkEvent.share_link_id == share_link.id,
-                ShareLinkEvent.event_type == "click",
-            )
-        )
-        play_count = await db.scalar(
-            select(func.count(ShareLinkEvent.id)).where(
-                ShareLinkEvent.share_link_id == share_link.id,
-                ShareLinkEvent.event_type == "play",
-            )
-        )
-        anonymous_plays = await db.scalar(
-            select(func.count(ShareLinkEvent.id)).where(
-                ShareLinkEvent.share_link_id == share_link.id,
-                ShareLinkEvent.event_type == "play",
+                ShareLinkEvent.share_link_id == share_link_id,
+                ShareLinkEvent.event_type == event_type,
                 ShareLinkEvent.visitor_did.is_(None),
             )
         )
 
-        # get listener breakdown (authenticated plays only)
-        listener_stmt = (
+        # get authenticated user breakdown
+        user_stmt = (
             select(
                 ShareLinkEvent.visitor_did,
-                func.count(ShareLinkEvent.id).label("play_count"),
+                func.count(ShareLinkEvent.id).label("event_count"),
             )
             .where(
-                ShareLinkEvent.share_link_id == share_link.id,
-                ShareLinkEvent.event_type == "play",
+                ShareLinkEvent.share_link_id == share_link_id,
+                ShareLinkEvent.event_type == event_type,
                 ShareLinkEvent.visitor_did.isnot(None),
             )
             .group_by(ShareLinkEvent.visitor_did)
             .order_by(func.count(ShareLinkEvent.id).desc())
         )
-        listener_result = await db.execute(listener_stmt)
-        listener_rows = listener_result.all()
+        user_result = await db.execute(user_stmt)
+        user_rows = user_result.all()
 
         # enrich with artist info
-        listeners = []
-        for visitor_did, visitor_play_count in listener_rows:
+        users = []
+        for visitor_did, event_count in user_rows:
             artist = await db.scalar(select(Artist).where(Artist.did == visitor_did))
             if artist:
-                listeners.append(
-                    ListenerStats(
+                users.append(
+                    UserStats(
                         did=visitor_did,
                         handle=artist.handle,
                         display_name=artist.display_name,
                         avatar_url=artist.avatar_url,
-                        play_count=visitor_play_count,
+                        count=event_count,
                     )
                 )
             else:
-                # fallback for users without artist profile
-                listeners.append(
-                    ListenerStats(
+                users.append(
+                    UserStats(
                         did=visitor_did,
                         handle=visitor_did,
                         display_name=None,
                         avatar_url=None,
-                        play_count=visitor_play_count,
+                        count=event_count,
                     )
                 )
+
+        return users, anonymous_count or 0
+
+    shares = []
+    for share_link in share_links:
+        # get visitor stats (clicks)
+        visitors, anonymous_clicks = await get_user_stats("click", share_link.id)
+
+        # get listener stats (plays)
+        listeners, anonymous_plays = await get_user_stats("play", share_link.id)
+
+        # total counts
+        click_count = len(visitors) + anonymous_clicks
+        play_count = len(listeners) + anonymous_plays
 
         # build track response
         track_response = await TrackResponse.from_track(share_link.track)
@@ -243,9 +248,11 @@ async def list_my_shares(
             ShareLinkStats(
                 code=share_link.code,
                 track=track_response,
-                click_count=click_count or 0,
-                play_count=play_count or 0,
-                anonymous_plays=anonymous_plays or 0,
+                click_count=click_count,
+                play_count=play_count,
+                anonymous_clicks=anonymous_clicks,
+                anonymous_plays=anonymous_plays,
+                visitors=visitors,
                 listeners=listeners,
                 created_at=share_link.created_at.isoformat(),
             )

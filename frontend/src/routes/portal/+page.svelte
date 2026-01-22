@@ -54,12 +54,12 @@
 	let loadingPlaylists = $state(false);
 
 	// share links state
-	interface ShareLinkListener {
+	interface ShareLinkUser {
 		did: string;
 		handle: string;
 		display_name: string | null;
 		avatar_url: string | null;
-		play_count: number;
+		count: number;
 	}
 
 	interface ShareLinkStats {
@@ -67,8 +67,10 @@
 		track: Track;
 		click_count: number;
 		play_count: number;
+		anonymous_clicks: number;
 		anonymous_plays: number;
-		listeners: ShareLinkListener[];
+		visitors: ShareLinkUser[];
+		listeners: ShareLinkUser[];
 		created_at: string;
 	}
 
@@ -1212,30 +1214,71 @@
 											copy
 										</button>
 									</div>
-									<div class="share-listeners">
-										{#if share.listeners.length > 0}
-											<h4>listeners</h4>
-											<div class="listeners-list">
-												{#each share.listeners as listener}
-													<a href="/u/{listener.handle}" class="listener">
-														{#if listener.avatar_url}
-															<img src={listener.avatar_url} alt="" class="listener-avatar" />
-														{:else}
-															<div class="listener-avatar-placeholder"></div>
-														{/if}
-														<span class="listener-name">{listener.display_name || listener.handle}</span>
-														<span class="listener-plays">{listener.play_count} {listener.play_count === 1 ? 'play' : 'plays'}</span>
-													</a>
-												{/each}
+
+									<div class="share-stats-grid">
+										<!-- visitors (clicks) -->
+										<div class="stat-group">
+											<div class="stat-header">
+												<span class="stat-label">visitors</span>
+												<span class="stat-count">{share.click_count}</span>
 											</div>
-										{/if}
-										{#if share.anonymous_plays > 0}
-											<p class="anonymous-plays">+ {share.anonymous_plays} anonymous {share.anonymous_plays === 1 ? 'play' : 'plays'}</p>
-										{/if}
-										{#if share.listeners.length === 0 && share.anonymous_plays === 0}
-											<p class="no-plays">no plays yet</p>
-										{/if}
+											{#if share.visitors.length > 0}
+												<div class="user-avatars">
+													{#each share.visitors as user}
+														<a
+															href="/u/{user.handle}"
+															class="user-circle"
+															title="{user.display_name || user.handle} ({user.count} {user.count === 1 ? 'click' : 'clicks'})"
+														>
+															{#if user.avatar_url}
+																<img src={user.avatar_url} alt="" />
+															{:else}
+																<span>{(user.display_name || user.handle).charAt(0).toUpperCase()}</span>
+															{/if}
+														</a>
+													{/each}
+												</div>
+											{/if}
+											{#if share.anonymous_clicks > 0}
+												<span class="anonymous-count">+{share.anonymous_clicks} anonymous</span>
+											{/if}
+											{#if share.visitors.length === 0 && share.anonymous_clicks === 0}
+												<span class="no-data">none yet</span>
+											{/if}
+										</div>
+
+										<!-- listeners (plays) -->
+										<div class="stat-group">
+											<div class="stat-header">
+												<span class="stat-label">listeners</span>
+												<span class="stat-count">{share.play_count}</span>
+											</div>
+											{#if share.listeners.length > 0}
+												<div class="user-avatars">
+													{#each share.listeners as user}
+														<a
+															href="/u/{user.handle}"
+															class="user-circle"
+															title="{user.display_name || user.handle} ({user.count} {user.count === 1 ? 'play' : 'plays'})"
+														>
+															{#if user.avatar_url}
+																<img src={user.avatar_url} alt="" />
+															{:else}
+																<span>{(user.display_name || user.handle).charAt(0).toUpperCase()}</span>
+															{/if}
+														</a>
+													{/each}
+												</div>
+											{/if}
+											{#if share.anonymous_plays > 0}
+												<span class="anonymous-count">+{share.anonymous_plays} anonymous</span>
+											{/if}
+											{#if share.listeners.length === 0 && share.anonymous_plays === 0}
+												<span class="no-data">none yet</span>
+											{/if}
+										</div>
 									</div>
+
 									<div class="share-meta">
 										<span class="share-created">created {new Date(share.created_at).toLocaleDateString()}</span>
 									</div>
@@ -2643,68 +2686,95 @@
 		opacity: 0.9;
 	}
 
-	.share-listeners h4 {
-		font-size: var(--text-sm);
-		font-weight: 600;
-		color: var(--text-secondary);
-		margin: 0 0 0.5rem 0;
+	.share-stats-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1rem;
+		margin-bottom: 0.75rem;
 	}
 
-	.listeners-list {
+	.stat-group {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 0.375rem;
 	}
 
-	.listener {
+	.stat-header {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.35rem 0.5rem;
-		border-radius: var(--radius-sm);
-		text-decoration: none;
-		transition: background 0.15s;
 	}
 
-	.listener:hover {
-		background: var(--bg-hover);
+	.stat-label {
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--text-secondary);
 	}
 
-	.listener-avatar {
-		width: 24px;
-		height: 24px;
+	.stat-count {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+
+	.user-avatars {
+		display: flex;
+		justify-content: flex-start;
+		overflow-x: auto;
+		max-width: 100%;
+		padding: 0.25rem 0;
+		scrollbar-width: none;
+	}
+
+	.user-avatars::-webkit-scrollbar {
+		display: none;
+	}
+
+	.user-circle {
+		width: 28px;
+		height: 28px;
 		border-radius: var(--radius-full);
+		border: 2px solid var(--bg-secondary);
+		background: var(--bg-tertiary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		margin-left: -6px;
+		transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), z-index 0s;
+		position: relative;
+		text-decoration: none;
+		flex-shrink: 0;
+	}
+
+	.user-circle:first-child {
+		margin-left: 0;
+	}
+
+	.user-circle:hover {
+		transform: translateY(-2px) scale(1.08);
+		z-index: 10;
+	}
+
+	.user-circle img {
+		width: 100%;
+		height: 100%;
 		object-fit: cover;
 	}
 
-	.listener-avatar-placeholder {
-		width: 24px;
-		height: 24px;
-		border-radius: var(--radius-full);
-		background: var(--border-default);
-	}
-
-	.listener-name {
-		font-size: var(--text-sm);
-		color: var(--text-primary);
-		flex: 1;
-	}
-
-	.listener-plays {
+	.user-circle span {
 		font-size: var(--text-xs);
-		color: var(--text-tertiary);
+		font-weight: 600;
+		color: var(--text-secondary);
 	}
 
-	.anonymous-plays {
-		font-size: var(--text-sm);
+	.anonymous-count {
+		font-size: var(--text-xs);
 		color: var(--text-muted);
-		margin: 0.5rem 0 0 0;
 	}
 
-	.no-plays {
-		font-size: var(--text-sm);
+	.no-data {
+		font-size: var(--text-xs);
 		color: var(--text-muted);
-		margin: 0;
 	}
 
 	.share-meta {
