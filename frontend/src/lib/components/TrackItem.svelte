@@ -397,7 +397,7 @@
 					<line x1="9" y1="18" x2="21" y2="18"></line>
 				</svg>
 			</button>
-			<ShareButton url={shareUrl} title="share track" />
+			<ShareButton url={shareUrl} title="share track" trackId={track.id} />
 		</div>
 
 		<!-- mobile: show three-dot menu -->

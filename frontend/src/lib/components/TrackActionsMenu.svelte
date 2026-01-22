@@ -2,6 +2,7 @@
 	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
+	import { auth } from '$lib/auth.svelte';
 	import type { Playlist } from '$lib/types';
 
 	interface Props {
@@ -78,8 +79,26 @@
 
 	async function handleShare(e: Event) {
 		e.stopPropagation();
+		let urlToCopy = shareUrl;
+
+		// create tracked share link if authenticated
+		if (auth.isAuthenticated) {
+			try {
+				const response = await fetch(`${API_URL}/tracks/${trackId}/share`, {
+					method: 'POST',
+					credentials: 'include'
+				});
+				if (response.ok) {
+					const data = await response.json();
+					urlToCopy = data.url;
+				}
+			} catch {
+				// fallback to plain url
+			}
+		}
+
 		try {
-			await navigator.clipboard.writeText(shareUrl);
+			await navigator.clipboard.writeText(urlToCopy);
 			toast.success('link copied');
 			closeMenu();
 		} catch {
