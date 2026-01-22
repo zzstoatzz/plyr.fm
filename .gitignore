@@ -60,3 +60,4 @@ simple-build.log
 # gemini
 .gemini/
 .gemini-clipboard/
+.loq_cache
