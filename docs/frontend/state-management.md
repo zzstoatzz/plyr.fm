@@ -200,6 +200,7 @@ plyr.fm uses global state managers following the Svelte 5 runes pattern for cros
 - persists across navigation
 - integrates with queue for track advancement
 - media session integration in `Player.svelte` (see below)
+- share link ref tracking for listen receipts (see below)
 
 ### uploader (`frontend/src/lib/uploader.svelte.ts`)
 - manages file uploads in background
@@ -367,3 +368,45 @@ reactive effects keep `navigator.mediaSession.setPositionState()` synced with pl
 - playback state syncs reactively with `player.paused`
 - position updates on every `player.currentTime` / `player.duration` change
 - gracefully no-ops if `navigator.mediaSession` is unavailable
+
+## share link ref tracking
+
+the player tracks share link attribution for listen receipts. when someone visits a track via a shared URL with `?ref=CODE`, the ref is stored and sent with play count requests.
+
+### how it works
+
+1. **capture**: track page extracts `?ref=` param on mount, calls `player.setRef(code, trackId)`
+2. **storage**: player stores `ref` and `_refTrackId` in reactive state
+3. **attribution**: `incrementPlayCount()` includes ref in request body if it matches current track
+4. **cleanup**: ref is cleared when switching to a different track (prevents cross-track attribution)
+
+### implementation
+
+```typescript
+// player.svelte.ts
+ref = $state<string | null>(null);
+private _refTrackId: number | null = null;
+
+setRef(code: string | null, trackId?: number) {
+    this.ref = code;
+    this._refTrackId = trackId ?? null;
+}
+
+// only include ref if it's for the current track
+get refForTrack(): string | null {
+    if (this.ref && this._refTrackId === this.currentTrack?.id) {
+        return this.ref;
+    }
+    return null;
+}
+```
+
+### why `_refTrackId` guard?
+
+prevents this scenario:
+1. user visits track A via share link with `?ref=abc`
+2. user navigates to track B (different track)
+3. user plays track B
+4. without the guard, track B's play would be attributed to track A's share link
+
+the `_refTrackId` ensures refs are only attributed to the specific track they were generated for.
