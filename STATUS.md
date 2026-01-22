@@ -47,6 +47,80 @@ plyr.fm should become:
 
 ### January 2026
 
+#### listen receipts (PR #773, Jan 22)
+
+**share links now track who clicked and played** - when you share a track, you get a URL with a `?ref=` code that records visitors and listeners:
+- `POST /tracks/{id}/share` creates tracked share link with unique 8-character code (48 bits entropy)
+- frontend captures `?ref=` param on page load, fires click event to backend
+- play endpoint accepts optional `ref` param to record play attribution
+- `GET /tracks/me/shares` returns paginated stats: visitors, listeners, anonymous counts
+
+**portal share stats section**:
+- expandable cards per share link with copyable tracked URL
+- visitors (who clicked) and listeners (who played) shown as avatar circles
+- individual interaction counts per user
+- self-clicks/plays filtered out to avoid inflating stats
+
+**data model**:
+- `ShareLink` table: code, track_id, creator_did, created_at
+- `ShareLinkEvent` table: share_link_id, visitor_did (nullable for anonymous), event_type (click/play)
+
+---
+
+#### handle display fix (PR #774, Jan 22)
+
+**DIDs were displaying instead of handles** in share link stats and other places (comments, track likers):
+- root cause: Artist records were only created during profile setup
+- users who authenticated but skipped setup had no Artist record
+- fix: create minimal Artist record (did, handle, avatar) during OAuth callback
+- profile setup now updates existing record instead of erroring
+
+---
+
+#### responsive embed v2 (PRs #771-772, Jan 20-21)
+
+**complete rewrite of embed CSS** using container queries and proportional scaling:
+
+**layout modes**:
+- **wide** (width >= 400px): side art, proportional sizing
+- **very wide** (width >= 600px): larger art, more breathing room
+- **square/tall** (aspect <= 1.2, width >= 200px): art on top, 2-line titles
+- **very tall** (aspect <= 0.7, width >= 200px): blurred background overlay
+- **narrow** (width < 280px): compact blurred background
+- **micro** (width < 200px): hide time labels and logo
+
+**key technical changes**:
+- all sizes use `clamp()` with `cqi` units (container query units)
+- grid-based header layout instead of absolute positioning
+- gradient overlay (top-heavy to bottom-heavy) for text readability
+
+---
+
+#### terms of service and privacy policy (PRs #567, #761-770, Jan 19-20)
+
+**legal foundation shipped** with ATProto-aware design:
+
+**terms cover**:
+- AT Protocol context (decentralized identity, user-controlled PDS)
+- content ownership (users retain ownership, plyr.fm gets license for streaming)
+- DMCA safe harbor with designated agent (DMCA-1069186)
+- federation disclaimer: audio files in blob storage we control, but ATProto records may persist on user's PDS
+
+**privacy policy**:
+- explicit third-party list with links (Cloudflare, Fly.io, Neon, Logfire, AudD, Anthropic, ATProtoFans)
+- data ownership clarity (DID, profile, tracks on user's PDS)
+- MIT license added to repo
+
+**acceptance flow** (TermsOverlay component):
+- shown on first login if `terms_accepted_at` is null
+- 4-bullet summary with links to full documents
+- "I Accept" or "Decline & Logout" options
+- `POST /account/accept-terms` records timestamp
+
+**polish PRs** (#761-770): corrected ATProto vs "our servers" terminology, standardized AT Protocol naming, added email fallbacks, capitalized sentence starts
+
+---
+
 #### content gating research (Jan 18)
 
 researched ATProtoFans architecture and JSONLogic rule evaluation. documented findings in `docs/content-gating-roadmap.md`:
@@ -68,6 +142,15 @@ no implementation changes - waiting to align with what ATProtoFans will support.
 - before: "stay logged in?" + "you're logging out of @handle?"
 - after: "switch accounts?"
 - "logout completely" → "log out of all accounts"
+
+---
+
+#### idempotent teal scrobbles (PR #754, Jan 16)
+
+**prevents duplicate scrobbles** when same play is submitted multiple times:
+- use `putRecord` with deterministic TID rkeys derived from `playedTime` instead of `createRecord`
+- network retries, multiple teal-compatible services, or background task retries won't create duplicates
+- adds `played_time` parameter to `build_teal_play_record` for deterministic record keys
 
 ---
 
@@ -93,6 +176,16 @@ no implementation changes - waiting to align with what ATProtoFans will support.
 
 ---
 
+#### copyright flagging fix (PR #748, Jan 12)
+
+**switched from score-based to dominant match detection**:
+- AudD's enterprise API doesn't return confidence scores (always 0)
+- previous threshold-based detection was broken
+- new approach: flag if one song appears in >= 30% of matched segments
+- filters false positives where random segments match different songs
+
+---
+
 #### Neon cold start fix (Jan 11)
 
 **why**: first requests after idle periods would fail with 500 errors due to Neon serverless scaling to zero after 5 minutes of inactivity. previous mitigations (larger pool, longer timeouts) helped but didn't eliminate the problem.
@@ -109,153 +202,19 @@ closes #733
 
 ---
 
-#### multi-account experience (PRs #707, #710, #712-714, Jan 3-5)
+#### early January work (Jan 1-9)
 
-**why**: many users have multiple ATProto identities (personal, artist, label). forcing re-authentication to switch was friction that discouraged uploads from secondary accounts.
-
-**users can now link multiple identities** to a single browser session:
-- add additional accounts via "add account" in user menu (triggers OAuth with `prompt=login`)
-- switch between linked accounts instantly without re-authenticating
-- logout from individual accounts or all at once
-- updated `/auth/me` returns `linked_accounts` array with avatars
-
-**backend changes**:
-- new `group_id` column on `user_sessions` links accounts together
-- new `pending_add_accounts` table tracks in-progress OAuth flows
-- new endpoints: `POST /auth/add-account/start`, `POST /auth/switch-account`, `POST /auth/logout-all`
-
-**infrastructure fixes** (PRs #710, #712, #714):
-these fixes came from reviewing [Bluesky's architecture deep dive](https://newsletter.pragmaticengineer.com/p/bluesky) which highlighted connection/resource management as scaling concerns. applied learnings to our own codebase:
-- identified Neon serverless connection overhead (~77ms per connection) via Logfire
-- cached `async_sessionmaker` per engine instead of recreating on every request (PR #712)
-- changed `_refresh_locks` from unbounded dict to LRUCache (10k max, 1hr TTL) to prevent memory leak (PR #710)
-- pass db session through auth helpers to reduce connections per request (PR #714)
-- result: `/auth/switch-account` ~1100ms → ~800ms, `/auth/me` ~940ms → ~720ms
-
-**frontend changes**:
-- UserMenu (desktop): collapsible accounts submenu with linked accounts, add account, logout all
-- ProfileMenu (mobile): dedicated accounts panel with avatars
-- fixed `invalidateAll()` not refreshing client-side loaded data by using `window.location.reload()` (PR #713)
-
-**docs**: [research/2026-01-03-multi-account-experience.md](docs/research/2026-01-03-multi-account-experience.md)
-
----
-
-#### track edit UX improvements (PRs #741-742, Jan 9)
-
-**why**: the portal track editing experience had several UX issues - users couldn't remove artwork (only replace), no preview when selecting new images, and buttons were poorly styled icon-only squares with overly aggressive hover effects.
-
-**artwork management** (PR #742):
-- add ability to **remove track artwork** via new `remove_image` form field on `PATCH /tracks/{id}`
-- show **image preview** when selecting new artwork before saving
-- hover overlay on current artwork with trash icon to remove
-- "undo" option when artwork is marked for removal
-- clear status labels: "current artwork", "new artwork selected", "artwork will be removed"
-
-**button styling** (PR #742):
-- replace icon-only squares with labeled pill buttons (`edit`, `delete`)
-- subtle outlined save/cancel buttons in edit mode
-- fix global button hover styles bleeding into all buttons (scoped to form submit only)
-
-**shutdown fix** (PR #742):
-- add 2s timeouts to docket worker and service shutdown
-- prevents backend hanging on Ctrl+C or hot-reload during development
-
-**beartype fix** (PR #741):
-- `starlette.UploadFile` vs `fastapi.UploadFile` type mismatch was causing 500 errors on image upload
-- fixed by importing UploadFile from starlette in metadata_service.py
-
----
-
-#### auth stabilization (PRs #734-736, Jan 6-7)
-
-**why**: multi-account support introduced edge cases where auth state could become inconsistent between frontend components, and sessions could outlive their refresh tokens.
-
-**session expiry alignment** (PR #734):
-- sessions now track refresh token lifetime and respect it during validation
-- prevents sessions from appearing valid after their underlying OAuth grant expires
-- dev token expiration handling aligned with same pattern
-
-**queue auth boundary fix** (PR #735):
-- queue component now uses shared layout auth state instead of localStorage session IDs
-- fixes race condition where queue could attempt authenticated requests before layout resolved auth
-- ensures remote queue snapshots don't inherit local update flags during hydration
-
-**playlist cover upload fix** (PR #736):
-- `R2Storage.save()` was rejecting `BytesIO` objects due to beartype's strict `BinaryIO` protocol checking
-- changed type hint to `BinaryIO | BytesIO` to explicitly accept both
-- found via Logfire: only 2 failures in production, both on Jan 3
-
----
-
-#### timestamp deep links (PRs #739-740, Jan 8)
-
-**timestamped comment sharing** (PR #739):
-- timed comments now show share button on hover
-- copies URL with `?t=` parameter (e.g., `plyr.fm/track/123?t=45`)
-- visiting timestamped URL auto-seeks to that position on play
-
-**autoplay error suppression** (PR #740):
-- suppress browser autoplay errors when deep linking to timestamps
-- browsers block autoplay without user interaction; now fails silently
-
----
-
-#### artist bio links (PRs #700-701, Jan 2)
-
-**links in artist bios now render as clickable** - supports full URLs and bare domains (e.g., "example.com"):
-- regex extracts URLs from bio text
-- bare domain/path URLs handled correctly
-- links open in new tab
-
----
-
-#### copyright moderation improvements (PRs #703-704, Jan 2-3)
-
-**per legal advice**, redesigned copyright handling to reduce liability exposure:
-- **disabled auto-labeling** (PR #703): labels are no longer automatically emitted when copyright matches are detected. the system now only flags and notifies, leaving takedown decisions to humans
-- **raised threshold** (PR #703): copyright flag threshold increased from "any match" to configurable score (default 85%). controlled via `MODERATION_COPYRIGHT_SCORE_THRESHOLD` env var
-- **DM notifications** (PR #704): when a track is flagged, both the artist and admin receive BlueSky DMs with details. includes structured error handling for when users have DMs disabled
-- **observability** (PR #704): Logfire spans added to all notification paths (`send_dm`, `copyright_notification`) with error categorization (`dm_blocked`, `network`, `auth`, `unknown`)
-- **notification tracking**: `notified_at` field added to `copyright_scans` table to track which flags have been communicated
-
-**why this matters**: DMCA safe harbor requires taking action on notices, not proactively policing. auto-labeling was creating liability by making assertions about copyright status. human review is now required before any takedown action.
-
----
-
-#### ATProto OAuth permission sets (PRs #697-698, Jan 1-2)
-
-**permission sets enabled** - OAuth now uses `include:fm.plyr.authFullApp` instead of listing individual `repo:` scopes:
-- users see clean "plyr.fm" permission title instead of raw collection names
-- permission set lexicon published to `com.atproto.lexicon.schema` on plyr.fm authority repo
-- DNS TXT records at `_lexicon.plyr.fm` and `_lexicon.stg.plyr.fm` link namespaces to authority DID
-- fixed scope validation in atproto SDK fork to handle PDS permission expansion (`include:` → `repo?collection=`)
-
-**why this matters**: permission sets are ATProto's mechanism for defining platform access tiers. enables future third-party integrations (mobile apps, read-only stats dashboards) to request semantic permission bundles instead of raw collection lists.
-
-**docs**: [lexicons/overview.md](docs/lexicons/overview.md), [research/2026-01-01-atproto-oauth-permission-sets.md](docs/research/2026-01-01-atproto-oauth-permission-sets.md)
-
----
-
-#### atprotofans supporters display (PRs #695-696, Jan 1)
-
-**supporters now visible on artist pages** - artists using atprotofans can show their supporters:
-- compact overlapping avatar circles (GitHub sponsors style) with "+N" overflow badge
-- clicks link to supporter's plyr.fm artist page (keeps users in-app)
-- `POST /artists/batch` endpoint enriches supporter DIDs with avatar_url from our Artist table
-- frontend fetches from atprotofans, enriches via backend, renders with consistent avatar pattern
-
-**route ordering fix** (PR #696): FastAPI was matching `/artists/batch` as `/{did}` with did="batch". moved POST route before the catchall GET route.
-
----
-
-#### UI polish (PRs #692-694, Dec 31 - Jan 1)
-
-- **feed/library toggle** (PR #692): consistent header layout with toggle between feed and library views
-- **shuffle button moved** (PR #693): shuffle now in queue component instead of player controls
-- **justfile consistency** (PR #694): standardized `just run` across frontend/backend modules
-
----
+See `.status_history/2026-01.md` for detailed history including:
+- multi-account experience (PRs #707, #710, #712-714, Jan 3-5)
+- integration test harness (PR #744, Jan 9)
+- track edit UX improvements (PRs #741-742, Jan 9)
+- auth stabilization (PRs #734-736, Jan 6-7)
+- timestamp deep links (PRs #739-740, Jan 8)
+- artist bio links (PRs #700-701, Jan 2)
+- copyright moderation improvements (PRs #703-704, Jan 2-3)
+- ATProto OAuth permission sets (PRs #697-698, Jan 1-2)
+- atprotofans supporters display (PRs #695-696, Jan 1)
+- UI polish (PRs #692-694, Dec 31 - Jan 1)
 
 ### December 2025
 
@@ -300,7 +259,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-stabilization and UX polish. track editing experience improved, shutdown reliability fixed.
+listen receipts shipped - share links now track who clicked and played. legal foundation complete with terms of service and privacy policy. responsive embed layout handles any container size.
 
 **end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) shipped:**
 - moderation consolidation: sensitive images moved to moderation service (#644)
@@ -363,6 +322,7 @@ stabilization and UX polish. track editing experience improved, shutdown reliabi
 - ✅ docket background tasks (copyright scan, export, atproto sync, scrobble)
 - ✅ media export with concurrent downloads
 - ✅ supporter-gated content via atprotofans
+- ✅ listen receipts (tracked share links with visitor/listener stats)
 
 **albums**
 - ✅ album CRUD with cover art
@@ -468,4 +428,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-18.
+this is a living document. last updated 2026-01-22.
