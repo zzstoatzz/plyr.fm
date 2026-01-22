@@ -9,10 +9,11 @@ plyr.fm uses secure cookie-based authentication to protect user sessions from XS
 2. backend redirects to user's PDS for authorization
 3. PDS redirects back to `/auth/callback` with authorization code
 4. backend exchanges code for OAuth tokens, creates session
-5. backend creates one-time exchange token, redirects to frontend
-6. frontend calls `/auth/exchange` with exchange token
-7. backend sets HttpOnly cookie and returns session_id
-8. all subsequent requests automatically include cookie
+5. backend ensures Artist record exists (creates minimal record if needed)
+6. backend creates one-time exchange token, redirects to frontend
+7. frontend calls `/auth/exchange` with exchange token
+8. backend sets HttpOnly cookie and returns session_id
+9. all subsequent requests automatically include cookie
 
 ```mermaid
 sequenceDiagram
@@ -38,6 +39,20 @@ sequenceDiagram
     API->>DB: SELECT session via cookie
     API-->>FE: JSON response (tracks, likes, uploads…)
 ```
+
+### artist record creation
+
+every OAuth callback (login, add-account, scope upgrade, dev token) ensures an Artist record exists via `ensure_artist_exists(did, handle)`. this creates a minimal record (DID, handle, display name, avatar) if one doesn't exist.
+
+**why this matters**: Artist records are needed to display handles (instead of DIDs) in:
+- share link stats (who clicked/played your shared links)
+- track likers tooltip
+- commenters tooltip
+- any other user-facing display
+
+without this, users who authenticate but skip profile setup would show as raw DIDs like `did:plc:abc123` instead of their handle `@alice.bsky.social`.
+
+**implementation**: `backend/_internal/auth.py:ensure_artist_exists()` runs immediately after `handle_oauth_callback()`, before any flow-specific logic. profile setup (`POST /artists/me`) updates the existing record rather than creating a new one.
 
 **key security properties**:
 - session tokens stored in HttpOnly cookies (not accessible to JavaScript)
