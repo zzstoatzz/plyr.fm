@@ -1200,6 +1200,18 @@
 
 							{#if expandedShareCode === share.code}
 								<div class="share-details">
+									<div class="share-link-row">
+										<code class="share-link-url">{window.location.origin}/track/{share.track.id}?ref={share.code}</code>
+										<button
+											class="copy-link-btn"
+											onclick={async () => {
+												await navigator.clipboard.writeText(`${window.location.origin}/track/${share.track.id}?ref=${share.code}`);
+												toast.success('link copied');
+											}}
+										>
+											copy
+										</button>
+									</div>
 									<div class="share-listeners">
 										{#if share.listeners.length > 0}
 											<h4>listeners</h4>
@@ -2591,6 +2603,44 @@
 		padding: 0.75rem 1rem 1rem;
 		border-top: 1px solid var(--border-subtle);
 		background: var(--bg-secondary);
+	}
+
+	.share-link-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+		padding: 0.5rem;
+		background: var(--bg-tertiary);
+		border-radius: var(--radius-sm);
+	}
+
+	.share-link-url {
+		flex: 1;
+		font-size: var(--text-xs);
+		color: var(--text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		background: none;
+		padding: 0;
+	}
+
+	.copy-link-btn {
+		flex-shrink: 0;
+		padding: 0.25rem 0.5rem;
+		font-size: var(--text-xs);
+		font-family: inherit;
+		background: var(--accent);
+		color: var(--bg-primary);
+		border: none;
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: opacity 0.15s;
+	}
+
+	.copy-link-btn:hover {
+		opacity: 0.9;
 	}
 
 	.share-listeners h4 {
