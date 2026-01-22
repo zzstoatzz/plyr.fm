@@ -18,6 +18,12 @@ from backend.schemas import TrackResponse
 from .router import router
 
 
+class OkResponse(BaseModel):
+    """simple success response."""
+
+    ok: bool = True
+
+
 class ShareLinkResponse(BaseModel):
     """response for creating a share link."""
 
@@ -57,9 +63,18 @@ class ShareListResponse(BaseModel):
     has_more: bool
 
 
-def generate_share_code() -> str:
-    """generate a unique 8-character share code."""
-    return secrets.token_urlsafe(6)  # yields 8 chars
+async def generate_unique_share_code(db: AsyncSession, max_attempts: int = 5) -> str:
+    """generate a unique 8-character share code, retrying on collision.
+
+    uses secrets.token_urlsafe(6) which yields 8 chars with 48 bits of entropy.
+    at current scale, collision probability is negligible (<0.2% at 1M codes).
+    """
+    for _ in range(max_attempts):
+        code = secrets.token_urlsafe(6)
+        existing = await db.scalar(select(ShareLink).where(ShareLink.code == code))
+        if not existing:
+            return code
+    raise HTTPException(status_code=500, detail="failed to generate unique code")
 
 
 @router.post("/{track_id}/share")
@@ -78,14 +93,7 @@ async def create_share_link(
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
 
-    # generate unique code with collision retry
-    for _ in range(5):
-        code = generate_share_code()
-        existing = await db.scalar(select(ShareLink).where(ShareLink.code == code))
-        if not existing:
-            break
-    else:
-        raise HTTPException(status_code=500, detail="failed to generate unique code")
+    code = await generate_unique_share_code(db)
 
     # create share link
     share_link = ShareLink(
@@ -109,7 +117,7 @@ async def record_share_click(
     code: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     session: AuthSession | None = Depends(get_optional_session),
-) -> dict:
+) -> OkResponse:
     """record a click event when someone visits a track via a share link.
 
     called by frontend when page loads with ?ref= parameter.
@@ -121,12 +129,12 @@ async def record_share_click(
     )
     if not share_link:
         # silently ignore invalid codes - don't leak info about valid codes
-        return {"ok": True}
+        return OkResponse()
 
     # skip self-clicks
     visitor_did = session.did if session else None
     if visitor_did and visitor_did == share_link.creator_did:
-        return {"ok": True}
+        return OkResponse()
 
     # record click event
     event = ShareLinkEvent(
@@ -137,7 +145,7 @@ async def record_share_click(
     db.add(event)
     await db.commit()
 
-    return {"ok": True}
+    return OkResponse()
 
 
 @router.get("/me/shares")
