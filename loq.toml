@@ -1,0 +1,193 @@
+default_max_lines = 500
+respect_gitignore = true
+
+# paths, files, or glob patterns to exclude
+exclude = [
+    ".git/**",
+    ".status_history/**",
+]
+
+# lock files don't need line limits
+[[rules]]
+path = "**/*.lock"
+max_lines = 10000
+
+[[rules]]
+path = "**/package-lock.json"
+max_lines = 10000
+
+[[rules]]
+path = "backend/src/backend/_internal/auth.py"
+max_lines = 1207
+
+[[rules]]
+path = "backend/src/backend/_internal/background_tasks.py"
+max_lines = 938
+
+[[rules]]
+path = "backend/src/backend/api/albums.py"
+max_lines = 714
+
+[[rules]]
+path = "backend/src/backend/api/auth.py"
+max_lines = 706
+
+[[rules]]
+path = "backend/src/backend/api/lists.py"
+max_lines = 865
+
+[[rules]]
+path = "backend/src/backend/api/tracks/mutations.py"
+max_lines = 664
+
+[[rules]]
+path = "backend/src/backend/api/tracks/uploads.py"
+max_lines = 750
+
+[[rules]]
+path = "backend/src/backend/config.py"
+max_lines = 768
+
+[[rules]]
+path = "backend/src/backend/storage/r2.py"
+max_lines = 661
+
+[[rules]]
+path = "backend/tests/api/test_albums.py"
+max_lines = 917
+
+[[rules]]
+path = "backend/tests/api/test_list_record_sync.py"
+max_lines = 554
+
+[[rules]]
+path = "backend/tests/api/test_track_comments.py"
+max_lines = 517
+
+[[rules]]
+path = "backend/tests/test_auth.py"
+max_lines = 569
+
+[[rules]]
+path = "backend/tests/test_moderation.py"
+max_lines = 513
+
+[[rules]]
+path = "docs/authentication.md"
+max_lines = 627
+
+[[rules]]
+path = "docs/backend/liked-tracks.md"
+max_lines = 503
+
+[[rules]]
+path = "docs/deployment/database-migrations.md"
+max_lines = 629
+
+[[rules]]
+path = "docs/tools/neon.md"
+max_lines = 519
+
+[[rules]]
+path = "frontend/src/lib/components/AddToMenu.svelte"
+max_lines = 801
+
+[[rules]]
+path = "frontend/src/lib/components/ProfileMenu.svelte"
+max_lines = 1087
+
+[[rules]]
+path = "frontend/src/lib/components/Queue.svelte"
+max_lines = 599
+
+[[rules]]
+path = "frontend/src/lib/components/SearchModal.svelte"
+max_lines = 557
+
+[[rules]]
+path = "frontend/src/lib/components/TrackActionsMenu.svelte"
+max_lines = 777
+
+[[rules]]
+path = "frontend/src/lib/components/TrackItem.svelte"
+max_lines = 998
+
+[[rules]]
+path = "frontend/src/lib/components/UserMenu.svelte"
+max_lines = 622
+
+[[rules]]
+path = "frontend/src/lib/components/player/Player.svelte"
+max_lines = 566
+
+[[rules]]
+path = "frontend/src/lib/queue.svelte.ts"
+max_lines = 593
+
+[[rules]]
+path = "frontend/src/routes/+layout.svelte"
+max_lines = 676
+
+[[rules]]
+path = "frontend/src/routes/costs/+page.svelte"
+max_lines = 724
+
+[[rules]]
+path = "frontend/src/routes/embed/track/\\[id\\]/+page.svelte"
+max_lines = 522
+
+[[rules]]
+path = "frontend/src/routes/library/+page.svelte"
+max_lines = 633
+
+[[rules]]
+path = "frontend/src/routes/liked/+page.svelte"
+max_lines = 540
+
+[[rules]]
+path = "frontend/src/routes/playlist/\\[id\\]/+page.svelte"
+max_lines = 2168
+
+[[rules]]
+path = "frontend/src/routes/portal/+page.svelte"
+max_lines = 3313
+
+[[rules]]
+path = "frontend/src/routes/settings/+page.svelte"
+max_lines = 1409
+
+[[rules]]
+path = "frontend/src/routes/track/\\[id\\]/+page.svelte"
+max_lines = 1667
+
+[[rules]]
+path = "frontend/src/routes/u/\\[handle\\]/+page.svelte"
+max_lines = 1436
+
+[[rules]]
+path = "frontend/src/routes/u/\\[handle\\]/album/\\[slug\\]/+page.svelte"
+max_lines = 1293
+
+[[rules]]
+path = "frontend/src/routes/upload/+page.svelte"
+max_lines = 644
+
+[[rules]]
+path = "moderation/src/admin.rs"
+max_lines = 688
+
+[[rules]]
+path = "moderation/src/db.rs"
+max_lines = 1086
+
+[[rules]]
+path = "moderation/src/review.rs"
+max_lines = 526
+
+[[rules]]
+path = "moderation/static/admin.css"
+max_lines = 505
+
+[[rules]]
+path = "scripts/moderation_agent.py"
+max_lines = 628

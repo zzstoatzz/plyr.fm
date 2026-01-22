@@ -1,6 +1,11 @@
 fail_fast: false
 
 repos:
+  - repo: https://github.com/jakekaplan/loq
+    rev: v0.1.0-alpha.7
+    hooks:
+      - id: loq
+
   - repo: https://github.com/abravalheri/validate-pyproject
     rev: v0.24.1
     hooks:
