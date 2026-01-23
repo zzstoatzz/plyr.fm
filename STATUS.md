@@ -268,6 +268,7 @@ listen receipts shipped - share links now track who clicked and played. legal fo
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
+- audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
 
 ### backlog
 - audio transcoding pipeline integration (#153) - transcoder service deployed, integration deferred
