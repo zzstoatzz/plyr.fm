@@ -1,8 +1,8 @@
 import { browser } from '$app/environment';
 import { redirect } from '@sveltejs/kit';
 import { fetchLikedTracks } from '$lib/tracks.svelte';
+import { auth } from '$lib/auth.svelte';
 import type { Track } from '$lib/types';
-import type { LoadEvent } from '@sveltejs/kit';
 
 export interface PageData {
 	tracks: Track[];
@@ -10,14 +10,14 @@ export interface PageData {
 
 export const ssr = false;
 
-export async function load({ parent }: LoadEvent): Promise<PageData> {
+export async function load(): Promise<PageData> {
 	if (!browser) {
 		return { tracks: [] };
 	}
 
-	// check auth from parent layout data
-	const { isAuthenticated } = await parent();
-	if (!isAuthenticated) {
+	// ensure auth is initialized before checking
+	await auth.initialize();
+	if (!auth.isAuthenticated) {
 		throw redirect(302, '/');
 	}
 

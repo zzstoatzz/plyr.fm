@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
 import { redirect } from '@sveltejs/kit';
 import { API_URL } from '$lib/config';
+import { auth } from '$lib/auth.svelte';
 import type { LoadEvent } from '@sveltejs/kit';
 import type { Playlist, Track } from '$lib/types';
 
@@ -11,14 +12,14 @@ export interface PageData {
 
 export const ssr = false;
 
-export async function load({ parent, fetch }: LoadEvent): Promise<PageData> {
+export async function load({ fetch }: LoadEvent): Promise<PageData> {
 	if (!browser) {
 		return { likedCount: 0, playlists: [] };
 	}
 
-	// check auth from parent layout data
-	const { isAuthenticated } = await parent();
-	if (!isAuthenticated) {
+	// ensure auth is initialized before checking
+	await auth.initialize();
+	if (!auth.isAuthenticated) {
 		throw redirect(302, '/');
 	}
 
