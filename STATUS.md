@@ -47,6 +47,14 @@ plyr.fm should become:
 
 ### January 2026
 
+#### auth check optimization (PRs #781-782, Jan 23)
+
+**eliminated redundant /auth/me calls** - previously, every navigation triggered an auth check via the layout load function. for unauthenticated users, this meant a 401 on every page click (117 errors in 24 hours observed via Logfire).
+
+**fix**: auth singleton now tracks initialization state. `+layout.svelte` checks auth once on mount instead of every navigation. follow-up PR fixed library/liked pages that were broken by the layout simplification (they were using `await parent()` to get `isAuthenticated` which was no longer provided).
+
+---
+
 #### listen receipts (PR #773, Jan 22)
 
 **share links now track who clicked and played** - when you share a track, you get a URL with a `?ref=` code that records visitors and listeners:
@@ -429,4 +437,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-22.
+this is a living document. last updated 2026-01-23.
