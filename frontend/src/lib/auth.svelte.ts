@@ -16,12 +16,19 @@ class AuthManager {
 	isAuthenticated = $state(false);
 	loading = $state(true);
 	scopeUpgradeRequired = $state(false);
+	private initialized = false;
 
 	async initialize(): Promise<void> {
 		if (!browser) {
 			this.loading = false;
 			return;
 		}
+
+		// only fetch once - subsequent calls are no-ops
+		if (this.initialized) {
+			return;
+		}
+		this.initialized = true;
 
 		try {
 			const response = await fetch(`${API_URL}/auth/me`, {
@@ -61,6 +68,7 @@ class AuthManager {
 		if (!browser) return;
 		this.user = null;
 		this.isAuthenticated = false;
+		this.initialized = false;
 	}
 
 	async logout(): Promise<void> {

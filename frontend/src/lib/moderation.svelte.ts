@@ -64,6 +64,18 @@ class ModerationManager {
 		return checkImageSensitive(url, this.data);
 	}
 
+	/**
+	 * initialize from pre-fetched SSR data (avoids redundant API call)
+	 */
+	initializeFromData(ssrData: SensitiveImagesData): void {
+		if (this.initialized) return;
+		this.initialized = true;
+		this.data = {
+			image_ids: new Set(ssrData.image_ids || []),
+			urls: new Set(ssrData.urls || [])
+		};
+	}
+
 	async initialize(): Promise<void> {
 		if (!browser || this.initialized || this.loading) return;
 		this.initialized = true;

@@ -43,7 +43,7 @@
 	// exclude legal pages so users can read full terms/privacy/cookies
 	// uses preferences.data (client state) since acceptTerms() updates it
 	let showTermsOverlay = $derived(
-		data.isAuthenticated &&
+		auth.isAuthenticated &&
 		preferences.data &&
 		!preferences.data.terms_accepted_at &&
 		!$page.url.pathname.startsWith('/terms') &&
@@ -51,16 +51,19 @@
 		!$page.url.pathname.startsWith('/cookies')
 	);
 
-	// sync auth and preferences state from layout data (fetched by +layout.ts)
-	$effect(() => {
-		if (browser) {
-			auth.user = data.user;
-			auth.isAuthenticated = data.isAuthenticated;
-			auth.loading = false;
-			preferences.data = data.preferences;
-			// fetch explicit images list (public, no auth needed)
-			moderation.initialize();
-			if (data.isAuthenticated && queue.revision === null) {
+	// initialize auth and preferences once on mount (not on every navigation)
+	// this prevents repeated /auth/me calls for unauthenticated users
+	onMount(async () => {
+		// use sensitive images from SSR (avoids redundant API call)
+		moderation.initializeFromData(data.sensitiveImages);
+
+		// check auth status once
+		await auth.initialize();
+
+		// if authenticated, fetch preferences and queue
+		if (auth.isAuthenticated) {
+			await preferences.initialize();
+			if (queue.revision === null) {
 				void queue.fetchQueue();
 			}
 		}
