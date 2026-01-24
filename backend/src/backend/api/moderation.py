@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
 from backend._internal.moderation_client import get_moderation_client
@@ -22,10 +22,17 @@ class SensitiveImagesResponse(BaseModel):
     urls: list[str]
 
 
+# cache TTLs for sensitive images endpoint
+# edge (CDN) caches for 5 minutes, browser caches for 1 minute
+# this data changes rarely (only when admins flag new images)
+SENSITIVE_IMAGES_CACHE_CONTROL = "public, s-maxage=300, max-age=60"
+
+
 @router.get("/sensitive-images")
 @limiter.limit("120/minute")
 async def get_sensitive_images(
     request: Request,
+    response: Response,
 ) -> SensitiveImagesResponse:
     """get all flagged sensitive images.
 
@@ -34,7 +41,11 @@ async def get_sensitive_images(
 
     returns both image_ids (for R2-stored images) and full URLs
     (for external images like avatars). clients should check both.
+
+    cached at edge (5 min) and browser (1 min) to reduce load from
+    SSR page loads hitting this endpoint on every request.
     """
+    response.headers["Cache-Control"] = SENSITIVE_IMAGES_CACHE_CONTROL
     client = get_moderation_client()
     result = await client.get_sensitive_images()
 
