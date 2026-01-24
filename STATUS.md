@@ -55,6 +55,14 @@ plyr.fm should become:
 
 ---
 
+#### sensitive-images cache headers (PR #784, Jan 24)
+
+**added edge caching for /moderation/sensitive-images** - the frontend SSR (`+layout.server.ts`) fetches sensitive images on every page load to filter NSFW content. during traffic spikes, this exceeded the 120/minute rate limit (1,179 rate limit hits over 7 days, mostly Jan 22 spike).
+
+**fix**: added `Cache-Control: public, s-maxage=300, max-age=60` header to the endpoint. cloudflare edge caches for 5 minutes, browsers cache for 1 minute. sensitive images list changes rarely (only when admins flag new images), so this is safe and massively reduces backend load.
+
+---
+
 #### listen receipts (PR #773, Jan 22)
 
 **share links now track who clicked and played** - when you share a track, you get a URL with a `?ref=` code that records visitors and listeners:
