@@ -4,7 +4,7 @@
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
-	import { checkImageSensitive } from '$lib/moderation.svelte';
+	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { playQueue } from '$lib/playback.svelte';
@@ -69,12 +69,6 @@
 	let touchStartY = $state(0);
 	let touchDragElement = $state<HTMLElement | null>(null);
 	let tracksListElement = $state<HTMLElement | null>(null);
-
-	// SSR-safe check for sensitive images (for og:image meta tags)
-	function isImageSensitiveSSR(url: string | null | undefined): boolean {
-		if (!url) return false;
-		return checkImageSensitive(url, data.sensitiveImages);
-	}
 
 	function playTrack(track: Track) {
 		queue.playNow(track);
@@ -407,7 +401,7 @@
 	<meta property="og:url" content="{APP_CANONICAL_URL}/u/{albumMetadata.artist_handle}/album/{albumMetadata.slug}" />
 	<meta property="og:site_name" content={APP_NAME} />
 	<meta property="music:musician" content="{albumMetadata.artist_handle}" />
-	{#if albumMetadata.image_url && !isImageSensitiveSSR(albumMetadata.image_url)}
+	{#if albumMetadata.image_url && !moderation.isSensitive(albumMetadata.image_url)}
 		<meta property="og:image" content="{albumMetadata.image_url}" />
 		<meta property="og:image:secure_url" content="{albumMetadata.image_url}" />
 		<meta property="og:image:width" content="1200" />
@@ -419,7 +413,7 @@
 	<meta name="twitter:card" content="summary" />
 	<meta name="twitter:title" content="{albumMetadata.title} by {albumMetadata.artist}" />
 	<meta name="twitter:description" content="{albumMetadata.track_count} tracks • {albumMetadata.total_plays} plays" />
-	{#if albumMetadata.image_url && !isImageSensitiveSSR(albumMetadata.image_url)}
+	{#if albumMetadata.image_url && !moderation.isSensitive(albumMetadata.image_url)}
 		<meta name="twitter:image" content="{albumMetadata.image_url}" />
 	{/if}
 </svelte:head>

@@ -55,11 +55,17 @@ plyr.fm should become:
 
 ---
 
-#### sensitive-images cache headers (PR #784, Jan 24)
+#### remove SSR sensitive-images fetch (PR #785, Jan 24)
 
-**added edge caching for /moderation/sensitive-images** - the frontend SSR (`+layout.server.ts`) fetches sensitive images on every page load to filter NSFW content. during traffic spikes, this exceeded the 120/minute rate limit (1,179 rate limit hits over 7 days, mostly Jan 22 spike).
+**eliminated unnecessary SSR fetch** - the frontend SSR (`+layout.server.ts`) was fetching `/moderation/sensitive-images` on every page load to pre-populate the client-side moderation filter. during traffic spikes, this hammered the backend (1,179 rate limit hits over 7 days).
 
-**fix**: added `Cache-Control: public, s-maxage=300, max-age=60` header to the endpoint. cloudflare edge caches for 5 minutes, browsers cache for 1 minute. sensitive images list changes rarely (only when admins flag new images), so this is safe and massively reduces backend load.
+**root cause**: the SSR fetch was premature optimization. cloudflare pages workers make direct fetch calls to fly.io - there's no CDN layer to cache responses. the cache-control headers we added in PR #784 only help browser caching, not SSR-to-origin requests.
+
+**fix**: removed the SSR fetch entirely. the client-side `ModerationManager` singleton already has caching and will fetch the data once on page load. the "flash of sensitive content" risk is theoretical - images load slower than a single API call completes, and there are only 2 flagged images.
+
+- deleted `+layout.server.ts`
+- simplified `+layout.ts`
+- updated pages to use `moderation.isSensitive()` singleton instead of SSR data
 
 ---
 
