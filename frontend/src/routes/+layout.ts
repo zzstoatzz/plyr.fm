@@ -1,14 +1,2 @@
-import type { SensitiveImagesData } from '$lib/moderation.svelte';
-import type { LoadEvent } from '@sveltejs/kit';
-
-export interface LayoutData {
-	sensitiveImages: SensitiveImagesData;
-}
-
-// auth and preferences are handled client-side via singletons
-// this load function just passes through server data (sensitive images)
-export async function load({ data }: LoadEvent): Promise<LayoutData> {
-	return {
-		sensitiveImages: data?.sensitiveImages ?? { image_ids: [], urls: [] }
-	};
-}
+// layout load - currently empty as auth/preferences/moderation are handled client-side
+// kept for future use if we need to pass data from server to client

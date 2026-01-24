@@ -21,9 +21,7 @@
 	import { queue } from '$lib/queue.svelte';
 	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
-	import type { LayoutData } from './$types';
-
-	let { children, data } = $props<{ children: any; data: LayoutData }>();
+	let { children } = $props<{ children: any }>();
 	let showQueue = $state(false);
 
 	// pages that define their own <title> in svelte:head
@@ -54,8 +52,8 @@
 	// initialize auth and preferences once on mount (not on every navigation)
 	// this prevents repeated /auth/me calls for unauthenticated users
 	onMount(async () => {
-		// use sensitive images from SSR (avoids redundant API call)
-		moderation.initializeFromData(data.sensitiveImages);
+		// fetch sensitive images client-side (small payload, fast)
+		moderation.initialize();
 
 		// check auth status once
 		await auth.initialize();

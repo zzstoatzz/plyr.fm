@@ -11,7 +11,7 @@
 	import TagEffects from '$lib/components/TagEffects.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import LikersTooltip from '$lib/components/LikersTooltip.svelte';
-	import { checkImageSensitive } from '$lib/moderation.svelte';
+	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
@@ -35,12 +35,6 @@
 	let { data }: { data: PageData } = $props();
 
 	let track = $state<Track>(data.track);
-
-	// SSR-safe sensitive image check using server-loaded data
-	function isImageSensitiveSSR(url: string | null | undefined): boolean {
-		if (!data.sensitiveImages) return false;
-		return checkImageSensitive(url, data.sensitiveImages);
-	}
 
 	// comments state - assume enabled until we know otherwise
 	let comments = $state<Comment[]>([]);
@@ -515,7 +509,7 @@ $effect(() => {
 	{#if track.album}
 		<meta property="music:album" content="{track.album.title}" />
 	{/if}
-	{#if track.image_url && !isImageSensitiveSSR(track.image_url)}
+	{#if track.image_url && !moderation.isSensitive(track.image_url)}
 		<meta property="og:image" content="{track.image_url}" />
 		<meta property="og:image:secure_url" content="{track.image_url}" />
 		<meta property="og:image:width" content="1200" />
@@ -534,7 +528,7 @@ $effect(() => {
 		name="twitter:description"
 		content="{track.artist}{track.album ? ` • ${track.album.title}` : ''}"
 	/>
-	{#if track.image_url && !isImageSensitiveSSR(track.image_url)}
+	{#if track.image_url && !moderation.isSensitive(track.image_url)}
 		<meta name="twitter:image" content="{track.image_url}" />
 	{/if}
 
