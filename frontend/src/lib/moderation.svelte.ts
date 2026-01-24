@@ -2,12 +2,14 @@
 import { browser } from '$app/environment';
 import { API_URL } from '$lib/config';
 
+const STORAGE_KEY = 'plyr:sensitive-images';
+
 interface SensitiveImages {
 	image_ids: Set<string>;
 	urls: Set<string>;
 }
 
-// raw data format from API (arrays, not Sets) - used for SSR
+// raw data format from API/storage (arrays, not Sets)
 export interface SensitiveImagesData {
 	image_ids: string[];
 	urls: string[];
@@ -15,7 +17,7 @@ export interface SensitiveImagesData {
 
 /**
  * check if an image URL matches sensitive image data.
- * works with both Set-based (client) and array-based (SSR) data.
+ * works with both Set-based (client) and array-based (storage) data.
  */
 export function checkImageSensitive(
 	url: string | null | undefined,
@@ -56,6 +58,13 @@ class ModerationManager {
 	private initialized = false;
 	loading = $state(false);
 
+	constructor() {
+		// load from localStorage synchronously (available immediately on page load)
+		if (browser) {
+			this.loadFromStorage();
+		}
+	}
+
 	/**
 	 * check if an image URL is flagged as sensitive.
 	 * checks both the full URL and extracts image_id from R2 URLs.
@@ -65,20 +74,42 @@ class ModerationManager {
 	}
 
 	/**
-	 * initialize from pre-fetched SSR data (avoids redundant API call)
+	 * load cached data from localStorage (synchronous, for immediate availability)
 	 */
-	initializeFromData(ssrData: SensitiveImagesData): void {
-		if (this.initialized) return;
-		this.initialized = true;
-		this.data = {
-			image_ids: new Set(ssrData.image_ids || []),
-			urls: new Set(ssrData.urls || [])
-		};
+	private loadFromStorage(): void {
+		try {
+			const stored = localStorage.getItem(STORAGE_KEY);
+			if (stored) {
+				const parsed: SensitiveImagesData = JSON.parse(stored);
+				this.data = {
+					image_ids: new Set(parsed.image_ids || []),
+					urls: new Set(parsed.urls || [])
+				};
+			}
+		} catch {
+			// ignore parse errors, will fetch fresh data
+		}
 	}
 
+	/**
+	 * save data to localStorage for future page loads
+	 */
+	private saveToStorage(data: SensitiveImagesData): void {
+		try {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+		} catch {
+			// ignore storage errors (quota exceeded, etc)
+		}
+	}
+
+	/**
+	 * initialize moderation data - loads from storage immediately,
+	 * then refreshes from API in background
+	 */
 	async initialize(): Promise<void> {
 		if (!browser || this.initialized || this.loading) return;
 		this.initialized = true;
+		// refresh from API in background (storage data is already loaded in constructor)
 		await this.fetch();
 	}
 
@@ -89,11 +120,13 @@ class ModerationManager {
 		try {
 			const response = await fetch(`${API_URL}/moderation/sensitive-images`);
 			if (response.ok) {
-				const data = await response.json();
+				const apiData: SensitiveImagesData = await response.json();
 				this.data = {
-					image_ids: new Set(data.image_ids || []),
-					urls: new Set(data.urls || [])
+					image_ids: new Set(apiData.image_ids || []),
+					urls: new Set(apiData.urls || [])
 				};
+				// persist for next page load
+				this.saveToStorage(apiData);
 			}
 		} catch (error) {
 			console.error('failed to fetch sensitive images:', error);
