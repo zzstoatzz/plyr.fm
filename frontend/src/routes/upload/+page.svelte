@@ -16,8 +16,8 @@
 	const BASE_AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a"];
 	const BASE_AUDIO_MIME_TYPES = ["audio/mpeg", "audio/wav", "audio/mp4"];
 	// lossless formats (require transcoding, feature-flagged)
-	const LOSSLESS_EXTENSIONS = [".aiff", ".flac"];
-	const LOSSLESS_MIME_TYPES = ["audio/aiff", "audio/flac"];
+	const LOSSLESS_EXTENSIONS = [".aiff", ".aif", ".flac"];
+	const LOSSLESS_MIME_TYPES = ["audio/aiff", "audio/x-aiff", "audio/flac"];
 
 	// check if user has lossless uploads enabled
 	function hasLosslessUploads(): boolean {

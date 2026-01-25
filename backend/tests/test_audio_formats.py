@@ -23,10 +23,13 @@ class TestAudioFormat:
             (".m4a", AudioFormat.M4A),
             ("m4a", AudioFormat.M4A),
             (".M4A", AudioFormat.M4A),
-            # aiff (lossless)
+            # aiff (lossless) - .aif is alias for .aiff
             (".aiff", AudioFormat.AIFF),
             ("aiff", AudioFormat.AIFF),
             (".AIFF", AudioFormat.AIFF),
+            (".aif", AudioFormat.AIFF),
+            ("aif", AudioFormat.AIFF),
+            (".AIF", AudioFormat.AIFF),
             # flac (lossless)
             (".flac", AudioFormat.FLAC),
             ("flac", AudioFormat.FLAC),
@@ -45,7 +48,6 @@ class TestAudioFormat:
             ".ogg",
             ".aac",
             ".wma",
-            ".aif",  # only .aiff is supported, not .aif
             "",
             "invalid",
         ],

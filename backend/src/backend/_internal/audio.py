@@ -39,6 +39,9 @@ class AudioFormat(str, Enum):
     def from_extension(cls, ext: str) -> Self | None:
         """get format from file extension (with or without dot)."""
         ext = ext.lower().lstrip(".")
+        # handle .aif as alias for .aiff
+        if ext == "aif":
+            ext = "aiff"
         for format in cls:
             if format.value == ext:
                 return format
