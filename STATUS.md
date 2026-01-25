@@ -47,6 +47,29 @@ plyr.fm should become:
 
 ### January 2026
 
+#### lossless audio support (PRs #794-797, Jan 25)
+
+**transcoding integration complete** - users can now upload AIFF and FLAC files. the system transcodes them to MP3 for browser compatibility while preserving originals for lossless playback.
+
+**how it works**:
+- upload AIFF/FLAC → original saved to R2, transcoded MP3 created
+- database stores both `file_id` (transcoded) and `original_file_id` (lossless)
+- frontend detects browser capabilities via `canPlayType()`
+- Safari/native apps get lossless, Chrome/Firefox get transcoded MP3
+- "lossless" badge shown on tracks when browser supports the format
+
+**key changes**:
+- `original_file_id` and `original_file_type` added to Track model and API
+- audio endpoint serves either version based on requested file_id
+- `LosslessBadge.svelte` component with browser capability detection
+- feature-flagged via `lossless-uploads` user flag
+
+**bug fixes during rollout**:
+- PR #796: audio endpoint now queries by `file_id` OR `original_file_id`
+- PR #797: store actual extension (`.aif`) not normalized format name (`.aiff`)
+
+---
+
 #### auth check optimization (PRs #781-782, Jan 23)
 
 **eliminated redundant /auth/me calls** - previously, every navigation triggered an auth check via the layout load function. for unauthenticated users, this meant a 401 on every page click (117 errors in 24 hours observed via Logfire).
@@ -293,7 +316,6 @@ listen receipts shipped - share links now track who clicked and played. legal fo
 - audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
 
 ### backlog
-- audio transcoding pipeline integration (#153) - transcoder service deployed, integration deferred
 - share to bluesky (#334)
 - lyrics and annotations (#373)
 - configurable rules engine for moderation
@@ -338,6 +360,7 @@ listen receipts shipped - share links now track who clicked and played. legal fo
 - ✅ artist profiles synced with Bluesky
 - ✅ track upload with streaming
 - ✅ audio streaming via 307 redirects to R2 CDN
+- ✅ lossless audio (AIFF/FLAC) with automatic transcoding for browser compatibility
 - ✅ play count tracking, likes, queue management
 - ✅ unified search with Cmd/Ctrl+K
 - ✅ teal.fm scrobbling
@@ -451,4 +474,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-23.
+this is a living document. last updated 2026-01-25.
