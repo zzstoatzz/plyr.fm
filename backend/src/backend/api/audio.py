@@ -4,7 +4,7 @@ import logfire
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import or_, select
 
 from backend._internal import Session, get_optional_session, validate_supporter
 from backend.models import Track
@@ -41,50 +41,60 @@ async def stream_audio(
     not through this endpoint.
     """
     is_head_request = request.method == "HEAD"
-    # look up track to get r2_url, file_type, support_gate, and artist_did
+    # look up track - could be by file_id (transcoded) or original_file_id (lossless)
     async with db_session() as db:
-        # check for duplicates (multiple tracks with same file_id)
-        count_result = await db.execute(
-            select(func.count()).select_from(Track).where(Track.file_id == file_id)
-        )
-        count = count_result.scalar()
-
-        if count == 0:
-            raise HTTPException(status_code=404, detail="audio file not found")
-
-        if count > 1:
-            logfire.warn(
-                "multiple tracks found for file_id",
-                file_id=file_id,
-                count=count,
-            )
-
-        # get the track with gating info
         result = await db.execute(
-            select(Track.r2_url, Track.file_type, Track.support_gate, Track.artist_did)
-            .where(Track.file_id == file_id)
+            select(
+                Track.file_id,
+                Track.r2_url,
+                Track.file_type,
+                Track.original_file_id,
+                Track.original_file_type,
+                Track.support_gate,
+                Track.artist_did,
+            )
+            .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
             .limit(1)
         )
         track_data = result.first()
-        r2_url, file_type, support_gate, artist_did = track_data
+
+        if not track_data:
+            raise HTTPException(status_code=404, detail="audio file not found")
+
+        (
+            track_file_id,
+            r2_url,
+            file_type,
+            original_file_id,
+            original_file_type,
+            support_gate,
+            artist_did,
+        ) = track_data
+
+    # determine if we're serving the original lossless file
+    serving_original = file_id == original_file_id and original_file_type is not None
+    serve_file_id = file_id if serving_original else track_file_id
+    serve_file_type = original_file_type if serving_original else file_type
 
     # check if track is gated
     if support_gate is not None:
         return await _handle_gated_audio(
-            file_id=file_id,
-            file_type=file_type,
+            file_id=serve_file_id,
+            file_type=serve_file_type,
             artist_did=artist_did,
             session=session,
             is_head_request=is_head_request,
         )
 
-    # public track - use cached r2_url if available
-    if r2_url and r2_url.startswith("http"):
+    # public track - use cached r2_url only for transcoded version
+    if not serving_original and r2_url and r2_url.startswith("http"):
         return RedirectResponse(url=r2_url)
 
-    # otherwise, get it with the specific extension (single HEAD)
-    url = await storage.get_url(file_id, file_type="audio", extension=file_type)
+    # get URL for the requested file (original or transcoded)
+    url = await storage.get_url(
+        serve_file_id, file_type="audio", extension=serve_file_type
+    )
     if not url:
         raise HTTPException(status_code=404, detail="audio file not found")
     return RedirectResponse(url=url)
@@ -167,8 +177,16 @@ async def get_audio_url(
     """
     async with db_session() as db:
         result = await db.execute(
-            select(Track.r2_url, Track.file_type, Track.support_gate, Track.artist_did)
-            .where(Track.file_id == file_id)
+            select(
+                Track.file_id,
+                Track.r2_url,
+                Track.file_type,
+                Track.original_file_id,
+                Track.original_file_type,
+                Track.support_gate,
+                Track.artist_did,
+            )
+            .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
             .limit(1)
         )
@@ -177,7 +195,20 @@ async def get_audio_url(
         if not track_data:
             raise HTTPException(status_code=404, detail="audio file not found")
 
-        r2_url, file_type, support_gate, artist_did = track_data
+        (
+            track_file_id,
+            r2_url,
+            file_type,
+            original_file_id,
+            original_file_type,
+            support_gate,
+            artist_did,
+        ) = track_data
+
+    # determine if we're serving the original lossless file
+    serving_original = file_id == original_file_id and original_file_type is not None
+    serve_file_id = file_id if serving_original else track_file_id
+    serve_file_type = original_file_type if serving_original else file_type
 
     # check if track is gated
     if support_gate is not None:
@@ -204,16 +235,24 @@ async def get_audio_url(
                 )
 
         # return presigned URL
-        url = await storage.generate_presigned_url(file_id=file_id, extension=file_type)
-        return AudioUrlResponse(url=url, file_id=file_id, file_type=file_type)
+        url = await storage.generate_presigned_url(
+            file_id=serve_file_id, extension=serve_file_type
+        )
+        return AudioUrlResponse(
+            url=url, file_id=serve_file_id, file_type=serve_file_type
+        )
 
-    # public track - return cached r2_url if available
-    if r2_url and r2_url.startswith("http"):
-        return AudioUrlResponse(url=r2_url, file_id=file_id, file_type=file_type)
+    # public track - return cached r2_url only for transcoded version
+    if not serving_original and r2_url and r2_url.startswith("http"):
+        return AudioUrlResponse(
+            url=r2_url, file_id=serve_file_id, file_type=serve_file_type
+        )
 
     # otherwise, resolve it
-    url = await storage.get_url(file_id, file_type="audio", extension=file_type)
+    url = await storage.get_url(
+        serve_file_id, file_type="audio", extension=serve_file_type
+    )
     if not url:
         raise HTTPException(status_code=404, detail="audio file not found")
 
-    return AudioUrlResponse(url=url, file_id=file_id, file_type=file_type)
+    return AudioUrlResponse(url=url, file_id=serve_file_id, file_type=serve_file_type)
