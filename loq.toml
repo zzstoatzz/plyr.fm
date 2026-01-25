@@ -22,7 +22,7 @@ max_lines = 1207
 
 [[rules]]
 path = "backend/src/backend/_internal/background_tasks.py"
-max_lines = 938
+max_lines = 954
 
 [[rules]]
 path = "backend/src/backend/api/albums.py"
@@ -42,11 +42,11 @@ max_lines = 664
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 760
+max_lines = 976
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 768
+max_lines = 816
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"

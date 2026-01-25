@@ -621,6 +621,42 @@ class ModerationSettings(AppSettingsSection):
     )
 
 
+class TranscoderSettings(AppSettingsSection):
+    """Transcoder service configuration for lossless audio conversion.
+
+    The transcoder is a standalone Rust service that converts non-web-playable
+    formats (AIFF, FLAC) to MP3 for browser playback while preserving originals.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="TRANSCODER_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable transcoding for lossless uploads. When False, lossless formats are rejected.",
+    )
+    service_url: str = Field(
+        default="https://plyr-transcoder.fly.dev",
+        description="URL of the transcoder service",
+    )
+    auth_token: str = Field(
+        default="",
+        description="Auth token for transcoder service (X-Transcoder-Key header)",
+    )
+    timeout_seconds: int = Field(
+        default=600,
+        description="Timeout for transcoder requests (10 min default for large files)",
+    )
+    target_format: str = Field(
+        default="mp3",
+        description="Target format for transcoded files",
+    )
+
+
 class DocketSettings(AppSettingsSection):
     """Background task queue configuration using pydocket.
 
@@ -750,6 +786,10 @@ class Settings(AppSettingsSection):
     moderation: ModerationSettings = Field(
         default_factory=ModerationSettings,
         description="Moderation service settings",
+    )
+    transcoder: TranscoderSettings = Field(
+        default_factory=TranscoderSettings,
+        description="Transcoder service settings for lossless audio conversion",
     )
     teal: TealSettings = Field(
         default_factory=TealSettings,

@@ -184,11 +184,19 @@ async def process_export(export_id: str, artist_did: str) -> None:
                     )
                     continue
 
+                # prefer original file for export (lossless if available)
+                if track.original_file_id and track.original_file_type:
+                    export_file_id = track.original_file_id
+                    export_file_type = track.original_file_type
+                else:
+                    export_file_id = track.file_id
+                    export_file_type = track.file_type
+
                 # create safe filename with duplicate handling
-                base_filename = f"{track.title}.{track.file_type}"
+                base_filename = f"{track.title}.{export_file_type}"
                 if base_filename in title_counts:
                     title_counts[base_filename] += 1
-                    filename = f"{track.title} ({title_counts[base_filename]}).{track.file_type}"
+                    filename = f"{track.title} ({title_counts[base_filename]}).{export_file_type}"
                 else:
                     title_counts[base_filename] = 0
                     filename = base_filename
@@ -203,7 +211,7 @@ async def process_export(export_id: str, artist_did: str) -> None:
                 track_info.append(
                     {
                         "track": track,
-                        "key": f"audio/{track.file_id}.{track.file_type}",
+                        "key": f"audio/{export_file_id}.{export_file_type}",
                         "filename": filename,
                         "temp_path": temp_path / filename,
                     }
