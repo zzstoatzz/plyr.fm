@@ -619,8 +619,7 @@ $effect(() => {
 					<div class="track-stats">
 						<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
 						{#if track.original_file_type}
-							<span class="separator">•</span>
-							<LosslessBadge originalFileType={track.original_file_type} />
+							<LosslessBadge originalFileType={track.original_file_type} withSeparator separatorClass="separator" />
 						{/if}
 						{#if track.like_count && track.like_count > 0}
 							<span class="separator">•</span>

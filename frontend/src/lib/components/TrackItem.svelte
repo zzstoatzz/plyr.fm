@@ -298,7 +298,7 @@
 			</div>
 			<div class="track-meta">
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
-				{#if track.original_file_type}<span class="meta-separator">•</span><LosslessBadge originalFileType={track.original_file_type} />{/if}
+				{#if track.original_file_type}<LosslessBadge originalFileType={track.original_file_type} withSeparator separatorClass="meta-separator" />{/if}
 			{#if likeCount > 0}
 				<span class="meta-separator">•</span>
 				<span

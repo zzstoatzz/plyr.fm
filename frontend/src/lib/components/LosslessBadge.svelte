@@ -3,15 +3,18 @@
 
 	interface Props {
 		originalFileType: string | null | undefined;
+		withSeparator?: boolean;
+		separatorClass?: string;
 	}
 
-	let { originalFileType }: Props = $props();
+	let { originalFileType, withSeparator = false, separatorClass = '' }: Props = $props();
 
 	// only show if browser can play this lossless format
 	let showBadge = $derived(hasPlayableLossless(originalFileType));
 </script>
 
 {#if showBadge}
+	{#if withSeparator}<span class={separatorClass}>•</span>{/if}
 	<span class="lossless-badge" title="lossless audio available">
 		<svg class="lossless-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 			<!-- diamond/gem icon suggesting quality -->
