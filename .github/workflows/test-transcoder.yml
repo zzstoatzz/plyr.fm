@@ -1,0 +1,63 @@
+name: transcoder integration tests
+
+on:
+  pull_request:
+    paths:
+      - "transcoder/**"
+      - "scripts/transcoder/**"
+      - "scripts/generate_audio_sample.py"
+      - ".github/workflows/test-transcoder.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: transcoder test matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: transcoder
+
+      - name: build transcoder
+        working-directory: transcoder
+        run: cargo build --release
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: start transcoder
+        run: |
+          TRANSCODER_HOST=127.0.0.1 TRANSCODER_PORT=8082 \
+            ./transcoder/target/release/transcoder &
+
+          # wait for health check
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8082/health > /dev/null; then
+              echo "transcoder ready"
+              break
+            fi
+            sleep 0.5
+          done
+
+      - name: run test matrix
+        run: uv run scripts/transcoder/test-matrix.py -v
+
+      - name: stop transcoder
+        if: always()
+        run: pkill -f transcoder || true

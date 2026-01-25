@@ -25,6 +25,7 @@ from backend._internal import (
     get_pending_dev_token,
     get_pending_scope_upgrade,
     get_session_group,
+    get_user_flags,
     handle_oauth_callback,
     list_developer_tokens,
     require_auth,
@@ -61,6 +62,7 @@ class CurrentUserResponse(BaseModel):
     did: str
     handle: str
     linked_accounts: list[LinkedAccountResponse] = []
+    enabled_flags: list[str] = []
 
 
 class DeveloperTokenInfo(BaseModel):
@@ -373,6 +375,9 @@ async def get_current_user(
         for artist in result.scalars().all():
             avatar_map[artist.did] = artist.avatar_url
 
+    # get feature flags for current user from dedicated table
+    current_user_flags = await get_user_flags(db, session.did)
+
     return CurrentUserResponse(
         did=session.did,
         handle=session.handle,
@@ -384,6 +389,7 @@ async def get_current_user(
             )
             for account in linked
         ],
+        enabled_flags=current_user_flags,
     )
 
 
