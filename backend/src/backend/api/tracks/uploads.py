@@ -466,11 +466,13 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                     )
                     return
 
+                # use actual extension from filename (e.g., "aif" not "aiff")
+                original_ext = Path(ctx.filename).suffix.lower().lstrip(".")
                 transcode_info = await _transcode_audio(
                     ctx.upload_id,
                     ctx.file_path,
                     ctx.filename,
-                    audio_format.value,
+                    original_ext,
                 )
                 if not transcode_info:
                     return
