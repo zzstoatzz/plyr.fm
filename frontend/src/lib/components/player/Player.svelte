@@ -7,6 +7,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
 	import { getCachedAudioUrl } from '$lib/storage';
+	import { hasPlayableLossless } from '$lib/audio-support';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import TrackInfo from './TrackInfo.svelte';
@@ -99,7 +100,6 @@
 	let isOnTrackDetailPage = $derived(
 		player.currentTrack && $page.url.pathname === `/track/${player.currentTrack.id}`
 	);
-
 	let trackInfoRef = $state<{ recalcOverflow: () => void } | null>(null);
 
 	$effect(() => {
@@ -109,9 +109,7 @@
 	});
 
 	// track play count when threshold is reached
-	$effect(() => {
-		player.incrementPlayCount();
-	});
+	$effect(() => { player.incrementPlayCount(); });
 
 	onMount(() => {
 		// set up media session handlers for system controls (CarPlay, lock screen, etc.)
@@ -344,8 +342,9 @@
 			// cleanup previous blob URL before loading new track
 			cleanupBlobUrl();
 
-			// async: get audio source (cached or network)
-			getAudioSource(trackToLoad.file_id, trackToLoad)
+			// use lossless original if browser supports it, otherwise transcoded
+			const fileId = (trackToLoad.original_file_id && hasPlayableLossless(trackToLoad.original_file_type)) ? trackToLoad.original_file_id : trackToLoad.file_id;
+			getAudioSource(fileId, trackToLoad)
 				.then((src) => {
 					// check if track is still current (user may have changed tracks during await)
 					if (player.currentTrack?.id !== trackToLoad.id || !player.audioElement) {
