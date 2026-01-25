@@ -288,7 +288,7 @@ async def _transcode_audio(
     await job_service.update_progress(
         upload_id,
         JobStatus.PROCESSING,
-        "transcoding audio (this may take a moment)...",
+        "transcoding audio...",
         phase="transcode",
         progress_pct=0.0,
     )

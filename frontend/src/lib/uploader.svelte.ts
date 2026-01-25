@@ -161,9 +161,10 @@ class UploaderState {
 
 						// show backend processing messages
 						if (update.message && update.status === 'processing') {
-							// if we have server-side progress, show it
+							// if we have meaningful server-side progress, show it
+							// (skip 0% as it looks wrong during phase transitions)
 							const serverProgress = update.server_progress_pct;
-							if (serverProgress !== undefined && serverProgress !== null) {
+							if (serverProgress !== undefined && serverProgress !== null && serverProgress > 0) {
 								toast.update(task.toastId, `${update.message} (${Math.round(serverProgress)}%)`);
 							} else {
 								toast.update(task.toastId, update.message);
