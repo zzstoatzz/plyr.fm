@@ -111,6 +111,9 @@ class TrackResponse(BaseModel):
     copyright_match: str | None = None  # "Title by Artist" of primary match
     support_gate: dict[str, Any] | None = None  # supporter gating config
     gated: bool = False  # true if track is gated AND viewer lacks access
+    original_file_type: str | None = (
+        None  # original format if transcoded (e.g., aiff, flac)
+    )
 
     @classmethod
     async def from_track(
@@ -216,4 +219,5 @@ class TrackResponse(BaseModel):
             copyright_match=copyright_match,
             support_gate=track.support_gate,
             gated=gated,
+            original_file_type=track.original_file_type,
         )

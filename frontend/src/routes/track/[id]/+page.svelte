@@ -11,6 +11,7 @@
 	import TagEffects from '$lib/components/TagEffects.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import LikersTooltip from '$lib/components/LikersTooltip.svelte';
+	import LosslessBadge from '$lib/components/LosslessBadge.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -617,6 +618,10 @@ $effect(() => {
 
 					<div class="track-stats">
 						<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
+						{#if track.original_file_type}
+							<span class="separator">•</span>
+							<LosslessBadge originalFileType={track.original_file_type} />
+						{/if}
 						{#if track.like_count && track.like_count > 0}
 							<span class="separator">•</span>
 							<span
