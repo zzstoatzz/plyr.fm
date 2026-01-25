@@ -543,7 +543,7 @@
 	.lossless-badge {
 		position: absolute;
 		top: -10px;
-		left: 12px;
+		right: 12px;
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
@@ -992,7 +992,7 @@
 
 		.lossless-badge {
 			top: -8px;
-			left: 8px;
+			right: 8px;
 			padding: 0.2rem 0.5rem 0.2rem 0.4rem;
 			font-size: 0.65rem;
 		}
@@ -1057,7 +1057,7 @@
 
 		.lossless-badge {
 			top: -7px;
-			left: 6px;
+			right: 6px;
 			padding: 0.15rem 0.4rem 0.15rem 0.35rem;
 			gap: 0.25rem;
 			font-size: 0.6rem;
