@@ -5,6 +5,7 @@
 	import LikersTooltip from './LikersTooltip.svelte';
 	import CommentersTooltip from './CommentersTooltip.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
+	import LosslessBadge from './LosslessBadge.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -84,15 +85,10 @@
 	let visibleTags = $derived(
 		tagsExpanded ? track.tags : track.tags?.slice(0, MAX_VISIBLE_TAGS)
 	);
-	let hiddenTagCount = $derived(
-		(track.tags?.length || 0) - MAX_VISIBLE_TAGS
-	);
+	let hiddenTagCount = $derived((track.tags?.length || 0) - MAX_VISIBLE_TAGS);
 
-	// construct shareable URL - use /track/[id] for link previews
-	// the track page will redirect to home with query param for actual playback
-	const shareUrl = typeof window !== 'undefined'
-		? `${window.location.origin}/track/${track.id}`
-		: '';
+	// shareable URL for link previews (track page redirects to home with query param)
+	const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/track/${track.id}` : '';
 
 	function addToQueue(e: Event) {
 		e.stopPropagation();
@@ -302,6 +298,7 @@
 			</div>
 			<div class="track-meta">
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
+				{#if track.original_file_type}<span class="meta-separator">•</span><LosslessBadge originalFileType={track.original_file_type} />{/if}
 			{#if likeCount > 0}
 				<span class="meta-separator">•</span>
 				<span
