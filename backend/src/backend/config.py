@@ -8,11 +8,11 @@ from typing import Annotated, Any, TypeVar
 from urllib.parse import urlparse
 
 from pydantic import (
+    AnyHttpUrl,
     BeforeValidator,
     Field,
     TypeAdapter,
     computed_field,
-    field_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -645,9 +645,9 @@ class TranscoderSettings(AppSettingsSection):
         default=True,
         description="Enable transcoding for lossless uploads. When False, lossless formats are rejected.",
     )
-    service_url: str = Field(
-        default="https://plyr-transcoder.fly.dev",
-        description="HTTP URL of the transcoder service",
+    service_url: AnyHttpUrl = Field(
+        default=AnyHttpUrl("https://plyr-transcoder.fly.dev"),
+        description="URL of the transcoder service",
     )
     auth_token: str = Field(
         default="",
@@ -661,14 +661,6 @@ class TranscoderSettings(AppSettingsSection):
         default="mp3",
         description="Target format for transcoded files",
     )
-
-    @field_validator("service_url")
-    @classmethod
-    def validate_service_url(cls, v: str) -> str:
-        """ensure service_url is a valid HTTP(S) URL."""
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("service_url must be an HTTP or HTTPS URL")
-        return v
 
 
 class DocketSettings(AppSettingsSection):
