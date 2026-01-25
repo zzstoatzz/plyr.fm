@@ -62,7 +62,7 @@ async def resolve_user(db, did_or_handle: str):
 
 async def cmd_enable(args) -> None:
     """enable a feature flag for a user."""
-
+    from backend._internal import enable_flag, get_user_flags
     from backend.utilities.database import db_session
 
     async with db_session() as db:
@@ -71,22 +71,21 @@ async def cmd_enable(args) -> None:
             print(f"error: user not found: {args.user}")
             sys.exit(1)
 
-        current_flags = artist.enabled_flags or []
-        if args.flag in current_flags:
-            print(f"flag '{args.flag}' already enabled for {artist.handle}")
-            return
-
-        # add flag
-        new_flags = list(current_flags) + [args.flag]
-        artist.enabled_flags = new_flags
+        newly_enabled = await enable_flag(db, artist.did, args.flag)
         await db.commit()
 
-        print(f"enabled '{args.flag}' for {artist.handle} ({artist.did})")
-        print(f"flags: {new_flags}")
+        if newly_enabled:
+            print(f"enabled '{args.flag}' for {artist.handle} ({artist.did})")
+        else:
+            print(f"flag '{args.flag}' already enabled for {artist.handle}")
+
+        flags = await get_user_flags(db, artist.did)
+        print(f"flags: {flags}")
 
 
 async def cmd_disable(args) -> None:
     """disable a feature flag for a user."""
+    from backend._internal import disable_flag, get_user_flags
     from backend.utilities.database import db_session
 
     async with db_session() as db:
@@ -95,22 +94,21 @@ async def cmd_disable(args) -> None:
             print(f"error: user not found: {args.user}")
             sys.exit(1)
 
-        current_flags = artist.enabled_flags or []
-        if args.flag not in current_flags:
-            print(f"flag '{args.flag}' not enabled for {artist.handle}")
-            return
-
-        # remove flag
-        new_flags = [f for f in current_flags if f != args.flag]
-        artist.enabled_flags = new_flags
+        was_disabled = await disable_flag(db, artist.did, args.flag)
         await db.commit()
 
-        print(f"disabled '{args.flag}' for {artist.handle} ({artist.did})")
-        print(f"flags: {new_flags}")
+        if was_disabled:
+            print(f"disabled '{args.flag}' for {artist.handle} ({artist.did})")
+        else:
+            print(f"flag '{args.flag}' not enabled for {artist.handle}")
+
+        flags = await get_user_flags(db, artist.did)
+        print(f"flags: {flags}")
 
 
 async def cmd_list(args) -> None:
     """list flags for a user."""
+    from backend._internal import get_user_flags
     from backend.utilities.database import db_session
 
     async with db_session() as db:
@@ -119,7 +117,7 @@ async def cmd_list(args) -> None:
             print(f"error: user not found: {args.user}")
             sys.exit(1)
 
-        flags = artist.enabled_flags or []
+        flags = await get_user_flags(db, artist.did)
         print(f"{artist.handle} ({artist.did}):")
         if flags:
             for flag in flags:
@@ -130,26 +128,41 @@ async def cmd_list(args) -> None:
 
 async def cmd_list_all(args) -> None:
     """list all users with feature flags."""
-    from sqlalchemy import func, select
+    from sqlalchemy import select
 
-    from backend.models import Artist
+    from backend.models import Artist, FeatureFlag
     from backend.utilities.database import db_session
 
     async with db_session() as db:
-        # find users with non-empty flags
-        result = await db.execute(
-            select(Artist).where(func.cardinality(Artist.enabled_flags) > 0)
-        )
-        artists = result.scalars().all()
+        # find all unique user DIDs with flags
+        result = await db.execute(select(FeatureFlag.user_did).distinct())
+        dids_with_flags = list(result.scalars().all())
 
-        if not artists:
+        if not dids_with_flags:
             print("no users have feature flags enabled")
             return
 
-        print(f"users with feature flags ({len(artists)}):")
-        for artist in artists:
-            flags = artist.enabled_flags or []
-            print(f"\n{artist.handle} ({artist.did}):")
+        # get artist info for each DID
+        artist_result = await db.execute(
+            select(Artist).where(Artist.did.in_(dids_with_flags))
+        )
+        artists_by_did = {a.did: a for a in artist_result.scalars().all()}
+
+        # get all flags grouped by user
+        flags_result = await db.execute(select(FeatureFlag))
+        all_flags = flags_result.scalars().all()
+
+        # group flags by DID
+        flags_by_did: dict[str, list[str]] = {}
+        for flag in all_flags:
+            flags_by_did.setdefault(flag.user_did, []).append(flag.flag)
+
+        print(f"users with feature flags ({len(dids_with_flags)}):")
+        for did in dids_with_flags:
+            artist = artists_by_did.get(did)
+            handle = artist.handle if artist else "(unknown)"
+            flags = flags_by_did.get(did, [])
+            print(f"\n{handle} ({did}):")
             for flag in flags:
                 print(f"  - {flag}")
 

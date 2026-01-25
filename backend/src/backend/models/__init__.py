@@ -6,6 +6,7 @@ from backend.models.copyright_scan import CopyrightScan
 from backend.models.database import Base
 from backend.models.sensitive_image import SensitiveImage
 from backend.models.exchange_token import ExchangeToken
+from backend.models.feature_flag import FeatureFlag
 from backend.models.job import Job
 from backend.models.oauth_state import OAuthStateModel
 from backend.models.pending_add_account import PendingAddAccount
@@ -28,6 +29,7 @@ __all__ = [
     "Base",
     "CopyrightScan",
     "ExchangeToken",
+    "FeatureFlag",
     "Job",
     "OAuthStateModel",
     "PendingAddAccount",

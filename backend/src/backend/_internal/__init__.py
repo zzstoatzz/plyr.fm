@@ -39,7 +39,13 @@ from backend._internal.auth import (
     update_session_tokens,
 )
 from backend._internal.constellation import get_like_count_safe
-from backend._internal.feature_flags import KNOWN_FLAGS, has_flag
+from backend._internal.feature_flags import (
+    KNOWN_FLAGS,
+    disable_flag,
+    enable_flag,
+    get_user_flags,
+    has_flag,
+)
 from backend._internal.notifications import notification_service
 from backend._internal.now_playing import now_playing_service
 from backend._internal.queue import queue_service

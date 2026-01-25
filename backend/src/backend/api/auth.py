@@ -25,6 +25,7 @@ from backend._internal import (
     get_pending_dev_token,
     get_pending_scope_upgrade,
     get_session_group,
+    get_user_flags,
     handle_oauth_callback,
     list_developer_tokens,
     require_auth,
@@ -366,17 +367,16 @@ async def get_current_user(
     # get all accounts in the session group (reuse db connection)
     linked = await get_session_group(session.session_id, db=db)
 
-    # look up artist profiles to get fresh avatars and flags
+    # look up artist profiles to get fresh avatars
     dids = [account.did for account in linked]
     avatar_map: dict[str, str | None] = {}
-    current_user_flags: list[str] = []
     if dids:
         result = await db.execute(select(Artist).where(Artist.did.in_(dids)))
         for artist in result.scalars().all():
             avatar_map[artist.did] = artist.avatar_url
-            # capture flags for the current user
-            if artist.did == session.did:
-                current_user_flags = artist.enabled_flags or []
+
+    # get feature flags for current user from dedicated table
+    current_user_flags = await get_user_flags(db, session.did)
 
     return CurrentUserResponse(
         did=session.did,

@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ARRAY, DateTime, String
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.database import Base
@@ -30,13 +30,6 @@ class Artist(Base):
 
     # cached PDS URL (for performance)
     pds_url: Mapped[str | None] = mapped_column(String, nullable=True)
-
-    # feature flags (enabled per-user by admin)
-    enabled_flags: Mapped[list[str]] = mapped_column(
-        ARRAY(String(64)),
-        server_default="{}",
-        default=list,
-    )
 
     # metadata
     created_at: Mapped[datetime] = mapped_column(
