@@ -170,7 +170,18 @@
 	class="track-container"
 	class:playing={isPlaying}
 	class:likers-tooltip-open={showLikersTooltip}
+	class:lossless={hasPlayableLossless(track.original_file_type)}
 >
+	{#if hasPlayableLossless(track.original_file_type)}
+		<div class="lossless-badge" title="lossless audio available">
+			<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+				<path d="M8 1L14 6L8 15L2 6L8 1Z" stroke="currentColor" stroke-width="1.2" fill="currentColor" fill-opacity="0.15" stroke-linejoin="round"/>
+				<path d="M2 6H14" stroke="currentColor" stroke-width="1.2"/>
+				<path d="M8 1L6 6L8 15L10 6L8 1Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+			</svg>
+			<span class="lossless-label">lossless</span>
+		</div>
+	{/if}
 	{#if showIndex}
 		<span class="track-index">{index + 1}</span>
 	{/if}
@@ -236,16 +247,7 @@
 					</svg>
 				</div>
 			{/if}
-			{#if hasPlayableLossless(track.original_file_type)}
-				<div class="lossless-indicator" title="lossless audio available">
-					<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-						<path d="M8 1L14 6L8 15L2 6L8 1Z" stroke="currentColor" stroke-width="1.2" fill="currentColor" fill-opacity="0.15" stroke-linejoin="round"/>
-						<path d="M2 6H14" stroke="currentColor" stroke-width="1.2"/>
-						<path d="M8 1L6 6L8 15L10 6L8 1Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
-					</svg>
-				</div>
-			{/if}
-		</div>
+			</div>
 		<div class="track-info">
 			<a href="/track/{track.id}" class="track-title">{track.title}</a>
 			<div class="track-metadata">
@@ -427,6 +429,7 @@
 
 <style>
 	.track-container {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
@@ -521,42 +524,74 @@
 		z-index: 1;
 	}
 
-	.lossless-indicator {
+	/* lossless track card styling */
+	.track-container.lossless {
+		border-color: color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
+		box-shadow:
+			0 1px 2px rgba(0, 0, 0, 0.04),
+			0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent),
+			inset 0 1px 0 color-mix(in srgb, var(--accent) 8%, transparent);
+	}
+
+	.track-container.lossless:hover {
+		border-color: color-mix(in srgb, var(--accent) 45%, var(--border-default));
+		box-shadow:
+			0 2px 8px color-mix(in srgb, var(--accent) 15%, transparent),
+			0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
+	}
+
+	.lossless-badge {
 		position: absolute;
-		top: -4px;
-		left: -4px;
-		width: 18px;
-		height: 18px;
+		top: -10px;
+		left: 12px;
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		gap: 0.35rem;
+		padding: 0.25rem 0.6rem 0.25rem 0.5rem;
 		background: var(--bg-primary);
 		border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
 		border-radius: var(--radius-full);
 		color: var(--accent);
-		z-index: 1;
-		box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		box-shadow:
+			0 2px 8px color-mix(in srgb, var(--accent) 25%, transparent),
+			0 0 12px color-mix(in srgb, var(--accent) 15%, transparent);
+		z-index: 2;
 		animation: lossless-glow 3s ease-in-out infinite;
 	}
 
-	.lossless-indicator svg {
-		width: 10px;
-		height: 10px;
+	.lossless-badge svg {
+		width: 12px;
+		height: 12px;
+		flex-shrink: 0;
+	}
+
+	.lossless-label {
+		line-height: 1;
 	}
 
 	@keyframes lossless-glow {
 		0%, 100% {
-			box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 35%, transparent);
+			box-shadow:
+				0 2px 8px color-mix(in srgb, var(--accent) 20%, transparent),
+				0 0 10px color-mix(in srgb, var(--accent) 12%, transparent);
 		}
 		50% {
-			box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 65%, transparent);
+			box-shadow:
+				0 2px 12px color-mix(in srgb, var(--accent) 35%, transparent),
+				0 0 16px color-mix(in srgb, var(--accent) 25%, transparent);
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.lossless-indicator {
+		.lossless-badge {
 			animation: none;
-			box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+			box-shadow:
+				0 2px 8px color-mix(in srgb, var(--accent) 25%, transparent),
+				0 0 12px color-mix(in srgb, var(--accent) 15%, transparent);
 		}
 	}
 
@@ -955,16 +990,16 @@
 			height: 8px;
 		}
 
-		.lossless-indicator {
-			width: 16px;
-			height: 16px;
-			top: -3px;
-			left: -3px;
+		.lossless-badge {
+			top: -8px;
+			left: 8px;
+			padding: 0.2rem 0.5rem 0.2rem 0.4rem;
+			font-size: 0.65rem;
 		}
 
-		.lossless-indicator svg {
-			width: 8px;
-			height: 8px;
+		.lossless-badge svg {
+			width: 10px;
+			height: 10px;
 		}
 
 		.track-title {
@@ -1020,16 +1055,17 @@
 			height: 7px;
 		}
 
-		.lossless-indicator {
-			width: 14px;
-			height: 14px;
-			top: -2px;
-			left: -2px;
+		.lossless-badge {
+			top: -7px;
+			left: 6px;
+			padding: 0.15rem 0.4rem 0.15rem 0.35rem;
+			gap: 0.25rem;
+			font-size: 0.6rem;
 		}
 
-		.lossless-indicator svg {
-			width: 7px;
-			height: 7px;
+		.lossless-badge svg {
+			width: 9px;
+			height: 9px;
 		}
 
 		.track-title {
