@@ -29,6 +29,10 @@ class Track(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     file_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     file_type: Mapped[str] = mapped_column(String, nullable=False)
+
+    # original file (for transcoded uploads - preserves lossless original for export)
+    original_file_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    original_file_type: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
