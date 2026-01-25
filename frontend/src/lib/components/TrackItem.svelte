@@ -5,7 +5,7 @@
 	import LikersTooltip from './LikersTooltip.svelte';
 	import CommentersTooltip from './CommentersTooltip.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
-	import LosslessBadge from './LosslessBadge.svelte';
+	import { hasPlayableLossless } from '$lib/audio-support';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -236,6 +236,15 @@
 					</svg>
 				</div>
 			{/if}
+			{#if hasPlayableLossless(track.original_file_type)}
+				<div class="lossless-indicator" title="lossless audio available">
+					<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+						<path d="M8 1L14 6L8 15L2 6L8 1Z" stroke="currentColor" stroke-width="1.2" fill="currentColor" fill-opacity="0.15" stroke-linejoin="round"/>
+						<path d="M2 6H14" stroke="currentColor" stroke-width="1.2"/>
+						<path d="M8 1L6 6L8 15L10 6L8 1Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+					</svg>
+				</div>
+			{/if}
 		</div>
 		<div class="track-info">
 			<a href="/track/{track.id}" class="track-title">{track.title}</a>
@@ -298,7 +307,6 @@
 			</div>
 			<div class="track-meta">
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
-				{#if track.original_file_type}<LosslessBadge originalFileType={track.original_file_type} withSeparator separatorClass="meta-separator" />{/if}
 			{#if likeCount > 0}
 				<span class="meta-separator">•</span>
 				<span
@@ -511,6 +519,45 @@
 		border-radius: var(--radius-full);
 		color: white;
 		z-index: 1;
+	}
+
+	.lossless-indicator {
+		position: absolute;
+		top: -4px;
+		left: -4px;
+		width: 18px;
+		height: 18px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--bg-primary);
+		border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+		border-radius: var(--radius-full);
+		color: var(--accent);
+		z-index: 1;
+		box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+		animation: lossless-glow 3s ease-in-out infinite;
+	}
+
+	.lossless-indicator svg {
+		width: 10px;
+		height: 10px;
+	}
+
+	@keyframes lossless-glow {
+		0%, 100% {
+			box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 35%, transparent);
+		}
+		50% {
+			box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 65%, transparent);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.lossless-indicator {
+			animation: none;
+			box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+		}
 	}
 
 	.track-image,
@@ -908,6 +955,18 @@
 			height: 8px;
 		}
 
+		.lossless-indicator {
+			width: 16px;
+			height: 16px;
+			top: -3px;
+			left: -3px;
+		}
+
+		.lossless-indicator svg {
+			width: 8px;
+			height: 8px;
+		}
+
 		.track-title {
 			font-size: var(--text-base);
 		}
@@ -957,6 +1016,18 @@
 		}
 
 		.gated-badge svg {
+			width: 7px;
+			height: 7px;
+		}
+
+		.lossless-indicator {
+			width: 14px;
+			height: 14px;
+			top: -2px;
+			left: -2px;
+		}
+
+		.lossless-indicator svg {
 			width: 7px;
 			height: 7px;
 		}
