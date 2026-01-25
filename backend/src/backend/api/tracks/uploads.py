@@ -323,23 +323,22 @@ async def _transcode_audio(
         return None
 
     # save transcoded file
-    await job_service.update_progress(
-        upload_id,
-        JobStatus.PROCESSING,
-        "saving transcoded file...",
-        phase="upload_transcoded",
-        progress_pct=0.0,
-    )
-
     target_format = settings.transcoder.target_format
     transcoded_filename = Path(filename).stem + f".{target_format}"
 
     try:
         import io
 
-        transcoded_file_id = await storage.save(
-            io.BytesIO(result.data), transcoded_filename
-        )
+        async with R2ProgressTracker(
+            job_id=upload_id,
+            message="saving transcoded file...",
+            phase="upload_transcoded",
+        ) as tracker:
+            transcoded_file_id = await storage.save(
+                io.BytesIO(result.data),
+                transcoded_filename,
+                progress_callback=tracker.on_progress,
+            )
     except Exception as e:
         logfire.error("failed to save transcoded file", error=str(e), exc_info=True)
         await job_service.update_progress(
