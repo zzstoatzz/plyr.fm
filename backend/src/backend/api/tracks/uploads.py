@@ -37,6 +37,7 @@ from backend._internal.background_tasks import (
 )
 from backend._internal.image import ImageFormat
 from backend._internal.jobs import job_service
+from backend._internal.transcoder_client import get_transcoder_client
 from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackTag, UserPreferences
 from backend.models.job import JobStatus, JobType
@@ -214,6 +215,156 @@ async def _save_image_to_storage(
         return None, None
 
 
+@dataclass
+class TranscodeInfo:
+    """result of transcoding an audio file."""
+
+    original_file_id: str
+    original_file_type: str
+    transcoded_file_id: str
+    transcoded_file_type: str
+    transcoded_data: bytes
+
+
+async def _transcode_audio(
+    upload_id: str,
+    file_path: str,
+    filename: str,
+    source_format: str,
+) -> TranscodeInfo | None:
+    """transcode audio file to web-playable format.
+
+    saves original to storage first, then transcodes. returns None on failure
+    (job status already updated with error).
+
+    args:
+        upload_id: job tracking ID
+        file_path: path to temp file
+        filename: original filename
+        source_format: source format (e.g., "aiff", "flac")
+
+    returns:
+        TranscodeInfo with both file IDs, or None on failure
+    """
+    # check if transcoding is enabled
+    if not settings.transcoder.enabled:
+        await job_service.update_progress(
+            upload_id,
+            JobStatus.FAILED,
+            "upload failed",
+            error="transcoding service is not enabled",
+        )
+        return None
+
+    # save original file first
+    await job_service.update_progress(
+        upload_id,
+        JobStatus.PROCESSING,
+        "saving original file...",
+        phase="upload_original",
+        progress_pct=0.0,
+    )
+
+    try:
+        async with R2ProgressTracker(
+            job_id=upload_id,
+            message="saving original file...",
+            phase="upload_original",
+        ) as tracker:
+            with open(file_path, "rb") as file_obj:
+                original_file_id = await storage.save(
+                    file_obj, filename, progress_callback=tracker.on_progress
+                )
+    except Exception as e:
+        logfire.error("failed to save original file", error=str(e), exc_info=True)
+        await job_service.update_progress(
+            upload_id, JobStatus.FAILED, "upload failed", error=str(e)
+        )
+        return None
+
+    logfire.info("original file saved", file_id=original_file_id, format=source_format)
+
+    # transcode to web-playable format (streams file to service, no memory load)
+    await job_service.update_progress(
+        upload_id,
+        JobStatus.PROCESSING,
+        "transcoding audio (this may take a moment)...",
+        phase="transcode",
+        progress_pct=0.0,
+    )
+
+    try:
+        client = get_transcoder_client()
+        result = await client.transcode_file(file_path, source_format)
+
+        if not result.success or not result.data:
+            await job_service.update_progress(
+                upload_id,
+                JobStatus.FAILED,
+                "upload failed",
+                error=f"transcoding failed: {result.error}",
+            )
+            # cleanup original
+            with contextlib.suppress(Exception):
+                await storage.delete(original_file_id, source_format)
+            return None
+
+    except Exception as e:
+        logfire.error("transcode failed", error=str(e), exc_info=True)
+        await job_service.update_progress(
+            upload_id,
+            JobStatus.FAILED,
+            "upload failed",
+            error=f"transcoding error: {e}",
+        )
+        # cleanup original
+        with contextlib.suppress(Exception):
+            await storage.delete(original_file_id, source_format)
+        return None
+
+    # save transcoded file
+    await job_service.update_progress(
+        upload_id,
+        JobStatus.PROCESSING,
+        "saving transcoded file...",
+        phase="upload_transcoded",
+        progress_pct=0.0,
+    )
+
+    target_format = settings.transcoder.target_format
+    transcoded_filename = Path(filename).stem + f".{target_format}"
+
+    try:
+        import io
+
+        transcoded_file_id = await storage.save(
+            io.BytesIO(result.data), transcoded_filename
+        )
+    except Exception as e:
+        logfire.error("failed to save transcoded file", error=str(e), exc_info=True)
+        await job_service.update_progress(
+            upload_id, JobStatus.FAILED, "upload failed", error=str(e)
+        )
+        # cleanup original
+        with contextlib.suppress(Exception):
+            await storage.delete(original_file_id, source_format)
+        return None
+
+    logfire.info(
+        "transcoded file saved",
+        file_id=transcoded_file_id,
+        format=target_format,
+    )
+
+    return TranscodeInfo(
+        original_file_id=original_file_id,
+        original_file_type=source_format,
+        transcoded_file_id=transcoded_file_id,
+        transcoded_file_type=target_format,
+        transcoded_data=result.data,
+    )
+
+
 async def _add_tags_to_track(
     db: AsyncSession,
     track_id: int,
@@ -258,8 +409,11 @@ async def _process_upload_background(ctx: UploadContext) -> None:
         "process upload background", upload_id=ctx.upload_id, filename=ctx.filename
     ):
         file_id: str | None = None
+        original_file_id: str | None = None
+        original_file_type: str | None = None
         image_id: str | None = None
         audio_format: AudioFormat | None = None
+        playable_format: AudioFormat | None = None
 
         try:
             await job_service.update_progress(
@@ -301,10 +455,41 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                         )
                         return
 
-            # save audio to storage (private bucket if gated)
-            file_id = await _save_audio_to_storage(
-                ctx.upload_id, ctx.file_path, ctx.filename, gated=is_gated
-            )
+            # for non-web-playable formats, transcode first
+            if not audio_format.is_web_playable:
+                # gated tracks don't support transcoding yet
+                if is_gated:
+                    await job_service.update_progress(
+                        ctx.upload_id,
+                        JobStatus.FAILED,
+                        "upload failed",
+                        error="supporter-gated tracks cannot use lossless formats yet",
+                    )
+                    return
+
+                transcode_info = await _transcode_audio(
+                    ctx.upload_id,
+                    ctx.file_path,
+                    ctx.filename,
+                    audio_format.value,
+                )
+                if not transcode_info:
+                    return
+
+                # use transcoded file for playback, store original for export
+                file_id = transcode_info.transcoded_file_id
+                original_file_id = transcode_info.original_file_id
+                original_file_type = transcode_info.original_file_type
+                playable_format = AudioFormat.from_extension(
+                    transcode_info.transcoded_file_type
+                )
+            else:
+                # web-playable format: save directly
+                file_id = await _save_audio_to_storage(
+                    ctx.upload_id, ctx.file_path, ctx.filename, gated=is_gated
+                )
+                playable_format = audio_format
+
             if not file_id:
                 return
 
@@ -326,10 +511,12 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                     return
 
             # get R2 URL (only for public tracks - gated tracks have no public URL)
+            # use playable_format for URL since that's what the ATProto record points to
             r2_url: str | None = None
             if not is_gated:
+                playable_ext = playable_format.value if playable_format else ext[1:]
                 r2_url = await storage.get_url(
-                    file_id, file_type="audio", extension=ext[1:]
+                    file_id, file_type="audio", extension=playable_ext
                 )
                 if not r2_url:
                     await job_service.update_progress(
@@ -401,12 +588,16 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                         assert r2_url is not None
                         audio_url_for_record = r2_url
 
+                    # use playable format for ATProto record (transcoded if applicable)
+                    playable_file_type = (
+                        playable_format.value if playable_format else ext[1:]
+                    )
                     atproto_result = await create_track_record(
                         auth_session=ctx.auth_session,
                         title=ctx.title,
                         artist=artist.display_name,
                         audio_url=audio_url_for_record,
-                        file_type=ext[1:],
+                        file_type=playable_file_type,
                         album=ctx.album,
                         duration=duration,
                         features=featured_artists or None,
@@ -429,7 +620,10 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                     )
                     # cleanup orphaned media
                     with contextlib.suppress(Exception):
-                        await storage.delete(file_id, audio_format.value)
+                        await storage.delete(file_id, playable_file_type)
+                    if original_file_id and original_file_type:
+                        with contextlib.suppress(Exception):
+                            await storage.delete(original_file_id, original_file_type)
                     if image_id:
                         with contextlib.suppress(Exception):
                             await storage.delete(image_id)
@@ -457,7 +651,9 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                 track = Track(
                     title=ctx.title,
                     file_id=file_id,
-                    file_type=ext[1:],
+                    file_type=playable_file_type,
+                    original_file_id=original_file_id,
+                    original_file_type=original_file_type,
                     artist_did=ctx.artist_did,
                     extra=extra,
                     album_id=album_record.id if album_record else None,
@@ -510,7 +706,10 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                         error=f"database constraint violation: {e!s}",
                     )
                     with contextlib.suppress(Exception):
-                        await storage.delete(file_id, audio_format.value)
+                        await storage.delete(file_id, playable_file_type)
+                    if original_file_id and original_file_type:
+                        with contextlib.suppress(Exception):
+                            await storage.delete(original_file_id, original_file_type)
 
         except Exception as e:
             logger.exception(f"upload {ctx.upload_id} failed with unexpected error")
