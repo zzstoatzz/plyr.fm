@@ -10,6 +10,8 @@ class AudioFormat(str, Enum):
     MP3 = "mp3"
     WAV = "wav"
     M4A = "m4a"
+    AIFF = "aiff"
+    FLAC = "flac"
 
     @property
     def extension(self) -> str:
@@ -23,8 +25,15 @@ class AudioFormat(str, Enum):
             AudioFormat.MP3: "audio/mpeg",
             AudioFormat.WAV: "audio/wav",
             AudioFormat.M4A: "audio/mp4",
+            AudioFormat.AIFF: "audio/aiff",
+            AudioFormat.FLAC: "audio/flac",
         }
         return media_types[self]
+
+    @property
+    def is_web_playable(self) -> bool:
+        """browsers can play this format natively (no transcoding needed)."""
+        return self in {AudioFormat.MP3, AudioFormat.WAV, AudioFormat.M4A}
 
     @classmethod
     def from_extension(cls, ext: str) -> Self | None:
