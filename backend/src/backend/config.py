@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import Annotated, Any, TypeVar
 from urllib.parse import urlparse
 
-from pydantic import BeforeValidator, Field, TypeAdapter, computed_field
+from pydantic import (
+    BeforeValidator,
+    Field,
+    TypeAdapter,
+    computed_field,
+    field_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -641,7 +647,7 @@ class TranscoderSettings(AppSettingsSection):
     )
     service_url: str = Field(
         default="https://plyr-transcoder.fly.dev",
-        description="URL of the transcoder service",
+        description="HTTP URL of the transcoder service",
     )
     auth_token: str = Field(
         default="",
@@ -655,6 +661,14 @@ class TranscoderSettings(AppSettingsSection):
         default="mp3",
         description="Target format for transcoded files",
     )
+
+    @field_validator("service_url")
+    @classmethod
+    def validate_service_url(cls, v: str) -> str:
+        """ensure service_url is a valid HTTP(S) URL."""
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("service_url must be an HTTP or HTTPS URL")
+        return v
 
 
 class DocketSettings(AppSettingsSection):

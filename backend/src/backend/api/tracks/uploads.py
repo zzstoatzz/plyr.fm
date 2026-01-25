@@ -284,7 +284,7 @@ async def _transcode_audio(
 
     logfire.info("original file saved", file_id=original_file_id, format=source_format)
 
-    # transcode to web-playable format
+    # transcode to web-playable format (streams file to service, no memory load)
     await job_service.update_progress(
         upload_id,
         JobStatus.PROCESSING,
@@ -294,11 +294,8 @@ async def _transcode_audio(
     )
 
     try:
-        with open(file_path, "rb") as f:
-            audio_data = f.read()
-
         client = get_transcoder_client()
-        result = await client.transcode(audio_data, filename, source_format)
+        result = await client.transcode_file(file_path, source_format)
 
         if not result.success or not result.data:
             await job_service.update_progress(
@@ -311,12 +308,6 @@ async def _transcode_audio(
             with contextlib.suppress(Exception):
                 await storage.delete(original_file_id, source_format)
             return None
-
-        logfire.info(
-            "transcode completed",
-            original_size_mb=len(audio_data) / (1024 * 1024),
-            transcoded_size_mb=len(result.data) / (1024 * 1024),
-        )
 
     except Exception as e:
         logfire.error("transcode failed", error=str(e), exc_info=True)

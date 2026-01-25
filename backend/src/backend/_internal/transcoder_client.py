@@ -4,7 +4,10 @@ client for converting non-web-playable audio formats (AIFF, FLAC) to MP3.
 """
 
 import logging
+import os
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Self
 
 import httpx
 import logfire
@@ -12,6 +15,8 @@ import logfire
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
+
+MB = 1024 * 1024  # bytes per megabyte
 
 
 @dataclass
@@ -32,7 +37,7 @@ class TranscoderClient:
 
     usage:
         client = TranscoderClient.from_settings()
-        result = await client.transcode(audio_bytes, "track.aiff", "aiff")
+        result = await client.transcode_file("/path/to/track.aiff", "aiff")
     """
 
     def __init__(
@@ -48,10 +53,10 @@ class TranscoderClient:
         self.target_format = target_format
 
     @classmethod
-    def from_settings(cls) -> "TranscoderClient":
+    def from_settings(cls) -> Self:
         """create a client from application settings."""
         return cls(
-            service_url=settings.transcoder.service_url,
+            service_url=str(settings.transcoder.service_url),
             auth_token=settings.transcoder.auth_token,
             timeout_seconds=settings.transcoder.timeout_seconds,
             target_format=settings.transcoder.target_format,
@@ -61,18 +66,18 @@ class TranscoderClient:
         """common auth headers."""
         return {"X-Transcoder-Key": self.auth_token}
 
-    async def transcode(
+    async def transcode_file(
         self,
-        audio_data: bytes,
-        filename: str,
+        file_path: str | Path,
         source_format: str,
         target_format: str | None = None,
     ) -> TranscodeResult:
-        """transcode audio to a web-playable format.
+        """transcode audio file to a web-playable format.
+
+        streams the file to the transcoder service without loading into memory.
 
         args:
-            audio_data: raw audio file bytes
-            filename: original filename (used for logging)
+            file_path: path to audio file on disk
             source_format: source format (e.g., "aiff", "flac")
             target_format: target format (defaults to settings.transcoder.target_format)
 
@@ -84,38 +89,44 @@ class TranscoderClient:
             the timeout is set high (10 min) to accommodate large files.
         """
         target = target_format or self.target_format
+        file_path = Path(file_path)
+        filename = file_path.name
+        file_size = os.path.getsize(file_path)
 
         logfire.info(
             "starting transcode",
             filename=filename,
             source_format=source_format,
             target_format=target,
-            size_mb=len(audio_data) / (1024 * 1024),
+            size_mb=file_size / MB,
         )
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.service_url}/transcode",
-                    files={"file": (filename, audio_data, f"audio/{source_format}")},
-                    params={"target": target},
-                    headers=self._headers(),
-                )
-                response.raise_for_status()
+            # stream file to transcoder without loading into memory
+            with open(file_path, "rb") as f:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(
+                        f"{self.service_url}/transcode",
+                        files={"file": (filename, f, f"audio/{source_format}")},
+                        params={"target": target},
+                        headers=self._headers(),
+                    )
+                    response.raise_for_status()
 
-                logfire.info(
-                    "transcode completed",
-                    filename=filename,
-                    source_format=source_format,
-                    target_format=target,
-                    output_size_mb=len(response.content) / (1024 * 1024),
-                )
+                    logfire.info(
+                        "transcode completed",
+                        filename=filename,
+                        source_format=source_format,
+                        target_format=target,
+                        input_size_mb=file_size / MB,
+                        output_size_mb=len(response.content) / MB,
+                    )
 
-                return TranscodeResult(
-                    success=True,
-                    data=response.content,
-                    content_type=response.headers.get("content-type"),
-                )
+                    return TranscodeResult(
+                        success=True,
+                        data=response.content,
+                        content_type=response.headers.get("content-type"),
+                    )
 
         except httpx.TimeoutException as e:
             logger.error("transcode timed out for %s: %s", filename, e)
