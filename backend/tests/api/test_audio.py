@@ -497,3 +497,109 @@ async def test_gated_stream_non_supporter_denied(
         assert "supporter access" in response.json()["detail"]
     finally:
         test_app.dependency_overrides.pop(get_optional_session, None)
+
+
+# lossless/original file serving tests
+
+
+@pytest.fixture
+async def test_track_with_original(db_session: AsyncSession) -> Track:
+    """create a track with both transcoded and original lossless file."""
+    artist = Artist(
+        did="did:plc:losslessartist",
+        handle="losslessartist.bsky.social",
+        display_name="Lossless Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    track = Track(
+        title="Lossless Track",
+        artist_did=artist.did,
+        file_id="transcoded123",  # MP3 version
+        file_type="mp3",
+        original_file_id="original456",  # AIFF original
+        original_file_type="aiff",
+        r2_url="https://cdn.example.com/audio/transcoded123.mp3",
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+
+    return track
+
+
+async def test_stream_audio_by_original_file_id(
+    test_app: FastAPI, test_track_with_original: Track
+):
+    """regression: requesting by original_file_id serves the lossless original."""
+    expected_url = "https://cdn.example.com/audio/original456.aiff"
+
+    mock_storage = MagicMock()
+    mock_storage.get_url = AsyncMock(return_value=expected_url)
+
+    with patch("backend.api.audio.storage", mock_storage):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                f"/audio/{test_track_with_original.original_file_id}",
+                follow_redirects=False,
+            )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == expected_url
+    mock_storage.get_url.assert_called_once_with(
+        test_track_with_original.original_file_id,
+        file_type="audio",
+        extension=test_track_with_original.original_file_type,
+    )
+
+
+async def test_stream_audio_by_file_id_uses_cached_r2_url(
+    test_app: FastAPI, test_track_with_original: Track
+):
+    """requesting by file_id (transcoded) uses cached r2_url."""
+    mock_storage = MagicMock()
+    mock_storage.get_url = AsyncMock()
+
+    with patch("backend.api.audio.storage", mock_storage):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                f"/audio/{test_track_with_original.file_id}", follow_redirects=False
+            )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == test_track_with_original.r2_url
+    mock_storage.get_url.assert_not_called()
+
+
+async def test_get_audio_url_by_original_file_id(
+    test_app: FastAPI, test_track_with_original: Track, mock_session: Session
+):
+    """/url endpoint with original_file_id returns lossless URL."""
+    expected_url = "https://cdn.example.com/audio/original456.aiff"
+
+    mock_storage = MagicMock()
+    mock_storage.get_url = AsyncMock(return_value=expected_url)
+
+    test_app.dependency_overrides[require_auth] = lambda: mock_session
+
+    try:
+        with patch("backend.api.audio.storage", mock_storage):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    f"/audio/{test_track_with_original.original_file_id}/url"
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["url"] == expected_url
+        assert data["file_id"] == test_track_with_original.original_file_id
+        assert data["file_type"] == test_track_with_original.original_file_type
+    finally:
+        test_app.dependency_overrides.pop(require_auth, None)
