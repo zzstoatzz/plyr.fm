@@ -12,19 +12,41 @@
 	import { toast } from "$lib/toast.svelte";
 	import { auth } from "$lib/auth.svelte";
 
-	// browser-compatible audio formats only
-	const ACCEPTED_AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a"];
-	const ACCEPTED_AUDIO_MIME_TYPES = ["audio/mpeg", "audio/wav", "audio/mp4"];
-	const FILE_INPUT_ACCEPT = [
-		...ACCEPTED_AUDIO_EXTENSIONS,
-		...ACCEPTED_AUDIO_MIME_TYPES,
-	].join(",");
+	// browser-compatible audio formats
+	const BASE_AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a"];
+	const BASE_AUDIO_MIME_TYPES = ["audio/mpeg", "audio/wav", "audio/mp4"];
+	// lossless formats (require transcoding, feature-flagged)
+	const LOSSLESS_EXTENSIONS = [".aiff", ".flac"];
+	const LOSSLESS_MIME_TYPES = ["audio/aiff", "audio/flac"];
+
+	// check if user has lossless uploads enabled
+	function hasLosslessUploads(): boolean {
+		return auth.user?.enabled_flags?.includes("lossless-uploads") ?? false;
+	}
+
+	// compute accepted formats based on feature flag
+	function getAcceptedExtensions(): string[] {
+		const extensions = [...BASE_AUDIO_EXTENSIONS];
+		if (hasLosslessUploads()) {
+			extensions.push(...LOSSLESS_EXTENSIONS);
+		}
+		return extensions;
+	}
+
+	function getFileInputAccept(): string {
+		const extensions = getAcceptedExtensions();
+		const mimeTypes = [...BASE_AUDIO_MIME_TYPES];
+		if (hasLosslessUploads()) {
+			mimeTypes.push(...LOSSLESS_MIME_TYPES);
+		}
+		return [...extensions, ...mimeTypes].join(",");
+	}
 
 	function isSupportedAudioFile(name: string): boolean {
 		const dotIndex = name.lastIndexOf(".");
 		if (dotIndex === -1) return false;
 		const ext = name.slice(dotIndex).toLowerCase();
-		return ACCEPTED_AUDIO_EXTENSIONS.includes(ext);
+		return getAcceptedExtensions().includes(ext);
 	}
 
 	let loading = $state(true);
@@ -148,7 +170,7 @@
 			const selected = target.files[0];
 			if (!isSupportedAudioFile(selected.name)) {
 				toast.error(
-					`unsupported file type. supported: ${ACCEPTED_AUDIO_EXTENSIONS.join(", ")}`,
+					`unsupported file type. supported: ${getAcceptedExtensions().join(", ")}`,
 				);
 				target.value = "";
 				file = null;
@@ -275,11 +297,11 @@
 				<input
 					id="file-input"
 					type="file"
-					accept={FILE_INPUT_ACCEPT}
+					accept={getFileInputAccept()}
 					onchange={handleFileChange}
 					required
 				/>
-				<p class="format-hint">supported: mp3, wav, m4a</p>
+				<p class="format-hint">supported: {getAcceptedExtensions().map(e => e.slice(1)).join(", ")}</p>
 				{#if file}
 					<p class="file-info">
 						{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)

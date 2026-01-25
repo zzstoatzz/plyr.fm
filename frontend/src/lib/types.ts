@@ -69,6 +69,7 @@ export interface User {
 	did: string;
 	handle: string;
 	linked_accounts: LinkedAccount[];
+	enabled_flags: string[];
 }
 
 export interface Artist {
