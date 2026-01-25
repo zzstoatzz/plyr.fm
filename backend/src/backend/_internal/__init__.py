@@ -39,12 +39,14 @@ from backend._internal.auth import (
     update_session_tokens,
 )
 from backend._internal.constellation import get_like_count_safe
+from backend._internal.feature_flags import KNOWN_FLAGS, has_flag
 from backend._internal.notifications import notification_service
 from backend._internal.now_playing import now_playing_service
 from backend._internal.queue import queue_service
 from backend._internal.atprotofans import get_supported_artists, validate_supporter
 
 __all__ = [
+    "KNOWN_FLAGS",
     "DeveloperToken",
     "LinkedAccount",
     "PendingAddAccountData",
@@ -71,6 +73,7 @@ __all__ = [
     "get_session_group",
     "get_supported_artists",
     "handle_oauth_callback",
+    "has_flag",
     "list_developer_tokens",
     "notification_service",
     "now_playing_service",

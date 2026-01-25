@@ -61,6 +61,7 @@ class CurrentUserResponse(BaseModel):
     did: str
     handle: str
     linked_accounts: list[LinkedAccountResponse] = []
+    enabled_flags: list[str] = []
 
 
 class DeveloperTokenInfo(BaseModel):
@@ -365,13 +366,17 @@ async def get_current_user(
     # get all accounts in the session group (reuse db connection)
     linked = await get_session_group(session.session_id, db=db)
 
-    # look up artist profiles to get fresh avatars
+    # look up artist profiles to get fresh avatars and flags
     dids = [account.did for account in linked]
     avatar_map: dict[str, str | None] = {}
+    current_user_flags: list[str] = []
     if dids:
         result = await db.execute(select(Artist).where(Artist.did.in_(dids)))
         for artist in result.scalars().all():
             avatar_map[artist.did] = artist.avatar_url
+            # capture flags for the current user
+            if artist.did == session.did:
+                current_user_flags = artist.enabled_flags or []
 
     return CurrentUserResponse(
         did=session.did,
@@ -384,6 +389,7 @@ async def get_current_user(
             )
             for account in linked
         ],
+        enabled_flags=current_user_flags,
     )
 
 
