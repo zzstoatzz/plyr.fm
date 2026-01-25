@@ -217,23 +217,34 @@ fly secrets unset TRANSCODER_AUTH_TOKEN -a plyr-transcoder
 
 ## integration with main backend
 
+the transcoder is integrated into the upload pipeline for lossless audio support (AIFF/FLAC). when a user uploads a non-web-playable format, the backend:
+
+1. saves the original file to R2 (`original_file_id`)
+2. calls the transcoder to convert to MP3
+3. saves the transcoded file to R2 (`file_id`)
+4. ATProto record points to MP3 for browser compatibility
+5. export returns the original lossless file
+
+this enables "best of both worlds": universal browser playback + lossless export for data portability.
+
 ### backend configuration
 
-**note**: the main backend does not currently use the transcoder service. this is available for future use when transcoding features are needed (e.g., format conversion for browser compatibility).
-
-if needed in the future, add to `src/backend/config.py`:
+transcoder settings in `src/backend/config.py`:
 
 ```python
 class TranscoderSettings(AppSettingsSection):
-    url: str = Field(
-        default="https://plyr-transcoder.fly.dev",
-        validation_alias="TRANSCODER_URL"
-    )
-    auth_token: str = Field(
-        default="",
-        validation_alias="TRANSCODER_AUTH_TOKEN"
-    )
+    """Transcoder service configuration for lossless audio conversion."""
+
+    enabled: bool = True  # set to False to reject lossless uploads
+    url: str = "https://plyr-transcoder.fly.dev"
+    auth_token: str = ""  # set via TRANSCODER_AUTH_TOKEN env var
+    timeout: int = 300  # 5 minutes for large files
 ```
+
+environment variables:
+- `TRANSCODER_ENABLED`: enable/disable transcoding (default: true)
+- `TRANSCODER_URL`: transcoder service URL
+- `TRANSCODER_AUTH_TOKEN`: bearer token for authentication
 
 ### calling from backend
 

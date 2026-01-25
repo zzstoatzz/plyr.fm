@@ -47,7 +47,7 @@ plyr.fm should become:
 
 ### January 2026
 
-#### lossless audio support (PRs #794-797, Jan 25)
+#### lossless audio support (PRs #794-801, Jan 25)
 
 **transcoding integration complete** - users can now upload AIFF and FLAC files. the system transcodes them to MP3 for browser compatibility while preserving originals for lossless playback.
 
@@ -56,17 +56,22 @@ plyr.fm should become:
 - database stores both `file_id` (transcoded) and `original_file_id` (lossless)
 - frontend detects browser capabilities via `canPlayType()`
 - Safari/native apps get lossless, Chrome/Firefox get transcoded MP3
-- "lossless" badge shown on tracks when browser supports the format
+- lossless badge shown on track cards when browser supports the format
 
 **key changes**:
 - `original_file_id` and `original_file_type` added to Track model and API
 - audio endpoint serves either version based on requested file_id
-- `LosslessBadge.svelte` component with browser capability detection
 - feature-flagged via `lossless-uploads` user flag
 
 **bug fixes during rollout**:
 - PR #796: audio endpoint now queries by `file_id` OR `original_file_id`
 - PR #797: store actual extension (`.aif`) not normalized format name (`.aiff`)
+
+**UI polish (PRs #799-801)**:
+- lossless badge positioned in top-right corner of track card (not artwork)
+- subtle glowing animation draws attention to premium quality tracks
+- whole card gets accent-colored border treatment when lossless
+- theme-aware styling, responsive sizing, respects `prefers-reduced-motion`
 
 ---
 

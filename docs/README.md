@@ -12,8 +12,9 @@ organized knowledge base for plyr.fm development.
 - **[background-tasks.md](./backend/background-tasks.md)** - docket-based task system (copyright scan, export, scrobble)
 - **[configuration.md](./backend/configuration.md)** - environment setup and settings
 - **[database/](./backend/database/)** - connection pooling, neon-specific patterns
+- **[feature-flags.md](./backend/feature-flags.md)** - per-user feature rollout system
 - **[streaming-uploads.md](./backend/streaming-uploads.md)** - SSE progress tracking
-- **[transcoder.md](./backend/transcoder.md)** - rust audio conversion service
+- **[transcoder.md](./backend/transcoder.md)** - rust audio conversion service (lossless support)
 
 ### frontend
 - **[state-management.md](./frontend/state-management.md)** - svelte 5 runes patterns
@@ -49,6 +50,8 @@ plyr.fm uses a hybrid storage model:
 - **audio files**: cloudflare R2 (CDN-backed, zero egress)
 - **metadata**: ATProto records on user's PDS (decentralized, user-owned)
 - **indexes**: neon postgres for fast queries
+
+**lossless audio**: AIFF/FLAC uploads are transcoded to MP3 for universal browser playback while originals are preserved for export. browsers that support lossless (Safari, native apps) are served the original quality.
 
 key namespaces:
 - `fm.plyr.track` - track metadata
