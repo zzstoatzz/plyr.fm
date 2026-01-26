@@ -59,6 +59,10 @@ jobs:
         if: steps.check-tokens.outputs.has_tokens == 'true'
         run: cd backend && uv sync --locked
 
+      - name: install ffmpeg
+        if: steps.check-tokens.outputs.has_tokens == 'true'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: run integration tests
         if: steps.check-tokens.outputs.has_tokens == 'true'
         env:
