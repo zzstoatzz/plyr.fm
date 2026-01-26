@@ -145,3 +145,70 @@ def save_drone(
     wav = generate_drone(note, duration_sec)
     path.write_bytes(wav.read())
     return path
+
+
+def convert_to_format(
+    wav_path: Path,
+    output_path: Path,
+) -> Path:
+    """convert a WAV file to another format using ffmpeg.
+
+    args:
+        wav_path: source WAV file
+        output_path: destination path (format inferred from extension)
+
+    returns:
+        the output path
+
+    raises:
+        FileNotFoundError: if ffmpeg is not available
+        subprocess.CalledProcessError: if conversion fails
+    """
+    import shutil
+    import subprocess
+
+    if not shutil.which("ffmpeg"):
+        msg = "ffmpeg not found - required for lossless format tests"
+        raise FileNotFoundError(msg)
+
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(wav_path), str(output_path)],
+        check=True,
+        capture_output=True,
+    )
+    return output_path
+
+
+def save_drone_as(
+    path: Path,
+    note: str = "A4",
+    duration_sec: float = 2.0,
+) -> Path:
+    """generate a drone and save in any supported format.
+
+    generates WAV first, then converts to target format if needed.
+    supports: .wav, .flac, .aiff, .aif
+
+    args:
+        path: where to save the file (format from extension)
+        note: musical note name
+        duration_sec: duration in seconds
+
+    returns:
+        the path where the file was saved
+    """
+    suffix = path.suffix.lower()
+
+    if suffix == ".wav":
+        return save_drone(path, note, duration_sec)
+
+    # generate WAV first, then convert
+    wav_path = path.with_suffix(".wav")
+    save_drone(wav_path, note, duration_sec)
+
+    try:
+        convert_to_format(wav_path, path)
+    finally:
+        wav_path.unlink(missing_ok=True)
+
+    return path

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from .utils.audio import save_drone
+from .utils.audio import save_drone, save_drone_as
 
 if TYPE_CHECKING:
     from plyrfm import AsyncPlyrClient
@@ -144,4 +144,31 @@ def drone_c4(tmp_path: Path) -> Generator[Path, None, None]:
     """generate a 2-second C4 drone (262Hz)."""
     path = tmp_path / "drone_c4.wav"
     save_drone(path, "C4", duration_sec=2.0)
+    yield path
+
+
+# lossless format fixtures (require ffmpeg)
+
+
+@pytest.fixture
+def drone_flac(tmp_path: Path) -> Generator[Path, None, None]:
+    """generate a 2-second A4 drone as FLAC."""
+    path = tmp_path / "drone_a4.flac"
+    save_drone_as(path, "A4", duration_sec=2.0)
+    yield path
+
+
+@pytest.fixture
+def drone_aiff(tmp_path: Path) -> Generator[Path, None, None]:
+    """generate a 2-second A4 drone as AIFF."""
+    path = tmp_path / "drone_a4.aiff"
+    save_drone_as(path, "A4", duration_sec=2.0)
+    yield path
+
+
+@pytest.fixture
+def drone_aif(tmp_path: Path) -> Generator[Path, None, None]:
+    """generate a 2-second A4 drone as AIF (alias for AIFF)."""
+    path = tmp_path / "drone_a4.aif"
+    save_drone_as(path, "A4", duration_sec=2.0)
     yield path
