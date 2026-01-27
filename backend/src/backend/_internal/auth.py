@@ -649,6 +649,32 @@ def _create_client_assertion(
     return dpop._sign_jwt(header, payload, private_key)
 
 
+async def _resolve_handle_from_pds(pds_url: str, did: str) -> str | None:
+    """resolve handle from PDS when OAuth doesn't return it.
+
+    this happens for newly created accounts on third-party PDSes where
+    the handle isn't yet indexed by the Bluesky AppView.
+    """
+    import httpx
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{pds_url}/xrpc/com.atproto.repo.describeRepo",
+                params={"repo": did},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                handle = data.get("handle")
+                if handle:
+                    logger.info(f"resolved handle from PDS: {handle}")
+                    return handle
+    except Exception as e:
+        logger.warning(f"failed to resolve handle from PDS: {e}")
+    return None
+
+
 async def handle_oauth_callback(
     code: str, state: str, iss: str
 ) -> tuple[str, str, dict]:
@@ -674,6 +700,15 @@ async def handle_oauth_callback(
             iss=iss,
         )
 
+        # resolve handle from PDS if not provided by OAuth
+        # (happens for newly created accounts on third-party PDSes)
+        handle = oauth_session.handle
+        if not handle:
+            handle = (
+                await _resolve_handle_from_pds(oauth_session.pds_url, oauth_session.did)
+                or ""
+            )
+
         # serialize DPoP private key for storage
         from cryptography.hazmat.primitives import serialization
 
@@ -692,7 +727,7 @@ async def handle_oauth_callback(
         # store full OAuth session with tokens in database
         session_data = {
             "did": oauth_session.did,
-            "handle": oauth_session.handle,
+            "handle": handle,
             "pds_url": oauth_session.pds_url,
             "authserver_iss": oauth_session.authserver_iss,
             "scope": oauth_session.scope,
@@ -705,7 +740,7 @@ async def handle_oauth_callback(
             "refresh_token_lifetime_days": refresh_lifetime_days,
             "refresh_token_expires_at": refresh_expires_at.isoformat(),
         }
-        return oauth_session.did, oauth_session.handle, session_data
+        return oauth_session.did, handle, session_data
     except Exception as e:
         raise HTTPException(
             status_code=401,
