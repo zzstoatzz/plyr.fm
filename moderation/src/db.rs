@@ -23,6 +23,25 @@ pub struct SensitiveImageRow {
     pub flagged_by: Option<String>,
 }
 
+/// User-submitted content report.
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct UserReport {
+    pub id: i32,
+    pub reporter_did: String,
+    pub target_type: String,
+    pub target_id: String,
+    pub target_uri: Option<String>,
+    pub reason: String,
+    pub description: Option<String>,
+    pub screenshot_url: Option<String>,
+    pub status: String,
+    pub admin_notes: Option<String>,
+    pub resolved_by: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+    pub resolved_at: Option<DateTime<Utc>>,
+}
+
 /// Review batch for mobile-friendly flag review.
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct ReviewBatch {
@@ -323,6 +342,49 @@ impl LabelDb {
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_batch_flags_batch_id ON batch_flags(batch_id)")
             .execute(&self.pool)
             .await?;
+
+        // User reports table for content moderation reports
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS user_reports (
+                id SERIAL PRIMARY KEY,
+                reporter_did TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                target_uri TEXT,
+                reason TEXT NOT NULL,
+                description TEXT,
+                screenshot_url TEXT,
+                status TEXT NOT NULL DEFAULT 'open',
+                admin_notes TEXT,
+                resolved_by TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ,
+                resolved_at TIMESTAMPTZ
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_user_reports_reporter ON user_reports(reporter_did)",
+        )
+        .execute(&self.pool)
+        .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_user_reports_status ON user_reports(status)")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_user_reports_created ON user_reports(created_at DESC)",
+        )
+        .execute(&self.pool)
+        .await?;
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_user_reports_target ON user_reports(target_type, target_id)",
+        )
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
@@ -1005,6 +1067,109 @@ impl LabelDb {
             safe: row.1,
             flagged: row.2,
         })
+    }
+
+    // -------------------------------------------------------------------------
+    // User reports
+    // -------------------------------------------------------------------------
+
+    /// Create a new user report.
+    pub async fn create_report(
+        &self,
+        reporter_did: &str,
+        target_type: &str,
+        target_id: &str,
+        target_uri: Option<&str>,
+        reason: &str,
+        description: Option<&str>,
+        screenshot_url: Option<&str>,
+    ) -> Result<UserReport, sqlx::Error> {
+        sqlx::query_as::<_, UserReport>(
+            r#"
+            INSERT INTO user_reports (reporter_did, target_type, target_id, target_uri, reason, description, screenshot_url)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *
+            "#,
+        )
+        .bind(reporter_did)
+        .bind(target_type)
+        .bind(target_id)
+        .bind(target_uri)
+        .bind(reason)
+        .bind(description)
+        .bind(screenshot_url)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    /// List user reports with optional filtering.
+    pub async fn list_reports(
+        &self,
+        status: Option<&str>,
+        target_type: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<UserReport>, sqlx::Error> {
+        let mut query = String::from(
+            "SELECT * FROM user_reports WHERE 1=1",
+        );
+        let mut param_idx = 1;
+
+        if status.is_some() {
+            query.push_str(&format!(" AND status = ${}", param_idx));
+            param_idx += 1;
+        }
+        if target_type.is_some() {
+            query.push_str(&format!(" AND target_type = ${}", param_idx));
+            param_idx += 1;
+        }
+
+        query.push_str(&format!(" ORDER BY created_at DESC LIMIT ${} OFFSET ${}", param_idx, param_idx + 1));
+
+        let mut q = sqlx::query_as::<_, UserReport>(&query);
+
+        if let Some(s) = status {
+            q = q.bind(s);
+        }
+        if let Some(t) = target_type {
+            q = q.bind(t);
+        }
+
+        q = q.bind(limit).bind(offset);
+
+        q.fetch_all(&self.pool).await
+    }
+
+    /// Get a user report by ID.
+    pub async fn get_report(&self, id: i32) -> Result<Option<UserReport>, sqlx::Error> {
+        sqlx::query_as::<_, UserReport>("SELECT * FROM user_reports WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+    }
+
+    /// Resolve a user report.
+    pub async fn resolve_report(
+        &self,
+        id: i32,
+        status: &str,
+        admin_notes: Option<&str>,
+        resolved_by: &str,
+    ) -> Result<Option<UserReport>, sqlx::Error> {
+        sqlx::query_as::<_, UserReport>(
+            r#"
+            UPDATE user_reports
+            SET status = $1, admin_notes = $2, resolved_by = $3, resolved_at = NOW(), updated_at = NOW()
+            WHERE id = $4
+            RETURNING *
+            "#,
+        )
+        .bind(status)
+        .bind(admin_notes)
+        .bind(resolved_by)
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
     }
 }
 

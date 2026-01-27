@@ -5,6 +5,7 @@
 	import ProfileMenu from './ProfileMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import { search } from '$lib/search.svelte';
+	import { feedback } from '$lib/feedback.svelte';
 	import { APP_NAME, APP_TAGLINE, APP_STAGE } from '$lib/branding';
 
 	interface Props {
@@ -67,6 +68,13 @@
 			<span>search</span>
 		</button>
 
+		<button class="nav-link" onclick={() => feedback.open()} title="feedback">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+			</svg>
+			<span>feedback</span>
+		</button>
+
 		{#if isAuthenticated}
 			{#if $page.url.pathname !== '/'}
 				<a href="/" class="nav-link" title="feed">
@@ -120,6 +128,11 @@
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="11" cy="11" r="8"></circle>
 					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+				</svg>
+			</button>
+			<button class="nav-icon" onclick={() => feedback.open()} title="feedback">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
 				</svg>
 			</button>
 			{#if isAuthenticated}

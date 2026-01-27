@@ -26,6 +26,7 @@ mod config;
 mod db;
 mod handlers;
 mod labels;
+mod reports;
 mod review;
 mod state;
 mod xrpc;
@@ -111,6 +112,11 @@ async fn main() -> anyhow::Result<()> {
             post(admin::remove_sensitive_image),
         )
         .route("/admin/batches", post(admin::create_batch))
+        // User reports
+        .route("/reports", post(reports::create_report))
+        .route("/admin/reports", get(reports::list_reports))
+        .route("/admin/reports/:id", get(reports::get_report))
+        .route("/admin/reports/:id/resolve", post(reports::resolve_report))
         // Review endpoints (under admin, auth protected)
         .route("/admin/review/:id", get(review::review_page))
         .route("/admin/review/:id/data", get(review::review_data))
