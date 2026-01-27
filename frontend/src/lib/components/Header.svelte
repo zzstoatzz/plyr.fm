@@ -53,6 +53,15 @@
 		</a>
 	</div>
 
+	<!-- Feedback button in right margin, outside main content flow -->
+	<div class="margin-right desktop-only">
+		<button class="social-link" onclick={() => feedback.open()} title="feedback">
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+			</svg>
+		</button>
+	</div>
+
 	<!-- desktop: logo left, nav items evenly spaced right -->
 	<div class="header-content desktop-only">
 		<a href="/" class="brand">
@@ -100,18 +109,8 @@
 				</a>
 			{/if}
 
-			<button class="icon-btn" onclick={() => feedback.open()} title="feedback">
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-				</svg>
-			</button>
 			<UserMenu {user} {onLogout} />
 		{:else}
-			<button class="icon-btn" onclick={() => feedback.open()} title="feedback">
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-				</svg>
-			</button>
 			<a href="/login" class="btn-primary">log in</a>
 		{/if}
 	</div>
@@ -181,6 +180,19 @@
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
+		width: calc((100vw - var(--queue-width, 0px) - 800px) / 2);
+		padding: 0 1rem;
+		gap: 0.5rem;
+	}
+
+	.margin-right {
+		position: absolute;
+		right: var(--queue-width, 0px);
+		top: 50%;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		justify-content: flex-start;
 		width: calc((100vw - var(--queue-width, 0px) - 800px) / 2);
 		padding: 0 1rem;
 		gap: 0.5rem;
@@ -354,26 +366,6 @@
 		flex-shrink: 0;
 	}
 
-	.icon-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 36px;
-		height: 36px;
-		background: transparent;
-		border: 1px solid transparent;
-		border-radius: var(--radius-base);
-		color: var(--text-secondary);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.icon-btn:hover {
-		color: var(--accent);
-		background: var(--bg-tertiary);
-		border-color: var(--border-default);
-	}
-
 	.btn-primary {
 		background: transparent;
 		border: 1px solid var(--accent);
@@ -392,9 +384,10 @@
 		color: var(--bg-primary);
 	}
 
-	/* Hide margin-left when viewport is too narrow for left margin */
+	/* Hide margins when viewport is too narrow */
 	@media (max-width: 1000px) {
-		.margin-left {
+		.margin-left,
+		.margin-right {
 			display: none !important;
 		}
 	}
