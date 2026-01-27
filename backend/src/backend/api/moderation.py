@@ -4,6 +4,7 @@ import logging
 from enum import Enum
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
@@ -82,9 +83,30 @@ async def create_report(
             screenshot_url=body.screenshot_url,
         )
         return CreateReportResponse(report_id=result.report_id)
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            "moderation service error: %s %s", e.response.status_code, e.response.text
+        )
+        if e.response.status_code in (401, 403):
+            # auth misconfiguration between backend and moderation service
+            raise HTTPException(
+                status_code=503, detail="moderation service unavailable"
+            ) from e
+        if e.response.status_code == 404:
+            raise HTTPException(
+                status_code=503, detail="moderation service endpoint not found"
+            ) from e
+        # propagate other client errors (4xx) as bad request
+        if 400 <= e.response.status_code < 500:
+            raise HTTPException(status_code=400, detail="invalid report request") from e
+        # server errors from moderation service
+        raise HTTPException(status_code=503, detail="moderation service error") from e
+    except httpx.TimeoutException as e:
+        logger.error("moderation service timeout: %s", e)
+        raise HTTPException(status_code=503, detail="moderation service timeout") from e
     except Exception as e:
-        logger.exception("failed to create report: %s", e)
-        raise HTTPException(status_code=500, detail="failed to submit report") from e
+        logger.exception("unexpected error creating report: %s", e)
+        raise HTTPException(status_code=500, detail="internal error") from e
 
 
 @router.get("/sensitive-images")

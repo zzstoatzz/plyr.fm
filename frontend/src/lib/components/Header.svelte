@@ -179,7 +179,7 @@
 		transform: translateY(-50%);
 		display: flex;
 		align-items: center;
-		justify-content: flex-end;
+		justify-content: center;
 		width: calc((100vw - var(--queue-width, 0px) - 800px) / 2);
 		padding: 0 1rem;
 		gap: 0.5rem;
@@ -192,7 +192,7 @@
 		transform: translateY(-50%);
 		display: flex;
 		align-items: center;
-		justify-content: flex-start;
+		justify-content: center;
 		width: calc((100vw - var(--queue-width, 0px) - 800px) / 2);
 		padding: 0 1rem;
 		gap: 0.5rem;
@@ -248,8 +248,11 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		background: transparent;
+		border: none;
 		color: var(--text-secondary);
 		text-decoration: none;
+		cursor: pointer;
 		transition: color 0.15s;
 	}
 

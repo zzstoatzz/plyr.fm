@@ -549,6 +549,11 @@
 		border-color: var(--accent);
 	}
 
+	.reason-select option {
+		background: var(--bg-secondary);
+		color: var(--text-primary);
+	}
+
 	.description-input {
 		width: 100%;
 		padding: 0.75rem;

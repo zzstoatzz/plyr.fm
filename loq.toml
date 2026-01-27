@@ -74,7 +74,7 @@ max_lines = 569
 
 [[rules]]
 path = "backend/tests/test_moderation.py"
-max_lines = 513
+max_lines = 715
 
 [[rules]]
 path = "docs/authentication.md"
@@ -186,7 +186,7 @@ max_lines = 1252
 
 [[rules]]
 path = "frontend/src/lib/components/FeedbackModal.svelte"
-max_lines = 644
+max_lines = 650
 
 [[rules]]
 path = "moderation/src/review.rs"
