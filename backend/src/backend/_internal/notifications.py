@@ -300,6 +300,49 @@ class NotificationService:
             logger.info(f"sent image flag notification for {image_id}")
         return result
 
+    async def send_user_report_notification(
+        self,
+        report_id: int,
+        reporter_handle: str | None,
+        target_type: str,
+        target_name: str | None,
+        target_url: str | None,
+        reason: str,
+        description: str | None,
+    ) -> NotificationResult | None:
+        """send notification about a new user report."""
+        if not self.recipient_did:
+            logger.warning("recipient not set, skipping notification")
+            return None
+
+        # build target display
+        target_display = target_name or f"[{target_type}]"
+
+        # build reporter display
+        reporter_display = f"@{reporter_handle}" if reporter_handle else "anonymous"
+
+        # build URL if available
+        target_link = ""
+        frontend_url = settings.frontend.url
+        if target_url and frontend_url and "localhost" not in frontend_url:
+            target_link = f"\n{frontend_url}{target_url}"
+
+        message_text = (
+            f"📋 new user report on {settings.app.name}\n\n"
+            f"from: {reporter_display}\n"
+            f"target: {target_display}{target_link}\n"
+            f"reason: {reason}\n"
+        )
+        if description:
+            # truncate long descriptions
+            desc = description[:200] + "..." if len(description) > 200 else description
+            message_text += f'\n"{desc}"'
+
+        result = await self._send_dm_to_did(self.recipient_did, message_text)
+        if result.success:
+            logger.info(f"sent user report notification for report {report_id}")
+        return result
+
     async def send_track_notification(self, track: Track) -> NotificationResult | None:
         """send notification about a new track."""
         if not self.recipient_did:

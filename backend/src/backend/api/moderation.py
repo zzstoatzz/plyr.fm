@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from backend._internal import Session, require_auth
 from backend._internal.moderation_client import get_moderation_client
+from backend._internal.notifications import notification_service
 from backend.utilities.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,21 @@ async def create_report(
             description=body.description,
             screenshot_url=body.screenshot_url,
         )
+
+        # notify admin via DM (fire and forget - don't block on failure)
+        try:
+            await notification_service.send_user_report_notification(
+                report_id=result.report_id,
+                reporter_handle=session.handle,
+                target_type=body.target_type,
+                target_name=body.target_name,
+                target_url=body.target_url,
+                reason=body.reason.value,
+                description=body.description,
+            )
+        except Exception as notify_err:
+            logger.warning("failed to send report notification: %s", notify_err)
+
         return CreateReportResponse(report_id=result.report_id)
     except httpx.HTTPStatusError as e:
         logger.error(
