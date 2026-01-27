@@ -28,8 +28,11 @@ pub struct SensitiveImageRow {
 pub struct UserReport {
     pub id: i32,
     pub reporter_did: String,
+    pub reporter_handle: Option<String>,
     pub target_type: String,
     pub target_id: String,
+    pub target_name: Option<String>,
+    pub target_url: Option<String>,
     pub target_uri: Option<String>,
     pub reason: String,
     pub description: Option<String>,
@@ -349,8 +352,11 @@ impl LabelDb {
             CREATE TABLE IF NOT EXISTS user_reports (
                 id SERIAL PRIMARY KEY,
                 reporter_did TEXT NOT NULL,
+                reporter_handle TEXT,
                 target_type TEXT NOT NULL,
                 target_id TEXT NOT NULL,
+                target_name TEXT,
+                target_url TEXT,
                 target_uri TEXT,
                 reason TEXT NOT NULL,
                 description TEXT,
@@ -366,6 +372,17 @@ impl LabelDb {
         )
         .execute(&self.pool)
         .await?;
+
+        // Add columns to existing tables (idempotent)
+        sqlx::query("ALTER TABLE user_reports ADD COLUMN IF NOT EXISTS reporter_handle TEXT")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("ALTER TABLE user_reports ADD COLUMN IF NOT EXISTS target_name TEXT")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("ALTER TABLE user_reports ADD COLUMN IF NOT EXISTS target_url TEXT")
+            .execute(&self.pool)
+            .await?;
 
         sqlx::query(
             "CREATE INDEX IF NOT EXISTS idx_user_reports_reporter ON user_reports(reporter_did)",
@@ -1074,11 +1091,15 @@ impl LabelDb {
     // -------------------------------------------------------------------------
 
     /// Create a new user report.
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_report(
         &self,
         reporter_did: &str,
+        reporter_handle: Option<&str>,
         target_type: &str,
         target_id: &str,
+        target_name: Option<&str>,
+        target_url: Option<&str>,
         target_uri: Option<&str>,
         reason: &str,
         description: Option<&str>,
@@ -1086,14 +1107,17 @@ impl LabelDb {
     ) -> Result<UserReport, sqlx::Error> {
         sqlx::query_as::<_, UserReport>(
             r#"
-            INSERT INTO user_reports (reporter_did, target_type, target_id, target_uri, reason, description, screenshot_url)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO user_reports (reporter_did, reporter_handle, target_type, target_id, target_name, target_url, target_uri, reason, description, screenshot_url)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *
             "#,
         )
         .bind(reporter_did)
+        .bind(reporter_handle)
         .bind(target_type)
         .bind(target_id)
+        .bind(target_name)
+        .bind(target_url)
         .bind(target_uri)
         .bind(reason)
         .bind(description)

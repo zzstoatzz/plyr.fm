@@ -16,8 +16,14 @@ use crate::AppState;
 #[derive(Debug, Deserialize)]
 pub struct CreateReportRequest {
     pub reporter_did: String,
+    #[serde(default)]
+    pub reporter_handle: Option<String>,
     pub target_type: String,
     pub target_id: String,
+    #[serde(default)]
+    pub target_name: Option<String>,
+    #[serde(default)]
+    pub target_url: Option<String>,
     #[serde(default)]
     pub target_uri: Option<String>,
     pub reason: String,
@@ -104,8 +110,11 @@ pub async fn create_report(
     let report = db
         .create_report(
             &req.reporter_did,
+            req.reporter_handle.as_deref(),
             &req.target_type,
             &req.target_id,
+            req.target_name.as_deref(),
+            req.target_url.as_deref(),
             req.target_uri.as_deref(),
             &req.reason,
             req.description.as_deref(),
@@ -427,6 +436,27 @@ fn render_report_card(report: &UserReport) -> String {
     // Format timestamp
     let created_at = report.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
 
+    // Target display - use target_name with link if available, otherwise target_id
+    let target_display = match (&report.target_name, &report.target_url) {
+        (Some(name), Some(url)) => format!(
+            r#"<a href="{}" target="_blank" rel="noopener" class="target-link">{}</a>"#,
+            html_escape(url),
+            html_escape(name)
+        ),
+        (Some(name), None) => html_escape(name),
+        _ => html_escape(&report.target_id),
+    };
+
+    // Reporter display - link to profile if handle available, otherwise show truncated DID
+    let reporter_display = match &report.reporter_handle {
+        Some(handle) => format!(
+            r#"<a href="/u/{}" target="_blank" rel="noopener" class="reporter-link">@{}</a>"#,
+            html_escape(handle),
+            html_escape(handle)
+        ),
+        None => format!("<code>{}</code>", truncate_did(&report.reporter_did)),
+    };
+
     format!(
         r#"<div class="report-card{}">
             <div class="report-header">
@@ -435,7 +465,7 @@ fn render_report_card(report: &UserReport) -> String {
                         <strong>{}</strong>: {}
                     </div>
                     <div class="report-meta">
-                        reported by <code>{}</code> · {}
+                        reported by {} · {}
                     </div>
                     {}
                     {}
@@ -452,8 +482,8 @@ fn render_report_card(report: &UserReport) -> String {
         </div>"#,
         resolved_class,
         html_escape(&report.target_type),
-        html_escape(&report.target_id),
-        truncate_did(&report.reporter_did),
+        target_display,
+        reporter_display,
         created_at,
         description_html,
         screenshot_html,

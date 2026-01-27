@@ -258,6 +258,9 @@ class ModerationClient:
         target_type: str,
         target_id: str,
         reason: str,
+        reporter_handle: str | None = None,
+        target_name: str | None = None,
+        target_url: str | None = None,
         target_uri: str | None = None,
         description: str | None = None,
         screenshot_url: str | None = None,
@@ -269,6 +272,9 @@ class ModerationClient:
             target_type: type of entity (track, artist, album, playlist, tag, comment)
             target_id: ID of the entity being reported
             reason: reason for report (copyright, abuse, spam, explicit, other)
+            reporter_handle: handle of the user submitting the report
+            target_name: display name of the entity (e.g., "#explicit", "Song Title")
+            target_url: relative URL path to the entity (e.g., "/tag/explicit")
             target_uri: optional ATProto URI of the entity
             description: optional description from the reporter
             screenshot_url: optional URL of uploaded screenshot
@@ -286,6 +292,12 @@ class ModerationClient:
             "target_id": target_id,
             "reason": reason,
         }
+        if reporter_handle:
+            payload["reporter_handle"] = reporter_handle
+        if target_name:
+            payload["target_name"] = target_name
+        if target_url:
+            payload["target_url"] = target_url
         if target_uri:
             payload["target_uri"] = target_uri
         if description:
