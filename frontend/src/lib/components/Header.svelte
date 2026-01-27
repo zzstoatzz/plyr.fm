@@ -68,13 +68,6 @@
 			<span>search</span>
 		</button>
 
-		<button class="nav-link" onclick={() => feedback.open()} title="feedback">
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-			</svg>
-			<span>feedback</span>
-		</button>
-
 		{#if isAuthenticated}
 			{#if $page.url.pathname !== '/'}
 				<a href="/" class="nav-link" title="feed">
@@ -107,8 +100,18 @@
 				</a>
 			{/if}
 
+			<button class="icon-btn" onclick={() => feedback.open()} title="feedback">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+				</svg>
+			</button>
 			<UserMenu {user} {onLogout} />
 		{:else}
+			<button class="icon-btn" onclick={() => feedback.open()} title="feedback">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+				</svg>
+			</button>
 			<a href="/login" class="btn-primary">log in</a>
 		{/if}
 	</div>
@@ -128,11 +131,6 @@
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="11" cy="11" r="8"></circle>
 					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-				</svg>
-			</button>
-			<button class="nav-icon" onclick={() => feedback.open()} title="feedback">
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
 				</svg>
 			</button>
 			{#if isAuthenticated}
@@ -356,6 +354,25 @@
 		flex-shrink: 0;
 	}
 
+	.icon-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius-base);
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.icon-btn:hover {
+		color: var(--accent);
+		background: var(--bg-tertiary);
+		border-color: var(--border-default);
+	}
 
 	.btn-primary {
 		background: transparent;
