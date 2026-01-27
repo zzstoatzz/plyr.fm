@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { portal } from 'svelte-portal';
 	import PlatformStats from './PlatformStats.svelte';
+	import { feedback } from '$lib/feedback.svelte';
 
 	let showMenu = $state(false);
 
@@ -121,6 +122,27 @@
 						<span class="link-subtitle">tangled.org</span>
 					</div>
 				</a>
+				<button
+					class="menu-link"
+					onclick={() => { closeMenu(); feedback.open(); }}
+				>
+					<svg
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+					</svg>
+					<div class="link-info">
+						<span class="link-title">feedback</span>
+						<span class="link-subtitle">report bug or content</span>
+					</div>
+				</button>
 			</nav>
 			<PlatformStats variant="menu" />
 		</div>
@@ -224,10 +246,15 @@
 		gap: 1rem;
 		padding: 1rem;
 		background: transparent;
+		border: none;
 		border-radius: var(--radius-md);
 		text-decoration: none;
 		color: var(--text-primary);
 		transition: all 0.2s;
+		cursor: pointer;
+		font-family: inherit;
+		width: 100%;
+		text-align: left;
 	}
 
 	.menu-link:hover {

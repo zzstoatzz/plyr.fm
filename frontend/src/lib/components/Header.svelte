@@ -5,6 +5,7 @@
 	import ProfileMenu from './ProfileMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import { search } from '$lib/search.svelte';
+	import { feedback } from '$lib/feedback.svelte';
 	import { APP_NAME, APP_TAGLINE, APP_STAGE } from '$lib/branding';
 
 	interface Props {
@@ -50,6 +51,15 @@
 		>
 			<img src="https://cdn.bsky.app/img/avatar/plain/did:plc:wshs7t2adsemcrrd4snkeqli/bafkreif6z53z4ukqmdgwstspwh5asmhxheblcd2adisoccl4fflozc3kva@jpeg" alt="Tangled" width="18" height="18" class="tangled-icon" />
 		</a>
+	</div>
+
+	<!-- Feedback button in right margin, outside main content flow -->
+	<div class="margin-right desktop-only">
+		<button class="social-link" onclick={() => feedback.open()} title="feedback">
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+			</svg>
+		</button>
 	</div>
 
 	<!-- desktop: logo left, nav items evenly spaced right -->
@@ -169,7 +179,20 @@
 		transform: translateY(-50%);
 		display: flex;
 		align-items: center;
-		justify-content: flex-end;
+		justify-content: center;
+		width: calc((100vw - var(--queue-width, 0px) - 800px) / 2);
+		padding: 0 1rem;
+		gap: 0.5rem;
+	}
+
+	.margin-right {
+		position: absolute;
+		right: var(--queue-width, 0px);
+		top: 50%;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		width: calc((100vw - var(--queue-width, 0px) - 800px) / 2);
 		padding: 0 1rem;
 		gap: 0.5rem;
@@ -225,8 +248,11 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		background: transparent;
+		border: none;
 		color: var(--text-secondary);
 		text-decoration: none;
+		cursor: pointer;
 		transition: color 0.15s;
 	}
 
@@ -343,7 +369,6 @@
 		flex-shrink: 0;
 	}
 
-
 	.btn-primary {
 		background: transparent;
 		border: 1px solid var(--accent);
@@ -362,9 +387,10 @@
 		color: var(--bg-primary);
 	}
 
-	/* Hide margin-left when viewport is too narrow for left margin */
+	/* Hide margins when viewport is too narrow */
 	@media (max-width: 1000px) {
-		.margin-left {
+		.margin-left,
+		.margin-right {
 			display: none !important;
 		}
 	}

@@ -1,10 +1,14 @@
 """content moderation api endpoints."""
 
 import logging
+from enum import Enum
+from typing import Literal
 
-from fastapi import APIRouter, Request, Response
-from pydantic import BaseModel
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, Field
 
+from backend._internal import Session, require_auth
 from backend._internal.moderation_client import get_moderation_client
 from backend.utilities.rate_limit import limiter
 
@@ -26,6 +30,83 @@ class SensitiveImagesResponse(BaseModel):
 # edge (CDN) caches for 5 minutes, browser caches for 1 minute
 # this data changes rarely (only when admins flag new images)
 SENSITIVE_IMAGES_CACHE_CONTROL = "public, s-maxage=300, max-age=60"
+
+
+class ReportReason(str, Enum):
+    """valid reasons for content reports."""
+
+    COPYRIGHT = "copyright"
+    ABUSE = "abuse"
+    SPAM = "spam"
+    EXPLICIT = "explicit"
+    OTHER = "other"
+
+
+class CreateReportRequest(BaseModel):
+    """request to create a content report."""
+
+    target_type: Literal["track", "artist", "album", "playlist", "tag", "comment"]
+    target_id: str = Field(..., min_length=1, max_length=100)
+    reason: ReportReason
+    description: str | None = Field(None, max_length=1000)
+    screenshot_url: str | None = Field(None, max_length=500)
+
+
+class CreateReportResponse(BaseModel):
+    """response after creating a report."""
+
+    report_id: int
+
+
+@router.post("/reports")
+@limiter.limit("10/hour")
+async def create_report(
+    request: Request,
+    body: CreateReportRequest,
+    session: Session = Depends(require_auth),
+) -> CreateReportResponse:
+    """submit a content report.
+
+    requires authentication. rate limited to 10 reports per hour per user.
+    the report is forwarded to the moderation service for storage and
+    admin review.
+    """
+    client = get_moderation_client()
+
+    try:
+        result = await client.create_report(
+            reporter_did=session.did,
+            target_type=body.target_type,
+            target_id=body.target_id,
+            reason=body.reason.value,
+            description=body.description,
+            screenshot_url=body.screenshot_url,
+        )
+        return CreateReportResponse(report_id=result.report_id)
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            "moderation service error: %s %s", e.response.status_code, e.response.text
+        )
+        if e.response.status_code in (401, 403):
+            # auth misconfiguration between backend and moderation service
+            raise HTTPException(
+                status_code=503, detail="moderation service unavailable"
+            ) from e
+        if e.response.status_code == 404:
+            raise HTTPException(
+                status_code=503, detail="moderation service endpoint not found"
+            ) from e
+        # propagate other client errors (4xx) as bad request
+        if 400 <= e.response.status_code < 500:
+            raise HTTPException(status_code=400, detail="invalid report request") from e
+        # server errors from moderation service
+        raise HTTPException(status_code=503, detail="moderation service error") from e
+    except httpx.TimeoutException as e:
+        logger.error("moderation service timeout: %s", e)
+        raise HTTPException(status_code=503, detail="moderation service timeout") from e
+    except Exception as e:
+        logger.exception("unexpected error creating report: %s", e)
+        raise HTTPException(status_code=500, detail="internal error") from e
 
 
 @router.get("/sensitive-images")

@@ -10,6 +10,7 @@
 	import Queue from '$lib/components/Queue.svelte';
 	import SearchModal from '$lib/components/SearchModal.svelte';
 	import LogoutModal from '$lib/components/LogoutModal.svelte';
+	import FeedbackModal from '$lib/components/FeedbackModal.svelte';
 	import TermsOverlay from '$lib/components/TermsOverlay.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
@@ -433,6 +434,7 @@
 <Toast />
 <SearchModal />
 <LogoutModal />
+<FeedbackModal />
 {#if showTermsOverlay}
 	<TermsOverlay />
 {/if}

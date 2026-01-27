@@ -53,6 +53,13 @@ class ScanImageResult:
     violated_categories: list[str]
 
 
+@dataclass
+class CreateReportResult:
+    """result from creating a user report."""
+
+    report_id: int
+
+
 class ModerationClient:
     """client for the plyr.fm moderation service.
 
@@ -244,6 +251,66 @@ class ModerationClient:
             )
 
             return result
+
+    async def create_report(
+        self,
+        reporter_did: str,
+        target_type: str,
+        target_id: str,
+        reason: str,
+        target_uri: str | None = None,
+        description: str | None = None,
+        screenshot_url: str | None = None,
+    ) -> CreateReportResult:
+        """create a user report for content moderation.
+
+        args:
+            reporter_did: DID of the user submitting the report
+            target_type: type of entity (track, artist, album, playlist, tag, comment)
+            target_id: ID of the entity being reported
+            reason: reason for report (copyright, abuse, spam, explicit, other)
+            target_uri: optional ATProto URI of the entity
+            description: optional description from the reporter
+            screenshot_url: optional URL of uploaded screenshot
+
+        returns:
+            CreateReportResult with the report ID
+
+        raises:
+            httpx.HTTPStatusError: on non-2xx response
+            httpx.TimeoutException: on timeout
+        """
+        payload: dict[str, Any] = {
+            "reporter_did": reporter_did,
+            "target_type": target_type,
+            "target_id": target_id,
+            "reason": reason,
+        }
+        if target_uri:
+            payload["target_uri"] = target_uri
+        if description:
+            payload["description"] = description
+        if screenshot_url:
+            payload["screenshot_url"] = screenshot_url
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(
+                f"{self.service_url}/reports",
+                json=payload,
+                headers=self._headers(),
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            logfire.info(
+                "user report created",
+                report_id=data["report_id"],
+                reporter_did=reporter_did,
+                target_type=target_type,
+                reason=reason,
+            )
+
+            return CreateReportResult(report_id=data["report_id"])
 
     async def get_active_labels(self, uris: list[str]) -> set[str]:
         """check which URIs have active (non-negated) copyright-violation labels.

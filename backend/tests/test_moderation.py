@@ -1,22 +1,27 @@
 """tests for copyright moderation integration."""
 
+from collections.abc import Generator
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend._internal import Session, require_auth
 from backend._internal.moderation import (
     get_active_copyright_labels,
     scan_track_for_copyright,
 )
 from backend._internal.moderation_client import (
+    CreateReportResult,
     ModerationClient,
     ScanResult,
     SensitiveImagesResult,
 )
+from backend.main import app
 from backend.models import Artist, CopyrightScan, Track
 
 
@@ -511,3 +516,196 @@ async def test_get_sensitive_images_endpoint(
     data = response.json()
     assert data["image_ids"] == ["image1", "image2"]
     assert data["urls"] == ["https://example.com/avatar.jpg"]
+
+
+# tests for POST /moderation/reports endpoint
+
+
+class MockReportSession(Session):
+    """mock session for report endpoint tests."""
+
+    def __init__(self, did: str = "did:test:reporter123"):
+        self.did = did
+        self.handle = "reporter.bsky.social"
+        self.session_id = "test_session_id"
+
+
+@pytest.fixture
+def report_test_app() -> Generator[FastAPI, None, None]:
+    """create test app with mocked auth for report tests."""
+
+    async def mock_require_auth() -> Session:
+        return MockReportSession()
+
+    app.dependency_overrides[require_auth] = mock_require_auth
+
+    yield app
+
+    app.dependency_overrides.clear()
+
+
+async def test_create_report_success(report_test_app: FastAPI) -> None:
+    """test successful report submission."""
+    from httpx import ASGITransport, AsyncClient
+
+    mock_result = CreateReportResult(report_id=123)
+
+    with patch("backend.api.moderation.get_moderation_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.create_report.return_value = mock_result
+        mock_get_client.return_value = mock_client
+
+        async with AsyncClient(
+            transport=ASGITransport(app=report_test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/moderation/reports",
+                json={
+                    "target_type": "track",
+                    "target_id": "42",
+                    "reason": "spam",
+                    "description": "test report",
+                },
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["report_id"] == 123
+
+
+async def test_create_report_requires_auth() -> None:
+    """test that report submission requires authentication."""
+    from httpx import ASGITransport, AsyncClient
+
+    # clear any auth overrides
+    app.dependency_overrides.pop(require_auth, None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/moderation/reports",
+            json={
+                "target_type": "track",
+                "target_id": "42",
+                "reason": "spam",
+            },
+        )
+
+    assert response.status_code == 401
+
+
+async def test_create_report_moderation_service_auth_error(
+    report_test_app: FastAPI,
+) -> None:
+    """test 503 when moderation service returns 401 (auth misconfiguration)."""
+    from httpx import ASGITransport, AsyncClient
+
+    mock_response = Mock()
+    mock_response.status_code = 401
+    mock_response.text = "Unauthorized"
+
+    with patch("backend.api.moderation.get_moderation_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.create_report.side_effect = httpx.HTTPStatusError(
+            "401 Unauthorized",
+            request=Mock(),
+            response=mock_response,
+        )
+        mock_get_client.return_value = mock_client
+
+        async with AsyncClient(
+            transport=ASGITransport(app=report_test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/moderation/reports",
+                json={
+                    "target_type": "track",
+                    "target_id": "42",
+                    "reason": "abuse",
+                },
+            )
+
+    assert response.status_code == 503
+    assert "unavailable" in response.json()["detail"]
+
+
+async def test_create_report_moderation_service_not_found(
+    report_test_app: FastAPI,
+) -> None:
+    """test 503 when moderation service returns 404 (endpoint not deployed)."""
+    from httpx import ASGITransport, AsyncClient
+
+    mock_response = Mock()
+    mock_response.status_code = 404
+    mock_response.text = "Not Found"
+
+    with patch("backend.api.moderation.get_moderation_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.create_report.side_effect = httpx.HTTPStatusError(
+            "404 Not Found",
+            request=Mock(),
+            response=mock_response,
+        )
+        mock_get_client.return_value = mock_client
+
+        async with AsyncClient(
+            transport=ASGITransport(app=report_test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/moderation/reports",
+                json={
+                    "target_type": "track",
+                    "target_id": "42",
+                    "reason": "copyright",
+                },
+            )
+
+    assert response.status_code == 503
+    assert "not found" in response.json()["detail"]
+
+
+async def test_create_report_moderation_service_timeout(
+    report_test_app: FastAPI,
+) -> None:
+    """test 503 when moderation service times out."""
+    from httpx import ASGITransport, AsyncClient
+
+    with patch("backend.api.moderation.get_moderation_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.create_report.side_effect = httpx.TimeoutException("timeout")
+        mock_get_client.return_value = mock_client
+
+        async with AsyncClient(
+            transport=ASGITransport(app=report_test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/moderation/reports",
+                json={
+                    "target_type": "artist",
+                    "target_id": "did:plc:test",
+                    "reason": "other",
+                },
+            )
+
+    assert response.status_code == 503
+    assert "timeout" in response.json()["detail"]
+
+
+async def test_create_report_invalid_reason(report_test_app: FastAPI) -> None:
+    """test validation error for invalid reason."""
+    from httpx import ASGITransport, AsyncClient
+
+    async with AsyncClient(
+        transport=ASGITransport(app=report_test_app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/moderation/reports",
+            json={
+                "target_type": "track",
+                "target_id": "42",
+                "reason": "invalid_reason",
+            },
+        )
+
+    assert response.status_code == 422  # validation error
