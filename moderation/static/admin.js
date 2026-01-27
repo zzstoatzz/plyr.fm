@@ -1,6 +1,7 @@
 // Set up auth header listener first (before any htmx requests)
 let currentToken = null;
 let currentFilter = 'pending'; // track current filter state
+let currentTab = 'copyright'; // track current tab
 
 document.body.addEventListener('htmx:configRequest', function(evt) {
     if (currentToken) {
@@ -157,4 +158,28 @@ function cancelResolve(btn) {
             mark false positive
         </button>
     `;
+}
+
+// Tab switching
+function switchTab(tab) {
+    currentTab = tab;
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.toggle('active', content.id === 'tab-' + tab);
+    });
+}
+
+// Placeholder refresh functions for future tabs
+function refreshReportsList() {
+    showToast('reports refresh coming soon', 'success');
+}
+
+function refreshImagesList() {
+    showToast('images refresh coming soon', 'success');
 }

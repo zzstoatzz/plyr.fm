@@ -10,7 +10,7 @@
 </head>
 <body>
     <h1>moderation</h1>
-    <p class="subtitle">review and resolve copyright flags</p>
+    <p class="subtitle">content moderation for plyr.fm</p>
 
     <div class="auth-section">
         <input type="password"
@@ -23,18 +23,67 @@
     </div>
 
     <div id="main-content" style="display: none;">
-        <div class="header-row">
-            <h2>flagged tracks</h2>
-            <button class="btn btn-secondary" onclick="refreshFlagsList()">
-                refresh
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="copyright" onclick="switchTab('copyright')">
+                copyright flags
             </button>
+            <button class="tab-btn" data-tab="reports" onclick="switchTab('reports')">
+                user reports
+            </button>
+            <button class="tab-btn" data-tab="images" onclick="switchTab('images')">
+                sensitive images
+            </button>
+        </nav>
+
+        <!-- copyright flags tab -->
+        <div id="tab-copyright" class="tab-content active">
+            <div class="header-row">
+                <h2>flagged tracks</h2>
+                <button class="btn btn-secondary" onclick="refreshFlagsList()">
+                    refresh
+                </button>
+            </div>
+
+            <div id="flags-list" class="flags-list"
+                 hx-get="/admin/flags-html?filter=pending"
+                 hx-trigger="load"
+                 hx-indicator="#loading">
+                <div id="loading" class="loading htmx-indicator">loading...</div>
+            </div>
         </div>
 
-        <div id="flags-list" class="flags-list"
-             hx-get="/admin/flags-html?filter=pending"
-             hx-trigger="load"
-             hx-indicator="#loading">
-            <div id="loading" class="loading htmx-indicator">loading...</div>
+        <!-- user reports tab -->
+        <div id="tab-reports" class="tab-content">
+            <div class="header-row">
+                <h2>user reports</h2>
+                <button class="btn btn-secondary" onclick="refreshReportsList()">
+                    refresh
+                </button>
+            </div>
+
+            <div id="reports-list" class="reports-list">
+                <div class="empty-placeholder">
+                    <p>user-submitted content reports</p>
+                    <p class="muted">reports for copyright, abuse, spam, explicit content, etc.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- sensitive images tab -->
+        <div id="tab-images" class="tab-content">
+            <div class="header-row">
+                <h2>sensitive images</h2>
+                <button class="btn btn-secondary" onclick="refreshImagesList()">
+                    refresh
+                </button>
+            </div>
+
+            <div id="images-list" class="images-list">
+                <div class="empty-placeholder">
+                    <p>flagged sensitive images</p>
+                    <p class="muted">artwork and avatars marked as sensitive</p>
+                </div>
+            </div>
         </div>
     </div>
 
