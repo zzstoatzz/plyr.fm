@@ -47,6 +47,8 @@ class CreateReportRequest(BaseModel):
 
     target_type: Literal["track", "artist", "album", "playlist", "tag", "comment"]
     target_id: str = Field(..., min_length=1, max_length=100)
+    target_name: str | None = Field(None, max_length=200)
+    target_url: str | None = Field(None, max_length=200)
     reason: ReportReason
     description: str | None = Field(None, max_length=1000)
     screenshot_url: str | None = Field(None, max_length=500)
@@ -76,8 +78,11 @@ async def create_report(
     try:
         result = await client.create_report(
             reporter_did=session.did,
+            reporter_handle=session.handle,
             target_type=body.target_type,
             target_id=body.target_id,
+            target_name=body.target_name,
+            target_url=body.target_url,
             reason=body.reason.value,
             description=body.description,
             screenshot_url=body.screenshot_url,

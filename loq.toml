@@ -182,7 +182,7 @@ max_lines = 688
 
 [[rules]]
 path = "moderation/src/db.rs"
-max_lines = 1252
+max_lines = 1285
 
 [[rules]]
 path = "frontend/src/lib/components/FeedbackModal.svelte"
@@ -194,7 +194,11 @@ max_lines = 526
 
 [[rules]]
 path = "moderation/static/admin.css"
-max_lines = 745
+max_lines = 760
+
+[[rules]]
+path = "moderation/src/reports.rs"
+max_lines = 520
 
 [[rules]]
 path = "scripts/moderation_agent.py"

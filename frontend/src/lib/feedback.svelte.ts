@@ -163,6 +163,21 @@ class FeedbackState {
 		}
 	}
 
+	getEntityUrl(entity: SearchResult): string {
+		switch (entity.type) {
+			case 'track':
+				return `/track/${entity.id}`;
+			case 'artist':
+				return `/u/${entity.handle}`;
+			case 'album':
+				return `/u/${entity.artist_handle}/album/${entity.slug}`;
+			case 'tag':
+				return `/tag/${entity.name}`;
+			case 'playlist':
+				return `/playlist/${entity.id}`;
+		}
+	}
+
 	canSubmit(): boolean {
 		return (
 			this.selectedEntity !== null &&
@@ -189,6 +204,8 @@ class FeedbackState {
 				body: JSON.stringify({
 					target_type: this.selectedEntity.type,
 					target_id: this.getEntityId(this.selectedEntity),
+					target_name: this.getEntityDisplayName(this.selectedEntity),
+					target_url: this.getEntityUrl(this.selectedEntity),
 					reason: this.reason,
 					description: this.description || null,
 					screenshot_url: this.screenshotUrl

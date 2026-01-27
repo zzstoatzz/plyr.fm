@@ -722,6 +722,18 @@ h1 {
     border-color: var(--accent);
 }
 
+/* report links */
+.target-link,
+.reporter-link {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.target-link:hover,
+.reporter-link:hover {
+    text-decoration: underline;
+}
+
 /* mobile */
 @media (max-width: 640px) {
     body { padding: 16px; }
