@@ -773,19 +773,8 @@ class AccountCreationSettings(AppSettingsSection):
     recommended_pds: list[dict[str, str | bool | None]] = Field(
         default=[
             {
-                "name": "Bluesky",
-                "url": "https://bsky.social",
-                "recommended": True,
-            },
-            {
                 "name": "selfhosted.social",
                 "url": "https://selfhosted.social",
-                "recommended": False,
-            },
-            {
-                "name": "blacksky.app",
-                "url": "https://blacksky.app",
-                "recommended": False,
             },
         ],
         description="List of recommended PDS options for account creation",
