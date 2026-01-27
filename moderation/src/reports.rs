@@ -437,9 +437,10 @@ fn render_report_card(report: &UserReport) -> String {
     let created_at = report.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
 
     // Target display - use target_name with link if available, otherwise target_id
+    // URLs are relative paths from frontend, so prepend main site
     let target_display = match (&report.target_name, &report.target_url) {
         (Some(name), Some(url)) => format!(
-            r#"<a href="{}" target="_blank" rel="noopener" class="target-link">{}</a>"#,
+            r#"<a href="https://plyr.fm{}" target="_blank" rel="noopener" class="target-link">{}</a>"#,
             html_escape(url),
             html_escape(name)
         ),
@@ -450,7 +451,7 @@ fn render_report_card(report: &UserReport) -> String {
     // Reporter display - link to profile if handle available, otherwise show truncated DID
     let reporter_display = match &report.reporter_handle {
         Some(handle) => format!(
-            r#"<a href="/u/{}" target="_blank" rel="noopener" class="reporter-link">@{}</a>"#,
+            r#"<a href="https://plyr.fm/u/{}" target="_blank" rel="noopener" class="reporter-link">@{}</a>"#,
             html_escape(handle),
             html_escape(handle)
         ),
