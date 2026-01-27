@@ -1,9 +1,11 @@
 """pytest configuration for relay tests."""
 
 import os
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from io import BytesIO
+from typing import BinaryIO
 from urllib.parse import urlsplit, urlunsplit
 
 import asyncpg
@@ -33,7 +35,12 @@ class MockStorage(R2Storage):
         # skip R2Storage.__init__ which requires credentials
         pass
 
-    async def save(self, file_obj, filename: str, progress_callback=None) -> str:
+    async def save(
+        self,
+        file: BinaryIO | BytesIO,
+        filename: str,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> str:
         """Mock save - returns a fake file_id."""
         return "mock_file_id_123"
 
@@ -57,7 +64,7 @@ def pytest_configure(config):
     import backend.storage
 
     # set _storage directly to prevent R2Storage initialization
-    backend.storage._storage = MockStorage()  # type: ignore[assignment]
+    backend.storage._storage = MockStorage()
 
 
 def _database_from_url(url: str) -> str:

@@ -1,7 +1,6 @@
 """image format handling for media storage."""
 
 from enum import Enum
-from typing import Self
 
 
 class ImageFormat(str, Enum):
@@ -25,7 +24,7 @@ class ImageFormat(str, Enum):
         }[self.value]
 
     @classmethod
-    def from_filename(cls, filename: str) -> Self | None:
+    def from_filename(cls, filename: str) -> "ImageFormat | None":
         """extract image format from filename extension."""
         ext = filename.lower().split(".")[-1]
         if ext in ["jpg", "jpeg"]:
@@ -35,7 +34,7 @@ class ImageFormat(str, Enum):
         return None
 
     @classmethod
-    def from_content_type(cls, content_type: str | None) -> Self | None:
+    def from_content_type(cls, content_type: str | None) -> "ImageFormat | None":
         """extract image format from MIME content type.
 
         this is more reliable than filename extension, especially on iOS
@@ -45,7 +44,7 @@ class ImageFormat(str, Enum):
             return None
 
         content_type = content_type.lower().split(";")[0].strip()
-        mapping = {
+        mapping: dict[str, ImageFormat] = {
             "image/jpeg": cls.JPEG,
             "image/jpg": cls.JPEG,
             "image/png": cls.PNG,
@@ -57,7 +56,7 @@ class ImageFormat(str, Enum):
     @classmethod
     def validate_and_extract(
         cls, filename: str | None, content_type: str | None = None
-    ) -> tuple[Self | None, bool]:
+    ) -> tuple["ImageFormat | None", bool]:
         """validate image format from filename or content type.
 
         prefers content_type over filename extension when available, since

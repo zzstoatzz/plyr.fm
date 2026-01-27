@@ -140,7 +140,7 @@ async def upload_track_image(image: UploadFile) -> tuple[str, str | None]:
     if settings.moderation.image_moderation_enabled:
         try:
             client = get_moderation_client()
-            content_type = image_format.mime_type if image_format else "image/png"
+            content_type = image_format.media_type if image_format else "image/png"
             result = await client.scan_image(image_data, image_id, content_type)
             # note: if image is flagged, it's automatically added to sensitive_images
             # by the moderation service. the image is still saved and returned -

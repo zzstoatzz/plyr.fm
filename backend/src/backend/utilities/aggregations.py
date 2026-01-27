@@ -43,7 +43,7 @@ async def get_like_counts(db: AsyncSession, track_ids: list[int]) -> dict[int, i
     )
 
     result = await db.execute(stmt)
-    return dict(result.all())  # type: ignore
+    return dict(result.all())
 
 
 async def get_comment_counts(db: AsyncSession, track_ids: list[int]) -> dict[int, int]:
@@ -66,7 +66,7 @@ async def get_comment_counts(db: AsyncSession, track_ids: list[int]) -> dict[int
     )
 
     result = await db.execute(stmt)
-    return dict(result.all())  # type: ignore
+    return dict(result.all())
 
 
 async def get_copyright_info(

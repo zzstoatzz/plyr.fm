@@ -576,7 +576,9 @@ async def sync_album_list(session_id: str, album_id: str) -> None:
             return
 
         track_refs = [
-            {"uri": t.atproto_record_uri, "cid": t.atproto_record_cid} for t in tracks
+            {"uri": t.atproto_record_uri, "cid": t.atproto_record_cid}
+            for t in tracks
+            if t.atproto_record_uri and t.atproto_record_cid
         ]
 
         try:
