@@ -194,7 +194,7 @@ max_lines = 526
 
 [[rules]]
 path = "moderation/static/admin.css"
-max_lines = 575
+max_lines = 745
 
 [[rules]]
 path = "scripts/moderation_agent.py"

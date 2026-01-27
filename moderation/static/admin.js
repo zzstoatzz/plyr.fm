@@ -1,7 +1,9 @@
 // Set up auth header listener first (before any htmx requests)
 let currentToken = null;
-let currentFilter = 'pending'; // track current filter state
+let currentFilter = 'pending'; // track current filter state for flags
+let currentReportStatus = 'open'; // track current status filter for reports
 let currentTab = 'copyright'; // track current tab
+let reportsLoaded = false; // track if reports have been loaded
 
 document.body.addEventListener('htmx:configRequest', function(evt) {
     if (currentToken) {
@@ -12,9 +14,15 @@ document.body.addEventListener('htmx:configRequest', function(evt) {
 // Track filter changes via htmx
 document.body.addEventListener('htmx:afterRequest', function(evt) {
     const url = evt.detail.pathInfo?.requestPath || '';
-    const match = url.match(/filter=(\w+)/);
-    if (match) {
-        currentFilter = match[1];
+    // Track flags filter
+    const filterMatch = url.match(/filter=(\w+)/);
+    if (filterMatch) {
+        currentFilter = filterMatch[1];
+    }
+    // Track reports status filter
+    const statusMatch = url.match(/status=(\w+)/);
+    if (statusMatch) {
+        currentReportStatus = statusMatch[1];
     }
 });
 
@@ -173,13 +181,107 @@ function switchTab(tab) {
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.toggle('active', content.id === 'tab-' + tab);
     });
+
+    // Load data for tab if needed
+    if (tab === 'reports' && !reportsLoaded) {
+        reportsLoaded = true;
+        refreshReportsList();
+    }
 }
 
-// Placeholder refresh functions for future tabs
+// Refresh reports list
 function refreshReportsList() {
-    showToast('reports refresh coming soon', 'success');
+    htmx.ajax('GET', `/admin/reports-html?status=${currentReportStatus}`, '#reports-list');
 }
 
+// Placeholder for sensitive images (future)
 function refreshImagesList() {
     showToast('images refresh coming soon', 'success');
+}
+
+// Report action options
+const REPORT_ACTIONS = [
+    { value: 'resolved', label: 'resolve' },
+    { value: 'dismissed', label: 'dismiss' },
+    { value: 'investigating', label: 'investigating' }
+];
+
+// Show report action buttons
+function showReportActions(btn) {
+    const flow = btn.closest('.report-actions-flow');
+
+    flow.innerHTML = `
+        <div class="reason-select">
+            ${REPORT_ACTIONS.map(a => `
+                <button type="button" class="reason-btn" onclick="selectReportAction(this, '${a.value}')">
+                    ${a.label}
+                </button>
+            `).join('')}
+            <button type="button" class="reason-btn cancel" onclick="cancelReportAction(this)">✕</button>
+        </div>
+    `;
+}
+
+// Select report action, show notes input
+function selectReportAction(btn, action) {
+    const flow = btn.closest('.report-actions-flow');
+    const actionLabel = REPORT_ACTIONS.find(a => a.value === action)?.label || action;
+
+    flow.innerHTML = `
+        <div class="confirm-step">
+            <input type="text" class="notes-input" placeholder="admin notes (optional)" id="report-notes-${flow.dataset.id}">
+            <button type="button" class="btn btn-confirm" onclick="confirmReportAction(this, '${action}')">
+                ${actionLabel}
+            </button>
+            <button type="button" class="reason-btn cancel" onclick="cancelReportAction(this)">cancel</button>
+        </div>
+    `;
+}
+
+// Submit report resolution
+function confirmReportAction(btn, action) {
+    const flow = btn.closest('.report-actions-flow');
+    const reportId = flow.dataset.id;
+    const notesInput = flow.querySelector('.notes-input');
+    const notes = notesInput ? notesInput.value : '';
+
+    btn.disabled = true;
+    btn.textContent = '...';
+
+    fetch(`/admin/reports/${reportId}/resolve`, {
+        method: 'POST',
+        headers: {
+            'X-Moderation-Key': currentToken,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            status: action,
+            admin_notes: notes || null,
+            resolved_by: 'admin' // TODO: track actual admin identity
+        })
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        }
+        throw new Error('Failed to resolve report');
+    })
+    .then(data => {
+        showToast(`report ${action}`, 'success');
+        refreshReportsList();
+    })
+    .catch(err => {
+        showToast('failed: ' + err.message, 'error');
+        cancelReportAction(btn);
+    });
+}
+
+// Cancel report action
+function cancelReportAction(btn) {
+    const flow = btn.closest('.report-actions-flow');
+    flow.innerHTML = `
+        <button type="button" class="btn btn-secondary" onclick="showReportActions(this)">
+            take action
+        </button>
+    `;
 }

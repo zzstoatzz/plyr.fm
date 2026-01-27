@@ -115,6 +115,7 @@ async fn main() -> anyhow::Result<()> {
         // User reports
         .route("/reports", post(reports::create_report))
         .route("/admin/reports", get(reports::list_reports))
+        .route("/admin/reports-html", get(reports::list_reports_html))
         .route("/admin/reports/:id", get(reports::get_report))
         .route("/admin/reports/:id/resolve", post(reports::resolve_report))
         // Review endpoints (under admin, auth protected)
