@@ -3,11 +3,12 @@
 import json
 import logging
 import secrets
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from atproto_oauth import OAuthClient, PromptType
+from atproto_oauth import OAuthClient, OAuthState, PromptType
 from atproto_oauth.client import (
     discover_authserver_from_pds_async,
     fetch_authserver_metadata_async,
@@ -596,8 +597,6 @@ async def start_oauth_flow_for_pds(pds_url: str) -> tuple[str, str]:
         request_uri = par_response["request_uri"]
 
         # store state with did=None (unknown until account created)
-        from atproto_oauth import OAuthState
-
         oauth_state = OAuthState(
             state=state_token,
             pkce_verifier=pkce_verifier,
@@ -619,9 +618,9 @@ async def start_oauth_flow_for_pds(pds_url: str) -> tuple[str, str]:
         logger.info(f"starting account creation OAuth for PDS {pds_url}")
         return auth_url, state_token
 
-    except HTTPException:
-        raise
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
         raise HTTPException(
             status_code=400,
             detail=f"failed to start account creation OAuth: {e}",
@@ -635,8 +634,6 @@ def _create_client_assertion(
     kid: str,
 ) -> str:
     """create client assertion JWT for confidential client."""
-    import time
-
     header = {"alg": "ES256", "typ": "JWT", "kid": kid}
     now = int(time.time())
     payload = {

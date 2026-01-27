@@ -18,7 +18,7 @@ max_lines = 10000
 
 [[rules]]
 path = "backend/src/backend/_internal/auth.py"
-max_lines = 1368
+max_lines = 1365
 
 [[rules]]
 path = "backend/src/backend/_internal/background_tasks.py"
