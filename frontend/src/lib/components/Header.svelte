@@ -53,11 +53,12 @@
 		</a>
 	</div>
 
-	<!-- Feedback button in right margin, outside main content flow -->
+	<!-- Report button in right margin, outside main content flow -->
 	<div class="margin-right desktop-only">
-		<button class="social-link" onclick={() => feedback.open()} title="feedback">
+		<button class="social-link" onclick={() => feedback.open()} title="report">
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+				<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+				<line x1="4" y1="22" x2="4" y2="15"></line>
 			</svg>
 		</button>
 	</div>

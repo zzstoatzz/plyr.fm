@@ -136,11 +136,12 @@
 						stroke-linecap="round"
 						stroke-linejoin="round"
 					>
-						<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+						<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+						<line x1="4" y1="22" x2="4" y2="15"></line>
 					</svg>
 					<div class="link-info">
-						<span class="link-title">feedback</span>
-						<span class="link-subtitle">report bug or content</span>
+						<span class="link-title">report</span>
+						<span class="link-subtitle">bug or content issue</span>
 					</div>
 				</button>
 			</nav>
