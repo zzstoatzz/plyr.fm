@@ -21,6 +21,6 @@ class _StorageProxy:
         return getattr(_get_storage(), name)
 
 
-storage = _StorageProxy()  # type: ignore[assignment]
+storage = _StorageProxy()
 
 __all__ = ["storage"]

@@ -34,6 +34,7 @@ from backend._internal import (
     save_pending_dev_token,
     save_pending_scope_upgrade,
     start_oauth_flow,
+    start_oauth_flow_for_pds,
     start_oauth_flow_with_scopes,
     switch_active_account,
 )
@@ -86,12 +87,83 @@ class DeveloperTokenListResponse(BaseModel):
     tokens: list[DeveloperTokenInfo]
 
 
+class PdsOption(BaseModel):
+    """a PDS option for account creation."""
+
+    name: str
+    url: str
+    recommended: bool = False
+    description: str | None = None
+
+
+class PdsOptionsResponse(BaseModel):
+    """response model for PDS options endpoint."""
+
+    enabled: bool
+    options: list[PdsOption]
+
+
+@router.get("/pds-options")
+async def get_pds_options() -> PdsOptionsResponse:
+    """get available PDS options for account creation.
+
+    returns the list of recommended PDS hosts where users can create
+    new ATProto accounts. this is used by the frontend login page to
+    show the "create account" option.
+    """
+    return PdsOptionsResponse(
+        enabled=settings.account_creation.enabled,
+        options=[
+            PdsOption(
+                name=str(pds.get("name", "")),
+                url=str(pds.get("url", "")),
+                recommended=bool(pds.get("recommended", False)),
+                description=str(pds["description"]) if pds.get("description") else None,
+            )
+            for pds in settings.account_creation.recommended_pds
+        ],
+    )
+
+
 @router.get("/start")
 @limiter.limit(settings.rate_limit.auth_limit)
-async def start_login(request: Request, handle: str) -> RedirectResponse:
-    """start OAuth flow for a given handle."""
-    auth_url, _state = await start_oauth_flow(handle)
-    return RedirectResponse(url=auth_url)
+async def start_login(
+    request: Request,
+    handle: str | None = None,
+    pds_url: str | None = None,
+) -> RedirectResponse:
+    """start OAuth flow for login or account creation.
+
+    for login: provide `handle` to authenticate with an existing account.
+    for account creation: provide `pds_url` to create a new account on that PDS.
+
+    exactly one of `handle` or `pds_url` must be provided.
+    """
+    if handle and pds_url:
+        raise HTTPException(
+            status_code=400,
+            detail="provide either handle or pds_url, not both",
+        )
+
+    if pds_url:
+        # account creation flow
+        if not settings.account_creation.enabled:
+            raise HTTPException(
+                status_code=403,
+                detail="account creation is not enabled",
+            )
+        auth_url, _state = await start_oauth_flow_for_pds(pds_url)
+        return RedirectResponse(url=auth_url)
+
+    if handle:
+        # regular login flow
+        auth_url, _state = await start_oauth_flow(handle)
+        return RedirectResponse(url=auth_url)
+
+    raise HTTPException(
+        status_code=400,
+        detail="either handle or pds_url is required",
+    )
 
 
 @router.get("/callback")

@@ -3,11 +3,18 @@
 import json
 import logging
 import secrets
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from atproto_oauth import OAuthClient, PromptType
+from atproto_oauth import OAuthClient, OAuthState, PromptType
+from atproto_oauth.client import (
+    discover_authserver_from_pds_async,
+    fetch_authserver_metadata_async,
+)
+from atproto_oauth.dpop import DPoPManager
+from atproto_oauth.pkce import PKCEManager
 from atproto_oauth.stores.memory import MemorySessionStore
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -114,11 +121,12 @@ def _load_client_secret() -> tuple[EllipticCurvePrivateKey | None, str | None]:
         pem_bytes = key_obj.to_pem()
 
         # load as cryptography key
-        _client_secret_key = load_pem_private_key(pem_bytes, password=None)
+        loaded_key = load_pem_private_key(pem_bytes, password=None)
 
-        if not isinstance(_client_secret_key, ec.EllipticCurvePrivateKey):
+        if not isinstance(loaded_key, ec.EllipticCurvePrivateKey):
             raise ValueError("OAUTH_JWK must be an EC key (ES256)")
 
+        _client_secret_key = loaded_key
         logger.info(f"loaded confidential OAuth client key (kid={_client_secret_kid})")
         return _client_secret_key, _client_secret_kid
 
@@ -489,6 +497,156 @@ async def start_oauth_flow_with_scopes(
             status_code=400,
             detail=f"failed to start OAuth flow: {e}",
         ) from e
+
+
+async def start_oauth_flow_for_pds(pds_url: str) -> tuple[str, str]:
+    """start OAuth flow for account creation on a PDS.
+
+    unlike start_oauth_flow which resolves a handle to DID, this discovers
+    the auth server directly from the PDS URL and sends PAR with prompt=create
+    to trigger the account creation UI.
+
+    args:
+        pds_url: URL of the PDS to create account on (e.g., 'https://bsky.social')
+
+    returns:
+        tuple of (authorization_url, state) for redirecting user.
+    """
+    from urllib.parse import urlencode
+
+    import httpx
+
+    try:
+        pds_url = pds_url.rstrip("/")
+
+        # discover auth server from PDS
+        authserver_url = await discover_authserver_from_pds_async(pds_url)
+        authserver_url = authserver_url.rstrip("/")
+
+        # fetch auth server metadata
+        authserver_meta = await fetch_authserver_metadata_async(authserver_url)
+
+        # get OAuth client for scope/keys
+        client = get_oauth_client(include_teal=False)
+
+        # generate PKCE and DPoP
+        pkce = PKCEManager()
+        pkce_verifier, pkce_challenge = pkce.generate_pair()
+        dpop = DPoPManager()
+        dpop_key = dpop.generate_keypair()
+        state_token = secrets.token_urlsafe(32)
+
+        # build PAR request with prompt=create and no login_hint
+        par_url = authserver_meta.pushed_authorization_request_endpoint
+        params: dict[str, str] = {
+            "response_type": "code",
+            "code_challenge": pkce_challenge,
+            "code_challenge_method": "S256",
+            "state": state_token,
+            "redirect_uri": client.redirect_uri,
+            "scope": client.scope,
+            "client_id": client.client_id,
+            "prompt": "create",
+        }
+
+        # add client authentication if confidential client
+        client_secret_key, client_secret_kid = _load_client_secret()
+        if client_secret_key and client_secret_kid:
+            client_assertion = _create_client_assertion(
+                client.client_id,
+                authserver_meta.issuer,
+                client_secret_key,
+                client_secret_kid,
+            )
+            params["client_assertion_type"] = (
+                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+            )
+            params["client_assertion"] = client_assertion
+
+        # make PAR request with DPoP nonce retry
+        dpop_nonce = ""
+        for attempt in range(2):
+            dpop_proof = dpop.create_proof(
+                method="POST",
+                url=par_url,
+                private_key=dpop_key,
+                nonce=dpop_nonce if dpop_nonce else None,
+            )
+
+            async with httpx.AsyncClient() as http:
+                response = await http.post(
+                    par_url, data=params, headers={"DPoP": dpop_proof}
+                )
+
+            if dpop.is_dpop_nonce_error(response):
+                new_nonce = dpop.extract_nonce_from_response(response)
+                if new_nonce and attempt == 0:
+                    dpop_nonce = new_nonce
+                    continue
+
+            dpop_nonce = dpop.extract_nonce_from_response(response) or dpop_nonce
+            break
+
+        if response.status_code not in (200, 201):
+            raise HTTPException(
+                status_code=400,
+                detail=f"PAR request failed: {response.status_code} {response.text}",
+            )
+
+        par_response = response.json()
+        request_uri = par_response["request_uri"]
+
+        # store state with did=None (unknown until account created)
+        oauth_state = OAuthState(
+            state=state_token,
+            pkce_verifier=pkce_verifier,
+            redirect_uri=client.redirect_uri,
+            scope=client.scope,
+            authserver_iss=authserver_meta.issuer,
+            dpop_private_key=dpop_key,
+            dpop_authserver_nonce=dpop_nonce,
+            did=None,
+            handle=None,
+            pds_url=pds_url,
+        )
+        await _state_store.save_state(oauth_state)
+
+        # build authorization URL
+        auth_params = {"client_id": client.client_id, "request_uri": request_uri}
+        auth_url = f"{authserver_meta.authorization_endpoint}?{urlencode(auth_params)}"
+
+        logger.info(f"starting account creation OAuth for PDS {pds_url}")
+        return auth_url, state_token
+
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=400,
+            detail=f"failed to start account creation OAuth: {e}",
+        ) from e
+
+
+def _create_client_assertion(
+    client_id: str,
+    audience: str,
+    private_key: EllipticCurvePrivateKey,
+    kid: str,
+) -> str:
+    """create client assertion JWT for confidential client."""
+    header = {"alg": "ES256", "typ": "JWT", "kid": kid}
+    now = int(time.time())
+    payload = {
+        "iss": client_id,
+        "sub": client_id,
+        "aud": audience,
+        "jti": secrets.token_urlsafe(16),
+        "iat": now,
+        "exp": now + 60,
+    }
+
+    dpop = DPoPManager()
+    return dpop._sign_jwt(header, payload, private_key)
 
 
 async def handle_oauth_callback(

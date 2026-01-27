@@ -151,6 +151,7 @@ async def sync_atproto_records(
                 track_refs = [
                     {"uri": t.atproto_record_uri, "cid": t.atproto_record_cid}
                     for t in tracks
+                    if t.atproto_record_uri and t.atproto_record_cid
                 ]
                 try:
                     album_result = await upsert_album_list_record(
@@ -195,6 +196,7 @@ async def sync_atproto_records(
             liked_refs = [
                 {"uri": t.atproto_record_uri, "cid": t.atproto_record_cid}
                 for t in liked_tracks
+                if t.atproto_record_uri and t.atproto_record_cid
             ]
             existing_liked_uri = prefs.liked_list_uri if prefs else None
 

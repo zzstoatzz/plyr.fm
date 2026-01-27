@@ -178,18 +178,18 @@ app = FastAPI(
 
 # setup rate limiter
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 # instrument fastapi with logfire
 if logfire:
     logfire.instrument_fastapi(app, request_attributes_mapper=request_attributes_mapper)
 
 # add security headers middleware
-app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)  # type: ignore[arg-type]
 
 # configure CORS - allow localhost for dev and cloudflare pages for production
 app.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware,  # type: ignore[arg-type]
     allow_origin_regex=settings.frontend.resolved_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
@@ -197,7 +197,7 @@ app.add_middleware(
 )
 
 # add rate limiting middleware
-app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(SlowAPIMiddleware)  # type: ignore[arg-type]
 
 # include routers
 app.include_router(auth_router)

@@ -18,7 +18,7 @@ max_lines = 10000
 
 [[rules]]
 path = "backend/src/backend/_internal/auth.py"
-max_lines = 1207
+max_lines = 1365
 
 [[rules]]
 path = "backend/src/backend/_internal/background_tasks.py"
@@ -30,7 +30,7 @@ max_lines = 714
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
-max_lines = 712
+max_lines = 784
 
 [[rules]]
 path = "backend/src/backend/api/lists.py"
@@ -46,7 +46,7 @@ max_lines = 976
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 830
+max_lines = 854
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
@@ -203,3 +203,7 @@ max_lines = 520
 [[rules]]
 path = "scripts/moderation_agent.py"
 max_lines = 628
+
+[[rules]]
+path = "frontend/src/routes/login/+page.svelte"
+max_lines = 535

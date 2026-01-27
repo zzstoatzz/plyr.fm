@@ -756,6 +756,42 @@ class AuthSettings(AppSettingsSection):
     )
 
 
+class AccountCreationSettings(AppSettingsSection):
+    """Account creation configuration for PDS-based signup."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="ACCOUNT_CREATION_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to allow new account creation via PDS selection",
+    )
+    recommended_pds: list[dict[str, str | bool | None]] = Field(
+        default=[
+            {
+                "name": "Bluesky",
+                "url": "https://bsky.social",
+                "recommended": True,
+            },
+            {
+                "name": "selfhosted.social",
+                "url": "https://selfhosted.social",
+                "recommended": False,
+            },
+            {
+                "name": "blacksky.app",
+                "url": "https://blacksky.app",
+                "recommended": False,
+            },
+        ],
+        description="List of recommended PDS options for account creation",
+    )
+
+
 class Settings(AppSettingsSection):
     """Relay application settings."""
 
@@ -784,6 +820,10 @@ class Settings(AppSettingsSection):
     auth: AuthSettings = Field(
         default_factory=AuthSettings,
         description="Authentication settings",
+    )
+    account_creation: AccountCreationSettings = Field(
+        default_factory=AccountCreationSettings,
+        description="Account creation settings for PDS-based signup",
     )
     notify: NotificationSettings = Field(
         default_factory=NotificationSettings,
