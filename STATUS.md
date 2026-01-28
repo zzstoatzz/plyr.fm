@@ -47,6 +47,27 @@ plyr.fm should become:
 
 ### January 2026
 
+#### PDS-based account creation (PRs #813-815, Jan 27)
+
+**create ATProto accounts directly from plyr.fm** - users without an existing ATProto identity can now create one during sign-up by selecting a PDS host.
+
+**how it works**:
+- login page shows "create account" tab when feature is enabled
+- user selects a PDS (currently selfhosted.social)
+- OAuth flow uses `prompt=create` to trigger account creation on the PDS
+- after account creation, user is redirected back and logged in
+
+**implementation details**:
+- `/auth/pds-options` endpoint returns available PDS hosts from config
+- `/auth/start` accepts `pds_url` parameter for account creation flow
+- handle resolution falls back to PDS directly (via `com.atproto.repo.describeRepo`) when Bluesky AppView hasn't indexed the new account yet
+
+**configuration** (`AccountCreationSettings`):
+- `enabled`: feature flag for account creation
+- `recommended_pds`: list of PDS options with name, url, and description
+
+---
+
 #### lossless audio support (PRs #794-801, Jan 25)
 
 **transcoding integration complete** - users can now upload AIFF and FLAC files. the system transcodes them to MP3 for browser compatibility while preserving originals for lossless playback.
@@ -479,4 +500,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-25.
+this is a living document. last updated 2026-01-27.
