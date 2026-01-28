@@ -94,6 +94,7 @@ class PdsOption(BaseModel):
     url: str
     recommended: bool = False
     description: str | None = None
+    info_url: str | None = None
 
 
 class PdsOptionsResponse(BaseModel):
@@ -119,6 +120,7 @@ async def get_pds_options() -> PdsOptionsResponse:
                 url=str(pds.get("url", "")),
                 recommended=bool(pds.get("recommended", False)),
                 description=str(pds["description"]) if pds.get("description") else None,
+                info_url=str(pds["info_url"]) if pds.get("info_url") else None,
             )
             for pds in settings.account_creation.recommended_pds
         ],

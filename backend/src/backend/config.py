@@ -775,6 +775,8 @@ class AccountCreationSettings(AppSettingsSection):
             {
                 "name": "selfhosted.social",
                 "url": "https://selfhosted.social",
+                "description": "free, community-run PDS",
+                "info_url": "https://selfhosted.social/info",
             },
         ],
         description="List of recommended PDS options for account creation",

@@ -35,7 +35,7 @@ max_lines = 714
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
-max_lines = 784
+max_lines = 790
 
 [[rules]]
 path = "backend/src/backend/api/lists.py"
@@ -51,7 +51,7 @@ max_lines = 976
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 843
+max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
