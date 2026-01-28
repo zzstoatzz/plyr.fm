@@ -10,10 +10,11 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import ORJSONResponse, PlainTextResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -48,7 +49,7 @@ from backend.api.albums import router as albums_router
 from backend.api.lists import router as lists_router
 from backend.api.migration import router as migration_router
 from backend.config import settings
-from backend.models import get_db
+from backend.models import Album, Artist, Track, get_db
 from backend.utilities.rate_limit import limiter
 
 # configure logfire if enabled
@@ -301,8 +302,6 @@ async def jwks_endpoint() -> dict[str, Any]:
 @app.get("/robots.txt", include_in_schema=False)
 async def robots_txt():
     """serve robots.txt to tell crawlers this is an API, not a website."""
-    from fastapi.responses import PlainTextResponse
-
     return PlainTextResponse(
         "User-agent: *\nDisallow: /\n",
         media_type="text/plain",
@@ -318,10 +317,6 @@ async def sitemap_data(
     returns tracks, artists, and albums with just IDs/slugs and timestamps.
     the frontend renders this into XML at /sitemap.xml.
     """
-    from sqlalchemy import select
-
-    from backend.models import Album, Artist, Track
-
     # fetch all tracks (id, created_at)
     tracks_result = await db.execute(
         select(Track.id, Track.created_at).order_by(Track.created_at.desc())
