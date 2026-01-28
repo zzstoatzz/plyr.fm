@@ -1,3 +1,55 @@
-# allow crawling everything by default
+# plyr.fm robots.txt
+
+# search engines - full access to public content
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# AI training crawlers - block
+# these crawl content for model training, not search
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+# AI search/assistant crawlers - allow
+# these fetch content to answer user queries
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+# default rules for all other crawlers
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /portal
+Disallow: /settings
+Disallow: /library
+Disallow: /liked
+Disallow: /upload
+Disallow: /profile/setup
+Disallow: /login
+
+Sitemap: https://plyr.fm/sitemap.xml

@@ -6,14 +6,16 @@ import re
 import warnings
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import ORJSONResponse, PlainTextResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # filter pydantic warning from atproto library
@@ -47,6 +49,7 @@ from backend.api.albums import router as albums_router
 from backend.api.lists import router as lists_router
 from backend.api.migration import router as migration_router
 from backend.config import settings
+from backend.models import Album, Artist, Track, get_db
 from backend.utilities.rate_limit import limiter
 
 # configure logfire if enabled
@@ -294,3 +297,60 @@ async def jwks_endpoint() -> dict[str, Any]:
         )
 
     return jwks
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt():
+    """serve robots.txt to tell crawlers this is an API, not a website."""
+    return PlainTextResponse(
+        "User-agent: *\nDisallow: /\n",
+        media_type="text/plain",
+    )
+
+
+@app.get("/sitemap-data")
+async def sitemap_data(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """return minimal data needed to generate sitemap.xml.
+
+    returns tracks, artists, and albums with just IDs/slugs and timestamps.
+    the frontend renders this into XML at /sitemap.xml.
+    """
+    # fetch all tracks (id, created_at)
+    tracks_result = await db.execute(
+        select(Track.id, Track.created_at).order_by(Track.created_at.desc())
+    )
+    tracks = [
+        {"id": row.id, "updated": row.created_at.strftime("%Y-%m-%d")}
+        for row in tracks_result.all()
+    ]
+
+    # fetch all artists with at least one track (handle, updated_at)
+    artists_result = await db.execute(
+        select(Artist.handle, Artist.updated_at)
+        .join(Track, Artist.did == Track.artist_did)
+        .distinct()
+        .order_by(Artist.updated_at.desc())
+    )
+    artists = [
+        {"handle": row.handle, "updated": row.updated_at.strftime("%Y-%m-%d")}
+        for row in artists_result.all()
+    ]
+
+    # fetch all albums (artist handle, slug, updated_at)
+    albums_result = await db.execute(
+        select(Album.slug, Artist.handle, Album.updated_at)
+        .join(Artist, Album.artist_did == Artist.did)
+        .order_by(Album.updated_at.desc())
+    )
+    albums = [
+        {
+            "handle": row.handle,
+            "slug": row.slug,
+            "updated": row.updated_at.strftime("%Y-%m-%d"),
+        }
+        for row in albums_result.all()
+    ]
+
+    return {"tracks": tracks, "artists": artists, "albums": albums}
