@@ -34,9 +34,8 @@ client.put_object(Body=content, ...)  # entire file in RAM
 ### goals achieved
 1. constant memory usage regardless of file size
 2. maintained backward compatibility (same file_id generation)
-3. supports both R2 and filesystem backends
-4. no changes to upload endpoint API
-5. proper test coverage added
+3. no changes to upload endpoint API
+4. proper test coverage added
 
 ### current flow (constant memory)
 ```python
@@ -151,51 +150,7 @@ async def save(self, file: BinaryIO, filename: str) -> str:
     return file_id
 ```
 
-### 3. filesystem storage backend
-
-**file**: `src/backend/storage/filesystem.py`
-
-**implementation**:
-- uses `hash_file_chunked()` for constant memory hashing
-- uses `anyio` for async file I/O instead of blocking operations
-- writes file in chunks for constant memory usage
-- supports both audio and image files
-
-```python
-# actual implementation (simplified)
-async def save(self, file: BinaryIO, filename: str) -> str:
-    """save media file using streaming write.
-
-    uses chunked hashing and async file I/O for constant
-    memory usage regardless of file size.
-    """
-    # compute hash in chunks (constant memory)
-    file_id = hash_file_chunked(file)[:16]
-
-    # determine file extension and type
-    ext = Path(filename).suffix.lower()
-
-    # try audio format first
-    audio_format = AudioFormat.from_extension(ext)
-    if audio_format:
-        file_path = self.base_path / "audio" / f"{file_id}{ext}"
-    else:
-        # handle image formats...
-        pass
-
-    # write file using async I/O in chunks (constant memory, non-blocking)
-    # file pointer already reset by hash_file_chunked
-    async with await anyio.open_file(file_path, "wb") as dest:
-        while True:
-            chunk = file.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            await dest.write(chunk)
-
-    return file_id
-```
-
-### 4. upload endpoint
+### 3. upload endpoint
 
 **file**: `src/backend/api/tracks.py`
 
@@ -205,7 +160,7 @@ FastAPI's `UploadFile` already uses `SpooledTemporaryFile`:
 - keeps small files (<1MB) in memory
 - automatically spools larger files to disk
 - provides file-like interface that our streaming functions expect
-- works seamlessly with both storage backends
+- works seamlessly with R2 storage backend
 
 ## testing
 
@@ -291,7 +246,6 @@ implemented in PR #182 and deployed to production.
 - memory usage stays constant (~10-16MB per upload)
 - file_id generation remains consistent (backward compatible)
 - supports concurrent uploads without OOM
-- both R2 and filesystem backends working correctly
 
 ## backward compatibility
 
@@ -312,12 +266,10 @@ successfully maintained during implementation:
 
 ### very large files (>100MB)
 - boto3 automatically handles multipart upload
-- filesystem streaming works for any size
 - only limited by storage capacity, not RAM
 
 ### network failures during upload
 - boto3 multipart upload can retry failed parts
-- filesystem writes are atomic per chunk
 - FastAPI handles connection errors
 
 ### concurrent uploads
@@ -359,7 +311,7 @@ metrics tracked in Logfire:
 
 ## references
 
-- implementation: `src/backend/storage/r2.py`, `src/backend/storage/filesystem.py`
+- implementation: `src/backend/storage/r2.py`
 - utilities: `src/backend/utilities/hashing.py`
 - tests: `tests/utilities/test_hashing.py`, `tests/api/test_tracks.py`
 - PR: #182
