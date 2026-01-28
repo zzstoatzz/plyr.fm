@@ -127,7 +127,7 @@
 				</button>
 			{:else}
 				<div class="input-group">
-					<span class="input-label">pick a home on the atmosphere</span>
+					<span class="input-label">pick a home on <a href="https://atproto.com" target="_blank" rel="noopener" class="atmosphere-link">the atmosphere</a></span>
 					<div class="pds-options">
 						{#each pdsOptions as pds (pds.url)}
 							<label class="pds-option" class:selected={selectedPds === pds.url}>
@@ -152,6 +152,12 @@
 							</label>
 						{/each}
 					</div>
+					<p class="pds-note">
+						or sign up directly with
+						<a href="https://bsky.app" target="_blank" rel="noopener">Bluesky</a>
+						or
+						<a href="https://blackskyweb.xyz" target="_blank" rel="noopener">Blacksky</a>
+					</p>
 				</div>
 
 				<button type="submit" class="primary" disabled={loading || !selectedPds}>
@@ -254,6 +260,9 @@
 							<a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a> network.
 							think of it as choosing a home for your account &mdash; you can always move later.
 						</p>
+						<p>
+							learn more at <a href="https://atproto.com/guides/self-hosting" target="_blank" rel="noopener">atproto.com</a>.
+						</p>
 					</div>
 				{/if}
 			{/if}
@@ -340,6 +349,8 @@
 	.input-label {
 		color: var(--text-secondary);
 		font-size: var(--text-base);
+		& .atmosphere-link { color: var(--accent); text-decoration: none; }
+		& .atmosphere-link:hover { text-decoration: underline; }
 	}
 
 	button.primary {
@@ -404,31 +415,11 @@
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
 		line-height: 1.6;
-	}
-
-	.faq-content p {
-		margin: 0 0 0.75rem 0;
-		text-align: left;
-	}
-
-	.faq-content p:last-child {
-		margin-bottom: 0;
-	}
-
-	.faq-content a {
-		color: var(--accent);
-		text-decoration: none;
-	}
-
-	.faq-content a:hover {
-		text-decoration: underline;
-	}
-
-	.faq-content code {
-		background: var(--bg-secondary);
-		padding: 0.15rem 0.4rem;
-		border-radius: var(--radius-sm);
-		font-size: 0.85em;
+		& p { margin: 0 0 0.75rem 0; text-align: left; }
+		& p:last-child { margin-bottom: 0; }
+		& a { color: var(--accent); text-decoration: none; }
+		& a:hover { text-decoration: underline; }
+		& code { background: var(--bg-secondary); padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); font-size: 0.85em; }
 	}
 
 	.link-button {
@@ -508,6 +499,15 @@
 	.pds-description {
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
+	}
+
+	.pds-note {
+		margin: 0.75rem 0 0;
+		font-size: var(--text-sm);
+		color: var(--text-tertiary);
+		text-align: center;
+		& a { color: var(--accent); text-decoration: none; }
+		& a:hover { text-decoration: underline; }
 	}
 
 	.back-link {
