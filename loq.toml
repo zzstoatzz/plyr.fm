@@ -16,6 +16,11 @@ max_lines = 10000
 path = "**/package-lock.json"
 max_lines = 10000
 
+# STATUS.md grows over time as we document work
+[[rules]]
+path = "STATUS.md"
+max_lines = 600
+
 [[rules]]
 path = "backend/src/backend/_internal/auth.py"
 max_lines = 1410
