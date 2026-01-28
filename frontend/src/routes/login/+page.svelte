@@ -127,7 +127,7 @@
 				</button>
 			{:else}
 				<div class="input-group">
-					<span class="input-label">choose where to create your account</span>
+					<span class="input-label">pick a home on <a href="https://atproto.com" target="_blank" rel="noopener" class="atmosphere-link">the atmosphere</a></span>
 					<div class="pds-options">
 						{#each pdsOptions as pds (pds.url)}
 							<label class="pds-option" class:selected={selectedPds === pds.url}>
@@ -349,6 +349,8 @@
 	.input-label {
 		color: var(--text-secondary);
 		font-size: var(--text-base);
+		& .atmosphere-link { color: var(--accent); text-decoration: none; }
+		& .atmosphere-link:hover { text-decoration: underline; }
 	}
 
 	button.primary {
