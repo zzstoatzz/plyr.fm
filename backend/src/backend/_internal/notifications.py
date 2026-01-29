@@ -198,7 +198,6 @@ class NotificationService:
             artist_message = (
                 f"⚠️ copyright notice for your track on {settings.app.name}\n\n"
                 f"track: '{track_title}'\n"
-                f"match confidence: {highest_score}%\n"
             )
             if primary_match:
                 artist_message += f"potential match: {primary_match}\n"
@@ -212,7 +211,6 @@ class NotificationService:
                 f"🚨 copyright flag on {settings.app.name}\n\n"
                 f"track: '{track_title}'\n"
                 f"artist: @{artist_handle}\n"
-                f"score: {highest_score}%\n"
                 f"matches: {match_count}\n"
             )
             if primary_match:
