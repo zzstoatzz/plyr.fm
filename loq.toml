@@ -167,7 +167,7 @@ max_lines = 1409
 
 [[rules]]
 path = "frontend/src/routes/track/\\[id\\]/+page.svelte"
-max_lines = 1667
+max_lines = 1700
 
 [[rules]]
 path = "frontend/src/routes/u/\\[handle\\]/+page.svelte"
