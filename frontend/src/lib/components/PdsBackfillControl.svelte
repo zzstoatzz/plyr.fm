@@ -11,9 +11,9 @@
 		onComplete?: () => void | Promise<void>;
 	} = $props();
 
-	let migrating = $state(false);
+	let backfilling = $state(false);
 
-	let migratableTrackCount = $derived(
+	let backfillableTrackCount = $derived(
 		tracks.filter(
 			(track) =>
 				!track.support_gate &&
@@ -21,18 +21,18 @@
 		).length
 	);
 
-	async function migrateAudioToPds() {
-		if (migrating) return;
-		if (migratableTrackCount === 0) {
+	async function backfillAudioToPds() {
+		if (backfilling) return;
+		if (backfillableTrackCount === 0) {
 			toast.info('all your tracks already have PDS blobs');
 			return;
 		}
 
-		const toastId = toast.info(`migrating ${migratableTrackCount} tracks...`, 0);
-		migrating = true;
+		const toastId = toast.info(`backfilling ${backfillableTrackCount} tracks...`, 0);
+		backfilling = true;
 
 		try {
-			const response = await fetch(`${API_URL}/pds-migrations/audio`, {
+			const response = await fetch(`${API_URL}/pds-backfill/audio`, {
 				method: 'POST',
 				credentials: 'include'
 			});
@@ -40,78 +40,78 @@
 			if (!response.ok) {
 				const error = await response.json();
 				toast.dismiss(toastId);
-				toast.error(error.detail || 'failed to start migration');
-				migrating = false;
+				toast.error(error.detail || 'failed to start backfill');
+				backfilling = false;
 				return;
 			}
 
 			const result = await response.json();
-			const migrationId = result.migration_id;
+			const backfillId = result.backfill_id;
 
-			const eventSource = new EventSource(`${API_URL}/pds-migrations/${migrationId}/progress`);
-			let migrationComplete = false;
+			const eventSource = new EventSource(`${API_URL}/pds-backfill/${backfillId}/progress`);
+			let backfillComplete = false;
 
 			eventSource.onmessage = async (event) => {
 				const update = JSON.parse(event.data);
 
 				if (update.message && update.status === 'processing') {
-					const progressDetail = update.migrated_count !== undefined
-						? ` (${update.migrated_count}/${update.total_count})`
+					const progressDetail = update.backfilled_count !== undefined
+						? ` (${update.backfilled_count}/${update.total_count})`
 						: '';
 					toast.update(toastId, `${update.message}${progressDetail}`);
 				}
 
 				if (update.status === 'completed') {
-					migrationComplete = true;
+					backfillComplete = true;
 					eventSource.close();
-					migrating = false;
+					backfilling = false;
 					await onComplete?.();
 					toast.dismiss(toastId);
-					toast.success('migration completed');
+					toast.success('backfill completed');
 				}
 
 				if (update.status === 'failed') {
-					migrationComplete = true;
+					backfillComplete = true;
 					eventSource.close();
-					migrating = false;
-					const errorMsg = update.error || 'migration failed';
+					backfilling = false;
+					const errorMsg = update.error || 'backfill failed';
 					toast.dismiss(toastId);
 					toast.error(errorMsg);
 				}
 			};
 
 			eventSource.onerror = () => {
-				if (migrationComplete) return;
+				if (backfillComplete) return;
 				eventSource.close();
-				migrating = false;
+				backfilling = false;
 				toast.dismiss(toastId);
-				toast.error('migration connection lost');
+				toast.error('backfill connection lost');
 			};
 		} catch (e) {
-			console.error('migration failed:', e);
+			console.error('backfill failed:', e);
 			toast.dismiss(toastId);
-			toast.error('failed to start migration');
-			migrating = false;
+			toast.error('failed to start backfill');
+			backfilling = false;
 		}
 	}
 </script>
 
-{#if migratableTrackCount > 0}
+{#if backfillableTrackCount > 0}
 	<div class="data-control">
 		<div class="control-info">
-			<h3>migrate audio to your PDS</h3>
+			<h3>backfill audio to your PDS</h3>
 			<p class="control-description">
-				{migratableTrackCount === 1
-					? 'move your audio blob to your PDS and keep the CDN fallback'
-					: `move ${migratableTrackCount} audio blobs to your PDS and keep the CDN fallback`}
+				{backfillableTrackCount === 1
+					? 'copy your audio blob to your PDS and keep the CDN fallback'
+					: `copy ${backfillableTrackCount} audio blobs to your PDS and keep the CDN fallback`}
 			</p>
 		</div>
 		<button
-			class="migrate-btn"
-			onclick={migrateAudioToPds}
-			disabled={migrating}
+			class="backfill-btn"
+			onclick={backfillAudioToPds}
+			disabled={backfilling}
 		>
-			{migrating ? 'migrating...' : 'migrate'}
+			{backfilling ? 'backfilling...' : 'backfill'}
 		</button>
 	</div>
 {/if}
@@ -147,7 +147,7 @@
 		margin: 0;
 	}
 
-	.migrate-btn {
+	.backfill-btn {
 		background: var(--accent);
 		color: var(--bg-primary);
 		border: none;
@@ -158,11 +158,11 @@
 		transition: opacity 0.2s ease, transform 0.2s ease;
 	}
 
-	.migrate-btn:hover:not(:disabled) {
+	.backfill-btn:hover:not(:disabled) {
 		transform: translateY(-1px);
 	}
 
-	.migrate-btn:disabled {
+	.backfill-btn:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
 	}
@@ -173,7 +173,7 @@
 			align-items: stretch;
 		}
 
-		.migrate-btn {
+		.backfill-btn {
 			width: 100%;
 		}
 	}

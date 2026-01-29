@@ -9,7 +9,7 @@
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
-	import PdsMigrationControl from '$lib/components/PdsMigrationControl.svelte';
+	import PdsBackfillControl from '$lib/components/PdsBackfillControl.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary, Playlist } from '$lib/types';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { API_URL } from '$lib/config';
@@ -1305,7 +1305,7 @@
 			</div>
 
 			{#if tracks.length > 0}
-				<PdsMigrationControl tracks={tracks} onComplete={loadMyTracks} />
+				<PdsBackfillControl tracks={tracks} onComplete={loadMyTracks} />
 
 				<div class="data-control">
 					<div class="control-info">

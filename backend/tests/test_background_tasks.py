@@ -166,16 +166,14 @@ async def test_process_export_downloads_concurrently() -> None:
 
     with (
         patch(
-            "backend._internal.background_tasks.aioboto3.Session",
+            "backend._internal.export_tasks.aioboto3.Session",
             return_value=mock_session,
         ),
-        patch(
-            "backend._internal.background_tasks.aiofiles.open", return_value=mock_file
-        ),
-        patch("backend._internal.background_tasks.zipfile.ZipFile"),
-        patch("backend._internal.background_tasks.os.unlink"),
-        patch("backend.utilities.database.db_session") as mock_db_session,
-        patch("backend._internal.jobs.job_service", mock_job_service),
+        patch("backend._internal.export_tasks.aiofiles.open", return_value=mock_file),
+        patch("backend._internal.export_tasks.zipfile.ZipFile"),
+        patch("backend._internal.export_tasks.os.unlink"),
+        patch("backend._internal.export_tasks.db_session") as mock_db_session,
+        patch("backend._internal.export_tasks.job_service", mock_job_service),
     ):
         mock_db_session.return_value.__aenter__.return_value = mock_db
 
@@ -183,7 +181,7 @@ async def test_process_export_downloads_concurrently() -> None:
         # (we only care about testing download concurrency)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(
-                bg_tasks.process_export("export-123", "did:plc:testuser"),
+                export_tasks.process_export("export-123", "did:plc:testuser"),
                 timeout=2.0,
             )
 

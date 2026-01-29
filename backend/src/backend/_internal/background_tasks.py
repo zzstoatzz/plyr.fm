@@ -22,7 +22,7 @@ from backend._internal.atproto.records import (
 from backend._internal.auth import get_session
 from backend._internal.background import get_docket
 from backend._internal.export_tasks import process_export
-from backend._internal.pds_migration_tasks import migrate_tracks_to_pds
+from backend._internal.pds_backfill_tasks import backfill_tracks_to_pds
 from backend.models import CopyrightScan, Track, TrackComment, TrackLike
 from backend.utilities.database import db_session
 
@@ -644,6 +644,6 @@ background_tasks = [
     pds_create_comment,
     pds_delete_comment,
     pds_update_comment,
-    migrate_tracks_to_pds,
+    backfill_tracks_to_pds,
     move_track_audio,
 ]

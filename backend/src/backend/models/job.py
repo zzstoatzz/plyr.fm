@@ -26,7 +26,7 @@ class JobType(str, Enum):
 
     UPLOAD = "upload"
     EXPORT = "export"
-    PDS_MIGRATION = "pds_migration"
+    PDS_BACKFILL = "pds_backfill"
 
 
 class Job(Base):

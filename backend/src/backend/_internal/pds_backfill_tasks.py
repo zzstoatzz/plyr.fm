@@ -1,4 +1,4 @@
-"""background tasks for migrating audio blobs to user PDS."""
+"""background tasks for backfilling audio blobs to user PDS."""
 
 from __future__ import annotations
 
@@ -24,24 +24,24 @@ from backend.utilities.database import db_session
 logger = logging.getLogger(__name__)
 
 
-async def migrate_tracks_to_pds(
-    migration_id: str,
+async def backfill_tracks_to_pds(
+    backfill_id: str,
     session_id: str,
     track_ids: list[int],
 ) -> None:
-    """migrate existing track audio to the user's PDS in the background.
+    """backfill existing track audio to the user's PDS in the background.
 
     args:
-        migration_id: job ID for tracking progress
+        backfill_id: job ID for tracking progress
         session_id: OAuth session ID for authentication
-        track_ids: list of track IDs to migrate
+        track_ids: list of track IDs to backfill
     """
     auth_session = await get_session(session_id)
     if not auth_session:
         await job_service.update_progress(
-            migration_id,
+            backfill_id,
             JobStatus.FAILED,
-            "migration failed",
+            "backfill failed",
             error="session not found",
         )
         return
@@ -49,14 +49,14 @@ async def migrate_tracks_to_pds(
     total_count = len(track_ids)
     if total_count == 0:
         await job_service.update_progress(
-            migration_id,
+            backfill_id,
             JobStatus.COMPLETED,
-            "no tracks to migrate",
+            "no tracks to backfill",
             progress_pct=100.0,
             result={
                 "total_count": 0,
                 "processed_count": 0,
-                "migrated_count": 0,
+                "backfilled_count": 0,
                 "skipped_count": 0,
                 "failed_count": 0,
             },
@@ -64,21 +64,21 @@ async def migrate_tracks_to_pds(
         return
 
     await job_service.update_progress(
-        migration_id,
+        backfill_id,
         JobStatus.PROCESSING,
-        "starting migration...",
+        "starting backfill...",
         progress_pct=0.0,
         phase="init",
         result={
             "total_count": total_count,
             "processed_count": 0,
-            "migrated_count": 0,
+            "backfilled_count": 0,
             "skipped_count": 0,
             "failed_count": 0,
         },
     )
 
-    migrated_count = 0
+    backfilled_count = 0
     skipped_count = 0
     failed_count = 0
     processed_count = 0
@@ -90,21 +90,21 @@ async def migrate_tracks_to_pds(
     async def update_progress(message: str) -> None:
         progress_pct = (processed_count / total_count) * 100.0
         await job_service.update_progress(
-            migration_id,
+            backfill_id,
             JobStatus.PROCESSING,
             message,
             progress_pct=progress_pct,
-            phase="migrate",
+            phase="backfill",
             result={
                 "processed_count": processed_count,
-                "migrated_count": migrated_count,
+                "backfilled_count": backfilled_count,
                 "skipped_count": skipped_count,
                 "failed_count": failed_count,
             },
         )
 
-    async def migrate_one(track_id: int) -> None:
-        nonlocal migrated_count, skipped_count, failed_count, processed_count
+    async def backfill_one(track_id: int) -> None:
+        nonlocal backfilled_count, skipped_count, failed_count, processed_count
 
         async with semaphore:
             track_data: dict | None = None
@@ -230,13 +230,13 @@ async def migrate_tracks_to_pds(
                         track.atproto_record_cid = new_record_cid
                     await db.commit()
 
-                migrated_count += 1
+                backfilled_count += 1
 
             except PayloadTooLargeError:
                 skipped_count += 1
             except Exception as e:
                 logger.error(
-                    "pds migration failed for track %s: %s",
+                    "pds backfill failed for track %s: %s",
                     track_id,
                     e,
                     exc_info=True,
@@ -246,20 +246,20 @@ async def migrate_tracks_to_pds(
                 async with progress_lock:
                     processed_count += 1
                     await update_progress(
-                        f"migrated {migrated_count}/{total_count} tracks"
+                        f"backfilled {backfilled_count}/{total_count} tracks"
                     )
 
-    await asyncio.gather(*(migrate_one(track_id) for track_id in track_ids))
+    await asyncio.gather(*(backfill_one(track_id) for track_id in track_ids))
 
-    if migrated_count == 0 and failed_count > 0 and skipped_count == 0:
+    if backfilled_count == 0 and failed_count > 0 and skipped_count == 0:
         await job_service.update_progress(
-            migration_id,
+            backfill_id,
             JobStatus.FAILED,
-            "migration failed",
+            "backfill failed",
             progress_pct=100.0,
             result={
                 "processed_count": processed_count,
-                "migrated_count": migrated_count,
+                "backfilled_count": backfilled_count,
                 "skipped_count": skipped_count,
                 "failed_count": failed_count,
             },
@@ -267,30 +267,30 @@ async def migrate_tracks_to_pds(
         return
 
     summary = (
-        f"migration completed ({migrated_count} migrated, {skipped_count} skipped, {failed_count} failed)"
+        f"backfill completed ({backfilled_count} backfilled, {skipped_count} skipped, {failed_count} failed)"
         if failed_count > 0 or skipped_count > 0
-        else "migration completed"
+        else "backfill completed"
     )
     await job_service.update_progress(
-        migration_id,
+        backfill_id,
         JobStatus.COMPLETED,
         summary,
         progress_pct=100.0,
         result={
             "processed_count": processed_count,
-            "migrated_count": migrated_count,
+            "backfilled_count": backfilled_count,
             "skipped_count": skipped_count,
             "failed_count": failed_count,
         },
     )
 
 
-async def schedule_pds_migration(
-    migration_id: str,
+async def schedule_pds_backfill(
+    backfill_id: str,
     session_id: str,
     track_ids: list[int],
 ) -> None:
-    """schedule a PDS audio migration via docket."""
+    """schedule a PDS audio backfill via docket."""
     docket = get_docket()
-    await docket.add(migrate_tracks_to_pds)(migration_id, session_id, track_ids)
-    logfire.info("scheduled pds audio migration", migration_id=migration_id)
+    await docket.add(backfill_tracks_to_pds)(backfill_id, session_id, track_ids)
+    logfire.info("scheduled pds audio backfill", backfill_id=backfill_id)
