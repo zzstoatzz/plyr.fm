@@ -482,6 +482,7 @@ class AtprotoSettings(AppSettingsSection):
 
         # fallback: granular repo scopes for each collection
         scopes = [
+            "blob:*/*",  # upload blobs to user's PDS
             f"repo:{self.track_collection}",
             f"repo:{self.like_collection}",
             f"repo:{self.comment_collection}",
