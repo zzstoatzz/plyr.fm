@@ -302,6 +302,64 @@ class R2Storage:
 
                 return None
 
+    async def get_file_data(
+        self,
+        file_id: str,
+        file_type: str,
+    ) -> bytes | None:
+        """fetch raw file data from R2.
+
+        args:
+            file_id: the file identifier hash
+            file_type: file extension without dot (e.g., "mp3", "wav")
+
+        returns:
+            file bytes if found, None otherwise
+        """
+        with logfire.span("R2 get_file_data", file_id=file_id, file_type=file_type):
+            async with self.async_session.client(
+                "s3",
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+            ) as client:
+                # build key from file_id and file_type
+                audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
+                if not audio_format:
+                    logfire.warning(
+                        "unsupported file type for get_file_data",
+                        file_id=file_id,
+                        file_type=file_type,
+                    )
+                    return None
+
+                key = f"audio/{file_id}{audio_format.extension}"
+
+                try:
+                    response = await client.get_object(
+                        Bucket=self.audio_bucket_name, Key=key
+                    )
+                    body = response["Body"]
+                    data = await body.read()
+                    logfire.info(
+                        "R2 file data fetched",
+                        file_id=file_id,
+                        key=key,
+                        size=len(data),
+                    )
+                    return data
+                except client.exceptions.NoSuchKey:
+                    logfire.warning(
+                        "R2 file not found",
+                        file_id=file_id,
+                        key=key,
+                    )
+                    return None
+                except ClientError as e:
+                    if e.response.get("Error", {}).get("Code") == "404":
+                        return None
+                    raise
+
     async def delete(self, file_id: str, file_type: str | None = None) -> bool:
         """delete media file from R2.
 

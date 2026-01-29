@@ -43,11 +43,11 @@ max_lines = 865
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
-max_lines = 664
+max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 976
+max_lines = 1100
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -55,7 +55,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
-max_lines = 661
+max_lines = 725
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"
@@ -119,7 +119,7 @@ max_lines = 777
 
 [[rules]]
 path = "frontend/src/lib/components/TrackItem.svelte"
-max_lines = 1105
+max_lines = 1145
 
 [[rules]]
 path = "frontend/src/lib/components/UserMenu.svelte"

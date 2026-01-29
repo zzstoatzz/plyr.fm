@@ -662,3 +662,178 @@ async def restore_track_record(
         track=await TrackResponse.from_track(track),
         restored_uri=new_uri,
     )
+
+
+class MigrateToPdsResponse(BaseModel):
+    """response for PDS migration endpoint."""
+
+    success: bool
+    track_id: int
+    pds_blob_cid: str | None = None
+    message: str
+
+
+@router.post("/{track_id}/migrate-to-pds")
+async def migrate_track_to_pds(
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> MigrateToPdsResponse:
+    """migrate an existing track's audio to the user's PDS.
+
+    this uploads the audio blob to the user's PDS and updates the ATProto record
+    to reference it. the R2 copy is kept for CDN streaming performance.
+
+    requires:
+    - active OAuth session (user must be logged in)
+    - track must belong to the authenticated user
+    - track must not already have a PDS blob
+
+    note: this may fail if the audio file is too large for the PDS blob limit.
+    """
+    from backend._internal.atproto import (
+        PayloadTooLargeError,
+        upload_blob,
+    )
+
+    # fetch track with artist
+    result = await db.execute(
+        select(Track).options(selectinload(Track.artist)).where(Track.id == track_id)
+    )
+    track = result.scalar_one_or_none()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="track not found")
+
+    # verify ownership
+    if track.artist_did != auth_session.did:
+        raise HTTPException(
+            status_code=403,
+            detail="you can only migrate your own tracks",
+        )
+
+    # check if already migrated
+    if track.pds_blob_cid:
+        return MigrateToPdsResponse(
+            success=True,
+            track_id=track_id,
+            pds_blob_cid=track.pds_blob_cid,
+            message="track already has PDS blob",
+        )
+
+    # gated tracks can't be migrated (they need auth-protected access)
+    if track.support_gate:
+        raise HTTPException(
+            status_code=400,
+            detail="supporter-gated tracks cannot be migrated to PDS",
+        )
+
+    # get the audio file from R2
+    try:
+        audio_data = await storage.get_file_data(track.file_id, track.file_type)
+        if not audio_data:
+            raise HTTPException(
+                status_code=404,
+                detail="audio file not found in storage",
+            )
+    except Exception as e:
+        logger.error(f"failed to fetch audio for track {track_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"failed to fetch audio file: {e}",
+        ) from e
+
+    # determine content type from file type
+    from backend._internal.audio import AudioFormat
+
+    audio_format = AudioFormat.from_extension(track.file_type)
+    if not audio_format:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported audio format: {track.file_type}",
+        )
+    content_type = audio_format.media_type
+
+    # upload blob to PDS
+    try:
+        blob_ref = await upload_blob(auth_session, audio_data, content_type)
+        blob_cid = blob_ref.get("ref", {}).get("$link")
+        blob_size = blob_ref.get("size")
+
+        logfire.info(
+            "pds blob migration succeeded",
+            track_id=track_id,
+            cid=blob_cid,
+            size=blob_size,
+            did=auth_session.did,
+        )
+    except PayloadTooLargeError as e:
+        logfire.info(
+            "pds blob migration failed: file too large",
+            track_id=track_id,
+            error=str(e),
+            did=auth_session.did,
+        )
+        raise HTTPException(
+            status_code=413,
+            detail="audio file too large for PDS blob upload",
+        ) from e
+    except Exception as e:
+        logger.error(
+            f"pds blob migration failed for track {track_id}: {e}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"PDS blob upload failed: {e}",
+        ) from e
+
+    # update the ATProto record with the blob reference
+    new_record_cid: str | None = None
+    if track.atproto_record_uri and track.r2_url:
+        try:
+            # build updated record with blob
+            track_record = build_track_record(
+                title=track.title,
+                artist=track.artist.display_name,
+                audio_url=track.r2_url,
+                file_type=track.file_type,
+                album=track.album,
+                duration=track.duration,
+                features=track.features if track.features else None,
+                image_url=await track.get_image_url(),
+                support_gate=track.support_gate,
+                audio_blob=blob_ref,
+            )
+            track_record["createdAt"] = track.created_at.isoformat()
+
+            _, new_record_cid = await update_record(
+                auth_session, track.atproto_record_uri, track_record
+            )
+            logfire.info(
+                "updated ATProto record with blob",
+                track_id=track_id,
+                record_uri=track.atproto_record_uri,
+                new_cid=new_record_cid,
+            )
+        except Exception as e:
+            # log but don't fail - the blob was uploaded successfully
+            # the record can be updated later
+            logger.warning(
+                f"failed to update ATProto record for track {track_id}: {e}",
+                exc_info=True,
+            )
+
+    # update database
+    track.audio_storage = "both"
+    track.pds_blob_cid = blob_cid
+    track.pds_blob_size = blob_size
+    if new_record_cid:
+        track.atproto_record_cid = new_record_cid
+    await db.commit()
+
+    return MigrateToPdsResponse(
+        success=True,
+        track_id=track_id,
+        pds_blob_cid=blob_cid,
+        message="track audio migrated to PDS successfully",
+    )

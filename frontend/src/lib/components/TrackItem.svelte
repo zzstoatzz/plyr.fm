@@ -368,6 +368,16 @@
 						{/if}
 					</span>
 				{/if}
+				{#if track.audio_storage === 'both' || track.audio_storage === 'pds'}
+					<span class="meta-separator">•</span>
+					<span class="pds-indicator" title="stored on PDS">
+						<svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/>
+							<path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						</svg>
+						<span class="pds-label">pds</span>
+					</span>
+				{/if}
 			</div>
 		</div>
 	</button>
@@ -915,6 +925,31 @@
 
 	.comment-count {
 		font-family: inherit;
+	}
+
+	.pds-indicator {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		color: var(--text-tertiary);
+		cursor: help;
+		transition: color 0.2s;
+	}
+
+	.pds-indicator:hover {
+		color: var(--accent);
+	}
+
+	.pds-indicator svg {
+		width: 12px;
+		height: 12px;
+		flex-shrink: 0;
+	}
+
+	.pds-label {
+		font-family: inherit;
+		font-size: inherit;
+		text-transform: lowercase;
 	}
 
 	.action-button {

@@ -77,6 +77,13 @@ class Track(Base):
     atproto_record_uri: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_cid: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # PDS blob storage (for audio stored on user's PDS)
+    audio_storage: Mapped[str] = mapped_column(
+        String, nullable=False, default="r2", server_default="r2"
+    )  # "r2" | "pds" | "both"
+    pds_blob_cid: Mapped[str | None] = mapped_column(String, nullable=True)
+    pds_blob_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # engagement metrics
     play_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
