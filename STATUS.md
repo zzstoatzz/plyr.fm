@@ -47,6 +47,31 @@ plyr.fm should become:
 
 ### January 2026
 
+#### PDS blob storage for audio (PR #823, Jan 29)
+
+**audio files now stored on user's PDS** - embraces ATProto's data ownership model by uploading audio to the user's PDS while keeping R2 copies for CDN streaming.
+
+**how it works**:
+- new uploads: audio blob uploaded to PDS, BlobRef stored in track record
+- dual-write: R2 copy kept for streaming performance (PDS `getBlob` isn't CDN-optimized)
+- graceful fallback: if PDS rejects blob (size limit), track stays R2-only
+- gated tracks skip PDS (need auth-protected access)
+
+**database changes**:
+- `audio_storage`: "r2" | "pds" | "both"
+- `pds_blob_cid`: CID of blob on user's PDS
+- `pds_blob_size`: size in bytes
+
+**migration endpoint**: `POST /tracks/{id}/migrate-to-pds` lets owners migrate existing tracks
+
+**frontend**: PDS indicator shown on track cards and detail page when `audio_storage` is "pds" or "both"
+
+**fast follow needed**: UI button for migrating existing tracks (endpoint exists, no frontend yet)
+
+**verification**: run staging integration tests after merging to main
+
+---
+
 #### PDS-based account creation (PRs #813-815, Jan 27)
 
 **create ATProto accounts directly from plyr.fm** - users without an existing ATProto identity can now create one during sign-up by selecting a PDS host.
@@ -330,7 +355,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-listen receipts shipped - share links now track who clicked and played. legal foundation complete with terms of service and privacy policy. responsive embed layout handles any container size.
+PDS blob storage shipped - new uploads store audio on user's PDS for true data ownership. fast follow: add UI button for migrating existing tracks.
 
 **end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) shipped:**
 - moderation consolidation: sensitive images moved to moderation service (#644)
@@ -387,6 +412,7 @@ listen receipts shipped - share links now track who clicked and played. legal fo
 - ✅ track upload with streaming
 - ✅ audio streaming via 307 redirects to R2 CDN
 - ✅ lossless audio (AIFF/FLAC) with automatic transcoding for browser compatibility
+- ✅ PDS blob storage for audio (user data ownership)
 - ✅ play count tracking, likes, queue management
 - ✅ unified search with Cmd/Ctrl+K
 - ✅ teal.fm scrobbling
@@ -500,4 +526,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-27.
+this is a living document. last updated 2026-01-29.
