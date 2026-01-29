@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
+import aiofiles
 import logfire
 from fastapi import (
     BackgroundTasks,
@@ -28,7 +29,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
 from backend._internal import has_flag, require_artist_profile
-from backend._internal.atproto import create_track_record
+from backend._internal.atproto import (
+    BlobRef,
+    PayloadTooLargeError,
+    create_track_record,
+    upload_blob,
+)
 from backend._internal.atproto.handles import resolve_featured_artists
 from backend._internal.audio import AudioFormat
 from backend._internal.background_tasks import (
@@ -226,6 +232,96 @@ class TranscodeInfo:
     transcoded_data: bytes
 
 
+@dataclass
+class PdsBlobResult:
+    """result of attempting to upload a blob to user's PDS."""
+
+    blob_ref: BlobRef | None
+    cid: str | None
+    size: int | None
+
+
+async def _try_upload_to_pds(
+    upload_id: str,
+    auth_session: AuthSession,
+    file_data: bytes,
+    content_type: str,
+) -> PdsBlobResult:
+    """attempt to upload audio blob to user's PDS.
+
+    this is a best-effort operation - if it fails due to size limits or other
+    errors, we fall back to R2-only storage. the canonical audio data lives on
+    the PDS when possible (embracing ATProto's data ownership ideals).
+
+    args:
+        upload_id: job tracking ID
+        auth_session: authenticated user session
+        file_data: audio file bytes (should match content_type)
+        content_type: MIME type (e.g., audio/mpeg)
+
+    returns:
+        PdsBlobResult with blob_ref, cid, and size if successful, all None otherwise
+    """
+    await job_service.update_progress(
+        upload_id,
+        JobStatus.PROCESSING,
+        "uploading to your PDS...",
+        phase="pds_upload",
+        progress_pct=0.0,
+    )
+
+    try:
+        blob_ref = await upload_blob(auth_session, file_data, content_type)
+
+        # extract CID from blob ref: {"ref": {"$link": "<CID>"}, ...}
+        cid = blob_ref.get("ref", {}).get("$link")
+        size = blob_ref.get("size")
+
+        await job_service.update_progress(
+            upload_id,
+            JobStatus.PROCESSING,
+            "uploaded to PDS",
+            phase="pds_upload",
+            progress_pct=100.0,
+        )
+        logfire.info(
+            "pds blob upload succeeded",
+            cid=cid,
+            size=size,
+            did=auth_session.did,
+        )
+        return PdsBlobResult(blob_ref=blob_ref, cid=cid, size=size)
+
+    except PayloadTooLargeError as e:
+        logfire.info(
+            "pds blob upload skipped: file too large",
+            error=str(e),
+            did=auth_session.did,
+        )
+        await job_service.update_progress(
+            upload_id,
+            JobStatus.PROCESSING,
+            "file too large for PDS, using CDN only",
+            phase="pds_upload",
+        )
+        return PdsBlobResult(blob_ref=None, cid=None, size=None)
+
+    except Exception as e:
+        logfire.warning(
+            "pds blob upload failed",
+            error=str(e),
+            did=auth_session.did,
+            exc_info=True,
+        )
+        await job_service.update_progress(
+            upload_id,
+            JobStatus.PROCESSING,
+            "PDS upload failed, using CDN only",
+            phase="pds_upload",
+        )
+        return PdsBlobResult(blob_ref=None, cid=None, size=None)
+
+
 async def _transcode_audio(
     upload_id: str,
     file_path: str,
@@ -413,6 +509,7 @@ async def _process_upload_background(ctx: UploadContext) -> None:
         image_id: str | None = None
         audio_format: AudioFormat | None = None
         playable_format: AudioFormat | None = None
+        pds_blob_result: PdsBlobResult | None = None
 
         try:
             await job_service.update_progress(
@@ -455,6 +552,7 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                         return
 
             # for non-web-playable formats, transcode first
+            transcode_info: TranscodeInfo | None = None
             if not audio_format.is_web_playable:
                 # gated tracks don't support transcoding yet
                 if is_gated:
@@ -527,6 +625,23 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                         error="failed to get public audio URL",
                     )
                     return
+
+            # try uploading blob to user's PDS (best-effort, falls back to R2-only)
+            # gated tracks skip PDS blob upload since they need auth-protected access
+            if not is_gated and playable_format:
+                content_type = playable_format.media_type
+                # use transcoded bytes if available, otherwise read original file
+                if transcode_info:
+                    pds_file_data = transcode_info.transcoded_data
+                else:
+                    async with aiofiles.open(ctx.file_path, "rb") as f:
+                        pds_file_data = await f.read()
+                pds_blob_result = await _try_upload_to_pds(
+                    ctx.upload_id,
+                    ctx.auth_session,
+                    pds_file_data,
+                    content_type,
+                )
 
             # save image if provided
             image_url = None
@@ -604,6 +719,9 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                         features=featured_artists or None,
                         image_url=image_url,
                         support_gate=ctx.support_gate,
+                        audio_blob=pds_blob_result.blob_ref
+                        if pds_blob_result
+                        else None,
                     )
                     if not atproto_result:
                         raise ValueError("PDS returned no record data")
@@ -649,6 +767,10 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                         db, artist, ctx.album, image_id, image_url
                     )
 
+                # determine audio storage type
+                has_pds_blob = pds_blob_result and pds_blob_result.cid is not None
+                audio_storage = "both" if has_pds_blob else "r2"
+
                 track = Track(
                     title=ctx.title,
                     file_id=file_id,
@@ -665,6 +787,9 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                     image_id=image_id,
                     image_url=image_url,
                     support_gate=ctx.support_gate,
+                    audio_storage=audio_storage,
+                    pds_blob_cid=pds_blob_result.cid if pds_blob_result else None,
+                    pds_blob_size=pds_blob_result.size if pds_blob_result else None,
                 )
 
                 db.add(track)

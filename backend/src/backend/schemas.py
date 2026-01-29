@@ -115,6 +115,8 @@ class TrackResponse(BaseModel):
     original_file_type: str | None = (
         None  # original format if transcoded (e.g., aiff, flac)
     )
+    audio_storage: str = "r2"  # "r2" | "pds" | "both"
+    pds_blob_cid: str | None = None  # CID if stored on user's PDS
 
     @classmethod
     async def from_track(
@@ -222,4 +224,6 @@ class TrackResponse(BaseModel):
             gated=gated,
             original_file_id=track.original_file_id,
             original_file_type=track.original_file_type,
+            audio_storage=track.audio_storage,
+            pds_blob_cid=track.pds_blob_cid,
         )

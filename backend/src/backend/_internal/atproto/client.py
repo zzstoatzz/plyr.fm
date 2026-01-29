@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, BinaryIO
 
 from atproto_oauth.models import OAuthSession
 from cachetools import LRUCache
@@ -17,6 +17,16 @@ from backend._internal.auth import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class PayloadTooLargeError(Exception):
+    """raised when PDS rejects a blob due to size limits."""
+
+
+# BlobRef uses ATProto's JSON structure with $type, $link keys.
+# TypedDict can't express $ in field names, so we use dict[str, Any] with documentation.
+# Structure: {"$type": "blob", "ref": {"$link": "<CID>"}, "mimeType": str, "size": int}
+BlobRef = dict[str, Any]
 
 # per-session locks for token refresh to prevent concurrent refresh races.
 # uses LRUCache (not TTLCache) to bound memory - LRU eviction is safe because:
@@ -236,6 +246,74 @@ async def make_pds_request(
                 pass
 
     raise Exception(f"PDS request failed: {response.status_code} {response.text}")
+
+
+async def upload_blob(
+    auth_session: AuthSession,
+    data: bytes | BinaryIO,
+    content_type: str,
+) -> BlobRef:
+    """upload a blob to the user's PDS.
+
+    args:
+        auth_session: authenticated user session
+        data: binary data or file-like object to upload
+        content_type: MIME type (e.g., audio/mpeg, audio/wav)
+
+    returns:
+        blob reference dict: {"$type": "blob", "ref": {"$link": CID}, "mimeType": str, "size": int}
+
+    raises:
+        PayloadTooLargeError: if PDS rejects due to size limit (413)
+        ValueError: if session is invalid
+        Exception: if upload fails after retry
+    """
+    oauth_data = auth_session.oauth_session
+    if not oauth_data or "access_token" not in oauth_data:
+        raise ValueError(
+            f"OAuth session data missing or invalid for {auth_session.did}"
+        )
+
+    oauth_session = reconstruct_oauth_session(oauth_data)
+    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.uploadBlob"
+
+    # read data if it's a file-like object
+    blob_data = data if isinstance(data, bytes) else data.read()
+
+    for attempt in range(2):
+        response = await get_oauth_client().make_authenticated_request(
+            session=oauth_session,
+            method="POST",
+            url=url,
+            content=blob_data,
+            headers={"Content-Type": content_type},
+        )
+
+        if response.status_code == 200:
+            return response.json()["blob"]
+
+        # payload too large - PDS rejects due to size limit
+        if response.status_code == 413:
+            raise PayloadTooLargeError(
+                f"blob too large for PDS (limit exceeded): {response.text}"
+            )
+
+        # token expired - refresh and retry
+        if response.status_code == 401 and attempt == 0:
+            try:
+                error_data = response.json()
+                if "exp" in error_data.get("message", ""):
+                    logger.info(
+                        f"access token expired for {auth_session.did}, attempting refresh"
+                    )
+                    oauth_session = await _refresh_session_tokens(
+                        auth_session, oauth_session
+                    )
+                    continue
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+    raise Exception(f"blob upload failed: {response.status_code} {response.text}")
 
 
 def parse_at_uri(uri: str) -> tuple[str, str, str]:

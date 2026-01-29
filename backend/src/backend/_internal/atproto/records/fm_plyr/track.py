@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend._internal import Session as AuthSession
-from backend._internal.atproto.client import make_pds_request, parse_at_uri
+from backend._internal.atproto.client import BlobRef, make_pds_request, parse_at_uri
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -18,9 +18,10 @@ def build_track_record(
     file_type: str,
     album: str | None = None,
     duration: int | None = None,
-    features: list[dict] | None = None,
+    features: list[dict[str, Any]] | None = None,
     image_url: str | None = None,
-    support_gate: dict | None = None,
+    support_gate: dict[str, Any] | None = None,
+    audio_blob: BlobRef | None = None,
 ) -> dict[str, Any]:
     """Build a track record dict for ATProto.
 
@@ -34,6 +35,7 @@ def build_track_record(
         features: optional list of featured artists [{did, handle, display_name, avatar_url}]
         image_url: optional cover art image URL
         support_gate: optional gating config (e.g., {"type": "any"})
+        audio_blob: optional blob reference from PDS upload (canonical source when present)
 
     returns:
         record dict ready for ATProto
@@ -68,6 +70,8 @@ def build_track_record(
         record["imageUrl"] = image_url
     if support_gate:
         record["supportGate"] = support_gate
+    if audio_blob:
+        record["audioBlob"] = audio_blob
 
     return record
 
@@ -80,9 +84,10 @@ async def create_track_record(
     file_type: str,
     album: str | None = None,
     duration: int | None = None,
-    features: list[dict] | None = None,
+    features: list[dict[str, Any]] | None = None,
     image_url: str | None = None,
-    support_gate: dict | None = None,
+    support_gate: dict[str, Any] | None = None,
+    audio_blob: BlobRef | None = None,
 ) -> tuple[str, str]:
     """Create a track record on the user's PDS using the configured collection.
 
@@ -97,6 +102,7 @@ async def create_track_record(
         features: optional list of featured artists [{did, handle, display_name, avatar_url}]
         image_url: optional cover art image URL
         support_gate: optional gating config (e.g., {"type": "any"})
+        audio_blob: optional blob reference from PDS upload (canonical source when present)
 
     returns:
         tuple of (record_uri, record_cid)
@@ -115,6 +121,7 @@ async def create_track_record(
         features=features,
         image_url=image_url,
         support_gate=support_gate,
+        audio_blob=audio_blob,
     )
 
     payload = {
