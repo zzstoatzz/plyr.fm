@@ -160,7 +160,7 @@ async def test_upload_searchable(user1_client: AsyncPlyrClient, drone_a4: Path):
             search_result = await client.search(unique_title, type="tracks")
             # search results are in search_result.results, filter for tracks
             for item in search_result.results:
-                if item.type == "track" and item.id == track_id:
+                if item.type == "track" and getattr(item, "id", None) == track_id:
                     found = True
                     break
             if found:
