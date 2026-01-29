@@ -93,7 +93,7 @@
 
 <svelte:head>
 	<title>{APP_NAME} - {APP_TAGLINE}</title>
-	<meta name="description" content="discover and stream music on the atproto network" />
+	<meta name="description" content={APP_TAGLINE} />
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="website" />

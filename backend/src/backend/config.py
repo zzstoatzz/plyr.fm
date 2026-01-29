@@ -105,7 +105,7 @@ class AppSettings(AppSettingsSection):
         description="Public-facing application name",
     )
     tagline: str = Field(
-        default="music streaming on atproto",
+        default="audio streaming app",
         description="Short marketing tagline for metadata",
     )
     debug: bool = Field(

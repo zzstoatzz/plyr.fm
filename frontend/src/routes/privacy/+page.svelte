@@ -21,7 +21,7 @@
 		<p class="last-updated">Last updated: January 20, 2026</p>
 
 		<p class="intro">
-			{APP_NAME} ("we", "us", or "our") is a music streaming application built on the
+			{APP_NAME} ("we", "us", or "our") is an audio streaming application built on the
 			<a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a>.
 			This privacy policy applies to the instance at
 			<a href={APP_CANONICAL_URL}>{APP_CANONICAL_URL}</a> (the "site").

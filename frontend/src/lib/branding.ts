@@ -1,5 +1,5 @@
 const DEFAULT_APP_NAME = 'plyr.fm';
-const DEFAULT_TAGLINE = 'music on atproto';
+const DEFAULT_TAGLINE = 'audio streaming app';
 const DEFAULT_APP_STAGE = 'alpha';
 const DEFAULT_CANONICAL_HOST = 'plyr.fm';
 const DEFAULT_BROADCAST_PREFIX = 'plyr';

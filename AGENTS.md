@@ -1,6 +1,6 @@
 # plyr.fm Developer Context
 
-**music streaming on AT Protocol**
+**audio streaming app**
 
 ## Reminders
 - i am already hot-reloading the backend and frontend. i might also have ngrok exposing 8001
