@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { auth } from "$lib/auth.svelte";
-
-	const PDS_AUDIO_FLAG = "pds-audio-uploads";
+	import { PDS_AUDIO_UPLOADS_FLAG } from "$lib/config";
 </script>
 
-{#if auth.user?.enabled_flags?.includes(PDS_AUDIO_FLAG)}
+{#if auth.user?.enabled_flags?.includes(PDS_AUDIO_UPLOADS_FLAG)}
 	<p class="pds-note">
 		audio blobs can be stored on your pds when enabled in
 		<a href="/settings">settings</a>. if the file is too large for your pds,

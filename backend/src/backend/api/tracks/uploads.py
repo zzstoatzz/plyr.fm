@@ -507,7 +507,6 @@ async def _process_upload_background(ctx: UploadContext) -> None:
         audio_format: AudioFormat | None = None
         playable_format: AudioFormat | None = None
         pds_blob_result: PdsBlobResult | None = None
-        allow_pds_upload = False
 
         try:
             await job_service.update_progress(
@@ -629,20 +628,20 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             if not is_gated and playable_format:
                 async with db_session() as db:
                     allow_pds_upload = await _should_upload_pds_blob(db, ctx.artist_did)
-            if allow_pds_upload and playable_format:
-                content_type = playable_format.media_type
-                # use transcoded bytes if available, otherwise read original file
-                if transcode_info:
-                    pds_file_data = transcode_info.transcoded_data
-                else:
-                    async with aiofiles.open(ctx.file_path, "rb") as f:
-                        pds_file_data = await f.read()
-                pds_blob_result = await _try_upload_to_pds(
-                    ctx.upload_id,
-                    ctx.auth_session,
-                    pds_file_data,
-                    content_type,
-                )
+                if allow_pds_upload:
+                    content_type = playable_format.media_type
+                    # use transcoded bytes if available, otherwise read original file
+                    if transcode_info:
+                        pds_file_data = transcode_info.transcoded_data
+                    else:
+                        async with aiofiles.open(ctx.file_path, "rb") as f:
+                            pds_file_data = await f.read()
+                    pds_blob_result = await _try_upload_to_pds(
+                        ctx.upload_id,
+                        ctx.auth_session,
+                        pds_file_data,
+                        content_type,
+                    )
 
             # save image if provided
             image_url = None
