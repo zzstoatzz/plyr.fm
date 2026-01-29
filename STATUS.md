@@ -47,11 +47,11 @@ plyr.fm should become:
 
 ### January 2026
 
-#### PDS blob storage for audio (PR #823, Jan 29)
+#### PDS blob storage for audio (PRs #823-833, Jan 29)
 
-**audio files now stored on user's PDS** - embraces ATProto's data ownership model by uploading audio to the user's PDS while keeping R2 copies for CDN streaming.
+**audio files can now be stored on the user's PDS** - embraces ATProto's data ownership model. PDS uploads are feature-flagged and opt-in via a user setting, with R2 CDN as the primary delivery path.
 
-**how it works**:
+**core implementation (PR #823)**:
 - new uploads: audio blob uploaded to PDS, BlobRef stored in track record
 - dual-write: R2 copy kept for streaming performance (PDS `getBlob` isn't CDN-optimized)
 - graceful fallback: if PDS rejects blob (size limit), track stays R2-only
@@ -62,13 +62,21 @@ plyr.fm should become:
 - `pds_blob_cid`: CID of blob on user's PDS
 - `pds_blob_size`: size in bytes
 
-**migration endpoint**: `POST /tracks/{id}/migrate-to-pds` lets owners migrate existing tracks
+**bug fixes and hardening (PRs #824-828)**:
+- fix atproto headers lost on DPoP retry (#824)
+- fail upload on unexpected PDS errors instead of silent fallback (#825)
+- add `blob:*/*` OAuth scope to both permission sets and granular paths (#826, #827)
+- remove PDS indicator from track UI — PDS will be the default, no need to badge it (#828)
 
-**frontend**: PDS indicator shown on track cards and detail page when `audio_storage` is "pds" or "both"
+**batch backfill (PR #829)**: `POST /pds-backfill/audio` starts a background job (docket) to backfill existing tracks to the user's PDS with SSE progress streaming. frontend `PdsBackfillControl` component in the portal.
 
-**fast follow needed**: UI button for migrating existing tracks (endpoint exists, no frontend yet)
+**copyright DM fix (PR #831)**: removed misleading "0% confidence" from copyright notification DMs — the enterprise AudD API doesn't return confidence values.
 
-**verification**: run staging integration tests after merging to main
+**feature flag gating (PR #833)**: PDS uploads during track upload are now gated behind two checks: admin-assigned `pds-audio-uploads` feature flag + per-user toggle in Settings > Experimental. default behavior is R2-only unless both are enabled.
+
+**terms update (PR #832)**: clarified PDS delisting language in terms of service.
+
+**research**: documented emerging ATProto media service patterns from [community discourse](https://discourse.atprotocol.community/t/media-pds-service/297) — the ecosystem is converging on dedicated sidecar media services rather than PDS-as-media-host. our layered architecture (R2 + CDN + PDS records) aligns well. see `docs/research/2026-01-29-atproto-media-service-patterns.md`.
 
 ---
 
@@ -355,7 +363,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-PDS blob storage shipped - new uploads store audio on user's PDS for true data ownership. fast follow: add UI button for migrating existing tracks.
+PDS blob storage shipped and feature-flagged. uploads store audio on user's PDS when the `pds-audio-uploads` flag is enabled and the user opts in via settings. batch backfill lets existing tracks be copied to PDS. R2 CDN remains primary delivery path.
 
 **end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) shipped:**
 - moderation consolidation: sensitive images moved to moderation service (#644)
