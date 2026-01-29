@@ -4,6 +4,7 @@
 	import Header from "$lib/components/Header.svelte";
 	import HandleSearch from "$lib/components/HandleSearch.svelte";
 	import AlbumSelect from "$lib/components/AlbumSelect.svelte";
+	import PdsUploadNote from "$lib/components/PdsUploadNote.svelte";
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
 	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
@@ -301,7 +302,10 @@
 					onchange={handleFileChange}
 					required
 				/>
-				<p class="format-hint">supported: {getAcceptedExtensions().map(e => e.slice(1)).join(", ")}</p>
+				<p class="format-hint">
+					supported: {getAcceptedExtensions().map(e => e.slice(1)).join(", ")}
+				</p>
+				<PdsUploadNote />
 				{#if file}
 					<p class="file-info">
 						{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
