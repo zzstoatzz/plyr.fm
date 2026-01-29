@@ -293,33 +293,15 @@ async def _try_upload_to_pds(
         return PdsBlobResult(blob_ref=blob_ref, cid=cid, size=size)
 
     except PayloadTooLargeError as e:
+        # expected: file exceeds PDS blob limit, gracefully fall back to R2-only
         logfire.info(
             "pds blob upload skipped: file too large",
             error=str(e),
             did=auth_session.did,
         )
-        await job_service.update_progress(
-            upload_id,
-            JobStatus.PROCESSING,
-            "file too large for PDS, using CDN only",
-            phase="pds_upload",
-        )
         return PdsBlobResult(blob_ref=None, cid=None, size=None)
 
-    except Exception as e:
-        logfire.warning(
-            "pds blob upload failed",
-            error=str(e),
-            did=auth_session.did,
-            exc_info=True,
-        )
-        await job_service.update_progress(
-            upload_id,
-            JobStatus.PROCESSING,
-            "PDS upload failed, using CDN only",
-            phase="pds_upload",
-        )
-        return PdsBlobResult(blob_ref=None, cid=None, size=None)
+    # any other exception is unexpected - let it propagate to fail the upload
 
 
 async def _transcode_audio(
