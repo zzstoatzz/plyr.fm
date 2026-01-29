@@ -17,7 +17,11 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_oauth_client, require_auth
-from backend._internal.atproto import delete_record_by_uri
+from backend._internal.atproto import (
+    PayloadTooLargeError,
+    delete_record_by_uri,
+    upload_blob,
+)
 from backend._internal.atproto.records import (
     _reconstruct_oauth_session,
     _refresh_session_tokens,
@@ -25,6 +29,7 @@ from backend._internal.atproto.records import (
     update_record,
 )
 from backend._internal.atproto.tid import datetime_to_tid
+from backend._internal.audio import AudioFormat
 from backend._internal.background_tasks import (
     schedule_album_list_sync,
     schedule_move_track_audio,
@@ -691,11 +696,6 @@ async def migrate_track_to_pds(
 
     note: this may fail if the audio file is too large for the PDS blob limit.
     """
-    from backend._internal.atproto import (
-        PayloadTooLargeError,
-        upload_blob,
-    )
-
     # fetch track with artist
     result = await db.execute(
         select(Track).options(selectinload(Track.artist)).where(Track.id == track_id)
@@ -744,8 +744,6 @@ async def migrate_track_to_pds(
         ) from e
 
     # determine content type from file type
-    from backend._internal.audio import AudioFormat
-
     audio_format = AudioFormat.from_extension(track.file_type)
     if not audio_format:
         raise HTTPException(
