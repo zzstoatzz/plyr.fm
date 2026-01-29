@@ -34,6 +34,7 @@ flags are documented in `backend/_internal/feature_flags.py`:
 ```python
 KNOWN_FLAGS = frozenset({
     "lossless-uploads",  # enable AIFF/FLAC upload support
+    "pds-audio-uploads",  # enable PDS audio blob uploads
 })
 ```
 
@@ -52,7 +53,7 @@ if await has_flag(db, user_did, "lossless-uploads"):
     pass
 
 # get all flags for a user
-flags = await get_user_flags(db, user_did)  # ["lossless-uploads", ...]
+flags = await get_user_flags(db, user_did)  # ["lossless-uploads", "pds-audio-uploads", ...]
 ```
 
 ### frontend

@@ -60,6 +60,9 @@ from .services import get_or_create_album
 
 logger = logging.getLogger(__name__)
 
+PDS_AUDIO_UPLOADS_FLAG = "pds-audio-uploads"
+PDS_AUDIO_UPLOADS_SETTING_KEY = "pds_audio_uploads_enabled"
+
 
 class UploadStartResponse(BaseModel):
     """response when upload is queued for processing."""
@@ -302,6 +305,18 @@ async def _try_upload_to_pds(
         return PdsBlobResult(blob_ref=None, cid=None, size=None)
 
     # any other exception is unexpected - let it propagate to fail the upload
+
+
+async def _should_upload_pds_blob(db: AsyncSession, user_did: str) -> bool:
+    """check if PDS audio uploads are enabled for the user."""
+    if not await has_flag(db, user_did, PDS_AUDIO_UPLOADS_FLAG):
+        return False
+
+    result = await db.execute(
+        select(UserPreferences.ui_settings).where(UserPreferences.did == user_did)
+    )
+    ui_settings = result.scalar_one_or_none() or {}
+    return bool(ui_settings.get(PDS_AUDIO_UPLOADS_SETTING_KEY))
 
 
 async def _transcode_audio(
@@ -611,19 +626,22 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             # try uploading blob to user's PDS (best-effort, falls back to R2-only)
             # gated tracks skip PDS blob upload since they need auth-protected access
             if not is_gated and playable_format:
-                content_type = playable_format.media_type
-                # use transcoded bytes if available, otherwise read original file
-                if transcode_info:
-                    pds_file_data = transcode_info.transcoded_data
-                else:
-                    async with aiofiles.open(ctx.file_path, "rb") as f:
-                        pds_file_data = await f.read()
-                pds_blob_result = await _try_upload_to_pds(
-                    ctx.upload_id,
-                    ctx.auth_session,
-                    pds_file_data,
-                    content_type,
-                )
+                async with db_session() as db:
+                    allow_pds_upload = await _should_upload_pds_blob(db, ctx.artist_did)
+                if allow_pds_upload:
+                    content_type = playable_format.media_type
+                    # use transcoded bytes if available, otherwise read original file
+                    if transcode_info:
+                        pds_file_data = transcode_info.transcoded_data
+                    else:
+                        async with aiofiles.open(ctx.file_path, "rb") as f:
+                            pds_file_data = await f.read()
+                    pds_blob_result = await _try_upload_to_pds(
+                        ctx.upload_id,
+                        ctx.auth_session,
+                        pds_file_data,
+                        content_type,
+                    )
 
             # save image if provided
             image_url = None

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
+	import PdsAudioUploadsToggle from '$lib/components/PdsAudioUploadsToggle.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import type { TokenInfo } from '$lib/types';
 	import { API_URL } from '$lib/config';
@@ -744,14 +745,11 @@
 						<p>automatically download tracks for offline playback when you like them</p>
 					</div>
 					<label class="toggle-switch">
-						<input
-							type="checkbox"
-							checked={autoDownloadLiked}
-							onchange={(e) => handleAutoDownloadToggle((e.target as HTMLInputElement).checked)}
-						/>
+						<input type="checkbox" checked={autoDownloadLiked} onchange={(e) => handleAutoDownloadToggle((e.target as HTMLInputElement).checked)} />
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
+				<PdsAudioUploadsToggle />
 			</div>
 		</section>
 	</main>

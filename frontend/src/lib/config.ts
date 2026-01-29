@@ -2,6 +2,8 @@ import { PUBLIC_API_URL } from '$env/static/public';
 
 export const API_URL = PUBLIC_API_URL || 'http://localhost:8001';
 
+export const PDS_AUDIO_UPLOADS_FLAG = 'pds-audio-uploads';
+
 /**
  * generate atprotofans support URL for an artist.
  * canonical format: https://atprotofans.com/support/{did}
