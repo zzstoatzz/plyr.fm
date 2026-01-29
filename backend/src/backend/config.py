@@ -477,8 +477,9 @@ class AtprotoSettings(AppSettingsSection):
             return self.scope_override
 
         # use permission sets if enabled (requires lexicons to be published)
+        # blob scope must be requested directly (can't be in permission sets)
         if self.use_permission_sets:
-            return f"atproto include:{self.app_namespace}.authFullApp"
+            return f"atproto blob:*/* include:{self.app_namespace}.authFullApp"
 
         # fallback: granular repo scopes for each collection
         scopes = [
