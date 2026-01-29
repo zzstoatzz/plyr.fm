@@ -115,6 +115,10 @@ def main() -> int:
 
     print("✓ production frontend deployment starting...")
 
+    # mirror to tangled
+    subprocess.run(["git", "push", "tangled", "main", "--tags"], check=True)
+    print("✓ mirrored to tangled")
+
     return 0
 
 
