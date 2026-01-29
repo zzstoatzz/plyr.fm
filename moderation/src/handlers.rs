@@ -135,7 +135,7 @@ pub async fn landing(State(state): State<AppState>) -> Html<String> {
     <p class="subtitle">ATProto labeler for audio content moderation</p>
 
     <p>This service provides content labels for <a href="https://plyr.fm">plyr.fm</a>,
-    the music streaming platform on ATProto.</p>
+    the audio streaming app.</p>
 
     <p><strong>Labeler DID:</strong> <code>{}</code></p>
 

@@ -1,6 +1,6 @@
 # [plyr.fm](https://plyr.fm)
 
-music on [atproto](https://atproto.com)
+audio streaming app
 
 check the [plyr.fm artist page](https://plyr.fm/u/plyr.fm) for the latest [auto-generated](.github/workflows/status-maintenance.yml) development podcast!
 
