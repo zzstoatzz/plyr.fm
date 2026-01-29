@@ -45,9 +45,9 @@
 				control. We do not store passwords.
 			</p>
 			<p>
-				We may terminate or suspend your access at any time, for any reason. Termination removes
-				your content from {APP_NAME} but does not affect your DID or data on your PDS—we don't control
-				those.
+				We may terminate or suspend your access at any time, for any reason. Termination removes or
+				delists your content from {APP_NAME} and our storage, but does not affect your DID or data on
+				your PDS—we don't control those.
 			</p>
 		</section>
 
@@ -55,8 +55,8 @@
 			<h2>2. Content</h2>
 			<p>
 				You retain ownership of content you upload. By uploading, you grant us a non-exclusive,
-				worldwide, royalty-free license to use, reproduce, modify, and distribute your content as
-				necessary to provide the service.
+				worldwide, royalty-free license to use, reproduce, modify, and distribute your content
+				(including copies stored on your PDS) as necessary to provide the service.
 			</p>
 			<p>
 				You represent that you own or have the necessary rights to the content you upload, and that
@@ -87,10 +87,9 @@
 			<p>We terminate accounts of repeat infringers.</p>
 			<p>
 				<strong><a href="https://atproto.com" target="_blank" rel="noopener">AT Protocol</a> limitation:</strong>
-				Audio files are stored in public blob storage that {APP_NAME} controls and can remove at any time
-				for policy violations. AT Protocol records referring to deleted audio files may persist in user
-				personal data servers (which {APP_NAME} does not control), but {APP_NAME} will not provide access
-				to violating or deleted content.
+				Audio may be stored on your PDS and/or in storage that {APP_NAME} controls for streaming. We can
+				remove or delist content on {APP_NAME} and delete our copies for policy violations, but AT Protocol
+				records and blobs stored on your PDS may persist and are not under our control.
 			</p>
 		</section>
 
