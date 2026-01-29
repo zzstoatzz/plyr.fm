@@ -5,6 +5,7 @@ import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import backend._internal.background_tasks as bg_tasks
+import backend._internal.export_tasks as export_tasks
 
 
 async def test_schedule_export_uses_docket() -> None:
@@ -18,10 +19,10 @@ async def test_schedule_export_uses_docket() -> None:
     mock_docket.add = MagicMock(return_value=mock_schedule)
 
     with (
-        patch.object(bg_tasks, "get_docket", return_value=mock_docket),
-        patch.object(bg_tasks, "process_export", MagicMock()),
+        patch.object(export_tasks, "get_docket", return_value=mock_docket),
+        patch.object(export_tasks, "process_export", MagicMock()),
     ):
-        await bg_tasks.schedule_export("export-123", "did:plc:testuser")
+        await export_tasks.schedule_export("export-123", "did:plc:testuser")
 
         mock_docket.add.assert_called_once()
         assert calls == [("export-123", "did:plc:testuser")]

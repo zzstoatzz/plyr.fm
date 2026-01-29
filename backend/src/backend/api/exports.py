@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
-from backend._internal.background_tasks import schedule_export
+from backend._internal.export_tasks import schedule_export
 from backend._internal.jobs import job_service
 from backend.models import Track, get_db
 from backend.models.job import JobStatus, JobType

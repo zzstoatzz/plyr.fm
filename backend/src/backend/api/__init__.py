@@ -8,6 +8,7 @@ from backend.api.exports import router as exports_router
 from backend.api.moderation import router as moderation_router
 from backend.api.now_playing import router as now_playing_router
 from backend.api.oembed import router as oembed_router
+from backend.api.pds_migrations import router as pds_migrations_router
 from backend.api.preferences import router as preferences_router
 from backend.api.queue import router as queue_router
 from backend.api.search import router as search_router
@@ -24,6 +25,7 @@ __all__ = [
     "moderation_router",
     "now_playing_router",
     "oembed_router",
+    "pds_migrations_router",
     "preferences_router",
     "queue_router",
     "search_router",

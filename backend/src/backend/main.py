@@ -38,6 +38,7 @@ from backend.api import (
     moderation_router,
     now_playing_router,
     oembed_router,
+    pds_migrations_router,
     preferences_router,
     queue_router,
     search_router,
@@ -216,6 +217,7 @@ app.include_router(queue_router)
 app.include_router(now_playing_router)
 app.include_router(migration_router)
 app.include_router(exports_router)
+app.include_router(pds_migrations_router)
 app.include_router(moderation_router)
 app.include_router(oembed_router)
 app.include_router(stats_router)
