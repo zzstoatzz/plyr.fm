@@ -12,11 +12,11 @@ by accessing or using plyr.fm, you agree to be bound by these terms. if you disa
 
 plyr.fm uses AT Protocol for authentication. your identity is your DID (decentralized identifier), not an account we control. we do not store passwords.
 
-we may terminate or suspend your access at any time, for any reason. termination removes your content from plyr.fm but does not affect your DID or data on your PDS—we don't control those.
+we may terminate or suspend your access at any time, for any reason. termination removes or delists your content from plyr.fm and our storage, but does not affect your DID or any data stored on your PDS—we don't control those.
 
 ## 3. content
 
-you retain ownership of content you upload. by uploading, you grant us a non-exclusive, worldwide, royalty-free license to use, reproduce, modify, and distribute your content as necessary to provide the service.
+you retain ownership of content you upload. by uploading, you grant us a non-exclusive, worldwide, royalty-free license to use, reproduce, modify, and distribute your content (including copies stored on your PDS) as necessary to provide the service.
 
 you represent that you own or have the necessary rights to the content you upload, and that it does not infringe any third party's rights.
 
@@ -40,7 +40,7 @@ we respond to valid DMCA takedown notices. our designated agent is:
 
 we terminate accounts of repeat infringers.
 
-**AT Protocol limitation:** we can only remove content from our servers. we cannot delete content that has been published to other AT Protocol servers or your PDS.
+**AT Protocol limitation:** we can only remove or delist content from our servers and the plyr.fm platform. we cannot delete content that has been published to other AT Protocol servers or your PDS.
 
 ## 6. disclaimers
 
