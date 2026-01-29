@@ -9,18 +9,17 @@
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
+	import PdsBackfillControl from '$lib/components/PdsBackfillControl.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary, Playlist } from '$lib/types';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
-
 	let loading = $state(true);
 	let error = $state('');
 	let tracks = $state<Track[]>([]);
 	let loadingTracks = $state(false);
-
 	// track editing state
 	let editingTrackId = $state<number | null>(null);
 	let editTitle = $state('');
@@ -32,7 +31,6 @@
 	let editRemoveImage = $state(false);
 	let editSupportGate = $state(false);
 	let hasUnresolvedEditFeaturesInput = $state(false);
-
 	// profile editing state
 	let displayName = $state('');
 	let bio = $state('');
@@ -1307,6 +1305,8 @@
 			</div>
 
 			{#if tracks.length > 0}
+				<PdsBackfillControl tracks={tracks} onComplete={loadMyTracks} />
+
 				<div class="data-control">
 					<div class="control-info">
 						<h3>export tracks</h3>

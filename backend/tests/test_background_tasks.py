@@ -5,6 +5,7 @@ import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import backend._internal.background_tasks as bg_tasks
+import backend._internal.export_tasks as export_tasks
 
 
 async def test_schedule_export_uses_docket() -> None:
@@ -18,10 +19,10 @@ async def test_schedule_export_uses_docket() -> None:
     mock_docket.add = MagicMock(return_value=mock_schedule)
 
     with (
-        patch.object(bg_tasks, "get_docket", return_value=mock_docket),
-        patch.object(bg_tasks, "process_export", MagicMock()),
+        patch.object(export_tasks, "get_docket", return_value=mock_docket),
+        patch.object(export_tasks, "process_export", MagicMock()),
     ):
-        await bg_tasks.schedule_export("export-123", "did:plc:testuser")
+        await export_tasks.schedule_export("export-123", "did:plc:testuser")
 
         mock_docket.add.assert_called_once()
         assert calls == [("export-123", "did:plc:testuser")]
@@ -165,16 +166,14 @@ async def test_process_export_downloads_concurrently() -> None:
 
     with (
         patch(
-            "backend._internal.background_tasks.aioboto3.Session",
+            "backend._internal.export_tasks.aioboto3.Session",
             return_value=mock_session,
         ),
-        patch(
-            "backend._internal.background_tasks.aiofiles.open", return_value=mock_file
-        ),
-        patch("backend._internal.background_tasks.zipfile.ZipFile"),
-        patch("backend._internal.background_tasks.os.unlink"),
-        patch("backend.utilities.database.db_session") as mock_db_session,
-        patch("backend._internal.jobs.job_service", mock_job_service),
+        patch("backend._internal.export_tasks.aiofiles.open", return_value=mock_file),
+        patch("backend._internal.export_tasks.zipfile.ZipFile"),
+        patch("backend._internal.export_tasks.os.unlink"),
+        patch("backend._internal.export_tasks.db_session") as mock_db_session,
+        patch("backend._internal.export_tasks.job_service", mock_job_service),
     ):
         mock_db_session.return_value.__aenter__.return_value = mock_db
 
@@ -182,7 +181,7 @@ async def test_process_export_downloads_concurrently() -> None:
         # (we only care about testing download concurrency)
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(
-                bg_tasks.process_export("export-123", "did:plc:testuser"),
+                export_tasks.process_export("export-123", "did:plc:testuser"),
                 timeout=2.0,
             )
 
