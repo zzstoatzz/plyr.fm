@@ -13,7 +13,7 @@
 		await preferences.updateUiSettings({ pds_audio_uploads_enabled: nextEnabled });
 		toast.success(
 			nextEnabled
-				? 'pds audio uploads enabled (best-effort)'
+				? 'pds audio uploads enabled'
 				: 'pds audio uploads disabled'
 		);
 	}
