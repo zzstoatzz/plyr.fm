@@ -1,12 +1,18 @@
 <script lang="ts">
 	import { auth } from "$lib/auth.svelte";
 	import { PDS_AUDIO_UPLOADS_FLAG } from "$lib/config";
+	import { preferences } from "$lib/preferences.svelte";
+
+	let hasFlag = $derived(auth.user?.enabled_flags?.includes(PDS_AUDIO_UPLOADS_FLAG) ?? false);
+	let enabled = $derived(preferences.uiSettings.pds_audio_uploads_enabled ?? false);
 </script>
 
-{#if auth.user?.enabled_flags?.includes(PDS_AUDIO_UPLOADS_FLAG)}
+{#if hasFlag && !enabled}
 	<p class="pds-note">
 		pds audio uploads available in <a href="/settings">settings</a>
 	</p>
+{:else if hasFlag && enabled}
+	<p class="pds-note">uploads will be stored on your pds</p>
 {/if}
 
 <style>
