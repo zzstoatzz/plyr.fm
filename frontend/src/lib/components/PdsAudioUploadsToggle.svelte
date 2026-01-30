@@ -23,7 +23,7 @@
 	<div class="setting-row">
 		<div class="setting-info">
 			<h3>store audio on your pds</h3>
-			<p>attempt to store uploaded audio blobs on your pds (falls back to r2 if too large)</p>
+			<p>store uploaded audio on your pds (falls back to plyr.fm storage if too large)</p>
 		</div>
 		<label class="toggle-switch">
 			<input type="checkbox" checked={enabled} onchange={handleToggle} />
