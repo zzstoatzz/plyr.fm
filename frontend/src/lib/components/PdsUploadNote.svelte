@@ -5,9 +5,7 @@
 
 {#if auth.user?.enabled_flags?.includes(PDS_AUDIO_UPLOADS_FLAG)}
 	<p class="pds-note">
-		audio blobs can be stored on your pds when enabled in
-		<a href="/settings">settings</a>. if the file is too large for your pds,
-		we fall back to r2.
+		pds audio uploads available in <a href="/settings">settings</a>
 	</p>
 {/if}
 
