@@ -153,10 +153,18 @@ async def list_my_shares(
 
     returns paginated list of share links with click/play counts and listener breakdown.
     """
-    # count total shares
+    # only show share links that have at least one interaction
+    has_events = (
+        select(ShareLinkEvent.id)
+        .where(ShareLinkEvent.share_link_id == ShareLink.id)
+        .exists()
+    )
+
+    # count total shares with activity
     total = await db.scalar(
         select(func.count(ShareLink.id)).where(
-            ShareLink.creator_did == auth_session.did
+            ShareLink.creator_did == auth_session.did,
+            has_events,
         )
     )
     total = total or 0
@@ -166,7 +174,7 @@ async def list_my_shares(
         select(ShareLink)
         .options(selectinload(ShareLink.track).selectinload(Track.artist))
         .options(selectinload(ShareLink.track).selectinload(Track.album_rel))
-        .where(ShareLink.creator_did == auth_session.did)
+        .where(ShareLink.creator_did == auth_session.did, has_events)
         .order_by(ShareLink.created_at.desc())
         .offset(offset)
         .limit(limit)
