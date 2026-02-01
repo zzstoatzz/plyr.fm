@@ -21,6 +21,12 @@ router = APIRouter(prefix="/pds-backfill", tags=["pds"])
 logger = logging.getLogger(__name__)
 
 
+class PdsBackfillStartRequest(BaseModel):
+    """optional request body for selective backfill."""
+
+    track_ids: list[int] | None = None  # if None, backfill all eligible
+
+
 class PdsBackfillStartResponse(BaseModel):
     """response when PDS backfill is queued for processing."""
 
@@ -34,9 +40,11 @@ class PdsBackfillStartResponse(BaseModel):
 async def backfill_audio_to_pds(
     session: Annotated[Session, Depends(require_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    body: PdsBackfillStartRequest | None = None,
 ) -> PdsBackfillStartResponse:
     """start backfill of existing tracks to the user's PDS.
 
+    optionally accepts a list of track_ids to selectively backfill.
     returns a backfill_id for tracking progress via SSE.
     """
     stmt = (
@@ -49,6 +57,8 @@ async def backfill_audio_to_pds(
         )
         .order_by(Track.created_at.desc())
     )
+    if body and body.track_ids:
+        stmt = stmt.where(Track.id.in_(body.track_ids))
     result = await db.execute(stmt)
     track_ids = [row[0] for row in result.all()]
 
@@ -109,6 +119,12 @@ async def backfill_progress(backfill_id: str) -> StreamingResponse:
                     if job.result
                     else 0,
                     "failed_count": job.result.get("failed_count") if job.result else 0,
+                    "last_processed_track_id": job.result.get("last_processed_track_id")
+                    if job.result
+                    else None,
+                    "last_status": job.result.get("last_status")
+                    if job.result
+                    else None,
                 }
 
                 yield f"data: {json.dumps(payload)}\n\n"

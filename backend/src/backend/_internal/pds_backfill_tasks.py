@@ -82,6 +82,8 @@ async def backfill_tracks_to_pds(
     skipped_count = 0
     failed_count = 0
     processed_count = 0
+    last_processed_track_id: int | None = None
+    last_status: str | None = None
     progress_lock = asyncio.Lock()
 
     concurrency = max(1, min(settings.docket.worker_concurrency, 3))
@@ -100,14 +102,18 @@ async def backfill_tracks_to_pds(
                 "backfilled_count": backfilled_count,
                 "skipped_count": skipped_count,
                 "failed_count": failed_count,
+                "last_processed_track_id": last_processed_track_id,
+                "last_status": last_status,
             },
         )
 
     async def backfill_one(track_id: int) -> None:
         nonlocal backfilled_count, skipped_count, failed_count, processed_count
+        nonlocal last_processed_track_id, last_status
 
         async with semaphore:
             track_data: dict | None = None
+            one_status = "skipped"
             try:
                 async with db_session() as db:
                     result = await db.execute(
@@ -231,9 +237,11 @@ async def backfill_tracks_to_pds(
                     await db.commit()
 
                 backfilled_count += 1
+                one_status = "backfilled"
 
             except PayloadTooLargeError:
                 skipped_count += 1
+                one_status = "skipped"
             except Exception as e:
                 logger.error(
                     "pds backfill failed for track %s: %s",
@@ -242,9 +250,12 @@ async def backfill_tracks_to_pds(
                     exc_info=True,
                 )
                 failed_count += 1
+                one_status = "failed"
             finally:
                 async with progress_lock:
                     processed_count += 1
+                    last_processed_track_id = track_id
+                    last_status = one_status
                     await update_progress(
                         f"backfilled {backfilled_count}/{total_count} tracks"
                     )

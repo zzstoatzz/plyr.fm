@@ -2859,17 +2859,10 @@
 	}
 
 	.export-btn {
-		padding: 0.6rem 1.25rem;
-		background: var(--accent);
-		color: var(--text-primary);
-		border: none;
-		border-radius: var(--radius-base);
-		font-size: var(--text-base);
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s;
-		white-space: nowrap;
-		width: auto;
+		padding: 0.6rem 1.25rem; background: var(--accent); color: var(--text-primary);
+		border: none; border-radius: var(--radius-base); font-family: inherit;
+		font-size: var(--text-base); font-weight: 600; cursor: pointer;
+		transition: all 0.2s; white-space: nowrap; width: auto;
 	}
 
 	.export-btn:hover:not(:disabled) {
