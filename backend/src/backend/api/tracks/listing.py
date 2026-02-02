@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Annotated
 
 import logfire
+from botocore.exceptions import ClientError
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -13,6 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, get_supported_artists, require_auth
+from backend._internal.audio import AudioFormat
 from backend.config import settings
 from backend.models import (
     Artist,
@@ -24,6 +26,7 @@ from backend.models import (
     get_db,
 )
 from backend.schemas import TrackResponse
+from backend.storage import storage
 from backend.utilities.aggregations import (
     get_comment_counts,
     get_copyright_info,
@@ -442,3 +445,56 @@ async def list_broken_tracks(
     )
 
     return BrokenTracksResponse(tracks=track_responses, count=len(track_responses))
+
+
+class FileSizesResponse(BaseModel):
+    sizes: dict[int, int]
+
+
+@router.get("/me/file-sizes")
+async def get_my_file_sizes(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth_session: AuthSession = Depends(require_auth),
+) -> FileSizesResponse:
+    """Get file sizes for the authenticated user's tracks via R2 HEAD requests."""
+    stmt = select(Track.id, Track.file_id, Track.file_type).where(
+        Track.artist_did == auth_session.did,
+        Track.file_id.isnot(None),
+    )
+    result = await db.execute(stmt)
+    tracks = result.all()
+
+    if not tracks:
+        return FileSizesResponse(sizes={})
+
+    semaphore = asyncio.Semaphore(10)
+    sizes: dict[int, int] = {}
+
+    async def get_size(track_id: int, file_id: str, file_type: str) -> None:
+        audio_format = AudioFormat.from_extension(file_type)
+        if not audio_format:
+            return
+        key = f"audio/{file_id}{audio_format.extension}"
+        async with semaphore:
+            try:
+                async with storage.async_session.client(
+                    "s3",
+                    endpoint_url=storage.endpoint_url,
+                    aws_access_key_id=storage.aws_access_key_id,
+                    aws_secret_access_key=storage.aws_secret_access_key,
+                ) as client:
+                    response = await client.head_object(
+                        Bucket=storage.audio_bucket_name, Key=key
+                    )
+                    sizes[track_id] = response["ContentLength"]
+            except ClientError:
+                pass  # file not found or other error — skip
+
+    await asyncio.gather(
+        *(
+            get_size(track_id, file_id, file_type)
+            for track_id, file_id, file_type in tracks
+        )
+    )
+
+    return FileSizesResponse(sizes=sizes)
