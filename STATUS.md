@@ -47,6 +47,23 @@ plyr.fm should become:
 
 ### January 2026
 
+#### per-track PDS migration + UX polish (PRs #835-839, Jan 30-31)
+
+**selective migration**: replaced all-or-nothing PDS backfill with a modal where users pick individual tracks to migrate. modal shows file sizes (via R2 HEAD requests), track status badges (on PDS / gated / eligible), and a select-all toggle.
+
+**non-blocking UX (PR #839)**: the modal initially blocked the user during migration. reworked so the modal is selection-only — picks tracks, fires a callback, closes immediately. POST + SSE progress tracking moved to the parent component with persistent toast updates ("migrating 3/7...", "5 migrated, 2 skipped"). user is never trapped.
+
+**backend changes (PR #838)**:
+- `GET /tracks/me/file-sizes` — parallel R2 HEAD requests (semaphore-capped at 10) to get byte sizes for the migration modal
+- `POST /pds-backfill/audio` now accepts optional `track_ids` body to backfill specific tracks (backward-compatible — no body = all eligible)
+- SSE progress stream includes `last_processed_track_id` and `last_status` for per-track updates
+
+**copy fixes (PRs #835-836)**: removed "R2" from user-facing text (settings toggle, upload notes). users see "plyr.fm storage" instead of infrastructure detail.
+
+**share link clutter (PR #837)**: share links with zero interactions (self-clicks filtered) were cluttering the portal stats section. now hidden until someone else actually clicks the link.
+
+---
+
 #### PDS blob storage for audio (PRs #823-833, Jan 29)
 
 **audio files can now be stored on the user's PDS** - embraces ATProto's data ownership model. PDS uploads are feature-flagged and opt-in via a user setting, with R2 CDN as the primary delivery path.
@@ -363,7 +380,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-PDS blob storage shipped and feature-flagged. uploads store audio on user's PDS when the `pds-audio-uploads` flag is enabled and the user opts in via settings. batch backfill lets existing tracks be copied to PDS. R2 CDN remains primary delivery path.
+PDS blob storage shipped and feature-flagged. uploads store audio on user's PDS when the `pds-audio-uploads` flag is enabled and the user opts in via settings. per-track migration modal lets users selectively backfill existing tracks to PDS with file size visibility and non-blocking toast-based progress. R2 CDN remains primary delivery path.
 
 **end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) shipped:**
 - moderation consolidation: sensitive images moved to moderation service (#644)
@@ -534,4 +551,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-29.
+this is a living document. last updated 2026-01-31.
