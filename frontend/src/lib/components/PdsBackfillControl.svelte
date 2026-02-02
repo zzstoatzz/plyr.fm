@@ -1,5 +1,7 @@
 <script lang="ts">
 	import PdsMigrationModal from './PdsMigrationModal.svelte';
+	import { API_URL } from '$lib/config';
+	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
 
 	let {
@@ -11,6 +13,7 @@
 	} = $props();
 
 	let showModal = $state(false);
+	let migrating = $state(false);
 
 	let backfillableTrackCount = $derived(
 		tracks.filter(
@@ -19,6 +22,77 @@
 				(track.audio_storage ?? 'r2') !== 'both'
 		).length
 	);
+
+	async function handleMigrate(trackIds: number[]) {
+		migrating = true;
+		const count = trackIds.length;
+		const toastId = toast.info(`migrating ${count} track${count !== 1 ? 's' : ''}...`, 0);
+
+		try {
+			const res = await fetch(`${API_URL}/pds-backfill/audio`, {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ track_ids: trackIds })
+			});
+
+			if (!res.ok) {
+				migrating = false;
+				toast.dismiss(toastId);
+				toast.error('failed to start migration');
+				return;
+			}
+
+			const data = await res.json();
+			listenToProgress(data.backfill_id, toastId);
+		} catch {
+			migrating = false;
+			toast.dismiss(toastId);
+			toast.error('failed to start migration');
+		}
+	}
+
+	function listenToProgress(backfillId: string, toastId: string) {
+		const eventSource = new EventSource(`${API_URL}/pds-backfill/${backfillId}/progress`);
+
+		eventSource.onmessage = (event) => {
+			try {
+				const data = JSON.parse(event.data);
+
+				if (data.processed_count != null && data.total_count) {
+					toast.update(toastId, `migrating... ${data.processed_count}/${data.total_count}`);
+				}
+
+				if (data.status === 'completed') {
+					eventSource.close();
+					migrating = false;
+					toast.dismiss(toastId);
+					const parts: string[] = [];
+					if (data.backfilled_count) parts.push(`${data.backfilled_count} migrated`);
+					if (data.skipped_count) parts.push(`${data.skipped_count} skipped`);
+					if (data.failed_count) parts.push(`${data.failed_count} failed`);
+					toast.success(parts.join(', ') || 'migration complete');
+					onComplete?.();
+				}
+
+				if (data.status === 'failed') {
+					eventSource.close();
+					migrating = false;
+					toast.dismiss(toastId);
+					toast.error(data.error || 'migration failed');
+				}
+			} catch {
+				/* ignore parse errors */
+			}
+		};
+
+		eventSource.onerror = () => {
+			eventSource.close();
+			migrating = false;
+			toast.dismiss(toastId);
+			toast.error('migration connection lost');
+		};
+	}
 </script>
 
 {#if backfillableTrackCount > 0}
@@ -34,8 +108,9 @@
 		<button
 			class="migrate-trigger-btn"
 			onclick={() => (showModal = true)}
+			disabled={migrating}
 		>
-			choose tracks
+			{migrating ? 'migrating...' : 'choose tracks'}
 		</button>
 	</div>
 {/if}
@@ -45,7 +120,7 @@
 		{tracks}
 		bind:open={showModal}
 		onClose={() => (showModal = false)}
-		{onComplete}
+		onMigrate={handleMigrate}
 	/>
 {/if}
 
@@ -94,9 +169,14 @@
 		white-space: nowrap;
 	}
 
-	.migrate-trigger-btn:hover {
+	.migrate-trigger-btn:hover:not(:disabled) {
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
+	}
+
+	.migrate-trigger-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	@media (max-width: 700px) {
