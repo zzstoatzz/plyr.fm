@@ -385,11 +385,11 @@
 	.pds-close-btn {
 		display: flex; align-items: center; justify-content: center;
 		width: 32px; height: 32px; background: transparent;
-		border: 1px solid var(--border-subtle); border-radius: var(--radius-base);
-		color: var(--text-tertiary); cursor: pointer; font-family: inherit; transition: all 0.15s;
+		border: none; border-radius: var(--radius-base);
+		color: var(--text-tertiary); cursor: pointer; transition: all 0.15s;
 	}
-	.pds-close-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-default); }
-	.pds-close-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+	.pds-close-btn:hover:not(:disabled) { background: var(--bg-tertiary); color: var(--text-primary); }
+	.pds-close-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 	.pds-description { font-size: var(--text-sm); color: var(--text-tertiary); margin: 0 0 1rem 0; line-height: 1.5; flex-shrink: 0; }
 	.pds-progress-section { margin-bottom: 1rem; flex-shrink: 0; }
 	.pds-progress-bar-track { width: 100%; height: 4px; background: var(--bg-tertiary); border-radius: 2px; overflow: hidden; margin-bottom: 0.5rem; }
@@ -433,8 +433,8 @@
 		border: none; border-radius: var(--radius-base); font-family: inherit;
 		font-size: var(--text-base); font-weight: 600; cursor: pointer; transition: all 0.15s;
 	}
-	.pds-migrate-btn:hover:not(:disabled) { filter: brightness(1.1); }
-	.pds-migrate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+	.pds-migrate-btn:hover:not(:disabled) { background: var(--accent-hover); }
+	.pds-migrate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 	.pds-close-done-btn {
 		width: 100%; padding: 0.625rem; background: transparent;
 		border: 1px solid var(--border-default); border-radius: var(--radius-base);
