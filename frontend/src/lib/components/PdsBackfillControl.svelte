@@ -1,6 +1,7 @@
 <script lang="ts">
 	import PdsMigrationModal from './PdsMigrationModal.svelte';
-	import { API_URL } from '$lib/config';
+	import { API_URL, PDS_AUDIO_UPLOADS_FLAG } from '$lib/config';
+	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
 
@@ -14,6 +15,8 @@
 
 	let showModal = $state(false);
 	let migrating = $state(false);
+
+	let hasFlag = $derived(auth.user?.enabled_flags?.includes(PDS_AUDIO_UPLOADS_FLAG) ?? false);
 
 	let backfillableTrackCount = $derived(
 		tracks.filter(
@@ -95,7 +98,7 @@
 	}
 </script>
 
-{#if backfillableTrackCount > 0}
+{#if hasFlag && backfillableTrackCount > 0}
 	<div class="data-control">
 		<div class="control-info">
 			<h3>migrate audio to your PDS</h3>

@@ -12,10 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
+from backend._internal.feature_flags import has_flag
 from backend._internal.jobs import job_service
 from backend._internal.pds_backfill_tasks import schedule_pds_backfill
 from backend.models import Track, get_db
 from backend.models.job import JobStatus, JobType
+
+PDS_AUDIO_UPLOADS_FLAG = "pds-audio-uploads"
 
 router = APIRouter(prefix="/pds-backfill", tags=["pds"])
 logger = logging.getLogger(__name__)
@@ -44,9 +47,13 @@ async def backfill_audio_to_pds(
 ) -> PdsBackfillStartResponse:
     """start backfill of existing tracks to the user's PDS.
 
+    requires the pds-audio-uploads feature flag.
     optionally accepts a list of track_ids to selectively backfill.
     returns a backfill_id for tracking progress via SSE.
     """
+    if not await has_flag(db, session.did, PDS_AUDIO_UPLOADS_FLAG):
+        raise HTTPException(status_code=403, detail="pds audio uploads not enabled")
+
     stmt = (
         select(Track.id)
         .where(
