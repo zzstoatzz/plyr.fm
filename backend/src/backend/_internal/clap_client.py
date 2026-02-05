@@ -53,8 +53,8 @@ class ClapClient:
     def from_settings(cls) -> Self:
         """create a client from application settings."""
         return cls(
-            embed_audio_url=settings.modal.embed_audio_url,
-            embed_text_url=settings.modal.embed_text_url,
+            embed_audio_url=str(settings.modal.embed_audio_url or ""),
+            embed_text_url=str(settings.modal.embed_text_url or ""),
             timeout_seconds=settings.modal.timeout_seconds,
         )
 

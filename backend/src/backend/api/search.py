@@ -9,6 +9,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.atproto.handles import search_handles
+from backend._internal.clap_client import get_clap_client
+from backend._internal.tpuf_client import query as tpuf_query
 from backend.config import settings
 from backend.models import Album, Artist, Playlist, Tag, Track, TrackTag, get_db
 
@@ -358,12 +360,12 @@ async def _search_playlists(
 
 
 # ---------------------------------------------------------------------------
-# vibe search (semantic text-to-audio via CLAP embeddings + turbopuffer)
+# semantic search (text-to-audio via CLAP embeddings + turbopuffer)
 # ---------------------------------------------------------------------------
 
 
-class VibeTrackResult(BaseModel):
-    """a track result from vibe search."""
+class SemanticTrackResult(BaseModel):
+    """a track result from semantic audio search."""
 
     type: Literal["track"] = "track"
     id: int
@@ -374,20 +376,25 @@ class VibeTrackResult(BaseModel):
     similarity: float
 
 
-class VibeSearchResponse(BaseModel):
-    """response from vibe search endpoint."""
+class SemanticSearchResponse(BaseModel):
+    """response from semantic search endpoint."""
 
-    results: list[VibeTrackResult]
+    results: list[SemanticTrackResult]
     query: str
 
 
-@router.get("/vibe")
-async def vibe_search(
+@router.get("/semantic")
+async def semantic_search(
     db: Annotated[AsyncSession, Depends(get_db)],
-    q: str = Query(..., min_length=3, max_length=200, description="vibe description"),
+    q: str = Query(
+        ...,
+        min_length=3,
+        max_length=200,
+        description="text description of desired audio",
+    ),
     limit: int = Query(10, ge=1, le=50, description="max results"),
-) -> VibeSearchResponse:
-    """semantic vibe search — describe a mood and get matching tracks.
+) -> SemanticSearchResponse:
+    """semantic audio search — describe a mood and get matching tracks.
 
     uses CLAP embeddings to match text descriptions to audio content.
     no auth required (matches existing /search/ pattern).
@@ -396,18 +403,15 @@ async def vibe_search(
     if not (settings.modal.enabled and settings.turbopuffer.enabled):
         raise HTTPException(
             status_code=503,
-            detail="vibe search is not currently available",
+            detail="semantic search is not currently available",
         )
-
-    from backend._internal.clap_client import get_clap_client
-    from backend._internal.tpuf_client import query as tpuf_query
 
     # embed query text
     clap_client = get_clap_client()
     embed_result = await clap_client.embed_text(q)
 
     if not embed_result.success or not embed_result.embedding:
-        logger.error("vibe search embedding failed: %s", embed_result.error)
+        logger.error("semantic search embedding failed: %s", embed_result.error)
         raise HTTPException(
             status_code=502,
             detail="failed to generate query embedding",
@@ -417,7 +421,7 @@ async def vibe_search(
     vector_results = await tpuf_query(embed_result.embedding, top_k=limit)
 
     if not vector_results:
-        return VibeSearchResponse(results=[], query=q)
+        return SemanticSearchResponse(results=[], query=q)
 
     # hydrate from DB (get image_url, display_name, etc.)
     track_ids = [r.track_id for r in vector_results]
@@ -436,7 +440,7 @@ async def vibe_search(
     for track, artist in rows:
         track_lookup[track.id] = (track, artist)
 
-    results: list[VibeTrackResult] = []
+    results: list[SemanticTrackResult] = []
     for track_id in track_ids:
         if track_id not in track_lookup:
             continue
@@ -444,7 +448,7 @@ async def vibe_search(
         # convert cosine distance to similarity (1 - distance)
         similarity = 1.0 - distance_by_id[track_id]
         results.append(
-            VibeTrackResult(
+            SemanticTrackResult(
                 id=track.id,
                 title=track.title,
                 artist_handle=artist.handle,
@@ -454,4 +458,4 @@ async def vibe_search(
             )
         )
 
-    return VibeSearchResponse(results=results, query=q)
+    return SemanticSearchResponse(results=results, query=q)

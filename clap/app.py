@@ -57,8 +57,7 @@ class ClapService:
         import librosa
         import torch
 
-        audio_b64 = item.get("audio_b64")
-        if not audio_b64:
+        if not (audio_b64 := item.get("audio_b64")):
             return {"error": "missing audio_b64 field"}
 
         audio_bytes = base64.b64decode(audio_b64)
@@ -96,8 +95,7 @@ class ClapService:
         """
         import torch
 
-        text = item.get("text")
-        if not text:
+        if not (text := item.get("text")):
             return {"error": "missing text field"}
 
         inputs = self.processor(

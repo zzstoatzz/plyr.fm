@@ -686,12 +686,12 @@ class ModalSettings(AppSettingsSection):
         default=False,
         description="Enable Modal CLAP embedding service",
     )
-    embed_audio_url: str = Field(
-        default="",
+    embed_audio_url: AnyHttpUrl | None = Field(
+        default=None,
         description="Modal web endpoint URL for audio embedding",
     )
-    embed_text_url: str = Field(
-        default="",
+    embed_text_url: AnyHttpUrl | None = Field(
+        default=None,
         description="Modal web endpoint URL for text embedding",
     )
     timeout_seconds: int = Field(

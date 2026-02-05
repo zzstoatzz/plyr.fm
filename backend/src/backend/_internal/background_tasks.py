@@ -22,8 +22,11 @@ from backend._internal.atproto.records import (
 )
 from backend._internal.auth import get_session
 from backend._internal.background import get_docket
+from backend._internal.clap_client import get_clap_client
 from backend._internal.export_tasks import process_export
 from backend._internal.pds_backfill_tasks import backfill_tracks_to_pds
+from backend._internal.tpuf_client import upsert as tpuf_upsert
+from backend.config import settings
 from backend.models import Artist, CopyrightScan, Track, TrackComment, TrackLike
 from backend.utilities.database import db_session
 
@@ -583,10 +586,6 @@ async def generate_embedding(track_id: int, audio_url: str) -> None:
         track_id: database ID of the track
         audio_url: public URL of the audio file (R2)
     """
-    from backend._internal.clap_client import get_clap_client
-    from backend._internal.tpuf_client import upsert
-    from backend.config import settings
-
     if not (settings.modal.enabled and settings.turbopuffer.enabled):
         logger.debug("embedding generation disabled, skipping track %d", track_id)
         return
@@ -633,7 +632,7 @@ async def generate_embedding(track_id: int, audio_url: str) -> None:
         return
 
     # store in turbopuffer
-    await upsert(
+    await tpuf_upsert(
         track_id=track_id,
         embedding=embed_result.embedding,
         title=track.title,

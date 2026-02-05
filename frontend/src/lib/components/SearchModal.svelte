@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
-	import { search, type SearchResult, type VibeSearchResult } from '$lib/search.svelte';
+	import { search, type SearchResult, type SemanticSearchResult } from '$lib/search.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { VIBE_SEARCH_FLAG } from '$lib/config';
 	import { onMount, onDestroy } from 'svelte';
@@ -9,7 +9,7 @@
 
 	let inputRef: HTMLInputElement | null = $state(null);
 	let isMobile = $state(false);
-	let hasVibeSearch = $derived(auth.user?.enabled_flags?.includes(VIBE_SEARCH_FLAG) ?? false);
+	let hasSemanticSearch = $derived(auth.user?.enabled_flags?.includes(VIBE_SEARCH_FLAG) ?? false);
 
 	// detect mobile on mount
 	$effect(() => {
@@ -57,7 +57,7 @@
 		}
 	}
 
-	function navigateToResult(result: SearchResult | VibeSearchResult) {
+	function navigateToResult(result: SearchResult | SemanticSearchResult) {
 		const href = search.getResultHref(result);
 		search.close();
 		goto(href);
@@ -69,7 +69,7 @@
 		}
 	}
 
-	function getResultImage(result: SearchResult | VibeSearchResult): string | null {
+	function getResultImage(result: SearchResult | SemanticSearchResult): string | null {
 		switch (result.type) {
 			case 'track':
 				return result.image_url;
@@ -84,7 +84,7 @@
 		}
 	}
 
-	function getResultTitle(result: SearchResult | VibeSearchResult): string {
+	function getResultTitle(result: SearchResult | SemanticSearchResult): string {
 		switch (result.type) {
 			case 'track':
 				return result.title;
@@ -99,7 +99,7 @@
 		}
 	}
 
-	function getResultSubtitle(result: SearchResult | VibeSearchResult): string {
+	function getResultSubtitle(result: SearchResult | SemanticSearchResult): string {
 		switch (result.type) {
 			case 'track':
 				return `by ${result.artist_display_name}`;
@@ -151,7 +151,7 @@
 					bind:this={inputRef}
 					type="text"
 					class="search-input"
-					placeholder={search.vibeMode ? 'describe a vibe...' : 'search tracks, artists, albums, playlists...'}
+					placeholder={search.semanticMode ? 'describe a vibe...' : 'search tracks, artists, albums, playlists...'}
 					value={search.query}
 					oninput={(e) => search.setQuery(e.currentTarget.value)}
 					autocomplete="off"
@@ -159,11 +159,11 @@
 					autocapitalize="off"
 					spellcheck="false"
 				/>
-				{#if hasVibeSearch}
+				{#if hasSemanticSearch}
 					<button
-						class="vibe-toggle"
-						class:active={search.vibeMode}
-						onclick={() => search.toggleVibeMode()}
+						class="semantic-toggle"
+						class:active={search.semanticMode}
+						onclick={() => search.toggleSemanticMode()}
 					>
 						vibe
 					</button>
@@ -226,7 +226,7 @@
 								<span class="result-title">{getResultTitle(result)}</span>
 								<span class="result-subtitle">{getResultSubtitle(result)}</span>
 							</div>
-							{#if search.vibeMode && 'similarity' in result}
+							{#if search.semanticMode && 'similarity' in result}
 								<span class="result-type">{Math.round(result.similarity * 100)}%</span>
 							{:else}
 								<span class="result-type">{result.type}</span>
@@ -234,7 +234,7 @@
 						</button>
 					{/each}
 				</div>
-			{:else if search.query.length >= (search.vibeMode ? 3 : 2) && !search.loading}
+			{:else if search.query.length >= (search.semanticMode ? 3 : 2) && !search.loading}
 				<div class="search-empty">
 					no results for "{search.query}"
 				</div>
@@ -333,7 +333,7 @@
 		font-family: inherit;
 	}
 
-	.vibe-toggle {
+	.semantic-toggle {
 		font-size: var(--text-xs);
 		padding: 0.2rem 0.5rem;
 		background: var(--bg-tertiary);
@@ -347,12 +347,12 @@
 		flex-shrink: 0;
 	}
 
-	.vibe-toggle:hover {
+	.semantic-toggle:hover {
 		border-color: var(--accent);
 		color: var(--text-secondary);
 	}
 
-	.vibe-toggle.active {
+	.semantic-toggle.active {
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		border-color: var(--accent);
 		color: var(--accent);
