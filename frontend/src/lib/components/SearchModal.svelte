@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
-	import { search, type SearchResult } from '$lib/search.svelte';
+	import { search, type SearchResult, type VibeSearchResult } from '$lib/search.svelte';
+	import { auth } from '$lib/auth.svelte';
+	import { VIBE_SEARCH_FLAG } from '$lib/config';
 	import { onMount, onDestroy } from 'svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
 
 	let inputRef: HTMLInputElement | null = $state(null);
 	let isMobile = $state(false);
+	let hasVibeSearch = $derived(auth.user?.enabled_flags?.includes(VIBE_SEARCH_FLAG) ?? false);
 
 	// detect mobile on mount
 	$effect(() => {
@@ -54,7 +57,7 @@
 		}
 	}
 
-	function navigateToResult(result: SearchResult) {
+	function navigateToResult(result: SearchResult | VibeSearchResult) {
 		const href = search.getResultHref(result);
 		search.close();
 		goto(href);
@@ -66,7 +69,7 @@
 		}
 	}
 
-	function getResultImage(result: SearchResult): string | null {
+	function getResultImage(result: SearchResult | VibeSearchResult): string | null {
 		switch (result.type) {
 			case 'track':
 				return result.image_url;
@@ -81,7 +84,7 @@
 		}
 	}
 
-	function getResultTitle(result: SearchResult): string {
+	function getResultTitle(result: SearchResult | VibeSearchResult): string {
 		switch (result.type) {
 			case 'track':
 				return result.title;
@@ -96,7 +99,7 @@
 		}
 	}
 
-	function getResultSubtitle(result: SearchResult): string {
+	function getResultSubtitle(result: SearchResult | VibeSearchResult): string {
 		switch (result.type) {
 			case 'track':
 				return `by ${result.artist_display_name}`;
@@ -148,7 +151,7 @@
 					bind:this={inputRef}
 					type="text"
 					class="search-input"
-					placeholder="search tracks, artists, albums, playlists..."
+					placeholder={search.vibeMode ? 'describe a vibe...' : 'search tracks, artists, albums, playlists...'}
 					value={search.query}
 					oninput={(e) => search.setQuery(e.currentTarget.value)}
 					autocomplete="off"
@@ -156,6 +159,15 @@
 					autocapitalize="off"
 					spellcheck="false"
 				/>
+				{#if hasVibeSearch}
+					<button
+						class="vibe-toggle"
+						class:active={search.vibeMode}
+						onclick={() => search.toggleVibeMode()}
+					>
+						vibe
+					</button>
+				{/if}
 				{#if search.loading}
 					<div class="search-spinner"></div>
 				{:else if !isMobile}
@@ -163,9 +175,9 @@
 				{/if}
 			</div>
 
-			{#if search.results.length > 0}
+			{#if search.activeResults.length > 0}
 				<div class="search-results">
-					{#each search.results as result, index (result.type + '-' + (result.type === 'track' ? result.id : result.type === 'artist' ? result.did : result.type === 'album' ? result.id : result.type === 'playlist' ? result.id : result.id))}
+					{#each search.activeResults as result, index (result.type + '-' + ('did' in result ? result.did : result.id))}
 						{@const imageUrl = getResultImage(result)}
 						<button
 							class="search-result"
@@ -176,12 +188,7 @@
 							<span class="result-icon" data-type={result.type}>
 								{#if imageUrl}
 									<SensitiveImage src={imageUrl} compact>
-										<img
-											src={imageUrl}
-											alt=""
-											class="result-image"
-											loading="lazy"
-										/>
+										<img src={imageUrl} alt="" class="result-image" loading="lazy" />
 									</SensitiveImage>
 								{:else if result.type === 'track'}
 									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -219,11 +226,15 @@
 								<span class="result-title">{getResultTitle(result)}</span>
 								<span class="result-subtitle">{getResultSubtitle(result)}</span>
 							</div>
-							<span class="result-type">{result.type}</span>
+							{#if search.vibeMode && 'similarity' in result}
+								<span class="result-type">{Math.round(result.similarity * 100)}%</span>
+							{:else}
+								<span class="result-type">{result.type}</span>
+							{/if}
 						</button>
 					{/each}
 				</div>
-			{:else if search.query.length >= 2 && !search.loading}
+			{:else if search.query.length >= (search.vibeMode ? 3 : 2) && !search.loading}
 				<div class="search-empty">
 					no results for "{search.query}"
 				</div>
@@ -320,6 +331,31 @@
 		border-radius: var(--radius-sm);
 		color: var(--text-muted);
 		font-family: inherit;
+	}
+
+	.vibe-toggle {
+		font-size: var(--text-xs);
+		padding: 0.2rem 0.5rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-full);
+		color: var(--text-muted);
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.15s;
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+
+	.vibe-toggle:hover {
+		border-color: var(--accent);
+		color: var(--text-secondary);
+	}
+
+	.vibe-toggle.active {
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.search-spinner {

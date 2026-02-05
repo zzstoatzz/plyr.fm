@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import Annotated, Any, TypeVar
@@ -11,6 +12,7 @@ from pydantic import (
     AnyHttpUrl,
     BeforeValidator,
     Field,
+    SecretStr,
     TypeAdapter,
     computed_field,
 )
@@ -156,6 +158,11 @@ class LegalSettings(AppSettingsSection):
     dmca_registration_number: str = Field(
         default="DMCA-1069186",
         description="USPTO DMCA agent registration number",
+    )
+    terms_last_updated: datetime = Field(
+        default=datetime(2026, 2, 4),
+        description="Date the terms/privacy were last materially updated. "
+        "Users who accepted before this date will be prompted to re-accept.",
     )
 
     @computed_field
@@ -665,6 +672,62 @@ class TranscoderSettings(AppSettingsSection):
     )
 
 
+class ModalSettings(AppSettingsSection):
+    """Modal compute platform settings for CLAP embedding service."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="MODAL_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Modal CLAP embedding service",
+    )
+    embed_audio_url: str = Field(
+        default="",
+        description="Modal web endpoint URL for audio embedding",
+    )
+    embed_text_url: str = Field(
+        default="",
+        description="Modal web endpoint URL for text embedding",
+    )
+    timeout_seconds: int = Field(
+        default=120,
+        description="Timeout for Modal requests (includes cold start)",
+    )
+
+
+class TurbopufferSettings(AppSettingsSection):
+    """Turbopuffer vector database settings for vibe search."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="TURBOPUFFER_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable turbopuffer vector search",
+    )
+    api_key: SecretStr = Field(
+        default=SecretStr(""),
+        description="Turbopuffer API key",
+    )
+    region: str = Field(
+        default="api",
+        description="Turbopuffer region",
+    )
+    namespace: str = Field(
+        default="plyr-tracks",
+        description="Turbopuffer namespace for track embeddings",
+    )
+
+
 class DocketSettings(AppSettingsSection):
     """Background task queue configuration using pydocket.
 
@@ -841,6 +904,14 @@ class Settings(AppSettingsSection):
     docket: DocketSettings = Field(
         default_factory=DocketSettings,
         description="Background task queue settings",
+    )
+    modal: ModalSettings = Field(
+        default_factory=ModalSettings,
+        description="Modal CLAP embedding service settings",
+    )
+    turbopuffer: TurbopufferSettings = Field(
+        default_factory=TurbopufferSettings,
+        description="Turbopuffer vector search settings",
     )
 
 

@@ -2,9 +2,12 @@
 	import { APP_NAME } from '$lib/branding';
 	import { auth } from '$lib/auth.svelte';
 	import { account } from '$lib/account.svelte';
+	import { preferences } from '$lib/preferences.svelte';
 
 	let accepting = $state(false);
 	let error = $state<string | null>(null);
+
+	let isReacceptance = $derived(!!preferences.data?.terms_accepted_at);
 
 	async function handleAccept() {
 		accepting = true;
@@ -27,8 +30,12 @@
 
 <div class="terms-overlay">
 	<div class="terms-modal">
-		<h1>Welcome to {APP_NAME}</h1>
-		<p class="subtitle">Please review and accept our terms to continue.</p>
+		<h1>{isReacceptance ? 'Updated Terms' : `Welcome to ${APP_NAME}`}</h1>
+		<p class="subtitle">
+			{isReacceptance
+				? 'Our terms and privacy policy have been updated. Please review and accept to continue.'
+				: 'Please review and accept our terms to continue.'}
+		</p>
 
 		<div class="terms-summary">
 			<h2>Key Points</h2>

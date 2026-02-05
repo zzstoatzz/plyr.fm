@@ -18,7 +18,7 @@
 <div class="legal-container">
 	<article class="legal-content">
 		<h1>Terms of Service</h1>
-		<p class="last-updated">Last updated: January 20, 2026</p>
+		<p class="last-updated">Last updated: February 4, 2026</p>
 
 		<p class="intro">
 			{APP_NAME} ("we", "us", or "our") is an audio streaming application built on the

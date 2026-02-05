@@ -1,7 +1,7 @@
 // global search state using Svelte 5 runes
 import { API_URL } from '$lib/config';
 
-export type SearchResultType = 'track' | 'artist' | 'album' | 'tag' | 'playlist';
+export type SearchResultType = 'track' | 'artist' | 'album' | 'tag' | 'playlist' | 'vibe';
 
 export interface TrackSearchResult {
 	type: 'track';
@@ -59,6 +59,21 @@ export type SearchResult =
 	| TagSearchResult
 	| PlaylistSearchResult;
 
+export interface VibeSearchResult {
+	type: 'track';
+	id: number;
+	title: string;
+	artist_handle: string;
+	artist_display_name: string;
+	image_url: string | null;
+	similarity: number;
+}
+
+export interface VibeSearchResponse {
+	results: VibeSearchResult[];
+	query: string;
+}
+
 export interface SearchResponse {
 	results: SearchResult[];
 	counts: {
@@ -81,6 +96,10 @@ class SearchState {
 	error = $state<string | null>(null);
 	selectedIndex = $state(0);
 
+	// vibe search state
+	vibeMode = $state(false);
+	vibeResults = $state<VibeSearchResult[]>([]);
+
 	// reference to input element for direct focus (mobile keyboard workaround)
 	inputRef: HTMLInputElement | null = null;
 
@@ -100,6 +119,7 @@ class SearchState {
 		this.isOpen = true;
 		this.query = '';
 		this.results = [];
+		this.vibeResults = [];
 		this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
 		this.error = null;
 		this.selectedIndex = 0;
@@ -109,6 +129,7 @@ class SearchState {
 		this.isOpen = false;
 		this.query = '';
 		this.results = [];
+		this.vibeResults = [];
 		this.error = null;
 		if (this.searchTimeout) {
 			clearTimeout(this.searchTimeout);
@@ -121,6 +142,27 @@ class SearchState {
 			this.close();
 		} else {
 			this.open();
+		}
+	}
+
+	toggleVibeMode() {
+		this.vibeMode = !this.vibeMode;
+		this.results = [];
+		this.vibeResults = [];
+		this.selectedIndex = 0;
+		this.error = null;
+		// re-search with current query if it meets the threshold
+		if (this.query.length >= (this.vibeMode ? 3 : 2)) {
+			if (this.searchTimeout) {
+				clearTimeout(this.searchTimeout);
+			}
+			this.searchTimeout = setTimeout(() => {
+				if (this.vibeMode) {
+					void this.vibeSearch(this.query);
+				} else {
+					void this.search(this.query);
+				}
+			}, 50);
 		}
 	}
 
@@ -137,20 +179,32 @@ class SearchState {
 		if (value.length > MAX_QUERY_LENGTH) {
 			this.error = `query too long (max ${MAX_QUERY_LENGTH} characters)`;
 			this.results = [];
+			this.vibeResults = [];
 			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
 			return;
 		}
 
 		this.error = null;
 
-		// debounce search
-		if (value.length >= 2) {
-			this.searchTimeout = setTimeout(() => {
-				void this.search(value);
-			}, 150);
+		if (this.vibeMode) {
+			// vibe search: 400ms debounce (modal cold start), min 3 chars
+			if (value.length >= 3) {
+				this.searchTimeout = setTimeout(() => {
+					void this.vibeSearch(value);
+				}, 400);
+			} else {
+				this.vibeResults = [];
+			}
 		} else {
-			this.results = [];
-			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
+			// regular search: 150ms debounce, min 2 chars
+			if (value.length >= 2) {
+				this.searchTimeout = setTimeout(() => {
+					void this.search(value);
+				}, 150);
+			} else {
+				this.results = [];
+				this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
+			}
 		}
 	}
 
@@ -182,23 +236,60 @@ class SearchState {
 		}
 	}
 
+	async vibeSearch(query: string): Promise<void> {
+		if (query.length < 3) return;
+
+		this.loading = true;
+		this.error = null;
+
+		try {
+			const response = await fetch(
+				`${API_URL}/search/vibe?q=${encodeURIComponent(query)}&limit=10`
+			);
+
+			if (response.status === 503) {
+				this.error = 'vibe search is not available yet';
+				this.vibeResults = [];
+				return;
+			}
+
+			if (!response.ok) {
+				throw new Error(`vibe search failed: ${response.statusText}`);
+			}
+
+			const data: VibeSearchResponse = await response.json();
+			this.vibeResults = data.results;
+			this.selectedIndex = 0;
+		} catch (e) {
+			console.error('vibe search error:', e);
+			this.error = e instanceof Error ? e.message : 'vibe search failed';
+			this.vibeResults = [];
+		} finally {
+			this.loading = false;
+		}
+	}
+
+	get activeResults(): (SearchResult | VibeSearchResult)[] {
+		return this.vibeMode ? this.vibeResults : this.results;
+	}
+
 	selectNext() {
-		if (this.results.length > 0) {
-			this.selectedIndex = (this.selectedIndex + 1) % this.results.length;
+		if (this.activeResults.length > 0) {
+			this.selectedIndex = (this.selectedIndex + 1) % this.activeResults.length;
 		}
 	}
 
 	selectPrevious() {
-		if (this.results.length > 0) {
-			this.selectedIndex = (this.selectedIndex - 1 + this.results.length) % this.results.length;
+		if (this.activeResults.length > 0) {
+			this.selectedIndex = (this.selectedIndex - 1 + this.activeResults.length) % this.activeResults.length;
 		}
 	}
 
-	getSelectedResult(): SearchResult | null {
-		return this.results[this.selectedIndex] ?? null;
+	getSelectedResult(): SearchResult | VibeSearchResult | null {
+		return this.activeResults[this.selectedIndex] ?? null;
 	}
 
-	getResultHref(result: SearchResult): string {
+	getResultHref(result: SearchResult | VibeSearchResult): string {
 		switch (result.type) {
 			case 'track':
 				return `/track/${result.id}`;

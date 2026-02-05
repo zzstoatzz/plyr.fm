@@ -18,7 +18,7 @@
 <div class="legal-container">
 	<article class="legal-content">
 		<h1>Privacy Policy</h1>
-		<p class="last-updated">Last updated: January 20, 2026</p>
+		<p class="last-updated">Last updated: February 4, 2026</p>
 
 		<p class="intro">
 			{APP_NAME} ("we", "us", or "our") is an audio streaming application built on the
@@ -86,6 +86,8 @@
 				<li><strong><a href="https://audd.io" target="_blank" rel="noopener">AudD</a></strong> - audio fingerprinting for copyright detection</li>
 				<li><strong><a href="https://anthropic.com" target="_blank" rel="noopener">Anthropic</a></strong> - image analysis for content moderation</li>
 				<li><strong><a href="https://atprotofans.com" target="_blank" rel="noopener">ATProtoFans</a></strong> - supporter validation for gated content</li>
+				<li><strong><a href="https://modal.com" target="_blank" rel="noopener">Modal</a></strong> - audio processing for search embeddings</li>
+				<li><strong><a href="https://turbopuffer.com" target="_blank" rel="noopener">turbopuffer</a></strong> - vector storage for semantic search</li>
 			</ul>
 			<p>
 				We may also write records to your PDS using third-party lexicon namespaces

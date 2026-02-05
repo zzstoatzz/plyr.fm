@@ -38,13 +38,12 @@
 
 	let isEmbed = $derived($page.url.pathname.startsWith('/embed/'));
 
-	// show terms overlay if authenticated but hasn't accepted terms
+	// show terms overlay if authenticated and either never accepted or accepted before latest update
 	// exclude legal pages so users can read full terms/privacy/cookies
-	// uses preferences.data (client state) since acceptTerms() updates it
+	// uses preferences.needsTermsAcceptance which compares accepted_at vs terms_last_updated
 	let showTermsOverlay = $derived(
 		auth.isAuthenticated &&
-		preferences.data &&
-		!preferences.data.terms_accepted_at &&
+		preferences.needsTermsAcceptance &&
 		!$page.url.pathname.startsWith('/terms') &&
 		!$page.url.pathname.startsWith('/privacy') &&
 		!$page.url.pathname.startsWith('/cookies')

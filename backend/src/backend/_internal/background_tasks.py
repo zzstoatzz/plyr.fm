@@ -9,6 +9,7 @@ requires DOCKET_URL to be set (Redis is always available).
 import logging
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import logfire
 from docket import Perpetual
 from sqlalchemy import select
@@ -23,7 +24,7 @@ from backend._internal.auth import get_session
 from backend._internal.background import get_docket
 from backend._internal.export_tasks import process_export
 from backend._internal.pds_backfill_tasks import backfill_tracks_to_pds
-from backend.models import CopyrightScan, Track, TrackComment, TrackLike
+from backend.models import Artist, CopyrightScan, Track, TrackComment, TrackLike
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -575,6 +576,81 @@ async def schedule_pds_update_comment(
     logfire.info("scheduled pds comment update", comment_id=comment_id)
 
 
+async def generate_embedding(track_id: int, audio_url: str) -> None:
+    """generate a CLAP embedding for a track and store in turbopuffer.
+
+    args:
+        track_id: database ID of the track
+        audio_url: public URL of the audio file (R2)
+    """
+    from backend._internal.clap_client import get_clap_client
+    from backend._internal.tpuf_client import upsert
+    from backend.config import settings
+
+    if not (settings.modal.enabled and settings.turbopuffer.enabled):
+        logger.debug("embedding generation disabled, skipping track %d", track_id)
+        return
+
+    async with db_session() as db:
+        result = await db.execute(
+            select(Track)
+            .join(Artist, Track.artist_did == Artist.did)
+            .where(Track.id == track_id)
+        )
+        row = result.first()
+        if not row:
+            logger.warning("generate_embedding: track %d not found", track_id)
+            return
+
+        track = row[0]
+
+        artist_result = await db.execute(
+            select(Artist).where(Artist.did == track.artist_did)
+        )
+        artist = artist_result.scalar_one_or_none()
+        if not artist:
+            logger.warning(
+                "generate_embedding: artist not found for track %d", track_id
+            )
+            return
+
+    # download audio from R2
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+        resp = await client.get(audio_url)
+        resp.raise_for_status()
+        audio_bytes = resp.content
+
+    # generate embedding via CLAP
+    clap_client = get_clap_client()
+    embed_result = await clap_client.embed_audio(audio_bytes)
+
+    if not embed_result.success or not embed_result.embedding:
+        logger.error(
+            "generate_embedding: CLAP embedding failed for track %d: %s",
+            track_id,
+            embed_result.error,
+        )
+        return
+
+    # store in turbopuffer
+    await upsert(
+        track_id=track_id,
+        embedding=embed_result.embedding,
+        title=track.title,
+        artist_handle=artist.handle,
+        artist_did=artist.did,
+    )
+
+    logfire.info("generated embedding for track", track_id=track_id)
+
+
+async def schedule_embedding_generation(track_id: int, audio_url: str) -> None:
+    """schedule an embedding generation via docket."""
+    docket = get_docket()
+    await docket.add(generate_embedding)(track_id, audio_url)
+    logfire.info("scheduled embedding generation", track_id=track_id)
+
+
 async def move_track_audio(track_id: int, to_private: bool) -> None:
     """move a track's audio file between public and private buckets.
 
@@ -646,4 +722,5 @@ background_tasks = [
     pds_update_comment,
     backfill_tracks_to_pds,
     move_track_audio,
+    generate_embedding,
 ]
