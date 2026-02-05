@@ -30,6 +30,7 @@ dependencies = [
     "pydocket>=0.15.2",
     "redis>=7.1.0",
     "beartype>=0.22.8",
+    "turbopuffer>=0.5.0",
 ]
 
 requires-python = ">=3.11"

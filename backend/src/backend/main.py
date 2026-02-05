@@ -245,6 +245,7 @@ async def get_public_config() -> dict[str, int | str | list[str]]:
         "privacy_email": settings.legal.resolved_privacy_email,
         "dmca_email": settings.legal.resolved_dmca_email,
         "dmca_registration_number": settings.legal.dmca_registration_number,
+        "terms_last_updated": settings.legal.terms_last_updated.isoformat(),
     }
 
 

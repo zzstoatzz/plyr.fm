@@ -3,6 +3,7 @@ import { PUBLIC_API_URL } from '$env/static/public';
 export const API_URL = PUBLIC_API_URL || 'http://localhost:8001';
 
 export const PDS_AUDIO_UPLOADS_FLAG = 'pds-audio-uploads';
+export const VIBE_SEARCH_FLAG = 'vibe-search';
 
 /**
  * generate atprotofans support URL for an artist.
@@ -22,6 +23,7 @@ interface ServerConfig {
 	privacy_email: string;
 	dmca_email: string;
 	dmca_registration_number: string;
+	terms_last_updated: string;
 }
 
 let serverConfig: ServerConfig | null = null;

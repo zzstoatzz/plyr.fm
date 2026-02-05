@@ -40,6 +40,7 @@ from backend._internal.audio import AudioFormat
 from backend._internal.background_tasks import (
     schedule_album_list_sync,
     schedule_copyright_scan,
+    schedule_embedding_generation,
 )
 from backend._internal.image import ImageFormat
 from backend._internal.jobs import job_service
@@ -809,6 +810,14 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                         await _send_track_notification(db, track)
                     if r2_url and not is_integration_test:
                         await schedule_copyright_scan(track.id, r2_url)
+
+                    # generate CLAP embedding for vibe search
+                    if (
+                        r2_url
+                        and settings.modal.enabled
+                        and settings.turbopuffer.enabled
+                    ):
+                        await schedule_embedding_generation(track.id, r2_url)
 
                     # sync album list record if track is in an album
                     if album_record:

@@ -51,7 +51,7 @@ max_lines = 1100
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 850
+max_lines = 918
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
@@ -111,7 +111,7 @@ max_lines = 599
 
 [[rules]]
 path = "frontend/src/lib/components/SearchModal.svelte"
-max_lines = 557
+max_lines = 593
 
 [[rules]]
 path = "frontend/src/lib/components/TrackActionsMenu.svelte"

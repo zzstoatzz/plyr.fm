@@ -1,6 +1,6 @@
 // user preferences state management
 import { browser } from '$app/environment';
-import { API_URL } from '$lib/config';
+import { API_URL, getServerConfig } from '$lib/config';
 import { auth } from '$lib/auth.svelte';
 
 export type Theme = 'dark' | 'light' | 'system';
@@ -47,10 +47,22 @@ const DEFAULT_PREFERENCES: Preferences = {
 class PreferencesManager {
 	data = $state<Preferences | null>(null);
 	loading = $state(false);
+	termsLastUpdated = $state<string | null>(null);
 	private initialized = false;
 
 	get loaded(): boolean {
 		return this.data !== null;
+	}
+
+	get needsTermsAcceptance(): boolean {
+		if (!this.data) return false;
+		// never accepted
+		if (!this.data.terms_accepted_at) return true;
+		// accepted before the latest update
+		if (this.termsLastUpdated) {
+			return new Date(this.data.terms_accepted_at) < new Date(this.termsLastUpdated);
+		}
+		return false;
 	}
 
 	get hiddenTags(): string[] {
@@ -135,6 +147,14 @@ class PreferencesManager {
 	async initialize(): Promise<void> {
 		if (!browser || this.initialized || this.loading) return;
 		this.initialized = true;
+		// fetch terms_last_updated from server config (non-blocking)
+		getServerConfig()
+			.then((config) => {
+				this.termsLastUpdated = config.terms_last_updated;
+			})
+			.catch(() => {
+				// ignore — termsLastUpdated stays null, overlay only shows for never-accepted
+			});
 		await this.fetch();
 	}
 
