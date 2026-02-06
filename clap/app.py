@@ -36,6 +36,7 @@ clap_image = (
 @app.cls(
     image=clap_image,
     scaledown_window=300,
+    min_containers=1,
     cpu=2.0,
     memory=4096,
 )

@@ -221,8 +221,9 @@
 							<span class="result-title">{getResultTitle(result)}</span>
 							<span class="result-subtitle">{getResultSubtitle(result)}</span>
 						</div>
-						{#if search.semanticBoundary >= 0 && index >= search.semanticBoundary}
-							<span class="result-type mood">mood</span>
+						{#if result.type === 'track' && search.semanticResultIds.has(result.id)}
+							{@const pct = Math.round((search.semanticSimilarityMap.get(result.id) ?? 0) * 100)}
+							<span class="result-type mood">{pct}%</span>
 						{:else}
 							<span class="result-type">{result.type}</span>
 						{/if}

@@ -263,13 +263,6 @@ class SearchState {
 		}
 	}
 
-	/** index in activeResults where semantic results begin, or -1 if none */
-	get semanticBoundary(): number {
-		const deduped = this.dedupedSemanticResults;
-		if (deduped.length === 0) return -1;
-		return this.results.length;
-	}
-
 	/** semantic results with keyword track IDs filtered out */
 	get dedupedSemanticResults(): SemanticSearchResult[] {
 		const keywordTrackIds = new Set(
@@ -278,8 +271,30 @@ class SearchState {
 		return this.semanticResults.filter((r) => !keywordTrackIds.has(r.id));
 	}
 
+	/** IDs of results that came from semantic search (for badge rendering) */
+	get semanticResultIds(): Set<number> {
+		return new Set(this.dedupedSemanticResults.map((r) => r.id));
+	}
+
+	/** similarity scores keyed by track ID for badge display */
+	get semanticSimilarityMap(): Map<number, number> {
+		return new Map(this.dedupedSemanticResults.map((r) => [r.id, r.similarity]));
+	}
+
 	get activeResults(): (SearchResult | SemanticSearchResult)[] {
-		return [...this.results, ...this.dedupedSemanticResults];
+		const keywordNonTracks = this.results.filter((r) => r.type !== 'track');
+		const keywordTracks = this.results.filter((r) => r.type === 'track');
+		const semanticTracks = this.dedupedSemanticResults;
+
+		// interleave: keyword track, semantic track, keyword track, semantic track...
+		const interleaved: (SearchResult | SemanticSearchResult)[] = [];
+		const maxLen = Math.max(keywordTracks.length, semanticTracks.length);
+		for (let i = 0; i < maxLen; i++) {
+			if (i < keywordTracks.length) interleaved.push(keywordTracks[i]);
+			if (i < semanticTracks.length) interleaved.push(semanticTracks[i]);
+		}
+
+		return [...keywordNonTracks, ...interleaved];
 	}
 
 	selectNext() {
