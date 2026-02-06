@@ -72,6 +72,7 @@ export interface SemanticSearchResult {
 export interface SemanticSearchResponse {
 	results: SemanticSearchResult[];
 	query: string;
+	available: boolean;
 }
 
 export interface SearchResponse {
@@ -97,14 +98,17 @@ class SearchState {
 	selectedIndex = $state(0);
 
 	// semantic search state
-	semanticMode = $state(false);
+	semanticEnabled = $state(false);
+	semanticLoading = $state(false);
+	semanticAvailable = $state(true);
 	semanticResults = $state<SemanticSearchResult[]>([]);
 
 	// reference to input element for direct focus (mobile keyboard workaround)
 	inputRef: HTMLInputElement | null = null;
 
-	// debounce timer
-	private searchTimeout: ReturnType<typeof setTimeout> | null = null;
+	// separate debounce timers
+	private keywordTimeout: ReturnType<typeof setTimeout> | null = null;
+	private semanticTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	setInputRef(el: HTMLInputElement | null) {
 		this.inputRef = el;
@@ -131,9 +135,13 @@ class SearchState {
 		this.results = [];
 		this.semanticResults = [];
 		this.error = null;
-		if (this.searchTimeout) {
-			clearTimeout(this.searchTimeout);
-			this.searchTimeout = null;
+		if (this.keywordTimeout) {
+			clearTimeout(this.keywordTimeout);
+			this.keywordTimeout = null;
+		}
+		if (this.semanticTimeout) {
+			clearTimeout(this.semanticTimeout);
+			this.semanticTimeout = null;
 		}
 	}
 
@@ -145,34 +153,16 @@ class SearchState {
 		}
 	}
 
-	toggleSemanticMode() {
-		this.semanticMode = !this.semanticMode;
-		this.results = [];
-		this.semanticResults = [];
-		this.selectedIndex = 0;
-		this.error = null;
-		// re-search with current query if it meets the threshold
-		if (this.query.length >= (this.semanticMode ? 3 : 2)) {
-			if (this.searchTimeout) {
-				clearTimeout(this.searchTimeout);
-			}
-			this.searchTimeout = setTimeout(() => {
-				if (this.semanticMode) {
-					void this.semanticSearch(this.query);
-				} else {
-					void this.search(this.query);
-				}
-			}, 50);
-		}
-	}
-
 	setQuery(value: string) {
 		this.query = value;
 		this.selectedIndex = 0;
 
-		// clear previous timeout
-		if (this.searchTimeout) {
-			clearTimeout(this.searchTimeout);
+		// clear previous timeouts
+		if (this.keywordTimeout) {
+			clearTimeout(this.keywordTimeout);
+		}
+		if (this.semanticTimeout) {
+			clearTimeout(this.semanticTimeout);
 		}
 
 		// validate length
@@ -186,25 +176,23 @@ class SearchState {
 
 		this.error = null;
 
-		if (this.semanticMode) {
-			// semantic search: 400ms debounce (modal cold start), min 3 chars
-			if (value.length >= 3) {
-				this.searchTimeout = setTimeout(() => {
-					void this.semanticSearch(value);
-				}, 400);
-			} else {
-				this.semanticResults = [];
-			}
+		// keyword search: 150ms debounce, min 2 chars
+		if (value.length >= 2) {
+			this.keywordTimeout = setTimeout(() => {
+				void this.search(value);
+			}, 150);
 		} else {
-			// regular search: 150ms debounce, min 2 chars
-			if (value.length >= 2) {
-				this.searchTimeout = setTimeout(() => {
-					void this.search(value);
-				}, 150);
-			} else {
-				this.results = [];
-				this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
-			}
+			this.results = [];
+			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
+		}
+
+		// semantic search: 500ms debounce, min 3 chars, only if enabled
+		if (this.semanticEnabled && value.length >= 3) {
+			this.semanticTimeout = setTimeout(() => {
+				void this.searchSemantic(value);
+			}, 500);
+		} else {
+			this.semanticResults = [];
 		}
 	}
 
@@ -224,10 +212,15 @@ class SearchState {
 			}
 
 			const data: SearchResponse = await response.json();
+
+			// stale query guard
+			if (this.query !== query) return;
+
 			this.results = data.results;
 			this.counts = data.counts;
 			this.selectedIndex = 0;
 		} catch (e) {
+			if (this.query !== query) return;
 			console.error('search error:', e);
 			this.error = e instanceof Error ? e.message : 'search failed';
 			this.results = [];
@@ -236,41 +229,57 @@ class SearchState {
 		}
 	}
 
-	async semanticSearch(query: string): Promise<void> {
+	async searchSemantic(query: string): Promise<void> {
 		if (query.length < 3) return;
 
-		this.loading = true;
-		this.error = null;
+		this.semanticLoading = true;
 
 		try {
 			const response = await fetch(
 				`${API_URL}/search/semantic?q=${encodeURIComponent(query)}&limit=10`
 			);
 
-			if (response.status === 503) {
-				this.error = 'semantic search is not available yet';
+			if (!response.ok) {
+				// non-ok but not a structured response — silently degrade
 				this.semanticResults = [];
+				this.semanticAvailable = false;
 				return;
 			}
 
-			if (!response.ok) {
-				throw new Error(`semantic search failed: ${response.statusText}`);
-			}
-
 			const data: SemanticSearchResponse = await response.json();
-			this.semanticResults = data.results;
+
+			// stale query guard
+			if (this.query !== query) return;
+
+			this.semanticAvailable = data.available;
+			this.semanticResults = data.available ? data.results : [];
 			this.selectedIndex = 0;
 		} catch (e) {
+			if (this.query !== query) return;
 			console.error('semantic search error:', e);
-			this.error = e instanceof Error ? e.message : 'semantic search failed';
 			this.semanticResults = [];
 		} finally {
-			this.loading = false;
+			this.semanticLoading = false;
 		}
 	}
 
+	/** index in activeResults where semantic results begin, or -1 if none */
+	get semanticBoundary(): number {
+		const deduped = this.dedupedSemanticResults;
+		if (deduped.length === 0) return -1;
+		return this.results.length;
+	}
+
+	/** semantic results with keyword track IDs filtered out */
+	get dedupedSemanticResults(): SemanticSearchResult[] {
+		const keywordTrackIds = new Set(
+			this.results.filter((r) => r.type === 'track').map((r) => (r as TrackSearchResult).id)
+		);
+		return this.semanticResults.filter((r) => !keywordTrackIds.has(r.id));
+	}
+
 	get activeResults(): (SearchResult | SemanticSearchResult)[] {
-		return this.semanticMode ? this.semanticResults : this.results;
+		return [...this.results, ...this.dedupedSemanticResults];
 	}
 
 	selectNext() {
