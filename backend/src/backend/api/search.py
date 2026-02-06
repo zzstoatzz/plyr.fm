@@ -440,13 +440,21 @@ async def semantic_search(
     for track, artist in rows:
         track_lookup[track.id] = (track, artist)
 
+    # CLAP cross-modal cosine similarities are inherently low (~0.01),
+    # so we normalize distances to a 0-1 relevance scale across results.
+    distances = [distance_by_id[tid] for tid in track_ids if tid in track_lookup]
+    min_dist = min(distances) if distances else 0.0
+    max_dist = max(distances) if distances else 1.0
+    dist_range = max_dist - min_dist
+
     results: list[SemanticTrackResult] = []
     for track_id in track_ids:
         if track_id not in track_lookup:
             continue
         track, artist = track_lookup[track_id]
-        # convert cosine distance to similarity (1 - distance)
-        similarity = 1.0 - distance_by_id[track_id]
+        dist = distance_by_id[track_id]
+        # map [min_dist, max_dist] -> [1.0, 0.0] so closest = highest score
+        relevance = 1.0 - (dist - min_dist) / dist_range if dist_range > 0 else 1.0
         results.append(
             SemanticTrackResult(
                 id=track.id,
@@ -454,7 +462,7 @@ async def semantic_search(
                 artist_handle=artist.handle,
                 artist_display_name=artist.display_name,
                 image_url=track.image_url,
-                similarity=round(similarity, 3),
+                similarity=round(relevance, 3),
             )
         )
 

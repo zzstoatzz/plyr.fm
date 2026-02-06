@@ -49,7 +49,6 @@ class ClapService:
         self.model = ClapModel.from_pretrained("laion/larger_clap_music")
         self.processor = ClapProcessor.from_pretrained("laion/larger_clap_music")
         self.model.eval()
-        self.device = "cpu"
 
     @modal.fastapi_endpoint(method="POST")
     def embed_audio(self, item: dict) -> dict:
@@ -64,6 +63,7 @@ class ClapService:
 
         import soundfile as sf
         import torch
+        import torch.nn.functional as F
 
         if not (audio_b64 := item.get("audio_b64")):
             return {"error": "missing audio_b64 field"}
@@ -129,14 +129,17 @@ class ClapService:
             )
 
             with torch.no_grad():
-                audio_output = self.model.audio_model(
+                # replicate ClapModel.forward() audio path:
+                # audio_model -> pooler_output -> projection -> normalize
+                audio_outputs = self.model.audio_model(
                     input_features=inputs["input_features"],
                     is_longer=inputs.get("is_longer"),
                 )
-                projected = self.model.audio_projection(audio_output.pooler_output)
-                normalized = torch.nn.functional.normalize(projected, dim=-1)
+                pooled = audio_outputs[1]  # pooler_output
+                projected = self.model.audio_projection(pooled)
+                embedding = F.normalize(projected, dim=-1)
 
-            embedding = normalized[0].cpu().numpy().tolist()
+            embedding = embedding[0].cpu().numpy().tolist()
 
             return {
                 "embedding": embedding,
@@ -153,6 +156,7 @@ class ClapService:
         returns: {"embedding": [float, ...], "dimensions": 512}
         """
         import torch
+        import torch.nn.functional as F
 
         if not (text := item.get("text")):
             return {"error": "missing text field"}
@@ -164,11 +168,14 @@ class ClapService:
         )
 
         with torch.no_grad():
-            text_output = self.model.text_model(**inputs)
-            projected = self.model.text_projection(text_output.pooler_output)
-            normalized = torch.nn.functional.normalize(projected, dim=-1)
+            # replicate ClapModel.forward() text path:
+            # text_model -> pooler_output -> projection -> normalize
+            text_outputs = self.model.text_model(**inputs)
+            pooled = text_outputs[1]  # pooler_output
+            projected = self.model.text_projection(pooled)
+            embedding = F.normalize(projected, dim=-1)
 
-        embedding = normalized[0].cpu().numpy().tolist()
+        embedding = embedding[0].cpu().numpy().tolist()
 
         return {
             "embedding": embedding,
