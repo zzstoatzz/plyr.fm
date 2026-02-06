@@ -173,9 +173,6 @@
 		{#if search.activeResults.length > 0}
 			<div class="search-results">
 				{#each search.activeResults as result, index (result.type + '-' + ('did' in result ? result.did : result.id))}
-					{#if index === search.semanticBoundary && search.semanticBoundary > 0}
-						<div class="semantic-separator">sounds like</div>
-					{/if}
 					{@const imageUrl = getResultImage(result)}
 					<button
 						class="search-result"
@@ -224,8 +221,8 @@
 							<span class="result-title">{getResultTitle(result)}</span>
 							<span class="result-subtitle">{getResultSubtitle(result)}</span>
 						</div>
-						{#if search.semanticBoundary >= 0 && index >= search.semanticBoundary && 'similarity' in result}
-							<span class="result-type">{Math.round(result.similarity * 100)}%</span>
+						{#if search.semanticBoundary >= 0 && index >= search.semanticBoundary}
+							<span class="result-type vibe">vibe</span>
 						{:else}
 							<span class="result-type">{result.type}</span>
 						{/if}
@@ -463,21 +460,9 @@
 		flex-shrink: 0;
 	}
 
-	.semantic-separator {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.5rem 0.75rem;
-		color: var(--text-muted);
-		font-size: var(--text-xs);
-	}
-
-	.semantic-separator::before,
-	.semantic-separator::after {
-		content: '';
-		flex: 1;
-		height: 1px;
-		background: var(--border-subtle);
+	.result-type.vibe {
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.semantic-loading {
