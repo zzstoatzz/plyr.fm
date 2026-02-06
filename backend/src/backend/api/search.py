@@ -3,7 +3,7 @@
 import logging
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -381,6 +381,7 @@ class SemanticSearchResponse(BaseModel):
 
     results: list[SemanticTrackResult]
     query: str
+    available: bool = True
 
 
 @router.get("/semantic")
@@ -401,10 +402,7 @@ async def semantic_search(
     returns 503 if embedding services are disabled.
     """
     if not (settings.modal.enabled and settings.turbopuffer.enabled):
-        raise HTTPException(
-            status_code=503,
-            detail="semantic search is not currently available",
-        )
+        return SemanticSearchResponse(results=[], query=q, available=False)
 
     # embed query text
     clap_client = get_clap_client()
@@ -412,10 +410,7 @@ async def semantic_search(
 
     if not embed_result.success or not embed_result.embedding:
         logger.error("semantic search embedding failed: %s", embed_result.error)
-        raise HTTPException(
-            status_code=502,
-            detail="failed to generate query embedding",
-        )
+        return SemanticSearchResponse(results=[], query=q, available=False)
 
     # query turbopuffer
     vector_results = await tpuf_query(embed_result.embedding, top_k=limit)
