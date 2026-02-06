@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass
 
 import logfire
-from turbopuffer import AsyncTurbopuffer
+from turbopuffer import AsyncTurbopuffer, NotFoundError
 
 from backend.config import settings
 
@@ -79,11 +79,18 @@ async def query(
         region=settings.turbopuffer.region,
     ) as client:
         ns = client.namespace(settings.turbopuffer.namespace)
-        response = await ns.query(
-            rank_by=("vector", "ANN", embedding),
-            top_k=top_k,
-            include_attributes=["title", "artist_handle", "artist_did"],
-        )
+        try:
+            response = await ns.query(
+                rank_by=("vector", "ANN", embedding),
+                top_k=top_k,
+                include_attributes=["title", "artist_handle", "artist_did"],
+            )
+        except NotFoundError:
+            logger.warning(
+                "turbopuffer namespace %r not found (no embeddings yet?)",
+                settings.turbopuffer.namespace,
+            )
+            return []
 
         results: list[VectorSearchResult] = []
         for row in response.rows or []:
