@@ -1,6 +1,6 @@
-# vibe search
+# mood search
 
-semantic search over tracks using CLAP (Contrastive Language-Audio Pretraining) embeddings. users describe a mood or vibe in natural language and get matching tracks ranked by similarity.
+semantic search over tracks using CLAP (Contrastive Language-Audio Pretraining) embeddings. users describe a mood in natural language and get matching tracks ranked by audio similarity.
 
 ## architecture
 
@@ -19,6 +19,15 @@ user types "dark ambient techno"
                               (Track + Artist join)
 ```
 
+### how search works
+
+keyword and semantic search fire in parallel from the frontend:
+
+1. **keyword** (150ms debounce, min 2 chars) — standard pg_trgm fuzzy match against track titles, artist names, albums, tags, playlists
+2. **semantic** (500ms debounce, min 3 chars, feature-flagged) — CLAP text embedding → turbopuffer ANN query → hydrate from postgres
+
+keyword results appear instantly. semantic results append when ready. client-side deduplication removes any semantic tracks that already appeared in keyword results.
+
 ### components
 
 | component | service | purpose |
@@ -34,12 +43,14 @@ user types "dark ambient techno"
 
 **source**: `clap/app.py`
 
-hosts the `laion/larger_clap_music` model on Modal with two endpoints:
+hosts the `laion/clap-htsat-unfused` model on Modal with two endpoints:
 
 - `POST /embed_audio` — base64-encoded audio → 512-dim embedding
 - `POST /embed_text` — text description → 512-dim embedding
 
 container specs: 2 CPU, 4GB RAM, 5-minute idle timeout (scales to zero).
+
+> **model choice**: we use `clap-htsat-unfused`, not `larger_clap_music`. the "larger" music variant has a broken text projection layer (zero biases, near-zero weights) that collapses all text to the same embedding. `clap-htsat-unfused` produces properly discriminative text embeddings (cosine similarity range -0.01 to 0.50 across different queries).
 
 **deploy**:
 ```bash
@@ -82,11 +93,13 @@ each vector stores:
 - `vector`: 512-dim CLAP embedding
 - attributes: `title`, `artist_handle`, `artist_did`
 
+the namespace is created automatically on first write. querying a nonexistent namespace returns empty results (not an error).
+
 ## indexing
 
 ### automatic (new uploads)
 
-when a track is uploaded and both Modal + turbopuffer are enabled, embedding generation is automatically scheduled as a docket background task. see `backend/src/backend/api/tracks/uploads.py`.
+when a track is uploaded and both Modal + turbopuffer are enabled, embedding generation is automatically scheduled as a docket background task. see `backend/src/backend/_internal/background_tasks.py` → `generate_embedding`.
 
 ### backfill (existing tracks)
 
@@ -97,18 +110,30 @@ uv run scripts/backfill_embeddings.py --dry-run
 # index first 5 tracks
 uv run scripts/backfill_embeddings.py --limit 5
 
-# full backfill
+# full backfill with 10 concurrent workers (default)
 uv run scripts/backfill_embeddings.py
 
-# custom batch size
-uv run scripts/backfill_embeddings.py --batch-size 5
+# faster with more concurrency (Modal auto-scales containers)
+uv run scripts/backfill_embeddings.py --concurrency 20
 ```
 
-the script downloads audio from R2, generates CLAP embeddings via Modal, and upserts to turbopuffer. runs sequentially to be gentle on Modal.
+the script downloads audio from R2, generates CLAP embeddings via Modal, and upserts to turbopuffer. uses asyncio concurrency with a semaphore — Modal spins up multiple containers automatically.
+
+requires env vars: `DATABASE_URL`, `R2_PUBLIC_BUCKET_URL`, `MODAL_*`, `TURBOPUFFER_*`.
+
+**important**: if you switch CLAP models, you must re-backfill all tracks. text and audio embeddings must be in the same latent space.
 
 ## feature flag
 
-vibe search is gated behind the `vibe-search` per-user feature flag. users with the flag see a "vibe" toggle in the Cmd+K search modal. without the flag, the toggle is hidden and only regular text search is available.
+mood search is gated behind the `vibe-search` per-user feature flag. users with the flag get semantic results appended below keyword results in the search modal. without the flag, only keyword search runs.
+
+## cost
+
+| service | backfill (575 tracks) | ongoing per upload | monthly storage |
+|---------|----------------------|-------------------|-----------------|
+| Modal (CLAP inference) | ~$0.35 | < $0.001 | $0 (scales to zero) |
+| turbopuffer (vectors) | — | — | < $0.01 |
+| R2 (audio download) | $0 (free egress) | $0 | — |
 
 ## environment variables
 
@@ -142,14 +167,15 @@ no auth required. returns tracks ranked by cosine similarity to the query text.
       "artist_handle": "artist.bsky.social",
       "artist_display_name": "Artist Name",
       "image_url": "https://...",
-      "similarity": 0.873
+      "similarity": 0.483
     }
   ],
-  "query": "dark ambient techno"
+  "query": "dark ambient techno",
+  "available": true
 }
 ```
 
-returns 503 if Modal/turbopuffer are disabled.
+`available: false` when Modal/turbopuffer are disabled or embedding fails. empty `results` with `available: true` means no tracks matched.
 
 ## key files
 
@@ -159,5 +185,5 @@ returns 503 if Modal/turbopuffer are disabled.
 - `backend/src/backend/api/search.py` — `/search/semantic` endpoint
 - `backend/src/backend/_internal/background_tasks.py` — `generate_embedding` task
 - `scripts/backfill_embeddings.py` — batch indexing script
-- `frontend/src/lib/components/SearchModal.svelte` — vibe toggle UI
-- `frontend/src/lib/search.svelte.ts` — semantic search state
+- `frontend/src/lib/components/SearchModal.svelte` — search UI (mood badge, progressive results)
+- `frontend/src/lib/search.svelte.ts` — parallel keyword + semantic dispatch
