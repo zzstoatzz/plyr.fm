@@ -412,8 +412,18 @@ async def semantic_search(
         logger.error("semantic search embedding failed: %s", embed_result.error)
         return SemanticSearchResponse(results=[], query=q, available=False)
 
-    # query turbopuffer
+    # query turbopuffer — fetch extra candidates so we can filter by quality
+    max_semantic_results = min(limit, 5)
     vector_results = await tpuf_query(embed_result.embedding, top_k=limit)
+
+    if not vector_results:
+        return SemanticSearchResponse(results=[], query=q)
+
+    # filter by absolute distance ceiling — CLAP cross-modal cosine distances
+    # cluster around 0.98-1.0, so only keep results clearly closer than random.
+    # a distance of 0.995 corresponds to ~0.005 cosine similarity (noise floor).
+    max_distance = 0.995
+    vector_results = [r for r in vector_results if r.distance < max_distance]
 
     if not vector_results:
         return SemanticSearchResponse(results=[], query=q)
@@ -435,21 +445,14 @@ async def semantic_search(
     for track, artist in rows:
         track_lookup[track.id] = (track, artist)
 
-    # CLAP cross-modal cosine similarities are inherently low (~0.01),
-    # so we normalize distances to a 0-1 relevance scale across results.
-    distances = [distance_by_id[tid] for tid in track_ids if tid in track_lookup]
-    min_dist = min(distances) if distances else 0.0
-    max_dist = max(distances) if distances else 1.0
-    dist_range = max_dist - min_dist
-
     results: list[SemanticTrackResult] = []
     for track_id in track_ids:
         if track_id not in track_lookup:
             continue
         track, artist = track_lookup[track_id]
         dist = distance_by_id[track_id]
-        # map [min_dist, max_dist] -> [1.0, 0.0] so closest = highest score
-        relevance = 1.0 - (dist - min_dist) / dist_range if dist_range > 0 else 1.0
+        # raw cosine similarity — low for CLAP cross-modal but honest
+        similarity = max(0.0, 1.0 - dist)
         results.append(
             SemanticTrackResult(
                 id=track.id,
@@ -457,8 +460,8 @@ async def semantic_search(
                 artist_handle=artist.handle,
                 artist_display_name=artist.display_name,
                 image_url=track.image_url,
-                similarity=round(relevance, 3),
+                similarity=round(similarity, 4),
             )
         )
 
-    return SemanticSearchResponse(results=results, query=q)
+    return SemanticSearchResponse(results=results[:max_semantic_results], query=q)
