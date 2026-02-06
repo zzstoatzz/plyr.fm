@@ -282,19 +282,17 @@ class SearchState {
 	}
 
 	get activeResults(): (SearchResult | SemanticSearchResult)[] {
-		const keywordNonTracks = this.results.filter((r) => r.type !== 'track');
-		const keywordTracks = this.results.filter((r) => r.type === 'track');
-		const semanticTracks = this.dedupedSemanticResults;
+		const keyword = this.results;
+		const semantic = this.dedupedSemanticResults;
 
-		// interleave: keyword track, semantic track, keyword track, semantic track...
-		const interleaved: (SearchResult | SemanticSearchResult)[] = [];
-		const maxLen = Math.max(keywordTracks.length, semanticTracks.length);
-		for (let i = 0; i < maxLen; i++) {
-			if (i < keywordTracks.length) interleaved.push(keywordTracks[i]);
-			if (i < semanticTracks.length) interleaved.push(semanticTracks[i]);
-		}
+		if (semantic.length === 0) return keyword;
+		if (keyword.length === 0) return semantic;
 
-		return [...keywordNonTracks, ...interleaved];
+		// merge by score — both relevance and similarity are 0-1
+		const score = (r: SearchResult | SemanticSearchResult): number =>
+			'similarity' in r ? r.similarity : r.relevance;
+
+		return [...keyword, ...semantic].sort((a, b) => score(b) - score(a));
 	}
 
 	selectNext() {
