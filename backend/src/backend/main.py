@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, PlainTextResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -183,6 +183,18 @@ app = FastAPI(
 # setup rate limiter
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> Response:
+    """log unhandled exceptions so they appear in logfire with full tracebacks."""
+    logger.exception("unhandled exception on %s %s", request.method, request.url.path)
+    return ORJSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+    )
+
+
+app.add_exception_handler(Exception, _unhandled_exception_handler)
 
 # instrument fastapi with logfire
 if logfire:
