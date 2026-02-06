@@ -1,7 +1,7 @@
 """turbopuffer vector database client.
 
 client for storing and querying CLAP embeddings in turbopuffer.
-used for semantic vibe search (text-to-audio matching).
+used for semantic mood search (text-to-audio matching).
 """
 
 import logging
