@@ -412,29 +412,11 @@ async def semantic_search(
         logger.error("semantic search embedding failed: %s", embed_result.error)
         return SemanticSearchResponse(results=[], query=q, available=False)
 
-    # query turbopuffer — fetch extra candidates so we can filter by quality
+    # query turbopuffer
     max_semantic_results = min(limit, 5)
-    vector_results = await tpuf_query(embed_result.embedding, top_k=limit)
-
-    if not vector_results:
-        return SemanticSearchResponse(results=[], query=q)
-
-    # filter by absolute distance ceiling — CLAP cross-modal cosine distances
-    # cluster around 0.98-1.0, so only keep results clearly closer than random.
-    # a distance of 0.995 corresponds to ~0.005 cosine similarity (noise floor).
-    max_distance = 0.995
-    vector_results = [r for r in vector_results if r.distance < max_distance]
-
-    if not vector_results:
-        return SemanticSearchResponse(results=[], query=q)
-
-    # spread check: if the gap between the best and worst result is too small,
-    # the rankings are essentially random (corpus too small or query too vague).
-    min_spread = 0.005
-    best_dist = vector_results[0].distance
-    worst_dist = vector_results[-1].distance
-    if worst_dist - best_dist < min_spread:
-        return SemanticSearchResponse(results=[], query=q)
+    vector_results = await tpuf_query(
+        embed_result.embedding, top_k=max_semantic_results
+    )
 
     # hydrate from DB (get image_url, display_name, etc.)
     track_ids = [r.track_id for r in vector_results]
@@ -459,7 +441,6 @@ async def semantic_search(
             continue
         track, artist = track_lookup[track_id]
         dist = distance_by_id[track_id]
-        # raw cosine similarity — low for CLAP cross-modal but honest
         similarity = max(0.0, 1.0 - dist)
         results.append(
             SemanticTrackResult(

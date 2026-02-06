@@ -2,7 +2,7 @@
 
 Hosts the CLAP (Contrastive Language-Audio Pretraining) model for generating
 audio and text embeddings in a shared vector space. Used by plyr.fm for
-semantic vibe search — users describe a mood and get matching tracks.
+semantic mood search — users describe a mood and get matching tracks.
 
 deploy:
     modal deploy clap/app.py
@@ -46,8 +46,8 @@ class ClapService:
     def load_model(self):
         from transformers import ClapModel, ClapProcessor
 
-        self.model = ClapModel.from_pretrained("laion/larger_clap_music")
-        self.processor = ClapProcessor.from_pretrained("laion/larger_clap_music")
+        self.model = ClapModel.from_pretrained("laion/clap-htsat-unfused")
+        self.processor = ClapProcessor.from_pretrained("laion/clap-htsat-unfused")
         self.model.eval()
 
     @modal.fastapi_endpoint(method="POST")
