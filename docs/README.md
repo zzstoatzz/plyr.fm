@@ -15,6 +15,7 @@ organized knowledge base for plyr.fm development.
 - **[feature-flags.md](./backend/feature-flags.md)** - per-user feature rollout system
 - **[streaming-uploads.md](./backend/streaming-uploads.md)** - SSE progress tracking
 - **[transcoder.md](./backend/transcoder.md)** - rust audio conversion service (lossless support)
+- **[vibe-search.md](./backend/vibe-search.md)** - semantic search with CLAP embeddings (Modal + turbopuffer)
 
 ### frontend
 - **[state-management.md](./frontend/state-management.md)** - svelte 5 runes patterns
