@@ -103,9 +103,7 @@ async def backfill_embeddings(
         batch = rows[i : i + batch_size]
 
         for track, artist in batch:
-            r2_url = (
-                f"{settings.storage.r2_public_url}/{track.file_id}{track.file_type}"
-            )
+            r2_url = f"{settings.storage.r2_public_bucket_url}/audio/{track.file_id}.{track.file_type}"
 
             try:
                 logger.info(
