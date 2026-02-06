@@ -428,6 +428,14 @@ async def semantic_search(
     if not vector_results:
         return SemanticSearchResponse(results=[], query=q)
 
+    # spread check: if the gap between the best and worst result is too small,
+    # the rankings are essentially random (corpus too small or query too vague).
+    min_spread = 0.005
+    best_dist = vector_results[0].distance
+    worst_dist = vector_results[-1].distance
+    if worst_dist - best_dist < min_spread:
+        return SemanticSearchResponse(results=[], query=q)
+
     # hydrate from DB (get image_url, display_name, etc.)
     track_ids = [r.track_id for r in vector_results]
     distance_by_id = {r.track_id: r.distance for r in vector_results}

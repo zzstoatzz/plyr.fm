@@ -222,7 +222,7 @@
 							<span class="result-subtitle">{getResultSubtitle(result)}</span>
 						</div>
 						{#if search.semanticBoundary >= 0 && index >= search.semanticBoundary}
-							<span class="result-type vibe">vibe</span>
+							<span class="result-type mood">mood</span>
 						{:else}
 							<span class="result-type">{result.type}</span>
 						{/if}
@@ -231,7 +231,7 @@
 				{#if search.semanticLoading}
 					<div class="semantic-loading">
 						<div class="search-spinner-small"></div>
-						<span>searching by vibe...</span>
+						<span>searching by mood...</span>
 					</div>
 				{/if}
 			</div>
@@ -240,7 +240,7 @@
 				<div class="search-empty">no matches by name</div>
 				<div class="semantic-loading">
 					<div class="search-spinner-small"></div>
-					<span>searching by vibe...</span>
+					<span>searching by mood...</span>
 				</div>
 			</div>
 		{:else if search.query.length >= 2 && !search.loading && !search.semanticLoading && search.activeResults.length === 0}
@@ -460,7 +460,7 @@
 		flex-shrink: 0;
 	}
 
-	.result-type.vibe {
+	.result-type.mood {
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
