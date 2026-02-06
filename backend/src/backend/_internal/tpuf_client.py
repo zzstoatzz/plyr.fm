@@ -129,7 +129,7 @@ async def get_vector(track_id: int) -> list[float] | None:
             response = await ns.query(
                 filters=("id", "Eq", track_id),
                 top_k=1,
-                include_vectors=True,
+                include_attributes=["vector"],
             )
         except NotFoundError:
             return None
