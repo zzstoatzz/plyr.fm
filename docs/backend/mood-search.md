@@ -85,8 +85,10 @@ vector database for storing and querying track embeddings.
 ```bash
 TURBOPUFFER_ENABLED=true
 TURBOPUFFER_API_KEY=tpuf_xxxxx
-TURBOPUFFER_NAMESPACE=plyr-tracks      # use plyr-tracks-stg for staging
+TURBOPUFFER_NAMESPACE=plyr-tracks      # prod: plyr-tracks, staging: plyr-tracks-stg
 ```
+
+> **namespace naming**: the backfill script writes to whatever `TURBOPUFFER_NAMESPACE` is set to. production uses `plyr-tracks` (not `plyr-tracks-prd`). if you change this, you must re-backfill.
 
 each vector stores:
 - `id`: track_id
@@ -176,6 +178,26 @@ no auth required. returns tracks ranked by cosine similarity to the query text.
 ```
 
 `available: false` when Modal/turbopuffer are disabled or embedding fails. empty `results` with `available: true` means no tracks matched.
+
+### `GET /tracks/{track_id}/recommended-tags?limit=5`
+
+no auth required. recommends tags for a track based on what similar-sounding tracks are tagged with.
+
+uses the track's CLAP audio embedding to find the 20 nearest neighbors via turbopuffer, aggregates their tags weighted by cosine similarity, and excludes tags the track already has.
+
+**response**:
+```json
+{
+  "track_id": 76,
+  "tags": [
+    {"name": "ambient", "score": 1.0},
+    {"name": "electronic", "score": 0.72}
+  ],
+  "available": true
+}
+```
+
+`available: false` when Modal/turbopuffer are disabled. empty `tags` with `available: true` means the track has no embedding or its neighbors have no tags.
 
 ## key files
 
