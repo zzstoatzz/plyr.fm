@@ -1,6 +1,8 @@
 """tag endpoints for track categorization."""
 
 import asyncio
+import logging
+from collections import defaultdict
 from typing import Annotated
 
 from fastapi import Cookie, Depends, HTTPException, Query, Request
@@ -9,7 +11,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend._internal import tpuf_client
 from backend._internal.auth import get_session
+from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
@@ -19,6 +23,8 @@ from backend.utilities.aggregations import (
 )
 
 from .router import router
+
+logger = logging.getLogger(__name__)
 
 
 class TagWithCount(BaseModel):
@@ -149,3 +155,85 @@ async def list_tags(
     rows = result.all()
 
     return [TagWithCount(name=row.name, track_count=row.track_count) for row in rows]
+
+
+class RecommendedTag(BaseModel):
+    """a recommended tag with similarity-weighted score."""
+
+    name: str
+    score: float
+
+
+class RecommendedTagsResponse(BaseModel):
+    """response for tag recommendations based on audio similarity."""
+
+    track_id: int
+    tags: list[RecommendedTag]
+    available: bool = True
+
+
+@router.get("/{track_id}/recommended-tags")
+async def get_recommended_tags(
+    track_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+) -> RecommendedTagsResponse:
+    """recommend tags for a track based on similar-sounding tracks.
+
+    uses CLAP audio embeddings to find similar tracks, then aggregates
+    their tags weighted by similarity score.
+    """
+    # verify track exists
+    result = await db.execute(select(Track).where(Track.id == track_id))
+    track = result.scalar_one_or_none()
+    if not track:
+        raise HTTPException(status_code=404, detail="track not found")
+
+    # check if embeddings are enabled
+    if not (settings.modal.enabled and settings.turbopuffer.enabled):
+        return RecommendedTagsResponse(track_id=track_id, tags=[], available=False)
+
+    # fetch this track's embedding
+    embedding = await tpuf_client.get_vector(track_id)
+    if embedding is None:
+        return RecommendedTagsResponse(track_id=track_id, tags=[])
+
+    # find similar tracks
+    similar = await tpuf_client.query(embedding, top_k=21)
+
+    # filter out self
+    neighbors = [r for r in similar if r.track_id != track_id][:20]
+    if not neighbors:
+        return RecommendedTagsResponse(track_id=track_id, tags=[])
+
+    neighbor_ids = [r.track_id for r in neighbors]
+    similarity_by_id = {r.track_id: 1.0 - r.distance for r in neighbors}
+
+    # fetch tags for neighbors and the target track
+    all_ids = [*neighbor_ids, track_id]
+    tags_map = await get_track_tags(db, all_ids)
+
+    current_tags = tags_map.get(track_id, set())
+
+    # aggregate: sum similarity scores per tag across neighbors
+    tag_scores: dict[str, float] = defaultdict(float)
+    for neighbor_id in neighbor_ids:
+        sim = similarity_by_id[neighbor_id]
+        for tag_name in tags_map.get(neighbor_id, set()):
+            if tag_name not in current_tags:
+                tag_scores[tag_name] += sim
+
+    if not tag_scores:
+        return RecommendedTagsResponse(track_id=track_id, tags=[])
+
+    # normalize to 0-1
+    max_score = max(tag_scores.values())
+    recommended = sorted(tag_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
+
+    return RecommendedTagsResponse(
+        track_id=track_id,
+        tags=[
+            RecommendedTag(name=name, score=round(score / max_score, 3))
+            for name, score in recommended
+        ],
+    )
