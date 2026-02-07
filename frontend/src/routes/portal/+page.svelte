@@ -31,6 +31,12 @@
 	let editRemoveImage = $state(false);
 	let editSupportGate = $state(false);
 	let hasUnresolvedEditFeaturesInput = $state(false);
+	let recommendedTags = $state<{name: string; score: number}[]>([]);
+	let loadingRecommendedTags = $state(false);
+	let recommendedTagsTrackId = $state<number | null>(null);
+	let visibleRecommendedTags = $derived(
+		recommendedTags.filter(r => !editTags.includes(r.name.toLowerCase()))
+	);
 	// profile editing state
 	let displayName = $state('');
 	let bio = $state('');
@@ -381,6 +387,28 @@
 		editFeaturedArtists = track.features || [];
 		editTags = track.tags || [];
 		editSupportGate = track.support_gate !== null && track.support_gate !== undefined;
+		fetchRecommendedTags(track.id);
+	}
+
+	async function fetchRecommendedTags(trackId: number) {
+		loadingRecommendedTags = true;
+		recommendedTags = [];
+		recommendedTagsTrackId = trackId;
+		try {
+			const response = await fetch(
+				`${API_URL}/tracks/${trackId}/recommended-tags?limit=8`,
+				{ credentials: 'include' }
+			);
+			if (!response.ok) return;
+			const data = await response.json();
+			if (recommendedTagsTrackId !== trackId) return;
+			if (!data.available || data.tags.length === 0) return;
+			recommendedTags = data.tags;
+		} catch {
+			// silent — enhancement, not critical
+		} finally {
+			loadingRecommendedTags = false;
+		}
 	}
 
 	function cancelEdit() {
@@ -396,6 +424,9 @@
 		editImagePreviewUrl = null;
 		editRemoveImage = false;
 		editSupportGate = false;
+		recommendedTags = [];
+		loadingRecommendedTags = false;
+		recommendedTagsTrackId = null;
 	}
 
 
@@ -798,6 +829,30 @@
 												onRemove={(tag) => { editTags = editTags.filter(t => t !== tag); }}
 												placeholder="type to search tags..."
 											/>
+											{#if loadingRecommendedTags}
+												<div class="suggested-tags-row">
+													<span class="suggested-label">suggested</span>
+													<WaveLoading size="sm" />
+												</div>
+											{:else if visibleRecommendedTags.length > 0}
+												<div class="suggested-tags-row">
+													<span class="suggested-label">suggested</span>
+													<div class="suggested-tags">
+														{#each visibleRecommendedTags as rec}
+															<button
+																type="button"
+																class="suggested-tag-chip"
+																onclick={() => {
+																	editTags = [...editTags, rec.name.toLowerCase()];
+																	recommendedTags = recommendedTags.filter(r => r !== rec);
+																}}
+															>
+																+ {rec.name}
+															</button>
+														{/each}
+													</div>
+												</div>
+											{/if}
 										</div>
 										<div class="edit-field-group">
 											<span class="edit-label">artwork (optional)</span>
@@ -1923,6 +1978,47 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+	}
+
+	.suggested-tags-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 24px;
+	}
+
+	.suggested-label {
+		font-size: var(--text-xs, 0.75rem);
+		color: var(--text-muted);
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+
+	.suggested-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+
+	.suggested-tag-chip {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.2rem 0.5rem;
+		background: transparent;
+		border: 1px dashed color-mix(in srgb, var(--accent) 30%, transparent);
+		color: var(--text-secondary);
+		border-radius: var(--radius-xl);
+		font-size: var(--text-sm);
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.suggested-tag-chip:hover {
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.edit-actions {
