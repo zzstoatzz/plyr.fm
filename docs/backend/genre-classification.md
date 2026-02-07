@@ -69,6 +69,17 @@ predictions are stored in `track.extra["genre_predictions"]`:
 
 once classified, the predictions are cached — subsequent API requests read from the database without calling Replicate again.
 
+### cache invalidation
+
+predictions are keyed by `genre_predictions_file_id` (stored alongside predictions in `track.extra`). when a track's audio file is replaced, the `file_id` changes and the cached predictions are discarded — the next request triggers reclassification.
+
+```json
+{
+  "genre_predictions": [...],
+  "genre_predictions_file_id": "a1b2c3d4e5f67890"
+}
+```
+
 ## backfill
 
 ```bash
@@ -104,6 +115,14 @@ effnet-discogs runs on CPU at ~$0.00019/run (~$0.11 per 575 tracks). Replicate s
 - **inference**: CPU, ~2s per track
 - **SDK note**: the `replicate` Python SDK is incompatible with Python 3.14 (pydantic v1 dependency). we use httpx directly against the Replicate HTTP API with `Prefer: wait` for synchronous predictions.
 
+## frontend UX
+
+when editing a track on the portal page, the edit modal fetches recommended tags and displays them as clickable dashed-border chips below the tag input. clicking a chip adds the tag. uses `$derived` to reactively hide suggestions that match manually-typed tags.
+
+- loading state: `WaveLoading size="sm"` with "suggested" label
+- silent failures: section hidden if replicate disabled, fetch fails, or no predictions
+- implemented in: `frontend/src/routes/portal/+page.svelte`
+
 ## key files
 
 - `backend/src/backend/_internal/replicate_client.py` — Replicate HTTP client
@@ -111,3 +130,4 @@ effnet-discogs runs on CPU at ~$0.00019/run (~$0.11 per 575 tracks). Replicate s
 - `backend/src/backend/api/tracks/tags.py` — `recommended-tags` endpoint
 - `backend/src/backend/config.py` — `ReplicateSettings`
 - `scripts/backfill_genres.py` — batch classification script
+- `frontend/src/routes/portal/+page.svelte` — suggested tags UI in edit modal

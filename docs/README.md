@@ -9,7 +9,7 @@ organized knowledge base for plyr.fm development.
   - [connection-pool-exhaustion](./runbooks/connection-pool-exhaustion.md) - 500s, stuck connections
 
 ### backend
-- **[background-tasks.md](./backend/background-tasks.md)** - docket-based task system (copyright scan, export, scrobble)
+- **[background-tasks.md](./backend/background-tasks.md)** - docket-based task system (copyright scan, export, scrobble, genre classification)
 - **[configuration.md](./backend/configuration.md)** - environment setup and settings
 - **[database/](./backend/database/)** - connection pooling, neon-specific patterns
 - **[feature-flags.md](./backend/feature-flags.md)** - per-user feature rollout system
