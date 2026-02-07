@@ -38,16 +38,17 @@ class ClassificationResult:
     error: str | None = None
 
 
-def _clean_genre_name(raw: str) -> str:
-    """clean Discogs taxonomy names like 'Electronic---Ambient' to 'ambient electronic'.
+def _split_genre_name(raw: str) -> list[str]:
+    """split Discogs taxonomy names like 'Electronic---Ambient' into separate tags.
 
     the effnet-discogs model returns genre/subgenre pairs separated by '---'.
-    we flip the order (subgenre first) and lowercase for tag-friendly formatting.
+    we split them into individual lowercase tags for more useful categorization.
+    e.g. 'Electronic---Deep Techno' → ['electronic', 'deep techno']
     """
     if "---" in raw:
         genre, subgenre = raw.split("---", 1)
-        return f"{subgenre} {genre}".lower()
-    return raw.lower()
+        return [genre.lower(), subgenre.lower()]
+    return [raw.lower()]
 
 
 class ReplicateClient:
@@ -150,12 +151,16 @@ class ReplicateClient:
                 output_response.raise_for_status()
                 predictions = output_response.json()
 
+                # split genre/subgenre pairs and deduplicate, keeping highest score
+                seen: dict[str, float] = {}
+                for name, score in predictions.items():
+                    for tag in _split_genre_name(name):
+                        if tag not in seen or score > seen[tag]:
+                            seen[tag] = round(score, 4)
+
                 genres = [
-                    GenrePrediction(
-                        name=_clean_genre_name(name),
-                        confidence=round(score, 4),
-                    )
-                    for name, score in predictions.items()
+                    GenrePrediction(name=tag, confidence=conf)
+                    for tag, conf in seen.items()
                 ]
                 # sort by confidence descending
                 genres.sort(key=lambda g: g.confidence, reverse=True)
