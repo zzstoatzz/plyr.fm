@@ -23,7 +23,7 @@ track uploaded (or on-demand request)
 
 1. audio URL is sent to Replicate's effnet-discogs model
 2. model returns genre labels from the [Discogs taxonomy](https://www.discogs.com/search/) with confidence scores
-3. raw labels use `Genre---Subgenre` format (e.g., `Electronic---Ambient`) — we clean these to `subgenre genre` lowercase (`ambient electronic`)
+3. raw labels use `Genre---Subgenre` format (e.g., `Electronic---Ambient`) — we split these into separate tags (`electronic`, `ambient`) and deduplicate, keeping the highest confidence score
 4. predictions are stored in `track.extra["genre_predictions"]` as JSON
 
 ### when classification runs
@@ -61,9 +61,10 @@ predictions are stored in `track.extra["genre_predictions"]`:
 
 ```json
 [
-  {"name": "ambient electronic", "confidence": 0.1999},
-  {"name": "experimental electronic", "confidence": 0.1673},
-  {"name": "synth-pop electronic", "confidence": 0.122}
+  {"name": "electronic", "confidence": 0.1999},
+  {"name": "ambient", "confidence": 0.1999},
+  {"name": "experimental", "confidence": 0.1673},
+  {"name": "synth-pop", "confidence": 0.122}
 ]
 ```
 
