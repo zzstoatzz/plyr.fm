@@ -685,6 +685,7 @@ async def classify_genres(track_id: int, audio_url: str) -> None:
 
         extra = dict(track.extra) if track.extra else {}
         extra["genre_predictions"] = predictions
+        extra["genre_predictions_file_id"] = track.file_id
         track.extra = extra
         await db.commit()
 

@@ -93,6 +93,7 @@ async def _classify_one(
                 if db_track:
                     extra = dict(db_track.extra) if db_track.extra else {}
                     extra["genre_predictions"] = predictions
+                    extra["genre_predictions_file_id"] = db_track.file_id
                     db_track.extra = extra
                     await db.commit()
 
