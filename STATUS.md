@@ -45,6 +45,37 @@ plyr.fm should become:
 
 ## recent work
 
+### February 2026
+
+#### ML genre classification + suggested tags (PRs #864-868, Feb 6-7)
+
+**genre classification via Replicate**: tracks are now automatically classified into genre labels using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model on Replicate (EfficientNet trained on Discogs ~400 categories).
+
+**how it works**:
+- on upload: if `REPLICATE_ENABLED=true`, classification runs as a docket background task
+- on demand: `GET /tracks/{id}/recommended-tags` classifies on the fly if no cached predictions
+- predictions stored in `track.extra["genre_predictions"]` with `genre_predictions_file_id` for cache invalidation when audio is replaced
+- raw Discogs labels (`Electronic---Ambient`) cleaned to `ambient electronic` format
+- cost: ~$0.00019/run (~$0.11 per 575 tracks, CPU inference)
+
+**frontend UX (PR #868)**: when editing a track on the portal, suggested genre tags appear as clickable dashed-border chips below the tag input. wave loading animation while fetching. clicking a chip adds the tag. `$derived` reactively hides suggestions matching manually-typed tags. all failures silently hide the section.
+
+**implementation details**:
+- Replicate Python SDK incompatible with Python 3.14 (pydantic v1) — uses httpx directly against the Replicate HTTP API with `Prefer: wait` header
+- `ReplicateSettings` in config, `ReplicateClient` singleton follows `clap_client.py` pattern
+- backfill script: `scripts/backfill_genres.py` with concurrency control
+- privacy policy updated to list Replicate, terms bumped for re-acceptance
+- docs: `docs/backend/genre-classification.md`
+
+**PRs**:
+- #864: core implementation (replicate client, background task, endpoint, backfill script, tests)
+- #865: clean Discogs genre names, add documentation
+- #866: link genre-classification from docs index
+- #867: cache invalidation keyed by file_id
+- #868: suggested tags UI in portal edit modal
+
+---
+
 ### January 2026
 
 #### per-track PDS migration + UX polish (PRs #835-839, Jan 30-31)
@@ -442,7 +473,8 @@ PDS blob storage shipped and feature-flagged. uploads store audio on user's PDS 
 - ✅ unified search with Cmd/Ctrl+K
 - ✅ teal.fm scrobbling
 - ✅ copyright moderation with ATProto labeler
-- ✅ docket background tasks (copyright scan, export, atproto sync, scrobble)
+- ✅ ML genre classification with suggested tags in edit modal (Replicate effnet-discogs)
+- ✅ docket background tasks (copyright scan, export, atproto sync, scrobble, genre classification)
 - ✅ media export with concurrent downloads
 - ✅ supporter-gated content via atprotofans
 - ✅ listen receipts (tracked share links with visitor/listener stats)
@@ -485,6 +517,7 @@ see live dashboard: [plyr.fm/costs](https://plyr.fm/costs)
 - neon postgres: $5/month
 - cloudflare (R2 + pages + domain): ~$1/month
 - audd audio fingerprinting: $5-10/month (usage-based)
+- replicate (genre classification): <$1/month (scales to zero, ~$0.00019/run)
 - logfire: $0 (free tier)
 
 ## admin tooling
@@ -551,4 +584,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-01-31.
+this is a living document. last updated 2026-02-07.
