@@ -70,6 +70,7 @@ class UploaderState {
 		image: File | null | undefined,
 		tags: string[],
 		supportGated: boolean,
+		autoTag: boolean,
 		onSuccess?: () => void,
 		callbacks?: UploadProgressCallback
 	): void {
@@ -108,6 +109,9 @@ class UploaderState {
 		}
 		if (supportGated) {
 			formData.append('support_gate', JSON.stringify({ type: 'any' }));
+		}
+		if (autoTag) {
+			formData.append('auto_tag', 'true');
 		}
 
 		const xhr = new XMLHttpRequest();

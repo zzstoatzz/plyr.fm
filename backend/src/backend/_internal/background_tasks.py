@@ -686,6 +686,30 @@ async def classify_genres(track_id: int, audio_url: str) -> None:
         extra = dict(track.extra) if track.extra else {}
         extra["genre_predictions"] = predictions
         extra["genre_predictions_file_id"] = track.file_id
+
+        # auto-tag if requested
+        if extra.get("auto_tag") and predictions:
+            from backend.api.tracks.uploads import _add_tags_to_track
+
+            # ratio-to-top: keep tags scoring >= 50% of top score
+            top_confidence = float(predictions[0]["confidence"])
+            top_tags = [
+                str(p["name"])
+                for p in predictions
+                if float(p["confidence"]) >= top_confidence * 0.5
+            ][:5]  # cap at 5
+
+            if top_tags:
+                await _add_tags_to_track(db, track_id, top_tags, track.artist_did)
+                logfire.info(
+                    "auto-tagged track",
+                    track_id=track_id,
+                    tags=top_tags,
+                )
+
+            # clean up flag
+            del extra["auto_tag"]
+
         track.extra = extra
         await db.commit()
 

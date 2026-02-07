@@ -100,6 +100,9 @@ class UploadContext:
     # supporter-gated content (e.g., {"type": "any"})
     support_gate: dict | None = None
 
+    # auto-apply recommended genre tags after classification
+    auto_tag: bool = False
+
 
 async def _get_or_create_tag(
     db: "AsyncSession", tag_name: str, creator_did: str
@@ -761,6 +764,8 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                 extra: dict = {}
                 if duration:
                     extra["duration"] = duration
+                if ctx.auto_tag:
+                    extra["auto_tag"] = True
 
                 album_record = None
                 if ctx.album:
@@ -881,6 +886,10 @@ async def upload_track(
     support_gate: Annotated[
         str | None,
         Form(description='JSON object for supporter gating, e.g., {"type": "any"}'),
+    ] = None,
+    auto_tag: Annotated[
+        str | None,
+        Form(description="auto-apply recommended genre tags after classification"),
     ] = None,
     file: UploadFile = File(...),
     image: UploadFile | None = File(None),
@@ -1026,6 +1035,7 @@ async def upload_track(
             image_filename=image_filename,
             image_content_type=image_content_type,
             support_gate=parsed_support_gate,
+            auto_tag=auto_tag == "true",
         )
         background_tasks.add_task(_process_upload_background, ctx)
     except Exception:

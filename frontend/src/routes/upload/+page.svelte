@@ -62,6 +62,7 @@
 	let hasUnresolvedFeaturesInput = $state(false);
 	let attestedRights = $state(false);
 	let supportGated = $state(false);
+	let autoTag = $state(false);
 
 	// albums for selection
 	let albums = $state<AlbumSummary[]>([]);
@@ -124,6 +125,7 @@
 		const uploadImage = imageFile;
 		const tagsToUpload = [...uploadTags];
 		const isGated = supportGated;
+		const shouldAutoTag = autoTag;
 
 		const clearForm = () => {
 			title = "";
@@ -134,6 +136,7 @@
 			uploadTags = [];
 			attestedRights = false;
 			supportGated = false;
+			autoTag = false;
 
 			const fileInput = document.getElementById(
 				"file-input",
@@ -153,6 +156,7 @@
 			uploadImage,
 			tagsToUpload,
 			isGated,
+			shouldAutoTag,
 			async () => {
 				await loadMyAlbums();
 			},
@@ -291,6 +295,10 @@
 					}}
 					placeholder="type to search tags..."
 				/>
+				<label class="checkbox-label" style="margin-top: 0.75rem;">
+					<input type="checkbox" bind:checked={autoTag} />
+					<span class="checkbox-text">auto-tag with recommended genres</span>
+				</label>
 			</div>
 
 			<div class="form-group">
