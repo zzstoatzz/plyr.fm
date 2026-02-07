@@ -38,6 +38,18 @@ class ClassificationResult:
     error: str | None = None
 
 
+def _clean_genre_name(raw: str) -> str:
+    """clean Discogs taxonomy names like 'Electronic---Ambient' to 'ambient electronic'.
+
+    the effnet-discogs model returns genre/subgenre pairs separated by '---'.
+    we flip the order (subgenre first) and lowercase for tag-friendly formatting.
+    """
+    if "---" in raw:
+        genre, subgenre = raw.split("---", 1)
+        return f"{subgenre} {genre}".lower()
+    return raw.lower()
+
+
 class ReplicateClient:
     """client for genre classification via Replicate's effnet-discogs model.
 
@@ -139,7 +151,10 @@ class ReplicateClient:
                 predictions = output_response.json()
 
                 genres = [
-                    GenrePrediction(name=name, confidence=round(score, 4))
+                    GenrePrediction(
+                        name=_clean_genre_name(name),
+                        confidence=round(score, 4),
+                    )
                     for name, score in predictions.items()
                 ]
                 # sort by confidence descending
