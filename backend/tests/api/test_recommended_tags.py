@@ -66,6 +66,7 @@ async def target_track_with_predictions(
                 {"name": "House", "confidence": 0.55},
                 {"name": "Ambient", "confidence": 0.31},
             ],
+            "genre_predictions_file_id": "classified001",
         },
         atproto_record_uri="at://did:plc:recartist/fm.plyr.track/classified001",
         atproto_record_cid="bafyclassified001",
@@ -201,6 +202,64 @@ async def test_recommended_tags_nonexistent_track(test_app: FastAPI):
         response = await client.get("/tracks/999999/recommended-tags")
 
     assert response.status_code == 404
+
+
+async def test_recommended_tags_reclassifies_when_file_id_changes(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    artist: Artist,
+):
+    """test that stale predictions are discarded when file_id changes."""
+    # create a track with predictions keyed to the OLD file_id
+    track = Track(
+        title="Replaced Audio Track",
+        artist_did=artist.did,
+        file_id="newfileid0001",
+        file_type="mp3",
+        r2_url="https://mock.r2.dev/audio/newfileid0001.mp3",
+        extra={
+            "duration": 200,
+            "genre_predictions": [
+                {"name": "Techno", "confidence": 0.87},
+            ],
+            "genre_predictions_file_id": "oldfileid0001",
+        },
+        atproto_record_uri="at://did:plc:recartist/fm.plyr.track/replaced001",
+        atproto_record_cid="bafyreplaced001",
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+
+    mock_result = ClassificationResult(
+        success=True,
+        genres=[
+            GenrePrediction(name="ambient electronic", confidence=0.75),
+        ],
+    )
+
+    with (
+        patch("backend.config.settings.replicate") as mock_replicate,
+        patch(
+            "backend._internal.replicate_client.get_replicate_client"
+        ) as mock_get_client,
+    ):
+        mock_replicate.enabled = True
+        mock_client = AsyncMock()
+        mock_client.classify = AsyncMock(return_value=mock_result)
+        mock_get_client.return_value = mock_client
+
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(f"/tracks/{track.id}/recommended-tags")
+
+    assert response.status_code == 200
+    data = response.json()
+    # should have reclassified — old "Techno" replaced with new "ambient electronic"
+    assert len(data["tags"]) == 1
+    assert data["tags"][0]["name"] == "ambient electronic"
+    mock_client.classify.assert_called_once()
 
 
 async def test_recommended_tags_replicate_disabled(

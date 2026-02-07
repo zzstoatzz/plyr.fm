@@ -187,10 +187,14 @@ async def get_recommended_tags(
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
 
-    # check for stored predictions
-    predictions: list[dict[str, str | float]] | None = (track.extra or {}).get(
-        "genre_predictions"
-    )
+    # check for stored predictions (invalidate if audio file changed)
+    extra = track.extra or {}
+    predictions: list[dict[str, str | float]] | None = extra.get("genre_predictions")
+    if (
+        predictions is not None
+        and extra.get("genre_predictions_file_id") != track.file_id
+    ):
+        predictions = None
 
     if predictions is None and settings.replicate.enabled and track.r2_url:
         # classify on-demand
@@ -207,6 +211,7 @@ async def get_recommended_tags(
             # store for future requests
             extra = dict(track.extra) if track.extra else {}
             extra["genre_predictions"] = predictions
+            extra["genre_predictions_file_id"] = track.file_id
             track.extra = extra
             await db.commit()
 
