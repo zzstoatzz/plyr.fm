@@ -181,23 +181,23 @@ no auth required. returns tracks ranked by cosine similarity to the query text.
 
 ### `GET /tracks/{track_id}/recommended-tags?limit=5`
 
-no auth required. recommends tags for a track based on what similar-sounding tracks are tagged with.
+no auth required. recommends genre tags for a track based on ML classification via effnet-discogs on Replicate.
 
-uses the track's CLAP audio embedding to find the 20 nearest neighbors via turbopuffer, aggregates their tags weighted by cosine similarity, and excludes tags the track already has.
+results are cached in `track.extra["genre_predictions"]`. if no predictions are stored and Replicate is enabled, classification runs on-demand. excludes tags the track already has.
 
 **response**:
 ```json
 {
   "track_id": 76,
   "tags": [
-    {"name": "ambient", "score": 1.0},
-    {"name": "electronic", "score": 0.72}
+    {"name": "Techno", "score": 0.87},
+    {"name": "Electronic", "score": 0.72}
   ],
   "available": true
 }
 ```
 
-`available: false` when Modal/turbopuffer are disabled. empty `tags` with `available: true` means the track has no embedding or its neighbors have no tags.
+`available: false` when Replicate is disabled. empty `tags` with `available: true` means classification returned no results or the track has no R2 URL.
 
 ## key files
 

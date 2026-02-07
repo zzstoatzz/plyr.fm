@@ -650,6 +650,58 @@ async def schedule_embedding_generation(track_id: int, audio_url: str) -> None:
     logfire.info("scheduled embedding generation", track_id=track_id)
 
 
+async def classify_genres(track_id: int, audio_url: str) -> None:
+    """classify genres for a track via Replicate effnet-discogs and store results.
+
+    args:
+        track_id: database ID of the track
+        audio_url: public URL of the audio file (R2)
+    """
+    from backend._internal.replicate_client import get_replicate_client
+
+    if not settings.replicate.enabled:
+        logger.debug("genre classification disabled, skipping track %d", track_id)
+        return
+
+    client = get_replicate_client()
+    result = await client.classify(audio_url)
+
+    if not result.success:
+        logger.error(
+            "genre classification failed for track %d: %s",
+            track_id,
+            result.error,
+        )
+        return
+
+    predictions = [{"name": g.name, "confidence": g.confidence} for g in result.genres]
+
+    async with db_session() as db:
+        db_result = await db.execute(select(Track).where(Track.id == track_id))
+        track = db_result.scalar_one_or_none()
+        if not track:
+            logger.warning("classify_genres: track %d not found", track_id)
+            return
+
+        extra = dict(track.extra) if track.extra else {}
+        extra["genre_predictions"] = predictions
+        track.extra = extra
+        await db.commit()
+
+    logfire.info(
+        "classified genres for track",
+        track_id=track_id,
+        top_genre=predictions[0]["name"] if predictions else None,
+    )
+
+
+async def schedule_genre_classification(track_id: int, audio_url: str) -> None:
+    """schedule a genre classification via docket."""
+    docket = get_docket()
+    await docket.add(classify_genres)(track_id, audio_url)
+    logfire.info("scheduled genre classification", track_id=track_id)
+
+
 async def move_track_audio(track_id: int, to_private: bool) -> None:
     """move a track's audio file between public and private buckets.
 
@@ -722,4 +774,5 @@ background_tasks = [
     backfill_tracks_to_pds,
     move_track_audio,
     generate_embedding,
+    classify_genres,
 ]

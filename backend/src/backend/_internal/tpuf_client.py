@@ -111,46 +111,6 @@ async def query(
         return results
 
 
-async def get_vector(track_id: int) -> list[float] | None:
-    """fetch a track's stored CLAP embedding by ID.
-
-    turbopuffer requires rank_by for queries, so we use a zero vector
-    with an ID filter to retrieve just the one row's vector.
-
-    args:
-        track_id: database ID of the track
-
-    returns:
-        embedding vector if found, None otherwise
-    """
-    # CLAP embeddings are 512-dim
-    zero_vector = [0.0] * 512
-
-    async with AsyncTurbopuffer(
-        api_key=settings.turbopuffer.api_key.get_secret_value(),
-        region=settings.turbopuffer.region,
-    ) as client:
-        ns = client.namespace(settings.turbopuffer.namespace)
-        try:
-            response = await ns.query(
-                rank_by=("vector", "ANN", zero_vector),
-                filters=("id", "Eq", track_id),
-                top_k=1,
-                include_attributes=["vector"],
-            )
-        except NotFoundError:
-            return None
-
-        rows = response.rows or []
-        if not rows:
-            return None
-
-        vector = rows[0].vector
-        if vector is None or isinstance(vector, str):
-            return None
-        return list(vector)
-
-
 async def delete(track_id: int) -> None:
     """delete a track embedding from turbopuffer.
 

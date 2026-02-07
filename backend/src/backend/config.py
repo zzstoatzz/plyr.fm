@@ -160,7 +160,7 @@ class LegalSettings(AppSettingsSection):
         description="USPTO DMCA agent registration number",
     )
     terms_last_updated: datetime = Field(
-        default=datetime(2026, 2, 4),
+        default=datetime(2026, 2, 6),
         description="Date the terms/privacy were last materially updated. "
         "Users who accepted before this date will be prompted to re-accept.",
     )
@@ -700,6 +700,34 @@ class ModalSettings(AppSettingsSection):
     )
 
 
+class ReplicateSettings(AppSettingsSection):
+    """Replicate ML platform settings for effnet-discogs genre classification."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="REPLICATE_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Replicate genre classification",
+    )
+    api_token: SecretStr = Field(
+        default=SecretStr(""),
+        description="Replicate API token (REPLICATE_API_TOKEN)",
+    )
+    top_n: int = Field(
+        default=10,
+        description="Number of top genre predictions to keep",
+    )
+    timeout_seconds: int = Field(
+        default=120,
+        description="Timeout for Replicate API requests",
+    )
+
+
 class TurbopufferSettings(AppSettingsSection):
     """Turbopuffer vector database settings for vibe search."""
 
@@ -912,6 +940,10 @@ class Settings(AppSettingsSection):
     turbopuffer: TurbopufferSettings = Field(
         default_factory=TurbopufferSettings,
         description="Turbopuffer vector search settings",
+    )
+    replicate: ReplicateSettings = Field(
+        default_factory=ReplicateSettings,
+        description="Replicate genre classification settings",
     )
 
 
