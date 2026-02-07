@@ -16,6 +16,7 @@ organized knowledge base for plyr.fm development.
 - **[streaming-uploads.md](./backend/streaming-uploads.md)** - SSE progress tracking
 - **[transcoder.md](./backend/transcoder.md)** - rust audio conversion service (lossless support)
 - **[vibe-search.md](./backend/vibe-search.md)** - semantic search with CLAP embeddings (Modal + turbopuffer)
+- **[genre-classification.md](./backend/genre-classification.md)** - ML genre tagging via effnet-discogs (Replicate)
 
 ### frontend
 - **[state-management.md](./frontend/state-management.md)** - svelte 5 runes patterns
