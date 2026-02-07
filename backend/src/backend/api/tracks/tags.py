@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from collections import defaultdict
 from typing import Annotated
 
 from fastapi import Cookie, Depends, HTTPException, Query, Request
@@ -11,7 +10,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend._internal import tpuf_client
 from backend._internal.auth import get_session
 from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
@@ -158,14 +156,14 @@ async def list_tags(
 
 
 class RecommendedTag(BaseModel):
-    """a recommended tag with similarity-weighted score."""
+    """a recommended tag with confidence score."""
 
     name: str
     score: float
 
 
 class RecommendedTagsResponse(BaseModel):
-    """response for tag recommendations based on audio similarity."""
+    """response for tag recommendations based on genre classification."""
 
     track_id: int
     tags: list[RecommendedTag]
@@ -178,10 +176,10 @@ async def get_recommended_tags(
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: Annotated[int, Query(ge=1, le=20)] = 5,
 ) -> RecommendedTagsResponse:
-    """recommend tags for a track based on similar-sounding tracks.
+    """recommend tags for a track based on ML genre classification.
 
-    uses CLAP audio embeddings to find similar tracks, then aggregates
-    their tags weighted by similarity score.
+    uses effnet-discogs via Replicate to classify audio into genre labels.
+    results are cached in track.extra["genre_predictions"].
     """
     # verify track exists
     result = await db.execute(select(Track).where(Track.id == track_id))
@@ -189,51 +187,46 @@ async def get_recommended_tags(
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
 
-    # check if embeddings are enabled
-    if not (settings.modal.enabled and settings.turbopuffer.enabled):
-        return RecommendedTagsResponse(track_id=track_id, tags=[], available=False)
+    # check for stored predictions
+    predictions: list[dict[str, str | float]] | None = (track.extra or {}).get(
+        "genre_predictions"
+    )
 
-    # fetch this track's embedding
-    embedding = await tpuf_client.get_vector(track_id)
-    if embedding is None:
+    if predictions is None and settings.replicate.enabled and track.r2_url:
+        # classify on-demand
+        from backend._internal.replicate_client import get_replicate_client
+
+        client = get_replicate_client()
+        classify_result = await client.classify(track.r2_url)
+
+        if classify_result.success and classify_result.genres:
+            predictions = [
+                {"name": g.name, "confidence": g.confidence}
+                for g in classify_result.genres
+            ]
+            # store for future requests
+            extra = dict(track.extra) if track.extra else {}
+            extra["genre_predictions"] = predictions
+            track.extra = extra
+            await db.commit()
+
+    if predictions is None:
+        if not settings.replicate.enabled:
+            return RecommendedTagsResponse(track_id=track_id, tags=[], available=False)
         return RecommendedTagsResponse(track_id=track_id, tags=[])
 
-    # find similar tracks
-    similar = await tpuf_client.query(embedding, top_k=21)
+    # get existing tags to exclude
+    tags_map = await get_track_tags(db, [track_id])
+    current_tags = {t.lower() for t in tags_map.get(track_id, set())}
 
-    # filter out self
-    neighbors = [r for r in similar if r.track_id != track_id][:20]
-    if not neighbors:
-        return RecommendedTagsResponse(track_id=track_id, tags=[])
-
-    neighbor_ids = [r.track_id for r in neighbors]
-    similarity_by_id = {r.track_id: 1.0 - r.distance for r in neighbors}
-
-    # fetch tags for neighbors and the target track
-    all_ids = [*neighbor_ids, track_id]
-    tags_map = await get_track_tags(db, all_ids)
-
-    current_tags = tags_map.get(track_id, set())
-
-    # aggregate: sum similarity scores per tag across neighbors
-    tag_scores: dict[str, float] = defaultdict(float)
-    for neighbor_id in neighbor_ids:
-        sim = similarity_by_id[neighbor_id]
-        for tag_name in tags_map.get(neighbor_id, set()):
-            if tag_name not in current_tags:
-                tag_scores[tag_name] += sim
-
-    if not tag_scores:
-        return RecommendedTagsResponse(track_id=track_id, tags=[])
-
-    # normalize to 0-1
-    max_score = max(tag_scores.values())
-    recommended = sorted(tag_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
+    # filter out tags the track already has
+    recommended = [
+        RecommendedTag(name=str(p["name"]), score=float(p["confidence"]))
+        for p in predictions
+        if str(p["name"]).lower() not in current_tags
+    ][:limit]
 
     return RecommendedTagsResponse(
         track_id=track_id,
-        tags=[
-            RecommendedTag(name=name, score=round(score / max_score, 3))
-            for name, score in recommended
-        ],
+        tags=recommended,
     )

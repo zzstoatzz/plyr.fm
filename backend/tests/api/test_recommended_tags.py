@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal.tpuf_client import VectorSearchResult
+from backend._internal.replicate_client import ClassificationResult, GenrePrediction
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackTag, get_db
 
@@ -36,6 +36,7 @@ async def target_track(db_session: AsyncSession, artist: Artist) -> Track:
         artist_did=artist.did,
         file_id="target001",
         file_type="mp3",
+        r2_url="https://mock.r2.dev/audio/target001.mp3",
         extra={"duration": 200},
         atproto_record_uri="at://did:plc:recartist/fm.plyr.track/target001",
         atproto_record_cid="bafytarget001",
@@ -47,47 +48,32 @@ async def target_track(db_session: AsyncSession, artist: Artist) -> Track:
 
 
 @pytest.fixture
-async def similar_tracks_with_tags(
+async def target_track_with_predictions(
     db_session: AsyncSession, artist: Artist
-) -> tuple[list[Track], list[Tag]]:
-    """create similar tracks with various tags."""
-    # create tags
-    ambient_tag = Tag(name="ambient", created_by_did=artist.did)
-    chill_tag = Tag(name="chill", created_by_did=artist.did)
-    electronic_tag = Tag(name="electronic", created_by_did=artist.did)
-    db_session.add_all([ambient_tag, chill_tag, electronic_tag])
-    await db_session.flush()
-
-    tracks = []
-    for i in range(3):
-        track = Track(
-            title=f"Similar Track {i}",
-            artist_did=artist.did,
-            file_id=f"similar{i:03d}",
-            file_type="mp3",
-            extra={"duration": 180},
-            atproto_record_uri=f"at://did:plc:recartist/fm.plyr.track/similar{i:03d}",
-            atproto_record_cid=f"bafysimilar{i:03d}",
-        )
-        db_session.add(track)
-        tracks.append(track)
-
-    await db_session.flush()
-
-    # track 0: ambient, chill (most similar — will get highest similarity)
-    db_session.add(TrackTag(track_id=tracks[0].id, tag_id=ambient_tag.id))
-    db_session.add(TrackTag(track_id=tracks[0].id, tag_id=chill_tag.id))
-    # track 1: ambient, electronic
-    db_session.add(TrackTag(track_id=tracks[1].id, tag_id=ambient_tag.id))
-    db_session.add(TrackTag(track_id=tracks[1].id, tag_id=electronic_tag.id))
-    # track 2: chill
-    db_session.add(TrackTag(track_id=tracks[2].id, tag_id=chill_tag.id))
-
+) -> Track:
+    """create a track with stored genre predictions."""
+    track = Track(
+        title="Classified Track",
+        artist_did=artist.did,
+        file_id="classified001",
+        file_type="mp3",
+        r2_url="https://mock.r2.dev/audio/classified001.mp3",
+        extra={
+            "duration": 200,
+            "genre_predictions": [
+                {"name": "Techno", "confidence": 0.87},
+                {"name": "Electronic", "confidence": 0.72},
+                {"name": "House", "confidence": 0.55},
+                {"name": "Ambient", "confidence": 0.31},
+            ],
+        },
+        atproto_record_uri="at://did:plc:recartist/fm.plyr.track/classified001",
+        atproto_record_cid="bafyclassified001",
+    )
+    db_session.add(track)
     await db_session.commit()
-    for t in tracks:
-        await db_session.refresh(t)
-
-    return tracks, [ambient_tag, chill_tag, electronic_tag]
+    await db_session.refresh(track)
+    return track
 
 
 @pytest.fixture
@@ -102,87 +88,56 @@ def test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
     app.dependency_overrides.clear()
 
 
-async def test_recommended_tags_returns_ranked_tags(
+async def test_recommended_tags_returns_stored_predictions(
     test_app: FastAPI,
-    target_track: Track,
-    similar_tracks_with_tags: tuple[list[Track], list[Tag]],
+    target_track_with_predictions: Track,
 ):
-    """test that recommended tags are returned ranked by similarity-weighted score."""
-    similar_tracks, _ = similar_tracks_with_tags
-
-    mock_embedding = [0.1] * 512
-    mock_similar = [
-        VectorSearchResult(track_id=similar_tracks[0].id, distance=0.1),  # sim=0.9
-        VectorSearchResult(track_id=similar_tracks[1].id, distance=0.3),  # sim=0.7
-        VectorSearchResult(track_id=similar_tracks[2].id, distance=0.5),  # sim=0.5
-    ]
-
-    with (
-        patch("backend.config.settings.modal") as mock_modal,
-        patch("backend.config.settings.turbopuffer") as mock_tpuf,
-        patch("backend.api.tracks.tags.tpuf_client") as mock_client,
-    ):
-        mock_modal.enabled = True
-        mock_tpuf.enabled = True
-        mock_client.get_vector = AsyncMock(return_value=mock_embedding)
-        mock_client.query = AsyncMock(return_value=mock_similar)
+    """test that stored genre predictions are returned."""
+    with patch("backend.config.settings.replicate") as mock_replicate:
+        mock_replicate.enabled = True
 
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
         ) as client:
             response = await client.get(
-                f"/tracks/{target_track.id}/recommended-tags?limit=5"
+                f"/tracks/{target_track_with_predictions.id}/recommended-tags?limit=5"
             )
 
     assert response.status_code == 200
     data = response.json()
-    assert data["track_id"] == target_track.id
+    assert data["track_id"] == target_track_with_predictions.id
     assert data["available"] is True
-    assert len(data["tags"]) > 0
+    assert len(data["tags"]) == 4
 
-    tag_names = [t["name"] for t in data["tags"]]
-    # ambient appears in tracks 0 (sim=0.9) and 1 (sim=0.7) -> score=1.6
-    # chill appears in tracks 0 (sim=0.9) and 2 (sim=0.5) -> score=1.4
-    # electronic appears in track 1 (sim=0.7) -> score=0.7
-    assert tag_names[0] == "ambient"
-    assert tag_names[1] == "chill"
-    assert tag_names[2] == "electronic"
-
-    # scores should be normalized to 0-1
-    for tag in data["tags"]:
-        assert 0 <= tag["score"] <= 1
+    # should be in confidence order
+    assert data["tags"][0]["name"] == "Techno"
+    assert data["tags"][0]["score"] == 0.87
+    assert data["tags"][1]["name"] == "Electronic"
 
 
-async def test_recommended_tags_excludes_existing_tags(
+async def test_recommended_tags_on_demand_classification(
     test_app: FastAPI,
-    db_session: AsyncSession,
     target_track: Track,
-    similar_tracks_with_tags: tuple[list[Track], list[Tag]],
 ):
-    """test that tags the track already has are excluded from recommendations."""
-    similar_tracks, tags = similar_tracks_with_tags
-    ambient_tag = tags[0]
-
-    # tag the target track with "ambient"
-    db_session.add(TrackTag(track_id=target_track.id, tag_id=ambient_tag.id))
-    await db_session.commit()
-
-    mock_embedding = [0.1] * 512
-    mock_similar = [
-        VectorSearchResult(track_id=similar_tracks[0].id, distance=0.1),
-        VectorSearchResult(track_id=similar_tracks[1].id, distance=0.3),
-        VectorSearchResult(track_id=similar_tracks[2].id, distance=0.5),
-    ]
+    """test that on-demand classification happens when no predictions stored."""
+    mock_result = ClassificationResult(
+        success=True,
+        genres=[
+            GenrePrediction(name="Drum and Bass", confidence=0.91),
+            GenrePrediction(name="Electronic", confidence=0.65),
+        ],
+    )
 
     with (
-        patch("backend.config.settings.modal") as mock_modal,
-        patch("backend.config.settings.turbopuffer") as mock_tpuf,
-        patch("backend.api.tracks.tags.tpuf_client") as mock_client,
+        patch("backend.config.settings.replicate") as mock_replicate,
+        patch(
+            "backend._internal.replicate_client.get_replicate_client"
+        ) as mock_get_client,
     ):
-        mock_modal.enabled = True
-        mock_tpuf.enabled = True
-        mock_client.get_vector = AsyncMock(return_value=mock_embedding)
-        mock_client.query = AsyncMock(return_value=mock_similar)
+        mock_replicate.enabled = True
+        mock_client = AsyncMock()
+        mock_client.classify = AsyncMock(return_value=mock_result)
+        mock_get_client.return_value = mock_client
 
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
@@ -191,11 +146,51 @@ async def test_recommended_tags_excludes_existing_tags(
 
     assert response.status_code == 200
     data = response.json()
+    assert data["track_id"] == target_track.id
+    assert data["available"] is True
+    assert len(data["tags"]) == 2
+    assert data["tags"][0]["name"] == "Drum and Bass"
+    assert data["tags"][0]["score"] == 0.91
+
+    # verify classify was called with the track's R2 URL
+    mock_client.classify.assert_called_once_with(target_track.r2_url)
+
+
+async def test_recommended_tags_excludes_existing_tags(
+    test_app: FastAPI,
+    db_session: AsyncSession,
+    target_track_with_predictions: Track,
+    artist: Artist,
+):
+    """test that tags the track already has are excluded from recommendations."""
+    # create a tag matching one of the predictions
+    techno_tag = Tag(name="techno", created_by_did=artist.did)
+    db_session.add(techno_tag)
+    await db_session.flush()
+
+    db_session.add(
+        TrackTag(track_id=target_track_with_predictions.id, tag_id=techno_tag.id)
+    )
+    await db_session.commit()
+
+    with patch("backend.config.settings.replicate") as mock_replicate:
+        mock_replicate.enabled = True
+
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                f"/tracks/{target_track_with_predictions.id}/recommended-tags"
+            )
+
+    assert response.status_code == 200
+    data = response.json()
     tag_names = [t["name"] for t in data["tags"]]
-    assert "ambient" not in tag_names
-    # chill and electronic should still be recommended
-    assert "chill" in tag_names
-    assert "electronic" in tag_names
+    # "Techno" matches "techno" tag (case-insensitive) — should be excluded
+    assert "Techno" not in tag_names
+    # other predictions should still be present
+    assert "Electronic" in tag_names
+    assert "House" in tag_names
 
 
 async def test_recommended_tags_nonexistent_track(test_app: FastAPI):
@@ -208,17 +203,13 @@ async def test_recommended_tags_nonexistent_track(test_app: FastAPI):
     assert response.status_code == 404
 
 
-async def test_recommended_tags_embeddings_disabled(
+async def test_recommended_tags_replicate_disabled(
     test_app: FastAPI,
     target_track: Track,
 ):
-    """test that available=false is returned when embeddings are disabled."""
-    with (
-        patch("backend.config.settings.modal") as mock_modal,
-        patch("backend.config.settings.turbopuffer") as mock_tpuf,
-    ):
-        mock_modal.enabled = False
-        mock_tpuf.enabled = True
+    """test that available=false is returned when replicate is disabled."""
+    with patch("backend.config.settings.replicate") as mock_replicate:
+        mock_replicate.enabled = False
 
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
@@ -229,65 +220,3 @@ async def test_recommended_tags_embeddings_disabled(
     data = response.json()
     assert data["available"] is False
     assert data["tags"] == []
-
-
-async def test_recommended_tags_no_embedding(
-    test_app: FastAPI,
-    target_track: Track,
-):
-    """test that empty tags are returned when track has no embedding."""
-    with (
-        patch("backend.config.settings.modal") as mock_modal,
-        patch("backend.config.settings.turbopuffer") as mock_tpuf,
-        patch("backend.api.tracks.tags.tpuf_client") as mock_client,
-    ):
-        mock_modal.enabled = True
-        mock_tpuf.enabled = True
-        mock_client.get_vector = AsyncMock(return_value=None)
-
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app), base_url="http://test"
-        ) as client:
-            response = await client.get(f"/tracks/{target_track.id}/recommended-tags")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["available"] is True
-    assert data["tags"] == []
-
-
-async def test_recommended_tags_filters_self_from_results(
-    test_app: FastAPI,
-    target_track: Track,
-    similar_tracks_with_tags: tuple[list[Track], list[Tag]],
-):
-    """test that the target track is excluded from its own similar results."""
-    similar_tracks, _ = similar_tracks_with_tags
-
-    mock_embedding = [0.1] * 512
-    # include the target track in results (distance=0, most similar to itself)
-    mock_similar = [
-        VectorSearchResult(track_id=target_track.id, distance=0.0),
-        VectorSearchResult(track_id=similar_tracks[0].id, distance=0.2),
-    ]
-
-    with (
-        patch("backend.config.settings.modal") as mock_modal,
-        patch("backend.config.settings.turbopuffer") as mock_tpuf,
-        patch("backend.api.tracks.tags.tpuf_client") as mock_client,
-    ):
-        mock_modal.enabled = True
-        mock_tpuf.enabled = True
-        mock_client.get_vector = AsyncMock(return_value=mock_embedding)
-        mock_client.query = AsyncMock(return_value=mock_similar)
-
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app), base_url="http://test"
-        ) as client:
-            response = await client.get(f"/tracks/{target_track.id}/recommended-tags")
-
-    assert response.status_code == 200
-    data = response.json()
-    # should still return tags from the neighbor, not crash
-    assert data["track_id"] == target_track.id
-    assert len(data["tags"]) > 0
