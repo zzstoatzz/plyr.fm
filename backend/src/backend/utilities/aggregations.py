@@ -154,6 +154,31 @@ async def get_top_track_ids(db: AsyncSession, limit: int = 10) -> list[int]:
     return list(result.scalars().all())
 
 
+async def get_top_tracks_with_counts(
+    db: AsyncSession, limit: int = 10
+) -> list[tuple[int, int]]:
+    """get top track IDs with their like counts in a single query.
+
+    combines the work of get_top_track_ids and get_like_counts to avoid
+    a redundant DB round-trip (the GROUP BY already computes the count).
+
+    args:
+        db: database session
+        limit: max number of tracks to return
+
+    returns:
+        list of (track_id, like_count) tuples ordered by like count descending
+    """
+    stmt = (
+        select(TrackLike.track_id, func.count(TrackLike.id).label("like_count"))
+        .group_by(TrackLike.track_id)
+        .order_by(func.count(TrackLike.id).desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return [(row[0], row[1]) for row in result.all()]
+
+
 async def get_track_tags(db: AsyncSession, track_ids: list[int]) -> dict[int, set[str]]:
     """get tags for multiple tracks in a single query.
 

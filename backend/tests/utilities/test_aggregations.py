@@ -4,7 +4,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models import Artist, CopyrightScan, Track, TrackLike
-from backend.utilities.aggregations import get_copyright_info, get_like_counts
+from backend.utilities.aggregations import (
+    get_copyright_info,
+    get_like_counts,
+    get_top_track_ids,
+    get_top_tracks_with_counts,
+)
 
 
 @pytest.fixture
@@ -103,6 +108,105 @@ async def test_get_like_counts_single_track(
     """test getting like count for a single track."""
     counts = await get_like_counts(db_session, [test_tracks[0].id])
     assert counts[test_tracks[0].id] == 2
+
+
+# tests for get_top_track_ids
+
+
+async def test_get_top_track_ids_ordering(
+    db_session: AsyncSession, test_tracks: list[Track]
+):
+    """test that top track IDs are ordered by like count descending."""
+    result = await get_top_track_ids(db_session, limit=10)
+
+    # track 0 has 2 likes, track 1 has 1 like, track 2 has 0 likes
+    assert result == [test_tracks[0].id, test_tracks[1].id]
+
+
+async def test_get_top_track_ids_respects_limit(
+    db_session: AsyncSession, test_tracks: list[Track]
+):
+    """test that limit parameter is respected."""
+    result = await get_top_track_ids(db_session, limit=1)
+    assert len(result) == 1
+    assert result[0] == test_tracks[0].id
+
+
+async def test_get_top_track_ids_empty_when_no_likes(
+    db_session: AsyncSession,
+):
+    """test that empty list is returned when no likes exist."""
+    # create an artist and track with no likes
+    artist = Artist(
+        did="did:plc:nolikes",
+        handle="nolikes.bsky.social",
+        display_name="No Likes Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    track = Track(
+        title="Unliked Track",
+        artist_did=artist.did,
+        file_id="unliked_file",
+        file_type="mp3",
+        atproto_record_uri="at://did:plc:nolikes/fm.plyr.track/abc",
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    result = await get_top_track_ids(db_session)
+    assert result == []
+
+
+# tests for get_top_tracks_with_counts
+
+
+async def test_get_top_tracks_with_counts_ordering(
+    db_session: AsyncSession, test_tracks: list[Track]
+):
+    """test that results are ordered by like count and include counts."""
+    result = await get_top_tracks_with_counts(db_session, limit=10)
+
+    assert len(result) == 2
+    # track 0: 2 likes, track 1: 1 like
+    assert result[0] == (test_tracks[0].id, 2)
+    assert result[1] == (test_tracks[1].id, 1)
+
+
+async def test_get_top_tracks_with_counts_respects_limit(
+    db_session: AsyncSession, test_tracks: list[Track]
+):
+    """test that limit parameter is respected."""
+    result = await get_top_tracks_with_counts(db_session, limit=1)
+    assert len(result) == 1
+    assert result[0] == (test_tracks[0].id, 2)
+
+
+async def test_get_top_tracks_with_counts_empty_when_no_likes(
+    db_session: AsyncSession,
+):
+    """test that empty list is returned when no likes exist."""
+    artist = Artist(
+        did="did:plc:nolikes2",
+        handle="nolikes2.bsky.social",
+        display_name="No Likes Artist 2",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    track = Track(
+        title="Unliked Track 2",
+        artist_did=artist.did,
+        file_id="unliked_file_2",
+        file_type="mp3",
+        atproto_record_uri="at://did:plc:nolikes2/fm.plyr.track/xyz",
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    result = await get_top_tracks_with_counts(db_session)
+    assert result == []
 
 
 # tests for get_copyright_info
