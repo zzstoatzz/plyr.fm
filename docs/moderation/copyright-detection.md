@@ -194,23 +194,23 @@ this is why we flag but don't enforce. human review is needed.
 ### list all flagged tracks
 
 ```sql
-SELECT t.id, t.title, a.handle, cf.confidence_score, cf.matched_tracks
-FROM copyright_flags cf
-JOIN tracks t ON t.id = cf.track_id
+SELECT t.id, t.title, a.handle, cs.highest_score, cs.matches
+FROM copyright_scans cs
+JOIN tracks t ON t.id = cs.track_id
 JOIN artists a ON a.did = t.artist_did
-WHERE cf.status = 'flagged'
-ORDER BY cf.confidence_score DESC;
+WHERE cs.is_flagged = true
+ORDER BY cs.highest_score DESC;
 ```
 
 ### scan statistics
 
 ```sql
 SELECT
-    status,
+    is_flagged,
     COUNT(*) as count,
-    AVG(confidence_score) as avg_score
-FROM copyright_flags
-GROUP BY status;
+    AVG(highest_score) as avg_score
+FROM copyright_scans
+GROUP BY is_flagged;
 ```
 
 ### tracks pending scan
@@ -218,8 +218,8 @@ GROUP BY status;
 ```sql
 SELECT t.id, t.title, t.created_at
 FROM tracks t
-LEFT JOIN copyright_flags cf ON cf.track_id = t.id
-WHERE cf.id IS NULL OR cf.status = 'pending'
+LEFT JOIN copyright_scans cs ON cs.track_id = t.id
+WHERE cs.id IS NULL
 ORDER BY t.created_at DESC;
 ```
 
