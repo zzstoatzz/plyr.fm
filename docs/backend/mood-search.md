@@ -41,7 +41,7 @@ keyword results appear instantly. semantic results append when ready. client-sid
 
 ### Modal CLAP service
 
-**source**: `clap/app.py`
+**source**: `services/clap/app.py`
 
 hosts the `laion/clap-htsat-unfused` model on Modal with two endpoints:
 
@@ -54,7 +54,7 @@ container specs: 2 CPU, 4GB RAM, 5-minute idle timeout (scales to zero).
 
 **deploy**:
 ```bash
-uvx modal deploy clap/app.py
+uvx modal deploy services/clap/app.py
 ```
 
 after deploy, Modal prints the endpoint URLs. set them as Fly secrets:
@@ -201,7 +201,7 @@ results are cached in `track.extra["genre_predictions"]`. if no predictions are 
 
 ## key files
 
-- `clap/app.py` — Modal CLAP service
+- `services/clap/app.py` — Modal CLAP service
 - `backend/src/backend/_internal/clap_client.py` — Modal HTTP client
 - `backend/src/backend/_internal/tpuf_client.py` — turbopuffer client
 - `backend/src/backend/api/search.py` — `/search/semantic` endpoint

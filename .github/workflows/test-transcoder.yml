@@ -3,7 +3,7 @@ name: transcoder integration tests
 on:
   pull_request:
     paths:
-      - "transcoder/**"
+      - "services/transcoder/**"
       - "scripts/transcoder/**"
       - "scripts/generate_audio_sample.py"
       - ".github/workflows/test-transcoder.yml"
@@ -32,10 +32,10 @@ jobs:
       - name: cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: transcoder
+          workspaces: services/transcoder
 
       - name: build transcoder
-        working-directory: transcoder
+        working-directory: services/transcoder
         run: cargo build --release
 
       - name: install uv
@@ -44,7 +44,7 @@ jobs:
       - name: start transcoder
         run: |
           TRANSCODER_HOST=127.0.0.1 TRANSCODER_PORT=8082 \
-            ./transcoder/target/release/transcoder &
+            ./services/transcoder/target/release/transcoder &
 
           # wait for health check
           for i in {1..30}; do

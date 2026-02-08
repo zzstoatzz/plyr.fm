@@ -48,12 +48,18 @@ plyr.fm/
 │       ├── models/       # SQLAlchemy schemas
 │       ├── storage/      # R2 and filesystem adapters
 │       └── utilities/    # Config, helpers
-├── frontend/         # SvelteKit app
-│   ├── src/routes/   # Pages (+page.svelte, +page.server.ts)
-│   └── src/lib/      # Components & State (.svelte.ts)
-├── scripts/          # Admin scripts (uv run scripts/...)
-├── docs/             # Architecture & Guides
-└── STATUS.md         # Living status document
+├── frontend/             # SvelteKit app
+│   ├── src/routes/       # Pages (+page.svelte, +page.server.ts)
+│   └── src/lib/          # Components & State (.svelte.ts)
+├── services/
+│   ├── transcoder/       # Audio transcoding (Rust, Fly.io)
+│   ├── moderation/       # Content moderation (Rust, Fly.io)
+│   └── clap/             # ML embeddings (Python, Modal)
+├── infrastructure/
+│   └── redis/            # Self-hosted Redis (Fly.io)
+├── scripts/              # Admin scripts (uv run scripts/...)
+├── docs/                 # Architecture & Guides
+└── STATUS.md             # Living status document
 ```
 
 this file ("AGENTS.md") is symlinked to `CLAUDE.md` for maximal compatibility.

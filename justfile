@@ -1,8 +1,8 @@
 # plyr.fm dev workflows
 mod frontend
-mod transcoder
-mod moderation
 mod backend
+mod transcoder 'services/transcoder'
+mod moderation 'services/moderation'
 
 
 # show available commands

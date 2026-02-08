@@ -13,7 +13,7 @@ plyr.fm has a functional but minimal moderation system: AuDD copyright scanning 
 
 | layer | location | purpose |
 |-------|----------|---------|
-| moderation service | `moderation/` (Rust) | AuDD scanning, label signing, XRPC endpoints |
+| moderation service | `services/moderation/` (Rust) | AuDD scanning, label signing, XRPC endpoints |
 | backend integration | `backend/src/backend/_internal/moderation.py` | orchestrates scans, stores results, emits labels |
 | moderation client | `backend/src/backend/_internal/moderation_client.py` | HTTP client with redis caching |
 | background tasks | `backend/src/backend/_internal/background_tasks.py` | `sync_copyright_resolutions()` perpetual task |
@@ -195,9 +195,9 @@ haley's team focus: making takedowns and policy association more robust.
 ## code references
 
 current moderation code:
-- `moderation/src/main.rs:70-101` - router setup
-- `moderation/src/db.rs` - label storage
-- `moderation/src/labels.rs` - secp256k1 signing
+- `services/moderation/src/main.rs:70-101` - router setup
+- `services/moderation/src/db.rs` - label storage
+- `services/moderation/src/labels.rs` - secp256k1 signing
 - `backend/src/backend/_internal/moderation.py` - scan orchestration
 - `backend/src/backend/_internal/moderation_client.py` - HTTP client
 - `backend/src/backend/_internal/background_tasks.py:180-220` - sync task

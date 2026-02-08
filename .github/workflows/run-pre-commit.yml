@@ -26,8 +26,8 @@ jobs:
             frontend:
               - 'frontend/**'
             rust:
-              - 'moderation/**'
-              - 'transcoder/**'
+              - 'services/moderation/**'
+              - 'services/transcoder/**'
 
       - name: install uv
         if: steps.filter.outputs.backend == 'true'
