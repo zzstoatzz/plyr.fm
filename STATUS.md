@@ -47,6 +47,20 @@ plyr.fm should become:
 
 ### February 2026
 
+#### auto-tag at upload + ML audit script (PRs #871-872, Feb 7)
+
+**auto-tag on upload (PR #871)**: checkbox on the upload form ("auto-tag with recommended genres") that automatically applies genre tags after classification completes. user doesn't need to come back to the portal to apply suggested tags.
+
+- frontend: `autoTag` state + checkbox below TagInput, threaded through `uploader.svelte.ts` into FormData
+- backend: `auto_tag` form param stored in `track.extra["auto_tag"]`, consumed by `classify_genres` background task
+- after classification, applies top tags using ratio-to-top filter (>= 50% of top score, capped at 5)
+- additive with manual tags — user can add their own AND get auto-tags
+- flag cleaned up from `track.extra` after use (no schema migration needed)
+
+**ML audit script (PR #872)**: `scripts/ml_audit.py` reports which tracks and artists have been processed by ML features (genre classification, CLAP embeddings, auto-tagging). for privacy policy and terms-of-service auditing. supports `--verbose` for track-level detail, `--check-embeddings` for turbopuffer vector counts.
+
+---
+
 #### ML genre classification + suggested tags (PRs #864-868, Feb 6-7)
 
 **genre classification via Replicate**: tracks are now automatically classified into genre labels using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model on Replicate (EfficientNet trained on Discogs ~400 categories).
@@ -411,12 +425,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-PDS blob storage shipped and feature-flagged. uploads store audio on user's PDS when the `pds-audio-uploads` flag is enabled and the user opts in via settings. per-track migration modal lets users selectively backfill existing tracks to PDS with file size visibility and non-blocking toast-based progress. R2 CDN remains primary delivery path.
-
-**end-of-year sprint [#625](https://github.com/zzstoatzz/plyr.fm/issues/625) shipped:**
-- moderation consolidation: sensitive images moved to moderation service (#644)
-- moderation batch review UI with Claude vision integration (#672, #687-690)
-- atprotofans: supporter badges (#627) and content gating (#637)
+ML-powered track features rolling out: genre classification (Replicate effnet-discogs) auto-runs on upload, with optional auto-tagging checkbox on the upload form. mood search (CLAP embeddings + turbopuffer) feature-flagged behind `vibe-search`. ML audit script (`scripts/ml_audit.py`) tracks which tracks/artists have been processed for privacy/ToS compliance.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -473,7 +482,7 @@ PDS blob storage shipped and feature-flagged. uploads store audio on user's PDS 
 - ✅ unified search with Cmd/Ctrl+K
 - ✅ teal.fm scrobbling
 - ✅ copyright moderation with ATProto labeler
-- ✅ ML genre classification with suggested tags in edit modal (Replicate effnet-discogs)
+- ✅ ML genre classification with suggested tags in edit modal + auto-tag at upload (Replicate effnet-discogs)
 - ✅ docket background tasks (copyright scan, export, atproto sync, scrobble, genre classification)
 - ✅ media export with concurrent downloads
 - ✅ supporter-gated content via atprotofans

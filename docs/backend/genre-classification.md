@@ -55,6 +55,28 @@ no auth required. returns genre predictions for a track, excluding tags the trac
 - empty `tags` with `available: true` means the track has no R2 URL or classification returned no results
 - `score` is the model's confidence (0-1)
 
+## auto-tag at upload
+
+users can check "auto-tag with recommended genres" on the upload form. when enabled:
+
+1. `auto_tag: true` is stored in `track.extra` during upload
+2. `classify_genres` background task runs as usual
+3. after storing predictions, the task checks for the `auto_tag` flag
+4. applies top genre tags using ratio-to-top filter: tags scoring >= 50% of the top score, capped at 5
+5. cleans up the `auto_tag` flag from `track.extra`
+
+auto-tags are additive with manual tags — if the user also typed tags, both appear on the track.
+
+**key files**: `backend/src/backend/api/tracks/uploads.py` (form param + UploadContext), `backend/src/backend/_internal/background_tasks.py` (apply logic in `classify_genres`)
+
+## auditing
+
+`scripts/ml_audit.py` reports which tracks and artists have been processed by genre classification (and other ML features). useful for privacy/ToS auditing.
+
+```bash
+cd backend && uv run python ../scripts/ml_audit.py --verbose
+```
+
 ## storage format
 
 predictions are stored in `track.extra["genre_predictions"]`:
@@ -127,8 +149,11 @@ when editing a track on the portal page, the edit modal fetches recommended tags
 ## key files
 
 - `backend/src/backend/_internal/replicate_client.py` — Replicate HTTP client
-- `backend/src/backend/_internal/background_tasks.py` — `classify_genres` task
+- `backend/src/backend/_internal/background_tasks.py` — `classify_genres` task (+ auto-tag logic)
+- `backend/src/backend/api/tracks/uploads.py` — `auto_tag` form param and `UploadContext`
 - `backend/src/backend/api/tracks/tags.py` — `recommended-tags` endpoint
 - `backend/src/backend/config.py` — `ReplicateSettings`
 - `scripts/backfill_genres.py` — batch classification script
+- `scripts/ml_audit.py` — ML processing audit script
+- `frontend/src/routes/upload/+page.svelte` — auto-tag checkbox on upload form
 - `frontend/src/routes/portal/+page.svelte` — suggested tags UI in edit modal
