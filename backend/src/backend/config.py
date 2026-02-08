@@ -270,9 +270,9 @@ class DatabaseSettings(AppSettingsSection):
         description="Maximum connections to create beyond pool_size when pool is exhausted. Total max connections = pool_size + pool_max_overflow.",
     )
     pool_recycle: int = Field(
-        default=7200,
+        default=1800,
         validation_alias="DATABASE_POOL_RECYCLE",
-        description="Seconds before recycling a connection. Prevents stale connections from lingering. Default 2 hours.",
+        description="Seconds before recycling a connection. Prevents stale connections from lingering. Default 30 minutes.",
     )
     pool_pre_ping: bool = Field(
         default=True,

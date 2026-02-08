@@ -31,7 +31,7 @@ from backend.utilities.aggregations import (
     get_comment_counts,
     get_copyright_info,
     get_like_counts,
-    get_top_track_ids,
+    get_top_tracks_with_counts,
     get_track_tags,
 )
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
@@ -297,10 +297,13 @@ async def list_top_tracks(
     """
     limit = max(1, min(limit, 50))
 
-    # get top track IDs by like count
-    top_track_ids = await get_top_track_ids(db, limit)
-    if not top_track_ids:
+    # get top track IDs with like counts in a single query
+    top_tracks_with_counts = await get_top_tracks_with_counts(db, limit)
+    if not top_tracks_with_counts:
         return []
+
+    top_track_ids = [tid for tid, _ in top_tracks_with_counts]
+    like_counts = dict(top_tracks_with_counts)
 
     # fetch tracks with relationships
     stmt = (
@@ -315,18 +318,20 @@ async def list_top_tracks(
     # preserve order from top_track_ids
     tracks = [tracks_by_id[tid] for tid in top_track_ids if tid in tracks_by_id]
 
-    # get authenticated user's liked tracks
+    # get authenticated user's liked tracks (scoped to current track IDs only)
     liked_track_ids: set[int] | None = None
+    track_ids = [track.id for track in tracks]
     if session:
         liked_result = await db.execute(
-            select(TrackLike.track_id).where(TrackLike.user_did == session.did)
+            select(TrackLike.track_id).where(
+                TrackLike.user_did == session.did,
+                TrackLike.track_id.in_(track_ids),
+            )
         )
         liked_track_ids = set(liked_result.scalars().all())
 
-    # batch fetch aggregations
-    track_ids = [track.id for track in tracks]
-    like_counts, comment_counts, track_tags = await asyncio.gather(
-        get_like_counts(db, track_ids),
+    # batch fetch remaining aggregations (like_counts already computed above)
+    comment_counts, track_tags = await asyncio.gather(
         get_comment_counts(db, track_ids),
         get_track_tags(db, track_ids),
     )
