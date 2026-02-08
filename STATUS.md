@@ -47,6 +47,21 @@ plyr.fm should become:
 
 ### February 2026
 
+#### optimize GET /tracks/top latency (PR #879, Feb 8)
+
+**baseline (production, 171 requests over 3 days)**: p50=123ms, p95=1204ms, p99=1576ms. the p95/p99 spikes were caused by stale connection reconnects during `pool_pre_ping` and redundant DB round-trips.
+
+**optimizations**:
+- **merged query**: new `get_top_tracks_with_counts()` returns (track_id, like_count) tuples in a single GROUP BY — the count was already computed to sort, now it's returned instead of discarded. eliminates a redundant `get_like_counts` call (1 fewer DB round-trip)
+- **scoped liked query**: the authenticated user's liked-track check now filters by `track_id IN (...)` (10 rows) instead of scanning all user likes
+- **pool_recycle 7200s → 1800s**: connections recycle every 30min instead of 2h, reducing stale connections that trigger expensive reconnects
+
+**verified via Logfire traces**: authenticated requests dropped from 11 DB queries to 7. post-deploy requests at 517-600ms vs baseline p95 of 1.2s.
+
+**14 new regression tests** covering ordering, limit clamping, auth state, like counts, comment counts, and tags.
+
+---
+
 #### auto-tag at upload + ML audit script (PRs #871-872, Feb 7)
 
 **auto-tag on upload (PR #871)**: checkbox on the upload form ("auto-tag with recommended genres") that automatically applies genre tags after classification completes. user doesn't need to come back to the portal to apply suggested tags.
@@ -593,4 +608,4 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-07.
+this is a living document. last updated 2026-02-08.

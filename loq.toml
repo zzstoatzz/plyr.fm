@@ -19,7 +19,7 @@ max_lines = 10000
 # STATUS.md grows over time as we document work
 [[rules]]
 path = "STATUS.md"
-max_lines = 600
+max_lines = 612
 
 [[rules]]
 path = "backend/src/backend/_internal/auth.py"
