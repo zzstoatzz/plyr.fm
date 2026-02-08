@@ -11,7 +11,7 @@
 *   **Workflow:**
     *   Use **GitHub Issues** (not Linear).
     *   **PRs:** Always create for review; never push to main directly.
-    *   **Deploy:** Automated via Actions (Backend: Fly.io, Frontend: Cloudflare Pages). Never deploy locally.
+    *   **Deploy:** Merging to `main` auto-deploys to **staging** (`stg.plyr.fm`). Production requires `just release` (see `docs/deployment/environments.md`). Never deploy locally.
 *   **ATProto NSIDs:** namespaces are environment-aware via settings (e.g., `fm.plyr.dev` (dev), `fm.plyr` (prod)). **Never** hardcode outside of scripts. these are fully-qualified hostname in Reverse Domain-Name Order, not urls.
 *   **Auth Security:** Session IDs live in HttpOnly cookies. **Never** touch `localStorage` for auth.
 *   **Async Everywhere:** Never block the event loop. Use `anyio`/`aiofiles`.
