@@ -288,7 +288,9 @@ jobs:
           YEAR=$(date +%Y)
 
           # count how many "plyr.fm update - {date}" tracks exist for today
-          TODAY_COUNT=$(echo "$EXISTING" | grep -c "plyr.fm update - $TODAY" || echo "0")
+          # grep -c returns exit code 1 on no match, so default to 0
+          TODAY_COUNT=$(echo "$EXISTING" | grep -c "plyr.fm update - $TODAY" || true)
+          TODAY_COUNT=${TODAY_COUNT:-0}
 
           if [ "$TODAY_COUNT" -gt 0 ]; then
             # already have one today, add episode number
