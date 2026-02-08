@@ -185,7 +185,7 @@ primary_region = "iad"
 
 ```bash
 # deploy from transcoder directory
-cd transcoder && fly deploy
+cd services/transcoder && fly deploy
 
 # check status
 fly status -a plyr-transcoder
@@ -298,7 +298,7 @@ except httpx.TimeoutException:
 
 ```bash
 # from transcoder directory
-cd transcoder && cargo run
+cd services/transcoder && cargo run
 
 # with custom port
 TRANSCODER_PORT=9000 cargo run
@@ -480,9 +480,9 @@ solution: check `auto_start_machines = true` in fly.toml
 
 ## references
 
-- source code: `transcoder/src/main.rs`
-- justfile: `transcoder/Justfile`
-- fly config: `transcoder/fly.toml`
-- dockerfile: `transcoder/Dockerfile`
+- source code: `services/transcoder/src/main.rs`
+- justfile: `services/transcoder/justfile`
+- fly config: `services/transcoder/fly.toml`
+- dockerfile: `services/transcoder/Dockerfile`
 - ffmpeg docs: https://ffmpeg.org/documentation.html
 - fly.io docs: https://fly.io/docs/

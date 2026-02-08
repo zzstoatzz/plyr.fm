@@ -3,8 +3,8 @@ name: check rust services
 on:
   pull_request:
     paths:
-      - "moderation/**"
-      - "transcoder/**"
+      - "services/moderation/**"
+      - "services/transcoder/**"
       - ".github/workflows/check-rust.yml"
 
 permissions:
@@ -24,10 +24,10 @@ jobs:
         with:
           filters: |
             moderation:
-              - 'moderation/**'
+              - 'services/moderation/**'
               - '.github/workflows/check-rust.yml'
             transcoder:
-              - 'transcoder/**'
+              - 'services/transcoder/**'
               - '.github/workflows/check-rust.yml'
 
   check:
@@ -40,9 +40,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - service: moderation
+          - service: services/moderation
             changed: ${{ needs.changes.outputs.moderation }}
-          - service: transcoder
+          - service: services/transcoder
             changed: ${{ needs.changes.outputs.transcoder }}
 
     steps:
@@ -78,9 +78,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - service: moderation
+          - service: services/moderation
             changed: ${{ needs.changes.outputs.moderation }}
-          - service: transcoder
+          - service: services/transcoder
             changed: ${{ needs.changes.outputs.transcoder }}
 
     steps:

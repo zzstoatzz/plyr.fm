@@ -5,12 +5,12 @@ on:
     branches:
       - main
     paths:
-      - "moderation/src/**"
-      - "moderation/static/**"
-      - "moderation/Cargo.toml"
-      - "moderation/Cargo.lock"
-      - "moderation/Dockerfile"
-      - "moderation/fly.toml"
+      - "services/moderation/src/**"
+      - "services/moderation/static/**"
+      - "services/moderation/Cargo.toml"
+      - "services/moderation/Cargo.lock"
+      - "services/moderation/Dockerfile"
+      - "services/moderation/fly.toml"
       - ".github/workflows/deploy-moderation.yml"
   workflow_dispatch:
 
@@ -25,7 +25,7 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: deploy to fly.io
-        run: flyctl deploy --config moderation/fly.toml --remote-only -a plyr-moderation
-        working-directory: moderation
+        run: flyctl deploy --config services/moderation/fly.toml --remote-only -a plyr-moderation
+        working-directory: services/moderation
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_MODERATION }}

@@ -208,7 +208,7 @@ the moderation service runs on Fly.io:
 
 ```bash
 # deploy
-cd moderation && fly deploy
+cd services/moderation && fly deploy
 
 # check logs
 fly logs -a plyr-moderation

@@ -346,9 +346,9 @@ cd frontend && bun run preview            # preview production build
 cd frontend && bun run check              # type check
 
 # transcoder
-cd transcoder && cargo run                # start transcoder
-cd transcoder && cargo test               # run tests
-cd transcoder && cargo build --release    # build for production
+cd services/transcoder && cargo run                # start transcoder
+cd services/transcoder && cargo test               # run tests
+cd services/transcoder && cargo build --release    # build for production
 ```
 
 ## next steps

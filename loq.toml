@@ -182,11 +182,11 @@ path = "frontend/src/routes/upload/+page.svelte"
 max_lines = 680
 
 [[rules]]
-path = "moderation/src/admin.rs"
+path = "services/moderation/src/admin.rs"
 max_lines = 688
 
 [[rules]]
-path = "moderation/src/db.rs"
+path = "services/moderation/src/db.rs"
 max_lines = 1285
 
 [[rules]]
@@ -194,15 +194,15 @@ path = "frontend/src/lib/components/FeedbackModal.svelte"
 max_lines = 660
 
 [[rules]]
-path = "moderation/src/review.rs"
+path = "services/moderation/src/review.rs"
 max_lines = 526
 
 [[rules]]
-path = "moderation/static/admin.css"
+path = "services/moderation/static/admin.css"
 max_lines = 760
 
 [[rules]]
-path = "moderation/src/reports.rs"
+path = "services/moderation/src/reports.rs"
 max_lines = 520
 
 [[rules]]
