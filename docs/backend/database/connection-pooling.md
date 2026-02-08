@@ -43,8 +43,8 @@ DATABASE_POOL_SIZE=10
 # additional connections to create on demand when pool is exhausted (default: 5)
 DATABASE_MAX_OVERFLOW=5
 
-# how long before recycling a connection, in seconds (default: 7200 = 2 hours)
-DATABASE_POOL_RECYCLE=7200
+# how long before recycling a connection, in seconds (default: 1800 = 30 minutes)
+DATABASE_POOL_RECYCLE=1800
 
 # verify connection health before using from pool (default: true)
 DATABASE_POOL_PRE_PING=true
@@ -67,7 +67,7 @@ total max connections = `pool_size` + `max_overflow` = 15 by default
 **pool_recycle:**
 - prevents stale connections from lingering
 - should be less than your database's connection timeout
-- 2 hours is a safe default for most PostgreSQL configurations
+- 30 minutes is a safe default for most PostgreSQL configurations
 
 **pool_pre_ping:**
 - adds small overhead (SELECT 1) before each connection use
@@ -148,7 +148,7 @@ DATABASE_STATEMENT_TIMEOUT=10.0
 DATABASE_CONNECTION_TIMEOUT=10.0
 
 # standard recycle
-DATABASE_POOL_RECYCLE=7200
+DATABASE_POOL_RECYCLE=1800
 ```
 
 this configuration:

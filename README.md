@@ -23,8 +23,11 @@ check the [plyr.fm artist page](https://plyr.fm/u/plyr.fm) for the latest [auto-
 - **styling**: vanilla CSS (lowercase aesthetic)
 
 ### services
-- **moderation**: Rust ATProto labeler for copyright/sensitive content
-- **transcoder**: Rust audio conversion service (ffmpeg)
+- **transcoder**: Rust audio conversion service (ffmpeg, Fly.io)
+- **moderation**: Rust ATProto labeler for copyright/sensitive content (Fly.io)
+- **mood search**: [CLAP](https://github.com/LAION-AI/CLAP) audio embeddings ([Modal](https://modal.com))
+- **genre classification**: [effnet-discogs](https://replicate.com/) ML tagging ([Replicate](https://replicate.com))
+- **vector search**: [turbopuffer](https://turbopuffer.com) for semantic audio queries
 
 </details>
 
@@ -81,23 +84,32 @@ just dev-services-down
 ### listening
 - audio playback with persistent queue across tabs
 - like tracks, add to playlists
-- browse artist profiles and discographies
-- share tracks, albums, and playlists with link previews
-- unified search with Cmd/Ctrl+K
-- teal.fm scrobbling
+- browse by artist, album, tag, or playlist
+- share tracks and albums with embeddable players and link previews
+- mood search - describe a vibe, get matching tracks (CLAP embeddings)
+- unified search with Cmd/Ctrl+K (fuzzy match across tracks, artists, albums, tags, playlists)
+- genre browsing and tag filtering
+- platform media controls (Media Session API)
+- teal.fm scrobbling and now-playing reporting
 
 ### creating
-- OAuth authentication via ATProto (bluesky accounts)
+- OAuth authentication via ATProto (bluesky accounts), multi-account support
 - upload tracks with title, artwork, tags, and featured artists
-- organize tracks into albums and playlists
-- drag-and-drop reordering
+- lossless audio support (AIFF/FLAC) with automatic MP3 transcoding for universal playback
+- auto-tagging via ML genre classification
+- organize tracks into albums and playlists with drag-and-drop reordering
 - timed comments with clickable timestamps
-- artist support links (ko-fi, patreon, etc.)
+- artist support links and supporter-gated content
+- copyright scanning via audio fingerprinting
+- content reporting and automated sensitive content filtering
 
 ### data ownership
 - tracks, likes, playlists synced to your PDS as ATProto records
+- bulk media export (download all your tracks)
 - portable identity - your data travels with you
 - public by default - any client can read your music records
+
+> some features may be paywalled in the future for the financial viability of the project. if you have thoughts on what should or shouldn't be gated, open a [discussion on GitHub](https://github.com/zzstoatzz/plyr.fm/discussions) or [tangled](https://tangled.sh/@zzstoatzz.io/plyr.fm).
 
 </details>
 
@@ -106,20 +118,19 @@ just dev-services-down
 
 ```
 plyr.fm/
-├── backend/              # FastAPI app
+├── backend/              # FastAPI app & Python tooling
 │   ├── src/backend/      # application code
-│   │   ├── api/          # public endpoints
-│   │   ├── _internal/    # services (auth, atproto, background tasks)
-│   │   ├── models/       # database schemas
-│   │   └── storage/      # R2 adapter
 │   ├── tests/            # pytest suite
-│   └── alembic/          # migrations
+│   └── alembic/          # database migrations
 ├── frontend/             # SvelteKit app
 │   ├── src/lib/          # components & state
 │   └── src/routes/       # pages
-├── moderation/           # Rust labeler service
-├── transcoder/           # Rust audio service
-├── redis/                # self-hosted Redis config
+├── services/
+│   ├── transcoder/       # Rust audio transcoding (Fly.io)
+│   ├── moderation/       # Rust content moderation (Fly.io)
+│   └── clap/             # ML embeddings (Python, Modal)
+├── infrastructure/
+│   └── redis/            # self-hosted Redis (Fly.io)
 ├── docs/                 # documentation
 └── justfile              # task runner
 ```
@@ -129,11 +140,13 @@ plyr.fm/
 <details>
 <summary>costs</summary>
 
-~$20/month:
-- fly.io (backend + redis + moderation): ~$14/month
+~$25/month:
+- fly.io (backend + transcoder + redis + moderation): ~$14/month
 - neon postgres: $5/month
 - cloudflare (pages + r2): ~$1/month
 - audd audio fingerprinting: $5-10/month (usage-based)
+- modal (CLAP embeddings): free tier / scales to zero
+- replicate (genre classification): <$1/month
 
 live dashboard: https://plyr.fm/costs
 

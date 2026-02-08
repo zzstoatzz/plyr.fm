@@ -44,7 +44,7 @@ DOCKET_WORKER_CONCURRENCY=10  # concurrent task limit
 
 ### ⚠️ worker settings - do not modify
 
-the worker is initialized in `backend/_internal/background.py` with pydocket's defaults. **do not change these settings without extensive testing:**
+the worker is initialized in `backend/_internal/background.py` using tasks registered via `backend/_internal/tasks/__init__.py`. **do not change these settings without extensive testing:**
 
 | setting | default | why it matters |
 |---------|---------|----------------|
@@ -94,33 +94,43 @@ note: uses Fly internal networking (`.internal` domain), no TLS needed within pr
 ### scheduling a task
 
 ```python
-from backend._internal.background_tasks import schedule_copyright_scan, schedule_export
+from backend._internal.tasks import schedule_copyright_scan
+from backend._internal.tasks import schedule_genre_classification, schedule_embedding_generation
 
 # automatically uses docket if enabled, else asyncio.create_task
 await schedule_copyright_scan(track_id, audio_url)
-await schedule_export(export_id, artist_did)
+await schedule_genre_classification(track_id)
+await schedule_embedding_generation(track_id, audio_url)
 ```
 
 ### adding new tasks
 
-1. define the task function in `backend/_internal/background_tasks.py`:
+1. define the task function in a module under `backend/_internal/tasks/` (organized by domain):
+   - `tasks/copyright.py` - copyright scanning and resolution sync
+   - `tasks/ml.py` - genre classification, CLAP embeddings
+   - `tasks/pds.py` - PDS record sync (likes, comments)
+   - `tasks/storage.py` - R2 file operations
+   - `tasks/sync.py` - ATProto sync, scrobbling, album lists
+
 ```python
+# e.g., backend/_internal/tasks/ml.py
 async def my_new_task(arg1: str, arg2: int) -> None:
     """task functions must be async and JSON-serializable args only."""
     # do work here
     pass
 ```
 
-2. register it in `backend/_internal/background.py`:
+2. export it from `backend/_internal/tasks/__init__.py` and add it to the `background_tasks` list:
 ```python
-def _register_tasks(docket: Docket) -> None:
-    from backend._internal.background_tasks import my_new_task, scan_copyright
+from backend._internal.tasks.ml import my_new_task
 
-    docket.register(scan_copyright)
-    docket.register(my_new_task)  # add here
+background_tasks = [
+    # ... existing tasks
+    my_new_task,
+]
 ```
 
-3. create a scheduler helper if needed:
+3. create a scheduler helper in the same module:
 ```python
 async def schedule_my_task(arg1: str, arg2: int) -> None:
     """schedule with docket if enabled, else asyncio."""

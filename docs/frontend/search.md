@@ -62,7 +62,7 @@ GET /search/?q=query&type=tracks,artists&limit=10
 
 **parameters**:
 - `q` (required): search query, 2-100 characters
-- `type` (optional): filter by type(s), comma-separated: `tracks`, `artists`, `albums`, `tags`
+- `type` (optional): filter by type(s), comma-separated: `tracks`, `artists`, `albums`, `tags`, `playlists`
 - `limit` (optional): max results per type, 1-50, default 20
 
 **response**:
@@ -131,6 +131,62 @@ ORDER BY relevance DESC
 - "bufo" matches "bufo" (1.0), "bufo mix" (0.6), "buffalo" (0.4)
 - "zz" matches "zzstoatzz" (0.3), "jazz" (0.25)
 
+## semantic search (mood search)
+
+in addition to keyword search, plyr.fm supports semantic search via CLAP audio embeddings. users describe a mood or vibe in natural language and get tracks ranked by audio similarity.
+
+**gated by feature flag**: `vibe-search` (per-user)
+
+### how it works
+
+1. user types a text description (e.g., "chill lo-fi beats")
+2. frontend sends query to `GET /search/semantic?q=...`
+3. backend embeds the text via CLAP model (Modal)
+4. text embedding is compared against pre-computed audio embeddings in turbopuffer
+5. matching tracks returned with similarity scores
+
+### frontend behavior
+
+- **debounce**: 500ms (vs 150ms for keyword search)
+- **minimum query length**: 3 characters (vs 2 for keyword)
+- **max results**: 5 per query
+- results are deduplicated against keyword results
+- similarity scores are merged alongside relevance scores
+
+### backend endpoint
+
+```
+GET /search/semantic?q=chill+vibes&limit=10
+```
+
+**parameters**:
+- `q` (required): text description, 3-200 characters
+- `limit` (optional): max results, 1-50, default 10 (capped at 5 internally)
+
+**response**:
+
+```json
+{
+  "results": [
+    {
+      "type": "track",
+      "id": 456,
+      "title": "midnight drift",
+      "artist_handle": "artist.bsky.social",
+      "artist_display_name": "artist name",
+      "image_url": "https://...",
+      "similarity": 0.7234
+    }
+  ],
+  "query": "chill vibes",
+  "available": true
+}
+```
+
+`available: false` indicates the embedding service is down - the frontend falls back to keyword-only search.
+
+see [mood-search.md](../backend/mood-search.md) for full backend architecture.
+
 ## result types
 
 ### tracks
@@ -148,6 +204,12 @@ ORDER BY relevance DESC
 ### albums
 
 - links to `/u/{artist_handle}/album/{slug}`
+- shows cover art if available
+- subtitle: "by {artist_display_name}"
+
+### playlists
+
+- links to `/u/{artist_handle}/playlist/{slug}`
 - shows cover art if available
 - subtitle: "by {artist_display_name}"
 

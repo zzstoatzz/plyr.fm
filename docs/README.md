@@ -15,7 +15,7 @@ organized knowledge base for plyr.fm development.
 - **[feature-flags.md](./backend/feature-flags.md)** - per-user feature rollout system
 - **[streaming-uploads.md](./backend/streaming-uploads.md)** - SSE progress tracking
 - **[transcoder.md](./backend/transcoder.md)** - rust audio conversion service (lossless support)
-- **[vibe-search.md](./backend/vibe-search.md)** - semantic search with CLAP embeddings (Modal + turbopuffer)
+- **[mood-search.md](./backend/mood-search.md)** - semantic search with CLAP embeddings (Modal + turbopuffer)
 - **[genre-classification.md](./backend/genre-classification.md)** - ML genre tagging via effnet-discogs (Replicate)
 
 ### frontend
@@ -32,6 +32,9 @@ organized knowledge base for plyr.fm development.
 - **[logfire.md](./tools/logfire.md)** - SQL query patterns for observability
 - **[neon.md](./tools/neon.md)** - postgres database management
 - **[pdsx.md](./tools/pdsx.md)** - ATProto PDS explorer
+- **[plyrfm.md](./tools/plyrfm.md)** - Python SDK and MCP server
+- **[tap.md](./tools/tap.md)** - ATProto sync utility for backfilling custom lexicons
+- **[status-maintenance.md](./tools/status-maintenance.md)** - automated status podcasts
 
 ### atproto
 - **[lexicons/](./lexicons/)** - record schemas (track, like, comment, list, profile)
