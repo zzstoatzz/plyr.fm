@@ -71,6 +71,11 @@ class AuthManager {
 		this.initialized = false;
 	}
 
+	async refresh(): Promise<void> {
+		this.initialized = false;
+		await this.initialize();
+	}
+
 	async logout(): Promise<void> {
 		try {
 			await fetch(`${API_URL}/auth/logout`, {

@@ -79,7 +79,7 @@
 						showTokenOverlay = true; // show full-page overlay immediately
 					} else if (isScopeUpgrade) {
 						// reload auth state with new session
-						await auth.initialize();
+						await auth.refresh();
 						await preferences.fetch();
 						toast.success('teal.fm scrobbling connected!');
 					}
