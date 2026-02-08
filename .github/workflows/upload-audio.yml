@@ -1,0 +1,74 @@
+# manual audio upload to plyr.fm
+#
+# uploads the most recent update.wav from the repo root to plyr.fm
+# via the plyrfm CLI. uses the plyr.fm bot account.
+#
+# required secrets:
+#   PLYR_BOT_TOKEN - plyr.fm developer token
+
+name: upload audio
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "track title"
+        required: true
+        type: string
+      album:
+        description: "album name (default: current year)"
+        required: false
+        type: string
+      tags:
+        description: "comma-separated tags (default: ai)"
+        required: false
+        type: string
+        default: "ai"
+      delete_track_id:
+        description: "track ID to delete before uploading (optional)"
+        required: false
+        type: string
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Delete old track (if requested)
+        if: inputs.delete_track_id != ''
+        run: |
+          echo "Deleting track ${{ inputs.delete_track_id }}..."
+          uv run --with plyrfm -- plyrfm delete "${{ inputs.delete_track_id }}" --yes
+        env:
+          PLYR_TOKEN: ${{ secrets.PLYR_BOT_TOKEN }}
+
+      - name: Upload audio to plyr.fm
+        run: |
+          if [ ! -f update.wav ]; then
+            echo "::error::No update.wav found at repo root"
+            exit 1
+          fi
+
+          ALBUM="${{ inputs.album }}"
+          ALBUM=${ALBUM:-$(date +%Y)}
+
+          TAGS="${{ inputs.tags }}"
+          TAG_ARGS=""
+          if [ -n "$TAGS" ]; then
+            IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
+            for tag in "${TAG_ARRAY[@]}"; do
+              TAG_ARGS="$TAG_ARGS -t $(echo "$tag" | xargs)"
+            done
+          fi
+
+          echo "Uploading: ${{ inputs.title }}"
+          echo "Album: $ALBUM"
+          echo "Tags: $TAGS"
+
+          eval uv run --with plyrfm -- plyrfm upload update.wav '"${{ inputs.title }}"' --album '"$ALBUM"' $TAG_ARGS
+        env:
+          PLYR_TOKEN: ${{ secrets.PLYR_BOT_TOKEN }}
