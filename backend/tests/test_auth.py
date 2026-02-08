@@ -346,7 +346,7 @@ async def test_create_session_default_expiration(db_session: AsyncSession):
 
 def test_is_confidential_client_false_by_default():
     """verify is_confidential_client returns False when OAUTH_JWK not set."""
-    with patch("backend._internal.auth.settings.atproto.oauth_jwk", None):
+    with patch("backend._internal.auth.session.settings.atproto.oauth_jwk", None):
         assert is_confidential_client() is False
 
 
@@ -354,13 +354,13 @@ def test_is_confidential_client_true_when_configured():
     """verify is_confidential_client returns True when OAUTH_JWK is set."""
     test_jwk = '{"kty":"EC","crv":"P-256","x":"test","y":"test","d":"test"}'
 
-    with patch("backend._internal.auth.settings.atproto.oauth_jwk", test_jwk):
+    with patch("backend._internal.auth.session.settings.atproto.oauth_jwk", test_jwk):
         assert is_confidential_client() is True
 
 
 def test_get_public_jwks_returns_none_without_config():
     """verify get_public_jwks returns None when OAUTH_JWK not configured."""
-    with patch("backend._internal.auth.settings.atproto.oauth_jwk", None):
+    with patch("backend._internal.auth.oauth.settings.atproto.oauth_jwk", None):
         assert get_public_jwks() is None
 
 
@@ -383,7 +383,7 @@ def test_get_public_jwks_returns_public_key():
     jwk_dict["kid"] = "test-key-id"  # add kid to test preservation
     test_jwk = json.dumps(jwk_dict)
 
-    with patch("backend._internal.auth.settings.atproto.oauth_jwk", test_jwk):
+    with patch("backend._internal.auth.oauth.settings.atproto.oauth_jwk", test_jwk):
         jwks = get_public_jwks()
 
         assert jwks is not None

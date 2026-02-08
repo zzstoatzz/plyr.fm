@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_auth
-from backend._internal.background_tasks import (
+from backend._internal.tasks import (
     schedule_pds_create_like,
     schedule_pds_delete_like,
 )

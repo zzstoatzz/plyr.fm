@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session, get_optional_session
-from backend._internal.background_tasks import schedule_teal_scrobble
+from backend._internal.tasks import schedule_teal_scrobble
 from backend.config import settings
 from backend.models import (
     Artist,

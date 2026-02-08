@@ -198,7 +198,7 @@ async def get_recommended_tags(
 
     if predictions is None and settings.replicate.enabled and track.r2_url:
         # classify on-demand
-        from backend._internal.replicate_client import get_replicate_client
+        from backend._internal.clients.replicate import get_replicate_client
 
         client = get_replicate_client()
         classify_result = await client.classify(track.r2_url)

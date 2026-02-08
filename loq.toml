@@ -22,14 +22,6 @@ path = "STATUS.md"
 max_lines = 612
 
 [[rules]]
-path = "backend/src/backend/_internal/auth.py"
-max_lines = 1410
-
-[[rules]]
-path = "backend/src/backend/_internal/background_tasks.py"
-max_lines = 954
-
-[[rules]]
 path = "backend/src/backend/api/albums.py"
 max_lines = 714
 

@@ -12,8 +12,8 @@ from sqlalchemy.orm import attributes
 from starlette.datastructures import UploadFile
 
 from backend._internal.atproto.handles import resolve_handle
+from backend._internal.clients.moderation import get_moderation_client
 from backend._internal.image import ImageFormat
-from backend._internal.moderation_client import get_moderation_client
 from backend._internal.notifications import notification_service
 from backend.config import settings
 from backend.models import Track

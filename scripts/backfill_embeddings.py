@@ -39,8 +39,8 @@ import time
 import httpx
 from sqlalchemy import select
 
-from backend._internal.clap_client import get_clap_client
-from backend._internal.tpuf_client import upsert
+from backend._internal.clients.clap import get_clap_client
+from backend._internal.clients.tpuf import upsert
 from backend.config import settings
 from backend.models import Artist, Track
 from backend.utilities.database import db_session

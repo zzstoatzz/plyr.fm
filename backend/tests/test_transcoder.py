@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import httpx
 import pytest
 
-from backend._internal.transcoder_client import (
+from backend._internal.clients.transcoder import (
     TranscoderClient,
     get_transcoder_client,
 )
@@ -151,7 +151,7 @@ async def test_transcoder_client_custom_target_format(
 
 def test_transcoder_client_from_settings() -> None:
     """test TranscoderClient.from_settings() creates client correctly."""
-    with patch("backend._internal.transcoder_client.settings") as mock_settings:
+    with patch("backend._internal.clients.transcoder.settings") as mock_settings:
         mock_settings.transcoder.service_url = "https://transcoder.example.com"
         mock_settings.transcoder.auth_token = "secret-token"
         mock_settings.transcoder.timeout_seconds = 120
@@ -166,12 +166,12 @@ def test_transcoder_client_from_settings() -> None:
 
 def test_get_transcoder_client_singleton() -> None:
     """test get_transcoder_client() returns singleton."""
-    import backend._internal.transcoder_client as module
+    import backend._internal.clients.transcoder as module
 
     # reset singleton
     module._client = None
 
-    with patch("backend._internal.transcoder_client.settings") as mock_settings:
+    with patch("backend._internal.clients.transcoder.settings") as mock_settings:
         mock_settings.transcoder.service_url = "https://transcoder.example.com"
         mock_settings.transcoder.auth_token = "token"
         mock_settings.transcoder.timeout_seconds = 60

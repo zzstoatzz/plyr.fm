@@ -6,7 +6,6 @@ import json
 import logging
 import tempfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -37,17 +36,17 @@ from backend._internal.atproto import (
 )
 from backend._internal.atproto.handles import resolve_featured_artists
 from backend._internal.audio import AudioFormat
-from backend._internal.background_tasks import (
+from backend._internal.clients.transcoder import get_transcoder_client
+from backend._internal.image import ImageFormat
+from backend._internal.jobs import job_service
+from backend._internal.tasks import (
     schedule_album_list_sync,
     schedule_copyright_scan,
     schedule_embedding_generation,
     schedule_genre_classification,
 )
-from backend._internal.image import ImageFormat
-from backend._internal.jobs import job_service
-from backend._internal.transcoder_client import get_transcoder_client
 from backend.config import settings
-from backend.models import Artist, Tag, Track, TrackTag, UserPreferences
+from backend.models import Artist, Track, UserPreferences
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.audio import extract_duration
@@ -55,7 +54,7 @@ from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
 from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.rate_limit import limiter
-from backend.utilities.tags import parse_tags_json
+from backend.utilities.tags import add_tags_to_track, parse_tags_json
 
 from .router import router
 from .services import get_or_create_album
@@ -104,42 +103,33 @@ class UploadContext:
     auto_tag: bool = False
 
 
-async def _get_or_create_tag(
-    db: "AsyncSession", tag_name: str, creator_did: str
-) -> Tag:
-    """get existing tag or create new one, handling race conditions.
+@dataclass
+class AudioInfo:
+    """result of audio validation phase."""
 
-    uses a select-then-insert pattern with IntegrityError handling
-    to safely handle concurrent tag creation.
-    """
-    # first try to find existing tag
-    result = await db.execute(select(Tag).where(Tag.name == tag_name))
-    tag = result.scalar_one_or_none()
-    if tag:
-        return tag
+    format: AudioFormat
+    duration: int | None
+    is_gated: bool
 
-    # try to create new tag
-    tag = Tag(
-        name=tag_name,
-        created_by_did=creator_did,
-        created_at=datetime.now(UTC),
-    )
-    db.add(tag)
 
-    try:
-        await db.flush()
-        return tag
-    except IntegrityError as e:
-        # only handle unique constraint violation on tag name (pgcode 23505)
-        # re-raise other integrity errors (e.g., foreign key violations)
-        pgcode = getattr(e.orig, "pgcode", None)
-        if pgcode != "23505":
-            raise
-        # another process created the tag - rollback and fetch it
-        await db.rollback()
-        result = await db.execute(select(Tag).where(Tag.name == tag_name))
-        tag = result.scalar_one()
-        return tag
+@dataclass
+class StorageResult:
+    """result of audio storage phase."""
+
+    file_id: str
+    original_file_id: str | None
+    original_file_type: str | None
+    playable_format: AudioFormat
+    r2_url: str | None
+    transcode_info: "TranscodeInfo | None"
+
+
+class UploadPhaseError(Exception):
+    """raised when an upload phase fails with a user-facing message."""
+
+    def __init__(self, error: str) -> None:
+        self.error = error
+        super().__init__(error)
 
 
 async def _save_audio_to_storage(
@@ -462,31 +452,6 @@ async def _transcode_audio(
     )
 
 
-async def _add_tags_to_track(
-    db: AsyncSession,
-    track_id: int,
-    validated_tags: list[str],
-    creator_did: str,
-) -> None:
-    """add validated tags to a track."""
-    if not validated_tags:
-        return
-
-    try:
-        for tag_name in validated_tags:
-            tag = await _get_or_create_tag(db, tag_name, creator_did)
-            track_tag = TrackTag(track_id=track_id, tag_id=tag.id)
-            db.add(track_tag)
-        await db.commit()
-    except Exception as e:
-        logfire.error(
-            "failed to add tags to track",
-            track_id=track_id,
-            tags=validated_tags,
-            error=str(e),
-        )
-
-
 async def _send_track_notification(db: AsyncSession, track: Track) -> None:
     """send notification for new track upload."""
     from backend._internal.notifications import notification_service
@@ -500,362 +465,346 @@ async def _send_track_notification(db: AsyncSession, track: Track) -> None:
         logger.warning(f"failed to send notification for track {track.id}: {e}")
 
 
+async def _validate_audio(ctx: UploadContext) -> AudioInfo:
+    """phase 1: validate file type, extract duration, check gating requirements."""
+    ext = Path(ctx.filename).suffix.lower()
+    audio_format = AudioFormat.from_extension(ext)
+    if not audio_format:
+        raise UploadPhaseError(f"unsupported file type: {ext}")
+
+    with open(ctx.file_path, "rb") as f:
+        duration = extract_duration(f)
+
+    is_gated = ctx.support_gate is not None
+    if is_gated:
+        async with db_session() as db:
+            prefs_result = await db.execute(
+                select(UserPreferences).where(UserPreferences.did == ctx.artist_did)
+            )
+            prefs = prefs_result.scalar_one_or_none()
+            if not prefs or prefs.support_url != "atprotofans":
+                raise UploadPhaseError(
+                    "supporter gating requires atprotofans to be enabled in settings"
+                )
+
+    return AudioInfo(format=audio_format, duration=duration, is_gated=is_gated)
+
+
+async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResult:
+    """phase 2: store audio (transcode if lossless)."""
+    transcode_info: TranscodeInfo | None = None
+
+    if not audio_info.format.is_web_playable:
+        if audio_info.is_gated:
+            raise UploadPhaseError(
+                "supporter-gated tracks cannot use lossless formats yet"
+            )
+
+        original_ext = Path(ctx.filename).suffix.lower().lstrip(".")
+        transcode_info = await _transcode_audio(
+            ctx.upload_id, ctx.file_path, ctx.filename, original_ext
+        )
+        if not transcode_info:
+            raise UploadPhaseError("transcoding failed")
+
+        file_id = transcode_info.transcoded_file_id
+        playable_format = AudioFormat.from_extension(
+            transcode_info.transcoded_file_type
+        )
+        if not playable_format:
+            raise UploadPhaseError("unknown transcoded format")
+    else:
+        file_id = await _save_audio_to_storage(
+            ctx.upload_id, ctx.file_path, ctx.filename, gated=audio_info.is_gated
+        )
+        if not file_id:
+            raise UploadPhaseError("failed to save audio to storage")
+        playable_format = audio_info.format
+        transcode_info = None
+
+    # get R2 URL (only for public tracks)
+    r2_url: str | None = None
+    if not audio_info.is_gated:
+        ext = Path(ctx.filename).suffix.lower()
+        playable_ext = playable_format.value if playable_format else ext[1:]
+        r2_url = await storage.get_url(
+            file_id, file_type="audio", extension=playable_ext
+        )
+        if not r2_url:
+            raise UploadPhaseError("failed to get public audio URL")
+
+    return StorageResult(
+        file_id=file_id,
+        original_file_id=transcode_info.original_file_id if transcode_info else None,
+        original_file_type=transcode_info.original_file_type
+        if transcode_info
+        else None,
+        playable_format=playable_format,
+        r2_url=r2_url,
+        transcode_info=transcode_info,
+    )
+
+
+async def _check_duplicate(ctx: UploadContext, sr: StorageResult) -> None:
+    """phase 3: check for duplicate tracks."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(Track).where(
+                Track.file_id == sr.file_id,
+                Track.artist_did == ctx.artist_did,
+            )
+        )
+        if existing := result.scalar_one_or_none():
+            raise UploadPhaseError(
+                f"duplicate upload: track already exists (id: {existing.id})"
+            )
+
+
+async def _upload_to_pds(
+    ctx: UploadContext, audio_info: AudioInfo, sr: StorageResult
+) -> PdsBlobResult | None:
+    """phase 4: upload to PDS (best-effort). returns None if skipped."""
+    if audio_info.is_gated:
+        return None
+
+    async with db_session() as db:
+        allow_pds_upload = await _should_upload_pds_blob(db, ctx.artist_did)
+    if not allow_pds_upload:
+        return None
+
+    content_type = sr.playable_format.media_type
+    if sr.transcode_info:
+        pds_file_data = sr.transcode_info.transcoded_data
+    else:
+        async with aiofiles.open(ctx.file_path, "rb") as f:
+            pds_file_data = await f.read()
+
+    return await _try_upload_to_pds(
+        ctx.upload_id, ctx.auth_session, pds_file_data, content_type
+    )
+
+
+async def _store_image(ctx: UploadContext) -> tuple[str | None, str | None]:
+    """phase 5: store image (optional). returns (image_id, image_url)."""
+    if not ctx.image_path or not ctx.image_filename:
+        return None, None
+    return await _save_image_to_storage(
+        ctx.upload_id, ctx.image_path, ctx.image_filename, ctx.image_content_type
+    )
+
+
+async def _create_records(
+    ctx: UploadContext,
+    audio_info: AudioInfo,
+    sr: StorageResult,
+    pds_result: PdsBlobResult | None,
+    image_id: str | None,
+    image_url: str | None,
+) -> Track:
+    """phase 6: create ATProto record + DB track record."""
+    ext = Path(ctx.filename).suffix.lower()
+    playable_file_type = sr.playable_format.value if sr.playable_format else ext[1:]
+
+    async with db_session() as db:
+        result = await db.execute(select(Artist).where(Artist.did == ctx.artist_did))
+        artist = result.scalar_one_or_none()
+        if not artist:
+            raise UploadPhaseError("artist profile not found")
+
+        # resolve featured artists
+        featured_artists: list[dict] = []
+        if ctx.features_json:
+            await job_service.update_progress(
+                ctx.upload_id,
+                JobStatus.PROCESSING,
+                "resolving featured artists...",
+                phase="metadata",
+            )
+            featured_artists = await resolve_featured_artists(
+                ctx.features_json, artist.handle
+            )
+
+        # create ATProto record
+        await job_service.update_progress(
+            ctx.upload_id,
+            JobStatus.PROCESSING,
+            "creating atproto record...",
+            phase="atproto",
+        )
+        try:
+            if audio_info.is_gated:
+                from urllib.parse import urljoin
+
+                backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
+                audio_url_for_record = urljoin(backend_url + "/", f"audio/{sr.file_id}")
+            else:
+                assert sr.r2_url is not None
+                audio_url_for_record = sr.r2_url
+
+            atproto_result = await create_track_record(
+                auth_session=ctx.auth_session,
+                title=ctx.title,
+                artist=artist.display_name,
+                audio_url=audio_url_for_record,
+                file_type=playable_file_type,
+                album=ctx.album,
+                duration=audio_info.duration,
+                features=featured_artists or None,
+                image_url=image_url,
+                support_gate=ctx.support_gate,
+                audio_blob=pds_result.blob_ref if pds_result else None,
+            )
+            if not atproto_result:
+                raise ValueError("PDS returned no record data")
+            atproto_uri, atproto_cid = atproto_result
+        except Exception as e:
+            logger.error("ATProto sync failed for upload %s: %s", ctx.upload_id, e)
+            # cleanup orphaned media
+            with contextlib.suppress(Exception):
+                await storage.delete(sr.file_id, playable_file_type)
+            if sr.original_file_id and sr.original_file_type:
+                with contextlib.suppress(Exception):
+                    await storage.delete(sr.original_file_id, sr.original_file_type)
+            if image_id:
+                with contextlib.suppress(Exception):
+                    await storage.delete(image_id)
+            raise UploadPhaseError(f"failed to sync track to ATProto: {e}") from e
+
+        # create DB record
+        await job_service.update_progress(
+            ctx.upload_id,
+            JobStatus.PROCESSING,
+            "saving track metadata...",
+            phase="database",
+        )
+
+        extra: dict = {}
+        if audio_info.duration:
+            extra["duration"] = audio_info.duration
+        if ctx.auto_tag:
+            extra["auto_tag"] = True
+
+        album_record = None
+        if ctx.album:
+            extra["album"] = ctx.album
+            album_record = await get_or_create_album(
+                db, artist, ctx.album, image_id, image_url
+            )
+
+        has_pds_blob = pds_result and pds_result.cid is not None
+        audio_storage = "both" if has_pds_blob else "r2"
+
+        track = Track(
+            title=ctx.title,
+            file_id=sr.file_id,
+            file_type=playable_file_type,
+            original_file_id=sr.original_file_id,
+            original_file_type=sr.original_file_type,
+            artist_did=ctx.artist_did,
+            extra=extra,
+            album_id=album_record.id if album_record else None,
+            features=featured_artists,
+            r2_url=sr.r2_url,
+            atproto_record_uri=atproto_uri,
+            atproto_record_cid=atproto_cid,
+            image_id=image_id,
+            image_url=image_url,
+            support_gate=ctx.support_gate,
+            audio_storage=audio_storage,
+            pds_blob_cid=pds_result.cid if pds_result else None,
+            pds_blob_size=pds_result.size if pds_result else None,
+        )
+
+        db.add(track)
+        try:
+            await db.commit()
+            await db.refresh(track)
+        except IntegrityError as e:
+            await db.rollback()
+            with contextlib.suppress(Exception):
+                await storage.delete(sr.file_id, playable_file_type)
+            if sr.original_file_id and sr.original_file_type:
+                with contextlib.suppress(Exception):
+                    await storage.delete(sr.original_file_id, sr.original_file_type)
+            raise UploadPhaseError(f"database constraint violation: {e!s}") from e
+
+    return track
+
+
+async def _schedule_post_upload(
+    ctx: UploadContext, sr: StorageResult, track: Track
+) -> None:
+    """phase 7: post-upload tasks (tags, notifications, background jobs)."""
+    async with db_session() as db:
+        await add_tags_to_track(db, track.id, ctx.tags, ctx.artist_did)
+
+        # skip notifications and copyright scan for integration tests on staging
+        is_integration_test = (
+            settings.observability.environment == "staging"
+            and "integration-test" in (ctx.tags or [])
+        )
+        if not is_integration_test:
+            await _send_track_notification(db, track)
+        if sr.r2_url and not is_integration_test:
+            await schedule_copyright_scan(track.id, sr.r2_url)
+
+    # generate CLAP embedding for vibe search
+    if sr.r2_url and settings.modal.enabled and settings.turbopuffer.enabled:
+        await schedule_embedding_generation(track.id, sr.r2_url)
+
+    # classify genres via Replicate
+    if sr.r2_url and settings.replicate.enabled:
+        await schedule_genre_classification(track.id, sr.r2_url)
+
+    # sync album list record if track is in an album
+    if track.album_id:
+        await schedule_album_list_sync(ctx.auth_session.session_id, track.album_id)
+
+
 async def _process_upload_background(ctx: UploadContext) -> None:
-    """background task to process upload."""
+    """orchestrate the upload pipeline through named phases."""
     with logfire.span(
         "process upload background", upload_id=ctx.upload_id, filename=ctx.filename
     ):
-        file_id: str | None = None
-        original_file_id: str | None = None
-        original_file_type: str | None = None
-        image_id: str | None = None
-        audio_format: AudioFormat | None = None
-        playable_format: AudioFormat | None = None
-        pds_blob_result: PdsBlobResult | None = None
-
         try:
             await job_service.update_progress(
                 ctx.upload_id, JobStatus.PROCESSING, "processing upload..."
             )
 
-            # validate file type
-            ext = Path(ctx.filename).suffix.lower()
-            audio_format = AudioFormat.from_extension(ext)
-            if not audio_format:
-                await job_service.update_progress(
-                    ctx.upload_id,
-                    JobStatus.FAILED,
-                    "upload failed",
-                    error=f"unsupported file type: {ext}",
-                )
-                return
+            # phase 1: validate and prepare audio
+            audio_info = await _validate_audio(ctx)
 
-            # extract duration
-            with open(ctx.file_path, "rb") as f:
-                duration = extract_duration(f)
+            # phase 2: store audio (transcode if lossless)
+            sr = await _store_audio(ctx, audio_info)
 
-            # validate gating requirements if support_gate is set
-            is_gated = ctx.support_gate is not None
-            if is_gated:
-                async with db_session() as db:
-                    prefs_result = await db.execute(
-                        select(UserPreferences).where(
-                            UserPreferences.did == ctx.artist_did
-                        )
-                    )
-                    prefs = prefs_result.scalar_one_or_none()
-                    if not prefs or prefs.support_url != "atprotofans":
-                        await job_service.update_progress(
-                            ctx.upload_id,
-                            JobStatus.FAILED,
-                            "upload failed",
-                            error="supporter gating requires atprotofans to be enabled in settings",
-                        )
-                        return
+            # phase 3: check for duplicates
+            await _check_duplicate(ctx, sr)
 
-            # for non-web-playable formats, transcode first
-            transcode_info: TranscodeInfo | None = None
-            if not audio_format.is_web_playable:
-                # gated tracks don't support transcoding yet
-                if is_gated:
-                    await job_service.update_progress(
-                        ctx.upload_id,
-                        JobStatus.FAILED,
-                        "upload failed",
-                        error="supporter-gated tracks cannot use lossless formats yet",
-                    )
-                    return
+            # phase 4: upload to PDS (best-effort)
+            pds_result = await _upload_to_pds(ctx, audio_info, sr)
 
-                # use actual extension from filename (e.g., "aif" not "aiff")
-                original_ext = Path(ctx.filename).suffix.lower().lstrip(".")
-                transcode_info = await _transcode_audio(
-                    ctx.upload_id,
-                    ctx.file_path,
-                    ctx.filename,
-                    original_ext,
-                )
-                if not transcode_info:
-                    return
+            # phase 5: store image (optional)
+            image_id, image_url = await _store_image(ctx)
 
-                # use transcoded file for playback, store original for export
-                file_id = transcode_info.transcoded_file_id
-                original_file_id = transcode_info.original_file_id
-                original_file_type = transcode_info.original_file_type
-                playable_format = AudioFormat.from_extension(
-                    transcode_info.transcoded_file_type
-                )
-            else:
-                # web-playable format: save directly
-                file_id = await _save_audio_to_storage(
-                    ctx.upload_id, ctx.file_path, ctx.filename, gated=is_gated
-                )
-                playable_format = audio_format
+            # phase 6: create records (ATProto + DB)
+            track = await _create_records(
+                ctx, audio_info, sr, pds_result, image_id, image_url
+            )
 
-            if not file_id:
-                return
+            # phase 7: post-upload tasks (tags, notifications, background jobs)
+            await _schedule_post_upload(ctx, sr, track)
 
-            # check for duplicate
-            async with db_session() as db:
-                result = await db.execute(
-                    select(Track).where(
-                        Track.file_id == file_id,
-                        Track.artist_did == ctx.artist_did,
-                    )
-                )
-                if existing := result.scalar_one_or_none():
-                    await job_service.update_progress(
-                        ctx.upload_id,
-                        JobStatus.FAILED,
-                        "upload failed",
-                        error=f"duplicate upload: track already exists (id: {existing.id})",
-                    )
-                    return
+            await job_service.update_progress(
+                ctx.upload_id,
+                JobStatus.COMPLETED,
+                "upload completed successfully",
+                result={"track_id": track.id},
+            )
 
-            # get R2 URL (only for public tracks - gated tracks have no public URL)
-            # use playable_format for URL since that's what the ATProto record points to
-            r2_url: str | None = None
-            if not is_gated:
-                playable_ext = playable_format.value if playable_format else ext[1:]
-                r2_url = await storage.get_url(
-                    file_id, file_type="audio", extension=playable_ext
-                )
-                if not r2_url:
-                    await job_service.update_progress(
-                        ctx.upload_id,
-                        JobStatus.FAILED,
-                        "upload failed",
-                        error="failed to get public audio URL",
-                    )
-                    return
-
-            # try uploading blob to user's PDS (best-effort, falls back to R2-only)
-            # gated tracks skip PDS blob upload since they need auth-protected access
-            if not is_gated and playable_format:
-                async with db_session() as db:
-                    allow_pds_upload = await _should_upload_pds_blob(db, ctx.artist_did)
-                if allow_pds_upload:
-                    content_type = playable_format.media_type
-                    # use transcoded bytes if available, otherwise read original file
-                    if transcode_info:
-                        pds_file_data = transcode_info.transcoded_data
-                    else:
-                        async with aiofiles.open(ctx.file_path, "rb") as f:
-                            pds_file_data = await f.read()
-                    pds_blob_result = await _try_upload_to_pds(
-                        ctx.upload_id,
-                        ctx.auth_session,
-                        pds_file_data,
-                        content_type,
-                    )
-
-            # save image if provided
-            image_url = None
-            if ctx.image_path and ctx.image_filename:
-                image_id, image_url = await _save_image_to_storage(
-                    ctx.upload_id,
-                    ctx.image_path,
-                    ctx.image_filename,
-                    ctx.image_content_type,
-                )
-
-            # get artist and resolve featured artists
-            async with db_session() as db:
-                result = await db.execute(
-                    select(Artist).where(Artist.did == ctx.artist_did)
-                )
-                artist = result.scalar_one_or_none()
-                if not artist:
-                    await job_service.update_progress(
-                        ctx.upload_id,
-                        JobStatus.FAILED,
-                        "upload failed",
-                        error="artist profile not found",
-                    )
-                    return
-
-                # resolve featured artists
-                featured_artists: list[dict] = []
-                if ctx.features_json:
-                    await job_service.update_progress(
-                        ctx.upload_id,
-                        JobStatus.PROCESSING,
-                        "resolving featured artists...",
-                        phase="metadata",
-                    )
-                    featured_artists = await resolve_featured_artists(
-                        ctx.features_json, artist.handle
-                    )
-
-                # create ATProto record
-                await job_service.update_progress(
-                    ctx.upload_id,
-                    JobStatus.PROCESSING,
-                    "creating atproto record...",
-                    phase="atproto",
-                )
-                try:
-                    # for gated tracks, use API endpoint URL instead of direct R2 URL
-                    # this ensures playback goes through our auth check
-                    if is_gated:
-                        # use backend URL for gated audio
-                        from urllib.parse import urljoin
-
-                        backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
-                        audio_url_for_record = urljoin(
-                            backend_url + "/", f"audio/{file_id}"
-                        )
-                    else:
-                        # r2_url is guaranteed non-None here - we returned early above if None
-                        assert r2_url is not None
-                        audio_url_for_record = r2_url
-
-                    # use playable format for ATProto record (transcoded if applicable)
-                    playable_file_type = (
-                        playable_format.value if playable_format else ext[1:]
-                    )
-                    atproto_result = await create_track_record(
-                        auth_session=ctx.auth_session,
-                        title=ctx.title,
-                        artist=artist.display_name,
-                        audio_url=audio_url_for_record,
-                        file_type=playable_file_type,
-                        album=ctx.album,
-                        duration=duration,
-                        features=featured_artists or None,
-                        image_url=image_url,
-                        support_gate=ctx.support_gate,
-                        audio_blob=pds_blob_result.blob_ref
-                        if pds_blob_result
-                        else None,
-                    )
-                    if not atproto_result:
-                        raise ValueError("PDS returned no record data")
-                    atproto_uri, atproto_cid = atproto_result
-                except Exception as e:
-                    logger.error(
-                        "ATProto sync failed for upload %s: %s", ctx.upload_id, e
-                    )
-                    await job_service.update_progress(
-                        ctx.upload_id,
-                        JobStatus.FAILED,
-                        "upload failed",
-                        error=f"failed to sync track to ATProto: {e}",
-                        phase="atproto",
-                    )
-                    # cleanup orphaned media
-                    with contextlib.suppress(Exception):
-                        await storage.delete(file_id, playable_file_type)
-                    if original_file_id and original_file_type:
-                        with contextlib.suppress(Exception):
-                            await storage.delete(original_file_id, original_file_type)
-                    if image_id:
-                        with contextlib.suppress(Exception):
-                            await storage.delete(image_id)
-                    return
-
-                # create track record
-                await job_service.update_progress(
-                    ctx.upload_id,
-                    JobStatus.PROCESSING,
-                    "saving track metadata...",
-                    phase="database",
-                )
-
-                extra: dict = {}
-                if duration:
-                    extra["duration"] = duration
-                if ctx.auto_tag:
-                    extra["auto_tag"] = True
-
-                album_record = None
-                if ctx.album:
-                    extra["album"] = ctx.album
-                    album_record = await get_or_create_album(
-                        db, artist, ctx.album, image_id, image_url
-                    )
-
-                # determine audio storage type
-                has_pds_blob = pds_blob_result and pds_blob_result.cid is not None
-                audio_storage = "both" if has_pds_blob else "r2"
-
-                track = Track(
-                    title=ctx.title,
-                    file_id=file_id,
-                    file_type=playable_file_type,
-                    original_file_id=original_file_id,
-                    original_file_type=original_file_type,
-                    artist_did=ctx.artist_did,
-                    extra=extra,
-                    album_id=album_record.id if album_record else None,
-                    features=featured_artists,
-                    r2_url=r2_url,
-                    atproto_record_uri=atproto_uri,
-                    atproto_record_cid=atproto_cid,
-                    image_id=image_id,
-                    image_url=image_url,
-                    support_gate=ctx.support_gate,
-                    audio_storage=audio_storage,
-                    pds_blob_cid=pds_blob_result.cid if pds_blob_result else None,
-                    pds_blob_size=pds_blob_result.size if pds_blob_result else None,
-                )
-
-                db.add(track)
-                try:
-                    await db.commit()
-                    await db.refresh(track)
-
-                    await _add_tags_to_track(db, track.id, ctx.tags, ctx.artist_did)
-
-                    # skip notifications and copyright scan for integration tests on staging
-                    # (synthetic audio, no point spamming DMs or paying for AudD API calls)
-                    is_integration_test = (
-                        settings.observability.environment == "staging"
-                        and "integration-test" in (ctx.tags or [])
-                    )
-                    if not is_integration_test:
-                        await _send_track_notification(db, track)
-                    if r2_url and not is_integration_test:
-                        await schedule_copyright_scan(track.id, r2_url)
-
-                    # generate CLAP embedding for vibe search
-                    if (
-                        r2_url
-                        and settings.modal.enabled
-                        and settings.turbopuffer.enabled
-                    ):
-                        await schedule_embedding_generation(track.id, r2_url)
-
-                    # classify genres via Replicate
-                    if r2_url and settings.replicate.enabled:
-                        await schedule_genre_classification(track.id, r2_url)
-
-                    # sync album list record if track is in an album
-                    if album_record:
-                        await schedule_album_list_sync(
-                            ctx.auth_session.session_id, album_record.id
-                        )
-
-                    await job_service.update_progress(
-                        ctx.upload_id,
-                        JobStatus.COMPLETED,
-                        "upload completed successfully",
-                        result={"track_id": track.id},
-                    )
-
-                except IntegrityError as e:
-                    await db.rollback()
-                    await job_service.update_progress(
-                        ctx.upload_id,
-                        JobStatus.FAILED,
-                        "upload failed",
-                        error=f"database constraint violation: {e!s}",
-                    )
-                    with contextlib.suppress(Exception):
-                        await storage.delete(file_id, playable_file_type)
-                    if original_file_id and original_file_type:
-                        with contextlib.suppress(Exception):
-                            await storage.delete(original_file_id, original_file_type)
-
+        except UploadPhaseError as e:
+            await job_service.update_progress(
+                ctx.upload_id, JobStatus.FAILED, "upload failed", error=e.error
+            )
         except Exception as e:
             logger.exception(f"upload {ctx.upload_id} failed with unexpected error")
             await job_service.update_progress(

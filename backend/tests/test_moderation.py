@@ -11,15 +11,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
-from backend._internal.moderation import (
-    get_active_copyright_labels,
-    scan_track_for_copyright,
-)
-from backend._internal.moderation_client import (
+from backend._internal.clients.moderation import (
     CreateReportResult,
     ModerationClient,
     ScanResult,
     SensitiveImagesResult,
+)
+from backend._internal.moderation import (
+    get_active_copyright_labels,
+    scan_track_for_copyright,
 )
 from backend.main import app
 from backend.models import Artist, CopyrightScan, Track
@@ -366,7 +366,7 @@ async def test_get_active_copyright_labels_service_error() -> None:
 
 async def test_sync_copyright_resolutions(db_session: AsyncSession) -> None:
     """test that sync_copyright_resolutions updates flagged scans."""
-    from backend._internal.background_tasks import sync_copyright_resolutions
+    from backend._internal.tasks import sync_copyright_resolutions
 
     # create test artist and tracks
     artist = Artist(
@@ -419,7 +419,7 @@ async def test_sync_copyright_resolutions(db_session: AsyncSession) -> None:
     await db_session.commit()
 
     with patch(
-        "backend._internal.moderation_client.get_moderation_client"
+        "backend._internal.clients.moderation.get_moderation_client"
     ) as mock_get_client:
         mock_client = AsyncMock()
         # only track2's URI is still active
