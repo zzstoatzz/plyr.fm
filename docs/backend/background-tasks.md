@@ -12,7 +12,7 @@ background tasks handle operations that shouldn't block the request/response cyc
 - **album list sync** - updates ATProto list records when album metadata changes
 - **PDS like/unlike** - syncs like records to user's PDS asynchronously
 - **PDS comment create/update/delete** - syncs comment records to user's PDS asynchronously
-- **genre classification** - classifies tracks via Replicate effnet-discogs, stores predictions in `track.extra`
+- **genre classification** - classifies tracks via Replicate effnet-discogs, stores predictions in `track.extra`. if `auto_tag` flag is set, applies top genre tags automatically after classification
 - **move track audio** - moves files between public/private R2 buckets when support_gate is toggled
 - **sync copyright resolutions** (perpetual) - syncs copyright label resolutions from ATProto labeler every 5 minutes
 
