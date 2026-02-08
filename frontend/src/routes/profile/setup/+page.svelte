@@ -33,7 +33,7 @@
 				if (exchangeResponse.ok) {
 					// invalidate all load functions so they rerun with the new session cookie
 					await invalidateAll();
-					await auth.initialize();
+					await auth.refresh();
 				}
 			} catch (_e) {
 				console.error('failed to exchange token:', _e);
