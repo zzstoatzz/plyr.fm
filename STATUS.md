@@ -47,355 +47,82 @@ plyr.fm should become:
 
 ### February 2026
 
-#### optimize GET /tracks/top latency (PR #879, Feb 8)
+#### portal pagination + perf optimization (PRs #878-879, Feb 8)
 
-**baseline (production, 171 requests over 3 days)**: p50=123ms, p95=1204ms, p99=1576ms. the p95/p99 spikes were caused by stale connection reconnects during `pool_pre_ping` and redundant DB round-trips.
+**portal pagination (PR #878)**: `GET /tracks/me` now supports `limit`/`offset` pagination (default 10 per page). portal loads first 10 tracks with a "load more" button. export section uses total count for accurate messaging.
 
-**optimizations**:
-- **merged query**: new `get_top_tracks_with_counts()` returns (track_id, like_count) tuples in a single GROUP BY — the count was already computed to sort, now it's returned instead of discarded. eliminates a redundant `get_like_counts` call (1 fewer DB round-trip)
-- **scoped liked query**: the authenticated user's liked-track check now filters by `track_id IN (...)` (10 rows) instead of scanning all user likes
-- **pool_recycle 7200s → 1800s**: connections recycle every 30min instead of 2h, reducing stale connections that trigger expensive reconnects
-
-**verified via Logfire traces**: authenticated requests dropped from 11 DB queries to 7. post-deploy requests at 517-600ms vs baseline p95 of 1.2s.
-
-**14 new regression tests** covering ordering, limit clamping, auth state, like counts, comment counts, and tags.
+**GET /tracks/top latency fix (PR #879)**: baseline p95 was 1.2s due to stale connection reconnects and redundant DB queries.
+- merged top-track-ids + like-counts into single `get_top_tracks_with_counts()` query (1 fewer round-trip)
+- scoped liked-track check to `track_id IN (...)` (10 rows) instead of all user likes
+- `pool_recycle` 7200s → 1800s to reduce stale connection spikes
+- authenticated requests dropped from 11 DB queries to 7. post-deploy p95: ~550ms
+- 14 new regression tests
 
 ---
 
-#### auto-tag at upload + ML audit script (PRs #871-872, Feb 7)
+#### repo reorganization (PR #876, Feb 8)
 
-**auto-tag on upload (PR #871)**: checkbox on the upload form ("auto-tag with recommended genres") that automatically applies genre tags after classification completes. user doesn't need to come back to the portal to apply suggested tags.
+moved auxiliary services into `services/` (transcoder, moderation, clap) and infrastructure into `infrastructure/` (redis). updated all GitHub Actions workflows, pre-commit config, justfile module paths, and docs.
 
-- frontend: `autoTag` state + checkbox below TagInput, threaded through `uploader.svelte.ts` into FormData
-- backend: `auto_tag` form param stored in `track.extra["auto_tag"]`, consumed by `classify_genres` background task
-- after classification, applies top tags using ratio-to-top filter (>= 50% of top score, capped at 5)
-- additive with manual tags — user can add their own AND get auto-tags
-- flag cleaned up from `track.extra` after use (no schema migration needed)
+---
 
-**ML audit script (PR #872)**: `scripts/ml_audit.py` reports which tracks and artists have been processed by ML features (genre classification, CLAP embeddings, auto-tagging). for privacy policy and terms-of-service auditing. supports `--verbose` for track-level detail, `--check-embeddings` for turbopuffer vector counts.
+#### auto-tag at upload + ML audit (PRs #870-872, Feb 7)
+
+**auto-tag on upload (PR #871)**: checkbox on the upload form ("auto-tag with recommended genres") that applies top genre tags after classification completes. ratio-to-top filter (>= 50% of top score, capped at 5), additive with manual tags. flag stored in `track.extra`, cleaned up after use.
+
+**genre/subgenre split (PR #870)**: compound Discogs labels like "Electronic---Ambient" now produce two separate tags ("electronic", "ambient") instead of one compound tag.
+
+**ML audit script (PR #872)**: `scripts/ml_audit.py` reports which tracks/artists have been processed by ML features. supports `--verbose` and `--check-embeddings` for privacy/ToS auditing.
 
 ---
 
 #### ML genre classification + suggested tags (PRs #864-868, Feb 6-7)
 
-**genre classification via Replicate**: tracks are now automatically classified into genre labels using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model on Replicate (EfficientNet trained on Discogs ~400 categories).
+**genre classification via Replicate**: tracks classified into genre labels using [effnet-discogs](https://replicate.com/mtg/effnet-discogs) on Replicate (EfficientNet trained on Discogs ~400 categories).
 
-**how it works**:
-- on upload: if `REPLICATE_ENABLED=true`, classification runs as a docket background task
+- on upload: classification runs as docket background task if `REPLICATE_ENABLED=true`
 - on demand: `GET /tracks/{id}/recommended-tags` classifies on the fly if no cached predictions
-- predictions stored in `track.extra["genre_predictions"]` with `genre_predictions_file_id` for cache invalidation when audio is replaced
-- raw Discogs labels (`Electronic---Ambient`) cleaned to `ambient electronic` format
-- cost: ~$0.00019/run (~$0.11 per 575 tracks, CPU inference)
+- predictions stored in `track.extra["genre_predictions"]` with file_id-based cache invalidation
+- raw Discogs labels cleaned to lowercase format. cost: ~$0.00019/run
+- Replicate SDK incompatible with Python 3.14 (pydantic v1) — uses httpx directly with `Prefer: wait` header
 
-**frontend UX (PR #868)**: when editing a track on the portal, suggested genre tags appear as clickable dashed-border chips below the tag input. wave loading animation while fetching. clicking a chip adds the tag. `$derived` reactively hides suggestions matching manually-typed tags. all failures silently hide the section.
+**frontend UX (PR #868)**: suggested genre tags appear as clickable dashed-border chips in the portal edit modal. `$derived` reactively hides suggestions matching manually-typed tags.
 
-**implementation details**:
-- Replicate Python SDK incompatible with Python 3.14 (pydantic v1) — uses httpx directly against the Replicate HTTP API with `Prefer: wait` header
-- `ReplicateSettings` in config, `ReplicateClient` singleton follows `clap_client.py` pattern
-- backfill script: `scripts/backfill_genres.py` with concurrency control
-- privacy policy updated to list Replicate, terms bumped for re-acceptance
-- docs: `docs/backend/genre-classification.md`
+---
 
-**PRs**:
-- #864: core implementation (replicate client, background task, endpoint, backfill script, tests)
-- #865: clean Discogs genre names, add documentation
-- #866: link genre-classification from docs index
-- #867: cache invalidation keyed by file_id
-- #868: suggested tags UI in portal edit modal
+#### mood search (PRs #848-858, Feb 5-6)
+
+**search by how music sounds** — type "chill lo-fi beats" into the search bar and find tracks that match the vibe, not just the title.
+
+**architecture**: CLAP (Contrastive Language-Audio Pretraining) model hosted on Modal generates audio embeddings at upload time and text embeddings at search time. vectors stored in turbopuffer. keyword and semantic searches fire in parallel — keyword results appear instantly (~50ms), semantic results append when ready (~1-2s).
+
+**key design decisions**:
+- unified search: no mode toggle. keyword + semantic results merge by score, client-side deduplication removes overlap
+- graceful degradation: backend returns `available: false` instead of 502/503 when CLAP/turbopuffer are down
+- quality controls: distance threshold, spread check to filter low-signal results, result cap
+- gated behind `vibe-search` feature flag with version-aware terms re-acceptance
+
+**hardening (PRs #849-858)**: m4a support for CLAP, correct R2 URLs, normalize similarity scores, switch from larger_clap_music to clap-htsat-unfused, handle empty turbopuffer namespace, rename "vibe search" → "mood search", concurrent backfill script.
+
+---
+
+#### recommended tags via audio similarity (PR #859, Feb 6)
+
+`GET /tracks/{track_id}/recommended-tags` finds tracks with similar CLAP embeddings in turbopuffer, aggregates their tags weighted by similarity score. excludes existing tags, normalizes scores to 0-1. replaced by genre classification (PR #864) but the endpoint pattern persisted.
+
+---
+
+#### mobile login UX + misc fixes (PRs #841-845, Feb 2)
+
+- **handle hint sizing (PRs #843-845)**: iterative fix for login page handle hint wrapping on mobile — final approach: reduced font size, gap, and `nowrap` to keep full text visible
+- **PDS backfill gate (PR #842)**: PDS backfill button gated behind `pds-audio-uploads` feature flag
+- **share button reuse (PR #841)**: track detail page now uses shared `ShareButton` component
 
 ---
 
 ### January 2026
 
-#### per-track PDS migration + UX polish (PRs #835-839, Jan 30-31)
-
-**selective migration**: replaced all-or-nothing PDS backfill with a modal where users pick individual tracks to migrate. modal shows file sizes (via R2 HEAD requests), track status badges (on PDS / gated / eligible), and a select-all toggle.
-
-**non-blocking UX (PR #839)**: the modal initially blocked the user during migration. reworked so the modal is selection-only — picks tracks, fires a callback, closes immediately. POST + SSE progress tracking moved to the parent component with persistent toast updates ("migrating 3/7...", "5 migrated, 2 skipped"). user is never trapped.
-
-**backend changes (PR #838)**:
-- `GET /tracks/me/file-sizes` — parallel R2 HEAD requests (semaphore-capped at 10) to get byte sizes for the migration modal
-- `POST /pds-backfill/audio` now accepts optional `track_ids` body to backfill specific tracks (backward-compatible — no body = all eligible)
-- SSE progress stream includes `last_processed_track_id` and `last_status` for per-track updates
-
-**copy fixes (PRs #835-836)**: removed "R2" from user-facing text (settings toggle, upload notes). users see "plyr.fm storage" instead of infrastructure detail.
-
-**share link clutter (PR #837)**: share links with zero interactions (self-clicks filtered) were cluttering the portal stats section. now hidden until someone else actually clicks the link.
-
----
-
-#### PDS blob storage for audio (PRs #823-833, Jan 29)
-
-**audio files can now be stored on the user's PDS** - embraces ATProto's data ownership model. PDS uploads are feature-flagged and opt-in via a user setting, with R2 CDN as the primary delivery path.
-
-**core implementation (PR #823)**:
-- new uploads: audio blob uploaded to PDS, BlobRef stored in track record
-- dual-write: R2 copy kept for streaming performance (PDS `getBlob` isn't CDN-optimized)
-- graceful fallback: if PDS rejects blob (size limit), track stays R2-only
-- gated tracks skip PDS (need auth-protected access)
-
-**database changes**:
-- `audio_storage`: "r2" | "pds" | "both"
-- `pds_blob_cid`: CID of blob on user's PDS
-- `pds_blob_size`: size in bytes
-
-**bug fixes and hardening (PRs #824-828)**:
-- fix atproto headers lost on DPoP retry (#824)
-- fail upload on unexpected PDS errors instead of silent fallback (#825)
-- add `blob:*/*` OAuth scope to both permission sets and granular paths (#826, #827)
-- remove PDS indicator from track UI — PDS will be the default, no need to badge it (#828)
-
-**batch backfill (PR #829)**: `POST /pds-backfill/audio` starts a background job (docket) to backfill existing tracks to the user's PDS with SSE progress streaming. frontend `PdsBackfillControl` component in the portal.
-
-**copyright DM fix (PR #831)**: removed misleading "0% confidence" from copyright notification DMs — the enterprise AudD API doesn't return confidence values.
-
-**feature flag gating (PR #833)**: PDS uploads during track upload are now gated behind two checks: admin-assigned `pds-audio-uploads` feature flag + per-user toggle in Settings > Experimental. default behavior is R2-only unless both are enabled.
-
-**terms update (PR #832)**: clarified PDS delisting language in terms of service.
-
-**research**: documented emerging ATProto media service patterns from [community discourse](https://discourse.atprotocol.community/t/media-pds-service/297) — the ecosystem is converging on dedicated sidecar media services rather than PDS-as-media-host. our layered architecture (R2 + CDN + PDS records) aligns well. see `docs/research/2026-01-29-atproto-media-service-patterns.md`.
-
----
-
-#### PDS-based account creation (PRs #813-815, Jan 27)
-
-**create ATProto accounts directly from plyr.fm** - users without an existing ATProto identity can now create one during sign-up by selecting a PDS host.
-
-**how it works**:
-- login page shows "create account" tab when feature is enabled
-- user selects a PDS (currently selfhosted.social)
-- OAuth flow uses `prompt=create` to trigger account creation on the PDS
-- after account creation, user is redirected back and logged in
-
-**implementation details**:
-- `/auth/pds-options` endpoint returns available PDS hosts from config
-- `/auth/start` accepts `pds_url` parameter for account creation flow
-- handle resolution falls back to PDS directly (via `com.atproto.repo.describeRepo`) when Bluesky AppView hasn't indexed the new account yet
-
-**configuration** (`AccountCreationSettings`):
-- `enabled`: feature flag for account creation
-- `recommended_pds`: list of PDS options with name, url, and description
-
----
-
-#### lossless audio support (PRs #794-801, Jan 25)
-
-**transcoding integration complete** - users can now upload AIFF and FLAC files. the system transcodes them to MP3 for browser compatibility while preserving originals for lossless playback.
-
-**how it works**:
-- upload AIFF/FLAC → original saved to R2, transcoded MP3 created
-- database stores both `file_id` (transcoded) and `original_file_id` (lossless)
-- frontend detects browser capabilities via `canPlayType()`
-- Safari/native apps get lossless, Chrome/Firefox get transcoded MP3
-- lossless badge shown on track cards when browser supports the format
-
-**key changes**:
-- `original_file_id` and `original_file_type` added to Track model and API
-- audio endpoint serves either version based on requested file_id
-- feature-flagged via `lossless-uploads` user flag
-
-**bug fixes during rollout**:
-- PR #796: audio endpoint now queries by `file_id` OR `original_file_id`
-- PR #797: store actual extension (`.aif`) not normalized format name (`.aiff`)
-
-**UI polish (PRs #799-801)**:
-- lossless badge positioned in top-right corner of track card (not artwork)
-- subtle glowing animation draws attention to premium quality tracks
-- whole card gets accent-colored border treatment when lossless
-- theme-aware styling, responsive sizing, respects `prefers-reduced-motion`
-
----
-
-#### auth check optimization (PRs #781-782, Jan 23)
-
-**eliminated redundant /auth/me calls** - previously, every navigation triggered an auth check via the layout load function. for unauthenticated users, this meant a 401 on every page click (117 errors in 24 hours observed via Logfire).
-
-**fix**: auth singleton now tracks initialization state. `+layout.svelte` checks auth once on mount instead of every navigation. follow-up PR fixed library/liked pages that were broken by the layout simplification (they were using `await parent()` to get `isAuthenticated` which was no longer provided).
-
----
-
-#### remove SSR sensitive-images fetch (PR #785, Jan 24)
-
-**eliminated unnecessary SSR fetch** - the frontend SSR (`+layout.server.ts`) was fetching `/moderation/sensitive-images` on every page load to pre-populate the client-side moderation filter. during traffic spikes, this hammered the backend (1,179 rate limit hits over 7 days).
-
-**root cause**: the SSR fetch was premature optimization. cloudflare pages workers make direct fetch calls to fly.io - there's no CDN layer to cache responses. the cache-control headers we added in PR #784 only help browser caching, not SSR-to-origin requests.
-
-**fix**: removed the SSR fetch entirely. the client-side `ModerationManager` singleton already has caching and will fetch the data once on page load. the "flash of sensitive content" risk is theoretical - images load slower than a single API call completes, and there are only 2 flagged images.
-
-- deleted `+layout.server.ts`
-- simplified `+layout.ts`
-- updated pages to use `moderation.isSensitive()` singleton instead of SSR data
-
----
-
-#### listen receipts (PR #773, Jan 22)
-
-**share links now track who clicked and played** - when you share a track, you get a URL with a `?ref=` code that records visitors and listeners:
-- `POST /tracks/{id}/share` creates tracked share link with unique 8-character code (48 bits entropy)
-- frontend captures `?ref=` param on page load, fires click event to backend
-- play endpoint accepts optional `ref` param to record play attribution
-- `GET /tracks/me/shares` returns paginated stats: visitors, listeners, anonymous counts
-
-**portal share stats section**:
-- expandable cards per share link with copyable tracked URL
-- visitors (who clicked) and listeners (who played) shown as avatar circles
-- individual interaction counts per user
-- self-clicks/plays filtered out to avoid inflating stats
-
-**data model**:
-- `ShareLink` table: code, track_id, creator_did, created_at
-- `ShareLinkEvent` table: share_link_id, visitor_did (nullable for anonymous), event_type (click/play)
-
----
-
-#### handle display fix (PR #774, Jan 22)
-
-**DIDs were displaying instead of handles** in share link stats and other places (comments, track likers):
-- root cause: Artist records were only created during profile setup
-- users who authenticated but skipped setup had no Artist record
-- fix: create minimal Artist record (did, handle, avatar) during OAuth callback
-- profile setup now updates existing record instead of erroring
-
----
-
-#### responsive embed v2 (PRs #771-772, Jan 20-21)
-
-**complete rewrite of embed CSS** using container queries and proportional scaling:
-
-**layout modes**:
-- **wide** (width >= 400px): side art, proportional sizing
-- **very wide** (width >= 600px): larger art, more breathing room
-- **square/tall** (aspect <= 1.2, width >= 200px): art on top, 2-line titles
-- **very tall** (aspect <= 0.7, width >= 200px): blurred background overlay
-- **narrow** (width < 280px): compact blurred background
-- **micro** (width < 200px): hide time labels and logo
-
-**key technical changes**:
-- all sizes use `clamp()` with `cqi` units (container query units)
-- grid-based header layout instead of absolute positioning
-- gradient overlay (top-heavy to bottom-heavy) for text readability
-
----
-
-#### terms of service and privacy policy (PRs #567, #761-770, Jan 19-20)
-
-**legal foundation shipped** with ATProto-aware design:
-
-**terms cover**:
-- AT Protocol context (decentralized identity, user-controlled PDS)
-- content ownership (users retain ownership, plyr.fm gets license for streaming)
-- DMCA safe harbor with designated agent (DMCA-1069186)
-- federation disclaimer: audio files in blob storage we control, but ATProto records may persist on user's PDS
-
-**privacy policy**:
-- explicit third-party list with links (Cloudflare, Fly.io, Neon, Logfire, AudD, Anthropic, ATProtoFans)
-- data ownership clarity (DID, profile, tracks on user's PDS)
-- MIT license added to repo
-
-**acceptance flow** (TermsOverlay component):
-- shown on first login if `terms_accepted_at` is null
-- 4-bullet summary with links to full documents
-- "I Accept" or "Decline & Logout" options
-- `POST /account/accept-terms` records timestamp
-
-**polish PRs** (#761-770): corrected ATProto vs "our servers" terminology, standardized AT Protocol naming, added email fallbacks, capitalized sentence starts
-
----
-
-#### content gating research (Jan 18)
-
-researched ATProtoFans architecture and JSONLogic rule evaluation. documented findings in `docs/content-gating-roadmap.md`:
-- current ATProtoFans records and API (supporter, supporterProof, brokerProof, terms)
-- the gap: terms exist but aren't exposed via validateSupporter
-- how magazi uses datalogic-rs for flexible rule evaluation
-- open questions about upcoming metadata extensions
-
-no implementation changes - waiting to align with what ATProtoFans will support.
-
-#### logout modal UX (PRs #755-757, Jan 17-18)
-
-**tooltip scroll fix** (PR #755):
-- leftmost avatar in likers/commenters tooltip was clipped with no way to scroll to it
-- changed `justify-content: center` to `flex-start` so most recent (leftmost) is always visible
-
-**logout modal copy** (PRs #756-757):
-- simplified from two confusing questions to one clear question
-- before: "stay logged in?" + "you're logging out of @handle?"
-- after: "switch accounts?"
-- "logout completely" → "log out of all accounts"
-
----
-
-#### idempotent teal scrobbles (PR #754, Jan 16)
-
-**prevents duplicate scrobbles** when same play is submitted multiple times:
-- use `putRecord` with deterministic TID rkeys derived from `playedTime` instead of `createRecord`
-- network retries, multiple teal-compatible services, or background task retries won't create duplicates
-- adds `played_time` parameter to `build_teal_play_record` for deterministic record keys
-
----
-
-#### avatar refresh and tooltip polish (PRs #750-752, Jan 13)
-
-**avatar refresh from anywhere** (PR #751):
-- previously, stale avatar URLs were only fixed when visiting the artist detail page
-- now any broken avatar triggers a background refresh from Bluesky
-- shared `avatar-refresh.svelte.ts` provides global cache and request deduplication
-- works from: track items, likers tooltip, commenters tooltip, profile page
-
-**interactive tooltips** (PR #750):
-- hovering on like count shows avatar circles of users who liked
-- hovering on comment count shows avatar circles of commenters
-- lazy-loaded with 5-minute cache, invalidated when likes/comments change
-- elegant centered layout with horizontal scroll when needed
-
-**UX polish** (PR #752):
-- added prettier config with `useTabs: true` to match existing style
-- reduced avatar hover effect intensity (scale 1.2 → 1.08)
-- fixed avatar hover clipping at tooltip edge (added top padding)
-- track title now links to detail page (color change on hover)
-
----
-
-#### copyright flagging fix (PR #748, Jan 12)
-
-**switched from score-based to dominant match detection**:
-- AudD's enterprise API doesn't return confidence scores (always 0)
-- previous threshold-based detection was broken
-- new approach: flag if one song appears in >= 30% of matched segments
-- filters false positives where random segments match different songs
-
----
-
-#### Neon cold start fix (Jan 11)
-
-**why**: first requests after idle periods would fail with 500 errors due to Neon serverless scaling to zero after 5 minutes of inactivity. previous mitigations (larger pool, longer timeouts) helped but didn't eliminate the problem.
-
-**fix**: disabled scale-to-zero on `plyr-prd` via Neon console. this is the [recommended approach](https://neon.com/blog/6-best-practices-for-running-neon-in-production) for production workloads.
-
-**configuration**:
-- `plyr-prd`: scale-to-zero **disabled** (`suspend_timeout_seconds: -1`)
-- `plyr-stg`, `plyr-dev`: scale-to-zero enabled (cold starts acceptable)
-
-**docs**: updated [connection-pooling.md](docs/backend/database/connection-pooling.md) with production guidance and how to verify settings via Neon MCP.
-
-closes #733
-
----
-
-#### early January work (Jan 1-9)
-
-See `.status_history/2026-01.md` for detailed history including:
-- multi-account experience (PRs #707, #710, #712-714, Jan 3-5)
-- integration test harness (PR #744, Jan 9)
-- track edit UX improvements (PRs #741-742, Jan 9)
-- auth stabilization (PRs #734-736, Jan 6-7)
-- timestamp deep links (PRs #739-740, Jan 8)
-- artist bio links (PRs #700-701, Jan 2)
-- copyright moderation improvements (PRs #703-704, Jan 2-3)
-- ATProto OAuth permission sets (PRs #697-698, Jan 1-2)
-- atprotofans supporters display (PRs #695-696, Jan 1)
-- UI polish (PRs #692-694, Dec 31 - Jan 1)
+See `.status_history/2026-01.md` for detailed history.
 
 ### December 2025
 
@@ -440,7 +167,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-ML-powered track features rolling out: genre classification (Replicate effnet-discogs) auto-runs on upload, with optional auto-tagging checkbox on the upload form. mood search (CLAP embeddings + turbopuffer) feature-flagged behind `vibe-search`. ML audit script (`scripts/ml_audit.py`) tracks which tracks/artists have been processed for privacy/ToS compliance.
+ML-powered track features: genre classification (Replicate effnet-discogs) auto-runs on upload with optional auto-tagging. mood search (CLAP + turbopuffer) feature-flagged behind `vibe-search`, runs parallel to keyword search. performance optimization on hot paths (GET /tracks/top p95 cut from 1.2s to ~550ms). repo reorganized — services and infrastructure in dedicated directories.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -494,7 +221,8 @@ ML-powered track features rolling out: genre classification (Replicate effnet-di
 - ✅ lossless audio (AIFF/FLAC) with automatic transcoding for browser compatibility
 - ✅ PDS blob storage for audio (user data ownership)
 - ✅ play count tracking, likes, queue management
-- ✅ unified search with Cmd/Ctrl+K
+- ✅ unified search with Cmd/Ctrl+K (keyword + mood search in parallel)
+- ✅ mood search via CLAP embeddings + turbopuffer (feature-flagged)
 - ✅ teal.fm scrobbling
 - ✅ copyright moderation with ATProto labeler
 - ✅ ML genre classification with suggested tags in edit modal + auto-tag at upload (Replicate effnet-discogs)
@@ -590,9 +318,12 @@ plyr.fm/
 ├── frontend/             # SvelteKit app
 │   ├── src/lib/          # components & state
 │   └── src/routes/       # pages
-├── moderation/           # Rust moderation service (ATProto labeler)
-├── transcoder/           # Rust audio transcoding service
-├── redis/                # self-hosted Redis config
+├── services/
+│   ├── transcoder/       # Rust audio transcoding (Fly.io)
+│   ├── moderation/       # Rust content moderation (Fly.io)
+│   └── clap/             # ML embeddings (Python, Modal)
+├── infrastructure/
+│   └── redis/            # self-hosted Redis (Fly.io)
 ├── docs/                 # documentation
 └── justfile              # task runner
 ```
@@ -609,3 +340,4 @@ plyr.fm/
 ---
 
 this is a living document. last updated 2026-02-08.
+
