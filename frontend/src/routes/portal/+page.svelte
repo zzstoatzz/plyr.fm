@@ -19,7 +19,10 @@
 	let loading = $state(true);
 	let error = $state('');
 	let tracks = $state<Track[]>([]);
+	let tracksTotal = $state(0);
+	let tracksHasMore = $state(false);
 	let loadingTracks = $state(false);
+	let loadingMoreTracks = $state(false);
 	// track editing state
 	let editingTrackId = $state<number | null>(null);
 	let editTitle = $state('');
@@ -155,20 +158,32 @@
 		}
 	});
 
-	async function loadMyTracks() {
-		loadingTracks = true;
+	async function loadMyTracks(append = false) {
+		if (append) {
+			loadingMoreTracks = true;
+		} else {
+			loadingTracks = true;
+		}
 		try {
-			const response = await fetch(`${API_URL}/tracks/me`, {
+			const offset = append ? tracks.length : 0;
+			const response = await fetch(`${API_URL}/tracks/me?limit=10&offset=${offset}`, {
 				credentials: 'include'
 			});
 			if (response.ok) {
 				const data = await response.json();
-				tracks = data.tracks;
+				if (append) {
+					tracks = [...tracks, ...data.tracks];
+				} else {
+					tracks = data.tracks;
+				}
+				tracksTotal = data.total;
+				tracksHasMore = data.has_more;
 			}
 		} catch (_e) {
 			console.error('failed to load tracks:', _e);
 		} finally {
 			loadingTracks = false;
+			loadingMoreTracks = false;
 		}
 	}
 
@@ -485,7 +500,7 @@
 	async function exportAllMedia() {
 		if (exportingMedia) return;
 
-		const trackCount = tracks.length;
+		const trackCount = tracksTotal || tracks.length;
 		const exportMsg = trackCount === 1 ? 'preparing export of your track...' : `preparing export of ${trackCount} tracks...`;
 		
 		// 0 means infinite/persist until dismissed
@@ -1107,6 +1122,16 @@
 						</div>
 					{/each}
 				</div>
+
+				{#if tracksHasMore}
+					<button
+						class="load-more-btn"
+						onclick={() => loadMyTracks(true)}
+						disabled={loadingMoreTracks}
+					>
+						{loadingMoreTracks ? 'loading...' : `load more (${tracks.length} of ${tracksTotal})`}
+					</button>
+				{/if}
 			{/if}
 		</section>
 
@@ -1359,14 +1384,14 @@
 				<a href="/settings" class="settings-link">all settings →</a>
 			</div>
 
-			{#if tracks.length > 0}
+			{#if tracksTotal > 0}
 				<PdsBackfillControl tracks={tracks} onComplete={loadMyTracks} />
 
 				<div class="data-control">
 					<div class="control-info">
 						<h3>export tracks</h3>
 						<p class="control-description">
-							{tracks.length === 1 ? 'download your track as a zip archive' : `download all ${tracks.length} tracks as a zip archive`}
+							{tracksTotal === 1 ? 'download your track as a zip archive' : `download all ${tracksTotal} tracks as a zip archive`}
 						</p>
 					</div>
 					<button

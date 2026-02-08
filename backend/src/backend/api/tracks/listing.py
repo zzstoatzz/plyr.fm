@@ -6,9 +6,9 @@ from typing import Annotated
 
 import logfire
 from botocore.exceptions import ClientError
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -51,6 +51,8 @@ class MyTracksResponse(BaseModel):
     """Response for listing authenticated user's tracks."""
 
     tracks: list[TrackResponse]
+    total: int
+    has_more: bool
 
 
 @router.get("/")
@@ -366,14 +368,25 @@ async def list_top_tracks(
 async def list_my_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ) -> MyTracksResponse:
     """List tracks uploaded by authenticated user."""
+    total_stmt = (
+        select(func.count())
+        .select_from(Track)
+        .where(Track.artist_did == auth_session.did)
+    )
+    total = (await db.execute(total_stmt)).scalar_one()
+
     stmt = (
         select(Track)
         .join(Artist)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.artist_did == auth_session.did)
         .order_by(Track.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
     result = await db.execute(stmt)
     tracks = result.scalars().all()
@@ -395,7 +408,11 @@ async def list_my_tracks(
         ]
     )
 
-    return MyTracksResponse(tracks=track_responses)
+    return MyTracksResponse(
+        tracks=track_responses,
+        total=total,
+        has_more=offset + len(track_responses) < total,
+    )
 
 
 class BrokenTracksResponse(BaseModel):
