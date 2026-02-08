@@ -50,7 +50,7 @@ frontend/.svelte-kit/
 frontend/build/
 
 # Rust build artifacts
-transcoder/target/
+**/target/
 
 # docker profiling logs
 docker-build-profile-*.log
