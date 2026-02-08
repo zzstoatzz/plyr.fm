@@ -4,8 +4,8 @@
   "defs": {
     "main": {
       "type": "permission-set",
-      "title": "plyr.fm",
-      "description": "Upload and manage audio content, playlists, likes, and comments.",
+      "title": "Full plyr.fm Access",
+      "detail": "Provides full access to all plyr.fm features including uploading and managing tracks, playlists, likes, and comments.",
       "permissions": [
         {
           "type": "permission",

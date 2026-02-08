@@ -2,20 +2,30 @@
 """publish permission set lexicon to ATProto repo with specific rkey."""
 
 import asyncio
-import os
+from pathlib import Path
 
 from atproto import AsyncClient
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ROOT = Path(__file__).parent.parent
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=str(ROOT / ".env"), extra="ignore")
+
+    plyrfm_handle: str = Field(validation_alias="PLYRFM_HANDLE")
+    plyrfm_password: str = Field(validation_alias="PLYRFM_PASSWORD")
+    namespace: str = Field(default="fm.plyr", validation_alias="NAMESPACE")
 
 
 async def main():
-    handle = os.environ["PLYRFM_HANDLE"]
-    password = os.environ["PLYRFM_PASSWORD"]
-    namespace = os.environ.get("NAMESPACE", "fm.plyr")
+    settings = Settings()
 
     client = AsyncClient()
-    await client.login(handle, password)
+    await client.login(settings.plyrfm_handle, settings.plyrfm_password)
 
-    permission_set_id = f"{namespace}.authFullApp"
+    permission_set_id = f"{settings.namespace}.authFullApp"
 
     record = {
         "$type": "com.atproto.lexicon.schema",
@@ -24,19 +34,19 @@ async def main():
         "defs": {
             "main": {
                 "type": "permission-set",
-                "title": "plyr.fm",
-                "description": "Upload and manage audio content, playlists, likes, and comments.",
+                "title": "Full plyr.fm Access",
+                "detail": "Provides full access to all plyr.fm features including uploading and managing tracks, playlists, likes, and comments.",
                 "permissions": [
                     {
                         "type": "permission",
                         "resource": "repo",
                         "action": ["create", "update", "delete"],
                         "collection": [
-                            f"{namespace}.track",
-                            f"{namespace}.like",
-                            f"{namespace}.comment",
-                            f"{namespace}.list",
-                            f"{namespace}.actor.profile",
+                            f"{settings.namespace}.track",
+                            f"{settings.namespace}.like",
+                            f"{settings.namespace}.comment",
+                            f"{settings.namespace}.list",
+                            f"{settings.namespace}.actor.profile",
                         ],
                     }
                 ],

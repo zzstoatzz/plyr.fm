@@ -47,6 +47,28 @@ plyr.fm should become:
 
 ### February 2026
 
+#### OAuth permission set cleanup + docs audit (PR #889, Feb 8)
+
+**OAuth permission set**: authorization page was showing raw NSID (`fm.plyr.authFullApp`) instead of human-readable description. root cause: ATProto permission sets use `detail` field (not `description`) for the subtitle text. updated lexicon and publish script, republished to PDS. also modernized publish script from raw `os.environ` to pydantic settings.
+
+**docs audit (PR #888)**: fixed stale/broken documentation across 6 files — wrong table names in copyright docs, outdated pool_recycle values, broken links in docs index, missing tools entries. updated README to reflect full feature set. added semantic search and playlists to search.md.
+
+---
+
+#### auth state refresh + backend refactor (PRs #886-887, Feb 8)
+
+**auth state refresh (PR #887)**: after account switch or login, stale user data persisted because `AuthManager.initialize()` no-ops once the `initialized` flag is set. added `refresh()` that resets the flag before re-fetching, used in all exchange-token call sites.
+
+**backend package split (PR #886)**: split three monolith files into focused packages:
+- `auth.py` (1,400 lines) → `auth/` package (8 modules)
+- `background_tasks.py` (803 lines) → `tasks/` package (5 domain modules: copyright, ml, pds, storage, sync)
+- 5 `*_client.py` files → `clients/` package
+- extracted upload pipeline into 7 named phase functions, shared tag ops to `utilities/tags.py`
+
+all public APIs preserved via `__init__.py` re-exports. 424 tests pass.
+
+---
+
 #### portal pagination + perf optimization (PRs #878-879, Feb 8)
 
 **portal pagination (PR #878)**: `GET /tracks/me` now supports `limit`/`offset` pagination (default 10 per page). portal loads first 10 tracks with a "load more" button. export section uses total count for accurate messaging.
@@ -167,7 +189,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-ML-powered track features: genre classification (Replicate effnet-discogs) auto-runs on upload with optional auto-tagging. mood search (CLAP + turbopuffer) feature-flagged behind `vibe-search`, runs parallel to keyword search. performance optimization on hot paths (GET /tracks/top p95 cut from 1.2s to ~550ms). repo reorganized — services and infrastructure in dedicated directories.
+code quality and developer experience: backend split into focused packages (auth, tasks, clients), docs audit to fix stale references, OAuth permission set cleanup. ML features stable — genre classification and mood search running in production. performance optimization on hot paths (GET /tracks/top p95 cut from 1.2s to ~550ms).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
