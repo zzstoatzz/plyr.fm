@@ -4,8 +4,9 @@ import asyncio
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import backend._internal.background_tasks as bg_tasks
 import backend._internal.export_tasks as export_tasks
+import backend._internal.tasks.copyright as copyright_tasks
+import backend._internal.tasks.sync as sync_tasks
 
 
 async def test_schedule_export_uses_docket() -> None:
@@ -39,10 +40,12 @@ async def test_schedule_copyright_scan_uses_docket() -> None:
     mock_docket.add = MagicMock(return_value=mock_schedule)
 
     with (
-        patch.object(bg_tasks, "get_docket", return_value=mock_docket),
-        patch.object(bg_tasks, "scan_copyright", MagicMock()),
+        patch.object(copyright_tasks, "get_docket", return_value=mock_docket),
+        patch.object(copyright_tasks, "scan_copyright", MagicMock()),
     ):
-        await bg_tasks.schedule_copyright_scan(123, "https://example.com/audio.mp3")
+        await copyright_tasks.schedule_copyright_scan(
+            123, "https://example.com/audio.mp3"
+        )
 
         mock_docket.add.assert_called_once()
         assert calls == [(123, "https://example.com/audio.mp3")]
@@ -59,10 +62,10 @@ async def test_schedule_atproto_sync_uses_docket() -> None:
     mock_docket.add = MagicMock(return_value=mock_schedule)
 
     with (
-        patch.object(bg_tasks, "get_docket", return_value=mock_docket),
-        patch.object(bg_tasks, "sync_atproto", MagicMock()),
+        patch.object(sync_tasks, "get_docket", return_value=mock_docket),
+        patch.object(sync_tasks, "sync_atproto", MagicMock()),
     ):
-        await bg_tasks.schedule_atproto_sync("session-abc", "did:plc:testuser")
+        await sync_tasks.schedule_atproto_sync("session-abc", "did:plc:testuser")
 
         mock_docket.add.assert_called_once()
         assert calls == [("session-abc", "did:plc:testuser")]
@@ -88,10 +91,10 @@ async def test_schedule_teal_scrobble_uses_docket() -> None:
     mock_docket.add = MagicMock(return_value=mock_schedule)
 
     with (
-        patch.object(bg_tasks, "get_docket", return_value=mock_docket),
-        patch.object(bg_tasks, "scrobble_to_teal", MagicMock()),
+        patch.object(sync_tasks, "get_docket", return_value=mock_docket),
+        patch.object(sync_tasks, "scrobble_to_teal", MagicMock()),
     ):
-        await bg_tasks.schedule_teal_scrobble(
+        await sync_tasks.schedule_teal_scrobble(
             session_id="session-xyz",
             track_id=42,
             track_title="Test Track",

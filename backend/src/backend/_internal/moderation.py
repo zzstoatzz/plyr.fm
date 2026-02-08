@@ -8,7 +8,7 @@ import logfire
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from backend._internal.moderation_client import get_moderation_client
+from backend._internal.clients.moderation import get_moderation_client
 from backend._internal.notifications import notification_service
 from backend.config import settings
 from backend.models import CopyrightScan, Track

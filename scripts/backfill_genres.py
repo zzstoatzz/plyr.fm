@@ -37,7 +37,7 @@ import time
 
 from sqlalchemy import select, text
 
-from backend._internal.replicate_client import get_replicate_client
+from backend._internal.clients.replicate import get_replicate_client
 from backend.config import settings
 from backend.models import Artist, Track
 from backend.utilities.database import db_session

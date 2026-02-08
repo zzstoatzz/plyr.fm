@@ -113,6 +113,6 @@ def _register_tasks(docket: Docket) -> None:
     tasks must be registered before they can be executed by workers.
     new tasks should be added to background_tasks.background_tasks list.
     """
-    docket.register_collection("backend._internal.background_tasks:background_tasks")
+    docket.register_collection("backend._internal.tasks:background_tasks")
 
     logger.info("registered background tasks")

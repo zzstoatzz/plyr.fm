@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_auth
-from backend._internal.background_tasks import (
+from backend._internal.tasks import (
     schedule_pds_create_comment,
     schedule_pds_delete_comment,
     schedule_pds_update_comment,

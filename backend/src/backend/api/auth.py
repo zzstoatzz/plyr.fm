@@ -39,7 +39,7 @@ from backend._internal import (
     switch_active_account,
 )
 from backend._internal.auth import get_refresh_token_lifetime_days
-from backend._internal.background_tasks import schedule_atproto_sync
+from backend._internal.tasks import schedule_atproto_sync
 from backend.config import settings
 from backend.models import Artist, get_db
 from backend.utilities.rate_limit import limiter

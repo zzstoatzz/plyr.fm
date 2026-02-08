@@ -9,8 +9,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.atproto.handles import search_handles
-from backend._internal.clap_client import get_clap_client
-from backend._internal.tpuf_client import query as tpuf_query
+from backend._internal.clients.clap import get_clap_client
+from backend._internal.clients.tpuf import query as tpuf_query
 from backend.config import settings
 from backend.models import Album, Artist, Playlist, Tag, Track, TrackTag, get_db
 

@@ -25,7 +25,7 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile
 from backend._internal.auth import get_session
-from backend._internal.moderation_client import get_moderation_client
+from backend._internal.clients.moderation import get_moderation_client
 from backend._internal.notifications import notification_service
 from backend.config import settings
 from backend.models import Album, Artist, Track, TrackLike, get_db

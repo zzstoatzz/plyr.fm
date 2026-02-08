@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal.replicate_client import ClassificationResult, GenrePrediction
+from backend._internal.clients.replicate import ClassificationResult, GenrePrediction
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackTag, get_db
 
@@ -132,7 +132,7 @@ async def test_recommended_tags_on_demand_classification(
     with (
         patch("backend.config.settings.replicate") as mock_replicate,
         patch(
-            "backend._internal.replicate_client.get_replicate_client"
+            "backend._internal.clients.replicate.get_replicate_client"
         ) as mock_get_client,
     ):
         mock_replicate.enabled = True
@@ -241,7 +241,7 @@ async def test_recommended_tags_reclassifies_when_file_id_changes(
     with (
         patch("backend.config.settings.replicate") as mock_replicate,
         patch(
-            "backend._internal.replicate_client.get_replicate_client"
+            "backend._internal.clients.replicate.get_replicate_client"
         ) as mock_get_client,
     ):
         mock_replicate.enabled = True

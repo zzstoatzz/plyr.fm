@@ -3,7 +3,6 @@
 import contextlib
 import json
 import logging
-from datetime import UTC, datetime
 from typing import Annotated
 from urllib.parse import urljoin
 
@@ -11,7 +10,6 @@ import logfire
 from fastapi import Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,15 +28,15 @@ from backend._internal.atproto.records import (
 )
 from backend._internal.atproto.tid import datetime_to_tid
 from backend._internal.audio import AudioFormat
-from backend._internal.background_tasks import (
+from backend._internal.tasks import (
     schedule_album_list_sync,
     schedule_move_track_audio,
 )
 from backend.config import settings
-from backend.models import Artist, Tag, Track, TrackTag, get_db
+from backend.models import Artist, Track, TrackTag, get_db
 from backend.schemas import MessageResponse, TrackResponse
 from backend.storage import storage
-from backend.utilities.tags import parse_tags_json
+from backend.utilities.tags import get_or_create_tag, parse_tags_json
 
 from .metadata_service import (
     apply_album_update,
@@ -48,42 +46,6 @@ from .metadata_service import (
 from .router import router
 
 logger = logging.getLogger(__name__)
-
-
-async def _get_or_create_tag(db: AsyncSession, tag_name: str, creator_did: str) -> Tag:
-    """get existing tag or create new one, handling race conditions.
-
-    uses a select-then-insert pattern with IntegrityError handling
-    to safely handle concurrent tag creation.
-    """
-    # first try to find existing tag
-    result = await db.execute(select(Tag).where(Tag.name == tag_name))
-    tag = result.scalar_one_or_none()
-    if tag:
-        return tag
-
-    # try to create new tag
-    tag = Tag(
-        name=tag_name,
-        created_by_did=creator_did,
-        created_at=datetime.now(UTC),
-    )
-    db.add(tag)
-
-    try:
-        await db.flush()
-        return tag
-    except IntegrityError as e:
-        # only handle unique constraint violation on tag name (pgcode 23505)
-        # re-raise other integrity errors (e.g., foreign key violations)
-        pgcode = getattr(e.orig, "pgcode", None)
-        if pgcode != "23505":
-            raise
-        # another process created the tag - rollback and fetch it
-        await db.rollback()
-        result = await db.execute(select(Tag).where(Tag.name == tag_name))
-        tag = result.scalar_one()
-        return tag
 
 
 @router.delete("/{track_id}")
@@ -308,7 +270,7 @@ async def update_track_metadata(
         # get or create tags and create track_tags
         for tag_name in validated_tags:
             # get or create tag with race condition handling
-            tag = await _get_or_create_tag(db, tag_name, auth_session.did)
+            tag = await get_or_create_tag(db, tag_name, auth_session.did)
 
             # create track_tag association
             track_tag = TrackTag(track_id=track_id, tag_id=tag.id)

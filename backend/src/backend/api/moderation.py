@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from backend._internal import Session, require_auth
-from backend._internal.moderation_client import get_moderation_client
+from backend._internal.clients.moderation import get_moderation_client
 from backend._internal.notifications import notification_service
 from backend.utilities.rate_limit import limiter
 
