@@ -2,7 +2,7 @@
 
 import pytest
 
-from backend.main import parse_plyrfm_user_agent
+from backend.utilities.observability import parse_plyrfm_user_agent
 
 
 class TestParsePlyrfmUserAgent:
