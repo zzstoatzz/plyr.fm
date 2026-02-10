@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from backend._internal import Session as AuthSession
 from backend._internal import has_flag, require_artist_profile
@@ -452,17 +453,22 @@ async def _transcode_audio(
     )
 
 
-async def _send_track_notification(db: AsyncSession, track: Track) -> None:
+async def _send_track_notification(db: AsyncSession, track_id: int) -> None:
     """send notification for new track upload."""
     from backend._internal.notifications import notification_service
 
     try:
-        await db.refresh(track, ["artist"])
+        track = await db.scalar(
+            select(Track).options(joinedload(Track.artist)).where(Track.id == track_id)
+        )
+        if not track:
+            logger.warning(f"track {track_id} not found for notification")
+            return
         await notification_service.send_track_notification(track)
         track.notification_sent = True
         await db.commit()
     except Exception as e:
-        logger.warning(f"failed to send notification for track {track.id}: {e}")
+        logger.warning(f"failed to send notification for track {track_id}: {e}")
 
 
 async def _validate_audio(ctx: UploadContext) -> AudioInfo:
@@ -744,7 +750,7 @@ async def _schedule_post_upload(
             and "integration-test" in (ctx.tags or [])
         )
         if not is_integration_test:
-            await _send_track_notification(db, track)
+            await _send_track_notification(db, track.id)
         if sr.r2_url and not is_integration_test:
             await schedule_copyright_scan(track.id, sr.r2_url)
 

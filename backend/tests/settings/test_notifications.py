@@ -1,9 +1,11 @@
 """test notification settings."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import Settings
 from backend.models import Artist, Track
@@ -83,3 +85,54 @@ async def test_track_notification_sent_flag_prevents_duplicates(db_session):
 
     # our track should not appear in this list since notification_sent=True
     assert track_id not in [t.id for t in tracks_needing_notification]
+
+
+async def test_send_track_notification_refetches_from_session(
+    db_session: AsyncSession,
+) -> None:
+    """regression: _send_track_notification must re-fetch the track by ID.
+
+    previously it accepted a Track object and called db.refresh(), which failed
+    with 'Instance is not persistent within this Session' when the track was
+    created in a different session (the normal upload flow).
+    """
+    from backend.api.tracks.uploads import _send_track_notification
+
+    artist = Artist(
+        did="did:plc:notif_test",
+        handle="notif.test.social",
+        display_name="Notif Artist",
+    )
+    db_session.add(artist)
+    await db_session.commit()
+
+    track = Track(
+        title="Detached Track",
+        file_id="notif_test_file",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        notification_sent=False,
+    )
+    db_session.add(track)
+    await db_session.commit()
+    track_id = track.id
+
+    mock_service = AsyncMock()
+    mock_service.send_track_notification = AsyncMock(return_value=None)
+
+    with (
+        patch(
+            "backend.api.tracks.uploads.notification_service", mock_service, create=True
+        ),
+        patch("backend._internal.notifications.notification_service", mock_service),
+    ):
+        # this used to raise DetachedInstanceError
+        await _send_track_notification(db_session, track_id)
+
+    mock_service.send_track_notification.assert_called_once()
+    called_track = mock_service.send_track_notification.call_args[0][0]
+    assert called_track.id == track_id
+    assert called_track.title == "Detached Track"
+
+    await db_session.refresh(track)
+    assert track.notification_sent is True
