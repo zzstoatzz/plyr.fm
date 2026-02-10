@@ -267,7 +267,7 @@ $effect(() => {
 		loadingMoreTracks = true;
 		try {
 			const response = await fetch(
-				`${API_URL}/tracks/?artist_did=${artist.did}&cursor=${encodeURIComponent(nextCursor)}`
+				`${API_URL}/tracks/?artist_did=${artist.did}&cursor=${encodeURIComponent(nextCursor)}&limit=10`
 			);
 			if (response.ok) {
 				const data = await response.json();
