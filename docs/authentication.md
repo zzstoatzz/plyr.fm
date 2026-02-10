@@ -458,23 +458,22 @@ backend settings in `AuthSettings`:
 
 ### how it works
 
-developer tokens are sessions with their own independent OAuth grant. when you create a dev token, you go through a full OAuth authorization flow at your PDS, which gives the token its own access/refresh credentials. this means:
+developer tokens are sessions with their own independent OAuth grant — **not app passwords**. when you create a dev token, you go through a full OAuth authorization flow at your PDS, which gives the token its own access/refresh credentials. this means:
 - dev tokens can refresh independently (no staleness when browser session refreshes)
 - each token has its own DPoP keypair for request signing
-- logging out of browser doesn't affect dev tokens (cookie isolation)
-- revoking browser session doesn't affect dev tokens
+- browser logout/revocation doesn't affect dev tokens (cookie isolation)
 
-dev tokens can:
-- read your data (tracks, likes, profile)
-- upload tracks (creates ATProto records on your PDS)
-- perform any authenticated action
+### scoping
 
-**security notes**:
-- tokens have full account access - treat like passwords
-- revoke individual tokens via the portal or API
-- each token is independent - revoking one doesn't affect others
-- token names help identify which token is used where
-- tokens require explicit OAuth consent at your PDS
+developer tokens are **scoped to plyr.fm's lexicon namespace** via ATProto OAuth. the grant requests only the collections plyr.fm needs (e.g. `atproto blob:*/* include:fm.plyr.authFullApp` via [permission sets](https://atproto.com/specs/oauth#permission-sets), or granular `repo:fm.plyr.track repo:fm.plyr.like ...` scopes as fallback).
+
+- **can** read/write plyr.fm data (tracks, likes, comments, playlists, profile) and upload blobs
+- **cannot** read or write your Bluesky posts, follows, blocks, or any other app's data
+- **cannot** modify your ATProto identity or account settings
+
+the PDS enforces these scopes at the protocol level — not just plyr.fm's API. rather than app passwords (full repo access, coupled to Bluesky), plyr.fm issues OAuth grants scoped to the minimum permissions needed.
+
+**security notes**: tokens grant full access to plyr.fm features, but are namespace-scoped at the protocol level. each token is independent — revoke individually via the portal or API.
 
 ## OAuth client types: public vs confidential
 
