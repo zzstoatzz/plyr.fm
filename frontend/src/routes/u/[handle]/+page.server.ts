@@ -15,7 +15,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		const artist: Artist = await artistResponse.json();
 
 		// fetch artist's tracks server-side (no cookie available on frontend host)
-		const tracksResponse = await fetch(`${API_URL}/tracks/?artist_did=${artist.did}`);
+		const tracksResponse = await fetch(`${API_URL}/tracks/?artist_did=${artist.did}&limit=5`);
 		let tracks: Track[] = [];
 		let hasMoreTracks = false;
 		let nextCursor: string | null = null;
