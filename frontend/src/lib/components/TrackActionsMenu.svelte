@@ -2,7 +2,6 @@
 	import { likeTrack, unlikeTrack } from '$lib/tracks.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
-	import { auth } from '$lib/auth.svelte';
 	import type { Playlist } from '$lib/types';
 
 	interface Props {
@@ -37,6 +36,7 @@
 
 	let showMenu = $state(false);
 	let showPlaylistPicker = $state(false);
+	let resolvedShareUrl = $state('');
 	let showCreateForm = $state(false);
 	let newPlaylistName = $state('');
 	let creatingPlaylist = $state(false);
@@ -46,12 +46,10 @@
 	let loadingPlaylists = $state(false);
 	let addingToPlaylist = $state<string | null>(null);
 
-	// filter out the excluded playlist (must be after playlists state declaration)
 	let filteredPlaylists = $derived(
 		excludePlaylistId ? playlists.filter(p => p.id !== excludePlaylistId) : playlists
 	);
 
-	// update liked state when initialLiked changes
 	$effect(() => {
 		liked = initialLiked;
 	});
@@ -59,6 +57,21 @@
 	function toggleMenu(e: Event) {
 		e.stopPropagation();
 		showMenu = !showMenu;
+		if (showMenu) {
+			// eagerly resolve share link so handleShare has no async gap (fixes mobile Safari)
+			resolvedShareUrl = shareUrl;
+			if (isAuthenticated) {
+				fetch(`${API_URL}/tracks/${trackId}/share`, {
+					method: 'POST',
+					credentials: 'include'
+				})
+					.then((r) => (r.ok ? r.json() : null))
+					.then((data) => {
+						if (data?.url) resolvedShareUrl = data.url;
+					})
+					.catch(() => {});
+			}
+		}
 		if (!showMenu) {
 			showPlaylistPicker = false;
 		}
@@ -79,31 +92,21 @@
 
 	async function handleShare(e: Event) {
 		e.stopPropagation();
-		let urlToCopy = shareUrl;
-
-		// create tracked share link if authenticated
-		if (auth.isAuthenticated) {
-			try {
-				const response = await fetch(`${API_URL}/tracks/${trackId}/share`, {
-					method: 'POST',
-					credentials: 'include'
-				});
-				if (response.ok) {
-					const data = await response.json();
-					urlToCopy = data.url;
+		try {
+			await navigator.clipboard.writeText(resolvedShareUrl);
+			toast.success('link copied');
+		} catch {
+			if (navigator.share) {
+				try {
+					await navigator.share({ url: resolvedShareUrl });
+				} catch {
+					toast.error('failed to copy link');
 				}
-			} catch {
-				// fallback to plain url
+			} else {
+				toast.error('failed to copy link');
 			}
 		}
-
-		try {
-			await navigator.clipboard.writeText(urlToCopy);
-			toast.success('link copied');
-			closeMenu();
-		} catch {
-			toast.error('failed to copy link');
-		}
+		closeMenu();
 	}
 
 	async function handleLike(e: Event) {
@@ -215,7 +218,6 @@
 
 		creatingPlaylist = true;
 		try {
-			// create the playlist
 			const createResponse = await fetch(`${API_URL}/lists/playlists`, {
 				method: 'POST',
 				credentials: 'include',
@@ -229,8 +231,6 @@
 			}
 
 			const playlist = await createResponse.json();
-
-			// add the track to the new playlist
 			const addResponse = await fetch(`${API_URL}/lists/playlists/${playlist.id}/tracks`, {
 				method: 'POST',
 				credentials: 'include',
