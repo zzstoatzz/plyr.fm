@@ -150,12 +150,20 @@ f"{settings.atproto.app_namespace}.track"
 
 ### `settings.atproto.resolved_scope`
 
-constructs the oauth scope from the collection(s):
+constructs the OAuth scope from the app's lexicon collections. this scope is used for all OAuth grants — browser sessions and [developer tokens](../authentication.md#scoping) alike — ensuring tokens can only access plyr.fm's namespace on the user's PDS.
+
 ```python
-# base scopes: our track collection + our like collection
+# with permission sets (default when lexicons are published):
+"atproto blob:*/* include:fm.plyr.authFullApp"
+
+# fallback: granular repo scopes for each collection
 scopes = [
+    "blob:*/*",
     f"repo:{settings.atproto.track_collection}",
-    f"repo:{settings.atproto.app_namespace}.like",
+    f"repo:{settings.atproto.like_collection}",
+    f"repo:{settings.atproto.comment_collection}",
+    f"repo:{settings.atproto.list_collection}",
+    f"repo:{settings.atproto.profile_collection}",
 ]
 
 # if we have an old namespace, add old track collection too
@@ -163,7 +171,7 @@ if settings.atproto.old_app_namespace:
     scopes.append(f"repo:{settings.atproto.old_track_collection}")
 
 return f"atproto {' '.join(scopes)}"
-# default: "atproto repo:fm.plyr.track repo:fm.plyr.like"
+# default: "atproto blob:*/* repo:fm.plyr.track repo:fm.plyr.like repo:fm.plyr.comment repo:fm.plyr.list repo:fm.plyr.actor.profile"
 ```
 
 can be overridden with `ATPROTO_SCOPE_OVERRIDE` if needed.
@@ -178,8 +186,11 @@ ATPROTO_APP_NAMESPACE=fm.plyr  # default
 
 this defines the collections:
 - `track_collection` → `"fm.plyr.track"`
-- `like_collection` → `"fm.plyr.like"` (implicit)
-- `resolved_scope` → `"atproto repo:fm.plyr.track repo:fm.plyr.like"`
+- `like_collection` → `"fm.plyr.like"`
+- `comment_collection` → `"fm.plyr.comment"`
+- `list_collection` → `"fm.plyr.list"`
+- `profile_collection` → `"fm.plyr.actor.profile"`
+- `resolved_scope` → `"atproto blob:*/* include:fm.plyr.authFullApp"` (with permission sets)
 
 ### environment-specific namespaces
 
@@ -224,9 +235,9 @@ optionally supports migration from an old namespace:
 ATPROTO_OLD_APP_NAMESPACE=app.relay  # optional, for migration
 ```
 
-when set, OAuth scopes will include both old and new namespaces:
+when set, OAuth scopes will include the old track collection alongside current collections:
 - `old_track_collection` → `"app.relay.track"`
-- `resolved_scope` → `"atproto repo:fm.plyr.track repo:fm.plyr.like repo:app.relay.track"`
+- `resolved_scope` includes `repo:app.relay.track` in addition to all `fm.plyr.*` scopes
 
 ## usage in code
 
