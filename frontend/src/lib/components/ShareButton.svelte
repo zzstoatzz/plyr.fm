@@ -46,8 +46,15 @@
 			setTimeout(() => {
 				showCopied = false;
 			}, 2000);
-		} catch (err) {
-			console.error('failed to copy:', err);
+		} catch {
+			// clipboard failed (mobile Safari after async gap) — try native share
+			if (navigator.share) {
+				try {
+					await navigator.share({ url: urlToCopy });
+				} catch {
+					// user cancelled or share failed
+				}
+			}
 		}
 	}
 </script>
