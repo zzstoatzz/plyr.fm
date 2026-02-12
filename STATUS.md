@@ -61,6 +61,20 @@ see `docs/backend/playlist-recommendations.md` for full architecture.
 
 ---
 
+#### main.py extraction + bug fixes (PRs #890-894, Feb 10)
+
+**main.py extraction (PR #890)**: `main.py` shrunk from 372 to 138 lines — now pure orchestration (imports, lifespan, wiring). extracted `SecurityHeadersMiddleware` → `utilities/middleware.py`, logfire/span enrichment → `utilities/observability.py`, and 6 root-level endpoints → `api/meta.py` router. added `__main__.py` for `python -m backend` convenience.
+
+**notification DM fix (PR #891)**: upload notification DMs were silently dropped because `_send_track_notification` received a `Track` object from a closed session. the `db.refresh()` call hit `DetachedInstanceError`, caught by a blanket `except`. fix: accept `track_id: int` and re-fetch with `joinedload(Track.artist)` from the current session. discovered via Logfire.
+
+**mobile share fix (PR #892)**: on mobile Safari, `await fetch()` before `navigator.clipboard.writeText()` consumes the transient user activation, breaking clipboard access. fix: eagerly create tracked share links when the menu opens (not on tap). added `navigator.share()` as fallback.
+
+**developer token scoping docs (PR #893)**: corrected misleading "full account access" language — tokens are actually scoped to `fm.plyr.*` via ATProto OAuth. fixed stale `resolved_scope` examples.
+
+**artist page track limit (PR #894)**: initial load was showing 50 tracks (backend default), burying albums below the fold. reduced to 5 with "load more" (10 per click).
+
+---
+
 #### OAuth permission set cleanup + docs audit (PR #889, Feb 8)
 
 **OAuth permission set**: authorization page was showing raw NSID (`fm.plyr.authFullApp`) instead of human-readable description. root cause: ATProto permission sets use `detail` field (not `description`) for the subtitle text. updated lexicon and publish script, republished to PDS. also modernized publish script from raw `os.environ` to pydantic settings.
@@ -203,7 +217,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-code quality and developer experience: backend split into focused packages (auth, tasks, clients), docs audit to fix stale references, OAuth permission set cleanup. ML features stable — genre classification and mood search running in production. performance optimization on hot paths (GET /tracks/top p95 cut from 1.2s to ~550ms).
+playlist intelligence and code quality: inline track recommendations via CLAP embeddings (adaptive k-means/RRF strategy, Redis-cached on playlist CID). backend continues splitting into focused modules (main.py extraction). bug fixes for mobile share clipboard, upload notification DMs, artist page layout. ML features stable in production.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -275,6 +289,7 @@ code quality and developer experience: backend split into focused packages (auth
 - ✅ full CRUD with drag-and-drop reordering
 - ✅ ATProto list records (synced on create/modify)
 - ✅ "add to playlist" menu, global search results
+- ✅ inline track recommendations when editing (CLAP embeddings + adaptive RRF/k-means)
 
 **deployment URLs**
 - production frontend: https://plyr.fm
@@ -375,5 +390,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-08.
+this is a living document. last updated 2026-02-12.
 
