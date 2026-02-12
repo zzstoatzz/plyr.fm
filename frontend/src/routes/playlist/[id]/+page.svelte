@@ -1842,6 +1842,9 @@
 		gap: 0.5rem;
 		padding: 0.75rem 1rem;
 		margin-top: 0.5rem;
+		/* align with track cards inside .track-row */
+		margin-left: calc(32px + 0.5rem);
+		margin-right: calc(36px + 0.5rem);
 		background: transparent;
 		border: 1px dashed var(--border-default);
 		border-radius: var(--radius-md);
@@ -2180,6 +2183,9 @@
 		margin-top: 1rem;
 		padding-top: 1rem;
 		border-top: 1px solid var(--border-subtle);
+		/* align with track cards inside .track-row */
+		margin-left: calc(32px + 0.5rem);
+		margin-right: calc(36px + 0.5rem);
 	}
 
 	.recommendations-header {
@@ -2187,8 +2193,6 @@
 		align-items: baseline;
 		gap: 0.5rem;
 		margin-bottom: 0.75rem;
-		/* align with track cards inside .track-row (offset by drag-handle + gap) */
-		padding-left: calc(32px + 0.5rem);
 	}
 
 	.recommendations-title {
@@ -2209,26 +2213,25 @@
 		padding: 1rem;
 	}
 
-	/* card layout matching .track-container from TrackItem */
+	/* card layout matching .track-container from TrackItem — faded to signal "suggested" */
 	.recommendation-item {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
 		background: var(--bg-secondary);
-		border: 1px solid var(--border-subtle);
+		border: 1px dashed var(--border-subtle);
 		border-radius: var(--radius-md);
 		padding: 1rem;
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		opacity: 0.7;
 		transition:
+			opacity 0.2s ease-out,
 			box-shadow 0.2s ease-out,
 			background 0.15s ease-out,
 			border-color 0.15s ease-out;
-		/* align with track cards: offset by drag-handle + gap on left, remove-btn + gap on right */
-		margin-left: calc(32px + 0.5rem);
-		margin-right: calc(36px + 0.5rem);
 	}
 
 	.recommendation-item:hover {
+		opacity: 1;
 		background: var(--bg-tertiary);
 		border-color: color-mix(in srgb, var(--accent) 15%, var(--border-default));
 		box-shadow:
@@ -2279,8 +2282,8 @@
 	}
 
 	.rec-artist {
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
+		font-size: var(--text-base);
+		color: var(--text-secondary);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -2368,6 +2371,11 @@
 			height: 160px;
 		}
 
+		.recommendation-item {
+			padding: 0.65rem 0.75rem;
+			gap: 0.5rem;
+		}
+
 		.rec-image,
 		.rec-image-placeholder {
 			width: 40px;
@@ -2376,6 +2384,10 @@
 
 		.rec-title {
 			font-size: var(--text-base);
+		}
+
+		.rec-artist {
+			font-size: var(--text-sm);
 		}
 	}
 
@@ -2405,6 +2417,10 @@
 			flex-wrap: wrap;
 		}
 
+		.recommendation-item {
+			padding: 0.5rem 0.65rem;
+		}
+
 		.rec-image,
 		.rec-image-placeholder {
 			width: 36px;
@@ -2413,6 +2429,10 @@
 
 		.rec-title {
 			font-size: var(--text-sm);
+		}
+
+		.rec-artist {
+			font-size: var(--text-xs);
 		}
 	}
 </style>
