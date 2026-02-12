@@ -1,26 +1,28 @@
 # terms of service
 
-**last updated:** december 16, 2025
+> **note:** the source of truth is `frontend/src/routes/terms/+page.svelte`. this markdown is a plain-text mirror for reference.
 
-these terms govern your use of plyr.fm, a music streaming platform built on the AT Protocol. by using the service, you agree to these terms.
+**last updated:** february 4, 2026
 
-## 1. acceptance of terms
+plyr.fm ("we", "us", or "our") is an audio streaming application built on the [AT Protocol](https://atproto.com). these terms of service apply to the instance at https://plyr.fm (the "site").
 
-by accessing or using plyr.fm, you agree to be bound by these terms. if you disagree with any part, you may not use the service.
+plyr.fm is open source under the MIT license. other instances or derivatives hosted elsewhere are not covered by these terms.
 
-## 2. accounts
+by using the service, you agree to these terms. if you disagree with any part, you may not use the service.
 
-plyr.fm uses AT Protocol for authentication. your identity is your DID (decentralized identifier), not an account we control. we do not store passwords.
+## 1. accounts
 
-we may terminate or suspend your access at any time, for any reason. termination removes or delists your content from plyr.fm and our storage, but does not affect your DID or any data stored on your PDS—we don't control those.
+plyr.fm uses the AT Protocol for authentication. your identity is your DID (decentralized identifier), not an account we control. we do not store passwords.
 
-## 3. content
+we may terminate or suspend your access at any time, for any reason. termination removes or delists your content from plyr.fm and our storage, but does not affect your DID or data on your PDS—we don't control those.
+
+## 2. content
 
 you retain ownership of content you upload. by uploading, you grant us a non-exclusive, worldwide, royalty-free license to use, reproduce, modify, and distribute your content (including copies stored on your PDS) as necessary to provide the service.
 
 you represent that you own or have the necessary rights to the content you upload, and that it does not infringe any third party's rights.
 
-## 4. acceptable use
+## 3. acceptable use
 
 you agree not to:
 
@@ -30,7 +32,7 @@ you agree not to:
 - attempt unauthorized access to the service
 - interfere with or disrupt the service
 
-## 5. copyright & DMCA
+## 4. copyright & DMCA
 
 we respond to valid DMCA takedown notices. our designated agent is:
 
@@ -40,13 +42,17 @@ we respond to valid DMCA takedown notices. our designated agent is:
 
 we terminate accounts of repeat infringers.
 
-**AT Protocol limitation:** we can only remove or delist content from our servers and the plyr.fm platform. we cannot delete content that has been published to other AT Protocol servers or your PDS.
+**AT Protocol limitation:** audio may be stored on your PDS and/or in storage that plyr.fm controls for streaming. we can remove or delist content on plyr.fm and delete our copies for policy violations, but AT Protocol records and blobs stored on your PDS may persist and are not under our control.
 
-## 6. disclaimers
+## 5. disclaimers
 
 the service is provided "as is" and "as available" without warranties of any kind. we do not guarantee uptime or that the service will be error-free.
 
 we are not liable for any indirect, incidental, special, or consequential damages resulting from your use of the service.
+
+## 6. governing law
+
+these terms are governed by United States law, without regard to conflict-of-law provisions.
 
 ## 7. changes
 
