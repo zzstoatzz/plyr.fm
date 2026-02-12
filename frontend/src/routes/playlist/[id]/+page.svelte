@@ -125,6 +125,11 @@
 	let coverInputElement = $state<HTMLInputElement | null>(null);
 	let uploadingCover = $state(false);
 
+	// recommendations state
+	let recommendations = $state<any[]>([]);
+	let loadingRecommendations = $state(false);
+	let recommendationsAvailable = $state(true);
+
 	// drag state
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
@@ -200,6 +205,30 @@
 		}
 	}
 
+	async function fetchRecommendations() {
+		loadingRecommendations = true;
+		try {
+			const res = await fetch(
+				`${API_URL}/lists/playlists/${playlist.id}/recommendations?limit=3`,
+				{ credentials: "include" },
+			);
+			if (!res.ok) {
+				recommendationsAvailable = false;
+				return;
+			}
+			const data = await res.json();
+			recommendationsAvailable = data.available;
+			// filter out any tracks already in the playlist
+			recommendations = data.tracks.filter(
+				(t: any) => !tracks.some((pt) => pt.id === t.id),
+			);
+		} catch {
+			recommendationsAvailable = false;
+		} finally {
+			loadingRecommendations = false;
+		}
+	}
+
 	async function addTrack(track: any) {
 		addingTrack = track.id;
 
@@ -247,8 +276,14 @@
 			// update playlist track count
 			playlist.track_count = tracks.length;
 
-			// remove from search results
+			// remove from search results and recommendations
 			searchResults = searchResults.filter((r) => r.id !== track.id);
+			recommendations = recommendations.filter((r) => r.id !== track.id);
+
+			// re-fetch recommendations (playlist context changed)
+			if (isEditMode) {
+				void fetchRecommendations();
+			}
 
 			toast.success(`added "${trackData.title}" to playlist`);
 		} catch (e) {
@@ -299,10 +334,15 @@
 		if (isEditMode) {
 			// exiting edit mode - save changes
 			saveAllChanges();
+			recommendations = [];
 		} else {
 			// entering edit mode - initialize edit state
 			editName = playlist.name;
 			editShowOnProfile = playlist.show_on_profile;
+			// fetch recommendations in background
+			if (tracks.length > 0) {
+				void fetchRecommendations();
+			}
 		}
 		isEditMode = !isEditMode;
 	}
@@ -1137,6 +1177,57 @@
 							</svg>
 							add tracks
 						</button>
+						{#if recommendationsAvailable && (recommendations.length > 0 || loadingRecommendations)}
+							<div class="recommendations-section">
+								<div class="recommendations-header">
+									<span class="recommendations-title">recommended</span>
+									<span class="recommendations-subtitle">based on this playlist</span>
+								</div>
+								{#if loadingRecommendations && recommendations.length === 0}
+									<div class="recommendations-loading">
+										<span class="spinner"></span>
+									</div>
+								{:else}
+									{#each recommendations as rec (rec.id)}
+										<div class="recommendation-item">
+											{#if rec.image_url}
+												<img
+													src={rec.image_url}
+													alt=""
+													class="rec-image"
+												/>
+											{:else}
+												<div class="rec-image-placeholder">
+													<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+														<circle cx="12" cy="12" r="10"></circle>
+														<circle cx="12" cy="12" r="3"></circle>
+													</svg>
+												</div>
+											{/if}
+											<div class="rec-info">
+												<span class="rec-title">{rec.title}</span>
+												<span class="rec-artist">{rec.artist_display_name}</span>
+											</div>
+											<button
+												class="rec-add-btn"
+												onclick={() => addTrack(rec)}
+												disabled={addingTrack === rec.id}
+												aria-label="add {rec.title} to playlist"
+											>
+												{#if addingTrack === rec.id}
+													<span class="spinner"></span>
+												{:else}
+													<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+														<line x1="12" y1="5" x2="12" y2="19"></line>
+														<line x1="5" y1="12" x2="19" y2="12"></line>
+													</svg>
+												{/if}
+											</button>
+										</div>
+									{/each}
+								{/if}
+							</div>
+						{/if}
 					{/if}
 				</div>
 			{/if}
@@ -2080,6 +2171,122 @@
 		to {
 			transform: rotate(360deg);
 		}
+	}
+
+	/* recommendations */
+	.recommendations-section {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	.recommendations-header {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.recommendations-title {
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--text-secondary);
+		text-transform: lowercase;
+	}
+
+	.recommendations-subtitle {
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+
+	.recommendations-loading {
+		display: flex;
+		justify-content: center;
+		padding: 1rem;
+	}
+
+	.recommendation-item {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-md);
+		transition: background 0.15s;
+	}
+
+	.recommendation-item:hover {
+		background: var(--bg-hover);
+	}
+
+	.rec-image,
+	.rec-image-placeholder {
+		width: 36px;
+		height: 36px;
+		border-radius: var(--radius-base);
+		flex-shrink: 0;
+	}
+
+	.rec-image {
+		object-fit: cover;
+	}
+
+	.rec-image-placeholder {
+		background: var(--bg-tertiary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-muted);
+	}
+
+	.rec-info {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+
+	.rec-title {
+		font-size: var(--text-sm);
+		font-weight: 500;
+		color: var(--text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.rec-artist {
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.rec-add-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		background: transparent;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.15s;
+		flex-shrink: 0;
+	}
+
+	.rec-add-btn:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
+	}
+
+	.rec-add-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	@media (max-width: 768px) {
