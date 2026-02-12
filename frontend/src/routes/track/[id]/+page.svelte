@@ -611,8 +611,6 @@ $effect(() => {
 								fileId={track.file_id}
 								gated={track.gated}
 								initialLiked={track.is_liked || false}
-								shareUrl={shareUrl}
-								onQueue={addToQueue}
 							/>
 						{/if}
 						<ShareButton url={shareUrl} title="share track" trackId={track.id} />
