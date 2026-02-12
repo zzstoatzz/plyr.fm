@@ -1,6 +1,7 @@
 """lists api endpoints for ATProto list records."""
 
 import contextlib
+import json
 import logging
 from io import BytesIO
 from pathlib import Path
@@ -13,6 +14,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     UploadFile,
 )
@@ -29,11 +31,14 @@ from backend._internal.atproto.records import (
     update_list_record,
 )
 from backend._internal.auth import get_session
+from backend._internal.recommendations import get_playlist_recommendations
+from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackLike, UserPreferences, get_db
 from backend.schemas import DeletedResponse, TrackResponse
 from backend.storage import storage
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
 from backend.utilities.hashing import CHUNK_SIZE
+from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +98,23 @@ class ReorderResponse(BaseModel):
 
     uri: str
     cid: str
+
+
+class RecommendedTrack(BaseModel):
+    """a recommended track for a playlist."""
+
+    id: int
+    title: str
+    artist_handle: str
+    artist_display_name: str
+    image_url: str | None
+
+
+class PlaylistRecommendationsResponse(BaseModel):
+    """response for playlist recommendations."""
+
+    tracks: list[RecommendedTrack]
+    available: bool
 
 
 @router.put("/liked/reorder")
@@ -863,3 +885,145 @@ async def update_playlist(
         atproto_record_uri=playlist.atproto_record_uri,
         created_at=playlist.created_at.isoformat(),
     )
+
+
+@router.get(
+    "/playlists/{playlist_id}/recommendations",
+    response_model=PlaylistRecommendationsResponse,
+)
+async def get_playlist_recommendations_endpoint(
+    playlist_id: str,
+    session: AuthSession = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(3, ge=1, le=10, description="max recommendations"),
+) -> PlaylistRecommendationsResponse:
+    """get track recommendations for a playlist.
+
+    uses CLAP embeddings to find tracks similar to what's in the playlist.
+    requires auth (owner only — recommendations are for editing).
+    results are cached per playlist CID (auto-invalidates on track changes).
+    """
+    unavailable = PlaylistRecommendationsResponse(tracks=[], available=False)
+
+    if not settings.turbopuffer.enabled:
+        return unavailable
+
+    # fetch playlist and verify ownership
+    result = await db.execute(
+        select(Playlist, Artist)
+        .join(Artist, Playlist.owner_did == Artist.did)
+        .where(Playlist.id == playlist_id)
+    )
+    row = result.first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="playlist not found")
+
+    playlist, artist = row
+
+    if playlist.owner_did != session.did:
+        raise HTTPException(status_code=403, detail="not playlist owner")
+
+    if playlist.track_count == 0:
+        return unavailable
+
+    # check Redis cache using playlist CID as cache key
+    cid = playlist.atproto_record_cid or ""
+    cache_key = f"plyr:recommendations:{playlist_id}:{cid}"
+
+    try:
+        redis = get_async_redis_client()
+        cached = await redis.get(cache_key)
+        if cached:
+            data = json.loads(cached)
+            return PlaylistRecommendationsResponse(**data)
+    except Exception as e:
+        logger.debug("redis cache miss/error for recommendations: %s", e)
+
+    # get track IDs from the playlist's ATProto record
+    from backend._internal.atproto.records import get_record_public
+
+    try:
+        record_data = await get_record_public(
+            record_uri=playlist.atproto_record_uri,
+            pds_url=artist.pds_url,
+        )
+    except Exception as e:
+        logger.warning("failed to fetch playlist record for recommendations: %s", e)
+        return unavailable
+
+    items = record_data.get("value", {}).get("items", [])
+    track_uris = [
+        item.get("subject", {}).get("uri") for item in items if item.get("subject")
+    ]
+    track_uris = [uri for uri in track_uris if uri]
+
+    if not track_uris:
+        return unavailable
+
+    # resolve URIs to track IDs
+    track_result = await db.execute(
+        select(Track.id).where(Track.atproto_record_uri.in_(track_uris))
+    )
+    track_ids = list(track_result.scalars().all())
+
+    if not track_ids:
+        return unavailable
+
+    # compute recommendations
+    try:
+        recs = await get_playlist_recommendations(track_ids, limit=limit)
+    except Exception as e:
+        logger.warning("recommendation computation failed: %s", e)
+        return unavailable
+
+    if not recs:
+        return PlaylistRecommendationsResponse(tracks=[], available=True)
+
+    # hydrate from DB
+    rec_ids = [r.track_id for r in recs]
+    stmt = (
+        select(Track, Artist)
+        .join(Artist, Track.artist_did == Artist.did)
+        .where(Track.id.in_(rec_ids))
+    )
+    hydrate_result = await db.execute(stmt)
+    hydrate_rows = hydrate_result.all()
+
+    track_lookup: dict[int, tuple[Track, Artist]] = {}
+    for track, rec_artist in hydrate_rows:
+        track_lookup[track.id] = (track, rec_artist)
+
+    # preserve recommendation order
+    recommended_tracks: list[RecommendedTrack] = []
+    for rec in recs:
+        if rec.track_id not in track_lookup:
+            continue
+        track, rec_artist = track_lookup[rec.track_id]
+        recommended_tracks.append(
+            RecommendedTrack(
+                id=track.id,
+                title=track.title,
+                artist_handle=rec_artist.handle,
+                artist_display_name=rec_artist.display_name,
+                image_url=track.image_url,
+            )
+        )
+
+    response = PlaylistRecommendationsResponse(
+        tracks=recommended_tracks,
+        available=True,
+    )
+
+    # cache result
+    try:
+        redis = get_async_redis_client()
+        await redis.set(
+            cache_key,
+            response.model_dump_json(),
+            ex=86400,  # 24h TTL
+        )
+    except Exception as e:
+        logger.debug("failed to cache recommendations: %s", e)
+
+    return response

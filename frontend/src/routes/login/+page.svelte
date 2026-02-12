@@ -316,8 +316,6 @@
 	.input-label {
 		color: var(--text-secondary);
 		font-size: var(--text-base);
-		& .atmosphere-link { color: var(--accent); text-decoration: none; }
-		& .atmosphere-link:hover { text-decoration: underline; }
 		& .handle-label-link { color: var(--text-secondary); text-decoration: none; border-bottom: 1px dashed var(--border-default); }
 		& .handle-label-link:hover { color: var(--text-primary); border-bottom-color: var(--text-tertiary); }
 		& .home-link { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent); }
@@ -395,7 +393,6 @@
 		& p.welcome { color: var(--text-primary); font-weight: 500; }
 		& a { color: var(--accent); text-decoration: none; }
 		& a:hover { text-decoration: underline; }
-		& code { background: var(--bg-secondary); padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); font-size: 0.85em; }
 	}
 
 	.link-button {

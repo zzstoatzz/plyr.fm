@@ -111,6 +111,55 @@ async def query(
         return results
 
 
+async def get_vectors(track_ids: list[int]) -> dict[int, list[float]]:
+    """fetch embedding vectors for given track IDs.
+
+    uses a zero vector query with ID filter to retrieve stored embeddings.
+
+    args:
+        track_ids: database IDs of tracks to fetch embeddings for
+
+    returns:
+        mapping of track_id -> embedding vector (only tracks with embeddings)
+    """
+    if not track_ids:
+        return {}
+
+    async with AsyncTurbopuffer(
+        api_key=settings.turbopuffer.api_key.get_secret_value(),
+        region=settings.turbopuffer.region,
+    ) as client:
+        ns = client.namespace(settings.turbopuffer.namespace)
+        # use a zero vector to satisfy rank_by requirement, filter by ID
+        zero_vector = [0.0] * 512
+        try:
+            response = await ns.query(
+                rank_by=("vector", "ANN", zero_vector),
+                top_k=len(track_ids),
+                filters=("id", "In", track_ids),
+                include_attributes=["vector"],
+            )
+        except NotFoundError:
+            logger.warning(
+                "turbopuffer namespace %r not found (no embeddings yet?)",
+                settings.turbopuffer.namespace,
+            )
+            return {}
+
+        result: dict[int, list[float]] = {}
+        for row in response.rows or []:
+            vec = row["vector"]
+            if vec is not None and not isinstance(vec, str):
+                result[int(row.id)] = [float(v) for v in vec]
+
+        logfire.info(
+            "fetched {count}/{requested} vectors",
+            count=len(result),
+            requested=len(track_ids),
+        )
+        return result
+
+
 async def delete(track_id: int) -> None:
     """delete a track embedding from turbopuffer.
 
