@@ -1215,7 +1215,9 @@
 												aria-label="add {rec.title} to playlist"
 											>
 												{#if addingTrack === rec.id}
-													<span class="spinner"></span>
+													<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spinner">
+														<circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"></circle>
+													</svg>
 												{:else}
 													<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 														<line x1="12" y1="5" x2="12" y2="19"></line>
@@ -2173,7 +2175,7 @@
 		}
 	}
 
-	/* recommendations — matches TrackItem layout */
+	/* recommendations — mirrors .track-container card style */
 	.recommendations-section {
 		margin-top: 1rem;
 		padding-top: 1rem;
@@ -2185,6 +2187,8 @@
 		align-items: baseline;
 		gap: 0.5rem;
 		margin-bottom: 0.75rem;
+		/* align with track cards inside .track-row (offset by drag-handle + gap) */
+		padding-left: calc(32px + 0.5rem);
 	}
 
 	.recommendations-title {
@@ -2205,17 +2209,36 @@
 		padding: 1rem;
 	}
 
+	/* card layout matching .track-container from TrackItem */
 	.recommendation-item {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		padding: 0.5rem 0;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-md);
-		transition: background 0.15s;
+		padding: 1rem;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		transition:
+			box-shadow 0.2s ease-out,
+			background 0.15s ease-out,
+			border-color 0.15s ease-out;
+		/* align with track cards: offset by drag-handle + gap on left, remove-btn + gap on right */
+		margin-left: calc(32px + 0.5rem);
+		margin-right: calc(36px + 0.5rem);
 	}
 
 	.recommendation-item:hover {
-		background: var(--bg-hover);
+		background: var(--bg-tertiary);
+		border-color: color-mix(in srgb, var(--accent) 15%, var(--border-default));
+		box-shadow:
+			0 1px 3px rgba(0, 0, 0, 0.06),
+			0 0 8px color-mix(in srgb, var(--accent) 8%, transparent);
+	}
+
+	.recommendation-item:active {
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		transition-duration: 0.08s;
 	}
 
 	.rec-image,
@@ -2271,7 +2294,7 @@
 		height: 36px;
 		background: transparent;
 		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-base);
 		color: var(--text-muted);
 		cursor: pointer;
 		transition: all 0.2s;
