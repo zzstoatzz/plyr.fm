@@ -1,22 +1,28 @@
 # privacy policy
 
-**last updated:** december 16, 2025
+> **note:** the source of truth is `frontend/src/routes/privacy/+page.svelte`. this markdown is a plain-text mirror for reference.
+
+**last updated:** february 6, 2026
+
+plyr.fm ("we", "us", or "our") is an audio streaming application built on the [AT Protocol](https://atproto.com). this privacy policy applies to the instance at https://plyr.fm (the "site").
+
+plyr.fm is open source under the MIT license. other instances or derivatives hosted elsewhere are not covered by this policy.
 
 this policy explains what data we collect, what's public by design on the AT Protocol, and your rights.
 
 ## 1. the AT Protocol
 
-plyr.fm uses the [AT Protocol](https://atproto.com) for identity and social features. this has important implications:
+plyr.fm uses the AT Protocol for identity and social features. this has important implications:
 
-**public by design:** your DID, handle, profile, tracks, likes, and comments are stored on the decentralized AT Protocol network. this data is visible to anyone on the network, not just plyr.fm users.
+**public by design:** your DID, handle, profile, tracks, likes, comments, and playlists are stored on your PDS (Personal Data Server) and remain under your control. the AT Protocol is a public data protocol—this data is accessible to any AT Protocol application, not just plyr.fm.
 
-**external PDS:** if your account is hosted on Bluesky's PDS or another provider (not ours), we do not control that data. their privacy policies govern it.
+**your PDS:** plyr.fm does not operate a PDS—we write records to wherever your account is hosted (e.g., bsky.social or a self-hosted PDS). we do not control that data; their privacy policies govern it.
 
 **private data:** session tokens, preferences, and server logs are stored only on our servers.
 
 ## 2. data we collect
 
-**you provide:** your ATProto identity when you log in, audio files and metadata you upload, and preferences like accent color.
+**you provide:** your AT Protocol identity when you log in, audio files and metadata you upload, and preferences like accent color.
 
 **automatically:** play counts, IP addresses, browser info, and session cookies for authentication.
 
@@ -28,17 +34,24 @@ we use your data to provide the service, maintain your session, and improve the 
 
 we use:
 
-- **Cloudflare** - CDN, storage (R2)
-- **Fly.io** - backend hosting
-- **Neon** - database
-- **Logfire** - error monitoring
-- **AT Protocol network** - public data federation
+- [Cloudflare](https://cloudflare.com) - CDN, storage (R2)
+- [Fly.io](https://fly.io) - backend hosting
+- [Neon](https://neon.tech) - database
+- [Logfire](https://logfire.pydantic.dev) - error monitoring
+- [AudD](https://audd.io) - audio fingerprinting for copyright detection
+- [Anthropic](https://anthropic.com) - image analysis for content moderation
+- [ATProtoFans](https://atprotofans.com) - supporter validation for gated content
+- [Modal](https://modal.com) - audio processing for search embeddings
+- [turbopuffer](https://turbopuffer.com) - vector storage for semantic search
+- [Replicate](https://replicate.com) - ML inference for genre classification
+
+we may also write records to your PDS using third-party lexicon namespaces (e.g., [teal.fm](https://teal.fm) for scrobbling) when you enable those features.
 
 ## 5. your rights
 
 you can access, correct, or delete your data through settings. when you delete your account, we remove your files from our storage and your data from our database.
 
-**we cannot delete:** your DID (you control it), data on other ATProto servers, or records in other users' PDSes.
+**we cannot delete:** your DID (you control it), data on other AT Protocol servers, or records in other users' PDSes.
 
 ## 6. security
 
