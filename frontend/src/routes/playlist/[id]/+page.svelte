@@ -1198,7 +1198,7 @@
 												/>
 											{:else}
 												<div class="rec-image-placeholder">
-													<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+													<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 														<circle cx="12" cy="12" r="10"></circle>
 														<circle cx="12" cy="12" r="3"></circle>
 													</svg>
@@ -2173,7 +2173,7 @@
 		}
 	}
 
-	/* recommendations */
+	/* recommendations — matches TrackItem layout */
 	.recommendations-section {
 		margin-top: 1rem;
 		padding-top: 1rem;
@@ -2209,7 +2209,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		padding: 0.5rem 0.75rem;
+		padding: 0.5rem 0;
 		border-radius: var(--radius-md);
 		transition: background 0.15s;
 	}
@@ -2220,8 +2220,8 @@
 
 	.rec-image,
 	.rec-image-placeholder {
-		width: 36px;
-		height: 36px;
+		width: 48px;
+		height: 48px;
 		border-radius: var(--radius-base);
 		flex-shrink: 0;
 	}
@@ -2243,12 +2243,12 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.1rem;
+		gap: 0.35rem;
 	}
 
 	.rec-title {
-		font-size: var(--text-sm);
-		font-weight: 500;
+		font-size: 1.05rem;
+		font-weight: 600;
 		color: var(--text-primary);
 		white-space: nowrap;
 		overflow: hidden;
@@ -2256,7 +2256,7 @@
 	}
 
 	.rec-artist {
-		font-size: var(--text-xs);
+		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		white-space: nowrap;
 		overflow: hidden;
@@ -2267,25 +2267,25 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 32px;
-		height: 32px;
+		width: 36px;
+		height: 36px;
 		background: transparent;
 		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		color: var(--text-secondary);
+		border-radius: var(--radius-sm);
+		color: var(--text-muted);
 		cursor: pointer;
-		transition: all 0.15s;
+		transition: all 0.2s;
 		flex-shrink: 0;
 	}
 
 	.rec-add-btn:hover:not(:disabled) {
 		border-color: var(--accent);
 		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 8%, transparent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.rec-add-btn:disabled {
-		opacity: 0.5;
+		opacity: 0.6;
 		cursor: not-allowed;
 	}
 
@@ -2344,6 +2344,16 @@
 			width: 160px;
 			height: 160px;
 		}
+
+		.rec-image,
+		.rec-image-placeholder {
+			width: 40px;
+			height: 40px;
+		}
+
+		.rec-title {
+			font-size: var(--text-base);
+		}
 	}
 
 	@media (max-width: 480px) {
@@ -2370,6 +2380,16 @@
 		.playlist-meta {
 			font-size: var(--text-sm);
 			flex-wrap: wrap;
+		}
+
+		.rec-image,
+		.rec-image-placeholder {
+			width: 36px;
+			height: 36px;
+		}
+
+		.rec-title {
+			font-size: var(--text-sm);
 		}
 	}
 </style>
