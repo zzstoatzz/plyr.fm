@@ -47,6 +47,20 @@ plyr.fm should become:
 
 ### February 2026
 
+#### playlist track recommendations (PRs #895-898, Feb 11)
+
+**inline recommendations when editing playlists**: shows 3 recommended tracks below the track list based on CLAP audio embeddings in turbopuffer. adaptive algorithm scales with playlist size — direct vector query for 1 track, per-track Reciprocal Rank Fusion for 2-5, k-means clustering into centroids for 6+. results cached in Redis keyed on the playlist's ATProto record CID (auto-invalidates when tracks change).
+
+**backend**: new `recommendations.py` module with pure-python k-means (no numpy), RRF merge, and `get_vectors()` in the turbopuffer client. new `GET /playlists/{id}/recommendations` endpoint with owner-only auth, Redis caching (24h TTL), and graceful degradation when turbopuffer is disabled.
+
+**frontend**: recommendation cards match TrackItem geometry exactly — dashed border + reduced opacity (0.7 → 1.0 on hover) distinguishes suggestions from committed playlist tracks. "add tracks" button and recommendations section align with track card width inside edit mode rows.
+
+no feature flag needed — degrades gracefully when turbopuffer or embeddings are unavailable.
+
+see `docs/backend/playlist-recommendations.md` for full architecture.
+
+---
+
 #### OAuth permission set cleanup + docs audit (PR #889, Feb 8)
 
 **OAuth permission set**: authorization page was showing raw NSID (`fm.plyr.authFullApp`) instead of human-readable description. root cause: ATProto permission sets use `detail` field (not `description`) for the subtitle text. updated lexicon and publish script, republished to PDS. also modernized publish script from raw `os.environ` to pydantic settings.
