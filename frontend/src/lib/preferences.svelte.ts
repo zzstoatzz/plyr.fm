@@ -32,7 +32,7 @@ const DEFAULT_PREFERENCES: Preferences = {
 	accent_color: null,
 	auto_advance: true,
 	allow_comments: true,
-	hidden_tags: ['ai'],
+	hidden_tags: ['ai', 'ai-slop'],
 	theme: 'dark',
 	enable_teal_scrobbling: false,
 	teal_needs_reauth: false,
