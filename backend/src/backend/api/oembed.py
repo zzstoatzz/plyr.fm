@@ -78,23 +78,18 @@ async def _build_track_oembed(
     result = await db.execute(
         select(Track).options(selectinload(Track.artist)).where(Track.id == track_id)
     )
-    track = result.scalar_one_or_none()
-
-    if not track:
+    if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
-
-    frontend_url = settings.frontend.url
-    embed_url = f"{frontend_url}/embed/track/{track_id}"
-    width = min(maxwidth or 400, 800)
-    height = min(maxheight or 165, 165)
 
     return OEmbedResponse(
         title=f"{track.title} - {track.artist.display_name}",
         author_name=track.artist.display_name,
-        author_url=f"{frontend_url}/u/{track.artist.handle}",
-        width=width,
-        height=height,
-        html=_build_iframe_html(embed_url, width, height),
+        author_url=f"{settings.frontend.url}/u/{track.artist.handle}",
+        width=(w := min(maxwidth or 400, 800)),
+        height=(h := min(maxheight or 165, 165)),
+        html=_build_iframe_html(
+            f"{settings.frontend.url}/embed/track/{track_id}", w, h
+        ),
         **_thumbnail_fields(track.image_url),
     )
 
@@ -110,23 +105,18 @@ async def _build_playlist_oembed(
         .options(selectinload(Playlist.owner))
         .where(Playlist.id == playlist_id)
     )
-    playlist = result.scalar_one_or_none()
-
-    if not playlist:
+    if not (playlist := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="playlist not found")
-
-    frontend_url = settings.frontend.url
-    embed_url = f"{frontend_url}/embed/playlist/{playlist_id}"
-    width = min(maxwidth or 400, 800)
-    height = min(maxheight or 380, 600)
 
     return OEmbedResponse(
         title=f'"{playlist.name}" by {playlist.owner.display_name}',
         author_name=playlist.owner.display_name,
-        author_url=f"{frontend_url}/u/{playlist.owner.handle}",
-        width=width,
-        height=height,
-        html=_build_iframe_html(embed_url, width, height),
+        author_url=f"{settings.frontend.url}/u/{playlist.owner.handle}",
+        width=(w := min(maxwidth or 400, 800)),
+        height=(h := min(maxheight or 380, 600)),
+        html=_build_iframe_html(
+            f"{settings.frontend.url}/embed/playlist/{playlist_id}", w, h
+        ),
         **_thumbnail_fields(playlist.image_url),
     )
 
@@ -144,23 +134,18 @@ async def _build_album_oembed(
         .options(selectinload(Album.artist))
         .where(Artist.handle == handle, Album.slug == slug)
     )
-    album = result.scalar_one_or_none()
-
-    if not album:
+    if not (album := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="album not found")
-
-    frontend_url = settings.frontend.url
-    embed_url = f"{frontend_url}/embed/album/{handle}/{slug}"
-    width = min(maxwidth or 400, 800)
-    height = min(maxheight or 380, 600)
 
     return OEmbedResponse(
         title=f'"{album.title}" by {album.artist.display_name}',
         author_name=album.artist.display_name,
-        author_url=f"{frontend_url}/u/{album.artist.handle}",
-        width=width,
-        height=height,
-        html=_build_iframe_html(embed_url, width, height),
+        author_url=f"{settings.frontend.url}/u/{album.artist.handle}",
+        width=(w := min(maxwidth or 400, 800)),
+        height=(h := min(maxheight or 380, 600)),
+        html=_build_iframe_html(
+            f"{settings.frontend.url}/embed/album/{handle}/{slug}", w, h
+        ),
         **_thumbnail_fields(album.image_url),
     )
 
