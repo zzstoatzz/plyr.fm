@@ -416,6 +416,12 @@
 	{#if albumMetadata.image_url && !moderation.isSensitive(albumMetadata.image_url)}
 		<meta name="twitter:image" content="{albumMetadata.image_url}" />
 	{/if}
+	<link
+		rel="alternate"
+		type="application/json+oembed"
+		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/u/${albumMetadata.artist_handle}/album/${albumMetadata.slug}`)}"
+		title="{albumMetadata.title} by {albumMetadata.artist}"
+	/>
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={() => goto('/login')} />

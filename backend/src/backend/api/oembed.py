@@ -1,4 +1,4 @@
-"""oEmbed endpoint for track embeds.
+"""oEmbed endpoint for track, playlist, and album embeds.
 
 Enables services like Leaflet.pub (via iframely) to discover
 and use our embed player instead of raw HTML5 audio.
@@ -15,16 +15,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.config import settings
-from backend.models import Track, get_db
+from backend.models import Album, Artist, Playlist, Track, get_db
 
 router = APIRouter(tags=["oembed"])
 
 # match /track/{id} or /track/{id}/ or /track/{id}?...
 TRACK_URL_PATTERN = re.compile(r"/track/(\d+)")
+PLAYLIST_URL_PATTERN = re.compile(r"/playlist/([a-f0-9-]+)")
+ALBUM_URL_PATTERN = re.compile(r"/u/([^/]+)/album/([^/?#]+)")
 
 
 class OEmbedResponse(BaseModel):
-    """oEmbed response for track embeds."""
+    """oEmbed response for embeds."""
 
     version: str = "1.0"
     type: str = "rich"
@@ -41,32 +43,21 @@ class OEmbedResponse(BaseModel):
     thumbnail_height: int | None = None
 
 
-@router.get("/oembed")
-async def get_oembed(
-    url: Annotated[str, Query(description="URL to get oEmbed data for")],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    maxwidth: Annotated[int | None, Query()] = None,
-    maxheight: Annotated[int | None, Query()] = None,
-    format: Annotated[str, Query()] = "json",
+def _build_iframe_html(embed_url: str, width: int, height: int) -> str:
+    return (
+        f'<iframe src="{embed_url}" '
+        f'width="{width}" height="{height}" '
+        f'frameborder="0" allow="autoplay" '
+        f'style="border-radius: 8px;"></iframe>'
+    )
+
+
+async def _build_track_oembed(
+    track_id: int,
+    db: AsyncSession,
+    maxwidth: int | None,
+    maxheight: int | None,
 ) -> OEmbedResponse:
-    """Return oEmbed data for a track URL.
-
-    This enables services like iframely to discover our embed player.
-    """
-    if format != "json":
-        raise HTTPException(status_code=501, detail="only json format is supported")
-
-    # decode URL in case it's URL-encoded
-    decoded_url = unquote(url)
-
-    # extract track ID from URL
-    match = TRACK_URL_PATTERN.search(decoded_url)
-    if not match:
-        raise HTTPException(status_code=404, detail="invalid track URL")
-
-    track_id = int(match.group(1))
-
-    # fetch track from database
     result = await db.execute(
         select(Track).options(selectinload(Track.artist)).where(Track.id == track_id)
     )
@@ -75,20 +66,10 @@ async def get_oembed(
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
 
-    # determine frontend URL (use production in prod, localhost in dev)
     frontend_url = settings.frontend.url
-
-    # build embed iframe HTML
     embed_url = f"{frontend_url}/embed/track/{track_id}"
     width = min(maxwidth or 400, 800)
     height = min(maxheight or 165, 165)
-
-    html = (
-        f'<iframe src="{embed_url}" '
-        f'width="{width}" height="{height}" '
-        f'frameborder="0" allow="autoplay" '
-        f'style="border-radius: 8px;"></iframe>'
-    )
 
     response = OEmbedResponse(
         title=f"{track.title} - {track.artist.display_name}",
@@ -96,13 +77,127 @@ async def get_oembed(
         author_url=f"{frontend_url}/u/{track.artist.handle}",
         width=width,
         height=height,
-        html=html,
+        html=_build_iframe_html(embed_url, width, height),
     )
 
-    # add thumbnail if track has cover art
     if track.image_url:
         response.thumbnail_url = track.image_url
         response.thumbnail_width = 300
         response.thumbnail_height = 300
 
     return response
+
+
+async def _build_playlist_oembed(
+    playlist_id: str,
+    db: AsyncSession,
+    maxwidth: int | None,
+    maxheight: int | None,
+) -> OEmbedResponse:
+    result = await db.execute(
+        select(Playlist)
+        .options(selectinload(Playlist.owner))
+        .where(Playlist.id == playlist_id)
+    )
+    playlist = result.scalar_one_or_none()
+
+    if not playlist:
+        raise HTTPException(status_code=404, detail="playlist not found")
+
+    frontend_url = settings.frontend.url
+    embed_url = f"{frontend_url}/embed/playlist/{playlist_id}"
+    width = min(maxwidth or 400, 800)
+    height = min(maxheight or 380, 600)
+
+    response = OEmbedResponse(
+        title=f'"{playlist.name}" by {playlist.owner.display_name}',
+        author_name=playlist.owner.display_name,
+        author_url=f"{frontend_url}/u/{playlist.owner.handle}",
+        width=width,
+        height=height,
+        html=_build_iframe_html(embed_url, width, height),
+    )
+
+    if playlist.image_url:
+        response.thumbnail_url = playlist.image_url
+        response.thumbnail_width = 300
+        response.thumbnail_height = 300
+
+    return response
+
+
+async def _build_album_oembed(
+    handle: str,
+    slug: str,
+    db: AsyncSession,
+    maxwidth: int | None,
+    maxheight: int | None,
+) -> OEmbedResponse:
+    result = await db.execute(
+        select(Album)
+        .join(Artist, Album.artist_did == Artist.did)
+        .options(selectinload(Album.artist))
+        .where(Artist.handle == handle, Album.slug == slug)
+    )
+    album = result.scalar_one_or_none()
+
+    if not album:
+        raise HTTPException(status_code=404, detail="album not found")
+
+    frontend_url = settings.frontend.url
+    embed_url = f"{frontend_url}/embed/album/{handle}/{slug}"
+    width = min(maxwidth or 400, 800)
+    height = min(maxheight or 380, 600)
+
+    response = OEmbedResponse(
+        title=f'"{album.title}" by {album.artist.display_name}',
+        author_name=album.artist.display_name,
+        author_url=f"{frontend_url}/u/{album.artist.handle}",
+        width=width,
+        height=height,
+        html=_build_iframe_html(embed_url, width, height),
+    )
+
+    if album.image_url:
+        response.thumbnail_url = album.image_url
+        response.thumbnail_width = 300
+        response.thumbnail_height = 300
+
+    return response
+
+
+@router.get("/oembed")
+async def get_oembed(
+    url: Annotated[str, Query(description="URL to get oEmbed data for")],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    maxwidth: Annotated[int | None, Query()] = None,
+    maxheight: Annotated[int | None, Query()] = None,
+    format: Annotated[str, Query()] = "json",
+) -> OEmbedResponse:
+    """Return oEmbed data for a track, playlist, or album URL.
+
+    This enables services like iframely to discover our embed player.
+    """
+    if format != "json":
+        raise HTTPException(status_code=501, detail="only json format is supported")
+
+    decoded_url = unquote(url)
+
+    # try track
+    match = TRACK_URL_PATTERN.search(decoded_url)
+    if match:
+        return await _build_track_oembed(int(match.group(1)), db, maxwidth, maxheight)
+
+    # try playlist
+    match = PLAYLIST_URL_PATTERN.search(decoded_url)
+    if match:
+        return await _build_playlist_oembed(match.group(1), db, maxwidth, maxheight)
+
+    # try album
+    match = ALBUM_URL_PATTERN.search(decoded_url)
+    if match:
+        return await _build_album_oembed(
+            match.group(1), match.group(2), db, maxwidth, maxheight
+        )
+
+    raise HTTPException(status_code=404, detail="unsupported URL format")
