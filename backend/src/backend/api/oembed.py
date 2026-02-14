@@ -13,13 +13,13 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from typing_extensions import TypedDict
 
 from backend.config import settings
 from backend.models import Album, Artist, Playlist, Track, get_db
 
 router = APIRouter(tags=["oembed"])
 
-# match /track/{id} or /track/{id}/ or /track/{id}?...
 TRACK_URL_PATTERN = re.compile(r"/track/(\d+)")
 PLAYLIST_URL_PATTERN = re.compile(r"/playlist/([a-f0-9-]+)")
 ALBUM_URL_PATTERN = re.compile(r"/u/([^/]+)/album/([^/?#]+)")
@@ -43,6 +43,12 @@ class OEmbedResponse(BaseModel):
     thumbnail_height: int | None = None
 
 
+class _ThumbnailFields(TypedDict, total=False):
+    thumbnail_url: str
+    thumbnail_width: int
+    thumbnail_height: int
+
+
 def _build_iframe_html(embed_url: str, width: int, height: int) -> str:
     return (
         f'<iframe src="{embed_url}" '
@@ -50,6 +56,17 @@ def _build_iframe_html(embed_url: str, width: int, height: int) -> str:
         f'frameborder="0" allow="autoplay" '
         f'style="border-radius: 8px;"></iframe>'
     )
+
+
+def _thumbnail_fields(image_url: str | None) -> _ThumbnailFields:
+    """return thumbnail kwargs for OEmbedResponse if an image exists."""
+    if not image_url:
+        return {}
+    return {
+        "thumbnail_url": image_url,
+        "thumbnail_width": 300,
+        "thumbnail_height": 300,
+    }
 
 
 async def _build_track_oembed(
@@ -71,21 +88,15 @@ async def _build_track_oembed(
     width = min(maxwidth or 400, 800)
     height = min(maxheight or 165, 165)
 
-    response = OEmbedResponse(
+    return OEmbedResponse(
         title=f"{track.title} - {track.artist.display_name}",
         author_name=track.artist.display_name,
         author_url=f"{frontend_url}/u/{track.artist.handle}",
         width=width,
         height=height,
         html=_build_iframe_html(embed_url, width, height),
+        **_thumbnail_fields(track.image_url),
     )
-
-    if track.image_url:
-        response.thumbnail_url = track.image_url
-        response.thumbnail_width = 300
-        response.thumbnail_height = 300
-
-    return response
 
 
 async def _build_playlist_oembed(
@@ -109,21 +120,15 @@ async def _build_playlist_oembed(
     width = min(maxwidth or 400, 800)
     height = min(maxheight or 380, 600)
 
-    response = OEmbedResponse(
+    return OEmbedResponse(
         title=f'"{playlist.name}" by {playlist.owner.display_name}',
         author_name=playlist.owner.display_name,
         author_url=f"{frontend_url}/u/{playlist.owner.handle}",
         width=width,
         height=height,
         html=_build_iframe_html(embed_url, width, height),
+        **_thumbnail_fields(playlist.image_url),
     )
-
-    if playlist.image_url:
-        response.thumbnail_url = playlist.image_url
-        response.thumbnail_width = 300
-        response.thumbnail_height = 300
-
-    return response
 
 
 async def _build_album_oembed(
@@ -149,21 +154,15 @@ async def _build_album_oembed(
     width = min(maxwidth or 400, 800)
     height = min(maxheight or 380, 600)
 
-    response = OEmbedResponse(
+    return OEmbedResponse(
         title=f'"{album.title}" by {album.artist.display_name}',
         author_name=album.artist.display_name,
         author_url=f"{frontend_url}/u/{album.artist.handle}",
         width=width,
         height=height,
         html=_build_iframe_html(embed_url, width, height),
+        **_thumbnail_fields(album.image_url),
     )
-
-    if album.image_url:
-        response.thumbnail_url = album.image_url
-        response.thumbnail_width = 300
-        response.thumbnail_height = 300
-
-    return response
 
 
 @router.get("/oembed")
@@ -183,21 +182,17 @@ async def get_oembed(
 
     decoded_url = unquote(url)
 
-    # try track
-    match = TRACK_URL_PATTERN.search(decoded_url)
-    if match:
-        return await _build_track_oembed(int(match.group(1)), db, maxwidth, maxheight)
+    if url_match := TRACK_URL_PATTERN.search(decoded_url):
+        return await _build_track_oembed(
+            int(url_match.group(1)), db, maxwidth, maxheight
+        )
 
-    # try playlist
-    match = PLAYLIST_URL_PATTERN.search(decoded_url)
-    if match:
-        return await _build_playlist_oembed(match.group(1), db, maxwidth, maxheight)
+    if url_match := PLAYLIST_URL_PATTERN.search(decoded_url):
+        return await _build_playlist_oembed(url_match.group(1), db, maxwidth, maxheight)
 
-    # try album
-    match = ALBUM_URL_PATTERN.search(decoded_url)
-    if match:
+    if url_match := ALBUM_URL_PATTERN.search(decoded_url):
         return await _build_album_oembed(
-            match.group(1), match.group(2), db, maxwidth, maxheight
+            url_match.group(1), url_match.group(2), db, maxwidth, maxheight
         )
 
     raise HTTPException(status_code=404, detail="unsupported URL format")
