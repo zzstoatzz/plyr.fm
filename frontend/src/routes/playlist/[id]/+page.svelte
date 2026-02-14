@@ -705,6 +705,8 @@
 	{#if playlist.image_url}
 		<meta name="twitter:image" content={playlist.image_url} />
 	{/if}
+	<link rel="alternate" type="application/json+oembed" title={playlist.name}
+		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/playlist/${playlist.id}`)}" />
 </svelte:head>
 
 <Header
