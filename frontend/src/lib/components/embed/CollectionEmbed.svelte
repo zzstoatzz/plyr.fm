@@ -116,6 +116,7 @@
 		<div class="collection-header">
 			<div class="meta">
 				<a href={collection.collectionUrl} target="_blank" rel="noopener noreferrer" class="title">{collection.title}</a>
+				<span class="meta-sep">&middot;</span>
 				<a href={collection.subtitleUrl} target="_blank" rel="noopener noreferrer" class="subtitle">{collection.subtitle}</a>
 			</div>
 			<a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">plyr.fm</a>
@@ -153,7 +154,11 @@
 					<div class="np-art-placeholder">&#9835;</div>
 				{/if}
 				<div class="np-meta">
-					<span class="np-title">{currentTrack?.title ?? ''}</span>
+					{#if currentTrack?.id}
+						<a class="np-title" href="https://plyr.fm/track/{currentTrack.id}" target="_blank" rel="noopener noreferrer">{currentTrack?.title ?? ''}</a>
+					{:else}
+						<span class="np-title">{currentTrack?.title ?? ''}</span>
+					{/if}
 					{#if currentTrack?.artist_handle}
 						<a class="np-artist" href="https://plyr.fm/u/{currentTrack.artist_handle}" target="_blank" rel="noopener noreferrer">{currentTrack?.artist ?? ''}</a>
 					{:else}
@@ -288,7 +293,7 @@
 	.collection-header {
 		display: flex;
 		justify-content: space-between;
-		align-items: start;
+		align-items: center;
 		gap: var(--gap);
 	}
 
@@ -312,20 +317,30 @@
 	.play-btn:active { transform: scale(0.95); }
 	.icon { width: var(--icon-size); height: var(--icon-size); }
 
-	.meta { min-width: 0; padding-top: 2px; }
+	.meta {
+		min-width: 0; display: flex; align-items: baseline; gap: 0.4em;
+		overflow: hidden;
+	}
 
 	.title {
-		display: block; font-size: var(--title-size); font-weight: 700;
-		margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		font-size: var(--title-size); font-weight: 700;
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 		text-decoration: none; color: var(--c-title); line-height: 1.3;
+		flex-shrink: 1; min-width: 0;
 	}
 	.title:hover { text-decoration: underline; }
 
+	.meta-sep {
+		color: var(--c-artist); flex-shrink: 0;
+		font-size: var(--artist-size);
+	}
+
 	.subtitle {
-		display: block; font-size: var(--artist-size);
+		font-size: var(--artist-size);
 		color: var(--c-artist);
 		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 		text-decoration: none; line-height: 1.3;
+		flex-shrink: 1; min-width: 0;
 	}
 	.subtitle:hover { text-decoration: underline; }
 
@@ -431,7 +446,9 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		color: var(--c-title);
+		text-decoration: none;
 	}
+	a.np-title:hover { text-decoration: underline; }
 
 	.np-artist {
 		font-size: calc(var(--row-size) * 0.85);
@@ -489,8 +506,14 @@
 		.bg-image, .bg-overlay { display: block; }
 		.art-container, .track-list { display: none; }
 		.np-art, .np-art-placeholder { display: none; }
-		.content { justify-content: center; }
+		.content { justify-content: center; gap: clamp(4px, 1.5cqi, 8px); }
+		.collection-header { flex-direction: column; gap: 0; }
+		.meta { flex-wrap: wrap; }
+		.meta-sep { display: none; }
 		.title { text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+		.subtitle { text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+		.logo { align-self: flex-start; }
+		.player-bar { gap: 2px; }
 	}
 
 	/* ===== MICRO (< 200px): hide times, logo, np-meta ===== */
