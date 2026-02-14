@@ -361,7 +361,7 @@
 									<line x1="12" y1="5" x2="12" y2="19"></line>
 									<line x1="5" y1="12" x2="19" y2="12"></line>
 								</svg>
-								<span>create new playlist</span>
+								<span>create new</span>
 							</button>
 							{#if loadingPlaylists}
 								<div class="loading-state">
@@ -619,10 +619,10 @@
 		gap: 0.75rem;
 		padding: 0.875rem 1.25rem;
 		background: transparent;
-		border: none;
-		border-top: 1px solid var(--border-subtle);
+		border: none; border-bottom: 1px solid var(--border-subtle);
 		color: var(--accent);
 		font-size: var(--text-lg);
+		white-space: nowrap;
 		font-family: inherit;
 		cursor: pointer;
 		transition: background 0.15s;
