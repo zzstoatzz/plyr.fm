@@ -113,25 +113,10 @@
 	</div>
 
 	<div class="content">
-		<div class="header">
-			<div class="controls">
-				<button class="ctrl-btn" onclick={skipPrev} aria-label="Previous">
-					<svg viewBox="0 0 24 24" fill="currentColor" class="ctrl-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" /></svg>
-				</button>
-				<button class="play-btn" onclick={togglePlay} aria-label={paused ? 'Play' : 'Pause'}>
-					{#if paused}
-						<svg viewBox="0 0 24 24" fill="currentColor" class="icon"><path d="M8 5v14l11-7z" /></svg>
-					{:else}
-						<svg viewBox="0 0 24 24" fill="currentColor" class="icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
-					{/if}
-				</button>
-				<button class="ctrl-btn" onclick={skipNext} aria-label="Next">
-					<svg viewBox="0 0 24 24" fill="currentColor" class="ctrl-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg>
-				</button>
-			</div>
+		<div class="collection-header">
 			<div class="meta">
 				<a href={collection.collectionUrl} target="_blank" rel="noopener noreferrer" class="title">{collection.title}</a>
-				<a href={collection.subtitleUrl} target="_blank" rel="noopener noreferrer" class="artist">{collection.subtitle}</a>
+				<a href={collection.subtitleUrl} target="_blank" rel="noopener noreferrer" class="subtitle">{collection.subtitle}</a>
 			</div>
 			<a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">plyr.fm</a>
 		</div>
@@ -140,7 +125,11 @@
 			{#each collection.tracks as track, i (track.id)}
 				<button
 					class="track-row" class:active={i === currentIndex} class:gated={!track.r2_url || track.gated}
-					onclick={() => playTrack(i)} disabled={!track.r2_url || track.gated}
+					onclick={(e) => {
+						if ((e.target as HTMLElement).closest?.('a')) return;
+						playTrack(i);
+					}}
+					disabled={!track.r2_url || track.gated}
 				>
 					<span class="track-num">
 						{#if i === currentIndex && !paused}
@@ -148,7 +137,7 @@
 						{:else}{i + 1}{/if}
 					</span>
 					<span class="track-title">{track.title}</span>
-					<span class="track-artist">{track.artist}</span>
+					<a class="track-artist" href="https://plyr.fm/u/{track.artist_handle}" target="_blank" rel="noopener noreferrer" onclick={(e) => e.stopPropagation()}>{track.artist}</a>
 				</button>
 			{/each}
 			{#if collection.tracks.length === 0}
@@ -156,15 +145,47 @@
 			{/if}
 		</div>
 
-		<div class="player-controls">
-			<div class="time">{formatTime(currentTime)}</div>
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div class="progress-bar" onclick={handleSeek}>
-				<div class="progress-bg"></div>
-				<div class="progress-fill" style="width: {(currentTime / (duration || 1)) * 100}%"></div>
+		<div class="player-bar">
+			<div class="now-playing">
+				{#if currentTrack?.image_url}
+					<img class="np-art" src={currentTrack.image_url} alt="" />
+				{:else}
+					<div class="np-art-placeholder">&#9835;</div>
+				{/if}
+				<div class="np-meta">
+					<span class="np-title">{currentTrack?.title ?? ''}</span>
+					{#if currentTrack?.artist_handle}
+						<a class="np-artist" href="https://plyr.fm/u/{currentTrack.artist_handle}" target="_blank" rel="noopener noreferrer">{currentTrack?.artist ?? ''}</a>
+					{:else}
+						<span class="np-artist">{currentTrack?.artist ?? ''}</span>
+					{/if}
+				</div>
+				<div class="transport">
+					<button class="ctrl-btn" onclick={skipPrev} aria-label="Previous">
+						<svg viewBox="0 0 24 24" fill="currentColor" class="ctrl-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" /></svg>
+					</button>
+					<button class="play-btn" onclick={togglePlay} aria-label={paused ? 'Play' : 'Pause'}>
+						{#if paused}
+							<svg viewBox="0 0 24 24" fill="currentColor" class="icon"><path d="M8 5v14l11-7z" /></svg>
+						{:else}
+							<svg viewBox="0 0 24 24" fill="currentColor" class="icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+						{/if}
+					</button>
+					<button class="ctrl-btn" onclick={skipNext} aria-label="Next">
+						<svg viewBox="0 0 24 24" fill="currentColor" class="ctrl-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg>
+					</button>
+				</div>
 			</div>
-			<div class="time">{formatTime(duration)}</div>
+			<div class="scrubber">
+				<div class="time">{formatTime(currentTime)}</div>
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div class="progress-bar" onclick={handleSeek}>
+					<div class="progress-bg"></div>
+					<div class="progress-fill" style="width: {(currentTime / (duration || 1)) * 100}%"></div>
+				</div>
+				<div class="time">{formatTime(duration)}</div>
+			</div>
 		</div>
 	</div>
 
@@ -193,7 +214,7 @@
 		container-type: size;
 		--pad: clamp(8px, 4cqi, 16px);
 		--gap: clamp(6px, 2cqi, 12px);
-		--play-size: clamp(28px, 9cqi, 36px);
+		--play-size: clamp(24px, 7cqi, 32px);
 		--icon-size: clamp(14px, 5cqi, 20px);
 		--ctrl-size: clamp(10px, 3.5cqi, 16px);
 		--title-size: clamp(12px, 3.5cqi, 15px);
@@ -201,6 +222,7 @@
 		--time-size: clamp(10px, 2.5cqi, 12px);
 		--logo-size: clamp(8px, 2cqi, 11px);
 		--row-size: clamp(10px, 2.8cqi, 13px);
+		--thumb-size: clamp(24px, 6cqi, 32px);
 		/* color tokens — overridden by blurred-mode container queries */
 		--c-title: var(--text-primary);
 		--c-artist: var(--text-secondary);
@@ -263,14 +285,12 @@
 		gap: var(--gap);
 	}
 
-	.header {
-		display: grid;
-		grid-template-columns: auto 1fr auto;
-		gap: var(--gap);
+	.collection-header {
+		display: flex;
+		justify-content: space-between;
 		align-items: start;
+		gap: var(--gap);
 	}
-
-	.controls { display: flex; align-items: center; gap: 2px; }
 
 	.ctrl-btn {
 		background: none; border: none;
@@ -301,13 +321,13 @@
 	}
 	.title:hover { text-decoration: underline; }
 
-	.artist {
+	.subtitle {
 		display: block; font-size: var(--artist-size);
 		color: var(--c-artist);
 		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 		text-decoration: none; line-height: 1.3;
 	}
-	.artist:hover { text-decoration: underline; }
+	.subtitle:hover { text-decoration: underline; }
 
 	.logo {
 		font-size: var(--logo-size); font-weight: 700;
@@ -345,7 +365,9 @@
 		flex: 0 1 auto; max-width: 30%;
 		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 		color: var(--c-row-dim); font-size: 0.9em;
+		text-decoration: none;
 	}
+	.track-artist:hover { text-decoration: underline; }
 
 	.empty { color: var(--text-muted); font-size: var(--row-size); padding: 8px 4px; }
 
@@ -359,7 +381,80 @@
 	.eq-bar:nth-child(3) { height: 50%; animation-delay: 0.4s; }
 	@keyframes eq { 0% { height: 20%; } 100% { height: 90%; } }
 
-	.player-controls { display: flex; align-items: center; gap: var(--gap); }
+	.player-bar {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		border-top: 1px solid var(--c-progress-bg);
+		padding-top: var(--gap);
+	}
+
+	.now-playing {
+		display: flex;
+		align-items: center;
+		gap: var(--gap);
+	}
+
+	.np-art {
+		width: var(--thumb-size);
+		height: var(--thumb-size);
+		border-radius: 3px;
+		object-fit: cover;
+		flex-shrink: 0;
+	}
+
+	.np-art-placeholder {
+		width: var(--thumb-size);
+		height: var(--thumb-size);
+		border-radius: 3px;
+		background: var(--border-default);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: calc(var(--thumb-size) * 0.5);
+		color: var(--text-muted);
+		flex-shrink: 0;
+	}
+
+	.np-meta {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+
+	.np-title {
+		font-size: var(--row-size);
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		color: var(--c-title);
+	}
+
+	.np-artist {
+		font-size: calc(var(--row-size) * 0.85);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		color: var(--c-artist);
+		text-decoration: none;
+	}
+	a.np-artist:hover { text-decoration: underline; }
+
+	.transport {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		flex-shrink: 0;
+	}
+
+	.scrubber {
+		display: flex;
+		align-items: center;
+		gap: var(--gap);
+	}
 
 	.time {
 		font-size: var(--time-size); color: var(--c-time);
@@ -393,15 +488,14 @@
 		}
 		.bg-image, .bg-overlay { display: block; }
 		.art-container, .track-list { display: none; }
+		.np-art, .np-art-placeholder { display: none; }
 		.content { justify-content: center; }
 		.title { text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
 	}
 
-	/* ===== MICRO (< 200px): hide times + logo ===== */
+	/* ===== MICRO (< 200px): hide times, logo, np-meta ===== */
 	@container (max-width: 199px) {
-		.time { display: none; }
-		.header { grid-template-columns: auto 1fr; }
-		.logo { display: none; }
+		.time, .logo, .np-meta { display: none; }
 	}
 
 	/* ===== TALL (aspect-ratio <= 1.2, >= 200px, >= 300px height): blurred bg, vertical ===== */

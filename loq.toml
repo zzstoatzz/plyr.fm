@@ -208,3 +208,7 @@ max_lines = 628
 [[rules]]
 path = "frontend/src/routes/login/+page.svelte"
 max_lines = 535
+
+[[rules]]
+path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
+max_lines = 525
