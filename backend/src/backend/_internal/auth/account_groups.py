@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend._internal.auth.session import _invalidate_session_cache
 from backend.models import UserSession
 from backend.utilities.database import db_session
 
@@ -171,10 +172,12 @@ async def remove_account_from_group(session_id: str) -> str | None:
 
         await db.delete(session)
         await db.commit()
+    await _invalidate_session_cache(session_id)
 
-        if not group_id:
-            return None
+    if not group_id:
+        return None
 
+    async with db_session() as db:
         result = await db.execute(
             select(UserSession).where(
                 UserSession.group_id == group_id,

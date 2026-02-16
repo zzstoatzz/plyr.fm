@@ -8,7 +8,10 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from backend._internal.auth.encryption import _decrypt_data
-from backend._internal.auth.session import _get_refresh_token_expires_at
+from backend._internal.auth.session import (
+    _get_refresh_token_expires_at,
+    _invalidate_session_cache,
+)
 from backend.models import PendingDevToken, UserSession
 from backend.utilities.database import db_session
 
@@ -86,7 +89,8 @@ async def revoke_developer_token(did: str, session_id: str) -> bool:
 
         await db.delete(session)
         await db.commit()
-        return True
+    await _invalidate_session_cache(session_id)
+    return True
 
 
 @dataclass
