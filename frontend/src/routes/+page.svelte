@@ -133,18 +133,30 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 
 <main>
-	<!-- trending section -->
+	<!-- top tracks section -->
 	{#if loadingTopTracks}
-		<section class="trending">
-			<h2>trending</h2>
+		<section class="top-tracks">
+			<h2>
+				<svg class="section-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<path d="M8 1C8 1 6.5 4.5 6.5 7a1.5 1.5 0 1 0 3 0C9.5 4.5 8 1 8 1Z" fill="currentColor" opacity="0.6"/>
+					<path d="M8 2.5C5.5 5.5 4 7.5 4 10a4 4 0 0 0 8 0c0-2.5-1.5-4.5-4-7.5Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+				</svg>
+				top tracks
+			</h2>
 			<div class="loading-container compact">
 				<WaveLoading size="sm" message="loading..." />
 			</div>
 		</section>
 	{:else if hasTopTracks}
-		<section class="trending">
-			<h2>trending</h2>
-			<div class="trending-grid">
+		<section class="top-tracks">
+			<h2>
+				<svg class="section-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<path d="M8 1C8 1 6.5 4.5 6.5 7a1.5 1.5 0 1 0 3 0C9.5 4.5 8 1 8 1Z" fill="currentColor" opacity="0.6"/>
+					<path d="M8 2.5C5.5 5.5 4 7.5 4 10a4 4 0 0 0 8 0c0-2.5-1.5-4.5-4-7.5Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+				</svg>
+				top tracks
+			</h2>
+			<div class="top-tracks-grid">
 				{#each topTracks as track, i}
 					<TrackCard
 						{track}
@@ -157,7 +169,7 @@
 		</section>
 	{/if}
 
-	<!-- artists from your bluesky follow graph -->
+	<!-- artists from your bluesky network -->
 	{#if hasNetworkArtists}
 		<section class="network-artists">
 			<h2>from your network</h2>
@@ -242,18 +254,28 @@
 		padding: 1.5rem 1rem;
 	}
 
-	.trending {
+	.top-tracks {
 		margin-bottom: 2.5rem;
 	}
 
-	.trending h2 {
+	.top-tracks h2 {
 		font-size: var(--text-page-heading);
 		font-weight: 700;
 		color: var(--text-primary);
 		margin: 0 0 1rem 0;
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
 	}
 
-	.trending-grid {
+	.section-icon {
+		width: 1.1em;
+		height: 1.1em;
+		color: var(--accent);
+		flex-shrink: 0;
+	}
+
+	.top-tracks-grid {
 		display: flex;
 		gap: 0.75rem;
 		overflow-x: auto;
@@ -404,7 +426,7 @@
 		}
 
 		.section-header h2,
-		.trending h2,
+		.top-tracks h2,
 		.network-artists h2 {
 			font-size: var(--text-2xl);
 		}
