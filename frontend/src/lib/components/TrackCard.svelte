@@ -92,7 +92,6 @@
 		<a
 			href="/u/{track.artist_handle}"
 			class="artist"
-			onclick={(e) => e.stopPropagation()}
 		>
 			{track.artist}
 		</a>
