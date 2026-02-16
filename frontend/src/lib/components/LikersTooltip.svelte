@@ -24,6 +24,10 @@
 	let tooltipElement: HTMLDivElement | null = $state(null);
 	let positionBelow = $state(false);
 
+	// fixed positioning for tooltips inside overflow containers
+	let fixedTop = $state(0);
+	let fixedLeft = $state(0);
+
 	// track which avatars have errored (by DID)
 	let avatarErrors = $state<Set<string>>(new Set());
 
@@ -55,10 +59,16 @@
 		return !url || avatarErrors.has(liker.did);
 	}
 
-	// check if tooltip should flip below based on viewport position
+	// position tooltip — use fixed positioning when forceBelow to escape overflow containers
 	$effect(() => {
 		if (forceBelow) {
 			positionBelow = true;
+			if (!tooltipElement) return;
+			const parent = tooltipElement.parentElement;
+			if (!parent) return;
+			const rect = parent.getBoundingClientRect();
+			fixedTop = rect.bottom + 8;
+			fixedLeft = rect.left + rect.width / 2;
 			return;
 		}
 
@@ -126,6 +136,8 @@
 	bind:this={tooltipElement}
 	class="likers-tooltip"
 	class:position-below={positionBelow}
+	class:position-fixed={forceBelow}
+	style={forceBelow ? `top: ${fixedTop}px; left: ${fixedLeft}px;` : ''}
 	role="tooltip"
 	onmouseenter={onMouseEnter}
 	onmouseleave={onMouseLeave}
@@ -192,6 +204,14 @@
 		top: 100%;
 		margin-bottom: 0;
 		margin-top: 0.625rem;
+	}
+
+	.likers-tooltip.position-fixed {
+		position: fixed;
+		bottom: auto;
+		top: auto;
+		left: auto;
+		margin: 0;
 	}
 
 	.loading,
