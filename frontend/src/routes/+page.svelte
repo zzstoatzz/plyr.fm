@@ -262,8 +262,13 @@
 		gap: 0.75rem;
 		overflow-x: auto;
 		padding-bottom: 0.5rem;
-		scrollbar-width: thin;
-		scrollbar-color: var(--border) transparent;
+		scrollbar-width: none;
+		scroll-snap-type: x proximity;
+		scroll-padding-inline: 1rem;
+	}
+
+	.top-tracks-grid::-webkit-scrollbar {
+		display: none;
 	}
 
 	.network-artists {
@@ -282,8 +287,13 @@
 		gap: 0.75rem;
 		overflow-x: auto;
 		padding-bottom: 0.5rem;
-		scrollbar-width: thin;
-		scrollbar-color: var(--border) transparent;
+		scrollbar-width: none;
+		scroll-snap-type: x proximity;
+		scroll-padding-inline: 1rem;
+	}
+
+	.artist-grid::-webkit-scrollbar {
+		display: none;
 	}
 
 	.artist-card {
@@ -300,6 +310,7 @@
 		min-width: 200px;
 		max-width: 200px;
 		transition: border-color 0.15s, background 0.15s;
+		scroll-snap-align: start;
 	}
 
 	.artist-card:hover {

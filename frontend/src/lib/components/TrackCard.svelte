@@ -88,7 +88,7 @@
 		{/if}
 	</div>
 	<div class="info">
-		<span class="title" title={track.title}>{track.title}</span>
+		<a href="/track/{track.id}" class="title" title={track.title}>{track.title}</a>
 		<a
 			href="/u/{track.artist_handle}"
 			class="artist"
@@ -129,34 +129,36 @@
 </button>
 
 <style>
-	/* horizontal card — wider than tall */
 	.track-card {
 		display: flex;
 		flex-direction: row;
 		align-items: center;
 		gap: 0.5rem;
-		min-width: 200px;
-		max-width: 200px;
+		min-width: 220px;
+		max-width: 220px;
 		padding: 0.5rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-subtle);
+		background: var(--track-bg, var(--bg-secondary));
+		border: 1px solid var(--track-border, var(--border-subtle));
 		border-radius: var(--radius-md);
 		cursor: pointer;
 		text-align: left;
 		font-family: inherit;
 		color: inherit;
-		transition: border-color 0.15s, background 0.15s;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		transition: box-shadow 0.2s ease-out, background 0.15s ease-out, border-color 0.15s ease-out;
 		position: relative;
+		scroll-snap-align: start;
 	}
 
 	.track-card:hover {
-		border-color: var(--accent);
-		background: var(--bg-hover);
+		border-color: color-mix(in srgb, var(--accent) 15%, var(--track-border-hover, var(--border-default)));
+		background: var(--track-bg-hover, var(--bg-tertiary));
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 8px color-mix(in srgb, var(--accent) 8%, transparent);
 	}
 
 	.track-card.playing {
-		background: color-mix(in srgb, var(--accent) 10%, var(--bg-secondary));
-		border-color: color-mix(in srgb, var(--accent) 25%, var(--border-subtle));
+		background: color-mix(in srgb, var(--accent) 10%, var(--track-bg-playing, var(--bg-tertiary)));
+		border-color: color-mix(in srgb, var(--accent) 20%, var(--track-border, var(--border-subtle)));
 	}
 
 	.track-card.tooltip-open {
@@ -165,8 +167,8 @@
 
 	.artwork {
 		position: relative;
-		width: 40px;
-		height: 40px;
+		width: 48px;
+		height: 48px;
 		flex-shrink: 0;
 		border-radius: var(--radius-sm);
 		overflow: hidden;
@@ -212,7 +214,7 @@
 		align-items: center;
 		justify-content: center;
 		background: var(--accent);
-		border: 2px solid var(--bg-secondary);
+		border: 2px solid var(--track-bg, var(--bg-secondary));
 		border-radius: var(--radius-full);
 		color: white;
 		z-index: 1;
@@ -230,10 +232,18 @@
 		font-size: var(--text-sm);
 		font-weight: 600;
 		color: var(--text-primary);
+		text-decoration: none;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		line-height: 1.3;
+		transition: color 0.15s;
+		width: fit-content;
+		max-width: 100%;
+	}
+
+	.title:hover {
+		color: var(--accent);
 	}
 
 	.artist {
@@ -244,13 +254,14 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		transition: color 0.15s;
+		width: fit-content;
+		max-width: 100%;
 	}
 
 	.artist:hover {
 		color: var(--accent);
 	}
 
-	/* meta row — no overflow hidden so tooltip escapes */
 	.meta {
 		display: flex;
 		align-items: center;
