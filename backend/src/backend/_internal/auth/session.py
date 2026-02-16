@@ -181,6 +181,15 @@ async def get_session(session_id: str) -> Session | None:
         redis = get_async_redis_client()
         if cached := await redis.get(cache_key):
             data = json.loads(cached)
+            now = datetime.now(UTC)
+            if (exp := data.get("expires_at")) and now > datetime.fromisoformat(exp):
+                await redis.delete(cache_key)
+                return None
+            if (
+                rexp := data.get("refresh_expires_at")
+            ) and now > datetime.fromisoformat(rexp):
+                await redis.delete(cache_key)
+                return None
             return Session(
                 session_id=data["session_id"],
                 did=data["did"],
@@ -236,6 +245,12 @@ async def get_session(session_id: str) -> Session | None:
                     "did": session.did,
                     "handle": session.handle,
                     "oauth_session": session.oauth_session,
+                    "expires_at": user_session.expires_at.isoformat()
+                    if user_session.expires_at
+                    else None,
+                    "refresh_expires_at": refresh_expires_at.isoformat()
+                    if refresh_expires_at
+                    else None,
                 }
             ),
             ex=SESSION_CACHE_TTL_SECONDS,
