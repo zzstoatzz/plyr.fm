@@ -137,11 +137,11 @@
 	{#if loadingTopTracks}
 		<section class="top-tracks">
 			<h2>
+				top tracks
 				<svg class="section-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 					<path d="M2 12l4-4 3 2 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 					<path d="M10 4h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 				</svg>
-				top tracks
 			</h2>
 			<div class="loading-container compact">
 				<WaveLoading size="sm" message="loading..." />
@@ -150,11 +150,11 @@
 	{:else if hasTopTracks}
 		<section class="top-tracks">
 			<h2>
+				top tracks
 				<svg class="section-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 					<path d="M2 12l4-4 3 2 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 					<path d="M10 4h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 				</svg>
-				top tracks
 			</h2>
 			<div class="top-tracks-grid">
 				{#each topTracks as track, i}
