@@ -11,6 +11,15 @@
 	import type { Track } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
+	import { API_URL } from '$lib/config';
+
+	interface NetworkArtist {
+		did: string;
+		handle: string;
+		display_name: string;
+		avatar_url: string | null;
+		track_count: number;
+	}
 
 	// use cached tracks
 	let tracks = $derived(tracksCache.tracks);
@@ -24,6 +33,10 @@
 	let topTracks = $state<Track[]>([]);
 	let loadingTopTracks = $state(true);
 	let hasTopTracks = $derived(topTracks.length > 0);
+
+	// network artists (people you follow on bluesky who have music here)
+	let networkArtists = $state<NetworkArtist[]>([]);
+	let hasNetworkArtists = $derived(networkArtists.length > 0);
 
 	// show loading during initial load or when actively loading with no cached data
 	let showLoading = $derived((initialLoad && !hasTracks) || (loadingTracks && !hasTracks));
@@ -43,6 +56,14 @@
 		topTracks = topResult;
 		loadingTopTracks = false;
 		initialLoad = false;
+
+		// fetch network artists in the background (only when authenticated)
+		if (auth.isAuthenticated) {
+			fetch(`${API_URL}/discover/network`, { credentials: 'include' })
+				.then((r) => (r.ok ? r.json() : []))
+				.then((artists) => (networkArtists = artists))
+				.catch(() => {});
+		}
 	});
 
 	// set up IntersectionObserver for infinite scroll
@@ -136,6 +157,28 @@
 		</section>
 	{/if}
 
+	<!-- artists from your bluesky follow graph -->
+	{#if hasNetworkArtists}
+		<section class="network-artists">
+			<h2>from your network</h2>
+			<div class="artist-grid">
+				{#each networkArtists as artist}
+					<a href="/u/{artist.handle}" class="artist-card">
+						{#if artist.avatar_url}
+							<img src={artist.avatar_url} alt={artist.display_name} class="artist-avatar" />
+						{:else}
+							<div class="artist-avatar placeholder"></div>
+						{/if}
+						<div class="artist-info">
+							<span class="artist-name">{artist.display_name}</span>
+							<span class="artist-meta">{artist.track_count} {artist.track_count === 1 ? 'track' : 'tracks'}</span>
+						</div>
+					</a>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
 	<section class="tracks">
 		<div class="section-header">
 			<h2>
@@ -210,6 +253,80 @@
 		margin: 0 0 1.5rem 0;
 	}
 
+	.network-artists {
+		margin-bottom: 2.5rem;
+	}
+
+	.network-artists h2 {
+		font-size: var(--text-page-heading);
+		font-weight: 700;
+		color: var(--text-primary);
+		margin: 0 0 1rem 0;
+	}
+
+	.artist-grid {
+		display: flex;
+		gap: 0.75rem;
+		overflow-x: auto;
+		padding-bottom: 0.5rem;
+		scrollbar-width: thin;
+		scrollbar-color: var(--border) transparent;
+	}
+
+	.artist-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem;
+		border-radius: var(--radius-md);
+		background: var(--surface-secondary);
+		border: 1px solid var(--border);
+		text-decoration: none;
+		color: inherit;
+		min-width: 120px;
+		transition: border-color 0.15s, background 0.15s;
+	}
+
+	.artist-card:hover {
+		border-color: var(--accent);
+		background: var(--surface-hover);
+	}
+
+	.artist-avatar {
+		width: 56px;
+		height: 56px;
+		border-radius: 50%;
+		object-fit: cover;
+	}
+
+	.artist-avatar.placeholder {
+		background: var(--surface-tertiary);
+	}
+
+	.artist-info {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.125rem;
+		text-align: center;
+	}
+
+	.artist-name {
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 100px;
+	}
+
+	.artist-meta {
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+	}
+
 	main {
 		max-width: 800px;
 		margin: 0 auto;
@@ -278,7 +395,8 @@
 		}
 
 		.section-header h2,
-		.top-tracks h2 {
+		.top-tracks h2,
+		.network-artists h2 {
 			font-size: var(--text-2xl);
 		}
 	}

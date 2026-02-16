@@ -19,6 +19,7 @@ from backend.api import (
     artists_router,
     audio_router,
     auth_router,
+    discover_router,
     exports_router,
     meta_router,
     moderation_router,
@@ -119,6 +120,7 @@ app.add_middleware(SlowAPIMiddleware)  # type: ignore[arg-type]
 app.include_router(auth_router)
 app.include_router(account_router)
 app.include_router(artists_router)
+app.include_router(discover_router)
 app.include_router(tracks_router)
 app.include_router(albums_router)
 app.include_router(lists_router)
