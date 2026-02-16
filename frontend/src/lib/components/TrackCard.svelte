@@ -115,6 +115,7 @@
 							{likeCount}
 							onMouseEnter={openLikers}
 							onMouseLeave={closeLikers}
+							forceBelow
 						/>
 					{/if}
 				</span>
