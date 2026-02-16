@@ -1,6 +1,7 @@
 """integration tests for session Redis caching."""
 
 import json
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -129,3 +130,24 @@ async def test_graceful_degradation_on_redis_failure(
         assert session is not None
         assert session.did == "did:plc:testcache"
         assert session.handle == "cachetest.bsky.social"
+
+
+async def test_cache_hit_checks_expiry(session_id: str) -> None:
+    """cached session with expired expires_at returns None and deletes cache entry."""
+    redis = get_async_redis_client()
+    cache_key = _session_cache_key(session_id)
+
+    # populate cache via normal flow
+    session = await get_session(session_id)
+    assert session is not None
+
+    # overwrite cache entry with an already-expired expires_at
+    cached_raw = await redis.get(cache_key)
+    assert cached_raw is not None
+    data = json.loads(cached_raw)
+    data["expires_at"] = (datetime.now(UTC) - timedelta(seconds=10)).isoformat()
+    await redis.set(cache_key, json.dumps(data), ex=SESSION_CACHE_TTL_SECONDS)
+
+    # get_session should detect expiry, delete cache, and return None
+    assert await get_session(session_id) is None
+    assert await redis.get(cache_key) is None
