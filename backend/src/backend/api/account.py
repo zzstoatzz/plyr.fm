@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend._internal.atproto import delete_record_by_uri
+from backend._internal.auth.session import _invalidate_session_cache
 from backend.models import (
     Album,
     Job,
@@ -178,9 +179,16 @@ async def delete_account(
     await db.execute(delete(Job).where(Job.owner_did == session.did))
 
     # 10. delete all sessions (will log user out)
+    session_ids_result = await db.execute(
+        select(UserSession.session_id).where(UserSession.did == session.did)
+    )
+    session_ids_to_invalidate = [sid for (sid,) in session_ids_result.fetchall()]
     await db.execute(delete(UserSession).where(UserSession.did == session.did))
 
     await db.commit()
+
+    for sid in session_ids_to_invalidate:
+        await _invalidate_session_cache(sid)
 
     # delete R2 objects (after database commit so refcount is 0)
     for file_id, file_type in r2_audio_files:

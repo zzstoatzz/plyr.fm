@@ -263,7 +263,6 @@ async def update_session_tokens(
 
 async def delete_session(session_id: str) -> None:
     """delete a session."""
-    await _invalidate_session_cache(session_id)
     async with db_session() as db:
         result = await db.execute(
             select(UserSession).where(UserSession.session_id == session_id)
@@ -271,6 +270,7 @@ async def delete_session(session_id: str) -> None:
         if user_session := result.scalar_one_or_none():
             await db.delete(user_session)
             await db.commit()
+    await _invalidate_session_cache(session_id)
 
 
 async def _check_teal_preference(did: str) -> bool:
