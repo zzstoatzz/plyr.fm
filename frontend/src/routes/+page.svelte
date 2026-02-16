@@ -138,10 +138,6 @@
 		<section class="top-tracks">
 			<h2>
 				top tracks
-				<svg class="section-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-					<polyline points="2,11 6,7 8,9 14,3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-					<polyline points="11,3 14,3 14,6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-				</svg>
 			</h2>
 			<div class="loading-container compact">
 				<WaveLoading size="sm" message="loading..." />
@@ -151,10 +147,6 @@
 		<section class="top-tracks">
 			<h2>
 				top tracks
-				<svg class="section-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-					<polyline points="2,11 6,7 8,9 14,3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-					<polyline points="11,3 14,3 14,6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-				</svg>
 			</h2>
 			<div class="top-tracks-grid">
 				{#each topTracks as track, i}
@@ -263,16 +255,6 @@
 		font-weight: 700;
 		color: var(--text-primary);
 		margin: 0 0 1rem 0;
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
-
-	.section-icon {
-		width: 1.1em;
-		height: 1.1em;
-		color: var(--accent);
-		flex-shrink: 0;
 	}
 
 	.top-tracks-grid {
