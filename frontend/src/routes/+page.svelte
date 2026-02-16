@@ -139,8 +139,8 @@
 			<h2>
 				top tracks
 				<svg class="section-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-					<path d="M2 12l4-4 3 2 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-					<path d="M10 4h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+					<path d="M2 12C6 11 10 5 14 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+					<path d="M10 3h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 				</svg>
 			</h2>
 			<div class="loading-container compact">
@@ -152,8 +152,8 @@
 			<h2>
 				top tracks
 				<svg class="section-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-					<path d="M2 12l4-4 3 2 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-					<path d="M10 4h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+					<path d="M2 12C6 11 10 5 14 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+					<path d="M10 3h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 				</svg>
 			</h2>
 			<div class="top-tracks-grid">

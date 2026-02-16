@@ -13,9 +13,10 @@
 		likeCount: number;
 		onMouseEnter?: () => void;
 		onMouseLeave?: () => void;
+		forceBelow?: boolean;
 	}
 
-	let { trackId, likeCount, onMouseEnter, onMouseLeave }: Props = $props();
+	let { trackId, likeCount, onMouseEnter, onMouseLeave, forceBelow = false }: Props = $props();
 
 	let likers = $state<LikerData[]>([]);
 	let loading = $state(true);
@@ -56,6 +57,11 @@
 
 	// check if tooltip should flip below based on viewport position
 	$effect(() => {
+		if (forceBelow) {
+			positionBelow = true;
+			return;
+		}
+
 		if (!tooltipElement) return;
 
 		const parent = tooltipElement.parentElement;
