@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import ShareButton from './ShareButton.svelte';
 	import AddToMenu from './AddToMenu.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
@@ -6,6 +7,7 @@
 	import CommentersTooltip from './CommentersTooltip.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
 	import { hasPlayableLossless } from '$lib/audio-support';
+	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -43,6 +45,18 @@
 	// optimize image loading: eager for first 3, lazy for rest
 	const imageLoading = index < 3 ? 'eager' : 'lazy';
 	const imageFetchPriority = index < 2 ? 'high' : undefined;
+
+	let isMobile = $state(false);
+
+	$effect(() => {
+		if (browser) {
+			const mq = window.matchMedia('(max-width: 768px)');
+			isMobile = mq.matches;
+			const handler = (e: MediaQueryListEvent) => (isMobile = e.matches);
+			mq.addEventListener('change', handler);
+			return () => mq.removeEventListener('change', handler);
+		}
+	});
 
 	let showLikersTooltip = $state(false);
 	let showCommentersTooltip = $state(false);
@@ -106,7 +120,7 @@
 	let likersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	function handleLikesMouseEnter() {
-		// cancel any pending close
+		if (isMobile) return;
 		if (likersTooltipTimeout) {
 			clearTimeout(likersTooltipTimeout);
 			likersTooltipTimeout = null;
@@ -115,17 +129,28 @@
 	}
 
 	function handleLikesMouseLeave() {
-		// delay closing to allow moving into the tooltip
+		if (isMobile) return;
 		likersTooltipTimeout = setTimeout(() => {
 			showLikersTooltip = false;
 			likersTooltipTimeout = null;
 		}, 150);
 	}
 
+	function handleLikesClick(e: Event) {
+		e.stopPropagation();
+		if (isMobile) {
+			likersSheet.open(track.id, likeCount);
+		}
+	}
+
 	function handleLikesKeydown(event: KeyboardEvent) {
 		if (event.key === 'Enter' || event.key === ' ') {
 			event.preventDefault();
-			showLikersTooltip = true;
+			if (isMobile) {
+				likersSheet.open(track.id, likeCount);
+			} else {
+				showLikersTooltip = true;
+			}
 		}
 		if (event.key === 'Escape') {
 			showLikersTooltip = false;
@@ -317,6 +342,7 @@
 					tabindex="0"
 					aria-label={`${likeCount} ${likeCount === 1 ? 'like' : 'likes'} (focus to view users)`}
 					aria-expanded={showLikersTooltip}
+					onclick={handleLikesClick}
 					onmouseenter={handleLikesMouseEnter}
 					onmouseleave={handleLikesMouseLeave}
 					onfocus={handleLikesMouseEnter}
@@ -324,7 +350,7 @@
 					onkeydown={handleLikesKeydown}
 				>
 					{likeCount} {likeCount === 1 ? 'like' : 'likes'}
-					{#if showLikersTooltip}
+					{#if showLikersTooltip && !isMobile}
 							<LikersTooltip
 								trackId={track.id}
 								likeCount={likeCount}
