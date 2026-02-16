@@ -138,8 +138,8 @@
 		<section class="top-tracks">
 			<h2>
 				<svg class="section-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-					<path d="M8 1C8 1 6.5 4.5 6.5 7a1.5 1.5 0 1 0 3 0C9.5 4.5 8 1 8 1Z" fill="currentColor" opacity="0.6"/>
-					<path d="M8 2.5C5.5 5.5 4 7.5 4 10a4 4 0 0 0 8 0c0-2.5-1.5-4.5-4-7.5Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+					<path d="M2 12l4-4 3 2 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+					<path d="M10 4h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 				</svg>
 				top tracks
 			</h2>
@@ -151,8 +151,8 @@
 		<section class="top-tracks">
 			<h2>
 				<svg class="section-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-					<path d="M8 1C8 1 6.5 4.5 6.5 7a1.5 1.5 0 1 0 3 0C9.5 4.5 8 1 8 1Z" fill="currentColor" opacity="0.6"/>
-					<path d="M8 2.5C5.5 5.5 4 7.5 4 10a4 4 0 0 0 8 0c0-2.5-1.5-4.5-4-7.5Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+					<path d="M2 12l4-4 3 2 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+					<path d="M10 4h4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 				</svg>
 				top tracks
 			</h2>
