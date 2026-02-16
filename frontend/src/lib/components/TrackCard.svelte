@@ -48,7 +48,10 @@
 	class="track-card"
 	class:playing={isPlaying}
 	class:tooltip-open={showLikersTooltip}
-	onclick={() => onPlay(track)}
+	onclick={(e) => {
+		if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) return;
+		onPlay(track);
+	}}
 >
 	<div class="artwork" class:gated={track.gated}>
 		{#if track.image_url}
@@ -103,6 +106,8 @@
 					tabindex="0"
 					aria-label="{likeCount} {likeCount === 1 ? 'like' : 'likes'}"
 					aria-expanded={showLikersTooltip}
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }}
 					onmouseenter={handleLikesMouseEnter}
 					onmouseleave={handleLikesMouseLeave}
 					onfocus={handleLikesMouseEnter}
