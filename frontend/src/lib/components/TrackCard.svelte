@@ -124,20 +124,20 @@
 </button>
 
 <style>
-	/* horizontal card: artwork left, text right */
+	/* vertical card — matches artist-card shape */
 	.track-card {
 		display: flex;
-		flex-direction: row;
+		flex-direction: column;
 		align-items: center;
-		gap: 0.625rem;
-		min-width: 240px;
-		max-width: 240px;
-		padding: 0.5rem;
+		gap: 0.5rem;
+		min-width: 120px;
+		max-width: 120px;
+		padding: 0.75rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-md);
 		cursor: pointer;
-		text-align: left;
+		text-align: center;
 		font-family: inherit;
 		color: inherit;
 		transition: border-color 0.15s, background 0.15s;
@@ -158,11 +158,11 @@
 		z-index: 60;
 	}
 
-	/* artwork — small square thumbnail */
+	/* artwork — square thumbnail matching artist avatar size */
 	.artwork {
 		position: relative;
-		width: 48px;
-		height: 48px;
+		width: 56px;
+		height: 56px;
 		flex-shrink: 0;
 		border-radius: var(--radius-sm);
 		overflow: hidden;
@@ -214,13 +214,14 @@
 		z-index: 1;
 	}
 
-	/* text content — stacked vertically */
+	/* text content — stacked vertically, centered */
 	.info {
-		flex: 1;
-		min-width: 0;
 		display: flex;
 		flex-direction: column;
+		align-items: center;
 		gap: 0.125rem;
+		min-width: 0;
+		width: 100%;
 	}
 
 	.title {
@@ -230,6 +231,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		max-width: 100%;
 		line-height: 1.3;
 	}
 
@@ -240,6 +242,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		max-width: 100%;
 		transition: color 0.15s;
 	}
 
