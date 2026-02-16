@@ -47,6 +47,24 @@ plyr.fm should become:
 
 ### February 2026
 
+#### homepage quality pass + likers bottom sheet (PRs #913-927, Feb 16)
+
+**top tracks redesign**: the homepage "top tracks" section now uses horizontal `TrackCard` components (row layout with 48px artwork, title/artist links, play/like counts) inside a scroll-snap container. cards use the same `--track-*` glass design tokens as `TrackItem` for visual consistency. scroll-snap with `x proximity` gives gentle anchoring without fighting the user.
+
+**likers bottom sheet**: hover tooltips for showing who liked a track were fundamentally broken on mobile — `position: fixed` gets trapped by ancestor `transform`/`transition` containing blocks inside `overflow-x: auto` scroll containers. replaced with a bottom sheet on mobile (slides up from bottom, renders at root level in `+layout.svelte` to escape all overflow/stacking contexts). desktop keeps the hover tooltip. the `(max-width: 768px)` breakpoint gates the behavior, matching the rest of the app. applied consistently across all three locations: `TrackCard`, `TrackItem`, and the track detail page.
+
+**"artists you know" section** (PRs #910-912, #927): new homepage section showing artists from your Bluesky follow graph. backend endpoint `GET /discover/network` cross-references follows with artists who have tracks on plyr.fm, ordered by follow age (oldest first). avatar refresh integration added after discovering stale DB URLs were preferred over fresh Bluesky URLs — flipped the `or` preference so the live follow-graph avatar wins.
+
+---
+
+#### oEmbed + collection embeds (PRs #903-909, Feb 13-14)
+
+**oEmbed support**: tracks, playlists, and albums now return oEmbed JSON for rich link previews. iframe embed player redesigned for collections — inline header with artwork, now-playing title links to source, narrow mode for small embeds.
+
+**misc fixes**: "ai-slop" added to default hidden tags filter. "create new playlist" CTA hoisted above existing playlists in picker. button text wrapping fixed.
+
+---
+
 #### playlist track recommendations (PRs #895-898, Feb 11)
 
 **inline recommendations when editing playlists**: shows 3 recommended tracks below the track list based on CLAP audio embeddings in turbopuffer. adaptive algorithm scales with playlist size — direct vector query for 1 track, per-track Reciprocal Rank Fusion for 2-5, k-means clustering into centroids for 6+. results cached in Redis keyed on the playlist's ATProto record CID (auto-invalidates when tracks change).
@@ -217,7 +235,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-playlist intelligence and code quality: inline track recommendations via CLAP embeddings (adaptive k-means/RRF strategy, Redis-cached on playlist CID). backend continues splitting into focused modules (main.py extraction). bug fixes for mobile share clipboard, upload notification DMs, artist page layout. ML features stable in production.
+homepage polish and mobile UX: top tracks horizontal row with glass-style TrackCards, likers bottom sheet for mobile (hover tooltip on desktop), "artists you know" section from Bluesky follow graph. oEmbed support for rich link previews. playlist recommendations via CLAP embeddings stable in production.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -390,5 +408,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-12.
+this is a living document. last updated 2026-02-16.
 
