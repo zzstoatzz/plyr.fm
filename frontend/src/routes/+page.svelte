@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import TrackItem from '$lib/components/TrackItem.svelte';
+	import TrackCard from '$lib/components/TrackCard.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import HiddenTagsFilter from '$lib/components/HiddenTagsFilter.svelte';
@@ -132,25 +133,24 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 
 <main>
-	<!-- most liked section -->
+	<!-- trending section -->
 	{#if loadingTopTracks}
-		<section class="top-tracks">
-			<h2>top tracks</h2>
+		<section class="trending">
+			<h2>trending</h2>
 			<div class="loading-container compact">
 				<WaveLoading size="sm" message="loading..." />
 			</div>
 		</section>
 	{:else if hasTopTracks}
-		<section class="top-tracks">
-			<h2>top tracks</h2>
-			<div class="track-list">
+		<section class="trending">
+			<h2>trending</h2>
+			<div class="trending-grid">
 				{#each topTracks as track, i}
-					<TrackItem
+					<TrackCard
 						{track}
 						index={i}
 						isPlaying={player.currentTrack?.id === track.id}
 						onPlay={(t) => queue.playNow(t)}
-						isAuthenticated={auth.isAuthenticated}
 					/>
 				{/each}
 			</div>
@@ -242,15 +242,24 @@
 		padding: 1.5rem 1rem;
 	}
 
-	.top-tracks {
+	.trending {
 		margin-bottom: 2.5rem;
 	}
 
-	.top-tracks h2 {
+	.trending h2 {
 		font-size: var(--text-page-heading);
 		font-weight: 700;
 		color: var(--text-primary);
-		margin: 0 0 1.5rem 0;
+		margin: 0 0 1rem 0;
+	}
+
+	.trending-grid {
+		display: flex;
+		gap: 0.75rem;
+		overflow-x: auto;
+		padding-bottom: 0.5rem;
+		scrollbar-width: thin;
+		scrollbar-color: var(--border) transparent;
 	}
 
 	.network-artists {
@@ -280,8 +289,8 @@
 		gap: 0.5rem;
 		padding: 0.75rem;
 		border-radius: var(--radius-md);
-		background: var(--surface-secondary);
-		border: 1px solid var(--border);
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
 		text-decoration: none;
 		color: inherit;
 		min-width: 120px;
@@ -290,7 +299,7 @@
 
 	.artist-card:hover {
 		border-color: var(--accent);
-		background: var(--surface-hover);
+		background: var(--bg-hover);
 	}
 
 	.artist-avatar {
@@ -301,7 +310,7 @@
 	}
 
 	.artist-avatar.placeholder {
-		background: var(--surface-tertiary);
+		background: var(--bg-tertiary);
 	}
 
 	.artist-info {
@@ -395,7 +404,7 @@
 		}
 
 		.section-header h2,
-		.top-tracks h2,
+		.trending h2,
 		.network-artists h2 {
 			font-size: var(--text-2xl);
 		}
