@@ -306,16 +306,17 @@
 
 	.artist-card {
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.75rem;
+		padding: 0.5rem;
 		border-radius: var(--radius-md);
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-subtle);
 		text-decoration: none;
 		color: inherit;
-		min-width: 120px;
+		min-width: 200px;
+		max-width: 200px;
 		transition: border-color 0.15s, background 0.15s;
 	}
 
@@ -325,10 +326,11 @@
 	}
 
 	.artist-avatar {
-		width: 56px;
-		height: 56px;
+		width: 40px;
+		height: 40px;
 		border-radius: 50%;
 		object-fit: cover;
+		flex-shrink: 0;
 	}
 
 	.artist-avatar.placeholder {
@@ -336,11 +338,11 @@
 	}
 
 	.artist-info {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		align-items: center;
 		gap: 0.125rem;
-		text-align: center;
 	}
 
 	.artist-name {
@@ -350,7 +352,6 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		max-width: 100px;
 	}
 
 	.artist-meta {
