@@ -1,5 +1,6 @@
 <script lang="ts">
 	import SensitiveImage from './SensitiveImage.svelte';
+	import LikersTooltip from './LikersTooltip.svelte';
 	import type { Track } from '$lib/types';
 
 	interface Props {
@@ -13,11 +14,32 @@
 
 	let imageLoading = $derived(index < 3 ? 'eager' as const : 'lazy' as const);
 	let likeCount = $derived(track.like_count || 0);
+
+	let showLikersTooltip = $state(false);
+	let likersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function handleLikesMouseEnter(e: Event) {
+		e.stopPropagation();
+		if (likersTooltipTimeout) {
+			clearTimeout(likersTooltipTimeout);
+			likersTooltipTimeout = null;
+		}
+		showLikersTooltip = true;
+	}
+
+	function handleLikesMouseLeave(e: Event) {
+		e.stopPropagation();
+		likersTooltipTimeout = setTimeout(() => {
+			showLikersTooltip = false;
+			likersTooltipTimeout = null;
+		}, 150);
+	}
 </script>
 
 <button
 	class="track-card"
 	class:playing={isPlaying}
+	class:tooltip-open={showLikersTooltip}
 	onclick={() => onPlay(track)}
 >
 	<div class="artwork-wrapper" class:gated={track.gated}>
@@ -35,7 +57,6 @@
 					src={track.artist_avatar_url}
 					alt={track.artist}
 					loading={imageLoading}
-					class="avatar"
 				/>
 			</SensitiveImage>
 		{:else}
@@ -63,7 +84,22 @@
 		{track.artist}
 	</a>
 	<span class="stats">
-		{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}{#if likeCount > 0}&nbsp;· {likeCount} {likeCount === 1 ? 'like' : 'likes'}{/if}
+		{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}{#if likeCount > 0}<span class="meta-sep">&middot;</span><span
+				class="likes"
+				role="button"
+				tabindex="0"
+				aria-label="{likeCount} {likeCount === 1 ? 'like' : 'likes'}"
+				aria-expanded={showLikersTooltip}
+				onmouseenter={handleLikesMouseEnter}
+				onmouseleave={handleLikesMouseLeave}
+				onfocus={handleLikesMouseEnter}
+				onblur={handleLikesMouseLeave}
+			>{likeCount} {likeCount === 1 ? 'like' : 'likes'}{#if showLikersTooltip}<LikersTooltip
+						trackId={track.id}
+						likeCount={likeCount}
+						onMouseEnter={() => handleLikesMouseEnter(new Event('mouseenter'))}
+						onMouseLeave={() => handleLikesMouseLeave(new Event('mouseleave'))}
+					/>{/if}</span>{/if}
 	</span>
 </button>
 
@@ -95,6 +131,10 @@
 		border-color: color-mix(in srgb, var(--accent) 25%, var(--border-subtle));
 	}
 
+	.track-card.tooltip-open {
+		z-index: 60;
+	}
+
 	.artwork-wrapper {
 		position: relative;
 		width: 100%;
@@ -117,10 +157,6 @@
 		height: 100%;
 		object-fit: cover;
 		display: block;
-	}
-
-	.artwork-wrapper img.avatar {
-		border-radius: var(--radius-full);
 	}
 
 	.placeholder {
@@ -178,5 +214,20 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.meta-sep {
+		margin: 0 0.25em;
+		color: var(--text-muted);
+	}
+
+	.likes {
+		position: relative;
+		cursor: help;
+		transition: color 0.15s;
+	}
+
+	.likes:hover {
+		color: var(--accent);
 	}
 </style>
