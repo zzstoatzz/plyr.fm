@@ -10,7 +10,12 @@ from backend._internal.auth.scopes import (
     _get_missing_scopes,
     _parse_scopes,
 )
-from backend._internal.auth.session import Session
+from backend._internal.auth.session import (
+    SESSION_CACHE_PREFIX,
+    SESSION_CACHE_TTL_SECONDS,
+    Session,
+    _session_cache_key,
+)
 
 
 def test_scopes_parse_roundtrip():
@@ -60,3 +65,16 @@ def test_exchange_token_functions_exist():
     """exchange token creation/consumption functions are importable."""
     assert callable(create_exchange_token)
     assert callable(consume_exchange_token)
+
+
+def test_session_cache_key_format():
+    """cache key uses plyr:session: prefix."""
+    key = _session_cache_key("abc-123")
+    assert key == "plyr:session:abc-123"
+    assert key.startswith(SESSION_CACHE_PREFIX)
+
+
+def test_session_cache_constants():
+    """cache constants have expected values."""
+    assert SESSION_CACHE_PREFIX == "plyr:session:"
+    assert SESSION_CACHE_TTL_SECONDS == 60

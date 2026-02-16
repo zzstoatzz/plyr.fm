@@ -13,11 +13,29 @@ from backend._internal.auth.encryption import _decrypt_data, _encrypt_data
 from backend.config import settings
 from backend.models import UserPreferences, UserSession
 from backend.utilities.database import db_session
+from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
 PUBLIC_REFRESH_TOKEN_DAYS = 14
 CONFIDENTIAL_REFRESH_TOKEN_DAYS = 180
+
+SESSION_CACHE_PREFIX = "plyr:session:"
+SESSION_CACHE_TTL_SECONDS = 60
+
+
+def _session_cache_key(session_id: str) -> str:
+    """build Redis cache key for a session."""
+    return f"{SESSION_CACHE_PREFIX}{session_id}"
+
+
+async def _invalidate_session_cache(session_id: str) -> None:
+    """delete cached session from Redis. fails silently."""
+    try:
+        redis = get_async_redis_client()
+        await redis.delete(_session_cache_key(session_id))
+    except Exception:
+        logger.debug("failed to invalidate session cache for %s", session_id)
 
 
 @dataclass
@@ -155,7 +173,24 @@ async def create_session(
 
 
 async def get_session(session_id: str) -> Session | None:
-    """retrieve session by id, decrypt OAuth data, and validate expiration."""
+    """retrieve session by id, checking Redis cache first then falling back to DB."""
+    cache_key = _session_cache_key(session_id)
+
+    # try Redis cache first
+    try:
+        redis = get_async_redis_client()
+        if cached := await redis.get(cache_key):
+            data = json.loads(cached)
+            return Session(
+                session_id=data["session_id"],
+                did=data["did"],
+                handle=data["handle"],
+                oauth_session=data["oauth_session"],
+            )
+    except Exception:
+        logger.debug("redis cache read failed for session %s", session_id)
+
+    # cache miss — fall back to DB
     async with db_session() as db:
         result = await db.execute(
             select(UserSession).where(UserSession.session_id == session_id)
@@ -165,15 +200,12 @@ async def get_session(session_id: str) -> Session | None:
 
         # check if session is expired
         if user_session.expires_at and datetime.now(UTC) > user_session.expires_at:
-            # session expired - delete it and return None
             await delete_session(session_id)
             return None
 
         # decrypt OAuth session data
         decrypted_data = _decrypt_data(user_session.oauth_session_data)
         if decrypted_data is None:
-            # decryption failed - session is invalid (key changed or data corrupted)
-            # delete the corrupted session
             await delete_session(session_id)
             return None
 
@@ -186,12 +218,32 @@ async def get_session(session_id: str) -> Session | None:
             await delete_session(session_id)
             return None
 
-        return Session(
-            session_id=user_session.session_id,
-            did=user_session.did,
-            handle=user_session.handle,
-            oauth_session=oauth_session_data,
+    session = Session(
+        session_id=user_session.session_id,
+        did=user_session.did,
+        handle=user_session.handle,
+        oauth_session=oauth_session_data,
+    )
+
+    # populate cache for next request
+    try:
+        redis = get_async_redis_client()
+        await redis.set(
+            cache_key,
+            json.dumps(
+                {
+                    "session_id": session.session_id,
+                    "did": session.did,
+                    "handle": session.handle,
+                    "oauth_session": session.oauth_session,
+                }
+            ),
+            ex=SESSION_CACHE_TTL_SECONDS,
         )
+    except Exception:
+        logger.debug("redis cache write failed for session %s", session_id)
+
+    return session
 
 
 async def update_session_tokens(
@@ -203,14 +255,15 @@ async def update_session_tokens(
             select(UserSession).where(UserSession.session_id == session_id)
         )
         if user_session := result.scalar_one_or_none():
-            # encrypt updated OAuth session data
             encrypted_data = _encrypt_data(json.dumps(oauth_session_data))
             user_session.oauth_session_data = encrypted_data
             await db.commit()
+    await _invalidate_session_cache(session_id)
 
 
 async def delete_session(session_id: str) -> None:
     """delete a session."""
+    await _invalidate_session_cache(session_id)
     async with db_session() as db:
         result = await db.execute(
             select(UserSession).where(UserSession.session_id == session_id)
