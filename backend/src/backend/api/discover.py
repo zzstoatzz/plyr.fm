@@ -72,13 +72,12 @@ async def get_network_artists(
     if not follow_dids:
         return []
 
-    # find artists in our DB whose DID is in the user's follow set, with track counts
+    # inner join ensures only artists with at least one track are returned
     result = await db.execute(
         select(Artist, func.count(Track.id).label("track_count"))
-        .outerjoin(Track, Track.artist_did == Artist.did)
+        .join(Track, Track.artist_did == Artist.did)
         .where(Artist.did.in_(follow_dids))
         .group_by(Artist.did)
-        .having(func.count(Track.id) > 0)
         .order_by(func.count(Track.id).desc())
     )
 
