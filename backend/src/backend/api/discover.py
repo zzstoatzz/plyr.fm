@@ -1,6 +1,7 @@
 """discovery endpoints — social graph powered artist discovery."""
 
 import logging
+from dataclasses import dataclass
 from typing import Annotated
 
 import httpx
@@ -33,10 +34,23 @@ class NetworkArtistResponse(BaseModel):
         return normalize_avatar_url(v)
 
 
-async def _get_follows(did: str) -> set[str]:
-    """fetch all DIDs a user follows on bluesky (public API, no auth needed)."""
-    follows: set[str] = set()
+@dataclass(frozen=True, slots=True)
+class FollowInfo:
+    """metadata about a follow relationship from bluesky."""
+
+    index: int  # enumeration position (0 = most recent, higher = older)
+    avatar_url: str | None  # avatar from bluesky profile
+
+
+async def _get_follows(did: str) -> dict[str, FollowInfo]:
+    """fetch all DIDs a user follows on bluesky with profile metadata.
+
+    returns a mapping of DID -> FollowInfo. enumeration order approximates
+    follow age (0 = most recently followed) since the API paginates by TID.
+    """
+    follows: dict[str, FollowInfo] = {}
     cursor: str | None = None
+    index = 0
 
     async with httpx.AsyncClient() as client:
         while True:
@@ -54,7 +68,12 @@ async def _get_follows(did: str) -> set[str]:
                 break
 
             data = resp.json()
-            follows.update(f["did"] for f in data.get("follows", []))
+            for f in data.get("follows", []):
+                follows[f["did"]] = FollowInfo(
+                    index=index,
+                    avatar_url=normalize_avatar_url(f.get("avatar")),
+                )
+                index += 1
 
             if not (cursor := data.get("cursor")):
                 break
@@ -78,16 +97,19 @@ async def get_network_artists(
         .join(Track, Track.artist_did == Artist.did)
         .where(Artist.did.in_(follow_dids))
         .group_by(Artist.did)
-        .order_by(func.count(Track.id).desc())
     )
 
-    return [
+    artists = [
         NetworkArtistResponse(
             did=artist.did,
             handle=artist.handle,
             display_name=artist.display_name,
-            avatar_url=artist.avatar_url,
+            avatar_url=artist.avatar_url or follow_dids[artist.did].avatar_url,
             track_count=track_count,
         )
         for artist, track_count in result.all()
     ]
+
+    # sort by follow index DESC — oldest follows first ("people you know the most")
+    artists.sort(key=lambda a: follow_dids[a.did].index, reverse=True)
+    return artists
