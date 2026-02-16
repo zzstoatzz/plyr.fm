@@ -261,12 +261,12 @@
 
 	.likers-avatars {
 		display: flex;
-		/* start from left so most recent (leftmost) is always visible */
-		/* scroll right to see older likers */
 		justify-content: flex-start;
 		overflow-x: auto;
 		max-width: 240px;
-		padding: 0.5rem 0 0.125rem 0;
+		width: fit-content;
+		margin: 0 auto;
+		padding: 0.25rem 0;
 		scrollbar-width: none;
 	}
 
