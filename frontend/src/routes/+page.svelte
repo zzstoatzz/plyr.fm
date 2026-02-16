@@ -13,6 +13,11 @@
 	import { auth } from '$lib/auth.svelte';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
 	import { API_URL } from '$lib/config';
+	import {
+		getRefreshedAvatar,
+		triggerAvatarRefresh,
+		hasAttemptedRefresh
+	} from '$lib/avatar-refresh.svelte';
 
 	interface NetworkArtist {
 		did: string;
@@ -164,12 +169,23 @@
 	<!-- artists from your bluesky network -->
 	{#if hasNetworkArtists}
 		<section class="network-artists">
-			<h2>from your network</h2>
+			<h2>artists you know</h2>
 			<div class="artist-grid">
 				{#each networkArtists as artist}
+					{@const refreshedUrl = getRefreshedAvatar(artist.did)}
+					{@const displayUrl = refreshedUrl ?? artist.avatar_url}
 					<a href="/u/{artist.handle}" class="artist-card">
-						{#if artist.avatar_url}
-							<img src={artist.avatar_url} alt={artist.display_name} class="artist-avatar" />
+						{#if displayUrl}
+							<img
+								src={displayUrl}
+								alt={artist.display_name}
+								class="artist-avatar"
+								onerror={() => {
+									if (!hasAttemptedRefresh(artist.did)) {
+										triggerAvatarRefresh(artist.did);
+									}
+								}}
+							/>
 						{:else}
 							<div class="artist-avatar placeholder"></div>
 						{/if}

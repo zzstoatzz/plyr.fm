@@ -104,7 +104,7 @@ async def get_network_artists(
             did=artist.did,
             handle=artist.handle,
             display_name=artist.display_name,
-            avatar_url=artist.avatar_url or follow_dids[artist.did].avatar_url,
+            avatar_url=follow_dids[artist.did].avatar_url or artist.avatar_url,
             track_count=track_count,
         )
         for artist, track_count in result.all()
