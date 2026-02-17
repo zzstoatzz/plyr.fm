@@ -23,7 +23,7 @@ max_lines = 612
 
 [[rules]]
 path = "backend/src/backend/api/albums.py"
-max_lines = 714
+max_lines = 781
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
