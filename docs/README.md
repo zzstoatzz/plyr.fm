@@ -17,6 +17,9 @@ organized knowledge base for plyr.fm development.
 - **[transcoder.md](./backend/transcoder.md)** - rust audio conversion service (lossless support)
 - **[mood-search.md](./backend/mood-search.md)** - semantic search with CLAP embeddings (Modal + turbopuffer)
 - **[genre-classification.md](./backend/genre-classification.md)** - ML genre tagging via effnet-discogs (Replicate)
+- **[playlist-recommendations.md](./backend/playlist-recommendations.md)** - inline track suggestions via CLAP embeddings
+- **[liked-tracks.md](./backend/liked-tracks.md)** - like system and liked tracks endpoint
+- **[atproto-identity.md](./backend/atproto-identity.md)** - ATProto identity resolution and handle management
 
 ### frontend
 - **[state-management.md](./frontend/state-management.md)** - svelte 5 runes patterns

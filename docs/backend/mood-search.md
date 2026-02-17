@@ -101,7 +101,7 @@ the namespace is created automatically on first write. querying a nonexistent na
 
 ### automatic (new uploads)
 
-when a track is uploaded and both Modal + turbopuffer are enabled, embedding generation is automatically scheduled as a docket background task. see `backend/src/backend/_internal/background_tasks.py` → `generate_embedding`.
+when a track is uploaded and both Modal + turbopuffer are enabled, embedding generation is automatically scheduled as a docket background task. see `backend/src/backend/_internal/tasks/ml.py` → `generate_embedding`.
 
 ### backfill (existing tracks)
 
@@ -202,10 +202,10 @@ results are cached in `track.extra["genre_predictions"]`. if no predictions are 
 ## key files
 
 - `services/clap/app.py` — Modal CLAP service
-- `backend/src/backend/_internal/clap_client.py` — Modal HTTP client
-- `backend/src/backend/_internal/tpuf_client.py` — turbopuffer client
+- `backend/src/backend/_internal/clients/clap.py` — Modal HTTP client
+- `backend/src/backend/_internal/clients/tpuf.py` — turbopuffer client
 - `backend/src/backend/api/search.py` — `/search/semantic` endpoint
-- `backend/src/backend/_internal/background_tasks.py` — `generate_embedding` task
+- `backend/src/backend/_internal/tasks/ml.py` — `generate_embedding` task
 - `scripts/backfill_embeddings.py` — batch indexing script
 - `frontend/src/lib/components/SearchModal.svelte` — search UI (mood badge, progressive results)
 - `frontend/src/lib/search.svelte.ts` — parallel keyword + semantic dispatch
