@@ -765,6 +765,10 @@ async def _schedule_post_upload(
     # sync album list record if track is in an album
     if track.album_id:
         await schedule_album_list_sync(ctx.auth_session.session_id, track.album_id)
+        from backend.api.albums import invalidate_album_cache_by_id
+
+        async with db_session() as db:
+            await invalidate_album_cache_by_id(db, track.album_id)
 
 
 async def _process_upload_background(ctx: UploadContext) -> None:

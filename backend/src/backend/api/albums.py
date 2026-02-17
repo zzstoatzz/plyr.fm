@@ -37,11 +37,43 @@ from backend.utilities.aggregations import (
     get_track_tags,
 )
 from backend.utilities.hashing import CHUNK_SIZE
+from backend.utilities.redis import get_async_redis_client
 from backend.utilities.slugs import slugify
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/albums", tags=["albums"])
+
+ALBUM_CACHE_PREFIX = "plyr:album:"
+ALBUM_CACHE_TTL_SECONDS = 300  # 5 minutes
+
+
+def _album_cache_key(handle: str, slug: str) -> str:
+    return f"{ALBUM_CACHE_PREFIX}{handle}/{slug}"
+
+
+async def invalidate_album_cache(handle: str, slug: str) -> None:
+    """delete cached album response. fails silently."""
+    try:
+        redis = get_async_redis_client()
+        await redis.delete(_album_cache_key(handle, slug))
+    except Exception:
+        logger.debug("failed to invalidate album cache for %s/%s", handle, slug)
+
+
+async def invalidate_album_cache_by_id(db: AsyncSession, album_id: str) -> None:
+    """look up album handle+slug and invalidate cache. fails silently."""
+    try:
+        result = await db.execute(
+            select(Album.slug, Artist.handle)
+            .join(Artist, Album.artist_did == Artist.did)
+            .where(Album.id == album_id)
+        )
+        if row := result.first():
+            slug, handle = row
+            await invalidate_album_cache(handle, slug)
+    except Exception:
+        logger.debug("failed to invalidate album cache by id %s", album_id)
 
 
 # Pydantic models defined first to avoid forward reference issues
@@ -279,6 +311,15 @@ async def get_album(
     if the album has an ATProto list record, tracks are returned in the
     order stored in that record. otherwise, tracks are ordered by created_at.
     """
+    # check Redis cache first
+    cache_key = _album_cache_key(handle, slug)
+    try:
+        redis = get_async_redis_client()
+        if cached := await redis.get(cache_key):
+            return AlbumResponse.model_validate_json(cached)
+    except Exception:
+        logger.debug("album cache read failed for %s/%s", handle, slug)
+
     from backend._internal.atproto.records import get_record_public
 
     # look up artist + album
@@ -401,10 +442,23 @@ async def get_album(
     total_plays = sum(t.play_count for t in tracks)
     metadata = await _album_metadata(album, artist, len(tracks), total_plays)
 
-    return AlbumResponse(
+    response = AlbumResponse(
         metadata=metadata,
         tracks=[t.model_dump(mode="json") for t in track_responses],
     )
+
+    # cache a depersonalized copy (is_liked zeroed out)
+    try:
+        redis = get_async_redis_client()
+        cache_tracks = [{**t, "is_liked": False} for t in response.tracks]
+        cacheable = AlbumResponse(metadata=response.metadata, tracks=cache_tracks)
+        await redis.set(
+            cache_key, cacheable.model_dump_json(), ex=ALBUM_CACHE_TTL_SECONDS
+        )
+    except Exception:
+        logger.debug("album cache write failed for %s/%s", handle, slug)
+
+    return response
 
 
 @router.post("/{album_id}/cover")
@@ -492,6 +546,8 @@ async def upload_album_cover(
         album.image_url = image_url
         await db.commit()
 
+        await invalidate_album_cache(auth_session.handle, album.slug)
+
         return {"image_url": image_url, "image_id": image_id}
 
     except HTTPException:
@@ -538,6 +594,7 @@ async def update_album(
         )
 
     old_title = album.title
+    old_slug = album.slug
     title_changed = title is not None and title.strip() != old_title
 
     if title is not None:
@@ -597,6 +654,11 @@ async def update_album(
 
     await db.commit()
 
+    # invalidate cache for old slug (new slug will be a cache miss)
+    await invalidate_album_cache(auth_session.handle, old_slug)
+    if album.slug != old_slug:
+        await invalidate_album_cache(auth_session.handle, album.slug)
+
     # fetch artist for response
     artist_result = await db.execute(
         select(Artist).where(Artist.did == album.artist_did)
@@ -639,6 +701,8 @@ async def remove_track_from_album(
     # orphan the track
     track.album_id = None
     await db.commit()
+
+    await invalidate_album_cache(auth_session.handle, album.slug)
 
     return RemoveTrackFromAlbumResponse(track_id=track_id)
 
@@ -706,6 +770,9 @@ async def delete_album(
     if album.image_id:
         with contextlib.suppress(Exception):
             await storage.delete(album.image_id)
+
+    # invalidate cache before deleting
+    await invalidate_album_cache(auth_session.handle, album.slug)
 
     # delete album from database
     await db.delete(album)

@@ -129,6 +129,9 @@ async def delete_track(
     # sync album list record if track was in an album
     if album_id_to_sync:
         await schedule_album_list_sync(auth_session.session_id, album_id_to_sync)
+        from backend.api.albums import invalidate_album_cache_by_id
+
+        await invalidate_album_cache_by_id(db, album_id_to_sync)
 
     return MessageResponse(message="track deleted successfully")
 
@@ -305,12 +308,16 @@ async def update_track_metadata(
 
     # sync album list records if album changed
     if album_changed:
+        from backend.api.albums import invalidate_album_cache_by_id
+
         # sync old album (track was removed)
         if old_album_id:
             await schedule_album_list_sync(auth_session.session_id, old_album_id)
+            await invalidate_album_cache_by_id(db, old_album_id)
         # sync new album (track was added)
         if new_album_id:
             await schedule_album_list_sync(auth_session.session_id, new_album_id)
+            await invalidate_album_cache_by_id(db, new_album_id)
 
     # move audio file between buckets if support_gate was toggled
     if move_to_private is not None:
