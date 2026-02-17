@@ -187,14 +187,25 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 <div class="page">
-	<div class="section-header">
-		<h2>
-			liked tracks
-			{#if data.tracks.length > 0}
-				<span class="count">{data.tracks.length}</span>
+	{#if data.tracks.length === 0}
+		<div class="empty-state">
+			<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+			</svg>
+			{#if !auth.isAuthenticated}
+				<h2>log in to like tracks</h2>
+				<p>you need to be logged in to like tracks</p>
+			{:else}
+				<h2>no liked tracks yet</h2>
+				<p>tracks you like will appear here</p>
 			{/if}
-		</h2>
-		{#if tracks.length > 0}
+		</div>
+	{:else}
+		<div class="section-header">
+			<h2>
+				liked tracks
+				<span class="count">{data.tracks.length}</span>
+			</h2>
 			<div class="header-actions">
 				<button class="queue-button" onclick={queueAll} title="add all liked tracks to queue">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -237,23 +248,7 @@
 					</button>
 				{/if}
 			</div>
-		{/if}
-	</div>
-
-	{#if data.tracks.length === 0}
-		<div class="empty-state">
-			<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-			</svg>
-			{#if !auth.isAuthenticated}
-				<h2>log in to like tracks</h2>
-				<p>you need to be logged in to like tracks</p>
-			{:else}
-				<h2>no liked tracks yet</h2>
-				<p>tracks you like will appear here</p>
-			{/if}
 		</div>
-	{:else}
 		<div
 			class="tracks-list"
 			class:edit-mode={isEditMode}
