@@ -306,10 +306,10 @@ async def update_track_metadata(
     await db.commit()
     await db.refresh(track)
 
-    # sync album list records if album changed
-    if album_changed:
-        from backend.api.albums import invalidate_album_cache_by_id
+    # invalidate album cache if track metadata changed within an album
+    from backend.api.albums import invalidate_album_cache_by_id
 
+    if album_changed:
         # sync old album (track was removed)
         if old_album_id:
             await schedule_album_list_sync(auth_session.session_id, old_album_id)
@@ -318,6 +318,8 @@ async def update_track_metadata(
         if new_album_id:
             await schedule_album_list_sync(auth_session.session_id, new_album_id)
             await invalidate_album_cache_by_id(db, new_album_id)
+    elif metadata_changed and track.album_id:
+        await invalidate_album_cache_by_id(db, track.album_id)
 
     # move audio file between buckets if support_gate was toggled
     if move_to_private is not None:

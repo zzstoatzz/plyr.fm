@@ -205,6 +205,17 @@ async def reorder_list(
                 list_uri=list_uri,
                 items=body.items,
             )
+
+            # invalidate album cache if this list belongs to an album
+            from backend.api.albums import invalidate_album_cache
+            from backend.models import Album
+
+            result = await db.execute(
+                select(Album).where(Album.atproto_record_uri == list_uri)
+            )
+            if album := result.scalar_one_or_none():
+                await invalidate_album_cache(session.handle, album.slug)
+
             return ReorderResponse(uri=uri, cid=cid)
 
         except Exception as e:
