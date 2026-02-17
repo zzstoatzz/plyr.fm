@@ -47,6 +47,18 @@ plyr.fm should become:
 
 ### February 2026
 
+#### Dockerfile fix + album caching + session caching (PRs #930-935, Feb 16-17)
+
+**production stability fix (PR #935)**: `uv run` in the Dockerfile CMD was triggering dependency resolution on every cold start, downloading from PyPI inside the Fly network. when PyPI connections failed (connection reset), the process exited, Fly restarted it, and the machine eventually hit the 10-restart limit and died permanently — leaving only one machine to serve all traffic. fix: `--no-sync` flag tells `uv run` to use the pre-installed venv without any runtime resolution.
+
+**album detail caching (PRs #933-934)**: `GET /albums/{handle}/{slug}` averaged 745ms with outliers at 5-7s due to Neon cold compute + uncached PDS calls. added Redis read-through cache on the full `AlbumResponse` (5-min TTL, keyed by handle/slug). per-user `is_liked` state zeroed out before caching to prevent leaking between users. explicit invalidation on all mutation paths: album CRUD, track CRUD, list reorder. follow-up PR #934 fixed three gaps caught in review: reorder not invalidating, same-album metadata edits not invalidating, and delete invalidating before commit (race condition).
+
+**session cache expiry fix (PR #932)**: Redis session cache from PR #930 was returning expired sessions — the cache read skipped the `expires_at` check. fix: validate expiry on cache hits, delete and fall through to DB on stale entries.
+
+**session caching (PR #930)**: Redis read-through cache for `get_session()` to reduce Neon cold-start latency on auth checks. 5-min TTL with invalidation on session mutations.
+
+---
+
 #### homepage quality pass + likers bottom sheet (PRs #913-927, Feb 16)
 
 **top tracks redesign**: the homepage "top tracks" section now uses horizontal `TrackCard` components (row layout with 48px artwork, title/artist links, play/like counts) inside a scroll-snap container. cards use the same `--track-*` glass design tokens as `TrackItem` for visual consistency. scroll-snap with `x proximity` gives gentle anchoring without fighting the user.
@@ -235,7 +247,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-homepage polish and mobile UX: top tracks horizontal row with glass-style TrackCards, likers bottom sheet for mobile (hover tooltip on desktop), "artists you know" section from Bluesky follow graph. oEmbed support for rich link previews. playlist recommendations via CLAP embeddings stable in production.
+production reliability and caching: Redis read-through caches on session auth and album detail endpoints to mitigate Neon cold-start latency. Dockerfile hardened against PyPI network failures in Fly.io. homepage polish and mobile UX stable in production.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -408,5 +420,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-16.
+this is a living document. last updated 2026-02-17.
 
