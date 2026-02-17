@@ -771,11 +771,14 @@ async def delete_album(
         with contextlib.suppress(Exception):
             await storage.delete(album.image_id)
 
-    # invalidate cache before deleting
-    await invalidate_album_cache(auth_session.handle, album.slug)
+    # capture slug before deletion
+    album_slug = album.slug
 
     # delete album from database
     await db.delete(album)
     await db.commit()
+
+    # invalidate cache after commit so concurrent reads can't re-populate from pre-delete state
+    await invalidate_album_cache(auth_session.handle, album_slug)
 
     return DeleteAlbumResponse(cascade=cascade)
