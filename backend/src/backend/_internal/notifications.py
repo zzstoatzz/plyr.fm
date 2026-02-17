@@ -153,6 +153,46 @@ class NotificationService:
                     error_type=error_type,
                 )
 
+    async def send_copyright_flag_notification(
+        self,
+        track_id: int,
+        track_title: str,
+        artist_handle: str,
+        matches: list[dict],
+    ) -> NotificationResult | None:
+        """send admin-only notification about a copyright flag."""
+        if not self.recipient_did:
+            logger.warning("recipient not set, skipping notification")
+            return None
+
+        primary_match = None
+        if matches:
+            m = matches[0]
+            primary_match = (
+                f"{m.get('title', 'Unknown')} by {m.get('artist', 'Unknown')}"
+            )
+
+        track_url = None
+        frontend_url = settings.frontend.url
+        if frontend_url and "localhost" not in frontend_url:
+            track_url = f"{frontend_url}/track/{track_id}"
+
+        message_text = (
+            f"copyright flag on {settings.app.name}\n\n"
+            f"track: '{track_title}'\n"
+            f"artist: @{artist_handle}\n"
+            f"matches: {len(matches)}\n"
+        )
+        if primary_match:
+            message_text += f"primary: {primary_match}\n"
+        if track_url:
+            message_text += f"\n{track_url}"
+
+        result = await self._send_dm_to_did(self.recipient_did, message_text)
+        if result.success:
+            logger.info(f"sent copyright flag notification for track {track_id}")
+        return result
+
     async def send_image_flag_notification(
         self,
         image_id: str,

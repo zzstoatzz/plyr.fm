@@ -4,10 +4,13 @@ import logging
 from typing import Any
 
 import logfire
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from backend._internal.clients.moderation import get_moderation_client
+from backend._internal.notifications import notification_service
 from backend.config import settings
-from backend.models import CopyrightScan
+from backend.models import CopyrightScan, Track
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -77,6 +80,21 @@ async def _store_scan_result(track_id: int, result: Any) -> None:
             highest_score=scan.highest_score,
             match_count=len(scan.matches),
         )
+
+        # notify admin only — never DM the artist
+        if result.is_flagged:
+            track = await db.scalar(
+                select(Track)
+                .options(joinedload(Track.artist))
+                .where(Track.id == track_id)
+            )
+            if track and track.artist:
+                await notification_service.send_copyright_flag_notification(
+                    track_id=track_id,
+                    track_title=track.title,
+                    artist_handle=track.artist.handle,
+                    matches=scan.matches,
+                )
 
 
 async def _store_scan_error(track_id: int, error: str) -> None:
