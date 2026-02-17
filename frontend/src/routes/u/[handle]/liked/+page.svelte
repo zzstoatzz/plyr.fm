@@ -58,15 +58,19 @@
 		</div>
 	</div>
 
-	<div class="section-header">
-		<h2>
-			{#if tracks.length > 0}
+	{#if tracks.length === 0}
+		<div class="empty-state">
+			<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+			</svg>
+			<h2>{isOwnProfile ? "you haven't" : `${displayName} hasn't`} liked any tracks yet</h2>
+			<p>liked tracks will appear here</p>
+		</div>
+	{:else}
+		<div class="section-header">
+			<h2>
 				<span class="count">{tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}</span>
-			{:else}
-				no liked tracks
-			{/if}
-		</h2>
-		{#if tracks.length > 0}
+			</h2>
 			<div class="header-actions">
 				<button class="btn-action" onclick={queueAll} title="queue all liked tracks">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -80,18 +84,7 @@
 					<span>queue all</span>
 				</button>
 			</div>
-		{/if}
-	</div>
-
-	{#if tracks.length === 0}
-		<div class="empty-state">
-			<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-			</svg>
-			<h2>{isOwnProfile ? "you haven't" : `${displayName} hasn't`} liked any tracks yet</h2>
-			<p>liked tracks will appear here</p>
 		</div>
-	{:else}
 		<div class="tracks-list">
 			{#each tracks as track, i (track.id)}
 				<TrackItem
