@@ -67,7 +67,7 @@ users can check "auto-tag with recommended genres" on the upload form. when enab
 
 auto-tags are additive with manual tags — if the user also typed tags, both appear on the track.
 
-**key files**: `backend/src/backend/api/tracks/uploads.py` (form param + UploadContext), `backend/src/backend/_internal/background_tasks.py` (apply logic in `classify_genres`)
+**key files**: `backend/src/backend/api/tracks/uploads.py` (form param + UploadContext), `backend/src/backend/_internal/tasks/ml.py` (apply logic in `classify_genres`)
 
 ## auditing
 
@@ -148,8 +148,8 @@ when editing a track on the portal page, the edit modal fetches recommended tags
 
 ## key files
 
-- `backend/src/backend/_internal/replicate_client.py` — Replicate HTTP client
-- `backend/src/backend/_internal/background_tasks.py` — `classify_genres` task (+ auto-tag logic)
+- `backend/src/backend/_internal/clients/replicate.py` — Replicate HTTP client
+- `backend/src/backend/_internal/tasks/ml.py` — `classify_genres` task (+ auto-tag logic)
 - `backend/src/backend/api/tracks/uploads.py` — `auto_tag` form param and `UploadContext`
 - `backend/src/backend/api/tracks/tags.py` — `recommended-tags` endpoint
 - `backend/src/backend/config.py` — `ReplicateSettings`
