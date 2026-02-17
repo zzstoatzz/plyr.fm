@@ -47,6 +47,12 @@ plyr.fm should become:
 
 ### February 2026
 
+#### liked tracks empty state fix (PRs #938-939, Feb 17)
+
+both `/liked` and `/u/[handle]/liked` showed redundant headings when the track list was empty — the section header ("liked tracks" / "no liked tracks") duplicated the empty state message below it. moved section headers inside the tracks-exist branch so only the empty state (heart icon + contextual message) renders when there are no likes.
+
+---
+
 #### Dockerfile fix + album caching + session caching (PRs #930-935, Feb 16-17)
 
 **production stability fix (PR #935)**: `uv run` in the Dockerfile CMD was triggering dependency resolution on every cold start, downloading from PyPI inside the Fly network. when PyPI connections failed (connection reset), the process exited, Fly restarted it, and the machine eventually hit the 10-restart limit and died permanently — leaving only one machine to serve all traffic. fix: `--no-sync` flag tells `uv run` to use the pre-installed venv without any runtime resolution.
@@ -420,5 +426,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-17.
+this is a living document. last updated 2026-02-17 (liked empty state fix).
 
