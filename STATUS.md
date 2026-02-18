@@ -47,6 +47,12 @@ plyr.fm should become:
 
 ### February 2026
 
+#### supporter avatar fallback (PR #943, Feb 17)
+
+atprotofans supporter avatars on artist profiles (e.g. goose.art) showed only initial letters for supporters who have Bluesky accounts but haven't used plyr.fm. root cause: `POST /artists/batch` only returns DIDs in our database, so non-plyr.fm supporters got no `avatar_url`. fix: fall back to constructing a Bluesky CDN URL from the atprotofans API's avatar blob data (`avatar.ref.$link` CID → `cdn.bsky.app/img/avatar/plain/{did}/{cid}@jpeg`). frontend-only change.
+
+---
+
 #### liked tracks empty state fix (PRs #938-939, Feb 17)
 
 both `/liked` and `/u/[handle]/liked` showed redundant headings when the track list was empty — the section header ("liked tracks" / "no liked tracks") duplicated the empty state message below it. moved section headers inside the tracks-exist branch so only the empty state (heart icon + contextual message) renders when there are no likes.
@@ -426,5 +432,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-17 (liked empty state fix).
+this is a living document. last updated 2026-02-17 (supporter avatar fallback).
 
