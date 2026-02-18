@@ -85,13 +85,23 @@ export async function getAtprotofansSupporters(
 			if (artistsResponse.ok) {
 				const artistsMap = await artistsResponse.json();
 				data.supporters = data.supporters.map(
-					(s: { did: string; handle: string; displayName?: string }) => {
+					(s: {
+						did: string;
+						handle: string;
+						displayName?: string;
+						avatar?: { ref?: { $link?: string } };
+					}) => {
 						const artist = artistsMap[s.did];
+						const blobCid = s.avatar?.ref?.['$link'];
 						return {
 							did: s.did,
 							handle: artist?.handle || s.handle,
 							display_name: artist?.display_name || s.displayName || s.handle,
-							avatar_url: artist?.avatar_url
+							avatar_url:
+								artist?.avatar_url ||
+								(blobCid
+									? `https://cdn.bsky.app/img/avatar/plain/${s.did}/${blobCid}@jpeg`
+									: undefined)
 						};
 					}
 				);
