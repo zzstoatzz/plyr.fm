@@ -108,6 +108,11 @@
 		}
 	});
 
+	// sync playback position to queue for persistence
+	$effect(() => {
+		queue.progressMs = Math.round(player.currentTime * 1000);
+	});
+
 	// track play count when threshold is reached
 	$effect(() => { player.incrementPlayCount(); });
 
@@ -290,6 +295,9 @@
 		return `${API_URL}/audio/${file_id}`;
 	}
 
+	// track whether we've restored saved position on initial hydration
+	let positionRestored = false;
+
 	// track blob URLs we've created so we can revoke them
 	let currentBlobUrl: string | null = null;
 
@@ -370,6 +378,15 @@
 					player.audioElement.addEventListener(
 						'loadeddata',
 						() => {
+							// restore position on initial hydration only
+							if (!positionRestored && queue.progressMs > 0 && player.audioElement) {
+								const positionSec = queue.progressMs / 1000;
+								// don't restore if near the end (within 5s of duration)
+								if (player.duration === 0 || positionSec < player.duration - 5) {
+									player.audioElement.currentTime = positionSec;
+								}
+								positionRestored = true;
+							}
 							isLoadingTrack = false;
 						},
 						{ once: true }
