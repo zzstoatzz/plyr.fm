@@ -22,6 +22,10 @@ path = "STATUS.md"
 max_lines = 612
 
 [[rules]]
+path = "backend/src/backend/_internal/jams.py"
+max_lines = 700
+
+[[rules]]
 path = "backend/src/backend/api/albums.py"
 max_lines = 784
 
@@ -103,7 +107,7 @@ max_lines = 1087
 
 [[rules]]
 path = "frontend/src/lib/components/Queue.svelte"
-max_lines = 599
+max_lines = 870
 
 [[rules]]
 path = "frontend/src/lib/components/SearchModal.svelte"
@@ -123,11 +127,11 @@ max_lines = 622
 
 [[rules]]
 path = "frontend/src/lib/components/player/Player.svelte"
-max_lines = 583
+max_lines = 640
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"
-max_lines = 627
+max_lines = 725
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"

@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { queue } from '$lib/queue.svelte';
+	import { player } from '$lib/player.svelte';
 	import { goToIndex } from '$lib/playback.svelte';
+	import { auth } from '$lib/auth.svelte';
+	import { jam } from '$lib/jam.svelte';
+	import { toast } from '$lib/toast.svelte';
+	import { JAMS_FLAG } from '$lib/config';
 	import type { Track } from '$lib/types';
 
 	let draggedIndex = $state<number | null>(null);
@@ -13,12 +18,50 @@
 	let touchDragElement = $state<HTMLElement | null>(null);
 	let queueTracksElement = $state<HTMLElement | null>(null);
 
-	const currentTrack = $derived.by<Track | null>(() => queue.tracks[queue.currentIndex] ?? null);
+	const canJam = $derived(auth.user?.enabled_flags?.includes(JAMS_FLAG) ?? false);
+
+	async function startJam() {
+		const trackIds = queue.tracks.map((t) => t.file_id);
+		await jam.create(
+			undefined,
+			trackIds,
+			queue.currentIndex,
+			!player.paused,
+			Math.round(player.currentTime * 1000)
+		);
+	}
+
+	async function leaveJam() {
+		await jam.leave();
+	}
+
+	async function shareJam() {
+		const url = `${window.location.origin}/jam/${jam.code}`;
+		try {
+			await navigator.clipboard.writeText(url);
+			toast.success('link copied');
+		} catch {
+			toast.error('failed to copy link');
+		}
+	}
+
+	// when jam is active, show jam tracks; otherwise show personal queue
+	const tracks = $derived(jam.active ? jam.tracks : queue.tracks);
+	const currentIdx = $derived(jam.active ? jam.currentIndex : queue.currentIndex);
+	const currentTrack = $derived.by<Track | null>(() => tracks[currentIdx] ?? null);
 	const upcoming = $derived.by<{ track: Track; index: number }[]>(() => {
-		return queue.tracks
+		return tracks
 			.map((track, index) => ({ track, index }))
-			.filter(({ index }) => index > queue.currentIndex);
+			.filter(({ index }) => index > currentIdx);
 	});
+
+	function handleTrackClick(index: number) {
+		goToIndex(index);
+	}
+
+	function handleRemoveTrack(index: number) {
+		queue.removeTrack(index);
+	}
 
 	// desktop drag and drop
 	function handleDragStart(event: DragEvent, index: number) {
@@ -110,36 +153,120 @@
 	}
 </script>
 
-{#if queue.tracks.length > 0}
-	<div class="queue">
+{#if tracks.length > 0}
+	<div class="queue" class:jam-mode={jam.active}>
 		<div class="queue-header">
-			<h2>queue</h2>
-			<div class="queue-actions">
-				<button
-					class="shuffle-btn"
-					class:active={queue.shuffle}
-					onclick={() => queue.toggleShuffle()}
-					title={queue.shuffle ? 'disable shuffle' : 'enable shuffle'}
-				>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<polyline points="16 3 21 3 21 8"></polyline>
-						<line x1="4" y1="20" x2="21" y2="3"></line>
-						<polyline points="21 16 21 21 16 21"></polyline>
-						<line x1="15" y1="15" x2="21" y2="21"></line>
-						<line x1="4" y1="4" x2="9" y2="9"></line>
-					</svg>
-				</button>
-				{#if upcoming.length > 0}
-					<button
-						class="clear-btn"
-						onclick={() => queue.clearUpNext()}
-						title="clear upcoming tracks"
-					>
-						clear
+			{#if jam.active}
+				<div class="jam-info">
+					<span class="jam-name">{jam.jam?.name ?? 'jam'}</span>
+					<div class="jam-meta">
+						<span class="connection-dot" class:connected={jam.connected} class:reconnecting={jam.reconnecting}></span>
+						<span class="jam-code">{jam.code}</span>
+					</div>
+				</div>
+				<div class="queue-actions">
+					<button class="share-btn" onclick={shareJam} title="share jam link">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="18" cy="5" r="3"></circle>
+							<circle cx="6" cy="12" r="3"></circle>
+							<circle cx="18" cy="19" r="3"></circle>
+							<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+							<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+						</svg>
 					</button>
-				{/if}
-			</div>
+					<button class="leave-btn" onclick={leaveJam} title="leave jam">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+							<polyline points="16 17 21 12 16 7"></polyline>
+							<line x1="21" y1="12" x2="9" y2="12"></line>
+						</svg>
+					</button>
+					<button
+						class="shuffle-btn"
+						class:active={queue.shuffle}
+						onclick={() => queue.toggleShuffle()}
+						title={queue.shuffle ? 'disable shuffle' : 'enable shuffle'}
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="16 3 21 3 21 8"></polyline>
+							<line x1="4" y1="20" x2="21" y2="3"></line>
+							<polyline points="21 16 21 21 16 21"></polyline>
+							<line x1="15" y1="15" x2="21" y2="21"></line>
+							<line x1="4" y1="4" x2="9" y2="9"></line>
+						</svg>
+					</button>
+					{#if upcoming.length > 0}
+						<button
+							class="clear-btn"
+							onclick={() => queue.clearUpNext()}
+							title="clear upcoming tracks"
+						>
+							clear
+						</button>
+					{/if}
+				</div>
+			{:else}
+				<h2>queue</h2>
+				<div class="queue-actions">
+					{#if canJam}
+						<button
+							class="jam-btn"
+							onclick={startJam}
+							title="start a jam"
+						>
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+								<circle cx="9" cy="7" r="4"></circle>
+								<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+								<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+							</svg>
+						</button>
+					{/if}
+					<button
+						class="shuffle-btn"
+						class:active={queue.shuffle}
+						onclick={() => queue.toggleShuffle()}
+						title={queue.shuffle ? 'disable shuffle' : 'enable shuffle'}
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="16 3 21 3 21 8"></polyline>
+							<line x1="4" y1="20" x2="21" y2="3"></line>
+							<polyline points="21 16 21 21 16 21"></polyline>
+							<line x1="15" y1="15" x2="21" y2="21"></line>
+							<line x1="4" y1="4" x2="9" y2="9"></line>
+						</svg>
+					</button>
+					{#if upcoming.length > 0}
+						<button
+							class="clear-btn"
+							onclick={() => queue.clearUpNext()}
+							title="clear upcoming tracks"
+						>
+							clear
+						</button>
+					{/if}
+				</div>
+			{/if}
 		</div>
+
+		{#if jam.active && jam.participants.length > 0}
+			<div class="participants-strip">
+				{#each jam.participants as participant (participant.did)}
+					<div class="participant-chip" title={participant.display_name ?? participant.handle}>
+						{#if participant.avatar_url}
+							<img src={participant.avatar_url} alt="" class="participant-avatar" />
+						{:else}
+							<div class="participant-avatar placeholder">
+								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+									<circle cx="12" cy="7" r="4"></circle>
+								</svg>
+							</div>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
 
 		<div class="queue-body">
 			{#if currentTrack}
@@ -166,6 +293,7 @@
 				{#if upcoming.length > 0}
 					<div
 						class="queue-tracks"
+						role="list"
 						bind:this={queueTracksElement}
 						ontouchmove={handleTouchMove}
 						ontouchend={handleTouchEnd}
@@ -184,8 +312,8 @@
 								ondragover={(e) => handleDragOver(e, index)}
 								ondrop={(e) => handleDrop(e, index)}
 								ondragend={handleDragEnd}
-								onclick={() => goToIndex(index)}
-								onkeydown={(e) => e.key === 'Enter' && goToIndex(index)}
+								onclick={() => handleTrackClick(index)}
+								onkeydown={(e) => e.key === 'Enter' && handleTrackClick(index)}
 							>
 								<!-- drag handle for reordering -->
 								<button
@@ -218,7 +346,7 @@
 									class="remove-btn"
 									onclick={(e) => {
 										e.stopPropagation();
-										queue.removeTrack(index);
+										handleRemoveTrack(index);
 									}}
 									aria-label="remove from queue"
 									title="remove from queue"
@@ -261,6 +389,118 @@
 		padding: 1.5rem 1.25rem calc(var(--player-height, 0px) + 40px + env(safe-area-inset-bottom, 0px));
 		background: transparent;
 		gap: 1rem;
+	}
+
+	.queue.jam-mode {
+		border-top: 2px solid transparent;
+		border-image: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6, #ff6b6b) 1;
+	}
+
+	.jam-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		min-width: 0;
+	}
+
+	.jam-name {
+		font-size: var(--text-lg);
+		font-weight: 600;
+		color: var(--text-primary);
+		text-transform: lowercase;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.jam-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
+	.connection-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: var(--radius-full);
+		background: var(--text-tertiary);
+		flex-shrink: 0;
+		transition: background 0.3s;
+	}
+
+	.connection-dot.connected {
+		background: #22c55e;
+	}
+
+	.connection-dot.reconnecting {
+		background: #eab308;
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.4; }
+	}
+
+	.jam-code {
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+		font-family: monospace;
+	}
+
+	.share-btn,
+	.leave-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-tertiary);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.share-btn:hover {
+		color: var(--accent);
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.leave-btn:hover {
+		color: var(--error);
+		border-color: var(--error);
+		background: color-mix(in srgb, var(--error) 10%, transparent);
+	}
+
+	.participants-strip {
+		display: flex;
+		gap: 0.375rem;
+		padding: 0 0.25rem;
+		flex-wrap: wrap;
+	}
+
+	.participant-chip {
+		flex-shrink: 0;
+	}
+
+	.participant-avatar {
+		width: 24px;
+		height: 24px;
+		border-radius: var(--radius-full);
+		object-fit: cover;
+		border: 1px solid var(--border-subtle);
+	}
+
+	.participant-avatar.placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--bg-tertiary);
+		color: var(--text-tertiary);
 	}
 
 	.queue-header h2 {
@@ -307,6 +547,27 @@
 	.shuffle-btn.active {
 		color: var(--accent);
 		border-color: var(--accent);
+	}
+
+	.jam-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-tertiary);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.jam-btn:hover {
+		color: var(--accent);
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.clear-btn {

@@ -47,6 +47,20 @@ plyr.fm should become:
 
 ### February 2026
 
+#### jams — shared listening rooms (Feb 19)
+
+real-time shared listening rooms. one user creates a jam, gets a shareable code (`plyr.fm/jam/a1b2c3d4`), and anyone with the link can join. all participants control playback — play, pause, seek, next, previous, add/remove tracks. no chat, no host-only lock.
+
+**backend**: `Jam` and `JamParticipant` models with partial indexes. `JamService` singleton manages lifecycle, WebSocket connections, and Redis Streams fan-out. playback state is server-authoritative — stored as JSONB with monotonic revision counter. commands mutate state, increment revision, commit, and publish to Redis stream. each backend instance runs `XREAD BLOCK` per active jam and fans out to connected WebSockets.
+
+**frontend**: `JamState` class (`lib/jam.svelte.ts`) with Svelte 5 runes. WebSocket lifecycle with exponential backoff reconnect (1s → 30s). Player.svelte has jam-aware effects — track sync from jam state instead of personal queue, drift correction (seek if >2s off from server timestamp). PlaybackControls routes commands through jam when active. jam page at `/jam/[code]` with track display, controls, participant avatars, share button.
+
+**sync**: server-timestamp + client interpolation (`progress_ms + (Date.now() - server_time_ms)`). reconnect replays missed events via `XRANGE` from last stream ID, falls back to full DB snapshot if trimmed. personal queue preserved and restored on leave.
+
+gated behind `jams` feature flag. 19 backend tests covering full lifecycle, all commands, revision monotonicity, flag gating, auto-leave. see `docs/architecture/jams.md`.
+
+---
+
 #### hidden tag filter autocomplete (PR #945, Feb 18)
 
 the homepage hidden tag filter's "add tag" input now has autocomplete. typing a partial tag name fetches matching tags from `GET /tracks/tags?q=...` (same endpoint the portal tag editor uses) with a 200ms debounce. suggestions appear in a compact glass-effect dropdown showing tag name and track count. supports keyboard navigation (arrow keys to cycle, enter to select, escape to close) and mouse selection. tags already in the hidden list are filtered out of suggestions. frontend-only change.
@@ -328,6 +342,7 @@ production reliability and caching: Redis read-through caches on session auth an
 - ✅ media export with concurrent downloads
 - ✅ supporter-gated content via atprotofans
 - ✅ listen receipts (tracked share links with visitor/listener stats)
+- ✅ jams — shared listening rooms with real-time sync via Redis Streams + WebSocket (feature-flagged)
 
 **albums**
 - ✅ album CRUD with cover art
@@ -438,5 +453,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-18 (hidden tag filter autocomplete).
+this is a living document. last updated 2026-02-19 (jams — shared listening rooms).
 

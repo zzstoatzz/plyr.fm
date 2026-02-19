@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import { jam } from '$lib/jam.svelte';
 	import { nowPlaying } from '$lib/now-playing.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { preferences } from '$lib/preferences.svelte';
@@ -53,11 +55,11 @@
 		if (!('mediaSession' in navigator)) return;
 
 		navigator.mediaSession.setActionHandler('play', () => {
-			player.paused = false;
+			queue.play();
 		});
 
 		navigator.mediaSession.setActionHandler('pause', () => {
-			player.paused = true;
+			queue.pause();
 		});
 
 		navigator.mediaSession.setActionHandler('previoustrack', () => {
@@ -108,9 +110,11 @@
 		}
 	});
 
-	// sync playback position to queue for persistence
+	// sync playback position to queue for persistence (skip in jam mode — server owns position)
 	$effect(() => {
-		queue.progressMs = Math.round(player.currentTime * 1000);
+		if (!jam.active) {
+			queue.progressMs = Math.round(player.currentTime * 1000);
+		}
 	});
 
 	// track play count when threshold is reached
@@ -460,6 +464,16 @@
 	let shouldAutoPlay = $state(false);
 
 	$effect(() => {
+		// in jam mode, jam state drives the player directly
+		if (jam.active && jam.currentTrack) {
+			const trackChanged = jam.currentTrack.id !== player.currentTrack?.id;
+			if (trackChanged) {
+				player.currentTrack = jam.currentTrack;
+				shouldAutoPlay = jam.isPlaying;
+			}
+			return;
+		}
+
 		if (queue.currentTrack) {
 			const trackChanged = queue.currentTrack.id !== player.currentTrack?.id;
 			const indexChanged = queue.currentIndex !== previousQueueIndex;
@@ -490,6 +504,37 @@
 			player.paused = false;
 			shouldAutoPlay = false;
 		}
+	});
+
+	// sync play/pause from jam state (any participant can play/pause)
+	// only runs when jam play state changes (from WS messages)
+	$effect(() => {
+		if (!jam.active) return;
+		const jamPlaying = jam.isPlaying;
+		const jamTrackId = jam.currentTrack?.id;
+		untrack(() => {
+			if (isLoadingTrack) return;
+			if (!jamTrackId || jamTrackId !== player.currentTrack?.id) return;
+			player.paused = !jamPlaying;
+		});
+	});
+
+	// jam drift correction: seek if >2s off from server
+	// only runs when jam state changes (progressMs/serverTimeMs from WS), not every frame
+	$effect(() => {
+		if (!jam.active) return;
+		// track jam state as dependencies (these change on WS messages)
+		const serverPos = jam.interpolatedProgressMs / 1000;
+		const jamTrackId = jam.currentTrack?.id;
+		// read player state without tracking to avoid running every frame
+		untrack(() => {
+			if (!player.audioElement || !player.duration) return;
+			if (!jamTrackId || jamTrackId !== player.currentTrack?.id) return;
+			const drift = Math.abs(player.currentTime - serverPos);
+			if (drift > 2) {
+				player.audioElement.currentTime = serverPos;
+			}
+		});
 	});
 
 	function handleTrackEnded() {
