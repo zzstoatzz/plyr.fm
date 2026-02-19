@@ -93,6 +93,7 @@ export interface QueueState {
 	shuffle: boolean;
 	original_order_ids: string[];
 	auto_advance?: boolean;
+	progress_ms?: number;
 }
 
 export interface QueueResponse {

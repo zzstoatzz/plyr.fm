@@ -13,6 +13,7 @@ class Queue {
 	shuffle = $state(false);
 	originalOrder = $state<Track[]>([]);
 	autoAdvance = $state(true);
+	progressMs = $state(0);
 
 	revision = $state<number | null>(null);
 	etag = $state<string | null>(null);
@@ -26,6 +27,8 @@ class Queue {
 	pendingSync = false;
 	channel: BroadcastChannel | null = null;
 	tabId: string | null = null;
+	private positionSaveInterval: number | null = null;
+	private lastSavedProgressMs = 0;
 
 	get currentTrack(): Track | null {
 		if (this.tracks.length === 0) return null;
@@ -114,6 +117,7 @@ class Queue {
 
 		document.addEventListener('visibilitychange', this.handleVisibilityChange);
 		window.addEventListener('beforeunload', this.handleBeforeUnload);
+		this.startPositionSave();
 	}
 
 	handleVisibilityChange = () => {
@@ -123,6 +127,7 @@ class Queue {
 	};
 
 	handleBeforeUnload = () => {
+		this.stopPositionSave();
 		void this.flushSync();
 		this.channel?.close();
 	};
@@ -136,6 +141,12 @@ class Queue {
 		}
 
 		if (this.pendingSync && !this.syncInProgress) {
+			await this.pushQueue();
+			return;
+		}
+
+		// always save position if playing something
+		if (this.tracks.length > 0 && !this.syncInProgress) {
 			await this.pushQueue();
 		}
 	}
@@ -251,6 +262,10 @@ class Queue {
 			this.autoAdvance = state.auto_advance;
 		}
 
+		if (state.progress_ms !== undefined) {
+			this.progressMs = state.progress_ms;
+		}
+
 		this.currentIndex = this.resolveCurrentIndex(
 			state.current_track_id,
 			state.current_index,
@@ -320,7 +335,8 @@ class Queue {
 				current_track_id: this.currentTrack?.file_id ?? null,
 				shuffle: this.shuffle,
 				original_order_ids: this.originalOrder.map((t) => t.file_id),
-				auto_advance: this.autoAdvance
+				auto_advance: this.autoAdvance,
+				progress_ms: this.progressMs
 			};
 
 			const headers: HeadersInit = {
@@ -335,6 +351,7 @@ class Queue {
 				credentials: 'include',
 				method: 'PUT',
 				headers,
+				keepalive: true,
 				body: JSON.stringify({ state })
 			});
 
@@ -575,6 +592,23 @@ class Queue {
 		this.currentIndex = 0;
 
 		this.schedulePush();
+	}
+
+	startPositionSave() {
+		this.stopPositionSave();
+		this.positionSaveInterval = window.setInterval(() => {
+			if (this.tracks.length > 0 && Math.abs(this.progressMs - this.lastSavedProgressMs) > 5000) {
+				this.lastSavedProgressMs = this.progressMs;
+				void this.pushQueue();
+			}
+		}, 30_000);
+	}
+
+	stopPositionSave() {
+		if (this.positionSaveInterval !== null) {
+			window.clearInterval(this.positionSaveInterval);
+			this.positionSaveInterval = null;
+		}
 	}
 
 	private createTabId(): string {
