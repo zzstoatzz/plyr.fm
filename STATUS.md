@@ -47,6 +47,12 @@ plyr.fm should become:
 
 ### February 2026
 
+#### hidden tag filter autocomplete (PR #945, Feb 18)
+
+the homepage hidden tag filter's "add tag" input now has autocomplete. typing a partial tag name fetches matching tags from `GET /tracks/tags?q=...` (same endpoint the portal tag editor uses) with a 200ms debounce. suggestions appear in a compact glass-effect dropdown showing tag name and track count. supports keyboard navigation (arrow keys to cycle, enter to select, escape to close) and mouse selection. tags already in the hidden list are filtered out of suggestions. frontend-only change.
+
+---
+
 #### supporter avatar fallback (PR #943, Feb 17)
 
 atprotofans supporter avatars on artist profiles (e.g. goose.art) showed only initial letters for supporters who have Bluesky accounts but haven't used plyr.fm. root cause: `POST /artists/batch` only returns DIDs in our database, so non-plyr.fm supporters got no `avatar_url`. fix: fall back to constructing a Bluesky CDN URL from the atprotofans API's avatar blob data (`avatar.ref.$link` CID → `cdn.bsky.app/img/avatar/plain/{did}/{cid}@jpeg`). frontend-only change.
@@ -432,5 +438,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-17 (supporter avatar fallback).
+this is a living document. last updated 2026-02-18 (hidden tag filter autocomplete).
 
