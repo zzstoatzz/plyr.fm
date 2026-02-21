@@ -53,6 +53,7 @@ class JamService:
 
     def __init__(self) -> None:
         self._connections: dict[str, set[WebSocket]] = {}
+        self._ws_by_did: dict[str, tuple[str, WebSocket]] = {}  # did → (jam_id, ws)
         self._reader_tasks: dict[str, asyncio.Task] = {}
 
     async def setup(self) -> None:
@@ -380,7 +381,7 @@ class JamService:
                 "tracks_changed": tracks_changed,
                 "actor": {"did": did, "type": cmd_type},
             }
-            if tracks_changed and tracks:
+            if tracks_changed:
                 event["tracks"] = tracks
             await self._publish_event(jam_id, event)
 
@@ -395,9 +396,13 @@ class JamService:
 
     async def connect_ws(self, jam_id: str, ws: WebSocket, did: str) -> None:
         """register a WebSocket connection for a jam."""
+        # close any previous socket for this user (e.g. stale from auto-leave)
+        await self._close_ws_for_did(did)
+
         if jam_id not in self._connections:
             self._connections[jam_id] = set()
         self._connections[jam_id].add(ws)
+        self._ws_by_did[did] = (jam_id, ws)
 
         # start reader task if first connection for this jam
         if jam_id not in self._reader_tasks or self._reader_tasks[jam_id].done():
@@ -408,6 +413,15 @@ class JamService:
 
     async def disconnect_ws(self, jam_id: str, ws: WebSocket) -> None:
         """unregister a WebSocket connection."""
+        # clean up did tracking
+        dids_to_remove = [
+            did
+            for did, (jid, w) in self._ws_by_did.items()
+            if jid == jam_id and w is ws
+        ]
+        for did in dids_to_remove:
+            del self._ws_by_did[did]
+
         if jam_id in self._connections:
             self._connections[jam_id].discard(ws)
             if not self._connections[jam_id]:
@@ -419,6 +433,17 @@ class JamService:
                         await self._reader_tasks[jam_id]
                     del self._reader_tasks[jam_id]
                     logger.info("stopped stream reader for jam %s", jam_id)
+
+    async def _close_ws_for_did(self, did: str) -> None:
+        """close any existing WebSocket for this DID."""
+        entry = self._ws_by_did.pop(did, None)
+        if not entry:
+            return
+        old_jam_id, old_ws = entry
+        if old_jam_id in self._connections:
+            self._connections[old_jam_id].discard(old_ws)
+        with contextlib.suppress(Exception):
+            await old_ws.close(code=4010, reason="replaced by new connection")
 
     async def handle_ws_message(
         self, jam_id: str, did: str, message: dict[str, Any], ws: WebSocket

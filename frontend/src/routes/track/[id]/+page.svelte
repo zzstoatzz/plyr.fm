@@ -160,7 +160,7 @@
 	async function handlePlay() {
 		if (player.currentTrack?.id === track.id) {
 			// this track is already loaded - just toggle play/pause
-			player.togglePlayPause();
+			queue.togglePlayPause();
 		} else {
 			// different track or no track - start this one
 			// use playTrack for gated content checks
@@ -249,9 +249,7 @@
 
 	async function seekToTimestamp(ms: number) {
 		const doSeek = () => {
-			if (player.audioElement) {
-				player.audioElement.currentTime = ms / 1000;
-			}
+			queue.seek(ms);
 		};
 
 		// if this track is already loaded, seek immediately
@@ -455,9 +453,9 @@ $effect(() => {
 		player.audioElement &&
 		player.audioElement.readyState >= 1
 	) {
-		const seekTo = pendingSeekMs / 1000;
+		const seekMs = pendingSeekMs;
 		pendingSeekMs = null;
-		player.audioElement.currentTime = seekTo;
+		queue.seek(seekMs);
 		// don't auto-play - browser policy blocks it without user interaction
 		// user will click play themselves
 	}

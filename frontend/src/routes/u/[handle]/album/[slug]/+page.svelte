@@ -557,7 +557,7 @@
 			<button
 				class="play-button"
 				class:is-playing={isAlbumPlaying}
-				onclick={() => isAlbumActive ? player.togglePlayPause() : playNow()}
+				onclick={() => isAlbumActive ? queue.togglePlayPause() : playNow()}
 			>
 				{#if isAlbumPlaying}
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">

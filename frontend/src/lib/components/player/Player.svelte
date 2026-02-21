@@ -75,25 +75,24 @@
 		});
 
 		navigator.mediaSession.setActionHandler('seekto', (details) => {
-			if (details.seekTime !== undefined && player.audioElement) {
-				player.audioElement.currentTime = details.seekTime;
+			if (details.seekTime !== undefined) {
+				queue.seek(details.seekTime * 1000);
 			}
 		});
 
 		navigator.mediaSession.setActionHandler('seekbackward', (details) => {
 			if (player.audioElement) {
 				const skipTime = details.seekOffset ?? 10;
-				player.audioElement.currentTime = Math.max(0, player.audioElement.currentTime - skipTime);
+				const newTime = Math.max(0, player.audioElement.currentTime - skipTime);
+				queue.seek(newTime * 1000);
 			}
 		});
 
 		navigator.mediaSession.setActionHandler('seekforward', (details) => {
 			if (player.audioElement) {
 				const skipTime = details.seekOffset ?? 10;
-				player.audioElement.currentTime = Math.min(
-					player.duration,
-					player.audioElement.currentTime + skipTime
-				);
+				const newTime = Math.min(player.duration, player.audioElement.currentTime + skipTime);
+				queue.seek(newTime * 1000);
 			}
 		});
 	}
