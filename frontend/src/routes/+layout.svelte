@@ -22,6 +22,7 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { jam } from '$lib/jam.svelte';
+	import { JAMS_FLAG } from '$lib/config';
 	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
 	let { children } = $props<{ children: any }>();
@@ -68,7 +69,7 @@
 			}
 
 			// reconnect to active jam on page load/refresh
-			if (!jam.active) {
+			if (!jam.active && auth.user?.enabled_flags?.includes(JAMS_FLAG)) {
 				const activeJam = await jam.fetchActive();
 				if (activeJam) {
 					await jam.join(activeJam.code);
