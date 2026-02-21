@@ -21,6 +21,7 @@
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import { jam } from '$lib/jam.svelte';
 	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
 	let { children } = $props<{ children: any }>();
@@ -65,6 +66,23 @@
 			if (queue.revision === null) {
 				void queue.fetchQueue();
 			}
+
+			// reconnect to active jam on page load/refresh
+			if (!jam.active) {
+				const activeJam = await jam.fetchActive();
+				if (activeJam) {
+					await jam.join(activeJam.code);
+				}
+			}
+		}
+	});
+
+	// auto-open queue when joining a jam
+	$effect(() => {
+		if (!browser) return;
+		if (jam.active && !showQueue) {
+			showQueue = true;
+			localStorage.setItem('showQueue', 'true');
 		}
 	});
 

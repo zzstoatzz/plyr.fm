@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { jam } from '$lib/jam.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { APP_NAME } from '$lib/branding';
@@ -12,9 +13,8 @@
 	onMount(async () => {
 		const ok = await jam.join(data.code);
 		if (ok) {
-			localStorage.setItem('showQueue', 'true');
-			// full page reload so layout picks up showQueue from localStorage
-			window.location.href = '/';
+			// SvelteKit navigation preserves runtime — jam state survives
+			goto('/');
 		} else {
 			error = 'could not join jam — it may have ended or the code is invalid';
 			toast.error('failed to join jam');
