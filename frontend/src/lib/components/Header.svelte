@@ -188,7 +188,7 @@
 
 	.margin-right {
 		position: absolute;
-		right: var(--queue-width, 0px);
+		right: 0;
 		top: 50%;
 		transform: translateY(-50%);
 		display: flex;

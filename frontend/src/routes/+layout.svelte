@@ -13,7 +13,7 @@
 	import FeedbackModal from '$lib/components/FeedbackModal.svelte';
 	import TermsOverlay from '$lib/components/TermsOverlay.svelte';
 	import LikersSheet from '$lib/components/LikersSheet.svelte';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
@@ -77,12 +77,16 @@
 		}
 	});
 
-	// auto-open queue when joining a jam
+	// auto-open queue when joining a jam (only on jam.active transition, not on queue toggle)
 	$effect(() => {
 		if (!browser) return;
-		if (jam.active && !showQueue) {
-			showQueue = true;
-			localStorage.setItem('showQueue', 'true');
+		if (jam.active) {
+			untrack(() => {
+				if (!showQueue) {
+					showQueue = true;
+					localStorage.setItem('showQueue', 'true');
+				}
+			});
 		}
 	});
 
