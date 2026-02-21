@@ -61,19 +61,22 @@
 		// check auth status once
 		await auth.initialize();
 
-		// if authenticated, fetch preferences and queue
+		// if authenticated, fetch preferences and reconnect to active jam or personal queue
 		if (auth.isAuthenticated) {
 			await preferences.initialize();
-			if (queue.revision === null) {
-				void queue.fetchQueue();
-			}
 
-			// reconnect to active jam on page load/refresh
+			// check for active jam first — if rejoining, jam owns the queue state
+			let joinedJam = false;
 			if (!jam.active && auth.user?.enabled_flags?.includes(JAMS_FLAG)) {
 				const activeJam = await jam.fetchActive();
 				if (activeJam) {
 					await jam.join(activeJam.code);
+					joinedJam = true;
 				}
+			}
+
+			if (!joinedJam && queue.revision === null) {
+				void queue.fetchQueue();
 			}
 		}
 	});
