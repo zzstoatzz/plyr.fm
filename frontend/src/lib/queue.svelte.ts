@@ -484,6 +484,7 @@ class Queue {
 	}
 
 	setQueue(tracks: Track[], startIndex = 0) {
+		if (this.jamBridge) return; // no set_queue command — block during jams
 		if (tracks.length === 0) {
 			this.clear();
 			return;
@@ -566,6 +567,7 @@ class Queue {
 	}
 
 	toggleShuffle() {
+		if (this.jamBridge) return; // no shuffle command — block during jams
 		// shuffle is an action, not a mode - shuffle upcoming tracks every time
 		if (this.tracks.length <= 1) {
 			return;
@@ -610,6 +612,7 @@ class Queue {
 	}
 
 	moveTrack(fromIndex: number, toIndex: number) {
+		if (this.jamBridge) return; // no move_track command — block during jams
 		if (fromIndex === toIndex) return;
 		if (fromIndex < 0 || fromIndex >= this.tracks.length) return;
 		if (toIndex < 0 || toIndex >= this.tracks.length) return;
@@ -668,6 +671,7 @@ class Queue {
 	}
 
 	clearUpNext() {
+		if (this.jamBridge) return; // no clear command — block during jams
 		if (this.tracks.length === 0) return;
 
 		this.lastUpdateWasLocal = true;

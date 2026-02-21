@@ -181,29 +181,6 @@
 							<line x1="21" y1="12" x2="9" y2="12"></line>
 						</svg>
 					</button>
-					<button
-						class="shuffle-btn"
-						class:active={queue.shuffle}
-						onclick={() => queue.toggleShuffle()}
-						title={queue.shuffle ? 'disable shuffle' : 'enable shuffle'}
-					>
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<polyline points="16 3 21 3 21 8"></polyline>
-							<line x1="4" y1="20" x2="21" y2="3"></line>
-							<polyline points="21 16 21 21 16 21"></polyline>
-							<line x1="15" y1="15" x2="21" y2="21"></line>
-							<line x1="4" y1="4" x2="9" y2="9"></line>
-						</svg>
-					</button>
-					{#if upcoming.length > 0}
-						<button
-							class="clear-btn"
-							onclick={() => queue.clearUpNext()}
-							title="clear upcoming tracks"
-						>
-							clear
-						</button>
-					{/if}
 				</div>
 			{:else}
 				<h2>queue</h2>
@@ -302,20 +279,21 @@
 						{#each upcoming as { track, index } (`${track.file_id}:${index}`)}
 							<div
 								class="queue-track"
-								class:drag-over={dragOverIndex === index && touchDragIndex !== index}
-								class:is-dragging={touchDragIndex === index || draggedIndex === index}
+								class:drag-over={!jam.active && dragOverIndex === index && touchDragIndex !== index}
+								class:is-dragging={!jam.active && (touchDragIndex === index || draggedIndex === index)}
 								data-index={index}
-								draggable="true"
+								draggable={!jam.active}
 								role="button"
 								tabindex="0"
-								ondragstart={(e) => handleDragStart(e, index)}
-								ondragover={(e) => handleDragOver(e, index)}
-								ondrop={(e) => handleDrop(e, index)}
-								ondragend={handleDragEnd}
+								ondragstart={jam.active ? undefined : (e) => handleDragStart(e, index)}
+								ondragover={jam.active ? undefined : (e) => handleDragOver(e, index)}
+								ondrop={jam.active ? undefined : (e) => handleDrop(e, index)}
+								ondragend={jam.active ? undefined : handleDragEnd}
 								onclick={() => handleTrackClick(index)}
 								onkeydown={(e) => e.key === 'Enter' && handleTrackClick(index)}
 							>
-								<!-- drag handle for reordering -->
+								<!-- drag handle for reordering (hidden during jams — no reorder command) -->
+								{#if !jam.active}
 								<button
 									class="drag-handle"
 									ontouchstart={(e) => handleTouchStart(e, index)}
@@ -332,6 +310,7 @@
 										<circle cx="11" cy="13" r="1.5"></circle>
 									</svg>
 								</button>
+								{/if}
 
 								<div class="track-info">
 									<div class="track-title">{track.title}</div>

@@ -1,6 +1,7 @@
 """tests for jam api endpoints."""
 
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session
 from backend._internal.feature_flags import enable_flag
+from backend._internal.jams import JamService
 from backend.main import app
 from backend.models import Artist
 
@@ -550,3 +552,32 @@ async def test_sequential_commands_get_distinct_revisions(
     # both advanced the index correctly
     assert r1.json()["state"]["current_index"] == 1
     assert r2.json()["state"]["current_index"] == 2
+
+
+async def test_did_socket_replacement() -> None:
+    """test that connecting a second WS for the same DID closes the first."""
+    from starlette.websockets import WebSocket
+
+    service = JamService()
+    jam_id = "test-jam-123"
+
+    ws1 = AsyncMock(spec=WebSocket)
+    ws2 = AsyncMock(spec=WebSocket)
+
+    # connect first socket
+    await service.connect_ws(jam_id, ws1, "did:test:user")
+    assert jam_id in service._connections
+    assert ws1 in service._connections[jam_id]
+
+    # connect second socket for same DID — should close first
+    await service.connect_ws(jam_id, ws2, "did:test:user")
+
+    # first socket should have been closed with code 4010
+    ws1.close.assert_awaited_once_with(code=4010, reason="replaced by new connection")
+
+    # only second socket should be in connections
+    assert ws2 in service._connections[jam_id]
+    assert ws1 not in service._connections[jam_id]
+
+    # DID mapping should point to second socket
+    assert service._ws_by_did["did:test:user"] == (jam_id, ws2)

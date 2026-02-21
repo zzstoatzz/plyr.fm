@@ -176,14 +176,14 @@ when a jam is active, the queue panel shows:
 
 ### medium priority
 
-- **unbridged queue methods** — `moveTrack`, `toggleShuffle`, `clearUpNext` operate locally during jams, causing desync. need bridge methods or should be disabled during jams.
 - **`_auto_leave` cleanup** — leaves previous jams but doesn't close the old WebSocket or unregister the old bridge on the client side.
-- **no WebSocket tests** — 22 backend tests cover REST endpoints and command logic, but no tests for WebSocket connection, sync, or reconnection.
+- **product semantics** — current design is democratic (any participant controls playback). issue #947 describes host-centric control. needs explicit resolution in the issue/PR thread.
 
 ### nice to have
 
 - **periodic sync heartbeat** — server could broadcast position every N seconds during playback to reduce drift between commands. not needed unless drift becomes noticeable in practice.
 - **queue reorder via drag** — needs a bridge method and backend command to support reordering during jams.
+- **shuffle/clear during jams** — currently disabled (no backend commands). could add `shuffle` and `clear_up_next` commands later.
 
 ## files
 
@@ -192,12 +192,12 @@ when a jam is active, the queue panel shows:
 | `backend/src/backend/models/jam.py` | Jam, JamParticipant SQLAlchemy models |
 | `backend/src/backend/_internal/jams.py` | JamService — commands, state management, Redis Streams |
 | `backend/src/backend/api/jams.py` | REST + WS endpoints, request/response models |
-| `backend/tests/api/test_jams.py` | 22 tests covering CRUD, commands, lifecycle, auth |
+| `backend/tests/api/test_jams.py` | 23 tests covering CRUD, commands, lifecycle, auth, DID socket replacement |
 | `frontend/src/lib/jam.svelte.ts` | JamState singleton — WebSocket, bridge registration |
 | `frontend/src/lib/queue.svelte.ts` | JamBridge interface, bridge routing in queue methods |
 | `frontend/src/lib/components/Queue.svelte` | Jam UI (participants, share, leave, rainbow border) |
 | `frontend/src/lib/components/player/Player.svelte` | Jam sync effects (track, pause, drift correction) |
-| `frontend/src/lib/playback.svelte.ts` | No jam awareness — routes through queue (bridge handles it) |
+| `frontend/src/lib/playback.svelte.ts` | Jam-aware — blocks `playQueue` during jams with toast |
 | `frontend/src/lib/components/player/PlaybackControls.svelte` | No jam awareness — calls queue methods |
 | `frontend/src/routes/jam/[code]/+page.svelte` | Join page — calls jam.join(), goto('/') |
 | `frontend/src/routes/+layout.svelte` | Startup reconnect via fetchActive(), auto-open queue |
