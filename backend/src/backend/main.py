@@ -12,7 +12,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from backend._internal import notification_service, queue_service
+from backend._internal import jam_service, notification_service, queue_service
 from backend._internal.background import background_worker_lifespan
 from backend.api import (
     account_router,
@@ -21,6 +21,7 @@ from backend.api import (
     auth_router,
     discover_router,
     exports_router,
+    jams_router,
     meta_router,
     moderation_router,
     now_playing_router,
@@ -60,6 +61,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # setup services
     await notification_service.setup()
     await queue_service.setup()
+    await jam_service.setup()
 
     # start background task worker (docket)
     async with background_worker_lifespan() as docket:
@@ -76,6 +78,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await asyncio.wait_for(queue_service.shutdown(), timeout=2.0)
     except TimeoutError:
         logging.warning("queue_service.shutdown() timed out")
+    try:
+        await asyncio.wait_for(jam_service.shutdown(), timeout=2.0)
+    except TimeoutError:
+        logging.warning("jam_service.shutdown() timed out")
 
 
 app = FastAPI(
@@ -131,6 +137,7 @@ app.include_router(queue_router)
 app.include_router(now_playing_router)
 app.include_router(migration_router)
 app.include_router(exports_router)
+app.include_router(jams_router)
 app.include_router(pds_backfill_router)
 app.include_router(moderation_router)
 app.include_router(oembed_router)

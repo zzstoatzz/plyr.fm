@@ -58,19 +58,15 @@
 		const RESTART_THRESHOLD = 1;
 
 		if (player.currentTime > RESTART_THRESHOLD) {
-			player.currentTime = 0;
+			queue.seek(0);
 			seekValue = 0;
-			if (player.paused) {
-				player.paused = false;
-			}
+			queue.play();
 		} else if (queue.hasPrevious) {
 			queue.previous();
 		} else {
-			player.currentTime = 0;
+			queue.seek(0);
 			seekValue = 0;
-			if (player.paused) {
-				player.paused = false;
-			}
+			queue.play();
 		}
 	}
 
@@ -81,10 +77,7 @@
 	}
 
 	function commitSeek(value: number) {
-		player.currentTime = value;
-		if (player.audioElement) {
-			player.audioElement.currentTime = value;
-		}
+		queue.seek(Math.round(value * 1000));
 		seekValue = value;
 	}
 
@@ -124,7 +117,7 @@
 
 	<button
 		class="control-btn play-pause"
-		onclick={() => player.togglePlayPause()}
+		onclick={() => queue.togglePlayPause()}
 		title={player.paused ? 'play' : 'pause'}
 	>
 		{#if !player.paused}

@@ -3,11 +3,30 @@ import type { QueueResponse, QueueState, Track } from './types';
 import { API_URL } from './config';
 import { APP_BROADCAST_PREFIX } from './branding';
 import { auth } from './auth.svelte';
+import { player } from './player.svelte';
 
 const SYNC_DEBOUNCE_MS = 250;
 
+/** bridge for routing queue mutations through a jam's WebSocket transport */
+export interface JamBridge {
+	playTrack(fileId: string): void;
+	addTracks(fileIds: string[]): void;
+	removeTrack(index: number): void;
+	setIndex(index: number): void;
+	next(): void;
+	previous(): void;
+	play(): void;
+	pause(): void;
+	seek(ms: number): void;
+}
+
 // global queue state using Svelte 5 runes
 class Queue {
+	jamBridge = $state<JamBridge | null>(null);
+
+	setJamBridge(bridge: JamBridge | null): void {
+		this.jamBridge = bridge;
+	}
 	tracks = $state<Track[]>([]);
 	currentIndex = $state(0);
 	shuffle = $state(false);
@@ -406,8 +425,52 @@ class Queue {
 		}
 	}
 
+	// ── playback control (routed through bridge when jam active) ──
+
+	play(): void {
+		if (this.jamBridge) {
+			this.jamBridge.play();
+		} else {
+			player.paused = false;
+		}
+	}
+
+	pause(): void {
+		if (this.jamBridge) {
+			this.jamBridge.pause();
+		} else {
+			player.paused = true;
+		}
+	}
+
+	togglePlayPause(): void {
+		if (player.paused) this.play();
+		else this.pause();
+	}
+
+	seek(ms: number): void {
+		if (this.jamBridge) {
+			this.jamBridge.seek(ms);
+		} else if (player.audioElement) {
+			player.audioElement.currentTime = ms / 1000;
+		}
+	}
+
+	// ── track mutations (routed through bridge when jam active) ──
+
 	addTracks(tracks: Track[], playNow = false) {
 		if (tracks.length === 0) return;
+
+		if (this.jamBridge) {
+			const fileIds = tracks.map((t) => t.file_id);
+			if (playNow && fileIds.length > 0) {
+				this.jamBridge.playTrack(fileIds[0]);
+				if (fileIds.length > 1) this.jamBridge.addTracks(fileIds.slice(1));
+			} else {
+				this.jamBridge.addTracks(fileIds);
+			}
+			return;
+		}
 
 		this.lastUpdateWasLocal = true;
 		this.tracks = [...this.tracks, ...tracks];
@@ -421,6 +484,7 @@ class Queue {
 	}
 
 	setQueue(tracks: Track[], startIndex = 0) {
+		if (this.jamBridge) return; // no set_queue command — block during jams
 		if (tracks.length === 0) {
 			this.clear();
 			return;
@@ -434,6 +498,11 @@ class Queue {
 	}
 
 	playNow(track: Track, autoPlay = true) {
+		if (this.jamBridge) {
+			this.jamBridge.playTrack(track.file_id);
+			return;
+		}
+
 		this.lastUpdateWasLocal = autoPlay;
 		const upNext = this.tracks.slice(this.currentIndex + 1);
 		this.tracks = [track, ...upNext];
@@ -452,6 +521,12 @@ class Queue {
 
 	goTo(index: number) {
 		if (index < 0 || index >= this.tracks.length) return;
+
+		if (this.jamBridge) {
+			this.jamBridge.setIndex(index);
+			return;
+		}
+
 		this.lastUpdateWasLocal = true;
 		this.currentIndex = index;
 		this.schedulePush();
@@ -459,6 +534,11 @@ class Queue {
 
 	next() {
 		if (this.tracks.length === 0) return;
+
+		if (this.jamBridge) {
+			this.jamBridge.next();
+			return;
+		}
 
 		if (this.currentIndex < this.tracks.length - 1) {
 			this.lastUpdateWasLocal = true;
@@ -469,6 +549,11 @@ class Queue {
 
 	previous(forceSkip = false) {
 		if (this.tracks.length === 0) return;
+
+		if (this.jamBridge) {
+			this.jamBridge.previous();
+			return true;
+		}
 
 		if (this.currentIndex > 0 || forceSkip) {
 			this.lastUpdateWasLocal = true;
@@ -482,6 +567,7 @@ class Queue {
 	}
 
 	toggleShuffle() {
+		if (this.jamBridge) return; // no shuffle command — block during jams
 		// shuffle is an action, not a mode - shuffle upcoming tracks every time
 		if (this.tracks.length <= 1) {
 			return;
@@ -526,6 +612,7 @@ class Queue {
 	}
 
 	moveTrack(fromIndex: number, toIndex: number) {
+		if (this.jamBridge) return; // no move_track command — block during jams
 		if (fromIndex === toIndex) return;
 		if (fromIndex < 0 || fromIndex >= this.tracks.length) return;
 		if (toIndex < 0 || toIndex >= this.tracks.length) return;
@@ -556,6 +643,11 @@ class Queue {
 		if (index < 0 || index >= this.tracks.length) return;
 		if (index === this.currentIndex) return;
 
+		if (this.jamBridge) {
+			this.jamBridge.removeTrack(index);
+			return;
+		}
+
 		this.lastUpdateWasLocal = true;
 		const updated = [...this.tracks];
 		const [removed] = updated.splice(index, 1);
@@ -579,6 +671,7 @@ class Queue {
 	}
 
 	clearUpNext() {
+		if (this.jamBridge) return; // no clear command — block during jams
 		if (this.tracks.length === 0) return;
 
 		this.lastUpdateWasLocal = true;

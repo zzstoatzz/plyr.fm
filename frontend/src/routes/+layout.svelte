@@ -13,7 +13,7 @@
 	import FeedbackModal from '$lib/components/FeedbackModal.svelte';
 	import TermsOverlay from '$lib/components/TermsOverlay.svelte';
 	import LikersSheet from '$lib/components/LikersSheet.svelte';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
@@ -21,6 +21,8 @@
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import { jam } from '$lib/jam.svelte';
+	import { JAMS_FLAG } from '$lib/config';
 	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
 	let { children } = $props<{ children: any }>();
@@ -65,6 +67,27 @@
 			if (queue.revision === null) {
 				void queue.fetchQueue();
 			}
+
+			// reconnect to active jam on page load/refresh
+			if (!jam.active && auth.user?.enabled_flags?.includes(JAMS_FLAG)) {
+				const activeJam = await jam.fetchActive();
+				if (activeJam) {
+					await jam.join(activeJam.code);
+				}
+			}
+		}
+	});
+
+	// auto-open queue when joining a jam (only on jam.active transition, not on queue toggle)
+	$effect(() => {
+		if (!browser) return;
+		if (jam.active) {
+			untrack(() => {
+				if (!showQueue) {
+					showQueue = true;
+					localStorage.setItem('showQueue', 'true');
+				}
+			});
 		}
 	});
 
@@ -203,7 +226,7 @@
 		switch (event.key) {
 			case ' ': // space - play/pause
 				event.preventDefault();
-				player.togglePlayPause();
+				queue.togglePlayPause();
 				break;
 
 			case 'ArrowLeft': // seek backward
@@ -242,28 +265,18 @@
 		if (!player.audioElement || !player.duration) return;
 
 		const newTime = Math.max(0, Math.min(player.duration, player.currentTime + seconds));
-		player.currentTime = newTime;
-		player.audioElement.currentTime = newTime;
+		queue.seek(newTime * 1000);
 	}
 
 	function handlePreviousTrack() {
 		const RESTART_THRESHOLD = 3; // restart if more than 3 seconds in
 
 		if (player.currentTime > RESTART_THRESHOLD) {
-			// restart current track
-			player.currentTime = 0;
-			if (player.audioElement) {
-				player.audioElement.currentTime = 0;
-			}
+			queue.seek(0);
 		} else if (queue.hasPrevious) {
-			// go to previous track
 			queue.previous();
 		} else {
-			// restart from beginning
-			player.currentTime = 0;
-			if (player.audioElement) {
-				player.audioElement.currentTime = 0;
-			}
+			queue.seek(0);
 		}
 	}
 

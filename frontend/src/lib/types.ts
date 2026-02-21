@@ -141,3 +141,34 @@ export interface PlaylistWithTracks extends Playlist {
 	tracks: Track[];
 }
 
+export interface JamInfo {
+	id: string;
+	code: string;
+	name: string | null;
+	host_did: string;
+	state: JamPlaybackState;
+	revision: number;
+	is_active: boolean;
+	created_at: string;
+	updated_at: string;
+	ended_at: string | null;
+	tracks: Track[];
+	participants: JamParticipant[];
+}
+
+export interface JamParticipant {
+	did: string;
+	handle: string;
+	display_name?: string;
+	avatar_url?: string;
+}
+
+export interface JamPlaybackState {
+	track_ids: string[];
+	current_index: number;
+	current_track_id: string | null;
+	is_playing: boolean;
+	progress_ms: number;
+	server_time_ms: number;
+}
+

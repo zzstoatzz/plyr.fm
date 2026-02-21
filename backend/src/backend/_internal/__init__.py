@@ -40,6 +40,7 @@ from backend._internal.auth import (
     update_session_tokens,
 )
 from backend._internal.constellation import get_like_count_safe
+from backend._internal.jams import jam_service
 from backend._internal.feature_flags import (
     KNOWN_FLAGS,
     disable_flag,
@@ -81,6 +82,7 @@ __all__ = [
     "get_supported_artists",
     "handle_oauth_callback",
     "has_flag",
+    "jam_service",
     "list_developer_tokens",
     "notification_service",
     "now_playing_service",
