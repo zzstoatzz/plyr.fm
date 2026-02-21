@@ -178,6 +178,7 @@ class Queue {
 	async fetchQueue(force = false) {
 		if (!browser) return;
 		if (!this.isAuthenticated()) return; // skip if not authenticated
+		if (this.jamBridge) return; // jam owns the queue state
 
 		// while we have unsent or in-flight local changes, skip non-forced fetches
 		if (
@@ -215,6 +216,9 @@ class Queue {
 			if (this.revision !== null && data.revision < this.revision) {
 				return;
 			}
+
+			// jam may have activated while fetch was in flight
+			if (this.jamBridge) return;
 
 			this.revision = data.revision;
 			this.etag = newEtag;
@@ -333,6 +337,7 @@ class Queue {
 	async pushQueue(): Promise<boolean> {
 		if (!browser) return false;
 		if (!this.isAuthenticated()) return false; // skip if not authenticated
+		if (this.jamBridge) return false; // jam owns the queue state
 
 		if (this.syncInProgress) {
 			this.pendingSync = true;
