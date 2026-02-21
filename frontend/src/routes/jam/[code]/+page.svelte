@@ -11,13 +11,13 @@
 	let error = $state<string | null>(null);
 
 	onMount(async () => {
-		const ok = await jam.join(data.code);
-		if (ok) {
+		const result = await jam.join(data.code);
+		if (result === true) {
 			// SvelteKit navigation preserves runtime — jam state survives
 			goto('/');
 		} else {
-			error = 'could not join jam — it may have ended or the code is invalid';
-			toast.error('failed to join jam');
+			error = result;
+			toast.error(result);
 		}
 	});
 </script>

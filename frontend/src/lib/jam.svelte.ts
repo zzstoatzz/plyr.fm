@@ -93,8 +93,8 @@ class JamState {
 		}
 	}
 
-	async join(code: string): Promise<boolean> {
-		if (!browser) return false;
+	async join(code: string): Promise<string | true> {
+		if (!browser) return 'not available';
 
 		try {
 			const response = await fetch(`${API_URL}/jams/${code}/join`, {
@@ -102,7 +102,10 @@ class JamState {
 				credentials: 'include'
 			});
 
-			if (!response.ok) return false;
+			if (!response.ok) {
+				const body = await response.json().catch(() => null);
+				return body?.detail ?? 'could not join jam';
+			}
 
 			const data: JamInfo = await response.json();
 			this.applyJamData(data);
@@ -112,7 +115,7 @@ class JamState {
 			return true;
 		} catch (error) {
 			console.error('failed to join jam:', error);
-			return false;
+			return 'could not join jam';
 		}
 	}
 
