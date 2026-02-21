@@ -248,8 +248,17 @@ class JamState {
 			}
 		};
 
-		this.ws.onclose = () => {
+		this.ws.onclose = (event) => {
 			this.connected = false;
+			// terminal codes: server rejected us, don't retry
+			if (event.code === 4003 || event.code === 4010) {
+				this.closeWs();
+				this.reset();
+				queue.setJamBridge(null);
+				queue.startPositionSave();
+				queue.fetchQueue();
+				return;
+			}
 			if (this.active) {
 				this.scheduleReconnect(code);
 			}
@@ -337,9 +346,13 @@ class JamState {
 		this.syncToQueue();
 	}
 
-	private handleParticipantMessage(_data: Record<string, unknown>): void {
-		// re-fetch participants from next state message
-		// for now just log it — the sync messages include participants
+	private async handleParticipantMessage(_data: Record<string, unknown>): Promise<void> {
+		// participant events only carry DID — fetch full list with metadata
+		if (!this.jam) return;
+		const fresh = await this.fetchJam(this.jam.code);
+		if (fresh) {
+			this.participants = fresh.participants ?? [];
+		}
 	}
 
 	// ── state management ───────────────────────────────────────────
