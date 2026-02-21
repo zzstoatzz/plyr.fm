@@ -115,6 +115,8 @@ the queue is the single integration point for all playback mutations. no `if (ja
 
 `jam.svelte.ts` registers a `JamBridge` with the queue on create/join, unregisters on leave/destroy. queue methods check the bridge first — if set, route through WebSocket; if not, do normal local mutation.
 
+**read-path sync**: when jam state arrives via WebSocket, `jam.svelte.ts` pushes `tracks` and `currentIndex` into the queue. this makes queue getters (`hasNext`, `hasPrevious`, `upNext`, `currentTrack`) reflect jam state, so controls and end-of-track logic work correctly without jam-awareness.
+
 see `jams-queue-integration.md` for design rationale.
 
 ### bridged queue methods
@@ -167,22 +169,16 @@ when a jam is active, the queue panel shows:
 - **auto-leave**: creating or joining a new jam auto-leaves any previous jam
 - **reconnect**: exponential backoff (1s → 30s), sync from last stream ID, drift correction
 - **page refresh**: layout detects active jam via `GET /jams/active` and reconnects
-- **simultaneous commands**: server-authoritative, serialized via revision. no row locking (see known issues)
+- **simultaneous commands**: server-authoritative, serialized via `SELECT ... FOR UPDATE` row locking
 - **gated tracks**: each client resolves audio independently. non-supporters get toast + skip
 
 ## known issues and follow-ups
 
-### high priority
-
-- **no row locking on concurrent commands** — two participants sending commands simultaneously can race. server applies both without conflict detection. revision increments are not atomic with state reads.
-- **track metadata desync** — server events for `tracks_changed` include track objects, but these may be stale or missing if hydration fails. clients should handle missing track metadata gracefully.
-
 ### medium priority
 
 - **unbridged queue methods** — `moveTrack`, `toggleShuffle`, `clearUpNext` operate locally during jams, causing desync. need bridge methods or should be disabled during jams.
-- **WS endpoint doesn't check membership** — WebSocket accepts any authenticated user, not just jam participants. membership is only checked inside `handle_command`.
 - **`_auto_leave` cleanup** — leaves previous jams but doesn't close the old WebSocket or unregister the old bridge on the client side.
-- **no WebSocket tests** — 21 backend tests cover REST endpoints and command logic, but no tests for WebSocket connection, sync, or reconnection.
+- **no WebSocket tests** — 22 backend tests cover REST endpoints and command logic, but no tests for WebSocket connection, sync, or reconnection.
 
 ### nice to have
 
@@ -196,7 +192,7 @@ when a jam is active, the queue panel shows:
 | `backend/src/backend/models/jam.py` | Jam, JamParticipant SQLAlchemy models |
 | `backend/src/backend/_internal/jams.py` | JamService — commands, state management, Redis Streams |
 | `backend/src/backend/api/jams.py` | REST + WS endpoints, request/response models |
-| `backend/tests/api/test_jams.py` | 21 tests covering CRUD, commands, lifecycle |
+| `backend/tests/api/test_jams.py` | 22 tests covering CRUD, commands, lifecycle, auth |
 | `frontend/src/lib/jam.svelte.ts` | JamState singleton — WebSocket, bridge registration |
 | `frontend/src/lib/queue.svelte.ts` | JamBridge interface, bridge routing in queue methods |
 | `frontend/src/lib/components/Queue.svelte` | Jam UI (participants, share, leave, rainbow border) |

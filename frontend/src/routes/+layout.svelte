@@ -221,7 +221,7 @@
 		switch (event.key) {
 			case ' ': // space - play/pause
 				event.preventDefault();
-				player.togglePlayPause();
+				queue.togglePlayPause();
 				break;
 
 			case 'ArrowLeft': // seek backward
@@ -260,28 +260,18 @@
 		if (!player.audioElement || !player.duration) return;
 
 		const newTime = Math.max(0, Math.min(player.duration, player.currentTime + seconds));
-		player.currentTime = newTime;
-		player.audioElement.currentTime = newTime;
+		queue.seek(newTime * 1000);
 	}
 
 	function handlePreviousTrack() {
 		const RESTART_THRESHOLD = 3; // restart if more than 3 seconds in
 
 		if (player.currentTime > RESTART_THRESHOLD) {
-			// restart current track
-			player.currentTime = 0;
-			if (player.audioElement) {
-				player.audioElement.currentTime = 0;
-			}
+			queue.seek(0);
 		} else if (queue.hasPrevious) {
-			// go to previous track
 			queue.previous();
 		} else {
-			// restart from beginning
-			player.currentTime = 0;
-			if (player.audioElement) {
-				player.audioElement.currentTime = 0;
-			}
+			queue.seek(0);
 		}
 	}
 

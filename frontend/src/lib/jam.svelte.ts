@@ -333,6 +333,8 @@ class JamState {
 		if (Array.isArray(data.participants)) {
 			this.participants = data.participants as JamParticipant[];
 		}
+
+		this.syncToQueue();
 	}
 
 	private handleParticipantMessage(_data: Record<string, unknown>): void {
@@ -354,6 +356,14 @@ class JamState {
 		this.isPlaying = state.is_playing;
 		this.progressMs = state.progress_ms;
 		this.serverTimeMs = state.server_time_ms;
+
+		this.syncToQueue();
+	}
+
+	/** push jam tracks/index into queue so read-path getters (hasNext, hasPrevious, etc.) work */
+	private syncToQueue(): void {
+		queue.tracks = this.tracks;
+		queue.currentIndex = this.currentIndex;
 	}
 
 	private reset(): void {

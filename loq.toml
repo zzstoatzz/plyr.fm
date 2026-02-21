@@ -70,6 +70,10 @@ path = "backend/tests/api/test_list_record_sync.py"
 max_lines = 554
 
 [[rules]]
+path = "backend/tests/api/test_jams.py"
+max_lines = 560
+
+[[rules]]
 path = "backend/tests/api/test_track_comments.py"
 max_lines = 517
 

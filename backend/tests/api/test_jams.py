@@ -498,3 +498,55 @@ async def test_command_set_index(test_app: FastAPI, db_session: AsyncSession) ->
         assert response.status_code == 200
         assert response.json()["state"]["current_index"] == 0
         assert response.json()["state"]["current_track_id"] == "t1"
+
+
+async def test_command_non_participant_rejected(
+    test_app: FastAPI, db_session: AsyncSession, second_user: str
+) -> None:
+    """test that non-participants cannot send commands."""
+    from backend._internal import require_auth
+
+    # create jam as host
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": ["t1", "t2"]})
+        code = create_response.json()["code"]
+
+    # switch to second user (NOT joined)
+    async def mock_joiner_auth() -> Session:
+        return MockSession(did=second_user)
+
+    app.dependency_overrides[require_auth] = mock_joiner_auth
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.post(f"/jams/{code}/command", json={"type": "next"})
+
+    # command should fail — not a participant
+    assert response.status_code == 400
+
+
+async def test_sequential_commands_get_distinct_revisions(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test that each command gets a distinct revision (verifies no clobbering)."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/jams/", json={"track_ids": ["t1", "t2", "t3"]}
+        )
+        code = create_response.json()["code"]
+        assert create_response.json()["revision"] == 1
+
+        # send two next commands back-to-back
+        r1 = await client.post(f"/jams/{code}/command", json={"type": "next"})
+        r2 = await client.post(f"/jams/{code}/command", json={"type": "next"})
+
+    assert r1.json()["revision"] == 2
+    assert r2.json()["revision"] == 3
+    # both advanced the index correctly
+    assert r1.json()["state"]["current_index"] == 1
+    assert r2.json()["state"]["current_index"] == 2

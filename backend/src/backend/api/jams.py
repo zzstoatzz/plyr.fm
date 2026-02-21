@@ -13,11 +13,13 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, has_flag, jam_service, require_auth
 from backend._internal.auth.session import get_session
 from backend.models import get_db
+from backend.models.jam import JamParticipant
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -234,6 +236,20 @@ async def jam_websocket(
         return
 
     jam_id = jam["id"]
+
+    # verify participant membership before accepting
+    async with db_session() as db:
+        result = await db.execute(
+            select(JamParticipant).where(
+                JamParticipant.jam_id == jam_id,
+                JamParticipant.did == session.did,
+                JamParticipant.left_at.is_(None),
+            )
+        )
+        if not result.scalar_one_or_none():
+            await ws.close(code=4003, reason="not a participant")
+            return
+
     await ws.accept()
 
     try:

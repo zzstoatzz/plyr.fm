@@ -256,7 +256,11 @@ class JamService:
     ) -> dict[str, Any] | None:
         """process a playback command: mutate state, publish event."""
         async with db_session() as db:
-            jam = await self._fetch_jam_by_id(db, jam_id)
+            # FOR UPDATE serializes concurrent commands on the same jam
+            result = await db.execute(
+                select(Jam).where(Jam.id == jam_id).with_for_update()
+            )
+            jam = result.scalar_one_or_none()
             if not jam or not jam.is_active:
                 return None
 
@@ -369,16 +373,16 @@ class JamService:
                 tracks = await self._hydrate_tracks(db, state.get("track_ids", []))
 
             # publish to Redis stream
-            await self._publish_event(
-                jam_id,
-                {
-                    "type": "state",
-                    "revision": jam.revision,
-                    "state": state,
-                    "tracks_changed": tracks_changed,
-                    "actor": {"did": did, "type": cmd_type},
-                },
-            )
+            event: dict[str, Any] = {
+                "type": "state",
+                "revision": jam.revision,
+                "state": state,
+                "tracks_changed": tracks_changed,
+                "actor": {"did": did, "type": cmd_type},
+            }
+            if tracks_changed and tracks:
+                event["tracks"] = tracks
+            await self._publish_event(jam_id, event)
 
             return {
                 "state": state,
