@@ -6,7 +6,7 @@
 	import { jam } from '$lib/jam.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { JAMS_FLAG } from '$lib/config';
-	import type { Track } from '$lib/types';
+	import type { Track, JamParticipant } from '$lib/types';
 
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
@@ -53,6 +53,11 @@
 		return tracks
 			.map((track, index) => ({ track, index }))
 			.filter(({ index }) => index > currentIdx);
+	});
+
+	const outputParticipant = $derived.by<JamParticipant | null>(() => {
+		if (!jam.active || !jam.outputDid) return null;
+		return jam.participants.find((p) => p.did === jam.outputDid) ?? null;
 	});
 
 	function handleTrackClick(index: number) {
@@ -162,9 +167,31 @@
 					<div class="jam-meta">
 						<span class="connection-dot" class:connected={jam.connected} class:reconnecting={jam.reconnecting}></span>
 						<span class="jam-code">{jam.code}</span>
+						{#if jam.outputClientId}
+							<span class="output-status">
+								{#if jam.isOutputDevice}
+									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+									playing here
+								{:else}
+									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+									{outputParticipant ? `playing on ${outputParticipant.display_name ?? outputParticipant.handle}` : 'playing elsewhere'}
+								{/if}
+							</span>
+						{:else}
+							<span class="output-status no-output">no output</span>
+						{/if}
 					</div>
 				</div>
 				<div class="queue-actions">
+					{#if !jam.isOutputDevice}
+						<button class="output-btn" onclick={() => jam.setOutput()} title="play audio on this device">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+								<path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+								<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+							</svg>
+						</button>
+					{/if}
 					<button class="share-btn" onclick={shareJam} title="share jam link">
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<circle cx="18" cy="5" r="3"></circle>
@@ -229,7 +256,7 @@
 		{#if jam.active && jam.participants.length > 0}
 			<div class="participants-strip">
 				{#each jam.participants as participant (participant.did)}
-					<div class="participant-chip" title={participant.display_name ?? participant.handle}>
+					<div class="participant-chip" class:is-output={participant.did === jam.outputDid} title={participant.display_name ?? participant.handle}>
 						{#if participant.avatar_url}
 							<img src={participant.avatar_url} alt="" class="participant-avatar" />
 						{:else}
@@ -237,6 +264,13 @@
 								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 									<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
 									<circle cx="12" cy="7" r="4"></circle>
+								</svg>
+							</div>
+						{/if}
+						{#if participant.did === jam.outputDid}
+							<div class="speaker-badge">
+								<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+									<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
 								</svg>
 							</div>
 						{/if}
@@ -464,6 +498,7 @@
 
 	.participant-chip {
 		flex-shrink: 0;
+		position: relative;
 	}
 
 	.participant-avatar {
@@ -835,5 +870,53 @@
 
 	.queue-tracks::-webkit-scrollbar-thumb:hover {
 		background: var(--border-emphasis);
+	}
+
+	.output-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+	}
+
+	.output-status.no-output {
+		color: var(--text-muted);
+	}
+
+	.output-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-tertiary);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.output-btn:hover {
+		color: var(--accent);
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.speaker-badge {
+		position: absolute;
+		bottom: -2px;
+		right: -2px;
+		width: 14px;
+		height: 14px;
+		border-radius: var(--radius-full);
+		background: var(--accent);
+		color: var(--bg-primary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: 1.5px solid var(--bg-primary);
 	}
 </style>

@@ -18,6 +18,9 @@ class JamState {
 	revision = $state(0);
 	connected = $state(false);
 	reconnecting = $state(false);
+	clientId = $state<string>('');
+	outputClientId = $state<string | null>(null);
+	outputDid = $state<string | null>(null);
 
 	private ws: WebSocket | null = null;
 	private lastStreamId: string | null = null;
@@ -25,6 +28,14 @@ class JamState {
 	private reconnectDelay = RECONNECT_BASE_MS;
 	private visibilityHandler: (() => void) | null = null;
 	private currentCode: string | null = null;
+
+	constructor() {
+		if (browser) {
+			this.clientId =
+				sessionStorage.getItem('jam_client_id') ?? crypto.randomUUID();
+			sessionStorage.setItem('jam_client_id', this.clientId);
+		}
+	}
 
 	get currentTrack(): Track | null {
 		if (this.tracks.length === 0) return null;
@@ -38,6 +49,10 @@ class JamState {
 
 	get code(): string | null {
 		return this.jam?.code ?? null;
+	}
+
+	get isOutputDevice(): boolean {
+		return this.clientId !== '' && this.clientId === this.outputClientId;
 	}
 
 	private createBridge(): JamBridge {
@@ -207,8 +222,18 @@ class JamState {
 		this.sendCommand({ type: 'set_index', index });
 	}
 
+	setOutput(): void {
+		this.sendCommand({ type: 'set_output', client_id: this.clientId });
+	}
+
 	private sendCommand(payload: Record<string, unknown>): void {
-		if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+		if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+			console.warn('[jam] command dropped — ws not open:', payload, {
+				ws: !!this.ws,
+				readyState: this.ws?.readyState
+			});
+			return;
+		}
 		this.ws.send(JSON.stringify({ type: 'command', payload }));
 	}
 
@@ -236,9 +261,13 @@ class JamState {
 		this.ws.onopen = () => {
 			this.connected = true;
 			this.reconnectDelay = RECONNECT_BASE_MS;
-			// request sync
+			// request sync with client identity
 			this.ws?.send(
-				JSON.stringify({ type: 'sync', last_id: this.lastStreamId })
+				JSON.stringify({
+					type: 'sync',
+					last_id: this.lastStreamId,
+					client_id: this.clientId
+				})
 			);
 		};
 
@@ -253,8 +282,10 @@ class JamState {
 
 		this.ws.onclose = (event) => {
 			this.connected = false;
+			console.warn('[jam] ws closed:', { code: event.code, reason: event.reason });
 			// terminal codes: server rejected us, don't retry
 			if (event.code === 4003 || event.code === 4010) {
+				console.warn('[jam] terminal close — leaving jam (code %d: %s)', event.code, event.reason);
 				this.closeWs();
 				this.reset();
 				queue.setJamBridge(null);
@@ -337,6 +368,8 @@ class JamState {
 		this.isPlaying = state.is_playing;
 		this.progressMs = state.progress_ms;
 		this.serverTimeMs = state.server_time_ms;
+		this.outputClientId = state.output_client_id ?? null;
+		this.outputDid = state.output_did ?? null;
 
 		if (data.tracks_changed && Array.isArray(data.tracks)) {
 			this.tracks = data.tracks as Track[];
@@ -372,6 +405,8 @@ class JamState {
 		this.isPlaying = state.is_playing;
 		this.progressMs = state.progress_ms;
 		this.serverTimeMs = state.server_time_ms;
+		this.outputClientId = state.output_client_id ?? null;
+		this.outputDid = state.output_did ?? null;
 
 		this.syncToQueue();
 	}
@@ -393,6 +428,8 @@ class JamState {
 		this.serverTimeMs = 0;
 		this.revision = 0;
 		this.lastStreamId = null;
+		this.outputClientId = null;
+		this.outputDid = null;
 	}
 
 	destroy(): void {

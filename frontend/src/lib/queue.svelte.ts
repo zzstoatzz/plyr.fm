@@ -435,17 +435,18 @@ class Queue {
 	play(): void {
 		if (this.jamBridge) {
 			this.jamBridge.play();
-		} else {
-			player.paused = false;
 		}
+		// always set synchronously — in jam mode this ensures audioElement.play()
+		// fires within the user gesture context (non-output devices are gated in
+		// Player.svelte's paused-state-sync effect)
+		player.paused = false;
 	}
 
 	pause(): void {
 		if (this.jamBridge) {
 			this.jamBridge.pause();
-		} else {
-			player.paused = true;
 		}
+		player.paused = true;
 	}
 
 	togglePlayPause(): void {
@@ -538,7 +539,10 @@ class Queue {
 	}
 
 	next() {
-		if (this.tracks.length === 0) return;
+		if (this.tracks.length === 0) {
+			console.warn('[queue.next] tracks empty, bailing');
+			return;
+		}
 
 		if (this.jamBridge) {
 			this.jamBridge.next();

@@ -45,6 +45,8 @@ def _empty_state() -> dict[str, Any]:
         "is_playing": False,
         "progress_ms": 0,
         "server_time_ms": int(time.time() * 1000),
+        "output_client_id": None,
+        "output_did": None,
     }
 
 
@@ -54,6 +56,7 @@ class JamService:
     def __init__(self) -> None:
         self._connections: dict[str, set[WebSocket]] = {}
         self._ws_by_did: dict[str, tuple[str, WebSocket]] = {}  # did → (jam_id, ws)
+        self._ws_client_ids: dict[WebSocket, str] = {}  # ws → client_id
         self._reader_tasks: dict[str, asyncio.Task] = {}
 
     async def setup(self) -> None:
@@ -70,6 +73,7 @@ class JamService:
                 await task
         self._reader_tasks.clear()
         self._connections.clear()
+        self._ws_client_ids.clear()
 
     # ── jam lifecycle ──────────────────────────────────────────────
 
@@ -172,6 +176,13 @@ class JamService:
 
     async def leave_jam(self, jam_id: str, did: str) -> bool:
         """leave a jam. if last participant, end the jam."""
+        # check if leaving user is the output device
+        if entry := self._ws_by_did.get(did):
+            if entry[0] == jam_id:
+                ws = entry[1]
+                if client_id := self._ws_client_ids.get(ws):
+                    await self._clear_output_if_matches(jam_id, client_id)
+
         async with db_session() as db:
             # mark participant as left
             cursor = await db.execute(
@@ -355,6 +366,23 @@ class JamService:
                     state["current_track_id"] = (
                         track_ids[ci] if track_ids and ci < len(track_ids) else None
                     )
+            elif cmd_type == "set_output":
+                # validate: the client_id must belong to the sender's WS in THIS jam
+                requested_client_id = command.get("client_id")
+                entry = self._ws_by_did.get(did)
+                if entry and requested_client_id and entry[0] == jam_id:
+                    sender_ws = entry[1]
+                    actual_client_id = self._ws_client_ids.get(sender_ws)
+                    if actual_client_id == requested_client_id:
+                        state["output_client_id"] = requested_client_id
+                        state["output_did"] = did
+                    else:
+                        logger.warning(
+                            "set_output rejected: client_id mismatch for %s", did
+                        )
+                        return None
+                else:
+                    return None
             else:
                 logger.warning("unknown jam command type: %s", cmd_type)
                 return None
@@ -413,6 +441,11 @@ class JamService:
 
     async def disconnect_ws(self, jam_id: str, ws: WebSocket) -> None:
         """unregister a WebSocket connection."""
+        # check if disconnecting WS was the output device
+        disconnecting_client_id = self._ws_client_ids.pop(ws, None)
+        if disconnecting_client_id:
+            await self._clear_output_if_matches(jam_id, disconnecting_client_id)
+
         # clean up did tracking
         dids_to_remove = [
             did
@@ -440,10 +473,42 @@ class JamService:
         if not entry:
             return
         old_jam_id, old_ws = entry
+        # clear output BEFORE removing client_id — disconnect_ws won't be able
+        # to find the mapping after we pop it
+        if client_id := self._ws_client_ids.pop(old_ws, None):
+            await self._clear_output_if_matches(old_jam_id, client_id)
         if old_jam_id in self._connections:
             self._connections[old_jam_id].discard(old_ws)
         with contextlib.suppress(Exception):
             await old_ws.close(code=4010, reason="replaced by new connection")
+
+    async def _clear_output_if_matches(self, jam_id: str, client_id: str) -> None:
+        """clear output_client_id and pause if it matches the given client_id."""
+        async with db_session() as db:
+            jam = await self._fetch_jam_by_id(db, jam_id)
+            if not jam or not jam.is_active:
+                return
+            if jam.state.get("output_client_id") != client_id:
+                return
+            state = dict(jam.state)
+            state["output_client_id"] = None
+            state["output_did"] = None
+            state["is_playing"] = False
+            jam.state = state
+            jam.revision += 1
+            jam.updated_at = datetime.now(UTC)
+            await db.commit()
+            await db.refresh(jam)
+            await self._publish_event(
+                jam_id,
+                {
+                    "type": "state",
+                    "revision": jam.revision,
+                    "state": state,
+                    "tracks_changed": False,
+                    "actor": {"did": "system", "type": "output_disconnected"},
+                },
+            )
 
     async def handle_ws_message(
         self, jam_id: str, did: str, message: dict[str, Any], ws: WebSocket
@@ -469,6 +534,38 @@ class JamService:
         self, jam_id: str, did: str, message: dict[str, Any], ws: WebSocket
     ) -> None:
         """handle sync/reconnect request from a client."""
+        # store client_id from sync message
+        if client_id := message.get("client_id"):
+            self._ws_client_ids[ws] = client_id
+
+            # auto-set output to host on first connect if no output set
+            async with db_session() as db:
+                jam = await self._fetch_jam_by_id(db, jam_id)
+                if (
+                    jam
+                    and jam.is_active
+                    and jam.state.get("output_client_id") is None
+                    and did == jam.host_did
+                ):
+                    state = dict(jam.state)
+                    state["output_client_id"] = client_id
+                    state["output_did"] = did
+                    jam.state = state
+                    jam.revision += 1
+                    jam.updated_at = datetime.now(UTC)
+                    await db.commit()
+                    await db.refresh(jam)
+                    await self._publish_event(
+                        jam_id,
+                        {
+                            "type": "state",
+                            "revision": jam.revision,
+                            "state": state,
+                            "tracks_changed": False,
+                            "actor": {"did": "system", "type": "auto_output"},
+                        },
+                    )
+
         last_id = message.get("last_id")
 
         if not last_id:
