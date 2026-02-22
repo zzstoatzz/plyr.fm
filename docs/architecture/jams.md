@@ -10,9 +10,23 @@ a jam is "your queue, but shared." the queue panel becomes the jam UI. there's n
 
 ## playback model
 
-each client plays audio independently on its own device. the server owns the authoritative state (what track, what position, playing or paused), and clients sync to it.
+**single-output device.** one participant's browser plays audio; everyone else is a remote control. the server tracks `output_client_id` (a per-tab UUID stored in `sessionStorage`) and `output_did` in jam state. only the output device loads audio into `<audio>` and drives playback. non-output clients see the full player UI, send commands, and receive state updates — they just don't produce sound.
 
-**sync is command-driven, not continuous.** the server broadcasts state only when someone does something — play, pause, seek, skip, add a track. between commands, each client free-runs its own audio element. clients may drift apart during uninterrupted playback and that's intentional. the next command re-syncs everyone.
+### output lifecycle
+
+1. **create**: `output_client_id` starts as `null`
+2. **host's first WS sync**: server auto-sets `output_client_id` to the host's `client_id` (zero-friction default)
+3. **set_output command**: any participant can claim output for their own device
+4. **output disconnects**: if the output device's WS drops (tab close, refresh), server clears `output_client_id` and pauses playback
+5. **output leaves jam**: same as disconnect — clear and pause
+
+### identity
+
+each browser tab generates a `client_id` (UUID in `sessionStorage`), sent in the WS sync message. server stores `ws → client_id` mapping. this is distinct from `did` (account identity) — `client_id` identifies the device/tab.
+
+### sync model
+
+**sync is command-driven, not continuous.** the server broadcasts state only when someone does something — play, pause, seek, skip, add a track. between commands, the output device free-runs its own audio element.
 
 position interpolation: server stores a snapshot `{progress_ms, server_time_ms, is_playing}` on each state transition. clients compute current position as:
 
@@ -21,7 +35,9 @@ if playing:  progress_ms + (Date.now() - server_time_ms)
 if paused:   progress_ms
 ```
 
-drift correction: if a client's audio element is >2 seconds off from the interpolated server position, it seeks. this only fires when new state arrives via WebSocket, not every frame.
+drift correction (output device only): if the audio element is >2 seconds off from the interpolated server position, it seeks. this only fires when new state arrives via WebSocket, not every frame.
+
+non-output clients: interpolate progress from jam state for the seek bar display (interval-based, every 250ms). no audio loaded.
 
 ## data model
 
@@ -40,7 +56,9 @@ drift correction: if a client's audio element is >2 seconds off from the interpo
   "current_track_id": "abc",
   "is_playing": true,
   "progress_ms": 12500,
-  "server_time_ms": 1708000000000
+  "server_time_ms": 1708000000000,
+  "output_client_id": "a1b2c3d4-...",
+  "output_did": "did:plc:..."
 }
 ```
 
@@ -52,7 +70,7 @@ each jam has a stream `jam:{id}:events` (MAXLEN ~1000). backend instances run `X
 
 ## commands
 
-all 9 commands are server-authoritative. clients send requests via WebSocket, server applies them, increments revision, broadcasts result.
+all 10 commands are server-authoritative. clients send requests via WebSocket, server applies them, increments revision, broadcasts result.
 
 | command | behavior |
 |---------|----------|
@@ -65,11 +83,12 @@ all 9 commands are server-authoritative. clients send requests via WebSocket, se
 | `play_track` | insert track after current, jump to it, auto-play |
 | `set_index` | jump to specific track index |
 | `remove_track` | remove track, adjust `current_index` if needed |
+| `set_output` | set `output_client_id` to sender's client_id (validated server-side) |
 
 ## WebSocket protocol
 
 client → server:
-- `{type: "sync", last_id: string | null}` — initial sync / reconnect
+- `{type: "sync", last_id: string | null, client_id: string}` — initial sync / reconnect (client_id identifies this tab)
 - `{type: "command", payload: {type: "play" | "pause" | "seek" | ..., ...}}` — playback commands
 - `{type: "ping"}` — heartbeat
 
@@ -133,12 +152,14 @@ these operate on local queue state only. using them during a jam will desync.
 
 ### Player.svelte effects
 
-Player.svelte still imports `jam` directly for incoming state sync. four jam-related effects:
+Player.svelte still imports `jam` directly for incoming state sync. key jam-related effects:
 
-1. **track sync** — when `jam.active && jam.currentTrack`, drives player track loading from jam state instead of queue
-2. **pause sync** — watches `jam.isPlaying`, sets `player.paused` accordingly. uses `untrack()` to avoid running every frame
-3. **drift correction** — watches `jam.interpolatedProgressMs`, seeks if audio element is >2s off. uses `untrack()`
-4. **position save skip** — when `jam.active`, skips saving playback position to server (jam owns it)
+1. **paused-state-sync** — gates on `jam.isOutputDevice`; only the output device calls `audioElement.play()`/`.pause()`. non-output clients' audio stays silent
+2. **track sync** — when `jam.active && jam.currentTrack`, drives player track loading from jam state instead of queue. sets `shouldAutoPlay` gated on `jam.isOutputDevice`
+3. **play/pause sync** — watches `jam.isPlaying`, sets `player.paused` accordingly. reads `isLoadingTrack` outside `untrack()` so it re-runs after loading
+4. **drift correction** — output device only. watches `jam.interpolatedProgressMs`, seeks if audio element is >2s off
+5. **non-output progress** — non-output clients interpolate progress bar from jam state (250ms interval)
+6. **position save skip** — when `jam.active`, skips saving playback position to server (jam owns it)
 
 ### join flow
 
@@ -170,7 +191,8 @@ when a jam is active, the queue panel shows:
 - **reconnect**: exponential backoff (1s → 30s), sync from last stream ID, drift correction
 - **page refresh**: layout detects active jam via `GET /jams/active` and reconnects
 - **simultaneous commands**: server-authoritative, serialized via `SELECT ... FOR UPDATE` row locking
-- **gated tracks**: each client resolves audio independently. non-supporters get toast + skip
+- **gated tracks**: output device resolves audio. non-supporters get toast + skip
+- **output device refresh**: old WS closes → server clears output + pauses. new WS connects → auto-set restores output to host
 
 ## known issues and follow-ups
 
@@ -192,7 +214,7 @@ when a jam is active, the queue panel shows:
 | `backend/src/backend/models/jam.py` | Jam, JamParticipant SQLAlchemy models |
 | `backend/src/backend/_internal/jams.py` | JamService — commands, state management, Redis Streams |
 | `backend/src/backend/api/jams.py` | REST + WS endpoints, request/response models |
-| `backend/tests/api/test_jams.py` | 23 tests covering CRUD, commands, lifecycle, auth, DID socket replacement |
+| `backend/tests/api/test_jams.py` | tests covering CRUD, commands, lifecycle, auth, DID socket replacement, output device |
 | `frontend/src/lib/jam.svelte.ts` | JamState singleton — WebSocket, bridge registration |
 | `frontend/src/lib/queue.svelte.ts` | JamBridge interface, bridge routing in queue methods |
 | `frontend/src/lib/components/Queue.svelte` | Jam UI (participants, share, leave, rainbow border) |

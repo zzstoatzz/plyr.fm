@@ -444,15 +444,21 @@
 		}
 	});
 
-	// sync paused state with audio element
+	// sync paused state with audio element (output device only — non-output stays silent)
 	$effect(() => {
 		if (!player.audioElement || isLoadingTrack) return;
+
+		// non-output jam clients: always pause audio (handles output transfer)
+		if (jam.active && !jam.isOutputDevice) {
+			player.audioElement.pause();
+			return;
+		}
 
 		if (player.paused) {
 			player.audioElement.pause();
 		} else {
-			player.audioElement.play().catch(err => {
-				console.error('playback failed:', err);
+			player.audioElement.play().catch((err) => {
+				console.error('[player] playback failed:', err.name, err.message);
 				player.paused = true;
 			});
 		}
@@ -468,7 +474,7 @@
 			const trackChanged = jam.currentTrack.id !== player.currentTrack?.id;
 			if (trackChanged) {
 				player.currentTrack = jam.currentTrack;
-				shouldAutoPlay = jam.isPlaying;
+				shouldAutoPlay = jam.isPlaying && jam.isOutputDevice;
 			}
 			return;
 		}
@@ -500,28 +506,38 @@
 	// auto-play when track finishes loading
 	$effect(() => {
 		if (shouldAutoPlay && !isLoadingTrack) {
+			// if jam paused while track was loading, respect that
+			if (jam.active && !jam.isPlaying) {
+				shouldAutoPlay = false;
+				return;
+			}
 			player.paused = false;
 			shouldAutoPlay = false;
 		}
 	});
 
-	// sync play/pause from jam state (any participant can play/pause)
-	// only runs when jam play state changes (from WS messages)
+	// sync play/pause from jam state (all participants — UI reflects jam state)
+	// audio element gating is handled separately above
+	// NOTE: isLoadingTrack must be tracked (outside untrack) so this re-runs after loading
 	$effect(() => {
 		if (!jam.active) return;
 		const jamPlaying = jam.isPlaying;
 		const jamTrackId = jam.currentTrack?.id;
+		const loading = isLoadingTrack;
 		untrack(() => {
-			if (isLoadingTrack) return;
+			// if paused while loading, cancel pending auto-play so it doesn't override
+			if (!jamPlaying) shouldAutoPlay = false;
+			if (loading) return;
 			if (!jamTrackId || jamTrackId !== player.currentTrack?.id) return;
 			player.paused = !jamPlaying;
 		});
 	});
 
-	// jam drift correction: seek if >2s off from server
+	// jam drift correction: seek if >2s off from server (output device only)
 	// only runs when jam state changes (progressMs/serverTimeMs from WS), not every frame
 	$effect(() => {
 		if (!jam.active) return;
+		if (!jam.isOutputDevice) return;
 		// track jam state as dependencies (these change on WS messages)
 		const serverPos = jam.interpolatedProgressMs / 1000;
 		const jamTrackId = jam.currentTrack?.id;
@@ -534,6 +550,26 @@
 				player.audioElement.currentTime = serverPos;
 			}
 		});
+	});
+
+	// non-output jam clients: sync progress bar from jam state
+	// seeks the (paused, silent) audio element so PlaybackControls' rAF picks it up
+	$effect(() => {
+		if (!jam.active || jam.isOutputDevice) return;
+		if (!player.audioElement) return;
+		// snap position on state changes (pause, seek, track change)
+		const pos = jam.interpolatedProgressMs / 1000;
+		if (player.audioElement.readyState >= 1) {
+			player.audioElement.currentTime = pos;
+		}
+		if (!jam.isPlaying) return;
+		// while playing, smoothly interpolate between state updates
+		const interval = window.setInterval(() => {
+			if (player.audioElement && player.audioElement.readyState >= 1) {
+				player.audioElement.currentTime = jam.interpolatedProgressMs / 1000;
+			}
+		}, 250);
+		return () => window.clearInterval(interval);
 	});
 
 	function handleTrackEnded() {
@@ -555,16 +591,31 @@
 </script>
 
 {#if player.currentTrack}
-	<div class="player">
+	<div class="player" class:jam-active={jam.active}>
 		<audio
 			bind:this={player.audioElement}
 			bind:currentTime={player.currentTime}
 			bind:duration={player.duration}
 			bind:volume={player.volume}
-			onplay={() => player.paused = false}
-			onpause={() => player.paused = true}
+			onplay={() => { if (!jam.active) player.paused = false; }}
+			onpause={() => { if (!jam.active) player.paused = true; }}
 			onended={handleTrackEnded}
 		></audio>
+
+		{#if jam.active}
+			<div class="jam-stripe-label">
+				<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>{#if jam.isOutputDevice}<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>{/if}</svg>
+				{#if jam.isOutputDevice}
+					playing here
+				{:else if jam.outputClientId}
+					playing elsewhere
+					<button class="play-here-pill" onclick={() => jam.setOutput()}>play here</button>
+				{:else}
+					<span class="muted">no output</span>
+					<button class="play-here-pill" onclick={() => jam.setOutput()}>play here</button>
+				{/if}
+			</div>
+		{/if}
 
 		<div class="player-content">
 			<TrackInfo
@@ -609,6 +660,54 @@
 			grid-template-columns: minmax(160px, 360px) minmax(0, 1fr);
 			gap: 1rem;
 		}
+	}
+
+	.player.jam-active {
+		border-top: 2px solid transparent;
+		border-image: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6, #ff6b6b) 1;
+		border-image-width: 2px 0 0 0;
+	}
+
+	.jam-stripe-label {
+		position: absolute;
+		top: 0;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		background: var(--glass-bg, var(--bg-tertiary));
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-full);
+		padding: 0.1rem 0.5rem;
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+		white-space: nowrap;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		z-index: 1;
+		backdrop-filter: var(--glass-blur, none);
+		-webkit-backdrop-filter: var(--glass-blur, none);
+	}
+
+	.jam-stripe-label .muted {
+		color: var(--text-muted);
+	}
+
+	.play-here-pill {
+		padding: 0 0.375rem;
+		font-size: var(--text-xs);
+		font-family: inherit;
+		background: transparent;
+		border: none;
+		border-left: 1px solid var(--border-subtle);
+		color: var(--text-tertiary);
+		cursor: pointer;
+		transition: color 0.15s ease;
+		margin-left: 0.125rem;
+		padding-left: 0.375rem;
+	}
+
+	.play-here-pill:hover {
+		color: var(--accent);
 	}
 
 	@media (max-width: 768px) {

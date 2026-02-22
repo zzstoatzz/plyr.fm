@@ -170,5 +170,7 @@ export interface JamPlaybackState {
 	is_playing: boolean;
 	progress_ms: number;
 	server_time_ms: number;
+	output_client_id?: string | null;
+	output_did?: string | null;
 }
 
