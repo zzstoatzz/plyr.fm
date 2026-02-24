@@ -1,0 +1,19 @@
+app = "plyr-osprey"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# no HTTP service — this is a worker that reads from Redis streams
+[processes]
+  worker = "osprey-cli run-rules-sink --no-pooled"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "256mb"
+
+[env]
+  OSPREY_INPUT_STREAM_SOURCE = "plugin"
+  OSPREY_STDOUT_OUTPUT_SINK = "True"
+  OSPREY_RULES_PATH = "/app/rules"

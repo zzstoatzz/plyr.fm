@@ -1,0 +1,19 @@
+# osprey rules engine workflows
+
+# run the osprey worker locally
+run:
+    OSPREY_INPUT_STREAM_SOURCE=plugin \
+    OSPREY_STDOUT_OUTPUT_SINK=True \
+    OSPREY_RULES_PATH=rules \
+    uv run osprey-cli run-rules-sink --no-pooled
+
+# deploy to fly.io
+deploy:
+    fly deploy
+
+# validate SML rules (parse without executing)
+check:
+    OSPREY_INPUT_STREAM_SOURCE=synthetic \
+    OSPREY_STDOUT_OUTPUT_SINK=True \
+    OSPREY_RULES_PATH=rules \
+    uv run python -c "from osprey.worker.lib.osprey_engine import OspreyEngine; OspreyEngine('rules'); print('rules OK')"
