@@ -1,6 +1,6 @@
 """OAuth scope parsing and validation using atproto_oauth.scopes."""
 
-from atproto_oauth.scopes import ScopesSet
+from atproto_oauth.scopes import RepoPermission, ScopesSet
 
 
 def check_scope_coverage(granted_scope: str, required_scope: str) -> bool:
@@ -22,8 +22,6 @@ def check_scope_coverage(granted_scope: str, required_scope: str) -> bool:
 
         # for repo scopes, parse and check semantic matching
         if token.startswith("repo"):
-            from atproto_oauth.scopes import RepoPermission
-
             if (req := RepoPermission.from_string(token)) is not None:
                 for coll in req.collection:
                     for action in req.action:
@@ -31,18 +29,7 @@ def check_scope_coverage(granted_scope: str, required_scope: str) -> bool:
                             return False
                 continue
 
-        # for blob scopes, check semantic matching
-        if token.startswith("blob"):
-            from atproto_oauth.scopes import BlobPermission
-
-            if (req := BlobPermission.from_string(token)) is not None:
-                # blob scopes don't have a clean "covers" semantic for patterns,
-                # so fall back to exact scope presence or string match
-                if granted.has(token) or granted.has(str(req)):
-                    continue
-                return False
-
-        # for other scopes, check exact presence
+        # for other scopes (blob, include, transition, etc.), check exact presence
         if not granted.has(token):
             return False
 
@@ -59,8 +46,6 @@ def get_missing_scopes(granted_scope: str, required_scope: str) -> set[str]:
             continue
 
         if token.startswith("repo"):
-            from atproto_oauth.scopes import RepoPermission
-
             if (req := RepoPermission.from_string(token)) is not None:
                 for coll in req.collection:
                     for action in req.action:

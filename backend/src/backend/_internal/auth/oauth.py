@@ -13,6 +13,7 @@ from atproto_oauth.client import (
 )
 from atproto_oauth.dpop import DPoPManager
 from atproto_oauth.pkce import PKCEManager
+from atproto_oauth.scopes import ScopesSet
 from atproto_oauth.stores.memory import MemorySessionStore
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
@@ -157,7 +158,10 @@ def get_oauth_client_for_scope(scope: str) -> OAuthClient:
 
     used during callback to match the scope that was used during authorization.
     """
-    include_teal = settings.teal.play_collection in scope
+    scopes = ScopesSet.from_string(scope)
+    include_teal = scopes.matches(
+        "repo", collection=settings.teal.play_collection, action="create"
+    )
     return get_oauth_client(include_teal=include_teal)
 
 
