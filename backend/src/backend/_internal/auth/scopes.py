@@ -1,6 +1,21 @@
 """OAuth scope parsing and validation using atproto_oauth.scopes."""
 
-from atproto_oauth.scopes import RepoPermission, ScopesSet
+from atproto_oauth.scopes import IncludeScope, RepoPermission, ScopesSet
+
+
+def _include_covered_by_granted(inc: IncludeScope, granted: ScopesSet) -> bool:
+    """check if an include: scope is covered by the granted set.
+
+    PDS servers expand ``include:ns.permSet`` into granular ``repo:``/``rpc:``
+    scopes, so the granted set will never contain the literal ``include:`` token.
+    instead, check that the granted set has at least one repo or rpc scope whose
+    collection/lxm is in the same namespace authority as the include scope.
+    """
+    for scope_str in granted:
+        if (rp := RepoPermission.from_string(scope_str)) is not None:
+            if any(inc.is_parent_authority_of(c) for c in rp.collection if c != "*"):
+                return True
+    return False
 
 
 def check_scope_coverage(granted_scope: str, required_scope: str) -> bool:
@@ -29,7 +44,16 @@ def check_scope_coverage(granted_scope: str, required_scope: str) -> bool:
                             return False
                 continue
 
-        # for other scopes (blob, include, transition, etc.), check exact presence
+        # include: scopes get expanded by the PDS into repo:/rpc: scopes,
+        # so the granted set won't contain the literal include: token.
+        # check namespace authority instead.
+        if token.startswith("include:"):
+            if (inc := IncludeScope.from_string(token)) is not None:
+                if _include_covered_by_granted(inc, granted):
+                    continue
+                return False
+
+        # for other scopes (blob, transition, etc.), check exact presence
         if not granted.has(token):
             return False
 
@@ -51,6 +75,12 @@ def get_missing_scopes(granted_scope: str, required_scope: str) -> set[str]:
                     for action in req.action:
                         if not granted.matches("repo", collection=coll, action=action):
                             missing.add(token)
+                continue
+
+        if token.startswith("include:"):
+            if (inc := IncludeScope.from_string(token)) is not None:
+                if not _include_covered_by_granted(inc, granted):
+                    missing.add(token)
                 continue
 
         if not granted.has(token):

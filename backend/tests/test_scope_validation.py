@@ -55,6 +55,25 @@ class TestCheckScopeCoverage:
         required = "atproto blob:*/*"
         assert check_scope_coverage(granted, required) is True
 
+    def test_include_covered_by_expanded_repo_scopes(self):
+        """PDS expands include: into repo: scopes — should still pass."""
+        granted = "atproto blob:*/* repo:fm.plyr.stg.track repo:fm.plyr.stg.like repo:fm.plyr.stg.comment repo:fm.plyr.stg.list repo:fm.plyr.stg.profile"
+        required = "atproto blob:*/* include:fm.plyr.stg.authFullApp"
+        assert check_scope_coverage(granted, required) is True
+
+    def test_include_not_covered_by_wrong_namespace(self):
+        """include: should fail if granted scopes are from a different namespace."""
+        granted = "atproto blob:*/* repo:fm.other.track"
+        required = "atproto blob:*/* include:fm.plyr.stg.authFullApp"
+        assert check_scope_coverage(granted, required) is False
+
+    def test_include_missing_shows_in_get_missing(self):
+        """get_missing_scopes should report include: as missing when not covered."""
+        granted = "atproto blob:*/* repo:fm.other.track"
+        required = "atproto blob:*/* include:fm.plyr.stg.authFullApp"
+        result = get_missing_scopes(granted, required)
+        assert result == {"include:fm.plyr.stg.authFullApp"}
+
 
 class TestGetMissingScopes:
     """tests for get_missing_scopes."""
