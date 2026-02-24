@@ -1,6 +1,8 @@
 """moderation service integration for copyright scanning."""
 
+import json
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 import logfire
@@ -12,8 +14,11 @@ from backend._internal.notifications import notification_service
 from backend.config import settings
 from backend.models import CopyrightScan, Track
 from backend.utilities.database import db_session
+from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
+
+MODERATION_STREAM_KEY = "moderation:actions"
 
 
 async def scan_track_for_copyright(track_id: int, audio_url: str) -> None:
@@ -81,20 +86,37 @@ async def _store_scan_result(track_id: int, result: Any) -> None:
             match_count=len(scan.matches),
         )
 
+        # load track for notification + event publishing
+        track = await db.scalar(
+            select(Track).options(joinedload(Track.artist)).where(Track.id == track_id)
+        )
+
         # notify admin only — never DM the artist
-        if result.is_flagged:
-            track = await db.scalar(
-                select(Track)
-                .options(joinedload(Track.artist))
-                .where(Track.id == track_id)
+        if result.is_flagged and track and track.artist:
+            await notification_service.send_copyright_flag_notification(
+                track_id=track_id,
+                track_title=track.title,
+                artist_handle=track.artist.handle,
+                matches=scan.matches,
             )
-            if track and track.artist:
-                await notification_service.send_copyright_flag_notification(
-                    track_id=track_id,
-                    track_title=track.title,
-                    artist_handle=track.artist.handle,
-                    matches=scan.matches,
-                )
+
+        # publish to moderation stream for Osprey rules engine
+        if track:
+            await _publish_moderation_event(
+                action_type="copyright_scan_completed",
+                track_id=track_id,
+                artist_did=track.artist.did if track.artist else None,
+                track_at_uri=track.atproto_record_uri,
+                scan={
+                    "highest_score": result.highest_score,
+                    "dominant_match_pct": result.raw_response.get(
+                        "dominant_match_pct", 0
+                    ),
+                    "match_count": len(result.matches),
+                    "dominant_match": result.raw_response.get("dominant_match"),
+                    "matches": result.matches,
+                },
+            )
 
 
 async def _store_scan_error(track_id: int, error: str) -> None:
@@ -114,6 +136,56 @@ async def _store_scan_error(track_id: int, error: str) -> None:
             "copyright scan error stored as clear",
             track_id=track_id,
             error=error,
+        )
+
+
+async def _publish_moderation_event(
+    action_type: str,
+    track_id: int | None = None,
+    artist_did: str | None = None,
+    track_at_uri: str | None = None,
+    scan: dict[str, Any] | None = None,
+) -> None:
+    """publish a moderation event to the Redis stream for Osprey.
+
+    events are published to the `moderation:actions` stream. the Osprey
+    worker reads from this stream and evaluates rules against the event data.
+
+    failures are logged but never block the caller — the existing moderation
+    pipeline continues to work regardless of whether Osprey is running.
+    """
+    try:
+        redis = get_async_redis_client()
+        payload: dict[str, Any] = {
+            "action_type": action_type,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+        if track_id is not None:
+            payload["track_id"] = track_id
+        if artist_did is not None:
+            payload["artist_did"] = artist_did
+        if track_at_uri is not None:
+            payload["track_at_uri"] = track_at_uri
+        if scan is not None:
+            payload["scan"] = scan
+
+        await redis.xadd(
+            MODERATION_STREAM_KEY,
+            {"payload": json.dumps(payload)},
+            maxlen=10000,
+            approximate=True,
+        )
+        logfire.debug(
+            "published moderation event",
+            action_type=action_type,
+            track_id=track_id,
+        )
+    except Exception:
+        logger.warning(
+            "failed to publish moderation event %s for track %s",
+            action_type,
+            track_id,
+            exc_info=True,
         )
 
 

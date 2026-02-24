@@ -3,6 +3,7 @@ mod frontend
 mod backend
 mod transcoder 'services/transcoder'
 mod moderation 'services/moderation'
+mod osprey 'services/osprey'
 
 
 # show available commands
