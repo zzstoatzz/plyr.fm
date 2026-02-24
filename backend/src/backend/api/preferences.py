@@ -69,8 +69,12 @@ def _has_teal_scope(session: Session) -> bool:
     """check if session has teal.fm scopes."""
     if not session.oauth_session:
         return False
-    scope = session.oauth_session.get("scope", "")
-    return settings.teal.play_collection in scope
+    from atproto_oauth.scopes import ScopesSet
+
+    scopes = ScopesSet.from_string(session.oauth_session.get("scope", ""))
+    return scopes.matches(
+        "repo", collection=settings.teal.play_collection, action="create"
+    )
 
 
 @router.get("/")

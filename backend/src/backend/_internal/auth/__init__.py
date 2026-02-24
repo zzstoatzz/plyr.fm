@@ -46,9 +46,8 @@ from backend._internal.auth.oauth import (
     start_oauth_flow_with_scopes,
 )
 from backend._internal.auth.scopes import (
-    _check_scope_coverage,
-    _get_missing_scopes,
-    _parse_scopes,
+    check_scope_coverage,
+    get_missing_scopes,
 )
 from backend._internal.auth.session import (
     CONFIDENTIAL_REFRESH_TOKEN_DAYS,
@@ -72,12 +71,10 @@ __all__ = [
     "PendingDevTokenData",
     "PendingScopeUpgradeData",
     "Session",
-    "_check_scope_coverage",
     "_decrypt_data",
     "_encrypt_data",
-    "_get_missing_scopes",
-    "_parse_scopes",
     "check_artist_profile_exists",
+    "check_scope_coverage",
     "consume_exchange_token",
     "create_exchange_token",
     "create_session",
@@ -87,6 +84,7 @@ __all__ = [
     "delete_session",
     "ensure_artist_exists",
     "get_client_auth_method",
+    "get_missing_scopes",
     "get_oauth_client",
     "get_oauth_client_for_scope",
     "get_optional_session",
