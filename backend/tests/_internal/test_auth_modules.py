@@ -6,9 +6,8 @@ from backend._internal.auth.exchange import (
     create_exchange_token,
 )
 from backend._internal.auth.scopes import (
-    _check_scope_coverage,
-    _get_missing_scopes,
-    _parse_scopes,
+    check_scope_coverage,
+    get_missing_scopes,
 )
 from backend._internal.auth.session import (
     SESSION_CACHE_PREFIX,
@@ -18,13 +17,11 @@ from backend._internal.auth.session import (
 )
 
 
-def test_scopes_parse_roundtrip():
-    """parse and validate scope strings."""
+def test_scopes_coverage_roundtrip():
+    """scope coverage and missing scopes round-trip."""
     scope = "atproto repo:fm.plyr.track repo:fm.plyr.like"
-    parsed = _parse_scopes(scope)
-    assert parsed == {"repo:fm.plyr.track", "repo:fm.plyr.like"}
-    assert _check_scope_coverage(scope, scope) is True
-    assert _get_missing_scopes(scope, scope) == set()
+    assert check_scope_coverage(scope, scope) is True
+    assert get_missing_scopes(scope, scope) == set()
 
 
 def test_encryption_roundtrip():

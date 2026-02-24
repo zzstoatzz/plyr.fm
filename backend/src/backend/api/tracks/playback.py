@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Annotated
 
+from atproto_oauth.scopes import ScopesSet
 from fastapi import Body, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -127,8 +128,12 @@ async def increment_play_count(
         )
         if prefs and prefs.enable_teal_scrobbling:
             # check if session has teal scopes
-            scope = session.oauth_session.get("scope", "")
-            if settings.teal.play_collection in scope:
+            scopes = ScopesSet.from_string(session.oauth_session.get("scope", ""))
+            if scopes.matches(
+                "repo",
+                collection=settings.teal.play_collection,
+                action="create",
+            ):
                 await schedule_teal_scrobble(
                     session_id=session.session_id,
                     track_id=track_id,

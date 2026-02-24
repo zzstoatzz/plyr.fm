@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import Cookie, Header, HTTPException
 
 from backend._internal.auth.oauth import check_artist_profile_exists
-from backend._internal.auth.scopes import _check_scope_coverage, _get_missing_scopes
+from backend._internal.auth.scopes import check_scope_coverage, get_missing_scopes
 from backend._internal.auth.session import Session, get_session
 from backend.config import settings
 
@@ -50,8 +50,8 @@ async def require_auth(
     granted_scope = session.oauth_session.get("scope", "")
     required_scope = settings.atproto.resolved_scope
 
-    if not _check_scope_coverage(granted_scope, required_scope):
-        missing = _get_missing_scopes(granted_scope, required_scope)
+    if not check_scope_coverage(granted_scope, required_scope):
+        missing = get_missing_scopes(granted_scope, required_scope)
         logger.info(
             f"session {session.did} missing scopes: {missing}, prompting re-auth"
         )
