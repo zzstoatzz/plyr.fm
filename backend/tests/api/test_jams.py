@@ -760,10 +760,10 @@ async def test_set_output_validates_client_id(
     await jam_service.disconnect_ws(jam_id, ws)
 
 
-async def test_output_clears_on_disconnect(
+async def test_output_disconnect_no_remaining_pauses(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
-    """test that output_client_id clears and playback pauses when output WS disconnects."""
+    """test that output clears and playback pauses when the only client disconnects (no fallback)."""
     from starlette.websockets import WebSocket
 
     # create jam and set output via API
@@ -789,7 +789,7 @@ async def test_output_clears_on_disconnect(
             json={"type": "set_output", "client_id": "host-output-client"},
         )
 
-    # disconnect output device
+    # disconnect output device (no other clients connected)
     await jam_service.disconnect_ws(jam_id, ws)
 
     # verify DB state: output cleared, playback paused
@@ -1357,3 +1357,209 @@ async def test_set_mode_invalid_value(
         )
 
     assert response.status_code == 400
+
+
+# ── output fallback tests ──────────────────────────────────────────
+
+
+async def test_output_fallback_on_disconnect(
+    test_app: FastAPI, db_session: AsyncSession, second_user: str
+) -> None:
+    """test that output reassigns to remaining client when output WS disconnects."""
+    from starlette.websockets import WebSocket
+
+    from backend._internal import require_auth
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/jams/", json={"track_ids": ["t1"], "is_playing": True}
+        )
+        code = create_response.json()["code"]
+        jam_id = create_response.json()["id"]
+
+    # second user joins
+    async def mock_joiner_auth() -> Session:
+        return MockSession(did=second_user)
+
+    app.dependency_overrides[require_auth] = mock_joiner_auth
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        await client.post(f"/jams/{code}/join")
+
+    # restore host auth
+    async def mock_host_auth() -> Session:
+        return MockSession(did="did:test:host")
+
+    app.dependency_overrides[require_auth] = mock_host_auth
+
+    # connect both WSs
+    ws_host = AsyncMock(spec=WebSocket)
+    ws_joiner = AsyncMock(spec=WebSocket)
+    await jam_service.connect_ws(jam_id, ws_host, "did:test:host")
+    jam_service._ws_client_ids[ws_host] = "host-client"
+    await jam_service.connect_ws(jam_id, ws_joiner, second_user)
+    jam_service._ws_client_ids[ws_joiner] = "joiner-client"
+
+    # set joiner as output device
+    app.dependency_overrides[require_auth] = mock_joiner_auth
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        await client.post(
+            f"/jams/{code}/command",
+            json={"type": "set_output", "client_id": "joiner-client"},
+        )
+
+    # disconnect the output device (joiner)
+    await jam_service.disconnect_ws(jam_id, ws_joiner)
+
+    # output should have fallen back to host, playback should NOT be paused
+    app.dependency_overrides[require_auth] = mock_host_auth
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        get_response = await client.get(f"/jams/{code}")
+        state = get_response.json()["state"]
+        assert state["output_client_id"] == "host-client"
+        assert state["output_did"] == "did:test:host"
+        assert state["is_playing"] is True
+
+    await jam_service.disconnect_ws(jam_id, ws_host)
+
+
+async def test_output_fallback_prefers_host(
+    test_app: FastAPI, db_session: AsyncSession, second_user: str
+) -> None:
+    """test that fallback prefers host over other connected clients."""
+    from starlette.websockets import WebSocket
+
+    from backend._internal import require_auth
+
+    # create a third user
+    third_did = "did:test:third"
+    third_artist = Artist(
+        did=third_did,
+        handle="test.third",
+        display_name="Test Third",
+    )
+    db_session.add(third_artist)
+    await enable_flag(db_session, third_did, "jams")
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/jams/", json={"track_ids": ["t1"], "is_playing": True}
+        )
+        code = create_response.json()["code"]
+        jam_id = create_response.json()["id"]
+
+    # join second and third users
+    for did in [second_user, third_did]:
+
+        async def _auth(did: str = did) -> Session:
+            return MockSession(did=did)
+
+        app.dependency_overrides[require_auth] = _auth
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            await client.post(f"/jams/{code}/join")
+
+    # connect all three WSs
+    ws_host = AsyncMock(spec=WebSocket)
+    ws_joiner = AsyncMock(spec=WebSocket)
+    ws_third = AsyncMock(spec=WebSocket)
+    await jam_service.connect_ws(jam_id, ws_host, "did:test:host")
+    jam_service._ws_client_ids[ws_host] = "host-client"
+    await jam_service.connect_ws(jam_id, ws_joiner, second_user)
+    jam_service._ws_client_ids[ws_joiner] = "joiner-client"
+    await jam_service.connect_ws(jam_id, ws_third, third_did)
+    jam_service._ws_client_ids[ws_third] = "third-client"
+
+    # set third user as output
+    async def mock_third_auth() -> Session:
+        return MockSession(did=third_did)
+
+    app.dependency_overrides[require_auth] = mock_third_auth
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        await client.post(
+            f"/jams/{code}/command",
+            json={"type": "set_output", "client_id": "third-client"},
+        )
+
+    # disconnect the output (third user)
+    await jam_service.disconnect_ws(jam_id, ws_third)
+
+    # fallback should prefer host over joiner
+    async def mock_host_auth() -> Session:
+        return MockSession(did="did:test:host")
+
+    app.dependency_overrides[require_auth] = mock_host_auth
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        get_response = await client.get(f"/jams/{code}")
+        state = get_response.json()["state"]
+        assert state["output_client_id"] == "host-client"
+        assert state["output_did"] == "did:test:host"
+        assert state["is_playing"] is True
+
+    await jam_service.disconnect_ws(jam_id, ws_host)
+    await jam_service.disconnect_ws(jam_id, ws_joiner)
+
+
+async def test_non_host_auto_output_on_sync(
+    test_app: FastAPI, db_session: AsyncSession, second_user: str
+) -> None:
+    """test that a non-host gets auto-assigned as output when no output is set."""
+    from starlette.websockets import WebSocket
+
+    from backend._internal import require_auth
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": ["t1"]})
+        code = create_response.json()["code"]
+        jam_id = create_response.json()["id"]
+        assert create_response.json()["state"]["output_client_id"] is None
+
+    # join as second user
+    async def mock_joiner_auth() -> Session:
+        return MockSession(did=second_user)
+
+    app.dependency_overrides[require_auth] = mock_joiner_auth
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        await client.post(f"/jams/{code}/join")
+
+    # connect joiner WS and send sync with client_id (no host WS connected)
+    ws = AsyncMock(spec=WebSocket)
+    await jam_service.connect_ws(jam_id, ws, second_user)
+    await jam_service._handle_sync(
+        jam_id, second_user, {"client_id": "joiner-abc-123", "last_id": None}, ws
+    )
+
+    # verify non-host was auto-assigned as output
+    async def mock_host_auth() -> Session:
+        return MockSession(did="did:test:host")
+
+    app.dependency_overrides[require_auth] = mock_host_auth
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        get_response = await client.get(f"/jams/{code}")
+        state = get_response.json()["state"]
+        assert state["output_client_id"] == "joiner-abc-123"
+        assert state["output_did"] == second_user
+
+    await jam_service.disconnect_ws(jam_id, ws)

@@ -609,11 +609,8 @@
 					<span class="muted">everyone plays</span>
 				{:else if jam.isOutputDevice}
 					playing here
-				{:else if jam.outputClientId}
-					playing elsewhere
-					<button class="play-here-pill" onclick={() => jam.setOutput()}>play here</button>
 				{:else}
-					<span class="muted">no output</span>
+					playing elsewhere
 					<button class="play-here-pill" onclick={() => jam.setOutput()}>play here</button>
 				{/if}
 			</div>
