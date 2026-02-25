@@ -44,7 +44,7 @@ class CommandRequest(BaseModel):
     type: str
     position_ms: int | None = None
     track_ids: list[str] | None = None
-    index: int | None = None
+    current_index: int | None = None
     client_id: str | None = None
 
 
@@ -187,8 +187,8 @@ async def jam_command(
         command["position_ms"] = body.position_ms
     if body.track_ids is not None:
         command["track_ids"] = body.track_ids
-    if body.index is not None:
-        command["index"] = body.index
+    if body.current_index is not None:
+        command["current_index"] = body.current_index
     if body.client_id is not None:
         command["client_id"] = body.client_id
 

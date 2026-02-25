@@ -289,6 +289,7 @@ class JamService:
                 return None
 
             state = copy.deepcopy(jam.state)
+            old_track_ids = state.get("track_ids", [])
             cmd_type = command.get("type")
             now_ms = int(time.time() * 1000)
 
@@ -305,68 +306,25 @@ class JamService:
             elif cmd_type == "seek":
                 state["progress_ms"] = command.get("position_ms", 0)
                 state["server_time_ms"] = now_ms
-            elif cmd_type == "next":
-                track_ids = state.get("track_ids", [])
-                idx = state.get("current_index", 0) + 1
-                if idx < len(track_ids):
-                    state["current_index"] = idx
-                    state["current_track_id"] = track_ids[idx]
-                    state["progress_ms"] = 0
-                    state["server_time_ms"] = now_ms
-            elif cmd_type == "previous":
-                idx = state.get("current_index", 0) - 1
-                if idx >= 0:
-                    track_ids = state.get("track_ids", [])
-                    state["current_index"] = idx
-                    state["current_track_id"] = (
-                        track_ids[idx] if idx < len(track_ids) else None
+            elif cmd_type == "update_queue":
+                old_track_id = state.get("current_track_id")
+                new_track_ids = command.get("track_ids", old_track_ids)
+                new_index = command.get("current_index", state.get("current_index", 0))
+
+                state["track_ids"] = new_track_ids
+                if new_track_ids:
+                    state["current_index"] = max(
+                        0, min(new_index, len(new_track_ids) - 1)
                     )
-                    state["progress_ms"] = 0
-                    state["server_time_ms"] = now_ms
-            elif cmd_type == "add_tracks":
-                new_ids = command.get("track_ids", [])
-                state.setdefault("track_ids", []).extend(new_ids)
-                # if was empty, set current
-                if len(state["track_ids"]) == len(new_ids) and new_ids:
+                    state["current_track_id"] = new_track_ids[state["current_index"]]
+                else:
                     state["current_index"] = 0
-                    state["current_track_id"] = new_ids[0]
-            elif cmd_type == "play_track":
-                # insert track after current and play it immediately
-                file_id = command.get("file_id")
-                if file_id:
-                    track_ids = state.get("track_ids", [])
-                    insert_at = state.get("current_index", 0) + 1
-                    track_ids.insert(insert_at, file_id)
-                    state["track_ids"] = track_ids
-                    state["current_index"] = insert_at
-                    state["current_track_id"] = file_id
-                    state["is_playing"] = True
+                    state["current_track_id"] = None
+
+                # reset progress when current track changes
+                if state["current_track_id"] != old_track_id:
                     state["progress_ms"] = 0
                     state["server_time_ms"] = now_ms
-            elif cmd_type == "set_index":
-                idx = command.get("index", 0)
-                track_ids = state.get("track_ids", [])
-                if 0 <= idx < len(track_ids):
-                    state["current_index"] = idx
-                    state["current_track_id"] = track_ids[idx]
-                    state["progress_ms"] = 0
-                    state["server_time_ms"] = now_ms
-            elif cmd_type == "remove_track":
-                idx = command.get("index")
-                track_ids = state.get("track_ids", [])
-                if idx is not None and 0 <= idx < len(track_ids):
-                    track_ids.pop(idx)
-                    state["track_ids"] = track_ids
-                    current = state.get("current_index", 0)
-                    if idx < current:
-                        state["current_index"] = current - 1
-                    elif idx == current:
-                        state["current_index"] = min(current, len(track_ids) - 1)
-                    # update current_track_id
-                    ci = state.get("current_index", 0)
-                    state["current_track_id"] = (
-                        track_ids[ci] if track_ids and ci < len(track_ids) else None
-                    )
             elif cmd_type == "set_output":
                 # validate: the client_id must belong to the sender's WS in THIS jam
                 requested_client_id = command.get("client_id")
@@ -396,7 +354,7 @@ class JamService:
             await db.refresh(jam)
 
             # determine if tracks changed
-            tracks_changed = cmd_type in ("add_tracks", "remove_track", "play_track")
+            tracks_changed = state.get("track_ids", []) != old_track_ids
 
             tracks: list[dict[str, Any]] = []
             if tracks_changed:

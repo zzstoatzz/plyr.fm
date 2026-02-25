@@ -7,7 +7,6 @@
 
 import { browser } from '$app/environment';
 import { queue } from './queue.svelte';
-import { jam } from './jam.svelte';
 import { toast } from './toast.svelte';
 import { API_URL, getAtprotofansSupportUrl } from './config';
 import type { Track } from './types';
@@ -134,11 +133,6 @@ export async function playTrack(track: Track): Promise<boolean> {
  */
 export async function playQueue(tracks: Track[], startIndex = 0): Promise<boolean> {
 	if (!browser || tracks.length === 0) return false;
-
-	if (jam.active) {
-		toast.info('leave the jam to play a different collection');
-		return false;
-	}
 
 	const startTrack = tracks[startIndex];
 	if (!startTrack) return false;
