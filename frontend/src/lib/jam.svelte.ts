@@ -57,15 +57,11 @@ class JamState {
 
 	private createBridge(): JamBridge {
 		return {
-			playTrack: (fileId) => this.sendCommand({ type: 'play_track', file_id: fileId }),
-			addTracks: (fileIds) => this.sendCommand({ type: 'add_tracks', track_ids: fileIds }),
-			removeTrack: (index) => this.sendCommand({ type: 'remove_track', index }),
-			moveTrack: (fromIndex, toIndex) =>
-				this.sendCommand({ type: 'move_track', from_index: fromIndex, to_index: toIndex }),
-			clearUpcoming: () => this.sendCommand({ type: 'clear_upcoming' }),
-			setIndex: (index) => this.sendCommand({ type: 'set_index', index }),
-			next: () => this.sendCommand({ type: 'next' }),
-			previous: () => this.sendCommand({ type: 'previous' }),
+			pushQueueState: () => this.sendCommand({
+				type: 'update_queue',
+				track_ids: queue.tracks.map(t => t.file_id),
+				current_index: queue.currentIndex,
+			}),
 			play: () => this.sendCommand({ type: 'play' }),
 			pause: () => this.sendCommand({ type: 'pause' }),
 			seek: (ms) => this.sendCommand({ type: 'seek', position_ms: ms }),
@@ -188,42 +184,6 @@ class JamState {
 	}
 
 	// ── commands (via WebSocket) ───────────────────────────────────
-
-	play(): void {
-		this.sendCommand({ type: 'play' });
-	}
-
-	pause(): void {
-		this.sendCommand({ type: 'pause' });
-	}
-
-	seek(ms: number): void {
-		this.sendCommand({ type: 'seek', position_ms: ms });
-	}
-
-	next(): void {
-		this.sendCommand({ type: 'next' });
-	}
-
-	previous(): void {
-		this.sendCommand({ type: 'previous' });
-	}
-
-	addTracks(ids: string[]): void {
-		this.sendCommand({ type: 'add_tracks', track_ids: ids });
-	}
-
-	removeTrack(index: number): void {
-		this.sendCommand({ type: 'remove_track', index });
-	}
-
-	playTrack(fileId: string): void {
-		this.sendCommand({ type: 'play_track', file_id: fileId });
-	}
-
-	setIndex(index: number): void {
-		this.sendCommand({ type: 'set_index', index });
-	}
 
 	setOutput(): void {
 		this.sendCommand({ type: 'set_output', client_id: this.clientId });

@@ -9,14 +9,7 @@ const SYNC_DEBOUNCE_MS = 250;
 
 /** bridge for routing queue mutations through a jam's WebSocket transport */
 export interface JamBridge {
-	playTrack(fileId: string): void;
-	addTracks(fileIds: string[]): void;
-	removeTrack(index: number): void;
-	moveTrack(fromIndex: number, toIndex: number): void;
-	clearUpcoming(): void;
-	setIndex(index: number): void;
-	next(): void;
-	previous(): void;
+	pushQueueState(): void;
 	play(): void;
 	pause(): void;
 	seek(ms: number): void;
@@ -336,6 +329,15 @@ class Queue {
 		}, SYNC_DEBOUNCE_MS);
 	}
 
+	private syncState() {
+		if (!browser) return;
+		if (this.jamBridge) {
+			this.jamBridge.pushQueueState();
+		} else {
+			this.schedulePush();
+		}
+	}
+
 	async pushQueue(): Promise<boolean> {
 		if (!browser) return false;
 		if (!this.isAuthenticated()) return false; // skip if not authenticated
@@ -469,17 +471,6 @@ class Queue {
 	addTracks(tracks: Track[], playNow = false) {
 		if (tracks.length === 0) return;
 
-		if (this.jamBridge) {
-			const fileIds = tracks.map((t) => t.file_id);
-			if (playNow && fileIds.length > 0) {
-				this.jamBridge.playTrack(fileIds[0]);
-				if (fileIds.length > 1) this.jamBridge.addTracks(fileIds.slice(1));
-			} else {
-				this.jamBridge.addTracks(fileIds);
-			}
-			return;
-		}
-
 		this.lastUpdateWasLocal = true;
 		this.tracks = [...this.tracks, ...tracks];
 		this.originalOrder = [...this.originalOrder, ...tracks];
@@ -488,11 +479,10 @@ class Queue {
 			this.currentIndex = this.tracks.length - tracks.length;
 		}
 
-		this.schedulePush();
+		this.syncState();
 	}
 
 	setQueue(tracks: Track[], startIndex = 0) {
-		if (this.jamBridge) return; // no set_queue command — block during jams
 		if (tracks.length === 0) {
 			this.clear();
 			return;
@@ -502,21 +492,16 @@ class Queue {
 		this.tracks = [...tracks];
 		this.originalOrder = [...tracks];
 		this.currentIndex = this.clampIndex(startIndex);
-		this.schedulePush();
+		this.syncState();
 	}
 
 	playNow(track: Track, autoPlay = true) {
-		if (this.jamBridge) {
-			this.jamBridge.playTrack(track.file_id);
-			return;
-		}
-
 		this.lastUpdateWasLocal = autoPlay;
 		const upNext = this.tracks.slice(this.currentIndex + 1);
 		this.tracks = [track, ...upNext];
 		this.originalOrder = [...this.tracks];
 		this.currentIndex = 0;
-		this.schedulePush();
+		this.syncState();
 	}
 
 	clear() {
@@ -524,20 +509,15 @@ class Queue {
 		this.tracks = [];
 		this.originalOrder = [];
 		this.currentIndex = 0;
-		this.schedulePush();
+		this.syncState();
 	}
 
 	goTo(index: number) {
 		if (index < 0 || index >= this.tracks.length) return;
 
-		if (this.jamBridge) {
-			this.jamBridge.setIndex(index);
-			return;
-		}
-
 		this.lastUpdateWasLocal = true;
 		this.currentIndex = index;
-		this.schedulePush();
+		this.syncState();
 	}
 
 	next() {
@@ -546,32 +526,22 @@ class Queue {
 			return;
 		}
 
-		if (this.jamBridge) {
-			this.jamBridge.next();
-			return;
-		}
-
 		if (this.currentIndex < this.tracks.length - 1) {
 			this.lastUpdateWasLocal = true;
 			this.currentIndex += 1;
-			this.schedulePush();
+			this.syncState();
 		}
 	}
 
 	previous(forceSkip = false) {
 		if (this.tracks.length === 0) return;
 
-		if (this.jamBridge) {
-			this.jamBridge.previous();
-			return true;
-		}
-
 		if (this.currentIndex > 0 || forceSkip) {
 			this.lastUpdateWasLocal = true;
 			if (this.currentIndex > 0) {
 				this.currentIndex -= 1;
 			}
-			this.schedulePush();
+			this.syncState();
 			return true;
 		}
 		return false;
@@ -623,10 +593,6 @@ class Queue {
 	}
 
 	moveTrack(fromIndex: number, toIndex: number) {
-		if (this.jamBridge) {
-			this.jamBridge.moveTrack(fromIndex, toIndex);
-			return;
-		}
 		if (fromIndex === toIndex) return;
 		if (fromIndex < 0 || fromIndex >= this.tracks.length) return;
 		if (toIndex < 0 || toIndex >= this.tracks.length) return;
@@ -650,17 +616,12 @@ class Queue {
 			this.originalOrder = [...updated];
 		}
 
-		this.schedulePush();
+		this.syncState();
 	}
 
 	removeTrack(index: number) {
 		if (index < 0 || index >= this.tracks.length) return;
 		if (index === this.currentIndex) return;
-
-		if (this.jamBridge) {
-			this.jamBridge.removeTrack(index);
-			return;
-		}
 
 		this.lastUpdateWasLocal = true;
 		const updated = [...this.tracks];
@@ -671,7 +632,7 @@ class Queue {
 
 		if (updated.length === 0) {
 			this.currentIndex = 0;
-			this.schedulePush();
+			this.syncState();
 			return;
 		}
 
@@ -681,14 +642,10 @@ class Queue {
 			this.currentIndex = this.clampIndex(this.currentIndex);
 		}
 
-		this.schedulePush();
+		this.syncState();
 	}
 
 	clearUpNext() {
-		if (this.jamBridge) {
-			this.jamBridge.clearUpcoming();
-			return;
-		}
 		if (this.tracks.length === 0) return;
 
 		this.lastUpdateWasLocal = true;
@@ -701,7 +658,7 @@ class Queue {
 		this.originalOrder = [currentTrack];
 		this.currentIndex = 0;
 
-		this.schedulePush();
+		this.syncState();
 	}
 
 	startPositionSave() {

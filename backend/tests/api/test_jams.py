@@ -1,6 +1,7 @@
 """tests for jam api endpoints."""
 
 from collections.abc import AsyncGenerator
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,6 +14,22 @@ from backend._internal.feature_flags import enable_flag
 from backend._internal.jams import JamService, jam_service
 from backend.main import app
 from backend.models import Artist
+
+
+async def _update_queue(
+    client: AsyncClient, code: str, track_ids: list[str], current_index: int
+) -> dict[str, Any]:
+    """send an update_queue command and return the response json."""
+    r = await client.post(
+        f"/jams/{code}/command",
+        json={
+            "type": "update_queue",
+            "track_ids": track_ids,
+            "current_index": current_index,
+        },
+    )
+    assert r.status_code == 200
+    return r.json()
 
 
 class MockSession(Session):
@@ -288,198 +305,136 @@ async def test_command_seek(test_app: FastAPI, db_session: AsyncSession) -> None
     assert response.json()["state"]["progress_ms"] == 30000
 
 
-async def test_command_next_previous(
+async def test_update_queue_change_index(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
-    """test next and previous commands."""
+    """test update_queue to advance and go back (replaces next/previous)."""
+    tracks = ["t1", "t2", "t3"]
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
-        create_response = await client.post(
-            "/jams/",
-            json={"track_ids": ["t1", "t2", "t3"]},
-        )
+        create_response = await client.post("/jams/", json={"track_ids": tracks})
         code = create_response.json()["code"]
 
-        # next
-        next_response = await client.post(
-            f"/jams/{code}/command", json={"type": "next"}
-        )
-        assert next_response.json()["state"]["current_index"] == 1
-        assert next_response.json()["state"]["current_track_id"] == "t2"
+        r1 = await _update_queue(client, code, tracks, 1)
+        assert r1["state"]["current_index"] == 1
+        assert r1["state"]["current_track_id"] == "t2"
 
-        # next again
-        next2_response = await client.post(
-            f"/jams/{code}/command", json={"type": "next"}
-        )
-        assert next2_response.json()["state"]["current_index"] == 2
+        r2 = await _update_queue(client, code, tracks, 2)
+        assert r2["state"]["current_index"] == 2
 
-        # previous
-        prev_response = await client.post(
-            f"/jams/{code}/command", json={"type": "previous"}
-        )
-        assert prev_response.json()["state"]["current_index"] == 1
-        assert prev_response.json()["state"]["current_track_id"] == "t2"
+        r3 = await _update_queue(client, code, tracks, 1)
+        assert r3["state"]["current_index"] == 1
+        assert r3["state"]["current_track_id"] == "t2"
 
 
-async def test_command_add_tracks(test_app: FastAPI, db_session: AsyncSession) -> None:
-    """test add_tracks command."""
+async def test_update_queue_add_tracks(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test update_queue with extended track list (replaces add_tracks)."""
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
         create_response = await client.post("/jams/", json={"track_ids": ["t1"]})
         code = create_response.json()["code"]
+        r = await _update_queue(client, code, ["t1", "t2", "t3"], 0)
 
-        response = await client.post(
-            f"/jams/{code}/command",
-            json={"type": "add_tracks", "track_ids": ["t2", "t3"]},
-        )
-
-    assert response.status_code == 200
-    assert response.json()["state"]["track_ids"] == ["t1", "t2", "t3"]
-    assert response.json()["tracks_changed"] is True
+    assert r["state"]["track_ids"] == ["t1", "t2", "t3"]
+    assert r["tracks_changed"] is True
 
 
-async def test_next_after_add_tracks(
+async def test_sequential_update_queue(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
-    """next after add_tracks must advance — regression for shallow-copy bug."""
+    """two update_queue calls: extend tracks, then advance — regression for shallow-copy bug."""
+    tracks = ["t1", "t2", "t3"]
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
         create_response = await client.post("/jams/", json={"track_ids": ["t1"]})
         code = create_response.json()["code"]
+        await _update_queue(client, code, tracks, 0)
+        r = await _update_queue(client, code, tracks, 1)
 
-        await client.post(
-            f"/jams/{code}/command",
-            json={"type": "add_tracks", "track_ids": ["t2", "t3"]},
-        )
-
-        next_response = await client.post(
-            f"/jams/{code}/command",
-            json={"type": "next"},
-        )
-
-    state = next_response.json()["state"]
-    assert state["track_ids"] == ["t1", "t2", "t3"]
-    assert state["current_index"] == 1
-    assert state["current_track_id"] == "t2"
+    assert r["state"]["track_ids"] == tracks
+    assert r["state"]["current_index"] == 1
+    assert r["state"]["current_track_id"] == "t2"
 
 
-async def test_command_remove_track(
+async def test_update_queue_remove_track(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
-    """test remove_track command."""
+    """test update_queue with a track removed."""
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
         create_response = await client.post(
-            "/jams/",
-            json={"track_ids": ["t1", "t2", "t3"]},
+            "/jams/", json={"track_ids": ["t1", "t2", "t3"]}
         )
         code = create_response.json()["code"]
+        r = await _update_queue(client, code, ["t1", "t3"], 0)
 
-        response = await client.post(
-            f"/jams/{code}/command",
-            json={"type": "remove_track", "index": 1},
-        )
-
-    assert response.status_code == 200
-    assert response.json()["state"]["track_ids"] == ["t1", "t3"]
-    assert response.json()["tracks_changed"] is True
+    assert r["state"]["track_ids"] == ["t1", "t3"]
+    assert r["tracks_changed"] is True
 
 
-async def test_command_move_track(test_app: FastAPI, db_session: AsyncSession) -> None:
-    """test move_track command reorders tracks and adjusts current_index."""
-    async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
-    ) as client:
-        create_response = await client.post(
-            "/jams/",
-            json={"track_ids": ["t1", "t2", "t3", "t4"]},
-        )
-        code = create_response.json()["code"]
-
-        # move t3 (index 2) to index 0 — current is 0 (t1), should shift to 1
-        response = await client.post(
-            f"/jams/{code}/command",
-            json={"type": "move_track", "from_index": 2, "to_index": 0},
-        )
-        assert response.status_code == 200
-        state = response.json()["state"]
-        assert state["track_ids"] == ["t3", "t1", "t2", "t4"]
-        assert state["current_index"] == 1
-        assert state["current_track_id"] == "t1"
-
-        # move currently-playing track (index 1, t1) to index 3
-        response = await client.post(
-            f"/jams/{code}/command",
-            json={"type": "move_track", "from_index": 1, "to_index": 3},
-        )
-        state = response.json()["state"]
-        assert state["track_ids"] == ["t3", "t2", "t4", "t1"]
-        assert state["current_index"] == 3
-        assert state["current_track_id"] == "t1"
-
-    assert response.json()["tracks_changed"] is True
-
-
-async def test_command_move_track_noop(
+async def test_update_queue_reorder(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
-    """test move_track with same index or out-of-bounds is a no-op."""
+    """test update_queue with reordered track list (replaces move_track)."""
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
         create_response = await client.post(
-            "/jams/",
-            json={"track_ids": ["t1", "t2"]},
+            "/jams/", json={"track_ids": ["t1", "t2", "t3", "t4"]}
         )
         code = create_response.json()["code"]
 
-        # same index — no-op
-        response = await client.post(
-            f"/jams/{code}/command",
-            json={"type": "move_track", "from_index": 0, "to_index": 0},
-        )
-        assert response.status_code == 200
-        assert response.json()["state"]["track_ids"] == ["t1", "t2"]
+        r1 = await _update_queue(client, code, ["t3", "t1", "t2", "t4"], 1)
+        assert r1["state"]["track_ids"] == ["t3", "t1", "t2", "t4"]
+        assert r1["state"]["current_index"] == 1
+        assert r1["state"]["current_track_id"] == "t1"
 
-        # out-of-bounds — no-op
-        response = await client.post(
-            f"/jams/{code}/command",
-            json={"type": "move_track", "from_index": 0, "to_index": 5},
-        )
-    assert response.json()["state"]["track_ids"] == ["t1", "t2"]
+        r2 = await _update_queue(client, code, ["t3", "t2", "t4", "t1"], 3)
+        assert r2["state"]["track_ids"] == ["t3", "t2", "t4", "t1"]
+        assert r2["state"]["current_index"] == 3
+        assert r2["state"]["current_track_id"] == "t1"
+        assert r2["tracks_changed"] is True
 
 
-async def test_command_clear_upcoming(
+async def test_update_queue_same_tracks_no_change(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
-    """test clear_upcoming removes all tracks after current."""
+    """test update_queue with same tracks reports tracks_changed=False."""
+    tracks = ["t1", "t2"]
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
-        create_response = await client.post(
-            "/jams/",
-            json={"track_ids": ["t1", "t2", "t3", "t4"]},
-        )
+        create_response = await client.post("/jams/", json={"track_ids": tracks})
         code = create_response.json()["code"]
+        r = await _update_queue(client, code, tracks, 0)
 
-        # advance to index 1
-        await client.post(f"/jams/{code}/command", json={"type": "next"})
+    assert r["state"]["track_ids"] == tracks
+    assert r["tracks_changed"] is False
 
-        # clear upcoming
-        response = await client.post(
-            f"/jams/{code}/command", json={"type": "clear_upcoming"}
-        )
 
-    assert response.status_code == 200
-    state = response.json()["state"]
-    assert state["track_ids"] == ["t1", "t2"]
-    assert state["current_index"] == 1
-    assert state["current_track_id"] == "t2"
-    assert response.json()["tracks_changed"] is True
+async def test_update_queue_clear_upcoming(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test update_queue with truncated list (replaces clear_upcoming)."""
+    full = ["t1", "t2", "t3", "t4"]
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": full})
+        code = create_response.json()["code"]
+        await _update_queue(client, code, full, 1)
+        r = await _update_queue(client, code, ["t1", "t2"], 1)
+
+    assert r["state"]["track_ids"] == ["t1", "t2"]
+    assert r["state"]["current_index"] == 1
+    assert r["state"]["current_track_id"] == "t2"
+    assert r["tracks_changed"] is True
 
 
 async def test_revision_monotonicity(
@@ -582,43 +537,25 @@ async def test_code_uniqueness(test_app: FastAPI, db_session: AsyncSession) -> N
     assert len(codes) == 5
 
 
-async def test_command_set_index(test_app: FastAPI, db_session: AsyncSession) -> None:
-    """test set_index command jumps to a specific track."""
+async def test_update_queue_set_index(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test update_queue to jump to a specific track (replaces set_index)."""
+    tracks = ["t1", "t2", "t3", "t4"]
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
-        create_response = await client.post(
-            "/jams/",
-            json={"track_ids": ["t1", "t2", "t3", "t4"]},
-        )
+        create_response = await client.post("/jams/", json={"track_ids": tracks})
         code = create_response.json()["code"]
 
-        # jump to index 2
-        response = await client.post(
-            f"/jams/{code}/command", json={"type": "set_index", "index": 2}
-        )
-        assert response.status_code == 200
-        state = response.json()["state"]
-        assert state["current_index"] == 2
-        assert state["current_track_id"] == "t3"
-        assert state["progress_ms"] == 0
+        r1 = await _update_queue(client, code, tracks, 2)
+        assert r1["state"]["current_index"] == 2
+        assert r1["state"]["current_track_id"] == "t3"
+        assert r1["state"]["progress_ms"] == 0
 
-        # jump to index 0
-        response = await client.post(
-            f"/jams/{code}/command", json={"type": "set_index", "index": 0}
-        )
-        assert response.status_code == 200
-        state = response.json()["state"]
-        assert state["current_index"] == 0
-        assert state["current_track_id"] == "t1"
-
-        # out-of-bounds index is a no-op (state unchanged, but command succeeds)
-        response = await client.post(
-            f"/jams/{code}/command", json={"type": "set_index", "index": 10}
-        )
-        assert response.status_code == 200
-        assert response.json()["state"]["current_index"] == 0
-        assert response.json()["state"]["current_track_id"] == "t1"
+        r2 = await _update_queue(client, code, tracks, 0)
+        assert r2["state"]["current_index"] == 0
+        assert r2["state"]["current_track_id"] == "t1"
 
 
 async def test_command_non_participant_rejected(
@@ -643,9 +580,15 @@ async def test_command_non_participant_rejected(
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
-        response = await client.post(f"/jams/{code}/command", json={"type": "next"})
+        response = await client.post(
+            f"/jams/{code}/command",
+            json={
+                "type": "update_queue",
+                "track_ids": ["t1", "t2"],
+                "current_index": 1,
+            },
+        )
 
-    # command should fail — not a participant
     assert response.status_code == 400
 
 
@@ -662,15 +605,14 @@ async def test_sequential_commands_get_distinct_revisions(
         code = create_response.json()["code"]
         assert create_response.json()["revision"] == 1
 
-        # send two next commands back-to-back
-        r1 = await client.post(f"/jams/{code}/command", json={"type": "next"})
-        r2 = await client.post(f"/jams/{code}/command", json={"type": "next"})
+        tracks = ["t1", "t2", "t3"]
+        r1 = await _update_queue(client, code, tracks, 1)
+        r2 = await _update_queue(client, code, tracks, 2)
 
-    assert r1.json()["revision"] == 2
-    assert r2.json()["revision"] == 3
-    # both advanced the index correctly
-    assert r1.json()["state"]["current_index"] == 1
-    assert r2.json()["state"]["current_index"] == 2
+    assert r1["revision"] == 2
+    assert r2["revision"] == 3
+    assert r1["state"]["current_index"] == 1
+    assert r2["state"]["current_index"] == 2
 
 
 async def test_did_socket_replacement() -> None:
@@ -942,11 +884,13 @@ async def test_non_output_disconnect_no_effect() -> None:
 # ── cross-client command tests ────────────────────────────────────
 
 
-async def test_cross_client_next_command(
+async def test_cross_client_update_queue(
     test_app: FastAPI, db_session: AsyncSession, second_user: str
 ) -> None:
-    """test that a non-host participant can send 'next' and it updates state for all."""
+    """test that a non-host participant can send update_queue and it updates state for all."""
     from backend._internal import require_auth
+
+    tracks = ["t1", "t2", "t3", "t4"]
 
     # create jam as host with 4 tracks
     async with AsyncClient(
@@ -956,7 +900,7 @@ async def test_cross_client_next_command(
             "/jams/",
             json={
                 "name": "cross client test",
-                "track_ids": ["t1", "t2", "t3", "t4"],
+                "track_ids": tracks,
                 "is_playing": True,
             },
         )
@@ -976,26 +920,15 @@ async def test_cross_client_next_command(
         join_response = await client.post(f"/jams/{code}/join")
         assert join_response.status_code == 200
 
-        # joiner sends "next" command
-        next_response = await client.post(
-            f"/jams/{code}/command", json={"type": "next"}
-        )
-        assert next_response.status_code == 200
-        state = next_response.json()["state"]
-        assert state["current_index"] == 1
-        assert state["current_track_id"] == "t2"
-        assert state["progress_ms"] == 0
-        # is_playing should be preserved (not changed by "next")
-        assert state["is_playing"] is True
+        r1 = await _update_queue(client, code, tracks, 1)
+        assert r1["state"]["current_index"] == 1
+        assert r1["state"]["current_track_id"] == "t2"
+        assert r1["state"]["progress_ms"] == 0
+        assert r1["state"]["is_playing"] is True
 
-        # joiner sends "next" again
-        next2_response = await client.post(
-            f"/jams/{code}/command", json={"type": "next"}
-        )
-        assert next2_response.status_code == 200
-        state2 = next2_response.json()["state"]
-        assert state2["current_index"] == 2
-        assert state2["current_track_id"] == "t3"
+        r2 = await _update_queue(client, code, tracks, 2)
+        assert r2["state"]["current_index"] == 2
+        assert r2["state"]["current_track_id"] == "t3"
 
     # verify state from host's perspective
     async def mock_host_auth() -> Session:
@@ -1084,10 +1017,10 @@ async def test_cross_client_seek(
         assert seek_response.json()["state"]["progress_ms"] == 45000
 
 
-async def test_cross_client_add_tracks(
+async def test_cross_client_update_queue_add_tracks(
     test_app: FastAPI, db_session: AsyncSession, second_user: str
 ) -> None:
-    """test that a non-host participant can add tracks."""
+    """test that a non-host participant can extend the queue via update_queue."""
     from backend._internal import require_auth
 
     async with AsyncClient(
@@ -1106,13 +1039,9 @@ async def test_cross_client_add_tracks(
     ) as client:
         await client.post(f"/jams/{code}/join")
 
-        add_response = await client.post(
-            f"/jams/{code}/command",
-            json={"type": "add_tracks", "track_ids": ["t2", "t3"]},
-        )
-        assert add_response.status_code == 200
-        assert add_response.json()["state"]["track_ids"] == ["t1", "t2", "t3"]
-        assert add_response.json()["tracks_changed"] is True
+        r = await _update_queue(client, code, ["t1", "t2", "t3"], 0)
+        assert r["state"]["track_ids"] == ["t1", "t2", "t3"]
+        assert r["tracks_changed"] is True
 
 
 async def test_output_preserved_across_cross_client_commands(
@@ -1151,7 +1080,7 @@ async def test_output_preserved_across_cross_client_commands(
             set_output_response.json()["state"]["output_client_id"] == "host-client-id"
         )
 
-    # joiner joins and sends next — output_client_id should be preserved
+    # joiner joins and sends update_queue — output_client_id should be preserved
     async def mock_joiner_auth() -> Session:
         return MockSession(did=second_user)
 
@@ -1162,11 +1091,8 @@ async def test_output_preserved_across_cross_client_commands(
     ) as client:
         await client.post(f"/jams/{code}/join")
 
-        next_response = await client.post(
-            f"/jams/{code}/command", json={"type": "next"}
-        )
-        assert next_response.status_code == 200
-        state = next_response.json()["state"]
+        r = await _update_queue(client, code, ["t1", "t2", "t3"], 1)
+        state = r["state"]
         assert state["current_index"] == 1
         assert state["output_client_id"] == "host-client-id"
         assert state["output_did"] == "did:test:host"
@@ -1174,3 +1100,66 @@ async def test_output_preserved_across_cross_client_commands(
 
     # cleanup
     await jam_service.disconnect_ws(jam_id, ws_host)
+
+
+# ── update_queue edge case tests ──────────────────────────────────
+
+
+async def test_update_queue_resets_progress_on_track_change(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test that progress resets to 0 when current track changes via update_queue."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": ["t1", "t2"]})
+        code = create_response.json()["code"]
+        await client.post(
+            f"/jams/{code}/command", json={"type": "seek", "position_ms": 30000}
+        )
+        r = await _update_queue(client, code, ["t1", "t2"], 1)
+
+    assert r["state"]["current_track_id"] == "t2"
+    assert r["state"]["progress_ms"] == 0
+
+
+async def test_update_queue_preserves_progress_on_same_track(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test that progress is preserved when current track stays the same."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": ["t1", "t2"]})
+        code = create_response.json()["code"]
+        await client.post(
+            f"/jams/{code}/command", json={"type": "seek", "position_ms": 30000}
+        )
+        r = await _update_queue(client, code, ["t1", "t2", "t3"], 0)
+
+    assert r["state"]["current_track_id"] == "t1"
+    assert r["state"]["progress_ms"] == 30000
+
+
+async def test_update_queue_clamps_index(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test that out-of-bounds current_index is clamped."""
+    tracks = ["t1", "t2", "t3"]
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": tracks})
+        code = create_response.json()["code"]
+
+        r = await _update_queue(client, code, tracks, 99)
+        assert r["state"]["current_index"] == 2
+        assert r["state"]["current_track_id"] == "t3"
+
+        r = await _update_queue(client, code, tracks, -5)
+        assert r["state"]["current_index"] == 0
+        assert r["state"]["current_track_id"] == "t1"
+
+        r = await _update_queue(client, code, [], 0)
+        assert r["state"]["current_index"] == 0
+        assert r["state"]["current_track_id"] is None
