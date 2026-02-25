@@ -355,6 +355,15 @@ class JamState {
 		}
 
 		this.syncToQueue();
+
+		// auto-claim output if nobody has it — "no output" should never be a visible state
+		if (
+			this.outputMode === 'one_speaker' &&
+			this.outputClientId === null &&
+			this.ws?.readyState === WebSocket.OPEN
+		) {
+			this.setOutput();
+		}
 	}
 
 	private async handleParticipantMessage(_data: Record<string, unknown>): Promise<void> {
