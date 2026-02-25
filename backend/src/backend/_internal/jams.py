@@ -6,6 +6,7 @@ for real-time playback sync across participants.
 
 import asyncio
 import contextlib
+import copy
 import json
 import logging
 import secrets
@@ -287,7 +288,7 @@ class JamService:
             if not participant.scalar_one_or_none():
                 return None
 
-            state = dict(jam.state)
+            state = copy.deepcopy(jam.state)
             cmd_type = command.get("type")
             now_ms = int(time.time() * 1000)
 
@@ -490,7 +491,7 @@ class JamService:
                 return
             if jam.state.get("output_client_id") != client_id:
                 return
-            state = dict(jam.state)
+            state = copy.deepcopy(jam.state)
             state["output_client_id"] = None
             state["output_did"] = None
             state["is_playing"] = False
@@ -547,7 +548,7 @@ class JamService:
                     and jam.state.get("output_client_id") is None
                     and did == jam.host_did
                 ):
-                    state = dict(jam.state)
+                    state = copy.deepcopy(jam.state)
                     state["output_client_id"] = client_id
                     state["output_did"] = did
                     jam.state = state
