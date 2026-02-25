@@ -340,6 +340,32 @@ async def test_command_add_tracks(test_app: FastAPI, db_session: AsyncSession) -
     assert response.json()["tracks_changed"] is True
 
 
+async def test_next_after_add_tracks(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """next after add_tracks must advance — regression for shallow-copy bug."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": ["t1"]})
+        code = create_response.json()["code"]
+
+        await client.post(
+            f"/jams/{code}/command",
+            json={"type": "add_tracks", "track_ids": ["t2", "t3"]},
+        )
+
+        next_response = await client.post(
+            f"/jams/{code}/command",
+            json={"type": "next"},
+        )
+
+    state = next_response.json()["state"]
+    assert state["track_ids"] == ["t1", "t2", "t3"]
+    assert state["current_index"] == 1
+    assert state["current_track_id"] == "t2"
+
+
 async def test_command_remove_track(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:

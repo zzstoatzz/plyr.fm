@@ -23,7 +23,7 @@ max_lines = 612
 
 [[rules]]
 path = "backend/src/backend/_internal/jams.py"
-max_lines = 820
+max_lines = 822
 
 [[rules]]
 path = "backend/src/backend/api/albums.py"
@@ -71,7 +71,7 @@ max_lines = 554
 
 [[rules]]
 path = "backend/tests/api/test_jams.py"
-max_lines = 1057
+max_lines = 1084
 
 [[rules]]
 path = "backend/tests/api/test_track_comments.py"
