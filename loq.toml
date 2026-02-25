@@ -71,7 +71,7 @@ max_lines = 554
 
 [[rules]]
 path = "backend/tests/api/test_jams.py"
-max_lines = 1181
+max_lines = 1359
 
 [[rules]]
 path = "backend/tests/api/test_track_comments.py"
@@ -111,7 +111,7 @@ max_lines = 1087
 
 [[rules]]
 path = "frontend/src/lib/components/Queue.svelte"
-max_lines = 929
+max_lines = 952
 
 [[rules]]
 path = "frontend/src/lib/components/SearchModal.svelte"
@@ -131,7 +131,7 @@ max_lines = 622
 
 [[rules]]
 path = "frontend/src/lib/components/player/Player.svelte"
-max_lines = 725
+max_lines = 727
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"

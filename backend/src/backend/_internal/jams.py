@@ -48,6 +48,7 @@ def _empty_state() -> dict[str, Any]:
         "server_time_ms": int(time.time() * 1000),
         "output_client_id": None,
         "output_did": None,
+        "output_mode": "one_speaker",
     }
 
 
@@ -342,6 +343,17 @@ class JamService:
                         return None
                 else:
                     return None
+            elif cmd_type == "set_mode":
+                # host-only
+                if did != jam.host_did:
+                    return None
+                new_mode = command.get("mode")
+                if new_mode not in ("one_speaker", "everyone"):
+                    return None
+                state["output_mode"] = new_mode
+                if new_mode == "everyone":
+                    state["output_client_id"] = None
+                    state["output_did"] = None
             else:
                 logger.warning("unknown jam command type: %s", cmd_type)
                 return None
@@ -447,6 +459,8 @@ class JamService:
             jam = await self._fetch_jam_by_id(db, jam_id)
             if not jam or not jam.is_active:
                 return
+            if jam.state.get("output_mode") == "everyone":
+                return  # no single output to clear
             if jam.state.get("output_client_id") != client_id:
                 return
             state = copy.deepcopy(jam.state)
@@ -503,6 +517,7 @@ class JamService:
                 if (
                     jam
                     and jam.is_active
+                    and jam.state.get("output_mode", "one_speaker") == "one_speaker"
                     and jam.state.get("output_client_id") is None
                     and did == jam.host_did
                 ):

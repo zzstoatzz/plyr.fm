@@ -605,7 +605,9 @@
 		{#if jam.active}
 			<div class="jam-stripe-label">
 				<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>{#if jam.isOutputDevice}<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>{/if}</svg>
-				{#if jam.isOutputDevice}
+				{#if jam.outputMode === 'everyone'}
+					<span class="muted">everyone plays</span>
+				{:else if jam.isOutputDevice}
 					playing here
 				{:else if jam.outputClientId}
 					playing elsewhere

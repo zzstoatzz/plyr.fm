@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { API_URL } from './config';
+import { auth } from '$lib/auth.svelte';
 import { queue, type JamBridge } from './queue.svelte';
 import type { JamInfo, JamParticipant, JamPlaybackState, Track } from './types';
 
@@ -21,6 +22,7 @@ class JamState {
 	clientId = $state<string>('');
 	outputClientId = $state<string | null>(null);
 	outputDid = $state<string | null>(null);
+	outputMode = $state<'one_speaker' | 'everyone'>('one_speaker');
 
 	private ws: WebSocket | null = null;
 	private lastStreamId: string | null = null;
@@ -52,7 +54,12 @@ class JamState {
 	}
 
 	get isOutputDevice(): boolean {
+		if (this.outputMode === 'everyone') return true;
 		return this.clientId !== '' && this.clientId === this.outputClientId;
+	}
+
+	get isHost(): boolean {
+		return !!this.jam && this.jam.host_did === auth.user?.did;
 	}
 
 	private createBridge(): JamBridge {
@@ -187,6 +194,10 @@ class JamState {
 
 	setOutput(): void {
 		this.sendCommand({ type: 'set_output', client_id: this.clientId });
+	}
+
+	setMode(mode: 'one_speaker' | 'everyone'): void {
+		this.sendCommand({ type: 'set_mode', mode });
 	}
 
 	private sendCommand(payload: Record<string, unknown>): void {
@@ -333,6 +344,7 @@ class JamState {
 		this.serverTimeMs = state.server_time_ms;
 		this.outputClientId = state.output_client_id ?? null;
 		this.outputDid = state.output_did ?? null;
+		this.outputMode = state.output_mode ?? 'one_speaker';
 
 		if (data.tracks_changed && Array.isArray(data.tracks)) {
 			this.tracks = data.tracks as Track[];
@@ -370,6 +382,7 @@ class JamState {
 		this.serverTimeMs = state.server_time_ms;
 		this.outputClientId = state.output_client_id ?? null;
 		this.outputDid = state.output_did ?? null;
+		this.outputMode = state.output_mode ?? 'one_speaker';
 
 		this.syncToQueue();
 	}
@@ -393,6 +406,7 @@ class JamState {
 		this.lastStreamId = null;
 		this.outputClientId = null;
 		this.outputDid = null;
+		this.outputMode = 'one_speaker';
 	}
 
 	destroy(): void {

@@ -172,5 +172,6 @@ export interface JamPlaybackState {
 	server_time_ms: number;
 	output_client_id?: string | null;
 	output_did?: string | null;
+	output_mode?: 'one_speaker' | 'everyone';
 }
 
