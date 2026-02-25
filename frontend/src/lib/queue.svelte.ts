@@ -12,6 +12,8 @@ export interface JamBridge {
 	playTrack(fileId: string): void;
 	addTracks(fileIds: string[]): void;
 	removeTrack(index: number): void;
+	moveTrack(fromIndex: number, toIndex: number): void;
+	clearUpcoming(): void;
 	setIndex(index: number): void;
 	next(): void;
 	previous(): void;
@@ -621,7 +623,10 @@ class Queue {
 	}
 
 	moveTrack(fromIndex: number, toIndex: number) {
-		if (this.jamBridge) return; // no move_track command — block during jams
+		if (this.jamBridge) {
+			this.jamBridge.moveTrack(fromIndex, toIndex);
+			return;
+		}
 		if (fromIndex === toIndex) return;
 		if (fromIndex < 0 || fromIndex >= this.tracks.length) return;
 		if (toIndex < 0 || toIndex >= this.tracks.length) return;
@@ -680,7 +685,10 @@ class Queue {
 	}
 
 	clearUpNext() {
-		if (this.jamBridge) return; // no clear command — block during jams
+		if (this.jamBridge) {
+			this.jamBridge.clearUpcoming();
+			return;
+		}
 		if (this.tracks.length === 0) return;
 
 		this.lastUpdateWasLocal = true;

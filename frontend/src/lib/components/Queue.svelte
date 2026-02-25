@@ -192,6 +192,15 @@
 							</svg>
 						</button>
 					{/if}
+					{#if upcoming.length > 0}
+						<button
+							class="clear-btn"
+							onclick={() => queue.clearUpNext()}
+							title="clear upcoming tracks"
+						>
+							clear
+						</button>
+					{/if}
 					<button class="share-btn" onclick={shareJam} title="share jam link">
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<circle cx="18" cy="5" r="3"></circle>
@@ -313,21 +322,19 @@
 						{#each upcoming as { track, index } (`${track.file_id}:${index}`)}
 							<div
 								class="queue-track"
-								class:drag-over={!jam.active && dragOverIndex === index && touchDragIndex !== index}
-								class:is-dragging={!jam.active && (touchDragIndex === index || draggedIndex === index)}
+								class:drag-over={dragOverIndex === index && touchDragIndex !== index}
+								class:is-dragging={touchDragIndex === index || draggedIndex === index}
 								data-index={index}
-								draggable={!jam.active}
+								draggable={true}
 								role="button"
 								tabindex="0"
-								ondragstart={jam.active ? undefined : (e) => handleDragStart(e, index)}
-								ondragover={jam.active ? undefined : (e) => handleDragOver(e, index)}
-								ondrop={jam.active ? undefined : (e) => handleDrop(e, index)}
-								ondragend={jam.active ? undefined : handleDragEnd}
+								ondragstart={(e) => handleDragStart(e, index)}
+								ondragover={(e) => handleDragOver(e, index)}
+								ondrop={(e) => handleDrop(e, index)}
+								ondragend={handleDragEnd}
 								onclick={() => handleTrackClick(index)}
 								onkeydown={(e) => e.key === 'Enter' && handleTrackClick(index)}
 							>
-								<!-- drag handle for reordering (hidden during jams — no reorder command) -->
-								{#if !jam.active}
 								<button
 									class="drag-handle"
 									ontouchstart={(e) => handleTouchStart(e, index)}
@@ -344,7 +351,6 @@
 										<circle cx="11" cy="13" r="1.5"></circle>
 									</svg>
 								</button>
-								{/if}
 
 								<div class="track-info">
 									<div class="track-title">{track.title}</div>

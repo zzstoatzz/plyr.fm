@@ -389,6 +389,99 @@ async def test_command_remove_track(
     assert response.json()["tracks_changed"] is True
 
 
+async def test_command_move_track(test_app: FastAPI, db_session: AsyncSession) -> None:
+    """test move_track command reorders tracks and adjusts current_index."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/jams/",
+            json={"track_ids": ["t1", "t2", "t3", "t4"]},
+        )
+        code = create_response.json()["code"]
+
+        # move t3 (index 2) to index 0 — current is 0 (t1), should shift to 1
+        response = await client.post(
+            f"/jams/{code}/command",
+            json={"type": "move_track", "from_index": 2, "to_index": 0},
+        )
+        assert response.status_code == 200
+        state = response.json()["state"]
+        assert state["track_ids"] == ["t3", "t1", "t2", "t4"]
+        assert state["current_index"] == 1
+        assert state["current_track_id"] == "t1"
+
+        # move currently-playing track (index 1, t1) to index 3
+        response = await client.post(
+            f"/jams/{code}/command",
+            json={"type": "move_track", "from_index": 1, "to_index": 3},
+        )
+        state = response.json()["state"]
+        assert state["track_ids"] == ["t3", "t2", "t4", "t1"]
+        assert state["current_index"] == 3
+        assert state["current_track_id"] == "t1"
+
+    assert response.json()["tracks_changed"] is True
+
+
+async def test_command_move_track_noop(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test move_track with same index or out-of-bounds is a no-op."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/jams/",
+            json={"track_ids": ["t1", "t2"]},
+        )
+        code = create_response.json()["code"]
+
+        # same index — no-op
+        response = await client.post(
+            f"/jams/{code}/command",
+            json={"type": "move_track", "from_index": 0, "to_index": 0},
+        )
+        assert response.status_code == 200
+        assert response.json()["state"]["track_ids"] == ["t1", "t2"]
+
+        # out-of-bounds — no-op
+        response = await client.post(
+            f"/jams/{code}/command",
+            json={"type": "move_track", "from_index": 0, "to_index": 5},
+        )
+    assert response.json()["state"]["track_ids"] == ["t1", "t2"]
+
+
+async def test_command_clear_upcoming(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test clear_upcoming removes all tracks after current."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/jams/",
+            json={"track_ids": ["t1", "t2", "t3", "t4"]},
+        )
+        code = create_response.json()["code"]
+
+        # advance to index 1
+        await client.post(f"/jams/{code}/command", json={"type": "next"})
+
+        # clear upcoming
+        response = await client.post(
+            f"/jams/{code}/command", json={"type": "clear_upcoming"}
+        )
+
+    assert response.status_code == 200
+    state = response.json()["state"]
+    assert state["track_ids"] == ["t1", "t2"]
+    assert state["current_index"] == 1
+    assert state["current_track_id"] == "t2"
+    assert response.json()["tracks_changed"] is True
+
+
 async def test_revision_monotonicity(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:

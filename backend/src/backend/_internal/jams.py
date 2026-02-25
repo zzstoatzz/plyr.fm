@@ -367,6 +367,38 @@ class JamService:
                     state["current_track_id"] = (
                         track_ids[ci] if track_ids and ci < len(track_ids) else None
                     )
+            elif cmd_type == "move_track":
+                from_idx = command.get("from_index")
+                to_idx = command.get("to_index")
+                track_ids = state.get("track_ids", [])
+                if (
+                    from_idx is not None
+                    and to_idx is not None
+                    and from_idx != to_idx
+                    and 0 <= from_idx < len(track_ids)
+                    and 0 <= to_idx < len(track_ids)
+                ):
+                    moved = track_ids.pop(from_idx)
+                    track_ids.insert(to_idx, moved)
+                    state["track_ids"] = track_ids
+                    # adjust current_index to follow the currently-playing track
+                    current = state.get("current_index", 0)
+                    if from_idx == current:
+                        state["current_index"] = to_idx
+                    elif from_idx < current <= to_idx:
+                        state["current_index"] = current - 1
+                    elif to_idx <= current < from_idx:
+                        state["current_index"] = current + 1
+                    ci = state.get("current_index", 0)
+                    state["current_track_id"] = (
+                        track_ids[ci] if track_ids and ci < len(track_ids) else None
+                    )
+            elif cmd_type == "clear_upcoming":
+                track_ids = state.get("track_ids", [])
+                current = state.get("current_index", 0)
+                if track_ids and 0 <= current < len(track_ids):
+                    state["track_ids"] = track_ids[: current + 1]
+                    # current_index and current_track_id stay the same
             elif cmd_type == "set_output":
                 # validate: the client_id must belong to the sender's WS in THIS jam
                 requested_client_id = command.get("client_id")
@@ -396,7 +428,13 @@ class JamService:
             await db.refresh(jam)
 
             # determine if tracks changed
-            tracks_changed = cmd_type in ("add_tracks", "remove_track", "play_track")
+            tracks_changed = cmd_type in (
+                "add_tracks",
+                "remove_track",
+                "play_track",
+                "move_track",
+                "clear_upcoming",
+            )
 
             tracks: list[dict[str, Any]] = []
             if tracks_changed:

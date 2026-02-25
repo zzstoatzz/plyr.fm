@@ -46,6 +46,9 @@ class CommandRequest(BaseModel):
     track_ids: list[str] | None = None
     index: int | None = None
     client_id: str | None = None
+    file_id: str | None = None
+    from_index: int | None = None
+    to_index: int | None = None
 
 
 class JamResponse(BaseModel):
@@ -191,6 +194,12 @@ async def jam_command(
         command["index"] = body.index
     if body.client_id is not None:
         command["client_id"] = body.client_id
+    if body.file_id is not None:
+        command["file_id"] = body.file_id
+    if body.from_index is not None:
+        command["from_index"] = body.from_index
+    if body.to_index is not None:
+        command["to_index"] = body.to_index
 
     result = await jam_service.handle_command(jam["id"], session.did, command)
     if not result:

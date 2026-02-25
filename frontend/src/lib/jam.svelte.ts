@@ -60,6 +60,9 @@ class JamState {
 			playTrack: (fileId) => this.sendCommand({ type: 'play_track', file_id: fileId }),
 			addTracks: (fileIds) => this.sendCommand({ type: 'add_tracks', track_ids: fileIds }),
 			removeTrack: (index) => this.sendCommand({ type: 'remove_track', index }),
+			moveTrack: (fromIndex, toIndex) =>
+				this.sendCommand({ type: 'move_track', from_index: fromIndex, to_index: toIndex }),
+			clearUpcoming: () => this.sendCommand({ type: 'clear_upcoming' }),
 			setIndex: (index) => this.sendCommand({ type: 'set_index', index }),
 			next: () => this.sendCommand({ type: 'next' }),
 			previous: () => this.sendCommand({ type: 'previous' }),
