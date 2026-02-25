@@ -162,68 +162,59 @@
 	<div class="queue" class:jam-mode={jam.active}>
 		<div class="queue-header">
 			{#if jam.active}
-				<div class="jam-info">
-					<span class="jam-name">{jam.jam?.name ?? 'jam'}</span>
-					<div class="jam-meta">
+				<div class="jam-header-row">
+					<div class="jam-identity">
 						<span class="connection-dot" class:connected={jam.connected} class:reconnecting={jam.reconnecting}></span>
+						<span class="jam-name">{jam.jam?.name ?? 'jam'}</span>
 						<span class="jam-code">{jam.code}</span>
-						{#if jam.outputMode === 'everyone'}
-							<span class="output-status">everyone plays</span>
-						{:else if jam.outputClientId}
-							<span class="output-status">
-								{#if jam.isOutputDevice}
-									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-									playing here
-								{:else}
-									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-									{outputParticipant ? `playing on ${outputParticipant.display_name ?? outputParticipant.handle}` : 'playing elsewhere'}
-								{/if}
-							</span>
-						{:else}
-							<span class="output-status no-output">no output</span>
+					</div>
+					<div class="queue-actions">
+						{#if upcoming.length > 0}
+							<button
+								class="clear-btn"
+								onclick={() => queue.clearUpNext()}
+								title="clear upcoming tracks"
+							>
+								clear
+							</button>
 						{/if}
+						<button class="share-btn" onclick={shareJam} title="share jam link">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="18" cy="5" r="3"></circle>
+								<circle cx="6" cy="12" r="3"></circle>
+								<circle cx="18" cy="19" r="3"></circle>
+								<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+								<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+							</svg>
+						</button>
+						<button class="leave-btn" onclick={leaveJam} title="leave jam">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+								<polyline points="16 17 21 12 16 7"></polyline>
+								<line x1="21" y1="12" x2="9" y2="12"></line>
+							</svg>
+						</button>
 					</div>
 				</div>
-				<div class="queue-actions">
+				<div class="jam-output-row">
+					<span class="output-status">
+						{#if jam.outputMode === 'everyone'}
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+							everyone plays
+						{:else if jam.isOutputDevice}
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+							playing here
+						{:else}
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+							<span class="output-name">{outputParticipant ? (outputParticipant.display_name ?? outputParticipant.handle) : 'elsewhere'}</span>
+							<button class="pill-btn" onclick={() => jam.setOutput()}>play here</button>
+						{/if}
+					</span>
 					{#if jam.isHost}
-						<button class="mode-toggle" onclick={() => jam.setMode(jam.outputMode === 'everyone' ? 'one_speaker' : 'everyone')} title={jam.outputMode === 'everyone' ? 'switch to one speaker' : 'let everyone play'}>
+						<button class="pill-btn" onclick={() => jam.setMode(jam.outputMode === 'everyone' ? 'one_speaker' : 'everyone')} title={jam.outputMode === 'everyone' ? 'switch to one speaker' : 'let everyone play'}>
 							{jam.outputMode === 'everyone' ? 'one speaker' : 'everyone'}
 						</button>
 					{/if}
-					{#if jam.outputMode !== 'everyone' && !jam.isOutputDevice}
-						<button class="output-btn" onclick={() => jam.setOutput()} title="play audio on this device">
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-								<path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-								<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-							</svg>
-						</button>
-					{/if}
-					{#if upcoming.length > 0}
-						<button
-							class="clear-btn"
-							onclick={() => queue.clearUpNext()}
-							title="clear upcoming tracks"
-						>
-							clear
-						</button>
-					{/if}
-					<button class="share-btn" onclick={shareJam} title="share jam link">
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<circle cx="18" cy="5" r="3"></circle>
-							<circle cx="6" cy="12" r="3"></circle>
-							<circle cx="18" cy="19" r="3"></circle>
-							<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-							<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-						</svg>
-					</button>
-					<button class="leave-btn" onclick={leaveJam} title="leave jam">
-						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-							<polyline points="16 17 21 12 16 7"></polyline>
-							<line x1="21" y1="12" x2="9" y2="12"></line>
-						</svg>
-					</button>
 				</div>
 			{:else}
 				<h2>queue</h2>
@@ -422,11 +413,52 @@
 		border-image: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6, #ff6b6b) 1;
 	}
 
-	.jam-info {
+	.jam-header-row {
 		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.jam-identity {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
 		min-width: 0;
+		overflow: hidden;
+	}
+
+	.jam-output-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.output-name {
+		max-width: 140px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		display: inline-block;
+		vertical-align: bottom;
+	}
+
+	.pill-btn {
+		padding: 0.125rem 0.5rem;
+		font-size: var(--text-xs);
+		font-family: inherit;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-tertiary);
+		border-radius: var(--radius-full);
+		cursor: pointer;
+		transition: all 0.15s ease;
+		white-space: nowrap;
+	}
+
+	.pill-btn:hover {
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 
 	.jam-name {
@@ -437,12 +469,8 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-	}
-
-	.jam-meta {
-		display: flex;
-		align-items: center;
-		gap: 0.375rem;
+		min-width: 0;
+		flex-shrink: 1;
 	}
 
 	.connection-dot {
@@ -472,6 +500,7 @@
 		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 		font-family: monospace;
+		flex-shrink: 0;
 	}
 
 	.share-btn,
@@ -542,6 +571,12 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+	}
+
+	.jam-mode .queue-header {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.375rem;
 	}
 
 	.queue-actions {
@@ -891,48 +926,8 @@
 		gap: 0.25rem;
 		font-size: var(--text-xs);
 		color: var(--text-tertiary);
-	}
-
-	.output-status.no-output {
-		color: var(--text-muted);
-	}
-
-	.mode-toggle {
-		padding: 0.125rem 0.5rem;
-		font-size: var(--text-xs);
-		font-family: inherit;
-		background: transparent;
-		border: 1px solid var(--border-subtle);
-		color: var(--text-tertiary);
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.mode-toggle:hover {
-		color: var(--accent);
-		border-color: var(--accent);
-	}
-
-	.output-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		padding: 0;
-		background: transparent;
-		border: 1px solid var(--border-subtle);
-		color: var(--text-tertiary);
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.output-btn:hover {
-		color: var(--accent);
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		min-width: 0;
+		overflow: hidden;
 	}
 
 	.speaker-badge {

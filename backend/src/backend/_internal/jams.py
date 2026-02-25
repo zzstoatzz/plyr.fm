@@ -453,8 +453,27 @@ class JamService:
         with contextlib.suppress(Exception):
             await old_ws.close(code=4010, reason="replaced by new connection")
 
+    def _find_fallback_output(
+        self, jam_id: str, host_did: str, *, exclude_client_ids: set[str] | None = None
+    ) -> tuple[str, str] | None:
+        """find a connected client to be fallback output. returns (did, client_id) or None. prefers host."""
+        fallback: tuple[str, str] | None = None
+        for ws in self._connections.get(jam_id, set()):
+            if not (client_id := self._ws_client_ids.get(ws)):
+                continue
+            if exclude_client_ids and client_id in exclude_client_ids:
+                continue
+            for did, (jid, w) in self._ws_by_did.items():
+                if jid == jam_id and w is ws:
+                    if did == host_did:
+                        return (did, client_id)  # host preferred
+                    if fallback is None:
+                        fallback = (did, client_id)
+                    break
+        return fallback
+
     async def _clear_output_if_matches(self, jam_id: str, client_id: str) -> None:
-        """clear output_client_id and pause if it matches the given client_id."""
+        """clear output_client_id if it matches the given client_id. tries fallback before pausing."""
         async with db_session() as db:
             jam = await self._fetch_jam_by_id(db, jam_id)
             if not jam or not jam.is_active:
@@ -463,10 +482,23 @@ class JamService:
                 return  # no single output to clear
             if jam.state.get("output_client_id") != client_id:
                 return
+
             state = copy.deepcopy(jam.state)
-            state["output_client_id"] = None
-            state["output_did"] = None
-            state["is_playing"] = False
+
+            # try to find a fallback output device
+            if fallback := self._find_fallback_output(
+                jam_id, jam.host_did, exclude_client_ids={client_id}
+            ):
+                fallback_did, fallback_client_id = fallback
+                state["output_client_id"] = fallback_client_id
+                state["output_did"] = fallback_did
+                actor_type = "output_fallback"
+            else:
+                state["output_client_id"] = None
+                state["output_did"] = None
+                state["is_playing"] = False
+                actor_type = "output_disconnected"
+
             jam.state = state
             jam.revision += 1
             jam.updated_at = datetime.now(UTC)
@@ -479,7 +511,7 @@ class JamService:
                     "revision": jam.revision,
                     "state": state,
                     "tracks_changed": False,
-                    "actor": {"did": "system", "type": "output_disconnected"},
+                    "actor": {"did": "system", "type": actor_type},
                 },
             )
 
@@ -511,7 +543,7 @@ class JamService:
         if client_id := message.get("client_id"):
             self._ws_client_ids[ws] = client_id
 
-            # auto-set output to host on first connect if no output set
+            # auto-set output on connect if no output set (any client, not just host)
             async with db_session() as db:
                 jam = await self._fetch_jam_by_id(db, jam_id)
                 if (
@@ -519,7 +551,6 @@ class JamService:
                     and jam.is_active
                     and jam.state.get("output_mode", "one_speaker") == "one_speaker"
                     and jam.state.get("output_client_id") is None
-                    and did == jam.host_did
                 ):
                     state = copy.deepcopy(jam.state)
                     state["output_client_id"] = client_id
