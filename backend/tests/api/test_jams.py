@@ -1163,3 +1163,197 @@ async def test_update_queue_clamps_index(
         r = await _update_queue(client, code, [], 0)
         assert r["state"]["current_index"] == 0
         assert r["state"]["current_track_id"] is None
+
+
+# ── output mode tests ──────────────────────────────────────────────
+
+
+async def test_set_mode_host_only(
+    test_app: FastAPI, db_session: AsyncSession, second_user: str
+) -> None:
+    """test that only the host can set output mode."""
+    from backend._internal import require_auth
+
+    # create jam as host
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": ["t1"]})
+        code = create_response.json()["code"]
+
+    # switch to second user
+    async def mock_joiner_auth() -> Session:
+        return MockSession(did=second_user)
+
+    app.dependency_overrides[require_auth] = mock_joiner_auth
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        await client.post(f"/jams/{code}/join")
+
+        # non-host tries to set mode — should fail
+        response = await client.post(
+            f"/jams/{code}/command",
+            json={"type": "set_mode", "mode": "everyone"},
+        )
+
+    assert response.status_code == 400
+
+
+async def test_set_mode_everyone(test_app: FastAPI, db_session: AsyncSession) -> None:
+    """test that host can set mode to everyone and output fields are cleared."""
+    from starlette.websockets import WebSocket
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": ["t1"]})
+        code = create_response.json()["code"]
+        jam_id = create_response.json()["id"]
+
+    # set up host as output device first
+    ws = AsyncMock(spec=WebSocket)
+    await jam_service.connect_ws(jam_id, ws, "did:test:host")
+    jam_service._ws_client_ids[ws] = "host-client"
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        await client.post(
+            f"/jams/{code}/command",
+            json={"type": "set_output", "client_id": "host-client"},
+        )
+
+        # switch to everyone mode
+        response = await client.post(
+            f"/jams/{code}/command",
+            json={"type": "set_mode", "mode": "everyone"},
+        )
+
+    assert response.status_code == 200
+    state = response.json()["state"]
+    assert state["output_mode"] == "everyone"
+    assert state["output_client_id"] is None
+    assert state["output_did"] is None
+
+    await jam_service.disconnect_ws(jam_id, ws)
+
+
+async def test_set_mode_back_to_one_speaker(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test round-trip: one_speaker → everyone → one_speaker."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": ["t1"]})
+        code = create_response.json()["code"]
+        assert create_response.json()["state"]["output_mode"] == "one_speaker"
+
+        # switch to everyone
+        r1 = await client.post(
+            f"/jams/{code}/command",
+            json={"type": "set_mode", "mode": "everyone"},
+        )
+        assert r1.json()["state"]["output_mode"] == "everyone"
+
+        # switch back to one_speaker
+        r2 = await client.post(
+            f"/jams/{code}/command",
+            json={"type": "set_mode", "mode": "one_speaker"},
+        )
+        assert r2.json()["state"]["output_mode"] == "one_speaker"
+
+
+async def test_everyone_mode_skips_output_disconnect_pause(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test that in everyone mode, disconnecting a WS does NOT pause playback."""
+    from starlette.websockets import WebSocket
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/jams/", json={"track_ids": ["t1"], "is_playing": True}
+        )
+        code = create_response.json()["code"]
+        jam_id = create_response.json()["id"]
+
+        # switch to everyone mode
+        await client.post(
+            f"/jams/{code}/command",
+            json={"type": "set_mode", "mode": "everyone"},
+        )
+
+    # connect a WS and then disconnect it
+    ws = AsyncMock(spec=WebSocket)
+    await jam_service.connect_ws(jam_id, ws, "did:test:host")
+    jam_service._ws_client_ids[ws] = "host-client"
+    await jam_service.disconnect_ws(jam_id, ws)
+
+    # jam should still be playing
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        get_response = await client.get(f"/jams/{code}")
+        state = get_response.json()["state"]
+        assert state["is_playing"] is True
+        assert state["output_mode"] == "everyone"
+
+
+async def test_everyone_mode_skips_auto_output(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test that in everyone mode, host sync does NOT auto-assign output."""
+    from starlette.websockets import WebSocket
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": ["t1"]})
+        code = create_response.json()["code"]
+        jam_id = create_response.json()["id"]
+
+        # switch to everyone mode
+        await client.post(
+            f"/jams/{code}/command",
+            json={"type": "set_mode", "mode": "everyone"},
+        )
+
+    # host connects and sends sync
+    ws = AsyncMock(spec=WebSocket)
+    await jam_service.connect_ws(jam_id, ws, "did:test:host")
+    await jam_service._handle_sync(
+        jam_id, "did:test:host", {"client_id": "host-abc", "last_id": None}, ws
+    )
+
+    # output_client_id should remain None (not auto-set)
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        get_response = await client.get(f"/jams/{code}")
+        state = get_response.json()["state"]
+        assert state["output_client_id"] is None
+        assert state["output_mode"] == "everyone"
+
+    await jam_service.disconnect_ws(jam_id, ws)
+
+
+async def test_set_mode_invalid_value(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test that an invalid mode value is rejected."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"track_ids": ["t1"]})
+        code = create_response.json()["code"]
+
+        response = await client.post(
+            f"/jams/{code}/command",
+            json={"type": "set_mode", "mode": "invalid_mode"},
+        )
+
+    assert response.status_code == 400

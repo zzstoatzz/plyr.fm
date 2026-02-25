@@ -167,7 +167,9 @@
 					<div class="jam-meta">
 						<span class="connection-dot" class:connected={jam.connected} class:reconnecting={jam.reconnecting}></span>
 						<span class="jam-code">{jam.code}</span>
-						{#if jam.outputClientId}
+						{#if jam.outputMode === 'everyone'}
+							<span class="output-status">everyone plays</span>
+						{:else if jam.outputClientId}
 							<span class="output-status">
 								{#if jam.isOutputDevice}
 									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
@@ -183,7 +185,12 @@
 					</div>
 				</div>
 				<div class="queue-actions">
-					{#if !jam.isOutputDevice}
+					{#if jam.isHost}
+						<button class="mode-toggle" onclick={() => jam.setMode(jam.outputMode === 'everyone' ? 'one_speaker' : 'everyone')} title={jam.outputMode === 'everyone' ? 'switch to one speaker' : 'let everyone play'}>
+							{jam.outputMode === 'everyone' ? 'one speaker' : 'everyone'}
+						</button>
+					{/if}
+					{#if jam.outputMode !== 'everyone' && !jam.isOutputDevice}
 						<button class="output-btn" onclick={() => jam.setOutput()} title="play audio on this device">
 							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -265,7 +272,7 @@
 		{#if jam.active && jam.participants.length > 0}
 			<div class="participants-strip">
 				{#each jam.participants as participant (participant.did)}
-					<div class="participant-chip" class:is-output={participant.did === jam.outputDid} title={participant.display_name ?? participant.handle}>
+					<div class="participant-chip" class:is-output={jam.outputMode !== 'everyone' && participant.did === jam.outputDid} title={participant.display_name ?? participant.handle}>
 						{#if participant.avatar_url}
 							<img src={participant.avatar_url} alt="" class="participant-avatar" />
 						{:else}
@@ -276,7 +283,7 @@
 								</svg>
 							</div>
 						{/if}
-						{#if participant.did === jam.outputDid}
+						{#if jam.outputMode !== 'everyone' && participant.did === jam.outputDid}
 							<div class="speaker-badge">
 								<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none">
 									<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -888,6 +895,23 @@
 
 	.output-status.no-output {
 		color: var(--text-muted);
+	}
+
+	.mode-toggle {
+		padding: 0.125rem 0.5rem;
+		font-size: var(--text-xs);
+		font-family: inherit;
+		background: transparent;
+		border: 1px solid var(--border-subtle);
+		color: var(--text-tertiary);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.mode-toggle:hover {
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 
 	.output-btn {

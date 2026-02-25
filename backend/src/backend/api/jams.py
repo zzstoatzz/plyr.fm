@@ -46,6 +46,7 @@ class CommandRequest(BaseModel):
     track_ids: list[str] | None = None
     current_index: int | None = None
     client_id: str | None = None
+    mode: str | None = None
 
 
 class JamResponse(BaseModel):
@@ -191,6 +192,8 @@ async def jam_command(
         command["current_index"] = body.current_index
     if body.client_id is not None:
         command["client_id"] = body.client_id
+    if body.mode is not None:
+        command["mode"] = body.mode
 
     result = await jam_service.handle_command(jam["id"], session.did, command)
     if not result:
