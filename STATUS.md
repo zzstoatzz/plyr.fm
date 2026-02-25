@@ -47,17 +47,35 @@ plyr.fm should become:
 
 ### February 2026
 
-#### jams — shared listening rooms (Feb 19)
+#### unified queue/jam architecture + output device (PRs #949-960, Feb 19-25)
 
-real-time shared listening rooms. one user creates a jam, gets a shareable code (`plyr.fm/jam/a1b2c3d4`), and anyone with the link can join. all participants control playback — play, pause, seek, next, previous, add/remove tracks. no chat, no host-only lock.
+**jams — shared listening rooms (PR #949)**: real-time shared listening rooms. one user creates a jam, gets a shareable code (`plyr.fm/jam/a1b2c3d4`), and anyone with the link can join. all participants control playback. `Jam` and `JamParticipant` models with partial indexes. `JamService` singleton manages lifecycle, WebSocket connections, and Redis Streams fan-out. playback state is server-authoritative — JSONB with monotonic revision counter. server-timestamp + client interpolation for sync. reconnect replays missed events via `XRANGE`, falls back to full DB snapshot if trimmed. personal queue preserved and restored on leave. gated behind `jams` feature flag. see `docs/architecture/jams.md`.
 
-**backend**: `Jam` and `JamParticipant` models with partial indexes. `JamService` singleton manages lifecycle, WebSocket connections, and Redis Streams fan-out. playback state is server-authoritative — stored as JSONB with monotonic revision counter. commands mutate state, increment revision, commit, and publish to Redis stream. each backend instance runs `XREAD BLOCK` per active jam and fans out to connected WebSockets.
+**output device — single-speaker mode (PR #953)**: one participant's browser plays audio, everyone else is a remote control. `output_client_id` / `output_did` in jam state with `set_output` command. auto-set to host on first WS sync. output clears + pauses when the output device disconnects or leaves. "play here" button transfers audio to any participant. fixed three browser-level playback bugs during integration: autoplay policy (WS round-trip broke user gesture context), audio event fight (drift correction seeking triggered pause/play loop), and output transfer (old device didn't stop audio on transfer).
 
-**frontend**: `JamState` class (`lib/jam.svelte.ts`) with Svelte 5 runes. WebSocket lifecycle with exponential backoff reconnect (1s → 30s). Player.svelte has jam-aware effects — track sync from jam state instead of personal queue, drift correction (seek if >2s off from server timestamp). PlaybackControls routes commands through jam when active. jam page at `/jam/[code]` with track display, controls, participant avatars, share button.
+**jam queue unification (PR #960)**: a jam is just a shared queue — the backend shouldn't reimplement queue manipulation. replaced ~100 lines of duplicated backend queue logic (`next`, `previous`, `add_tracks`, `remove_track`, `move_track`, `clear_upcoming`, `play_track`, `set_index`) with a single `update_queue` command. frontend does all mutation locally (same code path for solo and jam), then pushes the resulting state. `JamBridge` simplified from 11 methods to 4 (`pushQueueState`, `play`, `pause`, `seek`). enables `setQueue`, `clear`, and `playNow` in jams for free. net -189 lines.
 
-**sync**: server-timestamp + client interpolation (`progress_ms + (Date.now() - server_time_ms)`). reconnect replays missed events via `XRANGE` from last stream ID, falls back to full DB snapshot if trimmed. personal queue preserved and restored on leave.
+**reliability fixes**: deepcopy jam state to prevent shallow-copy clobber — `dict(jam.state)` shared nested list references, so in-place mutations went undetected by SQLAlchemy (PR #959). prevented personal queue fetch from overwriting jam state (PR #952). surfaced backend error detail on jam join failure (PR #951).
 
-gated behind `jams` feature flag. 19 backend tests covering full lifecycle, all commands, revision monotonicity, flag gating, auto-leave. see `docs/architecture/jams.md`.
+42 backend tests covering lifecycle, all commands, output device, cross-client sync, revision monotonicity, flag gating.
+
+---
+
+#### ATProto spec-compliant scope parsing (PRs #955, #957, Feb 24)
+
+replaced naive set-subset scope checking with `ScopesSet` from the atproto SDK. handles the full ATProto permission grammar: positional/query format equivalence (`repo:nsid` == `repo?collection=nsid`), wildcard matching (`repo:*`), action filtering, and MIME patterns for blob scopes. follow-up fix for `include:` scope expansion — PDS servers expand `include:ns.permSet` into granular `repo:`/`rpc:` scopes, so the granted scope never contains the literal `include:` token. was causing 403 `scope_upgrade_required` for all sessions on staging. fix checks namespace authority via `IncludeScope.is_parent_authority_of()` instead of exact string match. 21 scope tests.
+
+---
+
+#### persist playback position (PR #948, Feb 19)
+
+playback position survives page reloads and session restores. `progress_ms` stored in `QueueState` JSON (zero backend changes — backend stores and returns the dict verbatim). Player syncs `currentTime` → `queue.progressMs` via `$effect`. on page close/hide, `flushSync()` pushes with `keepalive: true` so the fetch survives page teardown. on restore, `loadeddata` handler seeks to saved position (skips if near end of track). 30s periodic save for crash resilience.
+
+---
+
+#### copyright DM fix (PRs #941-942, Feb 16-17)
+
+upload notification DMs were incorrectly going to artists when copyright flags were raised. stopped DMing artists about copyright flags, restored admin-only DM notification so copyright issues go to the right people.
 
 ---
 
@@ -279,7 +297,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-production reliability and caching: Redis read-through caches on session auth and album detail endpoints to mitigate Neon cold-start latency. Dockerfile hardened against PyPI network failures in Fly.io. homepage polish and mobile UX stable in production.
+jams hardening and architecture cleanup: unified queue/jam so frontend does all queue mutation locally with a single `update_queue` command to the backend. output device mode lets one speaker play audio while everyone else is a remote. ATProto scope parsing upgraded to spec-compliant SDK. production reliability stable (Redis caches, Dockerfile hardening).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -453,5 +471,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-19 (jams — shared listening rooms).
+this is a living document. last updated 2026-02-25 (unified queue/jam, output device, scope parsing).
 
