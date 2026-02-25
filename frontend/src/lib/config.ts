@@ -4,7 +4,6 @@ export const API_URL = PUBLIC_API_URL || 'http://localhost:8001';
 
 export const PDS_AUDIO_UPLOADS_FLAG = 'pds-audio-uploads';
 export const VIBE_SEARCH_FLAG = 'vibe-search';
-export const JAMS_FLAG = 'jams';
 
 /**
  * generate atprotofans support URL for an artist.
