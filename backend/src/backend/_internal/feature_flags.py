@@ -13,7 +13,6 @@ from backend.models.feature_flag import FeatureFlag
 KNOWN_FLAGS = frozenset(
     {
         "lossless-uploads",  # enable AIFF/FLAC upload support
-        "pds-audio-uploads",  # enable PDS audio blob uploads
         "vibe-search",  # enable semantic vibe search in Cmd+K
     }
 )
