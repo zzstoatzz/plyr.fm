@@ -1,8 +1,8 @@
-"""fix JSONB null in support_gate — convert to SQL NULL
+"""fix jsonb null in support_gate
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: 97e520a2e2fa
 Revises: f4ff6ce7d78b
-Create Date: 2026-02-26 00:00:00.000000
+Create Date: 2026-02-26 08:50:17.916457
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "a1b2c3d4e5f6"
+revision: str = "97e520a2e2fa"
 down_revision: str | Sequence[str] | None = "f4ff6ce7d78b"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
