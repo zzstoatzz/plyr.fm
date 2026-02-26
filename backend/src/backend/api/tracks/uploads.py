@@ -62,7 +62,6 @@ from .services import get_or_create_album
 
 logger = logging.getLogger(__name__)
 
-PDS_AUDIO_UPLOADS_FLAG = "pds-audio-uploads"
 PDS_AUDIO_UPLOADS_SETTING_KEY = "pds_audio_uploads_enabled"
 
 
@@ -305,9 +304,6 @@ async def _try_upload_to_pds(
 
 async def _should_upload_pds_blob(db: AsyncSession, user_did: str) -> bool:
     """check if PDS audio uploads are enabled for the user."""
-    if not await has_flag(db, user_did, PDS_AUDIO_UPLOADS_FLAG):
-        return False
-
     result = await db.execute(
         select(UserPreferences.ui_settings).where(UserPreferences.did == user_did)
     )

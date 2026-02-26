@@ -1,10 +1,7 @@
 <script lang="ts">
-	import { auth } from '$lib/auth.svelte';
-	import { PDS_AUDIO_UPLOADS_FLAG } from '$lib/config';
 	import { preferences } from '$lib/preferences.svelte';
 	import { toast } from '$lib/toast.svelte';
 
-	let visible = $derived(auth.user?.enabled_flags?.includes(PDS_AUDIO_UPLOADS_FLAG) ?? false);
 	let enabled = $derived(preferences.uiSettings.pds_audio_uploads_enabled ?? false);
 
 	async function handleToggle(event: Event) {
@@ -19,18 +16,16 @@
 	}
 </script>
 
-{#if visible}
-	<div class="setting-row">
-		<div class="setting-info">
-			<h3>store audio on your pds</h3>
-			<p>store uploaded audio on your pds (falls back to plyr.fm storage if too large)</p>
-		</div>
-		<label class="toggle-switch">
-			<input type="checkbox" checked={enabled} onchange={handleToggle} />
-			<span class="toggle-slider"></span>
-		</label>
+<div class="setting-row">
+	<div class="setting-info">
+		<h3>store audio on your pds</h3>
+		<p>store uploaded audio on your pds (falls back to plyr.fm storage if too large)</p>
 	</div>
-{/if}
+	<label class="toggle-switch">
+		<input type="checkbox" checked={enabled} onchange={handleToggle} />
+		<span class="toggle-slider"></span>
+	</label>
+</div>
 
 <style>
 	.setting-row {
