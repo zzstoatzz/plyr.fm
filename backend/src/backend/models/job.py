@@ -49,7 +49,9 @@ class Job(Base):
     phase: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Result/Error
-    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    result: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     error: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Metadata

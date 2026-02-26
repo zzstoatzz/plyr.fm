@@ -100,7 +100,7 @@ class Track(Base):
 
     # supporter-gated content (e.g., {"type": "any"} requires any atprotofans support)
     support_gate: Mapped[dict | None] = mapped_column(
-        JSONB, nullable=True, default=None
+        JSONB(none_as_null=True), nullable=True, default=None
     )
 
     @property
