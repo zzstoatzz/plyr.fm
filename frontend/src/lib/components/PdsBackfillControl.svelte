@@ -40,9 +40,10 @@
 			});
 
 			if (!res.ok) {
+				const err = await res.json().catch(() => null);
 				migrating = false;
 				toast.dismiss(toastId);
-				toast.error('failed to start migration');
+				toast.error(err?.detail || 'failed to start migration');
 				return;
 			}
 
