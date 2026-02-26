@@ -14,20 +14,15 @@ from fastapi import (
 )
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session, has_flag, jam_service, require_auth
+from backend._internal import Session, jam_service, require_auth
 from backend._internal.auth.session import get_session
-from backend.models import get_db
 from backend.models.jam import JamParticipant
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jams", tags=["jams"])
-
-JAMS_FLAG = "jams"
-
 
 # ── request/response models ───────────────────────────────────────
 
@@ -64,26 +59,15 @@ class JamResponse(BaseModel):
     participants: list[dict[str, Any]] = Field(default_factory=list)
 
 
-# ── flag check helper ──────────────────────────────────────────────
-
-
-async def _require_jams_flag(session: Session, db: AsyncSession) -> None:
-    """raise 403 if user doesn't have the jams flag."""
-    if not await has_flag(db, session.did, JAMS_FLAG):
-        raise HTTPException(status_code=403, detail="jams feature not enabled")
-
-
 # ── REST endpoints ─────────────────────────────────────────────────
 
 
 @router.post("/", response_model=JamResponse)
 async def create_jam(
     body: CreateJamRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> JamResponse:
     """create a new jam."""
-    await _require_jams_flag(session, db)
     result = await jam_service.create_jam(
         host_did=session.did,
         name=body.name,
@@ -97,11 +81,9 @@ async def create_jam(
 
 @router.get("/active", response_model=JamResponse | None)
 async def get_active_jam(
-    db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> JamResponse | None:
     """get the user's current active jam."""
-    await _require_jams_flag(session, db)
     result = await jam_service.get_active_jam(session.did)
     if not result:
         return None
@@ -111,11 +93,9 @@ async def get_active_jam(
 @router.get("/{code}", response_model=JamResponse)
 async def get_jam(
     code: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> JamResponse:
     """get jam details by code."""
-    await _require_jams_flag(session, db)
     result = await jam_service.get_jam_by_code(code)
     if not result:
         raise HTTPException(status_code=404, detail="jam not found")
@@ -125,11 +105,9 @@ async def get_jam(
 @router.post("/{code}/join", response_model=JamResponse)
 async def join_jam(
     code: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> JamResponse:
     """join a jam."""
-    await _require_jams_flag(session, db)
     result = await jam_service.join_jam(code, session.did)
     if not result:
         raise HTTPException(status_code=404, detail="jam not found or not active")
@@ -139,11 +117,9 @@ async def join_jam(
 @router.post("/{code}/leave")
 async def leave_jam(
     code: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> dict[str, bool]:
     """leave a jam."""
-    await _require_jams_flag(session, db)
     jam = await jam_service.get_jam_by_code(code)
     if not jam:
         raise HTTPException(status_code=404, detail="jam not found")
@@ -156,11 +132,9 @@ async def leave_jam(
 @router.post("/{code}/end")
 async def end_jam(
     code: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> dict[str, bool]:
     """end a jam (host only)."""
-    await _require_jams_flag(session, db)
     jam = await jam_service.get_jam_by_code(code)
     if not jam:
         raise HTTPException(status_code=404, detail="jam not found")
@@ -174,11 +148,9 @@ async def end_jam(
 async def jam_command(
     code: str,
     body: CommandRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
     session: Session = Depends(require_auth),
 ) -> dict[str, Any]:
     """send a playback command to the jam."""
-    await _require_jams_flag(session, db)
     jam = await jam_service.get_jam_by_code(code)
     if not jam:
         raise HTTPException(status_code=404, detail="jam not found")
@@ -228,12 +200,6 @@ async def jam_websocket(
     if not session:
         await ws.close(code=4001, reason="invalid session")
         return
-
-    # verify flag
-    async with db_session() as db:
-        if not await has_flag(db, session.did, JAMS_FLAG):
-            await ws.close(code=4003, reason="jams feature not enabled")
-            return
 
     # look up jam
     jam = await jam_service.get_jam_by_code(code)

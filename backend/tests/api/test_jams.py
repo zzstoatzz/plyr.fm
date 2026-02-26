@@ -10,7 +10,6 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session
-from backend._internal.feature_flags import enable_flag
 from backend._internal.jams import JamService, jam_service
 from backend.main import app
 from backend.models import Artist
@@ -65,8 +64,6 @@ async def test_app(db_session: AsyncSession) -> AsyncGenerator[FastAPI, None]:
     db_session.add(artist)
     await db_session.flush()
 
-    # enable jams flag for the test user
-    await enable_flag(db_session, "did:test:host", "jams")
     await db_session.commit()
 
     yield app
@@ -83,7 +80,6 @@ async def second_user(db_session: AsyncSession) -> str:
         display_name="Test Joiner",
     )
     db_session.add(artist)
-    await enable_flag(db_session, "did:test:joiner", "jams")
     await db_session.commit()
     return "did:test:joiner"
 
@@ -483,33 +479,6 @@ async def test_auto_leave_previous_jam(
 
     assert active_response.status_code == 200
     assert active_response.json()["code"] == second_code
-
-
-async def test_flag_gating(test_app: FastAPI, db_session: AsyncSession) -> None:
-    """test that users without the jams flag get 403."""
-    from backend._internal import require_auth
-
-    # create a user without the flag
-    no_flag_artist = Artist(
-        did="did:test:noflag",
-        handle="test.noflag",
-        display_name="No Flag",
-    )
-    db_session.add(no_flag_artist)
-    await db_session.commit()
-
-    async def mock_noflag_auth() -> Session:
-        return MockSession(did="did:test:noflag")
-
-    app.dependency_overrides[require_auth] = mock_noflag_auth
-
-    async with AsyncClient(
-        transport=ASGITransport(app=test_app), base_url="http://test"
-    ) as client:
-        response = await client.post("/jams/", json={})
-
-    assert response.status_code == 403
-    assert "not enabled" in response.json()["detail"]
 
 
 async def test_get_active_jam_none(test_app: FastAPI, db_session: AsyncSession) -> None:
@@ -1447,7 +1416,6 @@ async def test_output_fallback_prefers_host(
         display_name="Test Third",
     )
     db_session.add(third_artist)
-    await enable_flag(db_session, third_did, "jams")
     await db_session.commit()
 
     async with AsyncClient(
