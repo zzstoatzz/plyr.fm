@@ -32,6 +32,7 @@ from backend._internal.atproto.records import (
 )
 from backend._internal.auth import get_session
 from backend._internal.recommendations import get_playlist_recommendations
+from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackLike, UserPreferences, get_db
 from backend.schemas import DeletedResponse, TrackResponse
@@ -767,9 +768,6 @@ async def upload_playlist_cover(
         image_id = await storage.save(image_obj, image.filename)
 
         image_url = storage.build_image_url(image_id, ext)
-
-        # generate and save thumbnail
-        from backend._internal.thumbnails import generate_and_save
 
         thumbnail_url = await generate_and_save(bytes(image_data), image_id, "playlist")
 

@@ -27,6 +27,7 @@ from backend._internal import require_artist_profile
 from backend._internal.auth import get_session
 from backend._internal.clients.moderation import get_moderation_client
 from backend._internal.notifications import notification_service
+from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
@@ -504,9 +505,6 @@ async def upload_album_cover(
         image_id = await storage.save(image_obj, image.filename)
 
         image_url = storage.build_image_url(image_id, ext)
-
-        # generate and save thumbnail
-        from backend._internal.thumbnails import generate_and_save
 
         thumbnail_url = await generate_and_save(bytes(image_data), image_id, "album")
 

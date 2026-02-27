@@ -1,10 +1,11 @@
 """tests for thumbnail generation."""
 
 from io import BytesIO
+from unittest.mock import AsyncMock, patch
 
 from PIL import Image
 
-from backend._internal.thumbnails import generate_thumbnail
+from backend._internal.thumbnails import generate_and_save, generate_thumbnail
 
 
 def _make_png(width: int, height: int, mode: str = "RGB") -> bytes:
@@ -82,3 +83,24 @@ def test_generate_thumbnail_returns_bytes():
     assert len(result) > 0
     # WebP magic bytes
     assert result[:4] == b"RIFF"
+
+
+async def test_generate_and_save_returns_url():
+    """generate_and_save returns thumbnail URL on success."""
+    png_data = _make_png(100, 100)
+    mock_storage = AsyncMock()
+    mock_storage.save_thumbnail = AsyncMock(
+        return_value="https://images.test/thumb.webp"
+    )
+
+    with patch("backend.storage.storage", mock_storage):
+        url = await generate_and_save(png_data, "img123", "track")
+
+    assert url == "https://images.test/thumb.webp"
+    mock_storage.save_thumbnail.assert_called_once()
+
+
+async def test_generate_and_save_returns_none_on_failure():
+    """generate_and_save returns None and logs warning on failure."""
+    url = await generate_and_save(b"not-an-image", "img123", "track")
+    assert url is None

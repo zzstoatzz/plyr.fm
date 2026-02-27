@@ -6,6 +6,7 @@ import json
 import logging
 import tempfile
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 
@@ -46,6 +47,7 @@ from backend._internal.tasks import (
     schedule_embedding_generation,
     schedule_genre_classification,
 )
+from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.models import Artist, Track, UserPreferences
 from backend.models.job import JobStatus, JobType
@@ -196,8 +198,6 @@ async def _save_image_to_storage(
     image_content_type: str | None,
 ) -> tuple[str | None, str | None, str | None]:
     """save image to storage, returning (image_id, image_url, thumbnail_url) or (None, None, None)."""
-    from backend._internal.thumbnails import generate_and_save
-
     await job_service.update_progress(
         upload_id,
         JobStatus.PROCESSING,
@@ -214,8 +214,6 @@ async def _save_image_to_storage(
     try:
         with open(image_path, "rb") as image_obj:
             image_data = image_obj.read()
-
-        from io import BytesIO
 
         image_id = await storage.save(BytesIO(image_data), f"images/{image_filename}")
         image_url = await storage.get_url(image_id, file_type="image")

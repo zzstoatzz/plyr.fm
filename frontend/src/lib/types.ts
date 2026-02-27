@@ -134,6 +134,7 @@ export interface Playlist {
 	owner_handle: string;
 	track_count: number;
 	image_url?: string;
+	thumbnail_url?: string;
 	show_on_profile: boolean;
 	atproto_record_uri: string;
 	created_at: string;
