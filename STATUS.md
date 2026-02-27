@@ -153,126 +153,18 @@ both `/liked` and `/u/[handle]/liked` showed redundant headings when the track l
 
 ---
 
-#### playlist track recommendations (PRs #895-898, Feb 11)
-
-**inline recommendations when editing playlists**: shows 3 recommended tracks below the track list based on CLAP audio embeddings in turbopuffer. adaptive algorithm scales with playlist size — direct vector query for 1 track, per-track Reciprocal Rank Fusion for 2-5, k-means clustering into centroids for 6+. results cached in Redis keyed on the playlist's ATProto record CID (auto-invalidates when tracks change).
-
-**backend**: new `recommendations.py` module with pure-python k-means (no numpy), RRF merge, and `get_vectors()` in the turbopuffer client. new `GET /playlists/{id}/recommendations` endpoint with owner-only auth, Redis caching (24h TTL), and graceful degradation when turbopuffer is disabled.
-
-**frontend**: recommendation cards match TrackItem geometry exactly — dashed border + reduced opacity (0.7 → 1.0 on hover) distinguishes suggestions from committed playlist tracks. "add tracks" button and recommendations section align with track card width inside edit mode rows.
-
-no feature flag needed — degrades gracefully when turbopuffer or embeddings are unavailable.
-
-see `docs/backend/playlist-recommendations.md` for full architecture.
-
----
-
-#### main.py extraction + bug fixes (PRs #890-894, Feb 10)
-
-**main.py extraction (PR #890)**: `main.py` shrunk from 372 to 138 lines — now pure orchestration (imports, lifespan, wiring). extracted `SecurityHeadersMiddleware` → `utilities/middleware.py`, logfire/span enrichment → `utilities/observability.py`, and 6 root-level endpoints → `api/meta.py` router. added `__main__.py` for `python -m backend` convenience.
-
-**notification DM fix (PR #891)**: upload notification DMs were silently dropped because `_send_track_notification` received a `Track` object from a closed session. the `db.refresh()` call hit `DetachedInstanceError`, caught by a blanket `except`. fix: accept `track_id: int` and re-fetch with `joinedload(Track.artist)` from the current session. discovered via Logfire.
-
-**mobile share fix (PR #892)**: on mobile Safari, `await fetch()` before `navigator.clipboard.writeText()` consumes the transient user activation, breaking clipboard access. fix: eagerly create tracked share links when the menu opens (not on tap). added `navigator.share()` as fallback.
-
-**developer token scoping docs (PR #893)**: corrected misleading "full account access" language — tokens are actually scoped to `fm.plyr.*` via ATProto OAuth. fixed stale `resolved_scope` examples.
-
-**artist page track limit (PR #894)**: initial load was showing 50 tracks (backend default), burying albums below the fold. reduced to 5 with "load more" (10 per click).
-
----
-
-#### OAuth permission set cleanup + docs audit (PR #889, Feb 8)
-
-**OAuth permission set**: authorization page was showing raw NSID (`fm.plyr.authFullApp`) instead of human-readable description. root cause: ATProto permission sets use `detail` field (not `description`) for the subtitle text. updated lexicon and publish script, republished to PDS. also modernized publish script from raw `os.environ` to pydantic settings.
-
-**docs audit (PR #888)**: fixed stale/broken documentation across 6 files — wrong table names in copyright docs, outdated pool_recycle values, broken links in docs index, missing tools entries. updated README to reflect full feature set. added semantic search and playlists to search.md.
-
----
-
-#### auth state refresh + backend refactor (PRs #886-887, Feb 8)
-
-**auth state refresh (PR #887)**: after account switch or login, stale user data persisted because `AuthManager.initialize()` no-ops once the `initialized` flag is set. added `refresh()` that resets the flag before re-fetching, used in all exchange-token call sites.
-
-**backend package split (PR #886)**: split three monolith files into focused packages:
-- `auth.py` (1,400 lines) → `auth/` package (8 modules)
-- `background_tasks.py` (803 lines) → `tasks/` package (5 domain modules: copyright, ml, pds, storage, sync)
-- 5 `*_client.py` files → `clients/` package
-- extracted upload pipeline into 7 named phase functions, shared tag ops to `utilities/tags.py`
-
-all public APIs preserved via `__init__.py` re-exports. 424 tests pass.
-
----
-
-#### portal pagination + perf optimization (PRs #878-879, Feb 8)
-
-**portal pagination (PR #878)**: `GET /tracks/me` now supports `limit`/`offset` pagination (default 10 per page). portal loads first 10 tracks with a "load more" button. export section uses total count for accurate messaging.
-
-**GET /tracks/top latency fix (PR #879)**: baseline p95 was 1.2s due to stale connection reconnects and redundant DB queries.
-- merged top-track-ids + like-counts into single `get_top_tracks_with_counts()` query (1 fewer round-trip)
-- scoped liked-track check to `track_id IN (...)` (10 rows) instead of all user likes
-- `pool_recycle` 7200s → 1800s to reduce stale connection spikes
-- authenticated requests dropped from 11 DB queries to 7. post-deploy p95: ~550ms
-- 14 new regression tests
-
----
-
-#### repo reorganization (PR #876, Feb 8)
-
-moved auxiliary services into `services/` (transcoder, moderation, clap) and infrastructure into `infrastructure/` (redis). updated all GitHub Actions workflows, pre-commit config, justfile module paths, and docs.
-
----
-
-#### auto-tag at upload + ML audit (PRs #870-872, Feb 7)
-
-**auto-tag on upload (PR #871)**: checkbox on the upload form ("auto-tag with recommended genres") that applies top genre tags after classification completes. ratio-to-top filter (>= 50% of top score, capped at 5), additive with manual tags. flag stored in `track.extra`, cleaned up after use.
-
-**genre/subgenre split (PR #870)**: compound Discogs labels like "Electronic---Ambient" now produce two separate tags ("electronic", "ambient") instead of one compound tag.
-
-**ML audit script (PR #872)**: `scripts/ml_audit.py` reports which tracks/artists have been processed by ML features. supports `--verbose` and `--check-embeddings` for privacy/ToS auditing.
-
----
-
-#### ML genre classification + suggested tags (PRs #864-868, Feb 6-7)
-
-**genre classification via Replicate**: tracks classified into genre labels using [effnet-discogs](https://replicate.com/mtg/effnet-discogs) on Replicate (EfficientNet trained on Discogs ~400 categories).
-
-- on upload: classification runs as docket background task if `REPLICATE_ENABLED=true`
-- on demand: `GET /tracks/{id}/recommended-tags` classifies on the fly if no cached predictions
-- predictions stored in `track.extra["genre_predictions"]` with file_id-based cache invalidation
-- raw Discogs labels cleaned to lowercase format. cost: ~$0.00019/run
-- Replicate SDK incompatible with Python 3.14 (pydantic v1) — uses httpx directly with `Prefer: wait` header
-
-**frontend UX (PR #868)**: suggested genre tags appear as clickable dashed-border chips in the portal edit modal. `$derived` reactively hides suggestions matching manually-typed tags.
-
----
-
-#### mood search (PRs #848-858, Feb 5-6)
-
-**search by how music sounds** — type "chill lo-fi beats" into the search bar and find tracks that match the vibe, not just the title.
-
-**architecture**: CLAP (Contrastive Language-Audio Pretraining) model hosted on Modal generates audio embeddings at upload time and text embeddings at search time. vectors stored in turbopuffer. keyword and semantic searches fire in parallel — keyword results appear instantly (~50ms), semantic results append when ready (~1-2s).
-
-**key design decisions**:
-- unified search: no mode toggle. keyword + semantic results merge by score, client-side deduplication removes overlap
-- graceful degradation: backend returns `available: false` instead of 502/503 when CLAP/turbopuffer are down
-- quality controls: distance threshold, spread check to filter low-signal results, result cap
-- gated behind `vibe-search` feature flag with version-aware terms re-acceptance
-
-**hardening (PRs #849-858)**: m4a support for CLAP, correct R2 URLs, normalize similarity scores, switch from larger_clap_music to clap-htsat-unfused, handle empty turbopuffer namespace, rename "vibe search" → "mood search", concurrent backfill script.
-
----
-
-#### recommended tags via audio similarity (PR #859, Feb 6)
-
-`GET /tracks/{track_id}/recommended-tags` finds tracks with similar CLAP embeddings in turbopuffer, aggregates their tags weighted by similarity score. excludes existing tags, normalizes scores to 0-1. replaced by genre classification (PR #864) but the endpoint pattern persisted.
-
----
-
-#### mobile login UX + misc fixes (PRs #841-845, Feb 2)
-
-- **handle hint sizing (PRs #843-845)**: iterative fix for login page handle hint wrapping on mobile — final approach: reduced font size, gap, and `nowrap` to keep full text visible
-- **PDS backfill gate (PR #842)**: PDS backfill button gated behind `pds-audio-uploads` feature flag
-- **share button reuse (PR #841)**: track detail page now uses shared `ShareButton` component
+See `.status_history/2026-02.md` for Feb 2-12 history including:
+- playlist track recommendations via CLAP embeddings (PRs #895-898)
+- main.py extraction + bug fixes (PRs #890-894)
+- OAuth permission set cleanup + docs audit (PRs #888-889)
+- auth state refresh + backend package split (PRs #886-887)
+- portal pagination + perf optimization (PRs #878-879)
+- repo reorganization (PR #876)
+- auto-tag at upload + ML audit (PRs #870-872)
+- ML genre classification + suggested tags (PRs #864-868)
+- mood search via CLAP + turbopuffer (PRs #848-858)
+- recommended tags via audio similarity (PR #859)
+- mobile login UX + misc fixes (PRs #841-845)
 
 ---
 
@@ -323,7 +215,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-image performance and architecture cleanup: 96x96 WebP thumbnails for all artwork (track, album, playlist), storage protocol abstraction, backfill script for existing images. jams and PDS audio uploads shipped to all users (feature flags removed). homepage performance improved with Redis-cached follow graph and parallelized data fetching.
+jams shipped to all users — feature flag removed, output device mode (single-speaker) working. image performance: 96x96 WebP thumbnails for all artwork with storage protocol abstraction and backfill script. PDS audio uploads graduated to GA. homepage performance improved with Redis-cached follow graph and parallelized network artists fetch. ATProto scope parsing replaced with spec-compliant SDK implementation.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -387,7 +279,8 @@ image performance and architecture cleanup: 96x96 WebP thumbnails for all artwor
 - ✅ media export with concurrent downloads
 - ✅ supporter-gated content via atprotofans
 - ✅ listen receipts (tracked share links with visitor/listener stats)
-- ✅ jams — shared listening rooms with real-time sync via Redis Streams + WebSocket (feature-flagged)
+- ✅ jams — shared listening rooms with real-time sync via Redis Streams + WebSocket
+- ✅ 96x96 WebP thumbnails for artwork (track, album, playlist)
 
 **albums**
 - ✅ album CRUD with cover art
@@ -498,5 +391,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-27 (image thumbnails, storage protocol, jam GA, network artists perf).
+this is a living document. last updated 2026-02-27 (archival of early Feb, jams GA, thumbnails, scope parsing, homepage perf).
 
