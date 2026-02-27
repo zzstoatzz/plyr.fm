@@ -6,6 +6,7 @@
 		triggerAvatarRefresh,
 		hasAttemptedRefresh
 	} from '$lib/avatar-refresh.svelte';
+	import { fade } from 'svelte/transition';
 	import SensitiveImage from './SensitiveImage.svelte';
 
 	interface Props {
@@ -126,43 +127,45 @@
 	onmouseenter={onMouseEnter}
 	onmouseleave={onMouseLeave}
 >
-	{#if loading}
-		<div class="loading">
-			<div class="loading-avatars">
-				{#each [1, 2, 3] as _}
-					<div class="avatar-skeleton"></div>
+	{#key loading}
+		{#if loading}
+			<div class="loading" transition:fade={{ duration: 200 }}>
+				<div class="loading-avatars">
+					{#each [1, 2, 3] as _}
+						<div class="avatar-skeleton"></div>
+					{/each}
+				</div>
+			</div>
+		{:else if error}
+			<div class="error" transition:fade={{ duration: 200 }}>{error}</div>
+		{:else if commenters.length > 0}
+			<div class="commenters-avatars" transition:fade={{ duration: 200 }}>
+				{#each commenters as commenter (commenter.did)}
+					{@const displayUrl = getDisplayUrl(commenter)}
+					{@const showFallback = shouldShowFallback(commenter)}
+					<a
+						href="/u/{commenter.handle}"
+						class="commenter-circle"
+						title="{commenter.display_name || commenter.handle} (@{commenter.handle})"
+					>
+						{#if displayUrl && !showFallback}
+							<SensitiveImage src={displayUrl} compact>
+								<img
+									src={displayUrl}
+									alt=""
+									onerror={() => handleAvatarError(commenter.did)}
+								/>
+							</SensitiveImage>
+						{:else}
+							<span>{(commenter.display_name || commenter.handle).charAt(0).toUpperCase()}</span>
+						{/if}
+					</a>
 				{/each}
 			</div>
-		</div>
-	{:else if error}
-		<div class="error">{error}</div>
-	{:else if commenters.length > 0}
-		<div class="commenters-avatars">
-			{#each commenters as commenter (commenter.did)}
-				{@const displayUrl = getDisplayUrl(commenter)}
-				{@const showFallback = shouldShowFallback(commenter)}
-				<a
-					href="/u/{commenter.handle}"
-					class="commenter-circle"
-					title="{commenter.display_name || commenter.handle} (@{commenter.handle})"
-				>
-					{#if displayUrl && !showFallback}
-						<SensitiveImage src={displayUrl} compact>
-							<img
-								src={displayUrl}
-								alt=""
-								onerror={() => handleAvatarError(commenter.did)}
-							/>
-						</SensitiveImage>
-					{:else}
-						<span>{(commenter.display_name || commenter.handle).charAt(0).toUpperCase()}</span>
-					{/if}
-				</a>
-			{/each}
-		</div>
-	{:else}
-		<div class="empty">no comments yet</div>
-	{/if}
+		{:else}
+			<div class="empty" transition:fade={{ duration: 200 }}>no comments yet</div>
+		{/if}
+	{/key}
 </div>
 
 <style>

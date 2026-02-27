@@ -6,6 +6,7 @@
 		triggerAvatarRefresh,
 		hasAttemptedRefresh
 	} from '$lib/avatar-refresh.svelte';
+	import { fade } from 'svelte/transition';
 	import SensitiveImage from './SensitiveImage.svelte';
 
 	interface Props {
@@ -142,43 +143,45 @@
 	onmouseenter={onMouseEnter}
 	onmouseleave={onMouseLeave}
 >
-	{#if loading}
-		<div class="loading">
-			<div class="loading-avatars">
-				{#each [1, 2, 3] as _}
-					<div class="avatar-skeleton"></div>
+	{#key loading}
+		{#if loading}
+			<div class="loading" transition:fade={{ duration: 200 }}>
+				<div class="loading-avatars">
+					{#each [1, 2, 3] as _}
+						<div class="avatar-skeleton"></div>
+					{/each}
+				</div>
+			</div>
+		{:else if error}
+			<div class="error" transition:fade={{ duration: 200 }}>{error}</div>
+		{:else if likers.length > 0}
+			<div class="likers-avatars" transition:fade={{ duration: 200 }}>
+				{#each likers as liker (liker.did)}
+					{@const displayUrl = getDisplayUrl(liker)}
+					{@const showFallback = shouldShowFallback(liker)}
+					<a
+						href="/u/{liker.handle}/liked"
+						class="liker-circle"
+						title="{liker.display_name} (@{liker.handle}) • {formatTime(liker.liked_at)}"
+					>
+						{#if displayUrl && !showFallback}
+							<SensitiveImage src={displayUrl} compact>
+								<img
+									src={displayUrl}
+									alt=""
+									onerror={() => handleAvatarError(liker.did)}
+								/>
+							</SensitiveImage>
+						{:else}
+							<span>{(liker.display_name || liker.handle).charAt(0).toUpperCase()}</span>
+						{/if}
+					</a>
 				{/each}
 			</div>
-		</div>
-	{:else if error}
-		<div class="error">{error}</div>
-	{:else if likers.length > 0}
-		<div class="likers-avatars">
-			{#each likers as liker (liker.did)}
-				{@const displayUrl = getDisplayUrl(liker)}
-				{@const showFallback = shouldShowFallback(liker)}
-				<a
-					href="/u/{liker.handle}/liked"
-					class="liker-circle"
-					title="{liker.display_name} (@{liker.handle}) • {formatTime(liker.liked_at)}"
-				>
-					{#if displayUrl && !showFallback}
-						<SensitiveImage src={displayUrl} compact>
-							<img
-								src={displayUrl}
-								alt=""
-								onerror={() => handleAvatarError(liker.did)}
-							/>
-						</SensitiveImage>
-					{:else}
-						<span>{(liker.display_name || liker.handle).charAt(0).toUpperCase()}</span>
-					{/if}
-				</a>
-			{/each}
-		</div>
-	{:else}
-		<div class="empty">be the first to like this</div>
-	{/if}
+		{:else}
+			<div class="empty" transition:fade={{ duration: 200 }}>be the first to like this</div>
+		{/if}
+	{/key}
 </div>
 
 <style>

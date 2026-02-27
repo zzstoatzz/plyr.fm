@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { fade } from 'svelte/transition';
 	import { statsCache, formatDuration } from '$lib/stats.svelte';
 
 	interface Props {
@@ -73,12 +74,13 @@
 			</svg>
 			<span>stats</span>
 		</div>
-		{#if loading}
-			<div class="stats-menu-loading">
-				<span class="skeleton-text"></span>
-			</div>
-		{:else if stats}
-			<div class="stats-menu-grid">
+		{#key loading}
+			{#if loading}
+				<div class="stats-menu-loading" transition:fade={{ duration: 200 }}>
+					<span class="skeleton-text"></span>
+				</div>
+			{:else if stats}
+				<div class="stats-menu-grid" transition:fade={{ duration: 200 }}>
 				<div class="stats-menu-item">
 					<svg class="menu-stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -111,8 +113,9 @@
 					<span class="stats-menu-value">{formatDuration(stats.total_duration_seconds)}</span>
 					<span class="stats-menu-label">of audio</span>
 				</div>
-			</div>
-		{/if}
+				</div>
+			{/if}
+		{/key}
 	</div>
 {/if}
 
