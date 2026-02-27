@@ -256,7 +256,7 @@ async def process_export(export_id: str, artist_did: str) -> None:
                     with open(zip_path, "rb") as zip_file_obj:
                         await upload_client.upload_fileobj(
                             zip_file_obj,
-                            settings.storage.r2_bucket,
+                            storage.audio_bucket_name,
                             r2_key,
                             ExtraArgs={
                                 "ContentType": "application/zip",
@@ -279,7 +279,7 @@ async def process_export(export_id: str, artist_did: str) -> None:
                 raise
 
             # get download URL
-            download_url = f"{settings.storage.r2_public_bucket_url}/{r2_key}"
+            download_url = f"{storage.public_audio_bucket_url}/{r2_key}"
 
             # mark as completed
             await job_service.update_progress(
