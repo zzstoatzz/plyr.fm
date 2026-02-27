@@ -9,24 +9,16 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache, fetchTopTracks } from '$lib/tracks.svelte';
+	import { networkArtistsCache } from '$lib/network-artists.svelte';
 	import type { Track } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
 	import { fade } from 'svelte/transition';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
-	import { API_URL } from '$lib/config';
 	import {
 		getRefreshedAvatar,
 		triggerAvatarRefresh,
 		hasAttemptedRefresh
 	} from '$lib/avatar-refresh.svelte';
-
-	interface NetworkArtist {
-		did: string;
-		handle: string;
-		display_name: string;
-		avatar_url: string | null;
-		track_count: number;
-	}
 
 	// use cached tracks
 	let tracks = $derived(tracksCache.tracks);
@@ -42,8 +34,8 @@
 	let hasTopTracks = $derived(topTracks.length > 0);
 
 	// network artists (people you follow on bluesky who have music here)
-	let networkArtists = $state<NetworkArtist[]>([]);
-	let hasNetworkArtists = $derived(networkArtists.length > 0);
+	let networkArtists = $derived(networkArtistsCache.artists);
+	let hasNetworkArtists = $derived(networkArtistsCache.hasArtists);
 
 	// show loading during initial load or when actively loading with no cached data
 	let showLoading = $derived((initialLoad && !hasTracks) || (loadingTracks && !hasTracks));
@@ -55,17 +47,10 @@
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 
 	onMount(async () => {
-		const networkPromise = auth.isAuthenticated
-			? fetch(`${API_URL}/discover/network`, { credentials: 'include' })
-					.then((r) => (r.ok ? r.json() : []))
-					.then((artists: NetworkArtist[]) => (networkArtists = artists))
-					.catch(() => {})
-			: Promise.resolve();
-
 		const [topResult] = await Promise.all([
 			fetchTopTracks(10),
 			tracksCache.fetch(),
-			networkPromise
+			auth.isAuthenticated ? networkArtistsCache.fetch() : Promise.resolve()
 		]);
 		topTracks = topResult;
 		loadingTopTracks = false;
