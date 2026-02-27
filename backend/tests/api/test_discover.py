@@ -9,7 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
-from backend.api.discover import FollowInfo
+from backend._internal.follow_graph import FollowInfo
 from backend.main import app
 from backend.models import Artist, Track
 
@@ -98,7 +98,7 @@ async def test_network_excludes_artists_with_zero_tracks(
     tracks should be returned.
     """
     with patch(
-        "backend.api.discover._get_follows",
+        "backend.api.discover.get_follows",
         new_callable=AsyncMock,
         return_value={
             artist_with_tracks.did: FollowInfo(index=0, avatar_url=None),
@@ -123,7 +123,7 @@ async def test_network_returns_empty_when_no_follows_are_artists(
 ) -> None:
     """returns empty list when none of the user's follows are on plyr.fm."""
     with patch(
-        "backend.api.discover._get_follows",
+        "backend.api.discover.get_follows",
         new_callable=AsyncMock,
         return_value={
             "did:plc:stranger1": FollowInfo(index=0, avatar_url=None),
@@ -145,7 +145,7 @@ async def test_network_returns_empty_when_no_follows(
 ) -> None:
     """returns empty list when user follows nobody."""
     with patch(
-        "backend.api.discover._get_follows",
+        "backend.api.discover.get_follows",
         new_callable=AsyncMock,
         return_value={},
     ):
@@ -168,7 +168,7 @@ async def test_network_avatar_fallback_from_bluesky(
 
     bsky_avatar = "https://cdn.bsky.app/img/avatar/did:plc:has_tracks/abc@jpeg"
     with patch(
-        "backend.api.discover._get_follows",
+        "backend.api.discover.get_follows",
         new_callable=AsyncMock,
         return_value={
             artist_with_tracks.did: FollowInfo(index=0, avatar_url=bsky_avatar),
@@ -208,7 +208,7 @@ async def test_network_ordered_by_follow_age(
     await db_session.commit()
 
     with patch(
-        "backend.api.discover._get_follows",
+        "backend.api.discover.get_follows",
         new_callable=AsyncMock,
         return_value={
             "did:plc:recent": FollowInfo(index=0, avatar_url=None),  # most recent

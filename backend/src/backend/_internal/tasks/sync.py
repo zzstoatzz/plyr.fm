@@ -6,6 +6,7 @@ import logfire
 from sqlalchemy import select
 
 from backend._internal.background import get_docket
+from backend._internal.follow_graph import warm_follows_cache
 
 logger = logging.getLogger(__name__)
 
@@ -195,3 +196,22 @@ async def schedule_album_list_sync(session_id: str, album_id: str) -> None:
     docket = get_docket()
     await docket.add(sync_album_list)(session_id, album_id)
     logfire.info("scheduled album list sync", album_id=album_id)
+
+
+async def warm_follow_graph(user_did: str) -> None:
+    """warm the bluesky follow graph cache for a user.
+
+    fetches follows from bluesky and writes to Redis so that
+    subsequent requests to /discover/network are fast.
+
+    args:
+        user_did: the user's DID
+    """
+    await warm_follows_cache(user_did)
+
+
+async def schedule_follow_graph_warm(user_did: str) -> None:
+    """schedule a follow graph cache warm via docket."""
+    docket = get_docket()
+    await docket.add(warm_follow_graph)(user_did)
+    logfire.info("scheduled follow graph warm", user_did=user_did)

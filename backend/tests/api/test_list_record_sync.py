@@ -528,9 +528,9 @@ async def test_login_callback_triggers_background_sync(
             return_value=True,
         ),
         patch(
-            "backend.api.auth.schedule_atproto_sync",
-            new_callable=AsyncMock,
+            "backend.api.auth.schedule_atproto_sync", new_callable=AsyncMock
         ) as mock_schedule_sync,
+        patch("backend.api.auth.schedule_follow_graph_warm", new_callable=AsyncMock),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"

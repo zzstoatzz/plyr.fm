@@ -39,10 +39,12 @@ from backend._internal.tasks.storage import (
 from backend._internal.tasks.sync import (
     schedule_album_list_sync,
     schedule_atproto_sync,
+    schedule_follow_graph_warm,
     schedule_teal_scrobble,
     scrobble_to_teal,
     sync_album_list,
     sync_atproto,
+    warm_follow_graph,
 )
 
 # collection of all background task functions for docket registration
@@ -62,6 +64,7 @@ background_tasks = [
     move_track_audio,
     generate_embedding,
     classify_genres,
+    warm_follow_graph,
 ]
 
 __all__ = [
@@ -80,6 +83,7 @@ __all__ = [
     "schedule_copyright_resolution_sync",
     "schedule_copyright_scan",
     "schedule_embedding_generation",
+    "schedule_follow_graph_warm",
     "schedule_genre_classification",
     "schedule_move_track_audio",
     "schedule_pds_create_comment",
@@ -92,4 +96,5 @@ __all__ = [
     "sync_album_list",
     "sync_atproto",
     "sync_copyright_resolutions",
+    "warm_follow_graph",
 ]
