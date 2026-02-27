@@ -71,7 +71,7 @@ max_lines = 554
 
 [[rules]]
 path = "backend/tests/api/test_jams.py"
-max_lines = 1565
+max_lines = 1610
 
 [[rules]]
 path = "backend/tests/api/test_track_comments.py"

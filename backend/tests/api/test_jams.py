@@ -1537,17 +1537,26 @@ async def test_jam_preview_returns_host_info(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
     """test GET /jams/{code}/preview returns host info without auth."""
-    transport = ASGITransport(app=test_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        resp = await c.post("/jams/", json={"name": "preview test"})
-        code = resp.json()["code"]
+    # create jam as authenticated user
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "preview test"})
+        code = create_response.json()["code"]
+
+    # clear auth overrides — preview is public
     app.dependency_overrides.clear()
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        response = await c.get(f"/jams/{code}/preview")
-    data = response.json()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/jams/{code}/preview")
+
     assert response.status_code == 200
+    data = response.json()
     assert data["code"] == code
     assert data["name"] == "preview test"
+    assert data["is_active"] is True
     assert data["host_handle"] == "test.host"
     assert data["host_display_name"] == "Test Host"
     assert data["participant_count"] >= 1
@@ -1558,7 +1567,10 @@ async def test_jam_preview_not_found(
 ) -> None:
     """test GET /jams/{code}/preview returns 404 for nonexistent code."""
     app.dependency_overrides.clear()
-    transport = ASGITransport(app=test_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        response = await c.get("/jams/nonexist/preview")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.get("/jams/nonexist/preview")
+
     assert response.status_code == 404
