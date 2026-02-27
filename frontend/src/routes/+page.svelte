@@ -55,22 +55,21 @@
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 
 	onMount(async () => {
-		// fetch top tracks and latest tracks concurrently
+		const networkPromise = auth.isAuthenticated
+			? fetch(`${API_URL}/discover/network`, { credentials: 'include' })
+					.then((r) => (r.ok ? r.json() : []))
+					.then((artists: NetworkArtist[]) => (networkArtists = artists))
+					.catch(() => {})
+			: Promise.resolve();
+
 		const [topResult] = await Promise.all([
 			fetchTopTracks(10),
-			tracksCache.fetch()
+			tracksCache.fetch(),
+			networkPromise
 		]);
 		topTracks = topResult;
 		loadingTopTracks = false;
 		initialLoad = false;
-
-		// fetch network artists in the background (only when authenticated)
-		if (auth.isAuthenticated) {
-			fetch(`${API_URL}/discover/network`, { credentials: 'include' })
-				.then((r) => (r.ok ? r.json() : []))
-				.then((artists) => (networkArtists = artists))
-				.catch(() => {});
-		}
 	});
 
 	// set up IntersectionObserver for infinite scroll
