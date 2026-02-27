@@ -56,6 +56,13 @@
 		return jam.participants.find((p) => p.did === jam.outputDid) ?? null;
 	});
 
+	const MAX_VISIBLE_PARTICIPANTS = 2;
+	let participantsExpanded = $state(false);
+	const visibleParticipants = $derived(
+		participantsExpanded ? jam.participants : jam.participants.slice(0, MAX_VISIBLE_PARTICIPANTS)
+	);
+	const hiddenParticipantCount = $derived(jam.participants.length - MAX_VISIBLE_PARTICIPANTS);
+
 	function handleTrackClick(index: number) {
 		goToIndex(index);
 	}
@@ -162,7 +169,6 @@
 					<div class="jam-identity">
 						<span class="connection-dot" class:connected={jam.connected} class:reconnecting={jam.reconnecting}></span>
 						<span class="jam-name">{jam.jam?.name ?? 'jam'}</span>
-						<span class="jam-code">{jam.code}</span>
 					</div>
 					<div class="queue-actions">
 						{#if upcoming.length > 0}
@@ -196,19 +202,19 @@
 					<span class="output-status">
 						{#if jam.outputMode === 'everyone'}
 							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-							everyone plays
+							all devices
 						{:else if jam.isOutputDevice}
 							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-							playing here
+							this device
 						{:else}
 							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-							<span class="output-name">{outputParticipant ? (outputParticipant.display_name ?? outputParticipant.handle) : 'elsewhere'}</span>
+							<span class="output-name">{outputParticipant ? (outputParticipant.display_name ?? outputParticipant.handle) : 'another device'}</span>
 							<button class="pill-btn" onclick={() => jam.setOutput()}>play here</button>
 						{/if}
 					</span>
 					{#if jam.isHost}
-						<button class="pill-btn" onclick={() => jam.setMode(jam.outputMode === 'everyone' ? 'one_speaker' : 'everyone')} title={jam.outputMode === 'everyone' ? 'switch to one speaker' : 'let everyone play'}>
-							{jam.outputMode === 'everyone' ? 'one speaker' : 'everyone'}
+						<button class="pill-btn" onclick={() => jam.setMode(jam.outputMode === 'everyone' ? 'one_speaker' : 'everyone')} title={jam.outputMode === 'everyone' ? 'switch to single device' : 'play on all devices'}>
+							{jam.outputMode === 'everyone' ? 'single' : 'all'}
 						</button>
 					{/if}
 				</div>
@@ -256,7 +262,7 @@
 
 		{#if jam.active && jam.participants.length > 0}
 			<div class="participants-strip">
-				{#each jam.participants as participant (participant.did)}
+				{#each visibleParticipants as participant (participant.did)}
 					<div class="participant-chip" class:is-output={jam.outputMode !== 'everyone' && participant.did === jam.outputDid} title={participant.display_name ?? participant.handle}>
 						{#if participant.avatar_url}
 							<img src={participant.avatar_url} alt="" class="participant-avatar" />
@@ -277,6 +283,15 @@
 						{/if}
 					</div>
 				{/each}
+				{#if hiddenParticipantCount > 0 && !participantsExpanded}
+					<button
+						class="participants-more"
+						onclick={() => { participantsExpanded = true; }}
+						title="show all participants"
+					>
+						+{hiddenParticipantCount}
+					</button>
+				{/if}
 			</div>
 		{/if}
 
@@ -490,13 +505,6 @@
 		50% { opacity: 0.4; }
 	}
 
-	.jam-code {
-		font-size: var(--text-xs);
-		color: var(--text-tertiary);
-		font-family: monospace;
-		flex-shrink: 0;
-	}
-
 	.share-btn,
 	.leave-btn {
 		display: flex;
@@ -543,6 +551,29 @@
 		border-radius: var(--radius-full);
 		object-fit: cover;
 		border: 1px solid var(--border-subtle);
+	}
+
+	.participants-more {
+		width: 24px;
+		height: 24px;
+		border-radius: var(--radius-full);
+		border: 1px solid var(--border-subtle);
+		background: var(--bg-tertiary);
+		color: var(--text-tertiary);
+		font-size: var(--text-xs);
+		font-family: inherit;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
+		transition: all 0.15s ease;
+		flex-shrink: 0;
+	}
+
+	.participants-more:hover {
+		color: var(--text-secondary);
+		border-color: var(--border-default);
 	}
 
 	.participant-avatar.placeholder {

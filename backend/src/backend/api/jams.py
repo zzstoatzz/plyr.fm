@@ -13,11 +13,12 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from backend._internal import Session, jam_service, require_auth
 from backend._internal.auth.session import get_session
-from backend.models.jam import JamParticipant
+from backend.models.artist import Artist
+from backend.models.jam import Jam, JamParticipant
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,16 @@ class JamResponse(BaseModel):
     participants: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class JamPreviewResponse(BaseModel):
+    code: str
+    name: str | None
+    is_active: bool
+    host_handle: str
+    host_display_name: str
+    host_avatar_url: str | None
+    participant_count: int
+
+
 # ── REST endpoints ─────────────────────────────────────────────────
 
 
@@ -88,6 +99,41 @@ async def get_active_jam(
     if not result:
         return None
     return JamResponse(**result)
+
+
+@router.get("/{code}/preview", response_model=JamPreviewResponse)
+async def get_jam_preview(code: str) -> JamPreviewResponse:
+    """public preview info for a jam (no auth required)."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(Jam, Artist)
+            .join(Artist, Jam.host_did == Artist.did)
+            .where(Jam.code == code)
+        )
+        row = result.one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="jam not found")
+
+        jam_row, host = row._tuple()
+
+        participant_count = await db.scalar(
+            select(func.count())
+            .select_from(JamParticipant)
+            .where(
+                JamParticipant.jam_id == jam_row.id,
+                JamParticipant.left_at.is_(None),
+            )
+        )
+
+    return JamPreviewResponse(
+        code=jam_row.code,
+        name=jam_row.name,
+        is_active=jam_row.is_active,
+        host_handle=host.handle,
+        host_display_name=host.display_name,
+        host_avatar_url=host.avatar_url,
+        participant_count=participant_count or 0,
+    )
 
 
 @router.get("/{code}", response_model=JamResponse)
