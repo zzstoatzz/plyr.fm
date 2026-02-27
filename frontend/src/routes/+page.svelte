@@ -47,14 +47,18 @@
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 
 	onMount(async () => {
-		const [topResult] = await Promise.all([
-			fetchTopTracks(10),
-			tracksCache.fetch(),
-			auth.isAuthenticated ? networkArtistsCache.fetch() : Promise.resolve()
-		]);
+		const [topResult] = await Promise.all([fetchTopTracks(10), tracksCache.fetch()]);
 		topTracks = topResult;
 		loadingTopTracks = false;
 		initialLoad = false;
+	});
+
+	// fetch network artists reactively — auth.isAuthenticated is false on
+	// initial load and flips to true after the async /auth/me call resolves
+	$effect(() => {
+		if (auth.isAuthenticated) {
+			networkArtistsCache.fetch();
+		}
 	});
 
 	// set up IntersectionObserver for infinite scroll
