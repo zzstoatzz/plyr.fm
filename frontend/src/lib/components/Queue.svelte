@@ -162,7 +162,6 @@
 					<div class="jam-identity">
 						<span class="connection-dot" class:connected={jam.connected} class:reconnecting={jam.reconnecting}></span>
 						<span class="jam-name">{jam.jam?.name ?? 'jam'}</span>
-						<span class="jam-code">{jam.code}</span>
 					</div>
 					<div class="queue-actions">
 						{#if upcoming.length > 0}
@@ -196,19 +195,19 @@
 					<span class="output-status">
 						{#if jam.outputMode === 'everyone'}
 							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-							everyone plays
+							all devices
 						{:else if jam.isOutputDevice}
 							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-							playing here
+							this device
 						{:else}
 							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-							<span class="output-name">{outputParticipant ? (outputParticipant.display_name ?? outputParticipant.handle) : 'elsewhere'}</span>
+							<span class="output-name">{outputParticipant ? (outputParticipant.display_name ?? outputParticipant.handle) : 'another device'}</span>
 							<button class="pill-btn" onclick={() => jam.setOutput()}>play here</button>
 						{/if}
 					</span>
 					{#if jam.isHost}
-						<button class="pill-btn" onclick={() => jam.setMode(jam.outputMode === 'everyone' ? 'one_speaker' : 'everyone')} title={jam.outputMode === 'everyone' ? 'switch to one speaker' : 'let everyone play'}>
-							{jam.outputMode === 'everyone' ? 'one speaker' : 'everyone'}
+						<button class="pill-btn" onclick={() => jam.setMode(jam.outputMode === 'everyone' ? 'one_speaker' : 'everyone')} title={jam.outputMode === 'everyone' ? 'switch to single device' : 'play on all devices'}>
+							{jam.outputMode === 'everyone' ? 'single' : 'all'}
 						</button>
 					{/if}
 				</div>
@@ -488,13 +487,6 @@
 	@keyframes pulse {
 		0%, 100% { opacity: 1; }
 		50% { opacity: 0.4; }
-	}
-
-	.jam-code {
-		font-size: var(--text-xs);
-		color: var(--text-tertiary);
-		font-family: monospace;
-		flex-shrink: 0;
 	}
 
 	.share-btn,

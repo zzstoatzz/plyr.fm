@@ -1531,3 +1531,34 @@ async def test_non_host_auto_output_on_sync(
         assert state["output_did"] == second_user
 
     await jam_service.disconnect_ws(jam_id, ws)
+
+
+async def test_jam_preview_returns_host_info(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test GET /jams/{code}/preview returns host info without auth."""
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        resp = await c.post("/jams/", json={"name": "preview test"})
+        code = resp.json()["code"]
+    app.dependency_overrides.clear()
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        response = await c.get(f"/jams/{code}/preview")
+    data = response.json()
+    assert response.status_code == 200
+    assert data["code"] == code
+    assert data["name"] == "preview test"
+    assert data["host_handle"] == "test.host"
+    assert data["host_display_name"] == "Test Host"
+    assert data["participant_count"] >= 1
+
+
+async def test_jam_preview_not_found(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """test GET /jams/{code}/preview returns 404 for nonexistent code."""
+    app.dependency_overrides.clear()
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        response = await c.get("/jams/nonexist/preview")
+    assert response.status_code == 404
