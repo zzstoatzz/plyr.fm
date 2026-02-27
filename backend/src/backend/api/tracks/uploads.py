@@ -799,6 +799,13 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             # phase 4: upload to PDS (best-effort)
             pds_result = await _upload_to_pds(ctx, audio_info, sr)
 
+            # reload session in case PDS upload refreshed the token
+            if pds_result:
+                from backend._internal import get_session
+
+                if refreshed := await get_session(ctx.auth_session.session_id):
+                    ctx.auth_session = refreshed
+
             # phase 5: store image (optional)
             image_id, image_url, thumbnail_url = await _store_image(ctx)
 
