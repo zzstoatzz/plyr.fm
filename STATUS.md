@@ -47,6 +47,32 @@ plyr.fm should become:
 
 ### February 2026
 
+#### image thumbnails + storage cleanup (PRs #976-979, Feb 27)
+
+**96x96 WebP thumbnails for artwork**: track artwork and avatars display at 48px but full-resolution images (potentially megabytes) were being served. now generates a 96x96 WebP thumbnail (2x retina) on upload, stored as `images/{file_id}_thumb.webp` alongside the original. Pillow handles center-crop, LANCZOS resize, WebP encode. nullable `thumbnail_url` column on tracks, albums, and playlists. frontend falls back to `image_url` when `thumbnail_url` is null, so partially-backfilled states are safe. `generate_and_save()` helper wired into all image upload paths: track uploads, album covers, playlist covers, and track metadata edits.
+
+**storage protocol**: new `StorageProtocol` with `@runtime_checkable` formalizes the R2Storage contract. `build_image_url()` constructs public URLs without HEAD checks (caller knows the image exists). `save_thumbnail()` uploads WebP data to the image bucket. storage proxy typed as `StorageProtocol` in `__init__.py`. export_tasks decoupled from `settings.storage` — uses `storage.audio_bucket_name` instead.
+
+**backfill script**: `scripts/backfill_thumbnails.py` follows the embeddings backfill pattern (`--dry-run`, `--limit`, `--concurrency`). queries tracks/albums/playlists where `image_id IS NOT NULL AND thumbnail_url IS NULL`, downloads originals via httpx, generates thumbnails, uploads to R2, updates DB rows.
+
+9 thumbnail tests, 5 storage protocol/regression tests. 533 total tests pass.
+
+---
+
+#### jam polish + feature flag graduations (PRs #963-975, Feb 25-27)
+
+**jam UX fixes** (PRs #963-964): eliminated the "no output" state — auto-claim output when nobody has it. restructured jam header UI.
+
+**feature flag removals** (PRs #965, #969): jams and PDS audio uploads graduated to GA — available to all users without flags.
+
+**data fix** (PR #966): `support_gate` JSONB null vs SQL NULL — gated tracks were invisible to backfill queries because `IS NULL` doesn't match JSONB `null`. fixed with `none_as_null=True`.
+
+**loading state polish** (PR #972): fade transitions and `prefers-reduced-motion` support across loading states.
+
+**network artists perf** (PRs #970, #973-975): Bluesky follow graph cached in Redis. parallelized network artists fetch with other homepage data. module-level cache persists across navigations. fixed auth race where fetch fired before session was ready.
+
+---
+
 #### unified queue/jam architecture + output device (PRs #949-960, Feb 19-25)
 
 **jams — shared listening rooms (PR #949)**: real-time shared listening rooms. one user creates a jam, gets a shareable code (`plyr.fm/jam/a1b2c3d4`), and anyone with the link can join. all participants control playback. `Jam` and `JamParticipant` models with partial indexes. `JamService` singleton manages lifecycle, WebSocket connections, and Redis Streams fan-out. playback state is server-authoritative — JSONB with monotonic revision counter. server-timestamp + client interpolation for sync. reconnect replays missed events via `XRANGE`, falls back to full DB snapshot if trimmed. personal queue preserved and restored on leave. gated behind `jams` feature flag. see `docs/architecture/jams.md`.
@@ -297,7 +323,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-jams hardening and architecture cleanup: unified queue/jam so frontend does all queue mutation locally with a single `update_queue` command to the backend. output device mode lets one speaker play audio while everyone else is a remote. ATProto scope parsing upgraded to spec-compliant SDK. production reliability stable (Redis caches, Dockerfile hardening).
+image performance and architecture cleanup: 96x96 WebP thumbnails for all artwork (track, album, playlist), storage protocol abstraction, backfill script for existing images. jams and PDS audio uploads shipped to all users (feature flags removed). homepage performance improved with Redis-cached follow graph and parallelized data fetching.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -306,8 +332,9 @@ jams hardening and architecture cleanup: unified queue/jam so frontend does all 
 ### backlog
 - share to bluesky (#334)
 - lyrics and annotations (#373)
-- configurable rules engine for moderation
+- configurable rules engine for moderation (Osprey rules engine PR #958 open)
 - time-release gating (#642)
+- social activity feed (#971)
 
 ## technical state
 
@@ -471,5 +498,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-25 (unified queue/jam, output device, scope parsing).
+this is a living document. last updated 2026-02-27 (image thumbnails, storage protocol, jam GA, network artists perf).
 
