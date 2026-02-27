@@ -36,6 +36,7 @@ class Album(Base):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     image_id: Mapped[str | None] = mapped_column(String, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_uri: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_cid: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

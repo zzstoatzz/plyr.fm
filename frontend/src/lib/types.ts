@@ -12,6 +12,7 @@ export interface AlbumSummary {
 	track_count: number;
 	total_plays: number;
 	image_url?: string;
+	thumbnail_url?: string;
 }
 
 export interface AlbumMetadata extends AlbumSummary {
@@ -52,6 +53,7 @@ export interface Track {
 	tags?: string[];
 	created_at?: string;
 	image_url?: string;
+	thumbnail_url?: string;
 	is_liked?: boolean;
 	copyright_flagged?: boolean | null; // null = not scanned, false = clear, true = flagged
 	copyright_match?: string | null; // "Title by Artist" of primary match
@@ -132,6 +134,7 @@ export interface Playlist {
 	owner_handle: string;
 	track_count: number;
 	image_url?: string;
+	thumbnail_url?: string;
 	show_on_profile: boolean;
 	atproto_record_uri: string;
 	created_at: string;

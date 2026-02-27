@@ -6,6 +6,7 @@ import json
 import logging
 import tempfile
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 
@@ -46,6 +47,7 @@ from backend._internal.tasks import (
     schedule_embedding_generation,
     schedule_genre_classification,
 )
+from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.models import Artist, Track, UserPreferences
 from backend.models.job import JobStatus, JobType
@@ -194,8 +196,8 @@ async def _save_image_to_storage(
     image_path: str,
     image_filename: str,
     image_content_type: str | None,
-) -> tuple[str | None, str | None]:
-    """save image to storage, returning (image_id, image_url) or (None, None)."""
+) -> tuple[str | None, str | None, str | None]:
+    """save image to storage, returning (image_id, image_url, thumbnail_url) or (None, None, None)."""
     await job_service.update_progress(
         upload_id,
         JobStatus.PROCESSING,
@@ -207,16 +209,20 @@ async def _save_image_to_storage(
     )
     if not is_valid or not image_format:
         logger.warning(f"unsupported image format: {image_filename}")
-        return None, None
+        return None, None, None
 
     try:
         with open(image_path, "rb") as image_obj:
-            image_id = await storage.save(image_obj, f"images/{image_filename}")
-            image_url = await storage.get_url(image_id, file_type="image")
-            return image_id, image_url
+            image_data = image_obj.read()
+
+        image_id = await storage.save(BytesIO(image_data), f"images/{image_filename}")
+        image_url = await storage.get_url(image_id, file_type="image")
+        thumbnail_url = await generate_and_save(image_data, image_id, "track")
+
+        return image_id, image_url, thumbnail_url
     except Exception as e:
         logger.warning(f"failed to save image: {e}", exc_info=True)
-        return None, None
+        return None, None, None
 
 
 @dataclass
@@ -586,10 +592,12 @@ async def _upload_to_pds(
     )
 
 
-async def _store_image(ctx: UploadContext) -> tuple[str | None, str | None]:
-    """phase 5: store image (optional). returns (image_id, image_url)."""
+async def _store_image(
+    ctx: UploadContext,
+) -> tuple[str | None, str | None, str | None]:
+    """phase 5: store image (optional). returns (image_id, image_url, thumbnail_url)."""
     if not ctx.image_path or not ctx.image_filename:
-        return None, None
+        return None, None, None
     return await _save_image_to_storage(
         ctx.upload_id, ctx.image_path, ctx.image_filename, ctx.image_content_type
     )
@@ -602,6 +610,7 @@ async def _create_records(
     pds_result: PdsBlobResult | None,
     image_id: str | None,
     image_url: str | None,
+    thumbnail_url: str | None = None,
 ) -> Track:
     """phase 6: create ATProto record + DB track record."""
     ext = Path(ctx.filename).suffix.lower()
@@ -711,6 +720,7 @@ async def _create_records(
             atproto_record_cid=atproto_cid,
             image_id=image_id,
             image_url=image_url,
+            thumbnail_url=thumbnail_url,
             support_gate=ctx.support_gate,
             audio_storage=audio_storage,
             pds_blob_cid=pds_result.cid if pds_result else None,
@@ -790,11 +800,11 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             pds_result = await _upload_to_pds(ctx, audio_info, sr)
 
             # phase 5: store image (optional)
-            image_id, image_url = await _store_image(ctx)
+            image_id, image_url, thumbnail_url = await _store_image(ctx)
 
             # phase 6: create records (ATProto + DB)
             track = await _create_records(
-                ctx, audio_info, sr, pds_result, image_id, image_url
+                ctx, audio_info, sr, pds_result, image_id, image_url, thumbnail_url
             )
 
             # phase 7: post-upload tasks (tags, notifications, background jobs)

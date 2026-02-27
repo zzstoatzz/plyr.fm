@@ -34,6 +34,7 @@ class Playlist(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     image_id: Mapped[str | None] = mapped_column(String, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String, nullable=True)
     atproto_record_uri: Mapped[str] = mapped_column(
         String,
         nullable=False,

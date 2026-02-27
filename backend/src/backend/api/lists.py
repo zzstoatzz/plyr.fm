@@ -32,6 +32,7 @@ from backend._internal.atproto.records import (
 )
 from backend._internal.auth import get_session
 from backend._internal.recommendations import get_playlist_recommendations
+from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackLike, UserPreferences, get_db
 from backend.schemas import DeletedResponse, TrackResponse
@@ -178,13 +179,7 @@ async def reorder_list(
     session: AuthSession = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ) -> ReorderResponse:
-    """reorder items in a list by rkey.
-
-    the items array order becomes the new display order.
-    only the list owner can reorder their own list.
-
-    the rkey is the last segment of the AT URI (at://did/collection/rkey).
-    """
+    """reorder items in a list by rkey. items array order = new display order."""
     from backend.config import settings
 
     # construct the full AT URI
@@ -323,11 +318,7 @@ async def list_artist_public_playlists(
     artist_did: str,
     db: AsyncSession = Depends(get_db),
 ) -> list[PlaylistResponse]:
-    """list public playlists for an artist (no auth required).
-
-    returns playlists where show_on_profile is true.
-    used to display collections on artist profile pages.
-    """
+    """list public playlists for an artist (no auth required)."""
     result = await db.execute(
         select(Playlist, Artist)
         .join(Artist, Playlist.owner_did == Artist.did)
@@ -358,10 +349,7 @@ async def get_playlist_meta(
     playlist_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> PlaylistResponse:
-    """get playlist metadata (public, no auth required).
-
-    used for link previews and og tags.
-    """
+    """get playlist metadata (public, no auth required). used for link previews."""
     result = await db.execute(
         select(Playlist, Artist)
         .join(Artist, Playlist.owner_did == Artist.did)
@@ -779,8 +767,9 @@ async def upload_playlist_cover(
         # save returns the file_id (hash)
         image_id = await storage.save(image_obj, image.filename)
 
-        # construct R2 URL directly (images are stored under images/ prefix)
-        image_url = f"{storage.public_image_bucket_url}/images/{image_id}{ext}"
+        image_url = storage.build_image_url(image_id, ext)
+
+        thumbnail_url = await generate_and_save(bytes(image_data), image_id, "playlist")
 
         # delete old image if exists (prevent R2 object leaks)
         if playlist.image_id:
@@ -790,9 +779,14 @@ async def upload_playlist_cover(
         # update playlist with new image
         playlist.image_id = image_id
         playlist.image_url = image_url
+        playlist.thumbnail_url = thumbnail_url
         await db.commit()
 
-        return {"image_url": image_url, "image_id": image_id}
+        return {
+            "image_url": image_url,
+            "image_id": image_id,
+            "thumbnail_url": thumbnail_url,
+        }
 
     except HTTPException:
         raise

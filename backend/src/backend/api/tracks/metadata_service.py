@@ -15,6 +15,7 @@ from backend._internal.atproto.handles import resolve_handle
 from backend._internal.clients.moderation import get_moderation_client
 from backend._internal.image import ImageFormat
 from backend._internal.notifications import notification_service
+from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.models import Track
 from backend.storage import storage
@@ -113,8 +114,10 @@ async def apply_album_update(
     return True
 
 
-async def upload_track_image(image: UploadFile) -> tuple[str, str | None]:
-    """Persist a track image and return (image_id, public_url)."""
+async def upload_track_image(
+    image: UploadFile,
+) -> tuple[str, str | None, str | None]:
+    """Persist a track image and return (image_id, public_url, thumbnail_url)."""
     if not image.filename:
         raise HTTPException(status_code=400, detail="image filename missing")
 
@@ -136,13 +139,15 @@ async def upload_track_image(image: UploadFile) -> tuple[str, str | None]:
     image_id = await storage.save(image_obj, f"images/{image.filename}")
     image_url = await storage.get_url(image_id, file_type="image")
 
+    thumbnail_url = await generate_and_save(image_data, image_id, "track")
+
     # scan image for policy violations (non-blocking)
     if settings.moderation.image_moderation_enabled:
         try:
             client = get_moderation_client()
             content_type = image_format.media_type if image_format else "image/png"
             result = await client.scan_image(image_data, image_id, content_type)
-            # note: if image is flagged, it's automatically added to sensitive_images
+            # if image is flagged, it's automatically added to sensitive_images
             # by the moderation service. the image is still saved and returned -
             # sensitive images are just blurred in the UI, not rejected.
             if not result.is_safe:
@@ -156,4 +161,4 @@ async def upload_track_image(image: UploadFile) -> tuple[str, str | None]:
             # log but don't block upload - moderation is best-effort
             logger.warning("image moderation failed for %s: %s", image_id, e)
 
-    return image_id, image_url
+    return image_id, image_url, thumbnail_url

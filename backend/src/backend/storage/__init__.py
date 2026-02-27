@@ -1,5 +1,8 @@
 """storage implementations."""
 
+from typing import TYPE_CHECKING
+
+from backend.storage.protocol import StorageProtocol
 from backend.storage.r2 import R2Storage
 
 _storage: R2Storage | None = None
@@ -21,6 +24,9 @@ class _StorageProxy:
         return getattr(_get_storage(), name)
 
 
-storage = _StorageProxy()
+if TYPE_CHECKING:
+    storage: StorageProtocol
+else:
+    storage = _StorageProxy()
 
-__all__ = ["storage"]
+__all__ = ["StorageProtocol", "storage"]

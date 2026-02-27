@@ -92,6 +92,7 @@ class Track(Base):
     # image reference
     image_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # notification tracking
     notification_sent: Mapped[bool] = mapped_column(

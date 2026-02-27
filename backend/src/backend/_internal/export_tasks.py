@@ -20,6 +20,7 @@ from backend._internal.jobs import job_service
 from backend.config import settings
 from backend.models import Track
 from backend.models.job import JobStatus
+from backend.storage import storage
 from backend.storage.r2 import UploadProgressTracker
 from backend.utilities.database import db_session
 from backend.utilities.progress import R2ProgressTracker
@@ -138,7 +139,7 @@ async def process_export(export_id: str, artist_did: str) -> None:
                     track = info["track"]
                     try:
                         response = await s3_client.get_object(
-                            Bucket=settings.storage.r2_bucket,
+                            Bucket=storage.audio_bucket_name,
                             Key=info["key"],
                         )
 

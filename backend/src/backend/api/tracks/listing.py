@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, cast
 
 import logfire
 from botocore.exceptions import ClientError
@@ -37,6 +37,9 @@ from backend.utilities.aggregations import (
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
 from .router import router
+
+if TYPE_CHECKING:
+    from backend.storage.r2 import R2Storage
 
 
 class TracksListResponse(BaseModel):
@@ -290,11 +293,7 @@ async def list_top_tracks(
     limit: int = 10,
     session: AuthSession | None = Depends(get_optional_session),
 ) -> list[TrackResponse]:
-    """Get top tracks by like count.
-
-    Returns tracks ordered by number of likes (most liked first).
-    Only returns tracks that have at least one like.
-    """
+    """get top tracks by like count (most liked first, at least one like)."""
     limit = max(1, min(limit, 50))
 
     # get top track IDs with like counts in a single query
@@ -497,13 +496,14 @@ async def get_my_file_sizes(
         if not audio_format:
             return
         key = f"audio/{file_id}{audio_format.extension}"
+        r2 = cast("R2Storage", storage)
         async with semaphore:
             try:
-                async with storage.async_session.client(
+                async with r2.async_session.client(
                     "s3",
-                    endpoint_url=storage.endpoint_url,
-                    aws_access_key_id=storage.aws_access_key_id,
-                    aws_secret_access_key=storage.aws_secret_access_key,
+                    endpoint_url=r2.endpoint_url,
+                    aws_access_key_id=r2.aws_access_key_id,
+                    aws_secret_access_key=r2.aws_secret_access_key,
                 ) as client:
                     response = await client.head_object(
                         Bucket=storage.audio_bucket_name, Key=key
