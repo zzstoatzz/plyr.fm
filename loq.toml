@@ -111,7 +111,7 @@ max_lines = 1087
 
 [[rules]]
 path = "frontend/src/lib/components/Queue.svelte"
-max_lines = 952
+max_lines = 980
 
 [[rules]]
 path = "frontend/src/lib/components/SearchModal.svelte"

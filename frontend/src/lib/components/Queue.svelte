@@ -56,6 +56,13 @@
 		return jam.participants.find((p) => p.did === jam.outputDid) ?? null;
 	});
 
+	const MAX_VISIBLE_PARTICIPANTS = 2;
+	let participantsExpanded = $state(false);
+	const visibleParticipants = $derived(
+		participantsExpanded ? jam.participants : jam.participants.slice(0, MAX_VISIBLE_PARTICIPANTS)
+	);
+	const hiddenParticipantCount = $derived(jam.participants.length - MAX_VISIBLE_PARTICIPANTS);
+
 	function handleTrackClick(index: number) {
 		goToIndex(index);
 	}
@@ -255,7 +262,7 @@
 
 		{#if jam.active && jam.participants.length > 0}
 			<div class="participants-strip">
-				{#each jam.participants as participant (participant.did)}
+				{#each visibleParticipants as participant (participant.did)}
 					<div class="participant-chip" class:is-output={jam.outputMode !== 'everyone' && participant.did === jam.outputDid} title={participant.display_name ?? participant.handle}>
 						{#if participant.avatar_url}
 							<img src={participant.avatar_url} alt="" class="participant-avatar" />
@@ -276,6 +283,15 @@
 						{/if}
 					</div>
 				{/each}
+				{#if hiddenParticipantCount > 0 && !participantsExpanded}
+					<button
+						class="participants-more"
+						onclick={() => { participantsExpanded = true; }}
+						title="show all participants"
+					>
+						+{hiddenParticipantCount}
+					</button>
+				{/if}
 			</div>
 		{/if}
 
@@ -535,6 +551,29 @@
 		border-radius: var(--radius-full);
 		object-fit: cover;
 		border: 1px solid var(--border-subtle);
+	}
+
+	.participants-more {
+		width: 24px;
+		height: 24px;
+		border-radius: var(--radius-full);
+		border: 1px solid var(--border-subtle);
+		background: var(--bg-tertiary);
+		color: var(--text-tertiary);
+		font-size: var(--text-xs);
+		font-family: inherit;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
+		transition: all 0.15s ease;
+		flex-shrink: 0;
+	}
+
+	.participants-more:hover {
+		color: var(--text-secondary);
+		border-color: var(--border-default);
 	}
 
 	.participant-avatar.placeholder {
