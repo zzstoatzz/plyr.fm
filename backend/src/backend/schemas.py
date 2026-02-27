@@ -53,6 +53,7 @@ class AlbumSummary(BaseModel):
     slug: str
     title: str
     image_url: str | None
+    thumbnail_url: str | None = None
 
     @classmethod
     async def from_album(
@@ -70,6 +71,7 @@ class AlbumSummary(BaseModel):
             slug=album.slug,
             title=album.title,
             image_url=image_url,
+            thumbnail_url=album.thumbnail_url,
         )
 
 
@@ -100,6 +102,7 @@ class TrackResponse(BaseModel):
     play_count: int
     created_at: str
     image_url: str | None
+    thumbnail_url: str | None = None
     is_liked: bool
     like_count: int
     comment_count: int
@@ -213,6 +216,7 @@ class TrackResponse(BaseModel):
             play_count=track.play_count,
             created_at=track.created_at.isoformat(),
             image_url=image_url,
+            thumbnail_url=track.thumbnail_url,
             is_liked=is_liked,
             like_count=like_count,
             comment_count=comment_count,

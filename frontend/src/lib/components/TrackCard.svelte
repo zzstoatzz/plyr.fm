@@ -88,9 +88,9 @@
 >
 	<div class="artwork" class:gated={track.gated}>
 		{#if track.image_url}
-			<SensitiveImage src={track.image_url}>
+			<SensitiveImage src={track.thumbnail_url ?? track.image_url}>
 				<img
-					src={track.image_url}
+					src={track.thumbnail_url ?? track.image_url}
 					alt="{track.title} artwork"
 					loading={imageLoading}
 				/>

@@ -306,11 +306,7 @@ async def get_album(
     request: Request,
     session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> AlbumResponse:
-    """get album details with all tracks for a specific artist.
-
-    if the album has an ATProto list record, tracks are returned in the
-    order stored in that record. otherwise, tracks are ordered by created_at.
-    """
+    """get album details with tracks (ordered by ATProto list record or created_at)."""
     # check Redis cache first
     cache_key = _album_cache_key(handle, slug)
     try:
@@ -507,8 +503,12 @@ async def upload_album_cover(
         # save returns the file_id (hash)
         image_id = await storage.save(image_obj, image.filename)
 
-        # construct R2 URL directly (images are stored under images/ prefix)
-        image_url = f"{storage.public_image_bucket_url}/images/{image_id}{ext}"
+        image_url = storage.build_image_url(image_id, ext)
+
+        # generate and save thumbnail
+        from backend._internal.thumbnails import generate_and_save
+
+        thumbnail_url = await generate_and_save(bytes(image_data), image_id, "album")
 
         # scan image for policy violations (non-blocking)
         if settings.moderation.image_moderation_enabled:
@@ -544,11 +544,16 @@ async def upload_album_cover(
         # update album with new image
         album.image_id = image_id
         album.image_url = image_url
+        album.thumbnail_url = thumbnail_url
         await db.commit()
 
         await invalidate_album_cache(auth_session.handle, album.slug)
 
-        return {"image_url": image_url, "image_id": image_id}
+        return {
+            "image_url": image_url,
+            "image_id": image_id,
+            "thumbnail_url": thumbnail_url,
+        }
 
     except HTTPException:
         raise
@@ -568,12 +573,7 @@ async def update_album(
         str | None, Query(description="new album description")
     ] = None,
 ) -> AlbumMetadata:
-    """update album metadata (title, description).
-
-    when title changes:
-    - all tracks in the album have their ATProto records updated
-    - the album's ATProto list record name is updated
-    """
+    """update album metadata (title, description). syncs ATProto records on title change."""
     from backend._internal.atproto.records.fm_plyr.list import update_list_record
     from backend._internal.atproto.records.fm_plyr.track import (
         build_track_record,
@@ -717,13 +717,7 @@ async def delete_album(
         Query(description="if true, also delete all tracks in the album"),
     ] = False,
 ) -> DeleteAlbumResponse:
-    """delete an album.
-
-    by default, tracks are orphaned (album_id set to null) and remain
-    available as standalone tracks. with cascade=true, tracks are also deleted.
-
-    also deletes the ATProto list record if one exists.
-    """
+    """delete album. tracks are orphaned unless cascade=true. removes ATProto list record."""
     from backend._internal.atproto.records import delete_record_by_uri
 
     # verify album exists and belongs to the authenticated artist

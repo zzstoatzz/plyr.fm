@@ -125,18 +125,7 @@ class R2Storage:
         filename: str,
         progress_callback: Callable[[float], None] | None = None,
     ) -> str:
-        """save media file to R2 using streaming upload.
-
-        uses chunked hashing and aioboto3's upload_fileobj for constant
-        memory usage regardless of file size.
-
-        supports both audio and image files.
-
-        args:
-            file: file-like object to upload
-            filename: original filename (used to determine media type)
-            progress_callback: optional callback for upload progress (receives 0-100 percentage)
-        """
+        """save media file to R2 using streaming upload with chunked hashing."""
         with logfire.span("R2 save", filename=filename):
             # compute hash in chunks (constant memory)
             file_id = hash_file_chunked(file)[:16]
@@ -469,7 +458,7 @@ class R2Storage:
             from backend._internal.image import ImageFormat
 
             for image_format in ImageFormat:
-                key = f"{file_id}.{image_format.value}"
+                key = f"images/{file_id}.{image_format.value}"
 
                 try:
                     # check if object exists first
@@ -507,16 +496,7 @@ class R2Storage:
         filename: str,
         progress_callback: Callable[[float], None] | None = None,
     ) -> str:
-        """save supporter-gated audio file to private R2 bucket.
-
-        same as save() but uses the private bucket with no public URL.
-        files in this bucket are only accessible via presigned URLs.
-
-        args:
-            file: file-like object to upload
-            filename: original filename (used to determine media type)
-            progress_callback: optional callback for upload progress
-        """
+        """save supporter-gated audio to private R2 bucket (presigned URL access only)."""
         if not self.private_audio_bucket_name:
             raise ValueError("R2_PRIVATE_BUCKET not configured")
 
@@ -638,6 +618,28 @@ class R2Storage:
                     expires_in=expiry,
                 )
                 return url
+
+    def build_image_url(self, image_id: str, ext: str) -> str:
+        """construct public image URL without HEAD checks."""
+        return f"{self.public_image_bucket_url}/images/{image_id}.{ext.lstrip('.')}"
+
+    async def save_thumbnail(self, thumbnail_data: bytes, image_id: str) -> str:
+        """save a WebP thumbnail alongside the original image in R2."""
+        key = f"images/{image_id}_thumb.webp"
+        with logfire.span("R2 save_thumbnail", image_id=image_id, key=key):
+            async with self.async_session.client(
+                "s3",
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+            ) as client:
+                await client.upload_fileobj(
+                    BytesIO(thumbnail_data),
+                    self.image_bucket_name,
+                    key,
+                    ExtraArgs={"ContentType": "image/webp"},
+                )
+            return f"{self.public_image_bucket_url}/{key}"
 
     async def move_audio(
         self,

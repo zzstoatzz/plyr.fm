@@ -167,6 +167,9 @@ async def test_process_export_downloads_concurrently() -> None:
     mock_file.__aexit__.return_value = None
     mock_file.write = AsyncMock()
 
+    mock_storage = MagicMock()
+    mock_storage.audio_bucket_name = "test-audio-bucket"
+
     with (
         patch(
             "backend._internal.export_tasks.aioboto3.Session",
@@ -177,6 +180,7 @@ async def test_process_export_downloads_concurrently() -> None:
         patch("backend._internal.export_tasks.os.unlink"),
         patch("backend._internal.export_tasks.db_session") as mock_db_session,
         patch("backend._internal.export_tasks.job_service", mock_job_service),
+        patch("backend._internal.export_tasks.storage", mock_storage),
     ):
         mock_db_session.return_value.__aenter__.return_value = mock_db
 

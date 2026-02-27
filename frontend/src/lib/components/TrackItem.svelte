@@ -227,10 +227,10 @@
 	>
 		<div class="track-image-wrapper" class:gated={track.gated}>
 			{#if track.image_url && !trackImageError}
-				<SensitiveImage src={track.image_url}>
+				<SensitiveImage src={track.thumbnail_url ?? track.image_url}>
 					<div class="track-image">
 						<img
-							src={track.image_url}
+							src={track.thumbnail_url ?? track.image_url}
 							alt="{track.title} artwork"
 							width="48"
 							height="48"

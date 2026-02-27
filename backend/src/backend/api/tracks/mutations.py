@@ -236,10 +236,11 @@ async def update_track_metadata(
                 await storage.delete(track.image_id)
         track.image_id = None
         track.image_url = None
+        track.thumbnail_url = None
         image_changed = True
     elif image and image.filename:
         # handle image upload/replacement
-        image_id, image_url = await upload_track_image(image)
+        image_id, image_url, thumbnail_url = await upload_track_image(image)
 
         if track.image_id:
             # only delete old image from R2 if album doesn't share it
@@ -253,6 +254,7 @@ async def update_track_metadata(
 
         track.image_id = image_id
         track.image_url = image_url
+        track.thumbnail_url = thumbnail_url
         image_changed = True
 
     # handle tags update
