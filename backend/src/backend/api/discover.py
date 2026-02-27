@@ -1,17 +1,16 @@
 """discovery endpoints — social graph powered artist discovery."""
 
 import logging
-from dataclasses import dataclass
 from typing import Annotated
 
-import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
-from backend._internal.atproto.profile import BSKY_API_BASE, normalize_avatar_url
+from backend._internal.atproto.profile import normalize_avatar_url
+from backend._internal.follow_graph import get_follows
 from backend.models import Artist, Track, get_db
 
 logger = logging.getLogger(__name__)
@@ -34,60 +33,13 @@ class NetworkArtistResponse(BaseModel):
         return normalize_avatar_url(v)
 
 
-@dataclass(frozen=True, slots=True)
-class FollowInfo:
-    """metadata about a follow relationship from bluesky."""
-
-    index: int  # enumeration position (0 = most recent, higher = older)
-    avatar_url: str | None  # avatar from bluesky profile
-
-
-async def _get_follows(did: str) -> dict[str, FollowInfo]:
-    """fetch all DIDs a user follows on bluesky with profile metadata.
-
-    returns a mapping of DID -> FollowInfo. enumeration order approximates
-    follow age (0 = most recently followed) since the API paginates by TID.
-    """
-    follows: dict[str, FollowInfo] = {}
-    cursor: str | None = None
-    index = 0
-
-    async with httpx.AsyncClient() as client:
-        while True:
-            params: dict[str, str | int] = {"actor": did, "limit": 100}
-            if cursor:
-                params["cursor"] = cursor
-
-            resp = await client.get(
-                f"{BSKY_API_BASE}/app.bsky.graph.getFollows",
-                params=params,
-                timeout=10.0,
-            )
-            if resp.status_code != 200:
-                logger.warning(f"getFollows failed for {did}: {resp.status_code}")
-                break
-
-            data = resp.json()
-            for f in data.get("follows", []):
-                follows[f["did"]] = FollowInfo(
-                    index=index,
-                    avatar_url=normalize_avatar_url(f.get("avatar")),
-                )
-                index += 1
-
-            if not (cursor := data.get("cursor")):
-                break
-
-    return follows
-
-
 @router.get("/network")
 async def get_network_artists(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: Session = Depends(require_auth),
 ) -> list[NetworkArtistResponse]:
     """discover artists on plyr.fm that you follow on bluesky."""
-    follow_dids = await _get_follows(auth_session.did)
+    follow_dids = await get_follows(auth_session.did)
     if not follow_dids:
         return []
 
