@@ -11,6 +11,7 @@
 	import { tracksCache, fetchTopTracks } from '$lib/tracks.svelte';
 	import type { Track } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
+	import { fade } from 'svelte/transition';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
 	import { API_URL } from '$lib/config';
 	import {
@@ -139,36 +140,38 @@
 
 <main>
 	<!-- top tracks section -->
-	{#if loadingTopTracks}
-		<section class="top-tracks">
-			<h2>
-				top tracks
-			</h2>
-			<div class="loading-container compact">
-				<WaveLoading size="sm" message="loading..." />
-			</div>
-		</section>
-	{:else if hasTopTracks}
-		<section class="top-tracks">
-			<h2>
-				top tracks
-			</h2>
-			<div class="top-tracks-grid">
-				{#each topTracks as track, i}
-					<TrackCard
-						{track}
-						index={i}
-						isPlaying={player.currentTrack?.id === track.id}
-						onPlay={(t) => queue.playNow(t)}
-					/>
-				{/each}
-			</div>
-		</section>
-	{/if}
+	{#key loadingTopTracks}
+		{#if loadingTopTracks}
+			<section class="top-tracks" transition:fade={{ duration: 200 }}>
+				<h2>
+					top tracks
+				</h2>
+				<div class="loading-container compact">
+					<WaveLoading size="sm" message="loading..." />
+				</div>
+			</section>
+		{:else if hasTopTracks}
+			<section class="top-tracks" transition:fade={{ duration: 200 }}>
+				<h2>
+					top tracks
+				</h2>
+				<div class="top-tracks-grid">
+					{#each topTracks as track, i}
+						<TrackCard
+							{track}
+							index={i}
+							isPlaying={player.currentTrack?.id === track.id}
+							onPlay={(t) => queue.playNow(t)}
+						/>
+					{/each}
+				</div>
+			</section>
+		{/if}
+	{/key}
 
 	<!-- artists from your bluesky network -->
 	{#if hasNetworkArtists}
-		<section class="network-artists">
+		<section class="network-artists" transition:fade={{ duration: 200 }}>
 			<h2>artists you know</h2>
 			<div class="artist-grid">
 				{#each networkArtists as artist}

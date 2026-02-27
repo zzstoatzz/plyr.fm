@@ -70,4 +70,10 @@
 		font-size: var(--text-base);
 		text-align: center;
 	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bar {
+			animation: none;
+		}
+	}
 </style>
