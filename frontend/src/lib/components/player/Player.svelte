@@ -646,7 +646,7 @@
 		--top-bar-color: var(--accent);
 	}
 
-	.player::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1.5px; background: var(--top-bar-color); opacity: 0.32; filter: saturate(0.9) brightness(0.75); box-shadow: 0 0 0 transparent; transition: opacity 0.2s ease, filter 0.2s ease, box-shadow 0.25s ease; pointer-events: none; z-index: 2; }
+	.player::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--top-bar-color); opacity: 0.32; filter: saturate(0.9) brightness(0.75); box-shadow: 0 0 0 transparent; transition: opacity 0.15s ease-out, filter 0.15s ease-out, box-shadow 0.2s ease-out; pointer-events: none; z-index: 2; }
 	.player.is-playing::before { opacity: 0.95; filter: saturate(1.25) brightness(1.28); box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 65%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent); }
 
 	.player-content {
