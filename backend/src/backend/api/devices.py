@@ -97,8 +97,8 @@ async def device_websocket(
                         {"type": "error", "message": "device_id required"}
                     )
                     continue
-                # use client-provided name, or derive from user-agent
-                name = message.get("name") or parse_device_name(ua)
+                # derive device name from user-agent
+                name = parse_device_name(ua)
                 await device_service.handle_ws_message(
                     session.did,
                     device_id,

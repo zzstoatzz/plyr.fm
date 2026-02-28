@@ -181,6 +181,7 @@ class DeviceService:
                 return False
 
             state = queue_row.state
+            revision = queue_row.revision
             updated_at = queue_row.updated_at
 
         # hydrate tracks via queue service
@@ -200,6 +201,7 @@ class DeviceService:
 
         snapshot = {
             "state": state,
+            "revision": revision,
             "tracks": tracks,
             "progress_ms": progress_ms,
         }

@@ -9,18 +9,6 @@ const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 const HEARTBEAT_INTERVAL_MS = 30000;
 
-function getBrowserDeviceName(): string {
-	if (!browser) return 'unknown';
-	const ua = navigator.userAgent;
-	if (/iPhone/i.test(ua)) return 'iPhone';
-	if (/iPad/i.test(ua)) return 'iPad';
-	if (/Android/i.test(ua)) return 'Android';
-	if (/Mac/i.test(ua)) return 'Mac';
-	if (/Windows/i.test(ua)) return 'Windows';
-	if (/Linux/i.test(ua)) return 'Linux';
-	return 'Browser';
-}
-
 class DeviceManager {
 	devices = $state<Device[]>([]);
 	connected = $state(false);
@@ -70,11 +58,10 @@ class DeviceManager {
 			this.connected = true;
 			this.reconnectDelay = RECONNECT_BASE_MS;
 
-			// register this device
+			// register this device (name derived from User-Agent on backend)
 			this.send({
 				type: 'register',
-				device_id: this.deviceId,
-				name: getBrowserDeviceName()
+				device_id: this.deviceId
 			});
 
 			this.startHeartbeat();
@@ -89,9 +76,15 @@ class DeviceManager {
 			}
 		};
 
-		this.ws.onclose = () => {
+		this.ws.onclose = (event) => {
 			this.connected = false;
 			this.stopHeartbeat();
+			// terminal codes: don't retry (auth failure, etc.)
+			if (event.code === 4001) {
+				this.closeWs();
+				this.devices = [];
+				return;
+			}
 			this.scheduleReconnect();
 		};
 
@@ -193,11 +186,12 @@ class DeviceManager {
 		// skip transfer if we're in a jam -- jam owns playback
 		if (jam.active) return;
 
-		const snapshot = data as unknown as QueueResponse;
-		queue.applySnapshot(snapshot);
+		// payload: { type, state, revision, tracks, progress_ms }
+		queue.applySnapshot(data as unknown as QueueResponse);
 
+		// seek to interpolated progress (more accurate than state.progress_ms)
 		if (typeof data.progress_ms === 'number') {
-			queue.seek(data.progress_ms as number);
+			queue.seek(data.progress_ms);
 		}
 
 		queue.play();

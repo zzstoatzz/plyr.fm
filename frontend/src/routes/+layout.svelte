@@ -86,6 +86,13 @@
 		}
 	});
 
+	// disconnect device presence when user logs out
+	$effect(() => {
+		if (!auth.isAuthenticated && devices.connected) {
+			devices.disconnect();
+		}
+	});
+
 	// auto-open queue when joining a jam (only on jam.active transition, not on queue toggle)
 	$effect(() => {
 		if (!browser) return;
