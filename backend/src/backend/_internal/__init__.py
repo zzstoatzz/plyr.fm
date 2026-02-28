@@ -40,6 +40,7 @@ from backend._internal.auth import (
     update_session_tokens,
 )
 from backend._internal.constellation import get_like_count_safe
+from backend._internal.devices import device_service
 from backend._internal.jams import jam_service
 from backend._internal.feature_flags import (
     KNOWN_FLAGS,
@@ -69,6 +70,7 @@ __all__ = [
     "delete_pending_dev_token",
     "delete_pending_scope_upgrade",
     "delete_session",
+    "device_service",
     "ensure_artist_exists",
     "get_like_count_safe",
     "get_oauth_client",

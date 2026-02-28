@@ -144,6 +144,15 @@ export interface PlaylistWithTracks extends Playlist {
 	tracks: Track[];
 }
 
+export interface Device {
+	device_id: string;
+	name: string;
+	is_playing: boolean;
+	current_track_id: string | null;
+	progress_ms: number;
+	last_seen: number;
+}
+
 export interface JamInfo {
 	id: string;
 	code: string;
