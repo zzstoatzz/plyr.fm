@@ -412,6 +412,11 @@ class JamService:
 
     async def disconnect_ws(self, jam_id: str, ws: WebSocket) -> None:
         """unregister a WebSocket connection."""
+        # remove from connections FIRST so _fan_out won't send to this ws
+        # while _clear_output_if_matches publishes events
+        if jam_id in self._connections:
+            self._connections[jam_id].discard(ws)
+
         # check if disconnecting WS was the output device
         disconnecting_client_id = self._ws_client_ids.pop(ws, None)
         if disconnecting_client_id:
@@ -426,17 +431,15 @@ class JamService:
         for did in dids_to_remove:
             del self._ws_by_did[did]
 
-        if jam_id in self._connections:
-            self._connections[jam_id].discard(ws)
-            if not self._connections[jam_id]:
-                del self._connections[jam_id]
-                # cancel reader if no more connections
-                if jam_id in self._reader_tasks:
-                    self._reader_tasks[jam_id].cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await self._reader_tasks[jam_id]
-                    del self._reader_tasks[jam_id]
-                    logger.info("stopped stream reader for jam %s", jam_id)
+        if jam_id in self._connections and not self._connections[jam_id]:
+            del self._connections[jam_id]
+            # cancel reader if no more connections
+            if jam_id in self._reader_tasks:
+                self._reader_tasks[jam_id].cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._reader_tasks[jam_id]
+                del self._reader_tasks[jam_id]
+                logger.info("stopped stream reader for jam %s", jam_id)
 
     async def _close_ws_for_did(self, did: str) -> None:
         """close any existing WebSocket for this DID."""
