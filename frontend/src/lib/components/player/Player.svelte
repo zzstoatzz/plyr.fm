@@ -591,7 +591,7 @@
 </script>
 
 {#if player.currentTrack}
-	<div class="player" class:jam-active={jam.active}>
+	<div class="player" class:jam-active={jam.active} class:is-playing={!player.paused}>
 		<audio
 			bind:this={player.audioElement}
 			bind:currentTime={player.currentTime}
@@ -643,7 +643,11 @@
 		transform: translate3d(0, var(--visual-viewport-offset, 0px), 0);
 		-webkit-transform: translate3d(0, var(--visual-viewport-offset, 0px), 0);
 		will-change: transform;
+		--top-bar-color: var(--accent);
 	}
+
+	.player::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--top-bar-color); opacity: 0.32; filter: saturate(0.9) brightness(0.75); box-shadow: 0 0 0 transparent; transition: opacity 0.2s ease, filter 0.2s ease, box-shadow 0.25s ease; pointer-events: none; z-index: 2; }
+	.player.is-playing::before { opacity: 0.95; filter: saturate(1.25) brightness(1.28); box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 65%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent); }
 
 	.player-content {
 		width: 100%;
@@ -661,11 +665,7 @@
 		}
 	}
 
-	.player.jam-active {
-		border-top: 2px solid transparent;
-		border-image: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6, #ff6b6b) 1;
-		border-image-width: 2px 0 0 0;
-	}
+	.player.jam-active { --top-bar-color: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6, #ff6b6b); }
 
 	.jam-stripe-label {
 		position: absolute;
