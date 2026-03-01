@@ -361,6 +361,12 @@
 		color: rgba(255, 255, 255, 0.5);
 	}
 
+	/* --- SHORT (height < 100px): hide progress bar --- */
+	@container (max-height: 99px) {
+		.player-controls { display: none; }
+		.content { justify-content: center; }
+	}
+
 	/* --- NARROW (width < 280px): blurred bg, compact controls --- */
 	@container (max-width: 279px) {
 		.bg-image,

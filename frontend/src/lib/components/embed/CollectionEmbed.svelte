@@ -539,7 +539,7 @@
 	}
 
 	/* ===== WIDE (>= 500px): more room for artist column ===== */
-	@container (min-width: 500px) {
+	@container (min-width: 500px) and (aspect-ratio > 1.2) {
 		.track-artist { max-width: 40%; }
 	}
 </style>
