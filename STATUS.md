@@ -45,6 +45,18 @@ plyr.fm should become:
 
 ## recent work
 
+### March 2026
+
+#### embed glow bar + share button (PRs #996-998, Mar 1)
+
+**glow bar**: 1px accent-colored bar (`#6a9fff`) on track and collection embeds that lights up on playback and dims on pause, matching the main Player's `::before` style. uses `color-mix()` for the box-shadow glow. works across all container query breakpoints.
+
+**share button**: inline link icon next to the logo that copies the plyr.fm page URL (not the embed URL) to clipboard with "copied!" tooltip feedback. falls back to `navigator.share()` when clipboard API is unavailable. no auth dependency. hidden in MICRO mode, white-themed in blurred-bg modes (NARROW, SQUARE/TALL).
+
+**embed layout fixes** (PRs #996-997): fixed track embed clipping at short heights, guarded collection WIDE query, and fixed track embed layout for tall/portrait containers.
+
+---
+
 ### February 2026
 
 #### image thumbnails + storage cleanup (PRs #976-979, Feb 27)
@@ -391,5 +403,5 @@ plyr.fm/
 
 ---
 
-this is a living document. last updated 2026-02-27 (archival of early Feb, jams GA, thumbnails, scope parsing, homepage perf).
+this is a living document. last updated 2026-03-01 (embed glow bar + share button, embed layout fixes).
 
