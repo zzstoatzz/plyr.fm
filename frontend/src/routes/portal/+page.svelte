@@ -15,7 +15,7 @@
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { preferences } from '$lib/preferences.svelte';
+	import { preferences } from '$lib/preferences.svelte'; import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
 	let loading = $state(true);
 	let error = $state('');
 	let tracks = $state<Track[]>([]);
@@ -123,7 +123,7 @@
 					// invalidate all load functions so they rerun with the new session cookie
 					await invalidateAll();
 					await auth.refresh();
-					await preferences.fetch();
+					await preferences.fetch(); const r = getReturnUrl(); if (r) { clearReturnUrl(); window.location.href = r; return; }
 				}
 			} catch (_e) {
 				console.error('failed to exchange token:', _e);

@@ -2,7 +2,9 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { jam } from '$lib/jam.svelte';
+	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
+	import { setReturnUrl } from '$lib/utils/return-url';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import type { PageData } from './$types';
 
@@ -11,15 +13,29 @@
 	let error = $state<string | null>(null);
 
 	onMount(async () => {
+		// wait for auth check to complete (runs in layout)
+		while (auth.loading) {
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+
+		if (!auth.isAuthenticated) {
+			// don't try to join — show preview UI instead
+			return;
+		}
+
+		// authenticated — proceed with join
 		const result = await jam.join(data.code);
 		if (result === true) {
-			// SvelteKit navigation preserves runtime — jam state survives
 			goto('/');
 		} else {
 			error = result;
 			toast.error(result);
 		}
 	});
+
+	function handleSignIn() {
+		setReturnUrl(`/jam/${data.code}`);
+	}
 </script>
 
 <svelte:head>
@@ -60,7 +76,28 @@
 </svelte:head>
 
 <div class="join-page">
-	{#if error}
+	{#if auth.loading}
+		<p class="joining">loading...</p>
+	{:else if !auth.isAuthenticated}
+		<div class="preview-card">
+			{#if data.preview}
+				{#if data.preview.host_avatar_url}
+					<img src={data.preview.host_avatar_url} alt="" class="host-avatar" />
+				{/if}
+				<h2>{data.preview.name ?? `${data.preview.host_display_name}'s jam`}</h2>
+				<p class="preview-description">
+					{data.preview.participant_count > 1
+						? `${data.preview.host_display_name} and ${data.preview.participant_count - 1} others are listening`
+						: `${data.preview.host_display_name} is listening`}
+				</p>
+			{:else}
+				<h2>join a jam</h2>
+			{/if}
+			<a href="/login?return_to=/jam/{data.code}" class="sign-in-button" onclick={handleSignIn}>
+				sign in to join
+			</a>
+		</div>
+	{:else if error}
 		<div class="error-state">
 			<p>{error}</p>
 			<a href="/">go home</a>
@@ -82,6 +119,52 @@
 	.joining {
 		color: var(--text-tertiary);
 		font-size: var(--text-base);
+	}
+
+	.preview-card {
+		text-align: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		max-width: 320px;
+	}
+
+	.host-avatar {
+		width: 64px;
+		height: 64px;
+		border-radius: 50%;
+		object-fit: cover;
+		border: 2px solid var(--border-subtle);
+	}
+
+	.preview-card h2 {
+		font-size: var(--text-xl);
+		color: var(--text-primary);
+		margin: 0;
+	}
+
+	.preview-description {
+		color: var(--text-secondary);
+		font-size: var(--text-base);
+		margin: 0;
+	}
+
+	.sign-in-button {
+		display: inline-block;
+		margin-top: 0.5rem;
+		padding: 0.75rem 1.5rem;
+		background: var(--accent);
+		color: white;
+		border-radius: var(--radius-md);
+		text-decoration: none;
+		font-weight: 500;
+		font-size: var(--text-base);
+		transition: opacity 0.15s;
+	}
+
+	.sign-in-button:hover {
+		opacity: 0.9;
 	}
 
 	.error-state {

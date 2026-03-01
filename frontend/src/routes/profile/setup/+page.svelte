@@ -4,6 +4,7 @@
 	import { invalidateAll, replaceState } from '$app/navigation';
 	import { API_URL } from '$lib/config';
 	import { auth } from '$lib/auth.svelte';
+	import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
 
 	let loading = true;
 	let saving = false;
@@ -107,7 +108,12 @@
 			});
 
 			if (response.ok) {
-				// redirect to portal
+				const returnTo = getReturnUrl();
+				if (returnTo) {
+					clearReturnUrl();
+					window.location.href = returnTo;
+					return;
+				}
 				window.location.href = '/portal';
 			} else {
 				const errorData = await response.json();

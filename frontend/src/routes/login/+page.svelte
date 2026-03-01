@@ -4,6 +4,9 @@
 	import { API_URL } from '$lib/config';
 	import HandleAutocomplete from '$lib/components/HandleAutocomplete.svelte';
 
+	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+	const returnTo = params.get('return_to');
+
 	type Mode = 'signin' | 'create';
 
 	interface PdsOption {
@@ -235,7 +238,7 @@
 			{/if}
 		</div>
 
-		<a href="/" class="back-link">← back to home</a>
+		<a href={returnTo ?? '/'} class="back-link">← back</a>
 	</div>
 </div>
 
