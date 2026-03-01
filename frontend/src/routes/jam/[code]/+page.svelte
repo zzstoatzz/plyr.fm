@@ -6,6 +6,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import { setReturnUrl } from '$lib/utils/return-url';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
+	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -77,7 +78,7 @@
 
 <div class="join-page">
 	{#if auth.loading}
-		<p class="joining">loading...</p>
+		<WaveLoading size="sm" message="loading..." />
 	{:else if !auth.isAuthenticated}
 		<div class="preview-card">
 			{#if data.preview}
@@ -127,7 +128,12 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 1rem;
-		max-width: 320px;
+		max-width: 360px;
+		width: 100%;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+		padding: 2rem;
 	}
 
 	.host-avatar {
@@ -135,7 +141,6 @@
 		height: 64px;
 		border-radius: 50%;
 		object-fit: cover;
-		border: 2px solid var(--border-subtle);
 	}
 
 	.preview-card h2 {
