@@ -23,6 +23,15 @@
 
 	let currentTrack = $derived(collection.tracks[currentIndex]);
 	let isPlayable = $derived(currentTrack?.r2_url && !currentTrack?.gated);
+	let showCopied = $state(false);
+
+	async function copyShareLink() {
+		const url = collection.collectionUrl;
+		try { await navigator.clipboard.writeText(url); }
+		catch { if (navigator.share) { try { await navigator.share({ url }); } catch { /* dismissed */ } } return; }
+		showCopied = true;
+		setTimeout(() => { showCopied = false; }, 2000);
+	}
 
 	function togglePlay() {
 		if (!isPlayable) return;
@@ -119,7 +128,16 @@
 				<span class="meta-sep">&middot;</span>
 				<a href={collection.subtitleUrl} target="_blank" rel="noopener noreferrer" class="subtitle">{collection.subtitle}</a>
 			</div>
+			<div class="actions">
+			<button class="share-btn" onclick={copyShareLink} title="copy link">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="share-icon">
+					<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+					<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+				</svg>
+				{#if showCopied}<span class="copied">copied!</span>{/if}
+			</button>
 			<a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">plyr.fm</a>
+		</div>
 		</div>
 
 		<div class="track-list">
@@ -146,7 +164,7 @@
 			{/if}
 		</div>
 
-		<div class="player-bar">
+		<div class="player-bar" class:is-playing={!paused}>
 			<div class="now-playing">
 				{#if currentTrack?.image_url}
 					<img class="np-art" src={currentTrack.image_url} alt="" />
@@ -352,6 +370,13 @@
 	}
 	.logo:hover { color: var(--c-logo-hover); }
 
+	.actions { display: flex; align-items: center; gap: clamp(4px, 1.5cqi, 8px); flex-shrink: 0; }
+	.share-btn { background: none; border: none; color: var(--text-tertiary); cursor: pointer; padding: 2px; display: flex; align-items: center; position: relative; }
+	.share-btn:hover { color: var(--text-primary); }
+	.share-icon { width: var(--logo-size); height: var(--logo-size); }
+	.copied { position: absolute; top: -1.5rem; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; pointer-events: none; animation: fadeIn 0.15s ease-in; }
+	@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
 	.track-list {
 		flex: 1; overflow-y: auto; min-height: 0;
 		scrollbar-width: thin;
@@ -400,9 +425,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		border-top: 1px solid var(--c-progress-bg);
 		padding-top: var(--gap);
+		position: relative;
 	}
+
+	.player-bar::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: #6a9fff; opacity: 0.32; filter: saturate(0.9) brightness(0.75); box-shadow: 0 0 0 transparent; transition: opacity 0.15s ease-out, filter 0.15s ease-out, box-shadow 0.2s ease-out; pointer-events: none; z-index: 2; }
+	.player-bar.is-playing::before { opacity: 0.95; filter: saturate(1.25) brightness(1.28); box-shadow: 0 0 6px color-mix(in srgb, #6a9fff 65%, transparent), 0 0 14px color-mix(in srgb, #6a9fff 45%, transparent); }
 
 	.now-playing {
 		display: flex;
@@ -505,6 +533,8 @@
 		}
 		.bg-image, .bg-overlay { display: block; }
 		.art-container, .track-list { display: none; }
+		.share-btn { color: rgba(255,255,255,0.5); }
+		.share-btn:hover { color: rgba(255,255,255,0.75); }
 		.np-art, .np-art-placeholder { display: none; }
 		.content { justify-content: center; gap: clamp(4px, 1.5cqi, 8px); }
 		.collection-header { flex-direction: column; gap: 0; }
@@ -518,7 +548,7 @@
 
 	/* ===== MICRO (< 200px): hide times, logo, np-meta ===== */
 	@container (max-width: 199px) {
-		.time, .logo, .np-meta { display: none; }
+		.time, .logo, .np-meta, .share-btn { display: none; }
 	}
 
 	/* ===== TALL (aspect-ratio <= 1.2, >= 200px, >= 300px height): blurred bg, vertical ===== */
@@ -536,6 +566,8 @@
 		.art-container { display: none; }
 		.content { flex: 1; }
 		.title { text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+		.share-btn { color: rgba(255,255,255,0.5); }
+		.share-btn:hover { color: rgba(255,255,255,0.75); }
 	}
 
 	/* ===== WIDE (>= 500px): more room for artist column ===== */

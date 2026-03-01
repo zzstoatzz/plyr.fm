@@ -11,6 +11,15 @@
 	let paused = $state(true);
 	let currentTime = $state(0);
 	let duration = $state(0);
+	let showCopied = $state(false);
+
+	async function copyShareLink() {
+		const url = `https://plyr.fm/track/${track.id}`;
+		try { await navigator.clipboard.writeText(url); }
+		catch { if (navigator.share) { try { await navigator.share({ url }); } catch { /* dismissed */ } } return; }
+		showCopied = true;
+		setTimeout(() => { showCopied = false; }, 2000);
+	}
 
 	function togglePlay() {
 		if (audio.paused) {
@@ -45,7 +54,7 @@
 	});
 </script>
 
-<div class="embed-container">
+<div class="embed-container" class:is-playing={!paused}>
 	<!-- background image for mobile layout -->
 	{#if track.image_url}
 		<SensitiveImage src={track.image_url}>
@@ -95,9 +104,16 @@
 				<a href="https://plyr.fm/u/{track.artist_handle}" target="_blank" rel="noopener noreferrer" class="artist">{track.artist}</a>
 			</div>
 
-			<a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">
-				plyr.fm
-			</a>
+			<div class="actions">
+				<button class="share-btn" onclick={copyShareLink} title="copy link">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="share-icon">
+						<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+						<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+					</svg>
+					{#if showCopied}<span class="copied">copied!</span>{/if}
+				</button>
+				<a href="https://plyr.fm" target="_blank" rel="noopener noreferrer" class="logo">plyr.fm</a>
+			</div>
 		</div>
 
 		<div class="player-controls">
@@ -148,6 +164,9 @@
 		--time-size: clamp(10px, 3cqi, 12px);
 		--logo-size: clamp(8px, 2.5cqi, 12px);
 	}
+
+	.embed-container::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: #6a9fff; opacity: 0.32; filter: saturate(0.9) brightness(0.75); box-shadow: 0 0 0 transparent; transition: opacity 0.15s ease-out, filter 0.15s ease-out, box-shadow 0.2s ease-out; pointer-events: none; z-index: 2; }
+	.embed-container.is-playing::before { opacity: 0.95; filter: saturate(1.25) brightness(1.28); box-shadow: 0 0 6px color-mix(in srgb, #6a9fff 65%, transparent), 0 0 14px color-mix(in srgb, #6a9fff 45%, transparent); }
 
 	.bg-image {
 		display: none;
@@ -292,6 +311,13 @@
 		color: var(--text-muted);
 	}
 
+	.actions { display: flex; align-items: center; gap: clamp(4px, 1.5cqi, 8px); flex-shrink: 0; }
+	.share-btn { background: none; border: none; color: var(--text-tertiary); cursor: pointer; padding: 2px; display: flex; align-items: center; position: relative; }
+	.share-btn:hover { color: var(--text-primary); }
+	.share-icon { width: var(--logo-size); height: var(--logo-size); }
+	.copied { position: absolute; top: -1.5rem; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; pointer-events: none; animation: fadeIn 0.15s ease-in; }
+	@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
 	.player-controls {
 		display: flex;
 		align-items: center;
@@ -401,6 +427,9 @@
 			color: rgba(255, 255, 255, 0.75);
 		}
 
+		.share-btn { color: rgba(255, 255, 255, 0.5); }
+		.share-btn:hover { color: rgba(255, 255, 255, 0.75); }
+
 		.time {
 			color: rgba(255, 255, 255, 0.6);
 		}
@@ -416,7 +445,7 @@
 
 	/* --- MICRO (width < 200px): hide time labels, minimal UI --- */
 	@container (max-width: 199px) {
-		.time {
+		.time, .share-btn {
 			display: none;
 		}
 
@@ -484,6 +513,9 @@
 		.logo:hover {
 			color: rgba(255, 255, 255, 0.75);
 		}
+
+		.share-btn { color: rgba(255, 255, 255, 0.5); }
+		.share-btn:hover { color: rgba(255, 255, 255, 0.75); }
 
 		.time {
 			color: rgba(255, 255, 255, 0.6);

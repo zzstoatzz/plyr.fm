@@ -147,7 +147,7 @@ max_lines = 724
 
 [[rules]]
 path = "frontend/src/routes/embed/track/\\[id\\]/+page.svelte"
-max_lines = 522
+max_lines = 555
 
 [[rules]]
 path = "frontend/src/routes/library/+page.svelte"
@@ -219,4 +219,4 @@ max_lines = 535
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
-max_lines = 550
+max_lines = 580
