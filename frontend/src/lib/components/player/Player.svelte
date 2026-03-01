@@ -672,7 +672,7 @@
 		top: 0;
 		left: 50%;
 		transform: translate(-50%, -50%);
-		background: var(--glass-bg, var(--bg-tertiary));
+		background: color-mix(in srgb, var(--bg-tertiary) 95%, transparent);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-full);
 		padding: 0.1rem 0.5rem;
@@ -683,7 +683,8 @@
 		align-items: center;
 		gap: 0.3rem;
 		z-index: 3;
-		background: var(--bg-tertiary);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
 	}
 
 	.jam-stripe-label .muted {
