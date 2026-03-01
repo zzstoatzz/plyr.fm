@@ -222,8 +222,8 @@ class FrontendSettings(AppSettingsSection):
             # staging: allow stg.plyr.fm
             return r"^(https://stg\.plyr\.fm|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
         elif hostname in ("plyr.fm", "www.plyr.fm"):
-            # production: allow plyr.fm and www.plyr.fm
-            return r"^(https://(www\.)?plyr\.fm|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
+            # production: allow plyr.fm, www.plyr.fm, and embed consumers
+            return r"^(https://(www\.)?plyr\.fm|https://zzstoatzz\.github\.io|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
         else:
             # local dev: allow localhost
             return r"^(http://localhost:5173)$"
