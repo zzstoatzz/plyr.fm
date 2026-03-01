@@ -66,6 +66,15 @@
 	</div>
 
 	<div class="content">
+		<div class="art-card">
+			{#if track.image_url}
+				<SensitiveImage src={track.image_url}>
+					<img src={track.image_url} alt={track.title} class="art-card-img" />
+				</SensitiveImage>
+			{:else}
+				<div class="art-card-placeholder">♪</div>
+			{/if}
+		</div>
 		<div class="header">
 			<button class="play-btn" onclick={togglePlay} aria-label={paused ? 'Play' : 'Pause'}>
 				{#if paused}
@@ -120,10 +129,7 @@
 		color: var(--text-primary);
 	}
 
-	/* ===========================================
-	   BASE STYLES - Default "wide rail" layout
-	   Art on left, content on right
-	   =========================================== */
+	/* --- BASE STYLES: wide rail (art left, content right) --- */
 	.embed-container {
 		display: flex;
 		height: 100%;
@@ -143,7 +149,6 @@
 		--logo-size: clamp(8px, 2.5cqi, 12px);
 	}
 
-	/* Background image - hidden by default */
 	.bg-image {
 		display: none;
 		position: absolute;
@@ -156,7 +161,6 @@
 		pointer-events: none;
 	}
 
-	/* Gradient overlay instead of flat color */
 	.bg-overlay {
 		display: none;
 		position: absolute;
@@ -171,7 +175,6 @@
 		pointer-events: none;
 	}
 
-	/* Art container - percentage based sizing */
 	.art-container {
 		flex: 0 0 clamp(100px, 35cqi, 320px);
 		height: 100%;
@@ -195,7 +198,6 @@
 		color: var(--text-muted);
 	}
 
-	/* Content area */
 	.content {
 		flex: 1;
 		padding: var(--pad);
@@ -207,7 +209,6 @@
 		z-index: 1;
 	}
 
-	/* Header uses CSS grid for proper spacing */
 	.header {
 		display: grid;
 		grid-template-columns: auto 1fr auto;
@@ -239,7 +240,6 @@
 		height: var(--icon-size);
 	}
 
-	/* Meta fills middle column */
 	.meta {
 		min-width: 0;
 		padding-top: 2px;
@@ -277,7 +277,6 @@
 		text-decoration: underline;
 	}
 
-	/* Logo in grid column 3 */
 	.logo {
 		font-size: var(--logo-size);
 		font-weight: 700;
@@ -293,7 +292,6 @@
 		color: var(--text-muted);
 	}
 
-	/* Player controls with flexible gaps */
 	.player-controls {
 		display: flex;
 		align-items: center;
@@ -340,15 +338,32 @@
 		background: var(--accent);
 	}
 
-	/* ===========================================
-	   MODE: NARROW (width < 280px)
-	   Blurred background, compact controls
-	   =========================================== */
-	@container (max-width: 279px) {
-		.bg-image {
-			display: block;
-		}
+	.art-card {
+		display: none;
+	}
 
+	.art-card-img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		border-radius: var(--radius-lg, 12px);
+	}
+
+	.art-card-placeholder {
+		width: 100%;
+		height: 100%;
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: var(--radius-lg, 12px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: clamp(24px, 10cqi, 48px);
+		color: rgba(255, 255, 255, 0.5);
+	}
+
+	/* --- NARROW (width < 280px): blurred bg, compact controls --- */
+	@container (max-width: 279px) {
+		.bg-image,
 		.bg-overlay {
 			display: block;
 		}
@@ -393,10 +408,7 @@
 		}
 	}
 
-	/* ===========================================
-	   MODE: MICRO (width < 200px)
-	   Hide time labels, minimal UI
-	   =========================================== */
+	/* --- MICRO (width < 200px): hide time labels, minimal UI --- */
 	@container (max-width: 199px) {
 		.time {
 			display: none;
@@ -411,48 +423,9 @@
 		}
 	}
 
-	/* ===========================================
-	   MODE: SQUARE/TALL (aspect-ratio <= 1.2, width >= 200px)
-	   Art on top, content below, 2-line title
-	   =========================================== */
+	/* --- SQUARE/TALL (aspect-ratio <= 1.2): blurred bg, centered art card --- */
 	@container (aspect-ratio <= 1.2) and (min-width: 200px) and (min-height: 200px) {
-		.embed-container {
-			flex-direction: column;
-		}
-
-		.art-container {
-			flex: 1 1 auto;
-			width: 100%;
-			height: auto;
-			min-height: 0;
-		}
-
-		.content {
-			flex: 0 0 auto;
-			justify-content: flex-start;
-			gap: clamp(6px, 2cqi, 12px);
-		}
-
-		/* Allow 2-line title in tall layouts */
-		.title {
-			white-space: normal;
-			display: -webkit-box;
-			-webkit-line-clamp: 2;
-			line-clamp: 2;
-			-webkit-box-orient: vertical;
-			overflow: hidden;
-		}
-	}
-
-	/* ===========================================
-	   MODE: VERY TALL (aspect-ratio <= 0.7)
-	   Blurred background, larger art influence
-	   =========================================== */
-	@container (aspect-ratio <= 0.7) and (min-width: 200px) {
-		.bg-image {
-			display: block;
-		}
-
+		.bg-image,
 		.bg-overlay {
 			display: block;
 		}
@@ -461,14 +434,37 @@
 			display: none;
 		}
 
+		.art-card {
+			display: block;
+			width: clamp(80px, 45cqi, 220px);
+			aspect-ratio: 1;
+			margin: 0 auto;
+			flex-shrink: 0;
+		}
+
 		.content {
 			justify-content: center;
+			align-items: center;
+			gap: clamp(8px, 3cqi, 16px);
+		}
+
+		.header {
+			width: 100%;
 		}
 
 		.title,
 		.artist {
 			color: #fff;
 			text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+		}
+
+		.title {
+			white-space: normal;
+			display: -webkit-box;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			-webkit-box-orient: vertical;
+			overflow: hidden;
 		}
 
 		.artist {
@@ -494,23 +490,21 @@
 		.progress-fill {
 			background: #fff;
 		}
+
+		.player-controls {
+			width: 100%;
+		}
 	}
 
-	/* ===========================================
-	   MODE: WIDE (width >= 400px)
-	   Ensure art doesn't get too small
-	   =========================================== */
-	@container (min-width: 400px) {
+	/* --- WIDE (width >= 400px, landscape only) --- */
+	@container (min-width: 400px) and (aspect-ratio > 1.2) {
 		.art-container {
 			flex: 0 0 clamp(140px, 30cqi, 280px);
 		}
 	}
 
-	/* ===========================================
-	   MODE: VERY WIDE (width >= 600px)
-	   Larger art, more breathing room
-	   =========================================== */
-	@container (min-width: 600px) {
+	/* --- VERY WIDE (width >= 600px, landscape only) --- */
+	@container (min-width: 600px) and (aspect-ratio > 1.2) {
 		.art-container {
 			flex: 0 0 clamp(180px, 28cqi, 320px);
 		}
