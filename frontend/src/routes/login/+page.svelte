@@ -3,6 +3,12 @@
 	import { APP_NAME } from '$lib/branding';
 	import { API_URL } from '$lib/config';
 	import HandleAutocomplete from '$lib/components/HandleAutocomplete.svelte';
+	import { isValidReturnPath } from '$lib/utils/return-url';
+
+	const returnTo = (() => {
+		const raw = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('return_to');
+		return raw && isValidReturnPath(raw) ? raw : null;
+	})();
 
 	type Mode = 'signin' | 'create';
 
@@ -235,7 +241,7 @@
 			{/if}
 		</div>
 
-		<a href="/" class="back-link">← back to home</a>
+		<a href={returnTo ?? '/'} class="back-link">← back</a>
 	</div>
 </div>
 
