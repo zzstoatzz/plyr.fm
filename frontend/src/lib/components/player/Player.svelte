@@ -682,9 +682,8 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		z-index: 1;
-		backdrop-filter: var(--glass-blur, none);
-		-webkit-backdrop-filter: var(--glass-blur, none);
+		z-index: 3;
+		background: var(--bg-tertiary);
 	}
 
 	.jam-stripe-label .muted {
