@@ -249,10 +249,10 @@ async def get_activity_feed(
 
 
 _HISTOGRAM_QUERY = """
-    SELECT d::date AS bucket_date, COALESCE(c.total, 0) AS total
-    FROM generate_series(:start::date, :end_date::date, '1 day') d
+    SELECT CAST(d AS date) AS bucket_date, COALESCE(c.total, 0) AS total
+    FROM generate_series(CAST(:start AS date), CAST(:end_date AS date), '1 day') d
     LEFT JOIN (
-        SELECT created_at::date AS day, COUNT(*) AS total FROM (
+        SELECT CAST(created_at AS date) AS day, COUNT(*) AS total FROM (
             SELECT tl.created_at FROM track_likes tl WHERE tl.created_at >= :start
             UNION ALL
             SELECT t.created_at FROM tracks t WHERE t.created_at >= :start
@@ -262,7 +262,7 @@ _HISTOGRAM_QUERY = """
             SELECT a.created_at FROM artists a
                 WHERE a.handle != '' AND a.display_name != '' AND a.created_at >= :start
         ) events GROUP BY day
-    ) c ON c.day = d::date
+    ) c ON c.day = CAST(d AS date)
     ORDER BY bucket_date
 """
 
