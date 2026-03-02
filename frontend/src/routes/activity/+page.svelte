@@ -5,6 +5,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { API_URL } from '$lib/config';
 	import { APP_NAME } from '$lib/branding';
+	import { statsCache, formatDuration } from '$lib/stats.svelte';
 	import type { ActivityEvent } from '$lib/types';
 
 	let { data } = $props();
@@ -17,8 +18,11 @@
 
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 
+	let stats = $derived(statsCache.stats);
+
 	onMount(() => {
 		auth.initialize();
+		statsCache.fetch();
 		events = data.events;
 		nextCursor = data.next_cursor;
 		hasMore = data.has_more;
@@ -58,7 +62,6 @@
 		}
 	}
 
-	// infinite scroll via IntersectionObserver
 	$effect(() => {
 		if (!sentinelElement) return;
 
@@ -91,7 +94,17 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 
 <main>
-	<h1>activity</h1>
+	<!-- stats-informed ambient header -->
+	<div class="page-header">
+		<h1>activity</h1>
+		{#if stats}
+			<p class="header-pulse">
+				{stats.total_tracks.toLocaleString()} tracks &middot;
+				{stats.total_artists.toLocaleString()} artists &middot;
+				{formatDuration(stats.total_duration_seconds)} of audio
+			</p>
+		{/if}
+	</div>
 
 	{#if initialLoad}
 		<div class="loading-container">
@@ -111,7 +124,12 @@
 								class="avatar"
 							/>
 						{:else}
-							<div class="avatar placeholder"></div>
+							<div class="avatar placeholder">
+								<svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+									<circle cx="8" cy="5" r="3" fill="none" />
+									<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
+								</svg>
+							</div>
 						{/if}
 					</a>
 
@@ -153,6 +171,25 @@
 							</p>
 						{/if}
 					</div>
+
+					<!-- track artwork for events that reference a track -->
+					{#if event.track}
+						<a href="/track/{event.track.id}" class="track-art-link">
+							{#if event.track.thumbnail_url || event.track.image_url}
+								<img
+									src={event.track.thumbnail_url || event.track.image_url}
+									alt={event.track.title}
+									class="track-art"
+								/>
+							{:else}
+								<div class="track-art track-art-placeholder">
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+										<polygon points="5 3 19 12 5 21 5 3"></polygon>
+									</svg>
+								</div>
+							{/if}
+						</a>
+					{/if}
 				</div>
 			{/each}
 		</div>
@@ -174,11 +211,22 @@
 		padding: 0 1rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
 	}
 
+	.page-header {
+		margin-bottom: 1.5rem;
+	}
+
 	h1 {
 		font-size: var(--text-page-heading);
 		font-weight: 700;
 		color: var(--text-primary);
-		margin: 0 0 1.5rem 0;
+		margin: 0;
+	}
+
+	.header-pulse {
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+		margin: 0.25rem 0 0 0;
+		letter-spacing: 0.01em;
 	}
 
 	.loading-container {
@@ -201,8 +249,9 @@
 
 	.event-item {
 		display: flex;
+		align-items: center;
 		gap: 0.875rem;
-		padding: 0.875rem 1rem;
+		padding: 0.75rem 1rem;
 		background: var(--track-bg);
 		border: 1px solid var(--track-border);
 		border-radius: var(--radius-md);
@@ -215,47 +264,33 @@
 		border-color: color-mix(in srgb, var(--accent) 20%, var(--track-border));
 	}
 
-	/* per-type left accent — creates visual rhythm in the feed */
-	.event-item.like {
-		border-left-color: #e0607e;
-	}
-	.event-item.like:hover {
-		border-left-color: #e87a94;
-	}
-	.event-item.track {
-		border-left-color: var(--accent);
-	}
-	.event-item.track:hover {
-		border-left-color: var(--accent-hover, var(--accent));
-	}
-	.event-item.comment {
-		border-left-color: #a78bfa;
-	}
-	.event-item.comment:hover {
-		border-left-color: #b9a2fb;
-	}
-	.event-item.join {
-		border-left-color: #4ade80;
-	}
-	.event-item.join:hover {
-		border-left-color: #6ee7a0;
-	}
+	/* per-type left accent */
+	.event-item.like { border-left-color: #e0607e; }
+	.event-item.like:hover { border-left-color: #e87a94; }
+	.event-item.track { border-left-color: var(--accent); }
+	.event-item.track:hover { border-left-color: var(--accent-hover, var(--accent)); }
+	.event-item.comment { border-left-color: #a78bfa; }
+	.event-item.comment:hover { border-left-color: #b9a2fb; }
+	.event-item.join { border-left-color: #4ade80; }
+	.event-item.join:hover { border-left-color: #6ee7a0; }
 
 	.avatar-link {
 		flex-shrink: 0;
-		align-self: center;
 	}
 
 	.avatar {
-		width: 44px;
-		height: 44px;
+		width: 40px;
+		height: 40px;
 		border-radius: 50%;
 		object-fit: cover;
 	}
 
 	.avatar.placeholder {
 		background: var(--bg-tertiary);
-		border: 1px solid var(--border-subtle);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-muted);
 	}
 
 	.event-body {
@@ -307,7 +342,6 @@
 		opacity: 0.5;
 	}
 
-	/* tint icons to match their event type accent */
 	.like .action-icon { color: #e0607e; }
 	.track .action-icon { color: var(--accent); }
 	.comment .action-icon { color: #a78bfa; }
@@ -335,6 +369,26 @@
 		border-radius: var(--radius-sm);
 	}
 
+	/* track artwork on the right side of the card */
+	.track-art-link {
+		flex-shrink: 0;
+	}
+
+	.track-art {
+		width: 44px;
+		height: 44px;
+		border-radius: var(--radius-sm);
+		object-fit: cover;
+	}
+
+	.track-art-placeholder {
+		background: var(--bg-tertiary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-muted);
+	}
+
 	.scroll-sentinel {
 		display: flex;
 		justify-content: center;
@@ -348,6 +402,11 @@
 		}
 
 		.avatar {
+			width: 36px;
+			height: 36px;
+		}
+
+		.track-art {
 			width: 38px;
 			height: 38px;
 		}
