@@ -160,6 +160,7 @@
 			{#each events as event, i (event.created_at + event.actor.did + event.type)}
 				{@const hasArt = event.track && (event.track.thumbnail_url || event.track.image_url)}
 				{@const batchIndex = i >= previousCount ? i - previousCount : -1}
+				{@const isSelfAction = event.track && event.actor.handle === event.track.artist_handle}
 				<div
 					class="event-item {event.type}"
 					in:fly={{ y: 12, duration: batchIndex >= 0 ? 280 : 0, delay: batchIndex >= 0 ? batchIndex * 35 : 0, easing: cubicOut }}
@@ -168,15 +169,6 @@
 						{#if hasArt && event.track}
 							<a href="/track/{event.track.id}" class="art-link">
 								<img src={event.track.thumbnail_url || event.track.image_url} alt={event.track.title} class="art-img" />
-							</a>
-							<a href="/u/{event.actor.handle}" class="avatar-badge">
-								{#if event.actor.avatar_url}
-									<img src={event.actor.avatar_url} alt={event.actor.display_name} class="badge-img" />
-								{:else}
-									<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-										<circle cx="8" cy="5" r="3" fill="none" /><path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
-									</svg>
-								{/if}
 							</a>
 						{:else}
 							<a href="/u/{event.actor.handle}" class="art-link">
@@ -195,16 +187,31 @@
 
 					<div class="event-body">
 						<div class="event-header">
-							<a href="/u/{event.actor.handle}" class="handle-link">
-								{event.actor.display_name || event.actor.handle}
-							</a>
+							<div class="handle-group">
+								{#if hasArt}
+									<a href="/u/{event.actor.handle}" class="header-avatar-link">
+										{#if event.actor.avatar_url}
+											<img src={event.actor.avatar_url} alt={event.actor.display_name} class="header-avatar" />
+										{:else}
+											<span class="header-avatar header-avatar-placeholder">
+												<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+													<circle cx="8" cy="5" r="3" fill="none" /><path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
+												</svg>
+											</span>
+										{/if}
+									</a>
+								{/if}
+								<a href="/u/{event.actor.handle}" class="handle-link">
+									{event.actor.display_name || event.actor.handle}
+								</a>
+							</div>
 							<span class="event-time" title={new Date(event.created_at).toLocaleString()}>{timeAgo(event.created_at)}</span>
 						</div>
 						{#if event.type === 'like' && event.track}
 							<p class="event-action">
 								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
 								<span class="verb">liked</span> <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
-								{#if event.track.artist_handle}
+								{#if event.track.artist_handle && !isSelfAction}
 									<span class="by-artist">by</span>
 									<a href="/u/{event.track.artist_handle}" class="artist-avatar-link" title={event.track.artist_handle}>
 										{#if event.track.artist_avatar_url}
@@ -222,27 +229,13 @@
 						{:else if event.type === 'track' && event.track}
 							<p class="event-action">
 								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-								<span class="verb">shared</span> <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
-								{#if event.track.artist_handle}
-									<span class="by-artist">by</span>
-									<a href="/u/{event.track.artist_handle}" class="artist-avatar-link" title={event.track.artist_handle}>
-										{#if event.track.artist_avatar_url}
-											<img src={event.track.artist_avatar_url} alt={event.track.artist_handle} class="inline-avatar" />
-										{:else}
-											<span class="inline-avatar inline-avatar-placeholder">
-												<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-													<circle cx="8" cy="5" r="3" fill="none" /><path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
-												</svg>
-											</span>
-										{/if}
-									</a>
-								{/if}
+								<span class="verb">uploaded</span> <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
 							</p>
 						{:else if event.type === 'comment' && event.track}
 							<p class="event-action">
 								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
 								<span class="verb">commented on</span> <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
-								{#if event.track.artist_handle}
+								{#if event.track.artist_handle && !isSelfAction}
 									<span class="by-artist">by</span>
 									<a href="/u/{event.track.artist_handle}" class="artist-avatar-link" title={event.track.artist_handle}>
 										{#if event.track.artist_avatar_url}
@@ -402,21 +395,24 @@
 	.art-placeholder {
 		display: flex; align-items: center; justify-content: center; color: var(--text-muted);
 	}
-	.avatar-badge {
-		position: absolute; bottom: -3px; right: -3px;
-		width: 20px; height: 20px; border-radius: 50%;
-		border: 2px solid var(--bg-secondary, #141414);
-		background: var(--bg-tertiary); overflow: hidden; z-index: 1;
-		display: flex; align-items: center; justify-content: center;
-		color: var(--text-muted); transition: transform 0.15s ease;
-	}
-	.avatar-badge:hover { transform: scale(1.1); }
-	.badge-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-
 	.event-body { flex: 1; min-width: 0; }
 	.event-header {
-		display: flex; align-items: baseline; justify-content: space-between;
+		display: flex; align-items: center; justify-content: space-between;
 		gap: 0.75rem; margin-bottom: 0.125rem;
+	}
+	.handle-group {
+		display: flex; align-items: center; gap: 0.375rem;
+		min-width: 0;
+	}
+	.header-avatar-link { flex-shrink: 0; text-decoration: none; }
+	.header-avatar {
+		width: 20px; height: 20px; border-radius: 50%;
+		object-fit: cover; display: block;
+		border: 1px solid var(--border-subtle);
+	}
+	.header-avatar-placeholder {
+		background: var(--bg-tertiary); display: flex;
+		align-items: center; justify-content: center; color: var(--text-muted);
 	}
 	.handle-link {
 		color: var(--text-primary); font-weight: 600; font-size: var(--text-sm);
@@ -461,8 +457,7 @@
 	@media (max-width: 768px) {
 		main { padding: 0 0.75rem calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px)); }
 		.left-col, .art-link, .art-img { width: 40px; height: 40px; }
-		.avatar-badge { width: 18px; height: 18px; bottom: -2px; right: -2px; }
-		.avatar-badge svg { width: 8px; height: 8px; }
+		.header-avatar { width: 18px; height: 18px; }
 		.lava-blob { opacity: 0.07; }
 		.event-item { gap: 0.625rem; padding: 0.625rem 0.75rem; }
 	}
