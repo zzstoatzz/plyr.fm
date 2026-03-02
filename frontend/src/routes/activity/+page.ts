@@ -19,16 +19,20 @@ export async function load(): Promise<PageData> {
 	const empty: PageData = { events: [], next_cursor: null, has_more: false, histogram: [] };
 
 	try {
-		const [feedRes, histRes] = await Promise.all([
+		const [feedResult, histResult] = await Promise.allSettled([
 			fetch(`${API_URL}/activity/`),
 			fetch(`${API_URL}/activity/histogram?days=7`)
 		]);
 
-		const feed = feedRes.ok
-			? await feedRes.json()
-			: { events: [], next_cursor: null, has_more: false };
+		let feed = { events: [] as ActivityEvent[], next_cursor: null as string | null, has_more: false };
+		if (feedResult.status === 'fulfilled' && feedResult.value.ok) {
+			feed = await feedResult.value.json();
+		}
 
-		const histogram = histRes.ok ? (await histRes.json()).buckets : [];
+		let histogram: ActivityHistogramBucket[] = [];
+		if (histResult.status === 'fulfilled' && histResult.value.ok) {
+			histogram = (await histResult.value.json()).buckets;
+		}
 
 		return { ...feed, histogram };
 	} catch (e) {
