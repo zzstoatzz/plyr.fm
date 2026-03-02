@@ -38,7 +38,7 @@
 		initialLoad = false;
 
 		try {
-			const res = await fetch(`${API_URL}/activity/histogram?days=30`);
+			const res = await fetch(`${API_URL}/activity/histogram?days=7`);
 			if (res.ok) histogram = (await res.json()).buckets;
 		} catch (e) {
 			console.error('failed to load activity histogram:', e);
@@ -63,7 +63,7 @@
 		if (!hasMore || !nextCursor || loadingMore) return;
 		loadingMore = true;
 		try {
-			const response = await fetch(`${API_URL}/activity/?cursor=${nextCursor}`);
+			const response = await fetch(`${API_URL}/activity/?cursor=${encodeURIComponent(nextCursor)}`);
 			if (response.ok) {
 				const result = await response.json();
 				events = [...events, ...result.events];
@@ -123,7 +123,7 @@
 
 	{#if histogram.some(b => b.count > 0)}
 		<div class="sparkline-container">
-			<span class="sparkline-label">last 30 days</span>
+			<span class="sparkline-label">last 7 days</span>
 			<svg class="sparkline" viewBox="0 0 100 32" preserveAspectRatio="none">
 				<defs>
 					<linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
@@ -190,22 +190,64 @@
 						{#if event.type === 'like' && event.track}
 							<p class="event-action">
 								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-								liked <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
+								<span class="verb">liked</span> <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
+								{#if event.track.artist_handle}
+									<span class="by-artist">by</span>
+									<a href="/u/{event.track.artist_handle}" class="artist-avatar-link" title={event.track.artist_handle}>
+										{#if event.track.artist_avatar_url}
+											<img src={event.track.artist_avatar_url} alt={event.track.artist_handle} class="inline-avatar" />
+										{:else}
+											<span class="inline-avatar inline-avatar-placeholder">
+												<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+													<circle cx="8" cy="5" r="3" fill="none" /><path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
+												</svg>
+											</span>
+										{/if}
+									</a>
+								{/if}
 							</p>
 						{:else if event.type === 'track' && event.track}
 							<p class="event-action">
 								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-								shared <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
+								<span class="verb">shared</span> <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
+								{#if event.track.artist_handle}
+									<span class="by-artist">by</span>
+									<a href="/u/{event.track.artist_handle}" class="artist-avatar-link" title={event.track.artist_handle}>
+										{#if event.track.artist_avatar_url}
+											<img src={event.track.artist_avatar_url} alt={event.track.artist_handle} class="inline-avatar" />
+										{:else}
+											<span class="inline-avatar inline-avatar-placeholder">
+												<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+													<circle cx="8" cy="5" r="3" fill="none" /><path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
+												</svg>
+											</span>
+										{/if}
+									</a>
+								{/if}
 							</p>
 						{:else if event.type === 'comment' && event.track}
 							<p class="event-action">
 								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-								commented on <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
+								<span class="verb">commented on</span> <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
+								{#if event.track.artist_handle}
+									<span class="by-artist">by</span>
+									<a href="/u/{event.track.artist_handle}" class="artist-avatar-link" title={event.track.artist_handle}>
+										{#if event.track.artist_avatar_url}
+											<img src={event.track.artist_avatar_url} alt={event.track.artist_handle} class="inline-avatar" />
+										{:else}
+											<span class="inline-avatar inline-avatar-placeholder">
+												<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+													<circle cx="8" cy="5" r="3" fill="none" /><path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
+												</svg>
+											</span>
+										{/if}
+									</a>
+								{/if}
 							</p>
 						{:else if event.type === 'join'}
 							<p class="event-action">
 								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-								joined plyr.fm
+								<span class="verb">joined</span> plyr.fm
 							</p>
 						{/if}
 						{#if event.type === 'comment' && event.comment_text}
@@ -374,8 +416,26 @@
 		line-height: 1.4; display: flex; align-items: center; gap: 0.375rem;
 	}
 	.action-icon { flex-shrink: 0; opacity: 0.6; color: var(--type-color); }
+	.verb {
+		font-size: var(--text-xs);
+		color: color-mix(in srgb, var(--text-tertiary) 70%, var(--accent));
+	}
 	.track-link { color: var(--text-secondary); text-decoration: none; font-weight: 500; }
 	.track-link:hover { color: var(--accent); }
+	.by-artist {
+		font-size: var(--text-xs);
+		color: color-mix(in srgb, var(--text-tertiary) 70%, var(--accent));
+	}
+	.artist-avatar-link { text-decoration: none; flex-shrink: 0; }
+	.inline-avatar {
+		width: 16px; height: 16px; border-radius: 50%;
+		object-fit: cover; display: inline-block; vertical-align: middle;
+		border: 1px solid var(--border-subtle);
+	}
+	.inline-avatar-placeholder {
+		background: var(--bg-tertiary); display: inline-flex;
+		align-items: center; justify-content: center; color: var(--text-muted);
+	}
 	.comment-preview {
 		font-size: var(--text-xs); color: var(--text-tertiary); margin: 0.375rem 0 0 0;
 		line-height: 1.4; font-style: italic;

@@ -179,6 +179,7 @@ export interface ActivityTrack {
 	artist_handle: string;
 	image_url: string | null;
 	thumbnail_url: string | null;
+	artist_avatar_url: string | null;
 }
 
 export interface ActivityEvent {

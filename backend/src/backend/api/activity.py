@@ -39,6 +39,12 @@ class ActivityTrack(BaseModel):
     artist_handle: str
     image_url: str | None
     thumbnail_url: str | None
+    artist_avatar_url: str | None = None
+
+    @field_validator("artist_avatar_url", mode="before")
+    @classmethod
+    def normalize_avatar(cls, v: str | None) -> str | None:
+        return normalize_avatar_url(v)
 
 
 class ActivityEvent(BaseModel):
@@ -85,7 +91,8 @@ _TRACK_COLUMNS = """
     t.title AS track_title,
     ta.handle AS track_artist_handle,
     t.image_url AS track_image_url,
-    t.thumbnail_url AS track_thumbnail_url
+    t.thumbnail_url AS track_thumbnail_url,
+    ta.avatar_url AS track_artist_avatar_url
 """
 
 _LIKE_QUERY = f"""
@@ -110,6 +117,7 @@ _TRACK_QUERY = f"""
         a.handle AS track_artist_handle,
         t.image_url AS track_image_url,
         t.thumbnail_url AS track_thumbnail_url,
+        a.avatar_url AS track_artist_avatar_url,
         NULL AS comment_text,
         t.created_at AS created_at
     FROM tracks t
@@ -140,6 +148,7 @@ _JOIN_QUERY = f"""
         NULL AS track_artist_handle,
         NULL AS track_image_url,
         NULL AS track_thumbnail_url,
+        NULL AS track_artist_avatar_url,
         NULL AS comment_text,
         a.created_at AS created_at
     FROM artists a
@@ -220,6 +229,7 @@ async def get_activity_feed(
                 artist_handle=row.track_artist_handle,
                 image_url=row.track_image_url,
                 thumbnail_url=row.track_thumbnail_url,
+                artist_avatar_url=row.track_artist_avatar_url,
             )
             if row.track_id is not None
             else None,
