@@ -102,13 +102,6 @@ async def background_worker_lifespan() -> AsyncGenerator[Docket, None]:
                     logger.warning("docket worker did not stop within timeout")
                 except asyncio.CancelledError:
                     logger.debug("docket worker task cancelled")
-                except RuntimeError as e:
-                    # xdist teardown can run on a different event loop than
-                    # the one the worker task was created on
-                    if "attached to a different loop" in str(e):
-                        logger.debug("docket worker on stale loop (test teardown)")
-                    else:
-                        raise
             # clear global after worker is fully stopped
             _docket = None
             logger.info("docket worker stopped")

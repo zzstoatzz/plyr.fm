@@ -1,5 +1,7 @@
 """pytest configuration for relay tests."""
 
+import asyncio
+import contextlib
 import os
 from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import asynccontextmanager
@@ -377,11 +379,35 @@ async def db_session(
 
 
 @pytest.fixture(scope="session")
-def fastapi_app() -> FastAPI:
-    """provides the FastAPI app instance (session-scoped for performance)."""
+def fastapi_app() -> Generator[FastAPI, None, None]:
+    """provides the FastAPI app with a test lifespan that skips docket worker.
+
+    docket Worker binds asyncio.Tasks to the TestClient's portal loop; under
+    xdist, session teardown runs on a different loop → RuntimeError. no test
+    needs a live worker (all docket usage is mocked), so skip it.
+    """
     from backend.main import app as main_app
 
-    return main_app
+    original_lifespan = main_app.router.lifespan_context
+    main_app.router.lifespan_context = _test_lifespan
+    yield main_app
+    main_app.router.lifespan_context = original_lifespan
+
+
+@asynccontextmanager
+async def _test_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """test lifespan — skips docket worker to avoid event loop issues."""
+    from backend._internal import jam_service, notification_service, queue_service
+
+    await notification_service.setup()
+    await queue_service.setup()
+    await jam_service.setup()
+
+    yield
+
+    for service in (notification_service, queue_service, jam_service):
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(service.shutdown(), timeout=2.0)
 
 
 @pytest.fixture(scope="session")
@@ -389,7 +415,7 @@ def client(fastapi_app: FastAPI) -> Generator[TestClient, None, None]:
     """provides a TestClient for testing the FastAPI application.
 
     session-scoped to avoid the overhead of starting the full lifespan
-    (database init, services, docket worker) for each test.
+    (database init, services) for each test.
     """
     with TestClient(fastapi_app) as tc:
         yield tc
