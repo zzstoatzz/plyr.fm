@@ -76,7 +76,7 @@ _TRACK_COLUMNS = """
 """
 
 _LIKE_QUERY = f"""
-    SELECT 'like' AS event_type,
+    (SELECT 'like' AS event_type,
         {_BASE_COLUMNS},
         {_TRACK_COLUMNS},
         NULL AS comment_text,
@@ -86,10 +86,11 @@ _LIKE_QUERY = f"""
     JOIN tracks t ON t.id = tl.track_id
     JOIN artists ta ON ta.did = t.artist_did
     {{cursor_clause}}
+    ORDER BY tl.created_at DESC LIMIT :limit)
 """
 
 _TRACK_QUERY = f"""
-    SELECT 'track' AS event_type,
+    (SELECT 'track' AS event_type,
         {_BASE_COLUMNS},
         t.id AS track_id,
         t.title AS track_title,
@@ -101,10 +102,11 @@ _TRACK_QUERY = f"""
     FROM tracks t
     JOIN artists a ON a.did = t.artist_did
     {{cursor_clause}}
+    ORDER BY t.created_at DESC LIMIT :limit)
 """
 
 _COMMENT_QUERY = f"""
-    SELECT 'comment' AS event_type,
+    (SELECT 'comment' AS event_type,
         {_BASE_COLUMNS},
         {_TRACK_COLUMNS},
         tc.text AS comment_text,
@@ -114,10 +116,11 @@ _COMMENT_QUERY = f"""
     JOIN tracks t ON t.id = tc.track_id
     JOIN artists ta ON ta.did = t.artist_did
     {{cursor_clause}}
+    ORDER BY tc.created_at DESC LIMIT :limit)
 """
 
 _JOIN_QUERY = f"""
-    SELECT 'join' AS event_type,
+    (SELECT 'join' AS event_type,
         {_BASE_COLUMNS},
         NULL::integer AS track_id,
         NULL AS track_title,
@@ -128,11 +131,17 @@ _JOIN_QUERY = f"""
         a.created_at AS created_at
     FROM artists a
     {{cursor_clause}}
+    ORDER BY a.created_at DESC LIMIT :limit)
 """
 
 
 def _build_query(cursor: datetime | None) -> str:
-    """build the UNION ALL query, conditionally including cursor filter."""
+    """build the UNION ALL query, conditionally including cursor filter.
+
+    each branch has its own ORDER BY + LIMIT so postgres can index-scan
+    the top N from each table independently, rather than materializing
+    all qualifying rows before sorting.
+    """
     if cursor:
         like_clause = "WHERE tl.created_at < :cursor"
         track_clause = "WHERE t.created_at < :cursor"

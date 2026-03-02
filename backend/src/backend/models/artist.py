@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.database import Base
@@ -49,4 +49,9 @@ class Artist(Base):
     albums: Mapped[list["Album"]] = relationship("Album", back_populates="artist")
     playlists: Mapped[list["Playlist"]] = relationship(
         "Playlist", back_populates="owner"
+    )
+
+    __table_args__ = (
+        # index for global feed queries (activity feed ORDER BY created_at DESC)
+        Index("ix_artists_created_at", created_at.desc()),
     )
