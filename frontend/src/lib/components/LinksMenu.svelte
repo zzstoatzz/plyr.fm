@@ -97,8 +97,8 @@
 						stroke-linecap="round"
 						stroke-linejoin="round"
 					>
-						<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
-						></polyline>
+						<rect x="6" y="14" width="4" height="6" rx="1"></rect>
+						<rect x="14" y="8" width="4" height="12" rx="1"></rect>
 					</svg>
 					<div class="link-info">
 						<span class="link-title">status page</span>
