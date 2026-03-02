@@ -102,7 +102,7 @@
 	{:else}
 		<div class="event-list">
 			{#each events as event (event.created_at + event.actor.did + event.type)}
-				<div class="event-item">
+				<div class="event-item {event.type}">
 					<a href="/u/{event.actor.handle}" class="avatar-link">
 						{#if event.actor.avatar_url}
 							<img
@@ -116,53 +116,39 @@
 					</a>
 
 					<div class="event-body">
-						<div class="event-row">
-							<p class="event-description">
-								<span class="event-icon">
-									{#if event.type === 'like'}
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-									{:else if event.type === 'track'}
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6zM10 19a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>
-									{:else if event.type === 'comment'}
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/></svg>
-									{:else if event.type === 'join'}
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.09 6.26L20.18 9l-5.09 3.74L17.18 19 12 15.27 6.82 19l2.09-6.26L3.82 9l6.09-.74L12 2z"/></svg>
-									{/if}
-								</span>
-
-								<span class="event-text">
-									<a href="/u/{event.actor.handle}" class="handle-link">
-										{event.actor.display_name || event.actor.handle}
-									</a>
-
-									{#if event.type === 'like' && event.track}
-										<span class="action-verb">liked</span>
-										<a href="/track/{event.track.id}" class="track-link">
-											{event.track.title}
-										</a>
-									{:else if event.type === 'track' && event.track}
-										<span class="action-verb">posted</span>
-										<a href="/track/{event.track.id}" class="track-link">
-											{event.track.title}
-										</a>
-									{:else if event.type === 'comment' && event.track}
-										<span class="action-verb">commented on</span>
-										<a href="/track/{event.track.id}" class="track-link">
-											{event.track.title}
-										</a>
-									{:else if event.type === 'join'}
-										<span class="action-verb">joined plyr.fm</span>
-									{/if}
-								</span>
-							</p>
-
+						<div class="event-header">
+							<a href="/u/{event.actor.handle}" class="handle-link">
+								{event.actor.display_name || event.actor.handle}
+							</a>
 							<span class="event-time">{timeAgo(event.created_at)}</span>
 						</div>
 
+						{#if event.type === 'like' && event.track}
+							<p class="event-action">
+								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+								liked <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
+							</p>
+						{:else if event.type === 'track' && event.track}
+							<p class="event-action">
+								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+								shared <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
+							</p>
+						{:else if event.type === 'comment' && event.track}
+							<p class="event-action">
+								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+								commented on <a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
+							</p>
+						{:else if event.type === 'join'}
+							<p class="event-action">
+								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+								joined plyr.fm
+							</p>
+						{/if}
+
 						{#if event.type === 'comment' && event.comment_text}
 							<p class="comment-preview">
-								{event.comment_text.length > 100
-									? event.comment_text.slice(0, 100) + '...'
+								{event.comment_text.length > 120
+									? event.comment_text.slice(0, 120) + '...'
 									: event.comment_text}
 							</p>
 						{/if}
@@ -210,38 +196,66 @@
 	.event-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 0.375rem;
 	}
 
 	.event-item {
 		display: flex;
-		gap: 0.75rem;
-		padding: 0.75rem;
+		gap: 0.875rem;
+		padding: 0.875rem 1rem;
 		background: var(--track-bg);
 		border: 1px solid var(--track-border);
 		border-radius: var(--radius-md);
+		border-left: 3px solid var(--border-subtle);
 		transition: all 0.15s ease;
 	}
 
 	.event-item:hover {
 		background: var(--track-bg-hover);
-		border-color: color-mix(in srgb, var(--accent) 25%, var(--track-border));
+		border-color: color-mix(in srgb, var(--accent) 20%, var(--track-border));
+	}
+
+	/* per-type left accent — creates visual rhythm in the feed */
+	.event-item.like {
+		border-left-color: #e0607e;
+	}
+	.event-item.like:hover {
+		border-left-color: #e87a94;
+	}
+	.event-item.track {
+		border-left-color: var(--accent);
+	}
+	.event-item.track:hover {
+		border-left-color: var(--accent-hover, var(--accent));
+	}
+	.event-item.comment {
+		border-left-color: #a78bfa;
+	}
+	.event-item.comment:hover {
+		border-left-color: #b9a2fb;
+	}
+	.event-item.join {
+		border-left-color: #4ade80;
+	}
+	.event-item.join:hover {
+		border-left-color: #6ee7a0;
 	}
 
 	.avatar-link {
 		flex-shrink: 0;
+		align-self: center;
 	}
 
 	.avatar {
-		width: 36px;
-		height: 36px;
+		width: 44px;
+		height: 44px;
 		border-radius: 50%;
 		object-fit: cover;
-		border: 2px solid var(--border-subtle);
 	}
 
 	.avatar.placeholder {
 		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
 	}
 
 	.event-body {
@@ -249,53 +263,58 @@
 		min-width: 0;
 	}
 
-	.event-row {
+	.event-header {
 		display: flex;
 		align-items: baseline;
+		justify-content: space-between;
 		gap: 0.75rem;
-	}
-
-	.event-description {
-		flex: 1;
-		font-size: var(--text-sm);
-		color: var(--text-secondary);
-		margin: 0;
-		line-height: 1.4;
-		min-width: 0;
-		display: flex;
-		align-items: baseline;
-		gap: 0.375rem;
-	}
-
-	.event-icon {
-		flex-shrink: 0;
-		display: inline-flex;
-		align-items: center;
-		color: var(--text-tertiary);
-		position: relative;
-		top: 2px;
-	}
-
-	.event-text {
-		min-width: 0;
-	}
-
-	.action-verb {
-		color: var(--text-tertiary);
+		margin-bottom: 0.125rem;
 	}
 
 	.handle-link {
 		color: var(--text-primary);
 		font-weight: 600;
+		font-size: var(--text-sm);
 		text-decoration: none;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.handle-link:hover {
 		color: var(--accent);
 	}
 
+	.event-time {
+		flex-shrink: 0;
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+		white-space: nowrap;
+	}
+
+	.event-action {
+		font-size: var(--text-sm);
+		color: var(--text-tertiary);
+		margin: 0;
+		line-height: 1.4;
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
+	.action-icon {
+		flex-shrink: 0;
+		opacity: 0.5;
+	}
+
+	/* tint icons to match their event type accent */
+	.like .action-icon { color: #e0607e; }
+	.track .action-icon { color: var(--accent); }
+	.comment .action-icon { color: #a78bfa; }
+	.join .action-icon { color: #4ade80; }
+
 	.track-link {
-		color: var(--text-primary);
+		color: var(--text-secondary);
 		text-decoration: none;
 		font-weight: 500;
 	}
@@ -307,20 +326,13 @@
 	.comment-preview {
 		font-size: var(--text-xs);
 		color: var(--text-tertiary);
-		margin: 0.5rem 0 0 0;
+		margin: 0.375rem 0 0 0;
 		line-height: 1.4;
 		font-style: italic;
 		background: color-mix(in srgb, var(--accent) 5%, transparent);
-		border-left: 2px solid var(--accent);
-		padding: 0.5rem 0.75rem;
+		border-left: 2px solid color-mix(in srgb, #a78bfa 40%, transparent);
+		padding: 0.375rem 0.625rem;
 		border-radius: var(--radius-sm);
-	}
-
-	.event-time {
-		flex-shrink: 0;
-		font-size: var(--text-xs);
-		color: var(--text-muted);
-		white-space: nowrap;
 	}
 
 	.scroll-sentinel {
@@ -333,6 +345,11 @@
 	@media (max-width: 768px) {
 		main {
 			padding: 0 0.75rem calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px));
+		}
+
+		.avatar {
+			width: 38px;
+			height: 38px;
 		}
 	}
 </style>
