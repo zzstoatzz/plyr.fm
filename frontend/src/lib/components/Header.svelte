@@ -79,17 +79,6 @@
 		</button>
 
 		{#if isAuthenticated}
-			{#if $page.url.pathname !== '/'}
-				<a href="/" class="nav-link" title="feed">
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<circle cx="12" cy="12" r="10"></circle>
-						<line x1="2" y1="12" x2="22" y2="12"></line>
-						<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-					</svg>
-					<span>feed</span>
-				</a>
-			{/if}
-
 			{#if !$page.url.pathname.startsWith('/library')}
 				<a href="/library" class="nav-link" title="library">
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -134,15 +123,6 @@
 				</svg>
 			</button>
 			{#if isAuthenticated}
-				{#if $page.url.pathname !== '/'}
-					<a href="/" class="nav-icon" title="feed">
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<circle cx="12" cy="12" r="10"></circle>
-							<line x1="2" y1="12" x2="22" y2="12"></line>
-							<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-						</svg>
-					</a>
-				{/if}
 				{#if !$page.url.pathname.startsWith('/library')}
 					<a href="/library" class="nav-icon" title="library">
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
