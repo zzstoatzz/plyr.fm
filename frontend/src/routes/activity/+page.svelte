@@ -116,30 +116,48 @@
 					</a>
 
 					<div class="event-body">
-						<p class="event-description">
-							<a href="/u/{event.actor.handle}" class="handle-link">
-								{event.actor.display_name || event.actor.handle}
-							</a>
+						<div class="event-row">
+							<p class="event-description">
+								<span class="event-icon">
+									{#if event.type === 'like'}
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+									{:else if event.type === 'track'}
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6zM10 19a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>
+									{:else if event.type === 'comment'}
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/></svg>
+									{:else if event.type === 'join'}
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.09 6.26L20.18 9l-5.09 3.74L17.18 19 12 15.27 6.82 19l2.09-6.26L3.82 9l6.09-.74L12 2z"/></svg>
+									{/if}
+								</span>
 
-							{#if event.type === 'like' && event.track}
-								liked
-								<a href="/track/{event.track.id}" class="track-link">
-									{event.track.title}
-								</a>
-							{:else if event.type === 'track' && event.track}
-								posted
-								<a href="/track/{event.track.id}" class="track-link">
-									{event.track.title}
-								</a>
-							{:else if event.type === 'comment' && event.track}
-								commented on
-								<a href="/track/{event.track.id}" class="track-link">
-									{event.track.title}
-								</a>
-							{:else if event.type === 'join'}
-								joined plyr.fm
-							{/if}
-						</p>
+								<span class="event-text">
+									<a href="/u/{event.actor.handle}" class="handle-link">
+										{event.actor.display_name || event.actor.handle}
+									</a>
+
+									{#if event.type === 'like' && event.track}
+										<span class="action-verb">liked</span>
+										<a href="/track/{event.track.id}" class="track-link">
+											{event.track.title}
+										</a>
+									{:else if event.type === 'track' && event.track}
+										<span class="action-verb">posted</span>
+										<a href="/track/{event.track.id}" class="track-link">
+											{event.track.title}
+										</a>
+									{:else if event.type === 'comment' && event.track}
+										<span class="action-verb">commented on</span>
+										<a href="/track/{event.track.id}" class="track-link">
+											{event.track.title}
+										</a>
+									{:else if event.type === 'join'}
+										<span class="action-verb">joined plyr.fm</span>
+									{/if}
+								</span>
+							</p>
+
+							<span class="event-time">{timeAgo(event.created_at)}</span>
+						</div>
 
 						{#if event.type === 'comment' && event.comment_text}
 							<p class="comment-preview">
@@ -148,8 +166,6 @@
 									: event.comment_text}
 							</p>
 						{/if}
-
-						<span class="event-time">{timeAgo(event.created_at)}</span>
 					</div>
 				</div>
 			{/each}
@@ -194,17 +210,22 @@
 	.event-list {
 		display: flex;
 		flex-direction: column;
+		gap: 0.5rem;
 	}
 
 	.event-item {
 		display: flex;
 		gap: 0.75rem;
-		padding: 0.75rem 0;
-		border-bottom: 1px solid var(--border-subtle);
+		padding: 0.75rem;
+		background: var(--track-bg);
+		border: 1px solid var(--track-border);
+		border-radius: var(--radius-md);
+		transition: all 0.15s ease;
 	}
 
-	.event-item:last-child {
-		border-bottom: none;
+	.event-item:hover {
+		background: var(--track-bg-hover);
+		border-color: color-mix(in srgb, var(--accent) 25%, var(--track-border));
 	}
 
 	.avatar-link {
@@ -212,10 +233,11 @@
 	}
 
 	.avatar {
-		width: 32px;
-		height: 32px;
+		width: 36px;
+		height: 36px;
 		border-radius: 50%;
 		object-fit: cover;
+		border: 2px solid var(--border-subtle);
 	}
 
 	.avatar.placeholder {
@@ -227,11 +249,39 @@
 		min-width: 0;
 	}
 
+	.event-row {
+		display: flex;
+		align-items: baseline;
+		gap: 0.75rem;
+	}
+
 	.event-description {
+		flex: 1;
 		font-size: var(--text-sm);
 		color: var(--text-secondary);
 		margin: 0;
 		line-height: 1.4;
+		min-width: 0;
+		display: flex;
+		align-items: baseline;
+		gap: 0.375rem;
+	}
+
+	.event-icon {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		color: var(--text-tertiary);
+		position: relative;
+		top: 2px;
+	}
+
+	.event-text {
+		min-width: 0;
+	}
+
+	.action-verb {
+		color: var(--text-tertiary);
 	}
 
 	.handle-link {
@@ -257,16 +307,20 @@
 	.comment-preview {
 		font-size: var(--text-xs);
 		color: var(--text-tertiary);
-		margin: 0.25rem 0 0 0;
+		margin: 0.5rem 0 0 0;
 		line-height: 1.4;
 		font-style: italic;
+		background: color-mix(in srgb, var(--accent) 5%, transparent);
+		border-left: 2px solid var(--accent);
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
 	}
 
 	.event-time {
+		flex-shrink: 0;
 		font-size: var(--text-xs);
-		color: var(--text-tertiary);
-		margin-top: 0.125rem;
-		display: block;
+		color: var(--text-muted);
+		white-space: nowrap;
 	}
 
 	.scroll-sentinel {

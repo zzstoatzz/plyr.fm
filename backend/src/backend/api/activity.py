@@ -130,6 +130,7 @@ _JOIN_QUERY = f"""
         NULL AS comment_text,
         a.created_at AS created_at
     FROM artists a
+    WHERE a.handle != '' AND a.display_name != ''
     {{cursor_clause}}
     ORDER BY a.created_at DESC LIMIT :limit)
 """
@@ -146,7 +147,7 @@ def _build_query(cursor: datetime | None) -> str:
         like_clause = "WHERE tl.created_at < :cursor"
         track_clause = "WHERE t.created_at < :cursor"
         comment_clause = "WHERE tc.created_at < :cursor"
-        join_clause = "WHERE a.created_at < :cursor"
+        join_clause = "AND a.created_at < :cursor"
     else:
         like_clause = ""
         track_clause = ""
