@@ -209,6 +209,11 @@
 				</button>
 			</h2>
 			<div class="header-actions">
+				<a href="/activity" class="activity-link" title="activity">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+						<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+					</svg>
+				</a>
 				<HiddenTagsFilter />
 			</div>
 		</div>
@@ -384,7 +389,27 @@
 	.header-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 0.5rem;
+	}
+
+	.activity-link {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.35rem;
+		border-radius: var(--radius-base);
+		color: var(--text-tertiary);
+		text-decoration: none;
+		transition: all 0.15s;
+	}
+
+	.activity-link:hover {
+		color: var(--text-secondary);
+		background: var(--bg-hover, transparent);
+	}
+
+	.activity-link svg {
+		width: 18px;
+		height: 18px;
 	}
 
 	.clickable-heading {
