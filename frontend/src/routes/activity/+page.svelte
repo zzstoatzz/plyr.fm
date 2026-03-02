@@ -6,7 +6,7 @@
 	import { API_URL } from '$lib/config';
 	import { APP_NAME } from '$lib/branding';
 	import { statsCache, formatDuration } from '$lib/stats.svelte';
-	import type { ActivityEvent } from '$lib/types';
+	import type { ActivityEvent, ActivityHistogramBucket } from '$lib/types';
 
 	let { data } = $props();
 
@@ -17,14 +17,32 @@
 	let initialLoad = $state(true);
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 	let stats = $derived(statsCache.stats);
+	let histogram = $state<ActivityHistogramBucket[]>([]);
 
-	onMount(() => {
+	const sparklinePath = $derived.by(() => {
+		if (histogram.length === 0) return '';
+		const max = Math.max(...histogram.map((b) => b.count), 1);
+		const w = 100;
+		const h = 32;
+		const step = w / (histogram.length - 1 || 1);
+		const points = histogram.map((b, i) => `${i * step},${h - (b.count / max) * h * 0.85}`);
+		return `M${points.join(' L')} L${w},${h} L0,${h} Z`;
+	});
+
+	onMount(async () => {
 		auth.initialize();
 		statsCache.fetch();
 		events = data.events;
 		nextCursor = data.next_cursor;
 		hasMore = data.has_more;
 		initialLoad = false;
+
+		try {
+			const res = await fetch(`${API_URL}/activity/histogram?days=7`);
+			if (res.ok) histogram = (await res.json()).buckets;
+		} catch (e) {
+			console.error('failed to load activity histogram:', e);
+		}
 	});
 
 	function timeAgo(iso: string): string {
@@ -87,6 +105,8 @@
 	<div class="lava-blob b1"></div>
 	<div class="lava-blob b2"></div>
 	<div class="lava-blob b3"></div>
+	<div class="lava-blob b4"></div>
+	<div class="lava-blob b5"></div>
 </div>
 
 <main>
@@ -100,6 +120,25 @@
 			</p>
 		{/if}
 	</div>
+
+	{#if histogram.length > 0}
+		<div class="sparkline-container">
+			<span class="sparkline-label">last 7 days</span>
+			<svg class="sparkline" viewBox="0 0 100 32" preserveAspectRatio="none">
+				<defs>
+					<linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
+						<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.3" />
+						<stop offset="100%" stop-color="var(--accent)" stop-opacity="0.02" />
+					</linearGradient>
+				</defs>
+				<path d={sparklinePath} fill="url(#spark-fill)" />
+				<path
+					d={sparklinePath.replace(/ L\d+,32 L0,32 Z/, '')}
+					fill="none" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"
+				/>
+			</svg>
+		</div>
+	{/if}
 
 	{#if initialLoad}
 		<div class="loading-container">
@@ -191,40 +230,49 @@
 
 <style>
 	.lava-bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-
 	.lava-blob {
-		position: absolute; border-radius: 50%; filter: blur(80px);
-		opacity: 0.12; will-change: transform;
+		position: absolute; border-radius: 50%; filter: blur(50px);
+		opacity: 0.1; will-change: transform;
 	}
 	.b1 {
-		width: 60vw; height: 60vw; max-width: 500px; max-height: 500px;
+		width: 30vw; height: 30vw; max-width: 280px; max-height: 280px;
 		background: color-mix(in srgb, var(--accent) 60%, #e0607e);
-		top: -10%; left: -5%; animation: lava1 28s ease-in-out infinite;
+		top: 5%; left: 5%; animation: lava1 22s ease-in-out infinite;
 	}
 	.b2 {
-		width: 50vw; height: 50vw; max-width: 420px; max-height: 420px;
+		width: 25vw; height: 25vw; max-width: 240px; max-height: 240px;
 		background: color-mix(in srgb, #a78bfa 70%, var(--accent));
-		top: 35%; right: -8%; animation: lava2 34s ease-in-out infinite;
+		top: 25%; right: 3%; animation: lava2 28s ease-in-out infinite;
 	}
 	.b3 {
-		width: 55vw; height: 55vw; max-width: 460px; max-height: 460px;
+		width: 28vw; height: 28vw; max-width: 260px; max-height: 260px;
 		background: color-mix(in srgb, #4ade80 50%, var(--accent));
-		bottom: -5%; left: 15%; animation: lava3 24s ease-in-out infinite;
+		bottom: 15%; left: 10%; animation: lava3 18s ease-in-out infinite;
+	}
+	.b4 {
+		width: 22vw; height: 22vw; max-width: 200px; max-height: 200px;
+		background: color-mix(in srgb, var(--accent) 80%, #e0607e);
+		top: 55%; right: 15%; animation: lava1 32s ease-in-out infinite reverse;
+	}
+	.b5 {
+		width: 20vw; height: 20vw; max-width: 180px; max-height: 180px;
+		background: color-mix(in srgb, #a78bfa 40%, #4ade80);
+		top: 75%; left: 30%; animation: lava2 20s ease-in-out infinite reverse;
 	}
 	@keyframes lava1 {
 		0%, 100% { transform: translate(0, 0) scale(1); }
-		33% { transform: translate(80px, 80px) scale(1.1); }
-		66% { transform: translate(20px, 120px) scale(0.95); }
+		33% { transform: translate(50px, 40px) scale(1.1); }
+		66% { transform: translate(15px, 70px) scale(0.95); }
 	}
 	@keyframes lava2 {
 		0%, 100% { transform: translate(0, 0) scale(1); }
-		33% { transform: translate(-70px, 60px) scale(1.08); }
-		66% { transform: translate(-40px, -50px) scale(0.92); }
+		33% { transform: translate(-40px, 50px) scale(1.08); }
+		66% { transform: translate(-25px, -30px) scale(0.92); }
 	}
 	@keyframes lava3 {
 		0%, 100% { transform: translate(0, 0) scale(1); }
-		33% { transform: translate(60px, -80px) scale(1.12); }
-		66% { transform: translate(-40px, -30px) scale(0.9); }
+		33% { transform: translate(35px, -50px) scale(1.12); }
+		66% { transform: translate(-25px, -20px) scale(0.9); }
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.lava-blob { animation: none !important; }
@@ -234,33 +282,55 @@
 		max-width: 800px; margin: 0 auto; position: relative;
 		padding: 0 1rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
 	}
-	.page-header { margin-bottom: 1.5rem; }
+	.page-header { margin-bottom: 1rem; }
 	h1 { font-size: var(--text-page-heading); font-weight: 700; color: var(--text-primary); margin: 0; }
 	.header-pulse {
 		font-size: var(--text-xs); color: var(--text-muted);
 		margin: 0.25rem 0 0 0; letter-spacing: 0.01em;
 	}
+
+	.sparkline-container {
+		margin-bottom: 1.25rem; position: relative;
+		background: color-mix(in srgb, var(--track-bg) 70%, transparent);
+		backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+		border: 1px solid var(--glass-border, var(--track-border));
+		border-radius: var(--radius-md); padding: 0.625rem 0.75rem 0.375rem;
+	}
+	.sparkline-label {
+		font-size: var(--text-xs); color: var(--text-muted);
+		position: absolute; top: 0.375rem; right: 0.625rem;
+	}
+	.sparkline { width: 100%; height: 32px; display: block; }
+
 	.loading-container { display: flex; justify-content: center; padding: 3rem 2rem; }
 	.empty { color: var(--text-tertiary); padding: 2rem; text-align: center; }
-
 	.event-list { display: flex; flex-direction: column; gap: 0.5rem; }
 
 	.event-item {
 		--type-color: var(--border-subtle);
 		display: flex; align-items: center; gap: 0.875rem;
-		padding: 0.75rem 1rem;
+		padding: 0.75rem 1rem; position: relative;
 		background: color-mix(in srgb, var(--track-bg) 85%, transparent);
 		backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 		border: 1px solid var(--glass-border, var(--track-border));
 		border-radius: var(--radius-md);
-		border-left: 3px solid var(--type-color);
 		transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+	}
+	/* neon glow accent — fuzzy light instead of solid border */
+	.event-item::before {
+		content: ''; position: absolute; left: 0; top: 15%; bottom: 15%;
+		width: 2px; border-radius: 2px;
+		background: var(--type-color);
+		box-shadow: 0 0 6px var(--type-color), 0 0 14px color-mix(in srgb, var(--type-color) 40%, transparent);
 	}
 	.event-item:hover {
 		background: color-mix(in srgb, var(--track-bg-hover) 90%, transparent);
-		border-color: color-mix(in srgb, var(--type-color) 30%, var(--glass-border, var(--track-border)));
+		border-color: color-mix(in srgb, var(--type-color) 20%, var(--glass-border, var(--track-border)));
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 20px color-mix(in srgb, var(--type-color) 10%, transparent);
+	}
+	.event-item:hover::before {
+		box-shadow: 0 0 8px var(--type-color), 0 0 20px color-mix(in srgb, var(--type-color) 60%, transparent);
 	}
 	.event-item.like { --type-color: #e0607e; }
 	.event-item.track { --type-color: var(--accent); }
@@ -277,7 +347,6 @@
 	.art-placeholder {
 		display: flex; align-items: center; justify-content: center; color: var(--text-muted);
 	}
-
 	.avatar-badge {
 		position: absolute; bottom: -3px; right: -3px;
 		width: 20px; height: 20px; border-radius: 50%;
@@ -300,16 +369,13 @@
 	}
 	.handle-link:hover { color: var(--accent); }
 	.event-time { flex-shrink: 0; font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
-
 	.event-action {
 		font-size: var(--text-sm); color: var(--text-tertiary); margin: 0;
 		line-height: 1.4; display: flex; align-items: center; gap: 0.375rem;
 	}
 	.action-icon { flex-shrink: 0; opacity: 0.6; color: var(--type-color); }
-
 	.track-link { color: var(--text-secondary); text-decoration: none; font-weight: 500; }
 	.track-link:hover { color: var(--accent); }
-
 	.comment-preview {
 		font-size: var(--text-xs); color: var(--text-tertiary); margin: 0.375rem 0 0 0;
 		line-height: 1.4; font-style: italic;
@@ -317,7 +383,6 @@
 		border-left: 2px solid color-mix(in srgb, #a78bfa 40%, transparent);
 		padding: 0.375rem 0.625rem; border-radius: var(--radius-sm);
 	}
-
 	.scroll-sentinel { display: flex; justify-content: center; padding: 2rem 0; min-height: 60px; }
 
 	@media (max-width: 768px) {
@@ -325,7 +390,7 @@
 		.left-col, .art-link, .art-img { width: 40px; height: 40px; }
 		.avatar-badge { width: 18px; height: 18px; bottom: -2px; right: -2px; }
 		.avatar-badge svg { width: 8px; height: 8px; }
-		.lava-blob { opacity: 0.08; }
+		.lava-blob { opacity: 0.07; }
 		.event-item { gap: 0.625rem; padding: 0.625rem 0.75rem; }
 	}
 </style>
