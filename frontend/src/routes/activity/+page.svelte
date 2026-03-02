@@ -15,9 +15,7 @@
 	let hasMore = $state(false);
 	let loadingMore = $state(false);
 	let initialLoad = $state(true);
-
 	let sentinelElement = $state<HTMLDivElement | null>(null);
-
 	let stats = $derived(statsCache.stats);
 
 	onMount(() => {
@@ -40,8 +38,7 @@
 		if (days < 30) return `${days}d ago`;
 		const months = Math.floor(days / 30);
 		if (months < 12) return `${months}mo ago`;
-		const years = Math.floor(days / 365);
-		return `${years}y ago`;
+		return `${Math.floor(days / 365)}y ago`;
 	}
 
 	async function loadMore() {
@@ -64,21 +61,14 @@
 
 	$effect(() => {
 		if (!sentinelElement) return;
-
 		const observer = new IntersectionObserver(
 			(entries) => {
-				if (entries[0].isIntersecting && hasMore && !loadingMore) {
-					loadMore();
-				}
+				if (entries[0].isIntersecting && hasMore && !loadingMore) loadMore();
 			},
 			{ rootMargin: '200px' }
 		);
-
 		observer.observe(sentinelElement);
-
-		return () => {
-			observer.disconnect();
-		};
+		return () => observer.disconnect();
 	});
 
 	async function logout() {
@@ -93,8 +83,13 @@
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
 
+<div class="lava-bg" aria-hidden="true">
+	<div class="lava-blob b1"></div>
+	<div class="lava-blob b2"></div>
+	<div class="lava-blob b3"></div>
+</div>
+
 <main>
-	<!-- stats-informed ambient header -->
 	<div class="page-header">
 		<h1>activity</h1>
 		{#if stats}
@@ -115,23 +110,36 @@
 	{:else}
 		<div class="event-list">
 			{#each events as event (event.created_at + event.actor.did + event.type)}
+				{@const hasArt = event.track && (event.track.thumbnail_url || event.track.image_url)}
 				<div class="event-item {event.type}">
-					<a href="/u/{event.actor.handle}" class="avatar-link">
-						{#if event.actor.avatar_url}
-							<img
-								src={event.actor.avatar_url}
-								alt={event.actor.display_name}
-								class="avatar"
-							/>
+					<div class="left-col">
+						{#if hasArt && event.track}
+							<a href="/track/{event.track.id}" class="art-link">
+								<img src={event.track.thumbnail_url || event.track.image_url} alt={event.track.title} class="art-img" />
+							</a>
+							<a href="/u/{event.actor.handle}" class="avatar-badge">
+								{#if event.actor.avatar_url}
+									<img src={event.actor.avatar_url} alt={event.actor.display_name} class="badge-img" />
+								{:else}
+									<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+										<circle cx="8" cy="5" r="3" fill="none" /><path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
+									</svg>
+								{/if}
+							</a>
 						{:else}
-							<div class="avatar placeholder">
-								<svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-									<circle cx="8" cy="5" r="3" fill="none" />
-									<path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
-								</svg>
-							</div>
+							<a href="/u/{event.actor.handle}" class="art-link">
+								{#if event.actor.avatar_url}
+									<img src={event.actor.avatar_url} alt={event.actor.display_name} class="art-img" />
+								{:else}
+									<div class="art-img art-placeholder">
+										<svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+											<circle cx="8" cy="5" r="3" fill="none" /><path d="M3 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" stroke-linecap="round" />
+										</svg>
+									</div>
+								{/if}
+							</a>
 						{/if}
-					</a>
+					</div>
 
 					<div class="event-body">
 						<div class="event-header">
@@ -140,7 +148,6 @@
 							</a>
 							<span class="event-time">{timeAgo(event.created_at)}</span>
 						</div>
-
 						{#if event.type === 'like' && event.track}
 							<p class="event-action">
 								<svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
@@ -162,34 +169,12 @@
 								joined plyr.fm
 							</p>
 						{/if}
-
 						{#if event.type === 'comment' && event.comment_text}
 							<p class="comment-preview">
-								{event.comment_text.length > 120
-									? event.comment_text.slice(0, 120) + '...'
-									: event.comment_text}
+								{event.comment_text.length > 120 ? event.comment_text.slice(0, 120) + '...' : event.comment_text}
 							</p>
 						{/if}
 					</div>
-
-					<!-- track artwork for events that reference a track -->
-					{#if event.track}
-						<a href="/track/{event.track.id}" class="track-art-link">
-							{#if event.track.thumbnail_url || event.track.image_url}
-								<img
-									src={event.track.thumbnail_url || event.track.image_url}
-									alt={event.track.title}
-									class="track-art"
-								/>
-							{:else}
-								<div class="track-art track-art-placeholder">
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-										<polygon points="5 3 19 12 5 21 5 3"></polygon>
-									</svg>
-								</div>
-							{/if}
-						</a>
-					{/if}
 				</div>
 			{/each}
 		</div>
@@ -205,210 +190,142 @@
 </main>
 
 <style>
+	.lava-bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+
+	.lava-blob {
+		position: absolute; border-radius: 50%; filter: blur(80px);
+		opacity: 0.12; will-change: transform;
+	}
+	.b1 {
+		width: 60vw; height: 60vw; max-width: 500px; max-height: 500px;
+		background: color-mix(in srgb, var(--accent) 60%, #e0607e);
+		top: -10%; left: -5%; animation: lava1 28s ease-in-out infinite;
+	}
+	.b2 {
+		width: 50vw; height: 50vw; max-width: 420px; max-height: 420px;
+		background: color-mix(in srgb, #a78bfa 70%, var(--accent));
+		top: 35%; right: -8%; animation: lava2 34s ease-in-out infinite;
+	}
+	.b3 {
+		width: 55vw; height: 55vw; max-width: 460px; max-height: 460px;
+		background: color-mix(in srgb, #4ade80 50%, var(--accent));
+		bottom: -5%; left: 15%; animation: lava3 24s ease-in-out infinite;
+	}
+	@keyframes lava1 {
+		0%, 100% { transform: translate(0, 0) scale(1); }
+		33% { transform: translate(80px, 80px) scale(1.1); }
+		66% { transform: translate(20px, 120px) scale(0.95); }
+	}
+	@keyframes lava2 {
+		0%, 100% { transform: translate(0, 0) scale(1); }
+		33% { transform: translate(-70px, 60px) scale(1.08); }
+		66% { transform: translate(-40px, -50px) scale(0.92); }
+	}
+	@keyframes lava3 {
+		0%, 100% { transform: translate(0, 0) scale(1); }
+		33% { transform: translate(60px, -80px) scale(1.12); }
+		66% { transform: translate(-40px, -30px) scale(0.9); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.lava-blob { animation: none !important; }
+	}
+
 	main {
-		max-width: 800px;
-		margin: 0 auto;
+		max-width: 800px; margin: 0 auto; position: relative;
 		padding: 0 1rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
 	}
-
-	.page-header {
-		margin-bottom: 1.5rem;
-	}
-
-	h1 {
-		font-size: var(--text-page-heading);
-		font-weight: 700;
-		color: var(--text-primary);
-		margin: 0;
-	}
-
+	.page-header { margin-bottom: 1.5rem; }
+	h1 { font-size: var(--text-page-heading); font-weight: 700; color: var(--text-primary); margin: 0; }
 	.header-pulse {
-		font-size: var(--text-xs);
-		color: var(--text-muted);
-		margin: 0.25rem 0 0 0;
-		letter-spacing: 0.01em;
+		font-size: var(--text-xs); color: var(--text-muted);
+		margin: 0.25rem 0 0 0; letter-spacing: 0.01em;
 	}
+	.loading-container { display: flex; justify-content: center; padding: 3rem 2rem; }
+	.empty { color: var(--text-tertiary); padding: 2rem; text-align: center; }
 
-	.loading-container {
-		display: flex;
-		justify-content: center;
-		padding: 3rem 2rem;
-	}
-
-	.empty {
-		color: var(--text-tertiary);
-		padding: 2rem;
-		text-align: center;
-	}
-
-	.event-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-	}
+	.event-list { display: flex; flex-direction: column; gap: 0.5rem; }
 
 	.event-item {
-		display: flex;
-		align-items: center;
-		gap: 0.875rem;
+		--type-color: var(--border-subtle);
+		display: flex; align-items: center; gap: 0.875rem;
 		padding: 0.75rem 1rem;
-		background: var(--track-bg);
-		border: 1px solid var(--track-border);
+		background: color-mix(in srgb, var(--track-bg) 85%, transparent);
+		backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+		border: 1px solid var(--glass-border, var(--track-border));
 		border-radius: var(--radius-md);
-		border-left: 3px solid var(--border-subtle);
-		transition: all 0.15s ease;
+		border-left: 3px solid var(--type-color);
+		transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 	}
-
 	.event-item:hover {
-		background: var(--track-bg-hover);
-		border-color: color-mix(in srgb, var(--accent) 20%, var(--track-border));
+		background: color-mix(in srgb, var(--track-bg-hover) 90%, transparent);
+		border-color: color-mix(in srgb, var(--type-color) 30%, var(--glass-border, var(--track-border)));
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 20px color-mix(in srgb, var(--type-color) 10%, transparent);
+	}
+	.event-item.like { --type-color: #e0607e; }
+	.event-item.track { --type-color: var(--accent); }
+	.event-item.comment { --type-color: #a78bfa; }
+	.event-item.join { --type-color: #4ade80; }
+
+	.left-col { flex-shrink: 0; position: relative; width: 44px; height: 44px; }
+	.art-link { display: block; width: 44px; height: 44px; text-decoration: none; }
+	.art-img {
+		width: 44px; height: 44px; border-radius: var(--radius-sm);
+		object-fit: cover; display: block; background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+	}
+	.art-placeholder {
+		display: flex; align-items: center; justify-content: center; color: var(--text-muted);
 	}
 
-	/* per-type left accent */
-	.event-item.like { border-left-color: #e0607e; }
-	.event-item.like:hover { border-left-color: #e87a94; }
-	.event-item.track { border-left-color: var(--accent); }
-	.event-item.track:hover { border-left-color: var(--accent-hover, var(--accent)); }
-	.event-item.comment { border-left-color: #a78bfa; }
-	.event-item.comment:hover { border-left-color: #b9a2fb; }
-	.event-item.join { border-left-color: #4ade80; }
-	.event-item.join:hover { border-left-color: #6ee7a0; }
-
-	.avatar-link {
-		flex-shrink: 0;
+	.avatar-badge {
+		position: absolute; bottom: -3px; right: -3px;
+		width: 20px; height: 20px; border-radius: 50%;
+		border: 2px solid var(--bg-secondary, #141414);
+		background: var(--bg-tertiary); overflow: hidden; z-index: 1;
+		display: flex; align-items: center; justify-content: center;
+		color: var(--text-muted); transition: transform 0.15s ease;
 	}
+	.avatar-badge:hover { transform: scale(1.1); }
+	.badge-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 
-	.avatar {
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
-		object-fit: cover;
-	}
-
-	.avatar.placeholder {
-		background: var(--bg-tertiary);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--text-muted);
-	}
-
-	.event-body {
-		flex: 1;
-		min-width: 0;
-	}
-
+	.event-body { flex: 1; min-width: 0; }
 	.event-header {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 0.75rem;
-		margin-bottom: 0.125rem;
+		display: flex; align-items: baseline; justify-content: space-between;
+		gap: 0.75rem; margin-bottom: 0.125rem;
 	}
-
 	.handle-link {
-		color: var(--text-primary);
-		font-weight: 600;
-		font-size: var(--text-sm);
-		text-decoration: none;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+		color: var(--text-primary); font-weight: 600; font-size: var(--text-sm);
+		text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 	}
-
-	.handle-link:hover {
-		color: var(--accent);
-	}
-
-	.event-time {
-		flex-shrink: 0;
-		font-size: var(--text-xs);
-		color: var(--text-muted);
-		white-space: nowrap;
-	}
+	.handle-link:hover { color: var(--accent); }
+	.event-time { flex-shrink: 0; font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
 
 	.event-action {
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
-		margin: 0;
-		line-height: 1.4;
-		display: flex;
-		align-items: center;
-		gap: 0.375rem;
+		font-size: var(--text-sm); color: var(--text-tertiary); margin: 0;
+		line-height: 1.4; display: flex; align-items: center; gap: 0.375rem;
 	}
+	.action-icon { flex-shrink: 0; opacity: 0.6; color: var(--type-color); }
 
-	.action-icon {
-		flex-shrink: 0;
-		opacity: 0.5;
-	}
-
-	.like .action-icon { color: #e0607e; }
-	.track .action-icon { color: var(--accent); }
-	.comment .action-icon { color: #a78bfa; }
-	.join .action-icon { color: #4ade80; }
-
-	.track-link {
-		color: var(--text-secondary);
-		text-decoration: none;
-		font-weight: 500;
-	}
-
-	.track-link:hover {
-		color: var(--accent);
-	}
+	.track-link { color: var(--text-secondary); text-decoration: none; font-weight: 500; }
+	.track-link:hover { color: var(--accent); }
 
 	.comment-preview {
-		font-size: var(--text-xs);
-		color: var(--text-tertiary);
-		margin: 0.375rem 0 0 0;
-		line-height: 1.4;
-		font-style: italic;
-		background: color-mix(in srgb, var(--accent) 5%, transparent);
+		font-size: var(--text-xs); color: var(--text-tertiary); margin: 0.375rem 0 0 0;
+		line-height: 1.4; font-style: italic;
+		background: color-mix(in srgb, #a78bfa 6%, transparent);
 		border-left: 2px solid color-mix(in srgb, #a78bfa 40%, transparent);
-		padding: 0.375rem 0.625rem;
-		border-radius: var(--radius-sm);
+		padding: 0.375rem 0.625rem; border-radius: var(--radius-sm);
 	}
 
-	/* track artwork on the right side of the card */
-	.track-art-link {
-		flex-shrink: 0;
-	}
-
-	.track-art {
-		width: 44px;
-		height: 44px;
-		border-radius: var(--radius-sm);
-		object-fit: cover;
-	}
-
-	.track-art-placeholder {
-		background: var(--bg-tertiary);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--text-muted);
-	}
-
-	.scroll-sentinel {
-		display: flex;
-		justify-content: center;
-		padding: 2rem 0;
-		min-height: 60px;
-	}
+	.scroll-sentinel { display: flex; justify-content: center; padding: 2rem 0; min-height: 60px; }
 
 	@media (max-width: 768px) {
-		main {
-			padding: 0 0.75rem calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px));
-		}
-
-		.avatar {
-			width: 36px;
-			height: 36px;
-		}
-
-		.track-art {
-			width: 38px;
-			height: 38px;
-		}
+		main { padding: 0 0.75rem calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px)); }
+		.left-col, .art-link, .art-img { width: 40px; height: 40px; }
+		.avatar-badge { width: 18px; height: 18px; bottom: -2px; right: -2px; }
+		.avatar-badge svg { width: 8px; height: 8px; }
+		.lava-blob { opacity: 0.08; }
+		.event-item { gap: 0.625rem; padding: 0.625rem 0.75rem; }
 	}
 </style>
