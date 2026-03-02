@@ -404,7 +404,7 @@
 		display: flex; align-items: center; gap: 0.375rem;
 		min-width: 0;
 	}
-	.header-avatar-link { flex-shrink: 0; text-decoration: none; }
+	.header-avatar-link { flex-shrink: 0; text-decoration: none; line-height: 0; }
 	.header-avatar {
 		width: 20px; height: 20px; border-radius: 50%;
 		object-fit: cover; display: block;
@@ -417,14 +417,15 @@
 	.handle-link {
 		color: var(--text-primary); font-weight: 600; font-size: var(--text-sm);
 		text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		line-height: 1.2;
 	}
 	.handle-link:hover { color: var(--accent); }
 	.event-time { flex-shrink: 0; font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
 	.event-action {
 		font-size: var(--text-sm); color: var(--text-tertiary); margin: 0;
-		line-height: 1.4; display: flex; align-items: center; gap: 0.375rem;
+		line-height: 1.2; display: flex; align-items: center; gap: 0.375rem;
 	}
-	.action-icon { flex-shrink: 0; opacity: 0.6; color: var(--type-color); }
+	.action-icon { flex-shrink: 0; opacity: 0.6; color: var(--type-color); line-height: 0; }
 	.verb {
 		font-size: var(--text-xs);
 		color: color-mix(in srgb, var(--text-tertiary) 70%, var(--accent));
