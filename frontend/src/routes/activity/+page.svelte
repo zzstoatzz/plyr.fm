@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { fly } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { auth } from '$lib/auth.svelte';
@@ -18,6 +20,17 @@
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 	let stats = $derived(statsCache.stats);
 	let histogram = $state<ActivityHistogramBucket[]>([]);
+	let previousCount = $state(0);
+	let showSpinner = $state(false);
+
+	$effect(() => {
+		if (loadingMore) {
+			const timer = setTimeout(() => { showSpinner = true; }, 400);
+			return () => { clearTimeout(timer); showSpinner = false; };
+		} else {
+			showSpinner = false;
+		}
+	});
 
 	const sparklinePath = $derived.by(() => {
 		if (histogram.length === 0) return '';
@@ -29,20 +42,15 @@
 		return `M${points.join(' L')} L${w},${h} L0,${h} Z`;
 	});
 
-	onMount(async () => {
+	onMount(() => {
 		auth.initialize();
 		statsCache.fetch();
+		previousCount = data.events.length;
 		events = data.events;
 		nextCursor = data.next_cursor;
 		hasMore = data.has_more;
+		histogram = data.histogram;
 		initialLoad = false;
-
-		try {
-			const res = await fetch(`${API_URL}/activity/histogram?days=7`);
-			if (res.ok) histogram = (await res.json()).buckets;
-		} catch (e) {
-			console.error('failed to load activity histogram:', e);
-		}
 	});
 
 	function timeAgo(iso: string): string {
@@ -66,6 +74,7 @@
 			const response = await fetch(`${API_URL}/activity/?cursor=${encodeURIComponent(nextCursor)}`);
 			if (response.ok) {
 				const result = await response.json();
+				previousCount = events.length;
 				events = [...events, ...result.events];
 				nextCursor = result.next_cursor;
 				hasMore = result.has_more;
@@ -148,9 +157,13 @@
 		<p class="empty">no activity yet</p>
 	{:else}
 		<div class="event-list">
-			{#each events as event (event.created_at + event.actor.did + event.type)}
+			{#each events as event, i (event.created_at + event.actor.did + event.type)}
 				{@const hasArt = event.track && (event.track.thumbnail_url || event.track.image_url)}
-				<div class="event-item {event.type}">
+				{@const batchIndex = i >= previousCount ? i - previousCount : -1}
+				<div
+					class="event-item {event.type}"
+					in:fly={{ y: 12, duration: batchIndex >= 0 ? 280 : 0, delay: batchIndex >= 0 ? batchIndex * 35 : 0, easing: cubicOut }}
+				>
 					<div class="left-col">
 						{#if hasArt && event.track}
 							<a href="/track/{event.track.id}" class="art-link">
@@ -262,7 +275,7 @@
 
 		{#if hasMore}
 			<div bind:this={sentinelElement} class="scroll-sentinel">
-				{#if loadingMore}
+				{#if showSpinner}
 					<WaveLoading size="sm" message="loading more..." />
 				{/if}
 			</div>
