@@ -1,6 +1,7 @@
 """api routers."""
 
 from backend.api.account import router as account_router
+from backend.api.activity import router as activity_router
 from backend.api.artists import router as artists_router
 from backend.api.discover import router as discover_router
 from backend.api.meta import router as meta_router
@@ -21,6 +22,7 @@ from backend.api.users import router as users_router
 
 __all__ = [
     "account_router",
+    "activity_router",
     "artists_router",
     "audio_router",
     "auth_router",

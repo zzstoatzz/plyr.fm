@@ -53,4 +53,6 @@ class TrackLike(Base):
         UniqueConstraint("track_id", "user_did", name="uq_track_user_like"),
         # composite index for efficient user likes queries with sorting
         Index("ix_track_likes_user_did_created_at", "user_did", created_at.desc()),
+        # standalone index for global feed queries (activity feed ORDER BY created_at DESC)
+        Index("ix_track_likes_created_at", created_at.desc()),
     )

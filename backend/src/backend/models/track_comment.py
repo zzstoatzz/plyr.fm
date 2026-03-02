@@ -66,4 +66,6 @@ class TrackComment(Base):
         Index("ix_track_comments_track_timestamp", "track_id", "timestamp_ms"),
         # composite index for user's comments (order by recency handled in queries)
         Index("ix_track_comments_user_created", "user_did", "created_at"),
+        # standalone index for global feed queries (activity feed ORDER BY created_at DESC)
+        Index("ix_track_comments_created_at", created_at.desc()),
     )

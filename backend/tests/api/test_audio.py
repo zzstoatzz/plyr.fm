@@ -134,7 +134,9 @@ async def test_stream_audio_without_cached_url(
     assert response.headers["location"] == expected_url
 
 
-async def test_stream_audio_track_not_found(test_app: FastAPI):
+async def test_stream_audio_track_not_found(
+    test_app: FastAPI, db_session: AsyncSession
+):
     """test that endpoint returns 404 when track doesn't exist in DB."""
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
@@ -231,7 +233,9 @@ async def test_get_audio_url_without_cached_url(
         test_app.dependency_overrides.pop(require_auth, None)
 
 
-async def test_get_audio_url_not_found(test_app: FastAPI, mock_session: Session):
+async def test_get_audio_url_not_found(
+    test_app: FastAPI, mock_session: Session, db_session: AsyncSession
+):
     """test that /url endpoint returns 404 for nonexistent track."""
     test_app.dependency_overrides[require_auth] = lambda: mock_session
 
