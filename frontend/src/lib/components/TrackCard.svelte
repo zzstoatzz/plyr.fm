@@ -86,7 +86,7 @@
 		onPlay(track);
 	}}
 >
-	<div class="artwork" class:gated={track.gated}>
+	<div class="artwork" class:gated={track.gated} class:avatar-fallback={!track.image_url && track.artist_avatar_url}>
 		{#if track.image_url}
 			<SensitiveImage src={track.thumbnail_url ?? track.image_url}>
 				<img
@@ -215,9 +215,13 @@
 		display: block;
 	}
 
-	.artwork img.avatar {
+	.artwork.avatar-fallback {
 		border-radius: var(--radius-full);
 		border: 1.5px solid var(--border-default);
+	}
+
+	.artwork.avatar-fallback img {
+		border-radius: var(--radius-full);
 	}
 
 	.artwork.gated::after {

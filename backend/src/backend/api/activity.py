@@ -1,7 +1,7 @@
 """activity feed — platform-wide chronological event stream."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -57,6 +57,19 @@ class ActivityFeedResponse(BaseModel):
     events: list[ActivityEvent]
     next_cursor: str | None = None
     has_more: bool = False
+
+
+class ActivityHistogramBucket(BaseModel):
+    """single day in the activity histogram."""
+
+    date: str
+    count: int
+
+
+class ActivityHistogramResponse(BaseModel):
+    """activity counts per day over a time window."""
+
+    buckets: list[ActivityHistogramBucket]
 
 
 # raw SQL for the UNION ALL query — each branch selects the same column shape
@@ -222,4 +235,45 @@ async def get_activity_feed(
         events=events,
         next_cursor=next_cursor,
         has_more=has_more,
+    )
+
+
+_HISTOGRAM_QUERY = """
+    SELECT d::date AS bucket_date, COALESCE(c.total, 0) AS total
+    FROM generate_series(:start::date, :end_date::date, '1 day') d
+    LEFT JOIN (
+        SELECT created_at::date AS day, COUNT(*) AS total FROM (
+            SELECT tl.created_at FROM track_likes tl WHERE tl.created_at >= :start
+            UNION ALL
+            SELECT t.created_at FROM tracks t WHERE t.created_at >= :start
+            UNION ALL
+            SELECT tc.created_at FROM track_comments tc WHERE tc.created_at >= :start
+            UNION ALL
+            SELECT a.created_at FROM artists a
+                WHERE a.handle != '' AND a.display_name != '' AND a.created_at >= :start
+        ) events GROUP BY day
+    ) c ON c.day = d::date
+    ORDER BY bucket_date
+"""
+
+
+@router.get("/histogram")
+async def get_activity_histogram(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    days: int = Query(7, ge=1, le=30),
+) -> ActivityHistogramResponse:
+    """get activity counts per day for the sparkline."""
+    now = datetime.now(UTC)
+    start = now - timedelta(days=days - 1)
+
+    result = await db.execute(
+        text(_HISTOGRAM_QUERY),
+        {"start": start, "end_date": now},
+    )
+
+    return ActivityHistogramResponse(
+        buckets=[
+            ActivityHistogramBucket(date=str(row.bucket_date), count=row.total)
+            for row in result.fetchall()
+        ]
     )

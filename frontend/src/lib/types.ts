@@ -189,6 +189,11 @@ export interface ActivityEvent {
 	created_at: string;
 }
 
+export interface ActivityHistogramBucket {
+	date: string;
+	count: number;
+}
+
 export interface JamPlaybackState {
 	track_ids: string[];
 	current_index: number;
