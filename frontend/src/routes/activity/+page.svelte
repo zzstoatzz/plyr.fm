@@ -38,7 +38,7 @@
 		initialLoad = false;
 
 		try {
-			const res = await fetch(`${API_URL}/activity/histogram?days=7`);
+			const res = await fetch(`${API_URL}/activity/histogram?days=30`);
 			if (res.ok) histogram = (await res.json()).buckets;
 		} catch (e) {
 			console.error('failed to load activity histogram:', e);
@@ -121,9 +121,9 @@
 		{/if}
 	</div>
 
-	{#if histogram.length > 0}
+	{#if histogram.some(b => b.count > 0)}
 		<div class="sparkline-container">
-			<span class="sparkline-label">last 7 days</span>
+			<span class="sparkline-label">last 30 days</span>
 			<svg class="sparkline" viewBox="0 0 100 32" preserveAspectRatio="none">
 				<defs>
 					<linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
@@ -185,7 +185,7 @@
 							<a href="/u/{event.actor.handle}" class="handle-link">
 								{event.actor.display_name || event.actor.handle}
 							</a>
-							<span class="event-time">{timeAgo(event.created_at)}</span>
+							<span class="event-time" title={new Date(event.created_at).toLocaleString()}>{timeAgo(event.created_at)}</span>
 						</div>
 						{#if event.type === 'like' && event.track}
 							<p class="event-action">
@@ -316,12 +316,12 @@
 		border-radius: var(--radius-md);
 		transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 	}
-	/* neon glow accent — fuzzy light instead of solid border */
+	/* neon glow accent — follows card border-radius */
 	.event-item::before {
-		content: ''; position: absolute; left: 0; top: 15%; bottom: 15%;
-		width: 2px; border-radius: 2px;
-		background: var(--type-color);
-		box-shadow: 0 0 6px var(--type-color), 0 0 14px color-mix(in srgb, var(--type-color) 40%, transparent);
+		content: ''; position: absolute; inset: 0;
+		border-radius: inherit; pointer-events: none;
+		border-left: 2px solid var(--type-color);
+		box-shadow: inset 4px 0 8px -2px color-mix(in srgb, var(--type-color) 30%, transparent);
 	}
 	.event-item:hover {
 		background: color-mix(in srgb, var(--track-bg-hover) 90%, transparent);
@@ -330,7 +330,7 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 20px color-mix(in srgb, var(--type-color) 10%, transparent);
 	}
 	.event-item:hover::before {
-		box-shadow: 0 0 8px var(--type-color), 0 0 20px color-mix(in srgb, var(--type-color) 60%, transparent);
+		box-shadow: inset 6px 0 12px -2px color-mix(in srgb, var(--type-color) 50%, transparent);
 	}
 	.event-item.like { --type-color: #e0607e; }
 	.event-item.track { --type-color: var(--accent); }
