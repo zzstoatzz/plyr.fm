@@ -166,6 +166,29 @@ export interface JamParticipant {
 	avatar_url?: string;
 }
 
+export interface ActivityActor {
+	did: string;
+	handle: string;
+	display_name: string;
+	avatar_url: string | null;
+}
+
+export interface ActivityTrack {
+	id: number;
+	title: string;
+	artist_handle: string;
+	image_url: string | null;
+	thumbnail_url: string | null;
+}
+
+export interface ActivityEvent {
+	type: 'like' | 'track' | 'comment' | 'join';
+	actor: ActivityActor;
+	track: ActivityTrack | null;
+	comment_text: string | null;
+	created_at: string;
+}
+
 export interface JamPlaybackState {
 	track_ids: string[];
 	current_index: number;

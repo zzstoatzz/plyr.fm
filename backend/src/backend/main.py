@@ -16,6 +16,7 @@ from backend._internal import jam_service, notification_service, queue_service
 from backend._internal.background import background_worker_lifespan
 from backend.api import (
     account_router,
+    activity_router,
     artists_router,
     audio_router,
     auth_router,
@@ -125,6 +126,7 @@ app.add_middleware(SlowAPIMiddleware)  # type: ignore[arg-type]
 # routers
 app.include_router(auth_router)
 app.include_router(account_router)
+app.include_router(activity_router)
 app.include_router(artists_router)
 app.include_router(discover_router)
 app.include_router(tracks_router)
