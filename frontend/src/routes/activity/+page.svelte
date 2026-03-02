@@ -425,7 +425,10 @@
 		font-size: var(--text-sm); color: var(--text-tertiary); margin: 0;
 		line-height: 1.2; display: flex; align-items: center; gap: 0.375rem;
 	}
-	.action-icon { flex-shrink: 0; opacity: 0.6; color: var(--type-color); line-height: 0; }
+	.action-icon {
+		flex-shrink: 0; opacity: 0.6; color: var(--type-color); line-height: 0;
+		margin: 0 3px; /* center 14px icon in 20px space to align with header avatar */
+	}
 	.verb {
 		font-size: var(--text-xs);
 		color: color-mix(in srgb, var(--text-tertiary) 70%, var(--accent));
