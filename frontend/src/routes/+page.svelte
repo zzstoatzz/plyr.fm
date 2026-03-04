@@ -6,11 +6,14 @@
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import HiddenTagsFilter from '$lib/components/HiddenTagsFilter.svelte';
+	import ActivityRow from '$lib/components/ActivityRow.svelte';
+	import Sparkline from '$lib/components/Sparkline.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache, fetchTopTracks } from '$lib/tracks.svelte';
 	import { networkArtistsCache } from '$lib/network-artists.svelte';
-	import type { Track } from '$lib/types';
+	import { activityFeed } from '$lib/activity-feed.svelte';
+	import type { Track, ActivityEvent } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
 	import { fade } from 'svelte/transition';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
@@ -46,6 +49,32 @@
 	// infinite scroll sentinel element
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 
+	// merged feed: tracks + optional activity events
+	type FeedItem =
+		| { kind: 'track'; data: Track; sortTime: string; key: string }
+		| { kind: 'activity'; data: ActivityEvent; sortTime: string; key: string };
+
+	let feedItems = $derived.by<FeedItem[]>(() => {
+		const trackItems: FeedItem[] = tracks.map((t) => ({
+			kind: 'track' as const,
+			data: t,
+			sortTime: t.created_at ?? '',
+			key: `track-${t.id}`
+		}));
+		if (!activityFeed.active) return trackItems;
+		const activityItems: FeedItem[] = activityFeed.events
+			.filter((e) => e.type !== 'track')
+			.map((e) => ({
+				kind: 'activity' as const,
+				data: e,
+				sortTime: e.created_at,
+				key: `activity-${e.type}-${e.actor.handle}-${e.created_at}`
+			}));
+		return [...trackItems, ...activityItems].sort((a, b) => b.sortTime.localeCompare(a.sortTime));
+	});
+
+	let combinedHasMore = $derived(hasMore || (activityFeed.active && activityFeed.hasMore));
+
 	onMount(async () => {
 		const [topResult] = await Promise.all([fetchTopTracks(10), tracksCache.fetch()]);
 		topTracks = topResult;
@@ -68,8 +97,9 @@
 		const observer = new IntersectionObserver(
 			(entries) => {
 				const entry = entries[0];
-				if (entry.isIntersecting && hasMore && !loadingMore && !loadingTracks) {
+				if (entry.isIntersecting && combinedHasMore && !loadingMore && !loadingTracks) {
 					tracksCache.fetchMore();
+					if (activityFeed.active) activityFeed.loadMore();
 				}
 			},
 			{
@@ -144,7 +174,7 @@
 					top tracks
 				</h2>
 				<div class="top-tracks-grid">
-					{#each topTracks as track, i}
+					{#each topTracks as track, i (track.id)}
 						<TrackCard
 							{track}
 							index={i}
@@ -162,7 +192,7 @@
 		<section class="network-artists" transition:fade={{ duration: 200 }}>
 			<h2>artists you know</h2>
 			<div class="artist-grid">
-				{#each networkArtists as artist}
+				{#each networkArtists as artist (artist.did)}
 					{@const refreshedUrl = getRefreshedAvatar(artist.did)}
 					{@const displayUrl = refreshedUrl ?? artist.avatar_url}
 					<a href="/u/{artist.handle}" class="artist-card">
@@ -209,14 +239,23 @@
 				</button>
 			</h2>
 			<div class="header-actions">
-				<a href="/activity" class="activity-link" title="activity">
+				<button
+					type="button"
+					class="activity-toggle"
+					class:active={activityFeed.active}
+					title={activityFeed.active ? 'hide activity' : 'show activity'}
+					onclick={() => activityFeed.toggle()}
+				>
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
 						<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
 					</svg>
-				</a>
+				</button>
 				<HiddenTagsFilter />
 			</div>
 		</div>
+		{#if activityFeed.active && activityFeed.histogram.some((b) => b.count > 0)}
+			<Sparkline histogram={activityFeed.histogram} />
+		{/if}
 		{#if showLoading}
 			<div class="loading-container">
 				<WaveLoading size="lg" message="loading tracks..." />
@@ -225,20 +264,24 @@
 			<p class="empty">no tracks yet</p>
 		{:else}
 			<div class="track-list">
-				{#each tracks as track, i}
-					<TrackItem
-						{track}
-						index={i}
-						isPlaying={player.currentTrack?.id === track.id}
-						onPlay={(t) => queue.playNow(t)}
-						isAuthenticated={auth.isAuthenticated}
-					/>
+				{#each feedItems as item, i (item.key)}
+					{#if item.kind === 'track'}
+						<TrackItem
+							track={item.data}
+							index={i}
+							isPlaying={player.currentTrack?.id === item.data.id}
+							onPlay={(t) => queue.playNow(t)}
+							isAuthenticated={auth.isAuthenticated}
+						/>
+					{:else}
+						<ActivityRow event={item.data} />
+					{/if}
 				{/each}
 			</div>
 			<!-- infinite scroll sentinel -->
-			{#if hasMore}
+			{#if combinedHasMore}
 				<div bind:this={sentinelElement} class="scroll-sentinel">
-					{#if loadingMore}
+					{#if loadingMore || (activityFeed.active && activityFeed.loading)}
 						<WaveLoading size="sm" message="loading more..." />
 					{/if}
 				</div>
@@ -258,35 +301,12 @@
 		padding: 1.5rem 1rem;
 	}
 
-	.top-tracks {
-		margin-bottom: 2.5rem;
-	}
-
-	.top-tracks h2 {
-		font-size: var(--text-page-heading);
-		font-weight: 700;
-		color: var(--text-primary);
-		margin: 0 0 1rem 0;
-	}
-
-	.top-tracks-grid {
-		display: flex;
-		gap: 0.75rem;
-		overflow-x: auto;
-		padding-bottom: 0.5rem;
-		scrollbar-width: none;
-		scroll-snap-type: x proximity;
-		scroll-padding-inline: 1rem;
-	}
-
-	.top-tracks-grid::-webkit-scrollbar {
-		display: none;
-	}
-
+	.top-tracks,
 	.network-artists {
 		margin-bottom: 2.5rem;
 	}
 
+	.top-tracks h2,
 	.network-artists h2 {
 		font-size: var(--text-page-heading);
 		font-weight: 700;
@@ -294,6 +314,7 @@
 		margin: 0 0 1rem 0;
 	}
 
+	.top-tracks-grid,
 	.artist-grid {
 		display: flex;
 		gap: 0.75rem;
@@ -304,6 +325,7 @@
 		scroll-padding-inline: 1rem;
 	}
 
+	.top-tracks-grid::-webkit-scrollbar,
 	.artist-grid::-webkit-scrollbar {
 		display: none;
 	}
@@ -392,24 +414,31 @@
 		gap: 0.5rem;
 	}
 
-	.activity-link {
+	.activity-toggle {
 		display: inline-flex;
 		align-items: center;
 		padding: 0.35rem;
 		border-radius: var(--radius-base);
 		color: var(--text-tertiary);
-		text-decoration: none;
+		background: transparent;
+		border: none;
+		cursor: pointer;
 		transition: all 0.15s;
 	}
 
-	.activity-link:hover {
+	.activity-toggle:hover {
 		color: var(--text-secondary);
 		background: var(--bg-hover, transparent);
 	}
 
-	.activity-link svg {
+	.activity-toggle svg {
 		width: 18px;
 		height: 18px;
+	}
+
+	.activity-toggle.active {
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.clickable-heading {
