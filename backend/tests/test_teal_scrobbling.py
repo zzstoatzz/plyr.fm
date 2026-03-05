@@ -218,7 +218,7 @@ class TestScheduleTealScrobbleDedup:
                 return_value=mock_docket,
             ),
             patch(
-                "backend.utilities.redis.get_async_redis_client",
+                "backend._internal.tasks.sync.get_async_redis_client",
                 return_value=mock_redis,
             ),
         ):
@@ -254,7 +254,7 @@ class TestScheduleTealScrobbleDedup:
                 return_value=mock_docket,
             ),
             patch(
-                "backend.utilities.redis.get_async_redis_client",
+                "backend._internal.tasks.sync.get_async_redis_client",
                 return_value=mock_redis,
             ),
         ):

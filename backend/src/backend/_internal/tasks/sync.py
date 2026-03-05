@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from backend._internal.background import get_docket
 from backend._internal.follow_graph import warm_follows_cache
+from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +112,6 @@ async def schedule_teal_scrobble(
     uses redis SET NX with a 60s TTL to deduplicate concurrent requests
     from multiple fly machines or rapid-fire frontend calls.
     """
-    from backend.utilities.redis import get_async_redis_client
-
     redis = get_async_redis_client()
     dedup_key = f"teal-scrobble:{session_id}:{track_id}"
     if not await redis.set(dedup_key, "1", nx=True, ex=60):
