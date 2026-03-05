@@ -9,6 +9,7 @@ import logfire
 from botocore.exceptions import ClientError
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
+from redis.exceptions import RedisError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -49,7 +50,7 @@ async def invalidate_tracks_discovery_cache() -> None:
     try:
         redis = get_async_redis_client()
         await redis.delete(DISCOVERY_CACHE_KEY)
-    except Exception:
+    except (RuntimeError, RedisError):
         logger.debug("failed to invalidate discovery cache")
 
 
@@ -102,7 +103,7 @@ async def list_tracks(
             redis = get_async_redis_client()
             if cached := await redis.get(DISCOVERY_CACHE_KEY):
                 return TracksListResponse.model_validate_json(cached)
-        except Exception:
+        except (RuntimeError, RedisError):
             logger.debug("discovery cache read failed")
 
     # use settings default if not provided, clamp to reasonable bounds
@@ -320,7 +321,7 @@ async def list_tracks(
                 response.model_dump_json(),
                 ex=DISCOVERY_CACHE_TTL_SECONDS,
             )
-        except Exception:
+        except (RuntimeError, RedisError):
             logger.debug("discovery cache write failed")
 
     return response

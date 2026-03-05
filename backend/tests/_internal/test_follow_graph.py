@@ -4,6 +4,7 @@ import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from backend._internal.follow_graph import (
     FOLLOWS_CACHE_PREFIX,
@@ -123,8 +124,8 @@ async def test_cache_miss_fetches_and_writes(
 async def test_redis_error_falls_back_to_live(mock_fetch: AsyncMock) -> None:
     """redis errors fall back to live fetch without raising."""
     broken_redis = AsyncMock()
-    broken_redis.get.side_effect = ConnectionError("redis down")
-    broken_redis.set.side_effect = ConnectionError("redis down")
+    broken_redis.get.side_effect = RedisConnectionError("redis down")
+    broken_redis.set.side_effect = RedisConnectionError("redis down")
 
     with (
         patch(

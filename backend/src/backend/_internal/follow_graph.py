@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 
 import httpx
 import logfire
+from redis.exceptions import RedisError
 
 from backend._internal.atproto.profile import BSKY_API_BASE, normalize_avatar_url
 from backend.utilities.redis import get_async_redis_client
@@ -49,11 +50,11 @@ async def get_follows(did: str) -> dict[str, FollowInfo]:
                 ts_raw = await redis.get(ts_key)
                 if ts_raw and time.time() - float(ts_raw) > FOLLOWS_STALE_AFTER_SECONDS:
                     await _maybe_schedule_revalidation(did)
-            except Exception:
+            except (RuntimeError, RedisError):
                 logger.debug("redis staleness check failed for follows %s", did)
 
             return follows
-    except Exception:
+    except (RuntimeError, RedisError):
         logger.debug("redis cache read failed for follows %s", did)
 
     # cache miss — fetch live
@@ -66,7 +67,7 @@ async def get_follows(did: str) -> dict[str, FollowInfo]:
             cache_key, _serialize_follows(follows), ex=FOLLOWS_CACHE_TTL_SECONDS
         )
         await redis.set(ts_key, str(time.time()), ex=FOLLOWS_CACHE_TTL_SECONDS)
-    except Exception:
+    except (RuntimeError, RedisError):
         logger.debug("redis cache write failed for follows %s", did)
 
     return follows
@@ -84,7 +85,7 @@ async def _maybe_schedule_revalidation(did: str) -> None:
             from backend._internal.tasks import schedule_follow_graph_warm
 
             await schedule_follow_graph_warm(did)
-    except Exception:
+    except (RuntimeError, RedisError):
         logger.debug("failed to schedule revalidation for follows %s", did)
 
 

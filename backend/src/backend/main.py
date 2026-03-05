@@ -11,6 +11,8 @@ from fastapi.responses import ORJSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend._internal import jam_service, notification_service, queue_service
 from backend._internal.background import background_worker_lifespan
@@ -39,6 +41,7 @@ from backend.api.albums import router as albums_router
 from backend.api.lists import router as lists_router
 from backend.api.migration import router as migration_router
 from backend.config import settings
+from backend.utilities.database import get_engine
 from backend.utilities.middleware import SecurityHeadersMiddleware
 from backend.utilities.observability import (
     configure_observability,
@@ -66,15 +69,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # warm the database connection pool so the first request avoids cold connect
     try:
-        from sqlalchemy import text
-
-        from backend.utilities.database import get_engine
-
         engine = get_engine()
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         logger.info("database connection pool warmed")
-    except Exception:
+    except (OSError, SQLAlchemyError):
         logger.warning("failed to warm database connection pool")
 
     # start background task worker (docket)
