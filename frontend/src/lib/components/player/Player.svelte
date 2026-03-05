@@ -374,10 +374,7 @@
 						currentBlobUrl = src;
 					}
 
-					player.audioElement.src = src;
-					player.audioElement.load();
-
-					// wait for audio to be ready before allowing playback
+					// attach listener BEFORE load() to avoid race with cached audio
 					player.audioElement.addEventListener(
 						'loadeddata',
 						() => {
@@ -397,6 +394,9 @@
 						},
 						{ once: true }
 					);
+
+					player.audioElement.src = src;
+					player.audioElement.load();
 				})
 				.catch((err) => {
 					isLoadingTrack = false;
