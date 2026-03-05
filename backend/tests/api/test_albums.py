@@ -535,7 +535,7 @@ async def test_get_album_respects_atproto_track_order(
     }
 
     with patch(
-        "backend.api.albums.get_record_public_resilient",
+        "backend._internal.atproto.records.get_record_public_resilient",
         new_callable=AsyncMock,
         return_value=(mock_record, None),
     ):
