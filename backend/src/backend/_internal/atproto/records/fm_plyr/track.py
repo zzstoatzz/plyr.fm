@@ -4,6 +4,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from atproto_identity.did.resolver import AsyncDidResolver
+
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import BlobRef, make_pds_request, parse_at_uri
 from backend.config import settings
@@ -181,6 +183,43 @@ async def get_record_public(
         )
 
     return response.json()
+
+
+async def get_record_public_resilient(
+    record_uri: str,
+    pds_url: str | None = None,
+) -> tuple[dict[str, Any], str | None]:
+    """fetch an ATProto record, retrying with DID resolution if the cached PDS URL fails.
+
+    returns:
+        (record_data, resolved_pds_url) — resolved_pds_url is set only when
+        re-resolution found a different PDS than the one provided.
+    """
+    try:
+        return await get_record_public(record_uri, pds_url), None
+    except Exception as original_error:
+        if not pds_url:
+            raise
+
+        # resolve the DID to find the current PDS
+        repo, _, _ = parse_at_uri(record_uri)
+        try:
+            atproto_data = await AsyncDidResolver().resolve_atproto_data(repo)
+            resolved_url = atproto_data.pds
+        except Exception:
+            raise original_error from None
+
+        # if the resolved URL matches what we already tried, nothing to retry
+        if resolved_url == pds_url:
+            raise original_error
+
+        logger.info(
+            "PDS URL changed for %s: %s -> %s, retrying",
+            repo,
+            pds_url,
+            resolved_url,
+        )
+        return await get_record_public(record_uri, resolved_url), resolved_url
 
 
 async def update_record(

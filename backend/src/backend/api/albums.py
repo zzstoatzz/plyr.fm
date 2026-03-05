@@ -317,7 +317,7 @@ async def get_album(
     except Exception:
         logger.debug("album cache read failed for %s/%s", handle, slug)
 
-    from backend._internal.atproto.records import get_record_public
+    from backend._internal.atproto.records import get_record_public_resilient
 
     # look up artist + album
     album_result = await db.execute(
@@ -331,22 +331,7 @@ async def get_album(
 
     album, artist = row
 
-    # ensure PDS URL cached (needed for ATProto record fetch)
-    pds_cache: dict[str, str | None] = {}
-    if artist.pds_url:
-        pds_cache[artist.did] = artist.pds_url
-    else:
-        from atproto_identity.did.resolver import AsyncDidResolver
-
-        resolver = AsyncDidResolver()
-        try:
-            atproto_data = await resolver.resolve_atproto_data(artist.did)
-            pds_cache[artist.did] = atproto_data.pds
-            artist.pds_url = atproto_data.pds
-            db.add(artist)
-            await db.commit()
-        except Exception:
-            pds_cache[artist.did] = None
+    pds_cache: dict[str, str | None] = {artist.did: artist.pds_url}
 
     # fetch all tracks for this album
     track_stmt = (
@@ -359,12 +344,18 @@ async def get_album(
 
     # determine track order: use ATProto list record if available
     ordered_tracks: list[Track] = []
-    if album.atproto_record_uri and artist.pds_url:
+    if album.atproto_record_uri:
         try:
-            record_data = await get_record_public(
+            record_data, resolved_pds_url = await get_record_public_resilient(
                 record_uri=album.atproto_record_uri,
                 pds_url=artist.pds_url,
             )
+            if resolved_pds_url:
+                artist.pds_url = resolved_pds_url
+                pds_cache[artist.did] = resolved_pds_url
+                db.add(artist)
+                await db.commit()
+
             items = record_data.get("value", {}).get("items", [])
             track_uris = [item.get("subject", {}).get("uri") for item in items]
             track_uris = [uri for uri in track_uris if uri]

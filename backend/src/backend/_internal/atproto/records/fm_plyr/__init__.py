@@ -18,6 +18,7 @@ from backend._internal.atproto.records.fm_plyr.track import (
     create_track_record,
     delete_record_by_uri,
     get_record_public,
+    get_record_public_resilient,
     update_record,
 )
 
@@ -30,6 +31,7 @@ __all__ = [
     "create_track_record",
     "delete_record_by_uri",
     "get_record_public",
+    "get_record_public_resilient",
     "update_comment_record",
     "update_list_record",
     "update_record",

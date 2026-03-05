@@ -28,6 +28,7 @@ from backend._internal.atproto.records import (
     _reconstruct_oauth_session,
     _refresh_session_tokens,
     create_list_record,
+    get_record_public_resilient,
     update_list_record,
 )
 from backend._internal.auth import get_session
@@ -387,8 +388,6 @@ async def get_playlist(
     fetches the ATProto list record to get track ordering, then hydrates
     track metadata from the database. if authenticated, includes liked state.
     """
-    from backend._internal.atproto.records import get_record_public
-
     # get playlist from database
     result = await db.execute(
         select(Playlist, Artist)
@@ -404,10 +403,14 @@ async def get_playlist(
 
     # fetch ATProto record (public - no auth needed)
     try:
-        record_data = await get_record_public(
+        record_data, resolved_pds_url = await get_record_public_resilient(
             record_uri=playlist.atproto_record_uri,
             pds_url=artist.pds_url,
         )
+        if resolved_pds_url:
+            artist.pds_url = resolved_pds_url
+            db.add(artist)
+            await db.commit()
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"failed to fetch playlist record: {e}"
@@ -946,13 +949,15 @@ async def get_playlist_recommendations_endpoint(
         logger.debug("redis cache miss/error for recommendations: %s", e)
 
     # get track IDs from the playlist's ATProto record
-    from backend._internal.atproto.records import get_record_public
-
     try:
-        record_data = await get_record_public(
+        record_data, resolved_pds_url = await get_record_public_resilient(
             record_uri=playlist.atproto_record_uri,
             pds_url=artist.pds_url,
         )
+        if resolved_pds_url:
+            artist.pds_url = resolved_pds_url
+            db.add(artist)
+            await db.commit()
     except Exception as e:
         logger.warning("failed to fetch playlist record for recommendations: %s", e)
         return unavailable
