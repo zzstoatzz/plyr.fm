@@ -64,6 +64,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await queue_service.setup()
     await jam_service.setup()
 
+    # warm the database connection pool so the first request avoids cold connect
+    try:
+        from sqlalchemy import text
+
+        from backend.utilities.database import get_engine
+
+        engine = get_engine()
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        logger.info("database connection pool warmed")
+    except Exception:
+        logger.warning("failed to warm database connection pool")
+
     # start background task worker (docket)
     async with background_worker_lifespan() as docket:
         # store docket on app state for access in routes if needed

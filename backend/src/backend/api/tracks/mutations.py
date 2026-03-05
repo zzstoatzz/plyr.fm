@@ -38,6 +38,7 @@ from backend.schemas import MessageResponse, TrackResponse
 from backend.storage import storage
 from backend.utilities.tags import get_or_create_tag, parse_tags_json
 
+from .listing import invalidate_tracks_discovery_cache
 from .metadata_service import (
     apply_album_update,
     resolve_feature_handles,
@@ -125,6 +126,9 @@ async def delete_track(
     # delete track record
     await db.delete(track)
     await db.commit()
+
+    # invalidate anonymous discovery feed cache
+    await invalidate_tracks_discovery_cache()
 
     # sync album list record if track was in an album
     if album_id_to_sync:
@@ -307,6 +311,9 @@ async def update_track_metadata(
 
     await db.commit()
     await db.refresh(track)
+
+    # invalidate anonymous discovery feed cache
+    await invalidate_tracks_discovery_cache()
 
     # invalidate album cache if track metadata changed within an album
     from backend.api.albums import invalidate_album_cache_by_id

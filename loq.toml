@@ -39,7 +39,7 @@ max_lines = 1040
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 523
+max_lines = 562
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"

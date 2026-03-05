@@ -2,4 +2,5 @@
 
 MAX_FEATURES = 5
 
-__all__ = ["MAX_FEATURES"]
+DISCOVERY_CACHE_KEY = "plyr:tracks:discovery"
+DISCOVERY_CACHE_TTL_SECONDS = 60

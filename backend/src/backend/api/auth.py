@@ -39,7 +39,7 @@ from backend._internal import (
     switch_active_account,
 )
 from backend._internal.auth import get_refresh_token_lifetime_days
-from backend._internal.tasks import schedule_atproto_sync, schedule_follow_graph_warm
+from backend._internal.tasks import schedule_atproto_sync
 from backend.config import settings
 from backend.models import Artist, get_db
 from backend.utilities.rate_limit import limiter
@@ -249,7 +249,6 @@ async def oauth_callback(
 
         # schedule ATProto sync (via docket if enabled, else asyncio)
         await schedule_atproto_sync(session_id, did)
-        await schedule_follow_graph_warm(did)
 
         return RedirectResponse(
             url=f"{settings.frontend.url}/settings?exchange_token={exchange_token}&scope_upgraded=true",
@@ -276,7 +275,6 @@ async def oauth_callback(
 
         # schedule ATProto sync
         await schedule_atproto_sync(session_id, did)
-        await schedule_follow_graph_warm(did)
 
         return RedirectResponse(
             url=f"{settings.frontend.url}/portal?exchange_token={exchange_token}&account_added=true",
@@ -294,7 +292,6 @@ async def oauth_callback(
 
     # schedule ATProto sync (via docket if enabled, else asyncio)
     await schedule_atproto_sync(session_id, did)
-    await schedule_follow_graph_warm(did)
 
     # redirect to profile setup if needed, otherwise to portal
     redirect_path = "/portal" if has_profile else "/profile/setup"
