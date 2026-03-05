@@ -391,6 +391,9 @@
 								positionRestored = true;
 							}
 							isLoadingTrack = false;
+							// unlock play counting now that new audio is ready
+							// (prevents spurious fires from stale currentTime during transitions)
+							player.unlockPlayCount();
 						},
 						{ once: true }
 					);

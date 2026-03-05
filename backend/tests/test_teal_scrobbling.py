@@ -1,12 +1,16 @@
 """tests for teal.fm scrobbling integration."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from backend._internal.atproto.teal import (
     build_teal_play_record,
     build_teal_status_record,
 )
 from backend._internal.atproto.tid import datetime_to_tid
+from backend._internal.tasks.sync import schedule_teal_scrobble
 from backend.config import TealSettings, settings
 
 
@@ -174,3 +178,102 @@ class TestTealSettings:
         # alpha namespaces should NOT be in scope when overridden
         assert "fm.teal.alpha.feed.play" not in scope
         assert "fm.teal.alpha.actor.status" not in scope
+
+
+class TestScheduleTealScrobbleDedup:
+    """tests for redis-based deduplication in schedule_teal_scrobble."""
+
+    @pytest.fixture
+    def mock_docket(self) -> MagicMock:
+        """mock docket that tracks add() calls."""
+        mock = MagicMock()
+        mock.add.return_value = AsyncMock()
+        return mock
+
+    @pytest.fixture
+    def mock_redis(self) -> AsyncMock:
+        """mock redis client that simulates SET NX behavior."""
+        seen_keys: set[str] = set()
+
+        async def fake_set(
+            key: str, value: str, *, nx: bool = False, ex: int | None = None
+        ) -> bool | None:
+            if nx and key in seen_keys:
+                return False
+            seen_keys.add(key)
+            return True
+
+        redis = AsyncMock()
+        redis.set = AsyncMock(side_effect=fake_set)
+        return redis
+
+    async def test_duplicate_scrobble_only_schedules_once(
+        self, mock_docket: MagicMock, mock_redis: AsyncMock
+    ) -> None:
+        """calling schedule_teal_scrobble twice with same (session_id, track_id)
+        within the TTL window should only schedule one docket task."""
+        with (
+            patch(
+                "backend._internal.tasks.sync.get_docket",
+                return_value=mock_docket,
+            ),
+            patch(
+                "backend.utilities.redis.get_async_redis_client",
+                return_value=mock_redis,
+            ),
+        ):
+            # first call should schedule
+            await schedule_teal_scrobble(
+                session_id="test-session",
+                track_id=42,
+                track_title="Test Track",
+                artist_name="Test Artist",
+                duration=180,
+                album_name="Test Album",
+            )
+
+            # second call with same session+track should be deduped
+            await schedule_teal_scrobble(
+                session_id="test-session",
+                track_id=42,
+                track_title="Test Track",
+                artist_name="Test Artist",
+                duration=180,
+                album_name="Test Album",
+            )
+
+        assert mock_docket.add.call_count == 1
+
+    async def test_different_tracks_both_schedule(
+        self, mock_docket: MagicMock, mock_redis: AsyncMock
+    ) -> None:
+        """different track_ids should each get their own scrobble."""
+        with (
+            patch(
+                "backend._internal.tasks.sync.get_docket",
+                return_value=mock_docket,
+            ),
+            patch(
+                "backend.utilities.redis.get_async_redis_client",
+                return_value=mock_redis,
+            ),
+        ):
+            await schedule_teal_scrobble(
+                session_id="test-session",
+                track_id=1,
+                track_title="Track One",
+                artist_name="Artist",
+                duration=180,
+                album_name=None,
+            )
+
+            await schedule_teal_scrobble(
+                session_id="test-session",
+                track_id=2,
+                track_title="Track Two",
+                artist_name="Artist",
+                duration=200,
+                album_name=None,
+            )
+
+        assert mock_docket.add.call_count == 2

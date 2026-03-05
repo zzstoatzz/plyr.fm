@@ -20,6 +20,10 @@ class PlayerState {
 	// (reactive state updates are batched, so we need this to block rapid-fire calls)
 	private _playCountPending: number | null = null;
 
+	// lock play counting during track transitions to prevent spurious fires
+	// from stale currentTime/duration values before new audio loads
+	private _playCountLocked = false;
+
 	setRef(code: string | null, trackId: number | null = null) {
 		this.ref = code;
 		this._refTrackId = trackId;
@@ -45,6 +49,7 @@ class PlayerState {
 	}
 
 	incrementPlayCount() {
+		if (this._playCountLocked) return;
 		if (!this.currentTrack || this.playCountedForTrack === this.currentTrack.id || !this.duration) {
 			return;
 		}
@@ -79,6 +84,11 @@ class PlayerState {
 	resetPlayCount() {
 		this.playCountedForTrack = null;
 		this._playCountPending = null;
+		this._playCountLocked = true;
+	}
+
+	unlockPlayCount() {
+		this._playCountLocked = false;
 	}
 
 	reset() {
