@@ -535,9 +535,9 @@ async def test_get_album_respects_atproto_track_order(
     }
 
     with patch(
-        "backend._internal.atproto.records.get_record_public",
+        "backend.api.albums.get_record_public_resilient",
         new_callable=AsyncMock,
-        return_value=mock_record,
+        return_value=(mock_record, None),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"

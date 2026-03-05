@@ -442,9 +442,9 @@ async def test_sync_preserves_existing_album_track_order(
                 return_value=None,
             ),
             patch(
-                "backend._internal.atproto.sync.get_record_public",
+                "backend._internal.atproto.sync.get_record_public_resilient",
                 new_callable=AsyncMock,
-                return_value=mock_existing_record,
+                return_value=(mock_existing_record, None),
             ),
             patch(
                 "backend._internal.atproto.sync.upsert_album_list_record",
