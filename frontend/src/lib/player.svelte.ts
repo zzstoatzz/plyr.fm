@@ -22,7 +22,7 @@ class PlayerState {
 
 	// lock play counting during track transitions to prevent spurious fires
 	// from stale currentTime/duration values before new audio loads
-	private _playCountLocked = false;
+	private _playCountLocked = $state(false);
 
 	setRef(code: string | null, trackId: number | null = null) {
 		this.ref = code;
