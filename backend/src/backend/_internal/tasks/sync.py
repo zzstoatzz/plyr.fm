@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from backend._internal.background import get_docket
 from backend._internal.follow_graph import warm_follows_cache
+from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +107,17 @@ async def schedule_teal_scrobble(
     duration: int | None,
     album_name: str | None,
 ) -> None:
-    """schedule a teal scrobble via docket."""
+    """schedule a teal scrobble via docket.
+
+    uses redis SET NX with a 60s TTL to deduplicate concurrent requests
+    from multiple fly machines or rapid-fire frontend calls.
+    """
+    redis = get_async_redis_client()
+    dedup_key = f"teal-scrobble:{session_id}:{track_id}"
+    if not await redis.set(dedup_key, "1", nx=True, ex=60):
+        logfire.info("teal scrobble deduped", track_id=track_id)
+        return
+
     docket = get_docket()
     await docket.add(scrobble_to_teal)(
         session_id, track_id, track_title, artist_name, duration, album_name
