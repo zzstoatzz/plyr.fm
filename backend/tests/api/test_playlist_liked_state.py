@@ -163,9 +163,9 @@ async def test_playlist_returns_liked_state_for_authenticated_user(
 
     with (
         patch(
-            "backend._internal.atproto.records.get_record_public",
+            "backend.api.lists.get_record_public_resilient",
             new_callable=AsyncMock,
-            return_value=mock_record_data,
+            return_value=(mock_record_data, None),
         ),
         patch(
             "backend.api.lists.get_session",
@@ -225,9 +225,9 @@ async def test_playlist_returns_no_liked_state_for_unauthenticated_user(
 
     with (
         patch(
-            "backend._internal.atproto.records.get_record_public",
+            "backend.api.lists.get_record_public_resilient",
             new_callable=AsyncMock,
-            return_value=mock_record_data,
+            return_value=(mock_record_data, None),
         ),
         patch(
             "backend.api.lists.get_session",

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.profile import fetch_user_avatar
 from backend._internal.atproto.records.fm_plyr import (
-    get_record_public,
+    get_record_public_resilient,
     upsert_album_list_record,
     upsert_liked_list_record,
     upsert_profile_record,
@@ -30,7 +30,7 @@ async def _get_existing_track_order(
         return []
 
     try:
-        record_data = await get_record_public(
+        record_data, _ = await get_record_public_resilient(
             record_uri=album_atproto_uri,
             pds_url=artist_pds_url,
         )
