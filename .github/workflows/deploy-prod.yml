@@ -28,3 +28,11 @@ jobs:
           flyctl deploy --config backend/fly.toml --remote-only -a relay-api .
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PROD }}
+
+      - name: notify deploy failure
+        if: failure()
+        run: uvx --with atproto python scripts/notify_deploy_failure.py
+        env:
+          BSKY_NOTIFY_HANDLE: ${{ secrets.BSKY_NOTIFY_HANDLE }}
+          BSKY_NOTIFY_PASSWORD: ${{ secrets.BSKY_NOTIFY_PASSWORD }}
+          BSKY_NOTIFY_RECIPIENT: ${{ secrets.BSKY_NOTIFY_RECIPIENT }}
