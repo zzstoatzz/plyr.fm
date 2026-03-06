@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend._internal.atproto.records.fm_plyr.track import get_record_public
 from backend.config import settings
 from backend.models import Artist, Track, get_db
 from backend.models.album import Album
@@ -225,11 +226,6 @@ async def playlist_feed(
     # Instead, query tracks that reference this playlist's list URI.
     # Since playlists don't have a direct FK, we resolve via the ATProto list.
     # For now, we rely on the list endpoint's approach — fetch list items from PDS.
-
-    # simpler approach: playlists store track_count but tracks don't FK to playlists.
-    # the playlist detail endpoint resolves via ATProto list items.
-    # for RSS we'll do the same: get the list record, extract track URIs, hydrate.
-    from backend._internal.atproto.records.fm_plyr.track import get_record_public
 
     track_uris: list[str] = []
     try:
