@@ -9,12 +9,9 @@ Overview of security mechanisms in plyr.fm.
 We use **HttpOnly Cookies** for session management to prevent XSS attacks.
 See [Authentication](/authentication/) for details on the OAuth flow, token management, and environment architecture.
 
-For backend implementation details regarding ATProto identity resolution, see [ATProto identity](/backend/atproto-identity/).
-
 ## Rate Limiting
 
-We enforce application-side rate limits to prevent abuse.
-See [Rate Limiting](/rate-limiting/) for configuration and architecture details.
+We enforce application-side rate limits to prevent abuse. Limits are configured per-endpoint using `slowapi` with sensible defaults (e.g., 10 req/min for uploads, 30 req/min for API reads).
 
 ## HTTP Security Headers
 

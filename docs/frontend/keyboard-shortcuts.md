@@ -27,7 +27,7 @@ opens the unified search modal for searching tracks, artists, albums, and tags.
 - **enter** - select highlighted result
 - **esc** - close modal
 
-see [search](/frontend/search/) for full documentation.
+the search modal supports fuzzy matching across tracks, artists, albums, and tags.
 
 ---
 

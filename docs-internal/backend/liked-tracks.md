@@ -472,30 +472,6 @@ WHERE message LIKE '%failed to rollback%'
 ORDER BY start_timestamp DESC;
 ```
 
-## future enhancements
-
-### potential improvements
-
-1. **retry logic**
-   - automatic retries for transient failures
-   - exponential backoff
-   - circuit breaker pattern
-
-2. **background reconciliation**
-   - periodic job to check ATProto/database consistency
-   - automatically fix inconsistencies
-   - alert on persistent issues
-
-3. **like counts**
-   - denormalized like counts on Track model
-   - updated via database triggers
-   - enables sorting by popularity
-
-4. **like notifications**
-   - notify artists when their tracks are liked
-   - configurable via user preferences
-   - delivered via ATProto chat/DMs
-
 ## references
 
 - implementation: `src/backend/api/tracks.py:808-933`
