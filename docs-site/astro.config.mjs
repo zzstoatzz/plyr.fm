@@ -55,7 +55,7 @@ export default defineConfig({
           items: [{ slug: "legal/privacy" }, { slug: "legal/terms" }],
         },
       ],
-      customCss: [],
+      customCss: ["./src/styles/custom.css"],
     }),
   ],
   vite: {
