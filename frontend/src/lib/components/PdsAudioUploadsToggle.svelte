@@ -2,7 +2,7 @@
 	import { preferences } from '$lib/preferences.svelte';
 	import { toast } from '$lib/toast.svelte';
 
-	let enabled = $derived(preferences.uiSettings.pds_audio_uploads_enabled ?? false);
+	let enabled = $derived(preferences.uiSettings.pds_audio_uploads_enabled ?? true);
 
 	async function handleToggle(event: Event) {
 		const input = event.target as HTMLInputElement;
@@ -19,7 +19,7 @@
 <div class="setting-row">
 	<div class="setting-info">
 		<h3>store audio on your pds</h3>
-		<p>store uploaded audio on your pds (falls back to plyr.fm storage if too large)</p>
+		<p>new uploads are stored on your pds by default (falls back to plyr.fm storage if too large)</p>
 	</div>
 	<label class="toggle-switch">
 		<input type="checkbox" checked={enabled} onchange={handleToggle} />

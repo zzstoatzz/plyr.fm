@@ -310,12 +310,12 @@ async def _try_upload_to_pds(
 
 
 async def _should_upload_pds_blob(db: AsyncSession, user_did: str) -> bool:
-    """check if PDS audio uploads are enabled for the user."""
+    """check if PDS audio uploads are enabled for the user (default: on)."""
     result = await db.execute(
         select(UserPreferences.ui_settings).where(UserPreferences.did == user_did)
     )
     ui_settings = result.scalar_one_or_none() or {}
-    return bool(ui_settings.get(PDS_AUDIO_UPLOADS_SETTING_KEY))
+    return ui_settings.get(PDS_AUDIO_UPLOADS_SETTING_KEY, True) is not False
 
 
 async def _transcode_audio(
