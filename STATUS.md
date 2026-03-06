@@ -47,6 +47,21 @@ plyr.fm should become:
 
 ### March 2026
 
+#### public docs restructure (PRs #1035-1041, Mar 6)
+
+rewrote docs.plyr.fm from developer-only internal docs to an audience-first site serving four groups: listeners, artists, developers, and contributors.
+
+**what changed:**
+- moved all internal operational docs (auth, deployment, security, moderation, local dev setup) to `docs-internal/` — still available to active contributors, no longer public
+- created audience pages: `listeners.md`, `artists.md`, `developers.md` with content tailored to each group
+- rewrote `contributing.md` with fork workflow, prerequisite list, env var links, and a copy-pasteable prompt for coding assistants
+- landing page overhaul: audience card grid, live trending track embeds (fetched from `/tracks/top`), improved search with clickable results and thumbnails, animated hero waveform
+- created `skills/contribute/SKILL.md` ([agentskills.io](https://agentskills.io) spec) — action-oriented playbook for AI coding assistants contributing to the project
+- updated sidebar: listeners → artists → developers → lexicons → contributing → legal
+- linked docs.plyr.fm prominently from README.md
+
+**new components:** `TrendingTracks.astro` (lazy-loaded embed iframes), `HeroWaveform.astro` (animated SVG), updated `TrackSearch.astro` (clickable results with thumbnails)
+
 #### embed glow bar + share button (PRs #996-998, Mar 1)
 
 **glow bar**: 1px accent-colored bar (`#6a9fff`) on track and collection embeds that lights up on playback and dims on pause, matching the main Player's `::before` style. uses `color-mix()` for the box-shadow glow. works across all container query breakpoints.
@@ -227,6 +242,8 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
+public docs restructured at docs.plyr.fm — audience-first pages for listeners, artists, developers, and contributors. internal operational docs moved to `docs-internal/`. landing page with live trending embeds, search, and platform stats. contribute skill for AI coding assistants.
+
 jams shipped to all users — feature flag removed, output device mode (single-speaker) working. image performance: 96x96 WebP thumbnails for all artwork with storage protocol abstraction and backfill script. PDS audio uploads graduated to GA. homepage performance improved with Redis-cached follow graph and parallelized network artists fetch. ATProto scope parsing replaced with spec-compliant SDK implementation.
 
 ### known issues
@@ -350,58 +367,15 @@ uv run scripts/delete_track.py --url https://plyr.fm/track/34
 
 ## for new contributors
 
-### getting started
-1. clone: `gh repo clone zzstoatzz/plyr.fm`
-2. install dependencies: `uv sync && cd frontend && bun install`
-3. run backend: `uv run uvicorn backend.main:app --reload`
-4. run frontend: `cd frontend && bun run dev`
-5. visit http://localhost:5173
-
-### development workflow
-1. create issue on github
-2. create PR from feature branch
-3. ensure pre-commit hooks pass
-4. merge to main → deploys to staging
-5. create github release → deploys to production
-
-### key principles
-- type hints everywhere
-- lowercase aesthetic
-- ATProto first
-- async everywhere (no blocking I/O)
-- mobile matters
-- cost conscious
-
-### project structure
-```
-plyr.fm/
-├── backend/              # FastAPI app & Python tooling
-│   ├── src/backend/      # application code
-│   ├── tests/            # pytest suite
-│   └── alembic/          # database migrations
-├── frontend/             # SvelteKit app
-│   ├── src/lib/          # components & state
-│   └── src/routes/       # pages
-├── services/
-│   ├── transcoder/       # Rust audio transcoding (Fly.io)
-│   ├── moderation/       # Rust content moderation (Fly.io)
-│   └── clap/             # ML embeddings (Python, Modal)
-├── infrastructure/
-│   └── redis/            # self-hosted Redis (Fly.io)
-├── docs/                 # documentation
-└── justfile              # task runner
-```
+see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instructions, or install the [contribute skill](skills/contribute/SKILL.md) for AI coding assistants.
 
 ## documentation
 
-- [docs/README.md](docs/README.md) - documentation index
-- [runbooks](docs/runbooks/) - production incident procedures
-- [background tasks](docs/backend/background-tasks.md) - docket task system
-- [logfire querying](docs/tools/logfire.md) - observability queries
-- [moderation & labeler](docs/moderation/atproto-labeler.md) - copyright, sensitive content
-- [lexicons overview](docs/lexicons/overview.md) - ATProto record schemas
+- **public docs**: [docs.plyr.fm](https://docs.plyr.fm) — for listeners, artists, developers, and contributors
+- **internal docs**: [docs-internal/](docs-internal/) — deployment, auth internals, runbooks, moderation
+- **lexicons**: [docs.plyr.fm/lexicons/overview](https://docs.plyr.fm/lexicons/overview/) — ATProto record schemas
 
 ---
 
-this is a living document. last updated 2026-03-01 (embed glow bar + share button, embed layout fixes).
+this is a living document. last updated 2026-03-06 (public docs restructure).
 
