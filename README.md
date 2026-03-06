@@ -154,11 +154,11 @@ live dashboard: https://plyr.fm/costs
 
 ## links
 
+- **docs**: https://docs.plyr.fm
 - **production**: https://plyr.fm
 - **staging**: https://stg.plyr.fm
 - **API docs**: https://api.plyr.fm/docs
 - **python SDK / MCP server**: [plyrfm](https://github.com/zzstoatzz/plyr-python-client) ([PyPI](https://pypi.org/project/plyrfm/))
-- **documentation**: [docs/README.md](docs/README.md)
 - **status**: [STATUS.md](STATUS.md)
 
 ### mirrors
