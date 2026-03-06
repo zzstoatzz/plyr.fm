@@ -9,5 +9,5 @@ limiter = Limiter(
     key_func=get_remote_address,
     enabled=settings.rate_limit.enabled,
     default_limits=[settings.rate_limit.default_limit],
-    storage_uri="memory://",
+    storage_uri=settings.docket.url or "memory://",
 )
