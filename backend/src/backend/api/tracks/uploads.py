@@ -59,6 +59,7 @@ from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.rate_limit import limiter
 from backend.utilities.tags import add_tags_to_track, parse_tags_json
 
+from .listing import invalidate_tracks_discovery_cache
 from .router import router
 from .services import get_or_create_album
 
@@ -816,6 +817,9 @@ async def _process_upload_background(ctx: UploadContext) -> None:
 
             # phase 7: post-upload tasks (tags, notifications, background jobs)
             await _schedule_post_upload(ctx, sr, track)
+
+            # invalidate anonymous discovery feed cache
+            await invalidate_tracks_discovery_cache()
 
             await job_service.update_progress(
                 ctx.upload_id,

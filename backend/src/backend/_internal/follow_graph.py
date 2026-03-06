@@ -1,11 +1,13 @@
-"""bluesky follow graph with Redis read-through caching."""
+"""bluesky follow graph with Redis read-through caching and stale-while-revalidate."""
 
 import json
 import logging
+import time
 from dataclasses import asdict, dataclass
 
 import httpx
 import logfire
+from redis.exceptions import RedisError
 
 from backend._internal.atproto.profile import BSKY_API_BASE, normalize_avatar_url
 from backend.utilities.redis import get_async_redis_client
@@ -13,7 +15,10 @@ from backend.utilities.redis import get_async_redis_client
 logger = logging.getLogger(__name__)
 
 FOLLOWS_CACHE_PREFIX = "plyr:follows:"
-FOLLOWS_CACHE_TTL_SECONDS = 600  # 10 minutes
+FOLLOWS_TIMESTAMP_PREFIX = "plyr:follows:ts:"
+FOLLOWS_REVALIDATING_PREFIX = "plyr:follows:revalidating:"
+FOLLOWS_CACHE_TTL_SECONDS = 3600  # 60 minutes
+FOLLOWS_STALE_AFTER_SECONDS = 480  # 8 minutes
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,43 +32,74 @@ class FollowInfo:
 async def get_follows(did: str) -> dict[str, FollowInfo]:
     """get all DIDs a user follows on bluesky, with Redis read-through cache.
 
-    checks Redis first, falls back to live Bluesky API on miss,
-    then writes back to cache. fails silently on Redis errors.
+    uses stale-while-revalidate: returns cached data immediately even if stale,
+    and schedules a background re-warm when data is older than FOLLOWS_STALE_AFTER_SECONDS.
+    on cache miss, fetches live from Bluesky and writes back. fails silently on Redis errors.
     """
     cache_key = f"{FOLLOWS_CACHE_PREFIX}{did}"
+    ts_key = f"{FOLLOWS_TIMESTAMP_PREFIX}{did}"
 
     # try cache
     try:
         redis = get_async_redis_client()
         if cached := await redis.get(cache_key):
-            return _deserialize_follows(cached)
-    except Exception:
+            follows = _deserialize_follows(cached)
+
+            # check staleness — schedule background re-warm if stale
+            try:
+                ts_raw = await redis.get(ts_key)
+                if ts_raw and time.time() - float(ts_raw) > FOLLOWS_STALE_AFTER_SECONDS:
+                    await _maybe_schedule_revalidation(did)
+            except (RuntimeError, RedisError):
+                logger.debug("redis staleness check failed for follows %s", did)
+
+            return follows
+    except (RuntimeError, RedisError):
         logger.debug("redis cache read failed for follows %s", did)
 
     # cache miss — fetch live
     follows = await _fetch_follows_from_bsky(did)
 
-    # write back
+    # write back with timestamp
     try:
         redis = get_async_redis_client()
         await redis.set(
             cache_key, _serialize_follows(follows), ex=FOLLOWS_CACHE_TTL_SECONDS
         )
-    except Exception:
+        await redis.set(ts_key, str(time.time()), ex=FOLLOWS_CACHE_TTL_SECONDS)
+    except (RuntimeError, RedisError):
         logger.debug("redis cache write failed for follows %s", did)
 
     return follows
+
+
+async def _maybe_schedule_revalidation(did: str) -> None:
+    """schedule a background re-warm if no revalidation is already in progress.
+
+    uses SET NX on a revalidating key to dedup concurrent requests.
+    """
+    revalidating_key = f"{FOLLOWS_REVALIDATING_PREFIX}{did}"
+    try:
+        redis = get_async_redis_client()
+        if await redis.set(revalidating_key, "1", nx=True, ex=60):
+            from backend._internal.tasks import schedule_follow_graph_warm
+
+            await schedule_follow_graph_warm(did)
+    except (RuntimeError, RedisError):
+        logger.debug("failed to schedule revalidation for follows %s", did)
 
 
 async def warm_follows_cache(did: str) -> None:
     """always fetch from bluesky and write to Redis. called from background task."""
     follows = await _fetch_follows_from_bsky(did)
     cache_key = f"{FOLLOWS_CACHE_PREFIX}{did}"
+    ts_key = f"{FOLLOWS_TIMESTAMP_PREFIX}{did}"
     try:
         redis = get_async_redis_client()
         await redis.set(
             cache_key, _serialize_follows(follows), ex=FOLLOWS_CACHE_TTL_SECONDS
         )
+        await redis.set(ts_key, str(time.time()), ex=FOLLOWS_CACHE_TTL_SECONDS)
         logfire.info("warmed follows cache", did=did, count=len(follows))
     except Exception:
         logger.debug("redis cache write failed warming follows for %s", did)

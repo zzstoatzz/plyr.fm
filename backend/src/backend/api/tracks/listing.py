@@ -1,6 +1,7 @@
 """Read-only track listing endpoints."""
 
 import asyncio
+import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, cast
 
@@ -8,6 +9,7 @@ import logfire
 from botocore.exceptions import ClientError
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
+from redis.exceptions import RedisError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -34,9 +36,23 @@ from backend.utilities.aggregations import (
     get_top_tracks_with_counts,
     get_track_tags,
 )
+from backend.utilities.redis import get_async_redis_client
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
 
+from .constants import DISCOVERY_CACHE_KEY, DISCOVERY_CACHE_TTL_SECONDS
 from .router import router
+
+logger = logging.getLogger(__name__)
+
+
+async def invalidate_tracks_discovery_cache() -> None:
+    """delete the anonymous discovery feed cache key."""
+    try:
+        redis = get_async_redis_client()
+        await redis.delete(DISCOVERY_CACHE_KEY)
+    except (RuntimeError, RedisError):
+        logger.debug("failed to invalidate discovery cache")
+
 
 if TYPE_CHECKING:
     from backend.storage.r2 import R2Storage
@@ -80,6 +96,16 @@ async def list_tracks(
             Pass this to get the next page of results.
         limit: Maximum number of tracks to return (default from settings, max 100).
     """
+    # anonymous first-page discovery feed — serve from cache if available
+    is_cacheable = session is None and artist_did is None and cursor is None
+    if is_cacheable:
+        try:
+            redis = get_async_redis_client()
+            if cached := await redis.get(DISCOVERY_CACHE_KEY):
+                return TracksListResponse.model_validate_json(cached)
+        except (RuntimeError, RedisError):
+            logger.debug("discovery cache read failed")
+
     # use settings default if not provided, clamp to reasonable bounds
     if limit is None:
         limit = settings.app.default_page_size
@@ -280,11 +306,25 @@ async def list_tracks(
         ]
     )
 
-    return TracksListResponse(
+    response = TracksListResponse(
         tracks=list(track_responses),
         next_cursor=next_cursor,
         has_more=has_more,
     )
+
+    # write back to cache for anonymous first-page requests
+    if is_cacheable:
+        try:
+            redis = get_async_redis_client()
+            await redis.set(
+                DISCOVERY_CACHE_KEY,
+                response.model_dump_json(),
+                ex=DISCOVERY_CACHE_TTL_SECONDS,
+            )
+        except (RuntimeError, RedisError):
+            logger.debug("discovery cache write failed")
+
+    return response
 
 
 @router.get("/top")
