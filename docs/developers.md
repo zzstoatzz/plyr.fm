@@ -70,3 +70,7 @@ generate tokens at [plyr.fm/portal](https://plyr.fm/portal). tokens are scoped t
 ## ATProto lexicons
 
 all plyr.fm data uses custom ATProto lexicons under the `fm.plyr` namespace. see the [lexicons overview](/lexicons/overview/) for schemas and record types.
+
+## contributing
+
+plyr.fm is open source. see the [contributing guide](/contributing/) to get involved.

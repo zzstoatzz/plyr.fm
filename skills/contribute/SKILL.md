@@ -6,95 +6,47 @@ metadata:
   repo: https://github.com/zzstoatzz/plyr.fm
 ---
 
-# contributing to plyr.fm
+# how to contribute to plyr.fm
 
-## orientation
+## step 1: orient yourself
 
-1. read `CLAUDE.md` at the repo root — it has project structure, stack details, and rules
-2. read `STATUS.md` for active tasks and known issues
-3. check [open issues](https://github.com/zzstoatzz/plyr.fm/issues) for things to work on
+read these files in the repo — they have everything you need:
 
-## stack
+- `CLAUDE.md` — project rules, stack, structure, conventions
+- `STATUS.md` — active tasks and known issues
+- `backend/.env.example` — all environment variables with comments
+- `docs-internal/local-development/setup.md` — full local dev walkthrough
 
-- **backend**: FastAPI, SQLAlchemy, Neon Postgres, Cloudflare R2 — in `backend/`
-- **frontend**: SvelteKit (Svelte 5 Runes), Bun — in `frontend/`
-- **task runner**: `just` (justfiles at root, `backend/`, `frontend/`, etc.)
-- **python**: always use `uv`, never `pip`
-- **services**: Redis (via `just dev-services`), transcoder (Rust), moderation (Rust)
+check [open issues](https://github.com/zzstoatzz/plyr.fm/issues) for things to work on.
 
-## making changes
-
-1. fork `zzstoatzz/plyr.fm` on GitHub
-2. branch from `main`
-3. make your changes
-4. run linting before committing:
-   - `just backend lint` — python type checking + ruff
-   - `just frontend check` — svelte type check
-5. add regression tests for bug fixes (`just backend test` runs them)
-6. open a PR from your fork — describe what changed and why
-
-## key rules
-
-- type hints required everywhere (Python and TypeScript)
-- async everywhere — never block the event loop (`anyio`/`aiofiles`)
-- lowercase aesthetic in naming, docs, commits
-- imports at the top of files — only defer to break circular deps
-- never hardcode ATProto NSIDs — they're environment-aware via settings
-- session IDs in HttpOnly cookies — never use localStorage for auth
-
-## running locally
+## step 2: fork and set up
 
 ```bash
+gh repo fork zzstoatzz/plyr.fm --clone
+cd plyr.fm
 uv sync && cd frontend && bun install && cd ..
 cp backend/.env.example backend/.env
-# edit backend/.env — needs DATABASE_URL at minimum
-
-just dev-services    # redis
-just backend run     # port 8001
-just frontend run    # port 5173
+# edit backend/.env — DATABASE_URL is required, see the file for details
 ```
 
-see `backend/.env.example` for all env vars. see `docs-internal/local-development/setup.md` for detailed walkthrough.
+if you need to run the full stack locally, read `docs-internal/local-development/setup.md`. for frontend-only changes you may not need the backend running at all.
 
-## environment variables
+## step 3: make your change
 
-the backend requires a `.env` file. key vars:
+- branch from `main`
+- for bug fixes, add a regression test
+- run `just --list` to see available commands (linting, tests, etc.)
 
-- `DATABASE_URL` — postgres connection (Neon dev instance or local)
-- `ATPROTO_CLIENT_ID`, `ATPROTO_CLIENT_SECRET`, `ATPROTO_REDIRECT_URI` — OAuth config
-- `STORAGE_BACKEND` — "filesystem" for local dev (no R2 needed)
-- `DOCKET_URL` — redis URL for background tasks (optional, falls back to asyncio)
+## step 4: validate
 
-## useful commands
-
-```
-just backend run          # start backend (hot reload)
-just frontend run         # start frontend (hot reload)
-just dev-services         # start redis
-just backend test         # run tests (isolated postgres + redis via docker)
-just backend lint         # type check + ruff
-just frontend check       # svelte type check
-just backend migrate-up   # apply migrations
-just backend migrate "msg" # create migration
+```bash
+just backend lint       # python: type check + ruff
+just frontend check     # svelte: type check
+just backend test       # runs tests with isolated docker postgres + redis
 ```
 
-## project structure
+## step 5: open a PR
 
-```
-backend/src/backend/
-├── api/          # public endpoints
-├── _internal/    # auth, PDS, uploads
-├── models/       # SQLAlchemy schemas
-├── storage/      # R2 and filesystem
-└── utilities/    # config, helpers
+open a PR from your fork to `zzstoatzz/plyr.fm:main`. describe what changed and why.
 
-frontend/src/
-├── routes/       # pages (+page.svelte, +page.server.ts)
-└── lib/          # components & state (.svelte.ts)
-```
-
-## further reading
-
-- `docs-internal/` — detailed architecture, deployment, testing docs
-- `docs/lexicons/overview.md` — ATProto record schemas
-- `backend/.env.example` — all configuration options
+PRs are the only way changes land — the main branch is protected.
