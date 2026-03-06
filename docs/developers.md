@@ -29,26 +29,39 @@ from plyrfm import PlyrClient
 
 client = PlyrClient()
 
-# search tracks
-results = client.search("ambient electronic", type="tracks")
-for track in results:
-    print(f"{track.title} by {track.artist_display_name}")
+# list tracks
+for track in client.list_tracks(limit=5):
+    print(f"{track.id}: {track.title} by {track.artist}")
 
 # get a specific track
-track = client.get_track("abc123")
+track = client.get_track(42)
 ```
 
-the SDK handles pagination, rate limiting, and auth. see [pypi.org/project/plyrfm](https://pypi.org/project/plyrfm/) for full docs.
+authenticated operations (upload, download, manage your tracks) require a token:
+
+```python
+client = PlyrClient(token="your_token")
+my_tracks = client.my_tracks()
+client.upload("song.mp3", "My Song")
+```
+
+see the [plyr-python-client repo](https://github.com/zzstoatzz/plyr-python-client) for full docs.
 
 ## MCP server
 
-plyr.fm has a hosted MCP server for AI assistants:
+the `plyrfm-mcp` package provides an MCP server for AI assistants:
 
-```
-https://plyrfm.fastmcp.app/mcp
+```bash
+uv add plyrfm-mcp
 ```
 
-add it to your MCP client config to let LLMs search and play tracks, manage playlists, and interact with the platform.
+add to Claude Code:
+
+```bash
+claude mcp add plyr-fm -- uvx plyrfm-mcp
+```
+
+tools include `search`, `list_tracks`, `top_tracks`, `tracks_by_tag`, and more. see the [repo](https://github.com/zzstoatzz/plyr-python-client) for setup options.
 
 ## developer tokens
 

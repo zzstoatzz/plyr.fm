@@ -22,7 +22,7 @@ plyr.fm uses the `fm.plyr` namespace for all custom record types. this is enviro
 | staging     | `fm.plyr.stg` |
 | development | `fm.plyr.dev` |
 
-**important**: we never use Bluesky's `app.bsky.*` lexicons. even for concepts like "likes" that Bluesky has, we define our own (`fm.plyr.like`) to maintain namespace isolation and avoid coupling to another app's schema evolution.
+plyr.fm defines its own lexicons for music-specific concepts (tracks, likes, comments, playlists) rather than reusing `app.bsky.*` equivalents — this keeps the schema independent and music-focused. we also write to `fm.teal.*` collections for [teal.fm](https://teal.fm) scrobble integration. at login, plyr.fm requests OAuth scopes for each collection it needs to write to (see [permission sets](#permission-sets) below).
 
 ## current lexicons
 
@@ -127,20 +127,6 @@ ATProto records in user PDSes are the source of truth, but querying across PDSes
 
 the sync pattern: when a user logs in, we fetch their records from their PDS and update our local index. background jobs keep indexes fresh.
 
-## future: codegen from lexicon JSON
-
-currently, our Python models are hand-written to match the lexicon JSON definitions. this is error-prone.
-
-issue [#494](https://github.com/zzstoatzz/plyr.fm/issues/494) tracks building a portable lexicon-to-Pydantic codegen tool. the goal is to generate models directly from the JSON definitions in `/lexicons/`, ensuring the code always matches the schema.
-
-a Rust-based SDK for this purpose is in development. once complete, the workflow will be:
-
-1. edit lexicon JSON definitions
-2. run codegen to regenerate Python models
-3. use generated models in application code
-
-this removes the manual sync burden and enables type-safe ATProto record handling.
-
 ## permission sets
 
 permission sets bundle OAuth permissions under human-readable titles. instead of users seeing "fm.plyr.track, fm.plyr.like, ..." they see "plyr.fm Music Library".
@@ -157,14 +143,19 @@ set `ATPROTO_USE_PERMISSION_SETS=true` to use `include:fm.plyr.authFullApp` inst
 
 permission sets are resolved by PDS servers at authorization time — the `include:` token is expanded into granular `repo:` scopes and never appears in the granted token. the authority namespace (e.g. `fm.plyr`) must match the requesting app's domain.
 
-## adding new lexicons
+## login scopes
 
-when adding a new record type:
+when you sign in to plyr.fm, the app requests OAuth scopes for the collections it needs to write to:
 
-1. create the JSON definition in `/lexicons/`
-2. add the collection to `AtprotoSettings` in `backend/src/backend/config.py`
-3. add the OAuth scope in the auth flow
-4. create database migration for local indexing
-5. implement API endpoints and sync logic
+| scope | purpose |
+|-------|---------|
+| `repo:fm.plyr.feed.track` | create, update, delete tracks |
+| `repo:fm.plyr.feed.like` | like and unlike tracks |
+| `repo:fm.plyr.feed.comment` | timed comments |
+| `repo:fm.plyr.graph.list` | playlists, albums, liked lists |
+| `repo:fm.plyr.actor.profile` | artist profile |
+| `repo:fm.teal.alpha.feed.play` | scrobbles to [teal.fm](https://teal.fm) |
+| `repo:fm.teal.alpha.actor.status` | now-playing status |
+| `blob:*/*` | upload audio and images |
 
-see existing lexicons as templates. keep records minimal - ATProto schemas can only add optional fields after publication, never remove or change required fields.
+scopes are requested at authorization time so your PDS knows exactly what plyr.fm is allowed to do.
