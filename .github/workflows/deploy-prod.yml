@@ -29,6 +29,10 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PROD }}
 
+      - name: install uv
+        if: failure()
+        uses: astral-sh/setup-uv@v7
+
       - name: notify deploy failure
         if: failure()
         run: uvx --with atproto python scripts/notify_deploy_failure.py
