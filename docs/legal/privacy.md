@@ -1,5 +1,6 @@
 ---
 title: "privacy policy"
+description: "how plyr.fm handles your data"
 ---
 
 > **note:** the source of truth is `frontend/src/routes/privacy/+page.svelte`. this markdown is a plain-text mirror for reference.

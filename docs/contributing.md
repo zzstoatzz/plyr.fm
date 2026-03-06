@@ -1,5 +1,6 @@
 ---
 title: "contributing"
+description: "contribute to plyr.fm development"
 ---
 
 plyr.fm is open source. development happens on [GitHub](https://github.com/zzstoatzz/plyr.fm) (mirrored to [tangled.org](https://tangled.org/zzstoatzz.io/plyr.fm)). contributions welcome — fork the repo and open a PR.
