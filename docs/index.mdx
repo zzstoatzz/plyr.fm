@@ -64,22 +64,28 @@ import HeroWaveform from '../../components/HeroWaveform.astro';
 <div class="landing-section">
   <h2>your music, your data</h2>
   <p style="color: var(--sl-color-gray-2); font-size: 0.9rem; margin-bottom: 1rem;">
-    every track on plyr.fm is an ATProto record in the artist's personal data repo. here's what one looks like:
+    every track on plyr.fm is an ATProto record in the artist's personal data repo — including <a href="https://plyr.fm/plyr.fm" style="color: var(--sl-color-accent);">plyr.fm's own dev podcasts</a>. here's the latest one:
   </p>
   <div class="record-example">
 
 ```json
 {
   "$type": "fm.plyr.track",
-  "title": "late night drive",
-  "createdAt": "2026-02-14T03:22:00.000Z",
-  "audio": {
+  "album": "2026",
+  "title": "plyr.fm update - February 27, 2026",
+  "artist": "plyr.fm",
+  "audioUrl": "https://pub-d4ed8a1e39d44dac85263d86ad5676fd.r2.dev/audio/ada9cadc63efd822.wav",
+  "duration": 265,
+  "fileType": "wav",
+  "audioBlob": {
     "$type": "blob",
-    "ref": { "$link": "bafkrei..." },
-    "mimeType": "audio/mpeg",
-    "size": 8420196
+    "ref": {
+      "$link": "bafkreifnvhfnyy7p3ara2gdyv6krztsd26luv2mi45j7hw3sreq7xjpd24"
+    },
+    "mimeType": "audio/vnd.wave",
+    "size": 12760890
   },
-  "tags": ["electronic", "ambient"]
+  "createdAt": "2026-02-27T16:08:13.146107Z"
 }
 ```
 
