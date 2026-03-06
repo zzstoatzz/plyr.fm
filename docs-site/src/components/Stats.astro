@@ -1,0 +1,67 @@
+---
+// live platform stats fetched client-side from the public /stats endpoint
+---
+
+<div class="stats-section" id="stats-section">
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="stat-value" id="stat-tracks">&mdash;</span>
+      <span class="stat-label">tracks</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="stat-artists">&mdash;</span>
+      <span class="stat-label">artists</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="stat-plays">&mdash;</span>
+      <span class="stat-label">plays</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="stat-hours">&mdash;</span>
+      <span class="stat-label">hours of audio</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = "https://relay-api.fly.dev";
+
+  async function loadStats() {
+    try {
+      const res = await fetch(`${API}/stats`);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const fmt = (n: number) =>
+        n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+
+      document.getElementById("stat-tracks")!.textContent = fmt(
+        data.total_tracks,
+      );
+      document.getElementById("stat-artists")!.textContent = fmt(
+        data.total_artists,
+      );
+      document.getElementById("stat-plays")!.textContent = fmt(
+        data.total_plays,
+      );
+      document.getElementById("stat-hours")!.textContent = fmt(
+        Math.round(data.total_duration_seconds / 3600),
+      );
+    } catch {
+      // stats are non-critical — leave dashes
+    }
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting) {
+        loadStats();
+        observer.disconnect();
+      }
+    },
+    { threshold: 0.1 },
+  );
+
+  const el = document.getElementById("stats-section");
+  if (el) observer.observe(el);
+</script>

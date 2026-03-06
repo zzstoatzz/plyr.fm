@@ -1,0 +1,56 @@
+---
+title: plyr.fm docs
+description: documentation for plyr.fm — audio streaming on ATProto
+template: splash
+hero:
+  title: plyr.fm docs
+  tagline: audio streaming on ATProto
+  actions:
+    - text: get started
+      link: /local-development/setup/
+      icon: right-arrow
+    - text: contributing
+      link: /contributing/
+      variant: minimal
+---
+
+import Stats from '../../components/Stats.astro';
+import TrackSearch from '../../components/TrackSearch.astro';
+
+<div class="landing-section">
+  <h2>platform stats</h2>
+  <Stats />
+</div>
+
+<div class="landing-section">
+  <h2>try it — search tracks</h2>
+  <TrackSearch />
+</div>
+
+<div class="landing-section">
+  <h2>your music, your data</h2>
+  <p style="color: var(--sl-color-gray-2); font-size: 0.9rem; margin-bottom: 1rem;">
+    every track on plyr.fm is an ATProto record in the artist's personal data repo. here's what one looks like:
+  </p>
+  <div class="record-example">
+
+```json
+{
+  "$type": "fm.plyr.track",
+  "title": "late night drive",
+  "createdAt": "2026-02-14T03:22:00.000Z",
+  "audio": {
+    "$type": "blob",
+    "ref": { "$link": "bafkrei..." },
+    "mimeType": "audio/mpeg",
+    "size": 8420196
+  },
+  "tags": ["electronic", "ambient"]
+}
+```
+
+  </div>
+  <p style="color: var(--sl-color-gray-3); font-size: 0.8rem; margin-top: 0.75rem;">
+    the API is public. build your own player, analytics, or recommendation engine — the data is open.
+  </p>
+</div>
