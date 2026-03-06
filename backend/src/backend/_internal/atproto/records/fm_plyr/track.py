@@ -24,6 +24,7 @@ def build_track_record(
     image_url: str | None = None,
     support_gate: dict[str, Any] | None = None,
     audio_blob: BlobRef | None = None,
+    description: str | None = None,
 ) -> dict[str, Any]:
     """Build a track record dict for ATProto.
 
@@ -38,6 +39,7 @@ def build_track_record(
         image_url: optional cover art image URL
         support_gate: optional gating config (e.g., {"type": "any"})
         audio_blob: optional blob reference from PDS upload (canonical source when present)
+        description: optional track description (liner notes, show notes)
 
     returns:
         record dict ready for ATProto
@@ -72,6 +74,8 @@ def build_track_record(
         record["imageUrl"] = image_url
     if support_gate:
         record["supportGate"] = support_gate
+    if description:
+        record["description"] = description
     if audio_blob:
         record["audioBlob"] = audio_blob
 
@@ -90,6 +94,7 @@ async def create_track_record(
     image_url: str | None = None,
     support_gate: dict[str, Any] | None = None,
     audio_blob: BlobRef | None = None,
+    description: str | None = None,
 ) -> tuple[str, str]:
     """Create a track record on the user's PDS using the configured collection.
 
@@ -105,6 +110,7 @@ async def create_track_record(
         image_url: optional cover art image URL
         support_gate: optional gating config (e.g., {"type": "any"})
         audio_blob: optional blob reference from PDS upload (canonical source when present)
+        description: optional track description (liner notes, show notes)
 
     returns:
         tuple of (record_uri, record_cid)
@@ -124,6 +130,7 @@ async def create_track_record(
         image_url=image_url,
         support_gate=support_gate,
         audio_blob=audio_blob,
+        description=description,
     )
 
     payload = {

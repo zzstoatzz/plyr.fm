@@ -118,6 +118,7 @@ class TrackResponse(BaseModel):
     original_file_type: str | None = (
         None  # original format if transcoded (e.g., aiff, flac)
     )
+    description: str | None = None  # track description (liner notes, show notes)
     audio_storage: str = "r2"  # "r2" | "pds" | "both"
     pds_blob_cid: str | None = None  # CID if stored on user's PDS
 
@@ -226,6 +227,7 @@ class TrackResponse(BaseModel):
             copyright_match=copyright_match,
             support_gate=track.support_gate,
             gated=gated,
+            description=track.description,
             original_file_id=track.original_file_id,
             original_file_type=track.original_file_type,
             audio_storage=track.audio_storage,

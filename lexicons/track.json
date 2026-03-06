@@ -67,6 +67,11 @@
             "ref": "#supportGate",
             "description": "If set, this track requires viewer to be a supporter of the artist via atprotofans."
           },
+          "description": {
+            "type": "string",
+            "description": "Track description (liner notes, show notes, etc.).",
+            "maxLength": 5000
+          },
           "audioBlob": {
             "type": "blob",
             "description": "Audio file stored on the user's PDS. When present, this is the canonical source; audioUrl is the CDN fallback.",

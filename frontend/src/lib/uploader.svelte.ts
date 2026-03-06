@@ -71,6 +71,7 @@ class UploaderState {
 		tags: string[],
 		supportGated: boolean,
 		autoTag: boolean,
+		description: string,
 		onSuccess?: () => void,
 		callbacks?: UploadProgressCallback
 	): void {
@@ -112,6 +113,9 @@ class UploaderState {
 		}
 		if (autoTag) {
 			formData.append('auto_tag', 'true');
+		}
+		if (description) {
+			formData.append('description', description);
 		}
 
 		const xhr = new XMLHttpRequest();

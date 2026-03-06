@@ -84,6 +84,9 @@ class Track(Base):
     pds_blob_cid: Mapped[str | None] = mapped_column(String, nullable=True)
     pds_blob_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # track description (liner notes, show notes, etc.)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # engagement metrics
     play_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"

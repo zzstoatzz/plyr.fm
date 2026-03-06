@@ -422,6 +422,12 @@
 		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/u/${albumMetadata.artist_handle}/album/${albumMetadata.slug}`)}"
 		title="{albumMetadata.title} by {albumMetadata.artist}"
 	/>
+	<link
+		rel="alternate"
+		type="application/rss+xml"
+		title="{albumMetadata.title} RSS feed"
+		href="{API_URL}/feeds/album/{albumMetadata.artist_handle}/{albumMetadata.slug}"
+	/>
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={() => goto('/login')} />
