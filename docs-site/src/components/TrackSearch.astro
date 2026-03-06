@@ -1,0 +1,75 @@
+---
+// interactive track search — debounced client-side fetch from /search/
+---
+
+<div class="search-section" id="search-section">
+  <input
+    type="text"
+    id="track-search-input"
+    placeholder="search tracks..."
+    autocomplete="off"
+  />
+  <div id="search-results" class="search-results"></div>
+</div>
+
+<script>
+  const API = "https://api.plyr.fm";
+  const input = document.getElementById(
+    "track-search-input",
+  ) as HTMLInputElement;
+  const resultsEl = document.getElementById("search-results")!;
+  let timeout: ReturnType<typeof setTimeout>;
+
+  function escapeHtml(s: string) {
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  async function search(q: string) {
+    if (q.length < 2) {
+      resultsEl.innerHTML = "";
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `${API}/search/?q=${encodeURIComponent(q)}&type=tracks&limit=5`,
+      );
+      if (!res.ok) {
+        resultsEl.innerHTML = "";
+        return;
+      }
+      const data = await res.json();
+      const tracks = data.results.filter(
+        (r: { type: string }) => r.type === "track",
+      );
+
+      if (tracks.length === 0) {
+        resultsEl.innerHTML = '<div class="search-empty">no results</div>';
+        return;
+      }
+
+      resultsEl.innerHTML = tracks
+        .map(
+          (t: {
+            title: string;
+            artist_display_name: string;
+            artist_handle: string;
+          }) =>
+            `<div class="search-result">
+              <span class="search-title">${escapeHtml(t.title)}</span>
+              <span class="search-artist">${escapeHtml(t.artist_display_name || t.artist_handle)}</span>
+            </div>`,
+        )
+        .join("");
+    } catch {
+      resultsEl.innerHTML = "";
+    }
+  }
+
+  input.addEventListener("input", () => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => search(input.value.trim()), 300);
+  });
+</script>

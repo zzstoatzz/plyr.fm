@@ -7,14 +7,10 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "plyr.fm docs",
-      favicon: "/favicon.svg",
-      social: [
-        {
-          icon: "github",
-          label: "GitHub",
-          href: "https://github.com/zzstoatzz/plyr.fm",
-        },
-      ],
+      favicon: "/favicon.png",
+      components: {
+        SocialIcons: "./src/components/SocialIcons.astro",
+      },
       plugins: [starlightClientMermaid()],
       sidebar: [
         {

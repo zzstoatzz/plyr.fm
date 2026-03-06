@@ -1,0 +1,48 @@
+---
+// replaces Starlight's default SocialIcons with a single link to the tangled repo
+---
+
+<div class="social-icons">
+  <a
+    href="https://tangled.org/zzstoatzz.io/plyr.fm"
+    aria-label="tangled.org"
+    target="_blank"
+    rel="noopener"
+    class="tangled-link"
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  </a>
+</div>
+
+<style>
+  .social-icons {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tangled-link {
+    color: var(--sl-color-gray-1);
+    transition: color 0.2s ease;
+    display: flex;
+    align-items: center;
+  }
+
+  .tangled-link:hover {
+    color: var(--sl-color-white);
+  }
+</style>
