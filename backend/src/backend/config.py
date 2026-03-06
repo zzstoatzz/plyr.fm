@@ -219,11 +219,11 @@ class FrontendSettings(AppSettingsSection):
         hostname = parsed.hostname or "localhost"
 
         if hostname == "stg.plyr.fm":
-            # staging: allow stg.plyr.fm
-            return r"^(https://stg\.plyr\.fm|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
+            # staging: allow stg.plyr.fm and *.stg.plyr.fm subdomains
+            return r"^(https://([a-z0-9-]+\.)?stg\.plyr\.fm|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
         elif hostname in ("plyr.fm", "www.plyr.fm"):
-            # production: allow plyr.fm, www.plyr.fm, and embed consumers
-            return r"^(https://(www\.)?plyr\.fm|https://zzstoatzz\.(github\.io|io)|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
+            # production: allow plyr.fm, *.plyr.fm subdomains, and embed consumers
+            return r"^(https://([a-z0-9-]+\.)?plyr\.fm|https://zzstoatzz\.(github\.io|io)|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
         else:
             # local dev: allow localhost
             return r"^(http://localhost:5173)$"
