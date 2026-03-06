@@ -149,6 +149,12 @@ async def update_track_metadata(
     album: Annotated[str | None, Form()] = None,
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form(description="JSON array of tag names")] = None,
+    description: Annotated[
+        str | None,
+        Form(
+            description="Track description (liner notes, show notes), or empty string to remove"
+        ),
+    ] = None,
     support_gate: Annotated[
         str | None,
         Form(description="JSON object for supporter gating, or 'null' to remove"),
@@ -182,6 +188,11 @@ async def update_track_metadata(
     if title is not None:
         track.title = title
         title_changed = True
+
+    description_changed = False
+    if description is not None:
+        track.description = description if description != "" else None
+        description_changed = True
 
     # handle support_gate update
     # track migration direction: None = no move, True = to private, False = to public
@@ -290,6 +301,7 @@ async def update_track_metadata(
     support_gate_changed = move_to_private is not None
     metadata_changed = (
         title_changed
+        or description_changed
         or album is not None
         or features is not None
         or image_changed
@@ -380,6 +392,7 @@ async def _update_atproto_record(
         features=track.features if track.features else None,
         image_url=image_url_override or await track.get_image_url(),
         support_gate=track.support_gate,
+        description=track.description,
     )
 
     result = await update_record(

@@ -26,6 +26,7 @@
 	// track editing state
 	let editingTrackId = $state<number | null>(null);
 	let editTitle = $state('');
+	let editDescription = $state('');
 	let editAlbum = $state('');
 	let editFeaturedArtists = $state<FeaturedArtist[]>([]);
 	let editTags = $state<string[]>([]);
@@ -398,6 +399,7 @@
 	function startEditTrack(track: typeof tracks[0]) {
 		editingTrackId = track.id;
 		editTitle = track.title;
+		editDescription = track.description || '';
 		editAlbum = track.album?.title || '';
 		editFeaturedArtists = track.features || [];
 		editTags = track.tags || [];
@@ -429,6 +431,7 @@
 	function cancelEdit() {
 		editingTrackId = null;
 		editTitle = '';
+		editDescription = '';
 		editAlbum = '';
 		editFeaturedArtists = [];
 		editTags = [];
@@ -448,6 +451,7 @@
 	async function saveTrackEdit(trackId: number) {
 		const formData = new FormData();
 		formData.append('title', editTitle);
+		formData.append('description', editDescription);
 		formData.append('album', editAlbum);
 		if (editFeaturedArtists.length > 0) {
 			const handles = editFeaturedArtists.map(a => a.handle);
@@ -818,6 +822,17 @@
 												placeholder="track title"
 												class="edit-input"
 											/>
+										</div>
+										<div class="edit-field-group">
+											<label for="edit-description" class="edit-label">description (optional)</label>
+											<textarea
+												id="edit-description"
+												bind:value={editDescription}
+												placeholder="liner notes, show notes, credits..."
+												rows="3"
+												maxlength="5000"
+												class="edit-input"
+											></textarea>
 										</div>
 										<div class="edit-field-group">
 											<label for="edit-album" class="edit-label">album (optional)</label>
@@ -2311,6 +2326,11 @@
 		color: var(--text-primary);
 		font-size: var(--text-base);
 		font-family: inherit;
+	}
+
+	textarea.edit-input {
+		resize: vertical;
+		min-height: 4rem;
 	}
 
 	/* artwork editor */

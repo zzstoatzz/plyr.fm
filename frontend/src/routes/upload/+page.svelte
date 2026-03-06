@@ -59,6 +59,7 @@
 	let imageFile = $state<File | null>(null);
 	let featuredArtists = $state<FeaturedArtist[]>([]);
 	let uploadTags = $state<string[]>([]);
+	let description = $state("");
 	let hasUnresolvedFeaturesInput = $state(false);
 	let attestedRights = $state(false);
 	let supportGated = $state(false);
@@ -126,10 +127,12 @@
 		const tagsToUpload = [...uploadTags];
 		const isGated = supportGated;
 		const shouldAutoTag = autoTag;
+		const uploadDescription = description;
 
 		const clearForm = () => {
 			title = "";
 			albumTitle = "";
+			description = "";
 			file = null;
 			imageFile = null;
 			featuredArtists = [];
@@ -157,6 +160,7 @@
 			tagsToUpload,
 			isGated,
 			shouldAutoTag,
+			uploadDescription,
 			async () => {
 				await loadMyAlbums();
 			},
@@ -260,6 +264,17 @@
 					required
 					placeholder="my awesome song"
 				/>
+			</div>
+
+			<div class="form-group">
+				<label for="description">description (optional)</label>
+				<textarea
+					id="description"
+					bind:value={description}
+					placeholder="liner notes, show notes, credits..."
+					rows="3"
+					maxlength="5000"
+				></textarea>
 			</div>
 
 			<div class="form-group">
@@ -485,6 +500,25 @@
 	}
 
 	input[type="text"]:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	textarea {
+		width: 100%;
+		padding: 0.75rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		color: var(--text-primary);
+		font-size: var(--text-base);
+		font-family: inherit;
+		transition: all 0.2s;
+		resize: vertical;
+		min-height: 4rem;
+	}
+
+	textarea:focus {
 		outline: none;
 		border-color: var(--accent);
 	}

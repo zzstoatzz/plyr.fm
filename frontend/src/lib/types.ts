@@ -61,6 +61,7 @@ export interface Track {
 	gated?: boolean; // true if track is gated AND viewer lacks access
 	original_file_id?: string | null; // original file hash if transcoded
 	original_file_type?: string | null; // original format if transcoded (e.g., aiff, flac)
+	description?: string | null; // track description (liner notes, show notes)
 	audio_storage?: 'r2' | 'pds' | 'both'; // where audio is stored
 	pds_blob_cid?: string | null; // CID if stored on user's PDS
 }

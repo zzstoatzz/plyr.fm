@@ -159,11 +159,11 @@ max_lines = 540
 
 [[rules]]
 path = "frontend/src/routes/playlist/\\[id\\]/+page.svelte"
-max_lines = 2440
+max_lines = 2446
 
 [[rules]]
 path = "frontend/src/routes/portal/+page.svelte"
-max_lines = 3427
+max_lines = 3447
 
 [[rules]]
 path = "frontend/src/routes/settings/+page.svelte"
@@ -179,11 +179,11 @@ max_lines = 1436
 
 [[rules]]
 path = "frontend/src/routes/u/\\[handle\\]/album/\\[slug\\]/+page.svelte"
-max_lines = 1293
+max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 680
+max_lines = 712
 
 [[rules]]
 path = "services/moderation/src/admin.rs"

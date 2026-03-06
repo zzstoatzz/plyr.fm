@@ -99,6 +99,9 @@ class UploadContext:
     image_filename: str | None = None
     image_content_type: str | None = None
 
+    # track description (liner notes, show notes, etc.)
+    description: str | None = None
+
     # supporter-gated content (e.g., {"type": "any"})
     support_gate: dict | None = None
 
@@ -665,6 +668,7 @@ async def _create_records(
                 image_url=image_url,
                 support_gate=ctx.support_gate,
                 audio_blob=pds_result.blob_ref if pds_result else None,
+                description=ctx.description,
             )
             if not atproto_result:
                 raise ValueError("PDS returned no record data")
@@ -713,6 +717,7 @@ async def _create_records(
             original_file_id=sr.original_file_id,
             original_file_type=sr.original_file_type,
             artist_did=ctx.artist_did,
+            description=ctx.description,
             extra=extra,
             album_id=album_record.id if album_record else None,
             features=featured_artists,
@@ -863,6 +868,10 @@ async def upload_track(
         str | None,
         Form(description='JSON object for supporter gating, e.g., {"type": "any"}'),
     ] = None,
+    description: Annotated[
+        str | None,
+        Form(description="Track description (liner notes, show notes, etc.)"),
+    ] = None,
     auto_tag: Annotated[
         str | None,
         Form(description="auto-apply recommended genre tags after classification"),
@@ -1007,6 +1016,7 @@ async def upload_track(
             album=album,
             features_json=features,
             tags=validated_tags,
+            description=description,
             image_path=image_path,
             image_filename=image_filename,
             image_content_type=image_content_type,

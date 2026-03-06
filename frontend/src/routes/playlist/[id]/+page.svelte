@@ -707,6 +707,12 @@
 	{/if}
 	<link rel="alternate" type="application/json+oembed" title={playlist.name}
 		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/playlist/${playlist.id}`)}" />
+	<link
+		rel="alternate"
+		type="application/rss+xml"
+		title="{playlist.name} RSS feed"
+		href="{API_URL}/feeds/playlist/{playlist.id}"
+	/>
 </svelte:head>
 
 <Header

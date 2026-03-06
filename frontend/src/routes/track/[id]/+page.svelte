@@ -593,6 +593,10 @@ $effect(() => {
 						</div>
 					{/if}
 
+					{#if track.description}
+						<p class="track-description">{track.description}</p>
+					{/if}
+
 					<div class="track-stats">
 						<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
 						{#if track.original_file_type}
@@ -1009,6 +1013,14 @@ $effect(() => {
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		color: var(--accent);
 		outline: none;
+	}
+
+	.track-description {
+		color: var(--text-secondary);
+		font-size: var(--text-base);
+		line-height: 1.6;
+		margin: 0.75rem 0 0;
+		white-space: pre-wrap;
 	}
 
 	.track-tags {
