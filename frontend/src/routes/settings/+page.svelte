@@ -399,7 +399,7 @@
 				</button>
 			</div>
 			<p class="token-overlay-hint">
-				use this token with the <a href="https://github.com/zzstoatzz/plyr-python-client" target="_blank" rel="noopener">python SDK</a> for programmatic API access
+				use this token with the <a href="https://docs.plyr.fm/developers/" target="_blank" rel="noopener">API or python SDK</a> for programmatic access
 			</p>
 			<button class="token-overlay-dismiss" onclick={dismissTokenOverlay}>
 				i've saved my token
@@ -641,7 +641,7 @@
 					<h3>developer tokens</h3>
 					<p>
 						create tokens for programmatic API access (uploads, track management).
-						use with the <a href="https://github.com/zzstoatzz/plyr-python-client" target="_blank" rel="noopener">python SDK</a>
+						use with the <a href="https://docs.plyr.fm/developers/" target="_blank" rel="noopener">API or python SDK</a>
 					</p>
 				</div>
 
