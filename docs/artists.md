@@ -1,5 +1,6 @@
 ---
 title: "for artists"
+description: "upload, manage, and distribute your music on ATProto"
 ---
 
 plyr.fm gives artists a place to share music where **you own your data**. every track you upload is an [ATProto](https://atproto.com) record stored in your personal data server — portable, verifiable, and yours.

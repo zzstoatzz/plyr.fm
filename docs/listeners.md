@@ -1,5 +1,6 @@
 ---
 title: "for listeners"
+description: "discover and stream music on plyr.fm"
 ---
 
 plyr.fm is an audio streaming platform built on [ATProto](https://atproto.com), the open protocol behind [Bluesky](https://bsky.app) and [BlackSky](https://blacksky.community). sign in with your [Atmosphere](https://atproto.com) account and start listening — if you have a Bluesky handle, you're already in.

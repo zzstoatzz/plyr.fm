@@ -1,5 +1,6 @@
 ---
 title: "for developers"
+description: "build on plyr.fm — API, lexicons, and architecture"
 ---
 
 plyr.fm exposes a public API, a Python SDK, and an MCP server. build players, analytics, recommendation engines, or integrations on top of the open data.

@@ -1,5 +1,6 @@
 ---
 title: "plyr.fm lexicons"
+description: "ATProto lexicon schemas powering plyr.fm"
 ---
 
 > **note**: this is living documentation. the lexicon JSON definitions in `/lexicons/` are the source of truth.

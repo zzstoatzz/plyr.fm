@@ -1,5 +1,6 @@
 ---
 title: "terms of service"
+description: "terms governing use of plyr.fm"
 ---
 
 > **note:** the source of truth is `frontend/src/routes/terms/+page.svelte`. this markdown is a plain-text mirror for reference.

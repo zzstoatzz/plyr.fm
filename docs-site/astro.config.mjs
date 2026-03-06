@@ -24,6 +24,24 @@ export default defineConfig({
           items: [{ slug: "legal/privacy" }, { slug: "legal/terms" }],
         },
       ],
+      head: [
+        {
+          tag: "meta",
+          attrs: { property: "og:image", content: "https://docs.plyr.fm/og.png" },
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:width", content: "1200" },
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:height", content: "630" },
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:alt", content: "plyr.fm docs" },
+        },
+      ],
       customCss: ["./src/styles/custom.css"],
     }),
   ],
