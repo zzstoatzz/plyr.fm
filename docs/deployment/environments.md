@@ -113,6 +113,16 @@ this will:
 - production environment: `PUBLIC_API_URL=https://api-stg.plyr.fm`
 - custom domain: `stg.plyr.fm`
 
+### docs
+
+**plyr-fm-docs**:
+- framework: astro (starlight)
+- deployed via GHA workflow (`.github/workflows/deploy-docs.yml`) using `wrangler pages deploy`
+- triggers on push to `main` when `docs/**` or `docs-site/**` change
+- build command: `cd docs-site && bun install && bun run build`
+- build output: `docs-site/dist`
+- custom domain: `docs.plyr.fm`
+
 ### secrets management
 
 all secrets configured via `flyctl secrets set`. key environment variables:
