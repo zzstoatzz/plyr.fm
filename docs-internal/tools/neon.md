@@ -457,65 +457,16 @@ SELECT extra->>'album' FROM tracks;
 SELECT * FROM tracks WHERE (extra->>'album')::text = 'covid ableton sessions';
 ```
 
-### counting with filters
-
-postgres supports conditional aggregates:
-
-```sql
-SELECT
-  COUNT(*) as total,
-  COUNT(*) FILTER (WHERE play_count > 0) as played,
-  COUNT(*) FILTER (WHERE play_count = 0) as unplayed
-FROM tracks;
-```
-
-### working with timestamps
-
-```sql
--- last 24 hours
-WHERE created_at > NOW() - INTERVAL '24 hours'
-
--- specific date range
-WHERE created_at BETWEEN '2025-11-01' AND '2025-11-12'
-
--- group by day/week/month
-DATE_TRUNC('day', created_at)
-DATE_TRUNC('week', created_at)
-DATE_TRUNC('month', created_at)
-```
-
-### project id shortcuts
-
-store frequently used project IDs in your notes:
-
-```
-dev: muddy-flower-98795112
-staging: frosty-math-37367092
-prod: cold-butterfly-11920742
-```
-
 ## limitations
 
-1. **read-only focus**: this guide covers read operations only. for migrations, use alembic or neon's schema migration tools.
-
-2. **no write operations**: the neon mcp supports writes, but they're not covered here to prevent accidental data modifications during debugging.
-
-3. **connection pooling**: queries go through connection poolers (`-pooler` in endpoint). for admin operations or schema changes, use direct endpoints.
-
-4. **query timeouts**: complex queries may timeout. break them into smaller operations or add indexes if slow.
-
-5. **default database**: most operations assume `neondb` database. specify `databaseName` if using different database.
-
-## related tools
-
-- **pdsx**: for inspecting ATProto records on PDS (see docs/tools/pdsx.md)
-- **psql**: for interactive postgres sessions using connection strings
-- **alembic**: for database migrations (see alembic/versions/)
-- **neon console**: web UI at https://console.neon.tech
+- **read-only focus**: this guide covers read operations only. for migrations, use alembic or neon's schema migration tools.
+- **no write operations**: the neon mcp supports writes, but they're not covered here to prevent accidental data modifications during debugging.
+- **connection pooling**: queries go through connection poolers (`-pooler` in endpoint). for admin operations or schema changes, use direct endpoints.
+- **query timeouts**: complex queries may timeout. break them into smaller operations or add indexes if slow.
+- **default database**: most operations assume `neondb` database. specify `databaseName` if using different database.
 
 ## references
 
 - neon mcp server: https://github.com/neondatabase/mcp-server-neon
-- plyr.fm database models: src/backend/models/
-- ATProto integration: src/backend/_internal/atproto/records.py
-- migration scripts: scripts/backfill_atproto_records.py
+- plyr.fm database models: `src/backend/models/`
+- ATProto integration: `src/backend/_internal/atproto/records.py`

@@ -191,7 +191,7 @@ uv run alembic downgrade -1
 uv run alembic upgrade head
 ```
 
-see [database migrations](/deployment/database-migrations/) for details.
+migrations are managed with alembic — see `alembic/versions/` for existing migrations.
 
 ### running tests
 
@@ -355,7 +355,5 @@ cd services/transcoder && cargo build --release    # build for production
 
 ## next steps
 
-- read [backend configuration](/backend/configuration/) for config details
-- read [frontend state management](/frontend/state-management/) for frontend patterns
-- read [tools](/tools/logfire/) for development tools (logfire, neon, pdsx)
-- check [deployment](/deployment/environments/) when ready to deploy
+- read [contributing](/contributing/) for code style and workflow conventions
+- check [deployment environments](/deployment/environments/) when ready to deploy

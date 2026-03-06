@@ -461,171 +461,31 @@ as plyr.fm scales, we may want to explore:
    - check for missing operations (autogenerate doesn't detect everything)
    - ensure downgrade() is correct
 
-4. **test locally**
-   ```bash
-   # upgrade
-   uv run alembic upgrade head
+4. **test locally**: `uv run alembic upgrade head`, verify schema, test downgrade with `uv run alembic downgrade -1`
 
-   # verify schema
-   uv run python -c "from backend.models import Track; print(Track.__table__.columns)"
-
-   # test downgrade
-   uv run alembic downgrade -1
-   uv run alembic upgrade head
-   ```
-
-5. **test with actual app**
-   ```bash
-   # start backend with new schema
-   uv run uvicorn backend.main:app --reload
-
-   # verify endpoints work
-   curl http://localhost:8001/health
-   ```
+5. **test with actual app**: start backend, verify endpoints work
 
 ### deploying migration
 
-1. **commit migration file only**
-   ```bash
-   git add alembic/versions/<hash>_<description>.py
-   git commit -m "migration: <description>"
-   ```
-
-2. **create PR and review**
-   - include migration details in PR description
-   - note any backward compatibility concerns
-   - tag for review if complex
-
-3. **merge and deploy**
-   - merge to main
-   - watch deployment
-   - run migration (manual for now, automated soon)
-
-4. **verify deployment**
-   ```bash
-   # check revision
-   flyctl ssh console -a relay-api -C "uv run alembic current"
-
-   # check app health
-   curl https://relay-api.fly.dev/health
-
-   # check logs
-   flyctl logs --app relay-api
-   ```
+1. commit migration file, create PR
+2. merge to main — deployment runs automatically
+3. verify: `flyctl ssh console -a relay-api -C "uv run alembic current"`
 
 ### handling failed migrations
 
-**if migration fails during upgrade**:
-
-1. **check what failed**
-   ```bash
-   flyctl logs --app relay-api | grep alembic
-   ```
-
-2. **check database state**
-   ```bash
-   flyctl ssh console -a relay-api -C "uv run alembic current"
-   ```
-
-3. **fix the issue**
-   - if migration was partially applied, may need manual SQL to fix
-   - if migration didn't apply, fix and re-run
-   - if data is corrupted, may need to restore from backup
-
-4. **options**:
-
-   a. **downgrade and fix**:
-   ```bash
-   flyctl ssh console -a relay-api -C "uv run alembic downgrade -1"
-   # fix migration file locally
-   # commit and redeploy
-   ```
-
-   b. **create fix migration**:
-   ```bash
-   # create new migration that fixes the issue
-   uv run alembic revision -m "fix previous migration"
-   # implement fix in upgrade()
-   # commit and deploy
-   ```
-
-   c. **manual SQL fix**:
-   ```bash
-   flyctl ssh console -a relay-api
-   # connect to database
-   # run manual SQL to fix state
-   # stamp to correct revision
-   # exit
-   ```
+- check logs: `flyctl logs --app relay-api | grep alembic`
+- check state: `flyctl ssh console -a relay-api -C "uv run alembic current"`
+- options: downgrade and fix, create fix migration, or manual SQL fix
 
 ### zero-downtime migration patterns
 
-for production systems, some schema changes require special handling:
-
-**adding nullable columns** (safe):
-```python
-def upgrade():
-    op.add_column('tracks', sa.Column('new_field', sa.String(), nullable=True))
-```
-
-**adding non-nullable columns** (requires two-step):
-```python
-# migration 1: add nullable
-def upgrade():
-    op.add_column('tracks', sa.Column('new_field', sa.String(), nullable=True))
-
-# migration 2: populate and make non-null
-def upgrade():
-    op.execute("UPDATE tracks SET new_field = 'default' WHERE new_field IS NULL")
-    op.alter_column('tracks', 'new_field', nullable=False)
-```
-
-**dropping columns** (requires two-step):
-```python
-# migration 1: stop using column in app code
-# deploy app
-
-# migration 2: drop column
-def upgrade():
-    op.drop_column('tracks', 'old_field')
-```
-
-**renaming columns** (requires three-step):
-```python
-# migration 1: add new column
-def upgrade():
-    op.add_column('tracks', sa.Column('new_name', sa.String()))
-    op.execute("UPDATE tracks SET new_name = old_name")
-
-# migration 2: switch app to use new column
-# deploy app
-
-# migration 3: drop old column
-def upgrade():
-    op.drop_column('tracks', 'old_name')
-```
+- **adding nullable columns**: safe, single migration
+- **adding non-nullable columns**: two-step — add nullable, populate, then alter to non-null
+- **dropping columns**: two-step — stop using in app code first, then drop
+- **renaming columns**: three-step — add new, switch app, drop old
 
 ## references
 
-### internal
-- plyr.fm dockerfile: `Dockerfile`
-- plyr.fm fly config: `fly.toml`
-- alembic config: `alembic.ini`
-- alembic env: `alembic/env.py`
+- alembic config: `alembic.ini`, `alembic/env.py`
 - models: `src/backend/models/`
-
-### external
-- alembic documentation: https://alembic.sqlalchemy.org/
-- fly.io release commands: https://fly.io/docs/reference/configuration/#release_command
-- fly.io ssh: https://fly.io/docs/flyctl/ssh/
-- neon branching: https://neon.tech/docs/guides/branching
-
-### github actions
-- paths-filter action: https://github.com/dorny/paths-filter
-- flyctl actions: https://github.com/superfly/flyctl-actions
-
----
-
-**last updated**: 2025-12-05
-**status**: fully automated via fly.io release_command ✓
-**owner**: @zzstoatzz
+- alembic docs: https://alembic.sqlalchemy.org/

@@ -75,8 +75,6 @@ just backend migrate "description of change"
 just backend migrate-up
 ```
 
-see [database migrations](/deployment/database-migrations/) for the full workflow.
-
 ## conventions
 
 ### code style
@@ -97,7 +95,6 @@ see [database migrations](/deployment/database-migrations/) for the full workflo
 ### frontend
 
 - SvelteKit with **Svelte 5 Runes** — use `$state`, `$derived`, `$effect`
-- see [state management](/frontend/state-management/) for patterns
 
 ### ATProto
 
@@ -149,7 +146,4 @@ plyr.fm/
 ## further reading
 
 - [local development setup](/local-development/setup/) — full environment config and troubleshooting
-- [backend configuration](/backend/configuration/) — settings and environment variables
-- [state management](/frontend/state-management/) — Svelte 5 runes patterns
 - [deployment environments](/deployment/environments/) — staging vs production
-- [tools](/tools/logfire/) — logfire, neon, pdsx, and other dev tools
