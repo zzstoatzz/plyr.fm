@@ -1,4 +1,6 @@
-# docs
+---
+title: "docs"
+---
 
 organized knowledge base - check here before researching.
 

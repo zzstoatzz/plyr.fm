@@ -1,4 +1,6 @@
-# keyboard shortcuts
+---
+title: "keyboard shortcuts"
+---
 
 global keyboard shortcuts for the plyr.fm frontend.
 

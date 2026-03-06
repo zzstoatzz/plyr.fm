@@ -1,4 +1,6 @@
-# redirect after login
+---
+title: "redirect after login"
+---
 
 ## the problem
 

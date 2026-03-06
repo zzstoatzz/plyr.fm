@@ -1,4 +1,6 @@
-# Security
+---
+title: "security"
+---
 
 Overview of security mechanisms in plyr.fm.
 

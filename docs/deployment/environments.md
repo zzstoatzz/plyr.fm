@@ -1,4 +1,6 @@
-# environment separation strategy
+---
+title: "environment separation strategy"
+---
 
 plyr.fm uses a simple three-tier deployment strategy: development → staging → production.
 
@@ -108,6 +110,16 @@ this will:
 - production branch: `main`
 - production environment: `PUBLIC_API_URL=https://api-stg.plyr.fm`
 - custom domain: `stg.plyr.fm`
+
+### docs
+
+**plyr-fm-docs**:
+- framework: astro (starlight)
+- deployed via GHA workflow (`.github/workflows/deploy-docs.yml`) using `wrangler pages deploy`
+- triggers on push to `main` when `docs/**` or `docs-site/**` change
+- build command: `cd docs-site && bun install && bun run build`
+- build output: `docs-site/dist`
+- custom domain: `docs.plyr.fm`
 
 ### secrets management
 

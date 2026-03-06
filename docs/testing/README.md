@@ -1,4 +1,6 @@
-# testing
+---
+title: "testing"
+---
 
 testing philosophy and infrastructure for plyr.fm.
 

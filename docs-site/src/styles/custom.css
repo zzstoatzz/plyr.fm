@@ -1,0 +1,43 @@
+/* match plyr.fm dark-first aesthetic */
+
+/* dark mode (default) */
+:root {
+  /* accent: plyr.fm periwinkle blue #6a9fff */
+  --sl-color-accent-low: hsl(218, 50%, 15%);
+  --sl-color-accent: #6a9fff;
+  --sl-color-accent-high: #c0d8ff;
+  --sl-color-text-accent: #6a9fff;
+
+  /* grays matched to plyr.fm bg/border/text tokens */
+  --sl-color-white: #e8e8e8;
+  --sl-color-gray-1: #b0b0b0;
+  --sl-color-gray-2: #808080;
+  --sl-color-gray-3: #666666;
+  --sl-color-gray-4: #444444;
+  --sl-color-gray-5: #1a1a1a;
+  --sl-color-gray-6: #141414;
+  --sl-color-black: #0a0a0a;
+
+  /* monospace font stack from plyr.fm */
+  --sl-font: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas',
+    monospace;
+  --sl-font-system-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code',
+    'Consolas', monospace;
+}
+
+/* light mode */
+:root[data-theme='light'] {
+  --sl-color-accent-low: hsl(218, 60%, 92%);
+  --sl-color-accent: #4a7ddd;
+  --sl-color-accent-high: #1a3a6a;
+  --sl-color-text-accent: #4a7ddd;
+
+  --sl-color-white: #fafafa;
+  --sl-color-gray-1: #171717;
+  --sl-color-gray-2: #525252;
+  --sl-color-gray-3: #737373;
+  --sl-color-gray-4: #a3a3a3;
+  --sl-color-gray-5: #e5e5e5;
+  --sl-color-gray-6: #f5f5f5;
+  --sl-color-black: #ffffff;
+}

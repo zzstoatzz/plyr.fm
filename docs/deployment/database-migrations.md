@@ -1,4 +1,6 @@
-# database migrations
+---
+title: "database migrations"
+---
 
 ## current state (automated ✓)
 

@@ -1,4 +1,6 @@
-# state management
+---
+title: "state management"
+---
 
 ## svelte 5 runes mode
 

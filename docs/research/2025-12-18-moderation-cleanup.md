@@ -1,4 +1,6 @@
-# research: moderation cleanup
+---
+title: "research: moderation cleanup"
+---
 
 **date**: 2025-12-18
 **question**: understand issues #541-544 and how the moderation system works to inform cleanup

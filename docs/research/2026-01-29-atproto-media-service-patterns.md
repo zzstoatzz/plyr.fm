@@ -1,4 +1,6 @@
-# ATProto media service patterns
+---
+title: "ATProto media service patterns"
+---
 
 research date: 2026-01-29
 source: [discourse thread](https://discourse.atprotocol.community/t/media-pds-service/297) (18 posts, nov 2025 - jan 2026)

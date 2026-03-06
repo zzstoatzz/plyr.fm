@@ -1,4 +1,6 @@
-# plyrfm
+---
+title: "plyrfm"
+---
 
 python SDK and CLI for plyr.fm - available on [PyPI](https://pypi.org/project/plyrfm/) and [GitHub](https://github.com/zzstoatzz/plyr-python-client).
 

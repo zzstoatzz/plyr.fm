@@ -1,4 +1,6 @@
-# data loading
+---
+title: "data loading"
+---
 
 ## overview
 

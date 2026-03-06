@@ -1,4 +1,6 @@
-# toast notification system
+---
+title: "toast notification system"
+---
 
 ## status
 

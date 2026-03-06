@@ -1,4 +1,6 @@
-# neon mcp guide for plyr.fm
+---
+title: "neon mcp guide for plyr.fm"
+---
 
 the [neon mcp server](https://github.com/neondatabase/mcp-server-neon) provides tools for interacting with neon postgres databases through the model context protocol. this guide covers read-only operations useful for inspecting and debugging plyr.fm's database.
 

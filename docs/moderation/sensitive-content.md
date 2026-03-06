@@ -1,4 +1,6 @@
-# sensitive content moderation
+---
+title: "sensitive content moderation"
+---
 
 ## overview
 

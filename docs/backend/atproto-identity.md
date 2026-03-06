@@ -1,4 +1,6 @@
-# ATProto identity and OAuth
+---
+title: "ATProto identity and OAuth"
+---
 
 ## what is DID PLC?
 

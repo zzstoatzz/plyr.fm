@@ -1,4 +1,6 @@
-# jams + queue integration
+---
+title: "jams + queue integration"
+---
 
 ## big picture
 

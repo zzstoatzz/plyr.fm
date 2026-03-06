@@ -1,4 +1,6 @@
-# jams transport layer decision: Redis Streams
+---
+title: "jams transport layer decision: Redis Streams"
+---
 
 ## status
 

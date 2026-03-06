@@ -1,6 +1,8 @@
-plyr.fm legal questions
+---
+title: "legal questions"
+---
 
-# plyr.fm - legal questions
+plyr.fm legal questions
 
 music streaming platform on AT Protocol. users upload audio. no payments yet.
 

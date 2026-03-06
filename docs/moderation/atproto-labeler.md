@@ -1,4 +1,6 @@
-# ATProto labeler service
+---
+title: "ATProto labeler service"
+---
 
 technical documentation for the moderation service's ATProto labeling capabilities.
 

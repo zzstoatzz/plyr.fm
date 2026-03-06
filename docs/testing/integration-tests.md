@@ -1,4 +1,6 @@
-# integration tests
+---
+title: "integration tests"
+---
 
 integration tests run against the staging environment (`api-stg.plyr.fm`) using real API tokens.
 

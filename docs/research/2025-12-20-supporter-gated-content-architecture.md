@@ -1,4 +1,6 @@
-# research: supporter-gated content architecture
+---
+title: "research: supporter-gated content architecture"
+---
 
 **date**: 2025-12-20
 **question**: how do we prevent direct R2 access to paywalled audio content?

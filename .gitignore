@@ -49,6 +49,9 @@ frontend/node_modules/
 frontend/.svelte-kit/
 frontend/build/
 
+# Docs site
+.astro/
+
 # Rust build artifacts
 **/target/
 

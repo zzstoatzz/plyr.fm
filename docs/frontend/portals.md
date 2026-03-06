@@ -1,4 +1,6 @@
-# portals (rendering modals outside parent DOM)
+---
+title: "portals (rendering modals outside parent DOM)"
+---
 
 ## the problem
 

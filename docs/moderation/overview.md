@@ -1,4 +1,6 @@
-# moderation on plyr.fm
+---
+title: "moderation on plyr.fm"
+---
 
 ## philosophy
 

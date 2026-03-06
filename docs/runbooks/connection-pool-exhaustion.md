@@ -1,4 +1,6 @@
-# connection pool exhaustion
+---
+title: "connection pool exhaustion"
+---
 
 ## symptoms
 

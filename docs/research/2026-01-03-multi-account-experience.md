@@ -1,4 +1,6 @@
-# multi-account experience
+---
+title: "multi-account experience"
+---
 
 **status:** design draft
 **issue:** [#583](https://github.com/zzstoatzz/plyr.fm/issues/583)

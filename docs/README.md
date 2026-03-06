@@ -1,4 +1,6 @@
-# plyr.fm documentation
+---
+title: "plyr.fm documentation"
+---
 
 organized knowledge base for plyr.fm development.
 

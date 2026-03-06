@@ -1,4 +1,6 @@
-# neon database configuration
+---
+title: "neon database configuration"
+---
 
 configuration guide for connecting to neon postgres databases.
 
