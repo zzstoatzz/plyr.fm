@@ -1,0 +1,79 @@
+---
+// trending tracks — fetches top tracks and renders playable embed iframes
+---
+
+<div class="trending-section" id="trending-section">
+  <div class="trending-container" id="trending-container">
+    <div class="embed-loading">loading...</div>
+  </div>
+</div>
+
+<script>
+  const API = "https://api.plyr.fm";
+  const SITE = "https://plyr.fm";
+  const container = document.getElementById("trending-container")!;
+
+  function escapeHtml(s: string) {
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  async function loadTrending() {
+    try {
+      const res = await fetch(`${API}/tracks/top?limit=3`);
+      if (!res.ok) throw new Error("fetch failed");
+      const tracks: {
+        id: number;
+        title: string;
+        artist_display_name?: string;
+        artist_handle: string;
+      }[] = await res.json();
+
+      if (!tracks?.length) {
+        showFallback();
+        return;
+      }
+
+      container.innerHTML = tracks
+        .map(
+          (t) =>
+            `<div class="trending-track">
+              <iframe
+                src="${SITE}/embed/track/${t.id}"
+                width="100%"
+                height="152"
+                frameborder="0"
+                allow="autoplay; encrypted-media"
+                loading="lazy"
+                title="${escapeHtml(t.title)} by ${escapeHtml(t.artist_display_name || t.artist_handle)}"
+              ></iframe>
+            </div>`,
+        )
+        .join("");
+    } catch {
+      showFallback();
+    }
+  }
+
+  function showFallback() {
+    container.innerHTML = `
+      <a href="${SITE}" class="embed-fallback">
+        listen on plyr.fm &rarr;
+      </a>
+    `;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting) {
+        loadTrending();
+        observer.disconnect();
+      }
+    },
+    { threshold: 0.1 },
+  );
+
+  const el = document.getElementById("trending-section");
+  if (el) observer.observe(el);
+</script>

@@ -17,11 +17,7 @@ export default defineConfig({
         { slug: "artists" },
         { slug: "developers" },
         { slug: "lexicons/overview" },
-        {
-          label: "contributing",
-          collapsed: true,
-          items: [{ slug: "contributing" }],
-        },
+        { slug: "contributing" },
         {
           label: "legal",
           collapsed: true,

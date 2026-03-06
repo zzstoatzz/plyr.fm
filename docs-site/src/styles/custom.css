@@ -104,13 +104,20 @@
   margin: 0;
 }
 
-/* track embed */
-.embed-section {
+/* trending tracks */
+.trending-section {
   max-width: 32rem;
 }
 
-.embed-container {
-  min-height: 152px;
+.trending-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.trending-track iframe {
+  border-radius: 0.5rem;
+  border: 1px solid var(--sl-color-gray-4);
 }
 
 .embed-loading {
@@ -259,4 +266,36 @@
 .record-example pre {
   border: 1px solid var(--sl-color-gray-4);
   border-radius: 0.5rem;
+}
+
+/* mobile responsiveness */
+@media (max-width: 768px) {
+  .landing-section {
+    margin: 2rem auto;
+    padding: 0 0.75rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .stat-card {
+    padding: 1rem 0.75rem;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+  }
+
+  .trending-section,
+  .search-section {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
