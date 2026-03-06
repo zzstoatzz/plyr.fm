@@ -24,7 +24,7 @@ plyr.fm is an audio streaming platform built on [ATProto](https://atproto.com), 
 
 ## leaving
 
-your likes, comments, and playlists are ATProto records stored on your PDS — not locked into plyr.fm. you can leave at any time and your data stays with you. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
+your likes, comments, and playlists are ATProto records stored on your PDS — not locked into plyr.fm. you can leave at any time — your ATProto records stay on your PDS by default, but you can choose to delete those too. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
 
 ## start listening
 

@@ -89,4 +89,4 @@ your music lives in your repo under the `fm.plyr.track` collection. see the [lex
 
 ## leaving
 
-you can leave plyr.fm at any time. export your full catalog as a zip from the [portal](https://plyr.fm/portal), and your ATProto records remain on your PDS regardless. deleting your account removes all data from plyr.fm's infrastructure — for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
+you can leave plyr.fm at any time. export your full catalog as a zip from the [portal](https://plyr.fm/portal). deleting your account removes all data from plyr.fm's infrastructure — your ATProto records stay on your PDS by default, but you can choose to delete those too. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
