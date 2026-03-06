@@ -187,7 +187,7 @@ GET /search/semantic?q=chill+vibes&limit=10
 
 `available: false` indicates the embedding service is down - the frontend falls back to keyword-only search.
 
-see [mood-search.md](../backend/mood-search.md) for full backend architecture.
+see [mood search](/backend/mood-search/) for full backend architecture.
 
 ## result types
 

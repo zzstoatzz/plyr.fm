@@ -238,5 +238,5 @@ the moderation service stays focused on scanning + labeling. the backend + front
 
 ## related documentation
 
-- [copyright-detection.md](./copyright-detection.md) - scan flow and database schema
-- [atproto-labeler.md](./atproto-labeler.md) - labeler service endpoints and signing
+- [copyright detection](/moderation/copyright-detection/) - scan flow and database schema
+- [ATProto labeler](/moderation/atproto-labeler/) - labeler service endpoints and signing

@@ -177,6 +177,6 @@ VALUES (
 
 ## related documentation
 
-- [overview.md](./overview.md) - moderation philosophy and architecture
-- [copyright-detection.md](./copyright-detection.md) - automated copyright scanning
-- [atproto-labeler.md](./atproto-labeler.md) - ATProto label emission
+- [overview](/moderation/overview/) - moderation philosophy and architecture
+- [copyright detection](/moderation/copyright-detection/) - automated copyright scanning
+- [ATProto labeler](/moderation/atproto-labeler/) - ATProto label emission
