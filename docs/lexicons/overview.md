@@ -155,7 +155,7 @@ set `ATPROTO_USE_PERMISSION_SETS=true` to use `include:fm.plyr.authFullApp` inst
 
 **requirement**: permission set lexicons must be published to `com.atproto.lexicon.schema` collection on the `plyr.fm` authority repo (`did:plc:vs3hnzq2daqbszxlysywzy54`).
 
-see [research doc](../research/2026-01-01-atproto-oauth-permission-sets.md) for implementation details.
+permission sets are resolved by PDS servers at authorization time — the `include:` token is expanded into granular `repo:` scopes and never appears in the granted token. the authority namespace (e.g. `fm.plyr`) must match the requesting app's domain.
 
 ## adding new lexicons
 
