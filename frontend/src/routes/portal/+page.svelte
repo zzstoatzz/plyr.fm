@@ -983,7 +983,7 @@
 												</label>
 												{#if editSupportGate}
 													<p class="field-hint">
-														only users who support you via <a href="https://atprotofans.com" target="_blank" rel="noopener">atprotofans</a> can play this track
+														only users who support you via <a href="https://atprotofans.com" target="_blank" rel="noopener">atprotofans</a> can play this track. <a href="https://docs.plyr.fm/artists/#supporter-gated-tracks" target="_blank" rel="noopener">learn more</a>
 													</p>
 												{/if}
 											</div>

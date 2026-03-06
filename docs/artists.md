@@ -86,3 +86,7 @@ because tracks are ATProto records, you can:
 - **migrate** to a different PDS without losing anything
 
 your music lives in your repo under the `fm.plyr.track` collection. see the [lexicons overview](/lexicons/overview/) for the full schema.
+
+## leaving
+
+you can leave plyr.fm at any time. export your full catalog as a zip from the [portal](https://plyr.fm/portal), and your ATProto records remain on your PDS regardless. deleting your account removes all data from plyr.fm's infrastructure — for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
