@@ -6,9 +6,9 @@ from atproto import Client, models
 
 
 def main() -> None:
-    handle = os.environ["BSKY_NOTIFY_HANDLE"]
-    password = os.environ["BSKY_NOTIFY_PASSWORD"]
-    recipient = os.environ["BSKY_NOTIFY_RECIPIENT"]
+    handle = os.environ["NOTIFY_BOT_HANDLE"]
+    password = os.environ["NOTIFY_BOT_PASSWORD"]
+    recipient = os.environ["NOTIFY_RECIPIENT_HANDLE"]
 
     # context from GHA
     run_id = os.environ.get("GITHUB_RUN_ID", "unknown")

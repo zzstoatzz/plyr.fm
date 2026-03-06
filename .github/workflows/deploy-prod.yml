@@ -37,6 +37,6 @@ jobs:
         if: failure()
         run: uvx --with atproto python scripts/notify_deploy_failure.py
         env:
-          BSKY_NOTIFY_HANDLE: ${{ secrets.BSKY_NOTIFY_HANDLE }}
-          BSKY_NOTIFY_PASSWORD: ${{ secrets.BSKY_NOTIFY_PASSWORD }}
-          BSKY_NOTIFY_RECIPIENT: ${{ secrets.BSKY_NOTIFY_RECIPIENT }}
+          NOTIFY_BOT_HANDLE: ${{ secrets.NOTIFY_BOT_HANDLE }}
+          NOTIFY_BOT_PASSWORD: ${{ secrets.NOTIFY_BOT_PASSWORD }}
+          NOTIFY_RECIPIENT_HANDLE: ${{ secrets.NOTIFY_RECIPIENT_HANDLE }}
