@@ -2,8 +2,6 @@
 title: "feature flags"
 ---
 
-# feature flags
-
 per-user feature flags for controlled rollout of experimental features.
 
 ## overview

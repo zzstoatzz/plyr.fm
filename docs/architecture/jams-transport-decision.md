@@ -2,8 +2,6 @@
 title: "jams transport layer decision: Redis Streams"
 ---
 
-# jams transport layer decision: Redis Streams
-
 ## status
 
 recommended for implementation in jams v1.

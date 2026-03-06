@@ -4,8 +4,6 @@ title: "legal questions"
 
 plyr.fm legal questions
 
-# plyr.fm - legal questions
-
 music streaming platform on AT Protocol. users upload audio. no payments yet.
 
 ## 1. DMCA safe harbor limits

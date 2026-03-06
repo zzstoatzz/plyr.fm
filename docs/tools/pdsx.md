@@ -2,8 +2,6 @@
 title: "pdsx guide for plyr.fm"
 ---
 
-# pdsx guide for plyr.fm
-
 [pdsx](https://github.com/zzstoatzz/pdsx) is a CLI tool for ATProto record operations. this guide covers how to use it for inspecting and managing plyr.fm track records.
 
 ## installation

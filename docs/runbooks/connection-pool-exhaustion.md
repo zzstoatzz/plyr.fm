@@ -2,8 +2,6 @@
 title: "connection pool exhaustion"
 ---
 
-# connection pool exhaustion
-
 ## symptoms
 
 - 500 errors across multiple endpoints

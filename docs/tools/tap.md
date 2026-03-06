@@ -2,8 +2,6 @@
 title: "tap"
 ---
 
-# tap
-
 bluesky's ATProto sync utility for backfilling and streaming custom lexicons.
 
 ## install

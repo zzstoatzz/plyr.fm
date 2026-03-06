@@ -1,8 +1,6 @@
 ---
-title: "Rate Limiting"
+title: "rate limiting"
 ---
-
-# Rate Limiting
 
 plyr.fm uses [slowapi](https://github.com/laurentS/slowapi) to implement application-side rate limiting. This protects the backend from abuse, brute-force attacks, and denial-of-service attempts.
 

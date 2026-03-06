@@ -2,8 +2,6 @@
 title: "redirect after login"
 ---
 
-# redirect after login
-
 ## the problem
 
 unauthenticated users who follow a deep link (e.g. a jam invite `/jam/abc123`) get redirected to the login page. after completing the OAuth flow, they land on `/portal` with no memory of where they were trying to go. the invite link is lost.

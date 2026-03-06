@@ -2,8 +2,6 @@
 title: "status maintenance workflow"
 ---
 
-# status maintenance workflow
-
 automated workflow that archives old STATUS.md content and generates audio updates.
 
 ## what it does

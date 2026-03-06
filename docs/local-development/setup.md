@@ -2,8 +2,6 @@
 title: "local development setup"
 ---
 
-# local development setup
-
 ## prerequisites
 
 - **python**: 3.11+ (managed via `uv`)

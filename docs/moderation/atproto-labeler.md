@@ -2,8 +2,6 @@
 title: "ATProto labeler service"
 ---
 
-# ATProto labeler service
-
 technical documentation for the moderation service's ATProto labeling capabilities.
 
 ## overview

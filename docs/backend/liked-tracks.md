@@ -2,8 +2,6 @@
 title: "liked tracks"
 ---
 
-# liked tracks
-
 ## overview
 
 plyr.fm's liked tracks feature allows users to like tracks, with likes stored as ATProto records on the user's PDS and indexed locally for fast queries. the implementation includes comprehensive error handling to ensure consistency between ATProto and the local database.

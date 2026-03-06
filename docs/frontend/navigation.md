@@ -2,8 +2,6 @@
 title: "client-side navigation"
 ---
 
-# client-side navigation
-
 ## preserving player state across navigation
 
 the player lives in the root layout (`+layout.svelte`) and persists across all page navigations. to maintain uninterrupted playback, client-side navigation must work correctly.

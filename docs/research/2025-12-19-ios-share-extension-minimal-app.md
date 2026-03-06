@@ -2,8 +2,6 @@
 title: "research: minimal iOS app with share extension"
 ---
 
-# research: minimal iOS app with share extension
-
 **date**: 2025-12-19
 **question**: how to build a minimal iOS app with share extension for uploading audio to plyr.fm API, for someone with no iOS experience
 

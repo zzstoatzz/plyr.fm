@@ -2,8 +2,6 @@
 title: "privacy policy"
 ---
 
-# privacy policy
-
 > **note:** the source of truth is `frontend/src/routes/privacy/+page.svelte`. this markdown is a plain-text mirror for reference.
 
 **last updated:** february 6, 2026

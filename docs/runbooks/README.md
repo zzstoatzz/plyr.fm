@@ -2,8 +2,6 @@
 title: "runbooks"
 ---
 
-# runbooks
-
 operational procedures for production incidents.
 
 ## available runbooks

@@ -2,8 +2,6 @@
 title: "research: atprotofans paywall integration"
 ---
 
-# research: atprotofans paywall integration
-
 **date**: 2025-12-20
 **question**: how should plyr.fm integrate with atprotofans to enable supporter-gated content?
 

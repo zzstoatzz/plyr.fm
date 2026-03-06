@@ -2,8 +2,6 @@
 title: "ATProto identity and OAuth"
 ---
 
-# ATProto identity and OAuth
-
 ## what is DID PLC?
 
 [PLC (Public Ledger of Credentials)](https://plc.directory) is ATProto's decentralized identifier system.

@@ -2,8 +2,6 @@
 title: "jams + queue integration"
 ---
 
-# jams + queue integration
-
 ## big picture
 
 a jam is "your queue, but shared." when you start a jam, your queue becomes a shared space. anyone in the jam can play a track, skip, reorder, add tracks — same as they would with their own queue. the player footer handles all playback. there's no separate "jam page" or "jam player."

@@ -2,8 +2,6 @@
 title: "state management"
 ---
 
-# state management
-
 ## svelte 5 runes mode
 
 plyr.fm uses svelte 5 runes mode throughout the frontend. **all reactive state must use the `$state()` rune**.

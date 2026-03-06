@@ -2,8 +2,6 @@
 title: "research: moderation architecture overhaul"
 ---
 
-# research: moderation architecture overhaul
-
 **date**: 2025-12-20
 **question**: how should plyr.fm evolve its moderation architecture based on Roost Osprey and Bluesky Ozone patterns?
 

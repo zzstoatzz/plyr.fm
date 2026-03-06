@@ -2,8 +2,6 @@
 title: "toast notification system"
 ---
 
-# toast notification system
-
 ## status
 
 **IMPLEMENTED** - this feature is live in production

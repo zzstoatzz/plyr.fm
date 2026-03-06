@@ -2,8 +2,6 @@
 title: "queue design"
 ---
 
-# queue design
-
 ## overview
 
 The queue is a cross-device, server-authoritative data model with optimistic local updates. Every device performs queue mutations locally, pushes a full snapshot to the API, and receives hydrated track metadata back. Servers keep an in-memory cache (per process) in sync via Postgres LISTEN/NOTIFY so horizontally scaled instances observe the latest queue state without adding Redis or similar infra.

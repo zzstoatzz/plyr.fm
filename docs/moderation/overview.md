@@ -2,8 +2,6 @@
 title: "moderation on plyr.fm"
 ---
 
-# moderation on plyr.fm
-
 ## philosophy
 
 plyr.fm's approach to moderation is inspired by [Bluesky's stackable moderation architecture](https://bsky.social/about/blog/03-12-2024-stackable-moderation). the core insight: **moderation is information, not enforcement**.

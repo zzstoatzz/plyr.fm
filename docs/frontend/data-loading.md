@@ -2,8 +2,6 @@
 title: "data loading"
 ---
 
-# data loading
-
 ## overview
 
 plyr.fm uses SvelteKit's server-side and client-side load functions for optimal performance and SEO.

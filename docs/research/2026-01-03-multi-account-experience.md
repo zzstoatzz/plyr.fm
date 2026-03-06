@@ -2,8 +2,6 @@
 title: "multi-account experience"
 ---
 
-# multi-account experience
-
 **status:** design draft
 **issue:** [#583](https://github.com/zzstoatzz/plyr.fm/issues/583)
 **date:** 2026-01-03

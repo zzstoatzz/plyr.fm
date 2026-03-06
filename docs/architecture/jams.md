@@ -2,8 +2,6 @@
 title: "jams — shared listening rooms"
 ---
 
-# jams — shared listening rooms
-
 real-time shared playback rooms. server-side only (no ATProto records in v1). gated behind `jams` feature flag.
 
 ## overview

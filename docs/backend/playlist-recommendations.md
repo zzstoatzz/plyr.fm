@@ -2,8 +2,6 @@
 title: "playlist recommendations"
 ---
 
-# playlist recommendations
-
 recommends tracks for a playlist based on its existing tracks' CLAP embeddings in turbopuffer. shown inline when editing a playlist.
 
 ## architecture

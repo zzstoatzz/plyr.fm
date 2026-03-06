@@ -1,8 +1,6 @@
 ---
-title: "research: Web Share Target API for iOS PWAs"
+title: "research: web share target API for iOS PWAs"
 ---
-
-# research: Web Share Target API for iOS PWAs
 
 **date**: 2025-12-19
 **question**: can a PWA receive shared audio files from the iOS share sheet (like SoundCloud does)?

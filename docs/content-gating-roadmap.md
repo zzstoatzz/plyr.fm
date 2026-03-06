@@ -1,8 +1,6 @@
 ---
-title: "Content Gating: Research Notes"
+title: "content gating: research notes"
 ---
-
-# Content Gating: Research Notes
 
 Reference material for understanding ATProtoFans and preparing for upcoming discussions.
 

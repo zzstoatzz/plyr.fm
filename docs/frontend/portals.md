@@ -2,8 +2,6 @@
 title: "portals (rendering modals outside parent DOM)"
 ---
 
-# portals (rendering modals outside parent DOM)
-
 ## the problem
 
 when a modal is rendered inside an element with `backdrop-filter`, `transform`, or `filter`, the modal's `position: fixed` becomes relative to that ancestor instead of the viewport. this causes modals to be positioned incorrectly (e.g., appearing off-screen).

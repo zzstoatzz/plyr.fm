@@ -2,8 +2,6 @@
 title: "contributing"
 ---
 
-# contributing
-
 guide for contributing to plyr.fm.
 
 ## getting started

@@ -2,8 +2,6 @@
 title: "sensitive content moderation"
 ---
 
-# sensitive content moderation
-
 ## overview
 
 plyr.fm allows artists to upload cover art and use their Bluesky avatars. some of this content may be inappropriate for general audiences (nudity, graphic imagery, etc.). rather than blocking uploads, we blur sensitive images by default and let users opt-in to view them.

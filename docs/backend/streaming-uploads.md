@@ -2,8 +2,6 @@
 title: "streaming uploads"
 ---
 
-# streaming uploads
-
 **status**: implemented in PR #182
 **date**: 2025-11-03
 

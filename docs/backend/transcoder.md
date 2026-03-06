@@ -2,8 +2,6 @@
 title: "audio transcoder service"
 ---
 
-# audio transcoder service
-
 ## overview
 
 the transcoder is a standalone rust-based HTTP service that handles audio format conversion using ffmpeg. it runs as a separate fly.io app to isolate CPU-intensive transcoding operations from the main backend API.

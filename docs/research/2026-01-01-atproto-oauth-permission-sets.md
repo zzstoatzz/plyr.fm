@@ -2,8 +2,6 @@
 title: "research: ATProto OAuth permission sets"
 ---
 
-# research: ATProto OAuth permission sets
-
 **date**: 2026-01-01
 **question**: how do ATProto OAuth permission sets work, and how could plyr.fm adopt them?
 

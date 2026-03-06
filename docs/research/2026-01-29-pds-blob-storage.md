@@ -2,8 +2,6 @@
 title: "PDS blob storage research"
 ---
 
-# PDS blob storage research
-
 storing audio on user's PDS instead of (or in addition to) R2.
 
 ## motivation

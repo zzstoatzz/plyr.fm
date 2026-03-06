@@ -2,8 +2,6 @@
 title: "database migrations"
 ---
 
-# database migrations
-
 ## current state (automated ✓)
 
 plyr.fm uses **automated database migrations** via fly.io's `release_command`.

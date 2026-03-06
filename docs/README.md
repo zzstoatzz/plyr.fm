@@ -2,8 +2,6 @@
 title: "plyr.fm documentation"
 ---
 
-# plyr.fm documentation
-
 organized knowledge base for plyr.fm development.
 
 ## quick navigation
