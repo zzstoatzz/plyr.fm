@@ -1,3 +1,7 @@
+---
+title: "client-side navigation"
+---
+
 # client-side navigation
 
 ## preserving player state across navigation

@@ -1,3 +1,7 @@
+---
+title: "redirect after login (deep link preservation through auth)"
+---
+
 # redirect after login (deep link preservation through auth)
 
 **status:** research complete

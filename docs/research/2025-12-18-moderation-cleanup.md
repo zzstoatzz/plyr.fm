@@ -1,3 +1,7 @@
+---
+title: "research: moderation cleanup"
+---
+
 # research: moderation cleanup
 
 **date**: 2025-12-18

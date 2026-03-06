@@ -1,3 +1,7 @@
+---
+title: "authentication"
+---
+
 # authentication
 
 plyr.fm uses secure cookie-based authentication to protect user sessions from XSS attacks.

@@ -1,3 +1,7 @@
+---
+title: "copyright detection"
+---
+
 # copyright detection
 
 technical documentation for the copyright scanning system.

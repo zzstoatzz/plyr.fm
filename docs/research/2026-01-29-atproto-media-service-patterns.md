@@ -1,3 +1,7 @@
+---
+title: "ATProto media service patterns"
+---
+
 # ATProto media service patterns
 
 research date: 2026-01-29

@@ -1,0 +1,17 @@
+# docs site commands
+
+# install dependencies
+install:
+    bun install
+
+# start dev server
+run: install
+    bun run dev
+
+# build static site
+build: install
+    bun run build
+
+# preview built site
+preview: install
+    bun run preview

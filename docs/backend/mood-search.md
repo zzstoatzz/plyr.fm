@@ -1,3 +1,7 @@
+---
+title: "mood search"
+---
+
 # mood search
 
 semantic search over tracks using CLAP (Contrastive Language-Audio Pretraining) embeddings. users describe a mood in natural language and get matching tracks ranked by audio similarity.

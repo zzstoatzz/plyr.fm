@@ -1,3 +1,7 @@
+---
+title: "terms of service"
+---
+
 # terms of service
 
 > **note:** the source of truth is `frontend/src/routes/terms/+page.svelte`. this markdown is a plain-text mirror for reference.

@@ -1,3 +1,7 @@
+---
+title: "research: minimal iOS app with share extension"
+---
+
 # research: minimal iOS app with share extension
 
 **date**: 2025-12-19

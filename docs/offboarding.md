@@ -1,3 +1,7 @@
+---
+title: "Offboarding & Data Export"
+---
+
 # Offboarding & Data Export
 
 Plyr.fm provides tools for users to export their data and manage their presence on the platform. This document outlines the architecture and workflows for these features.

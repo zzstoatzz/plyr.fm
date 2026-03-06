@@ -1,3 +1,7 @@
+---
+title: "redirect after login"
+---
+
 # redirect after login
 
 ## the problem

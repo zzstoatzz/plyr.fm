@@ -1,3 +1,7 @@
+---
+title: "Logfire Querying Guide"
+---
+
 # Logfire Querying Guide
 
 ## Basic Concepts

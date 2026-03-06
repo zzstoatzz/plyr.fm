@@ -1,3 +1,7 @@
+---
+title: "database connection pooling"
+---
+
 # database connection pooling
 
 configuration and best practices for managing database connections in production.

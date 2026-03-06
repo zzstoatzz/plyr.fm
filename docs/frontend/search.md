@@ -1,3 +1,7 @@
+---
+title: "unified search"
+---
+
 # unified search
 
 global search across tracks, artists, albums, and tags with fuzzy matching.

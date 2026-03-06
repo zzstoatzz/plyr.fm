@@ -1,3 +1,7 @@
+---
+title: "research: moderation architecture overhaul"
+---
+
 # research: moderation architecture overhaul
 
 **date**: 2025-12-20

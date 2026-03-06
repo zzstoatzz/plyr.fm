@@ -1,3 +1,7 @@
+---
+title: "research: supporter-gated content architecture"
+---
+
 # research: supporter-gated content architecture
 
 **date**: 2025-12-20

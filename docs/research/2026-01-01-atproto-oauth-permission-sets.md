@@ -1,3 +1,7 @@
+---
+title: "research: ATProto OAuth permission sets"
+---
+
 # research: ATProto OAuth permission sets
 
 **date**: 2026-01-01

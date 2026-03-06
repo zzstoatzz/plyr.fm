@@ -1,3 +1,7 @@
+---
+title: "streaming uploads"
+---
+
 # streaming uploads
 
 **status**: implemented in PR #182

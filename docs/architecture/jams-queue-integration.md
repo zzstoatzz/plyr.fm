@@ -1,3 +1,7 @@
+---
+title: "jams + queue integration"
+---
+
 # jams + queue integration
 
 ## big picture

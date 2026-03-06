@@ -1,3 +1,7 @@
+---
+title: "local development setup"
+---
+
 # local development setup
 
 ## prerequisites

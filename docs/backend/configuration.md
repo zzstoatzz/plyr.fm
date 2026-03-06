@@ -1,3 +1,7 @@
+---
+title: "configuration"
+---
+
 # configuration
 
 plyr.fm uses nested pydantic settings for configuration management, following a pattern similar to prefect.

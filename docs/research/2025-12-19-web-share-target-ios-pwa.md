@@ -1,3 +1,7 @@
+---
+title: "research: Web Share Target API for iOS PWAs"
+---
+
 # research: Web Share Target API for iOS PWAs
 
 **date**: 2025-12-19

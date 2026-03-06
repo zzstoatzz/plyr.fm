@@ -1,3 +1,7 @@
+---
+title: "neon database configuration"
+---
+
 # neon database configuration
 
 configuration guide for connecting to neon postgres databases.

@@ -1,3 +1,7 @@
+---
+title: "genre classification"
+---
+
 # genre classification
 
 ML-based genre classification for tracks using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model on Replicate.

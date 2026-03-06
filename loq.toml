@@ -87,19 +87,19 @@ max_lines = 715
 
 [[rules]]
 path = "docs/authentication.md"
-max_lines = 627
+max_lines = 631
 
 [[rules]]
 path = "docs/backend/liked-tracks.md"
-max_lines = 503
+max_lines = 507
 
 [[rules]]
 path = "docs/deployment/database-migrations.md"
-max_lines = 629
+max_lines = 633
 
 [[rules]]
 path = "docs/tools/neon.md"
-max_lines = 519
+max_lines = 523
 
 [[rules]]
 path = "frontend/src/lib/components/AddToMenu.svelte"

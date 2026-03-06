@@ -1,3 +1,7 @@
+---
+title: "design tokens"
+---
+
 # design tokens
 
 CSS custom properties defined in `frontend/src/routes/+layout.svelte`. Use these instead of hardcoding values.

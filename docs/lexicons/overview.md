@@ -1,3 +1,7 @@
+---
+title: "plyr.fm Lexicons"
+---
+
 # plyr.fm Lexicons
 
 > **note**: this is living documentation. the lexicon JSON definitions in `/lexicons/` are the source of truth.
