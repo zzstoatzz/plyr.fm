@@ -86,7 +86,7 @@ path = "backend/tests/test_moderation.py"
 max_lines = 715
 
 [[rules]]
-path = "docs/authentication.md"
+path = "docs-internal/authentication.md"
 max_lines = 631
 
 [[rules]]

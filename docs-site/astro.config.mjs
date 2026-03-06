@@ -13,25 +13,14 @@ export default defineConfig({
       },
       plugins: [starlightClientMermaid()],
       sidebar: [
+        { slug: "listeners" },
+        { slug: "artists" },
+        { slug: "developers" },
+        { slug: "lexicons/overview" },
         {
-          label: "getting started",
-          items: [
-            { slug: "local-development/setup" },
-            { slug: "contributing" },
-            { slug: "offboarding" },
-          ],
-        },
-        {
-          label: "platform",
+          label: "contributing",
           collapsed: true,
-          items: [
-            { slug: "authentication" },
-            { slug: "security" },
-            { slug: "deployment/environments" },
-            { slug: "frontend/keyboard-shortcuts" },
-            { slug: "moderation/overview" },
-            { slug: "lexicons/overview" },
-          ],
+          items: [{ slug: "contributing" }],
         },
         {
           label: "legal",

@@ -1,0 +1,68 @@
+---
+// featured track embed — fetches a recent track and renders a playable iframe
+---
+
+<div class="embed-section" id="embed-section">
+  <div class="embed-container" id="embed-container">
+    <div class="embed-loading">loading...</div>
+  </div>
+</div>
+
+<script>
+  const API = "https://api.plyr.fm";
+  const SITE = "https://plyr.fm";
+  const container = document.getElementById("embed-container")!;
+
+  async function loadEmbed() {
+    try {
+      const res = await fetch(`${API}/search/?q=&type=tracks&limit=1`);
+      if (!res.ok) throw new Error("fetch failed");
+      const data = await res.json();
+      const tracks = data.results?.filter(
+        (r: { type: string }) => r.type === "track",
+      );
+
+      if (!tracks?.length) {
+        showFallback();
+        return;
+      }
+
+      const track = tracks[0];
+      const iframe = document.createElement("iframe");
+      iframe.src = `${SITE}/embed/track/${track.id}`;
+      iframe.width = "100%";
+      iframe.height = "152";
+      iframe.frameBorder = "0";
+      iframe.allow = "autoplay; encrypted-media";
+      iframe.loading = "lazy";
+      iframe.style.borderRadius = "0.5rem";
+      iframe.style.border = "1px solid var(--sl-color-gray-4)";
+
+      container.innerHTML = "";
+      container.appendChild(iframe);
+    } catch {
+      showFallback();
+    }
+  }
+
+  function showFallback() {
+    container.innerHTML = `
+      <a href="${SITE}" class="embed-fallback">
+        listen on plyr.fm &rarr;
+      </a>
+    `;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting) {
+        loadEmbed();
+        observer.disconnect();
+      }
+    },
+    { threshold: 0.1 },
+  );
+
+  const el = document.getElementById("embed-section");
+  if (el) observer.observe(el);
+</script>
