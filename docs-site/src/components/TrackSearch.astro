@@ -1,5 +1,5 @@
 ---
-// interactive track search — debounced client-side fetch from /search/
+// interactive track search — debounced client-side fetch, clickable results link to plyr.fm
 ---
 
 <div class="search-section" id="search-section">
@@ -14,6 +14,7 @@
 
 <script>
   const API = "https://api.plyr.fm";
+  const SITE = "https://plyr.fm";
   const input = document.getElementById(
     "track-search-input",
   ) as HTMLInputElement;
@@ -53,14 +54,20 @@
       resultsEl.innerHTML = tracks
         .map(
           (t: {
+            id: string;
             title: string;
             artist_display_name: string;
             artist_handle: string;
+            image_url?: string;
           }) =>
-            `<div class="search-result">
-              <span class="search-title">${escapeHtml(t.title)}</span>
-              <span class="search-artist">${escapeHtml(t.artist_display_name || t.artist_handle)}</span>
-            </div>`,
+            `<a href="${SITE}/track/${t.id}" target="_blank" rel="noopener" class="search-result">
+              ${t.image_url ? `<img src="${escapeHtml(t.image_url)}" alt="" class="search-thumb" loading="lazy" />` : `<div class="search-thumb search-thumb-empty"></div>`}
+              <div class="search-info">
+                <span class="search-title">${escapeHtml(t.title)}</span>
+                <span class="search-artist">${escapeHtml(t.artist_display_name || t.artist_handle)}</span>
+              </div>
+              <span class="search-play">&rsaquo;</span>
+            </a>`,
         )
         .join("");
     } catch {

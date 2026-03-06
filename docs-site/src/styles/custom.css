@@ -57,6 +57,80 @@
   margin-bottom: 1rem;
 }
 
+/* audience cards */
+.audience-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 480px) {
+  .audience-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.audience-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+  border: 1px solid var(--sl-color-gray-4);
+  border-radius: 0.5rem;
+  background: var(--sl-color-gray-6);
+  text-decoration: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.audience-card:hover {
+  border-color: var(--sl-color-accent);
+  background: var(--sl-color-gray-5);
+}
+
+.audience-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--sl-color-accent);
+}
+
+.audience-card h3 {
+  font-size: 1rem;
+  color: var(--sl-color-white);
+  margin: 0 0 0.25rem;
+}
+
+.audience-card p {
+  font-size: 0.8rem;
+  color: var(--sl-color-gray-2);
+  margin: 0;
+}
+
+/* track embed */
+.embed-section {
+  max-width: 32rem;
+}
+
+.embed-container {
+  min-height: 152px;
+}
+
+.embed-loading {
+  color: var(--sl-color-gray-3);
+  font-size: 0.85rem;
+  padding: 1rem 0;
+}
+
+.embed-fallback {
+  display: inline-block;
+  color: var(--sl-color-accent);
+  font-size: 0.9rem;
+  text-decoration: none;
+  padding: 0.75rem 0;
+}
+
+.embed-fallback:hover {
+  text-decoration: underline;
+}
+
 /* stats cards */
 .stats-grid {
   display: grid;
@@ -118,24 +192,61 @@
 
 .search-result {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 0.75rem;
   padding: 0.5rem 0.8rem;
   border-bottom: 1px solid var(--sl-color-gray-5);
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.search-result:hover {
+  background: var(--sl-color-gray-5);
 }
 
 .search-result:last-child {
   border-bottom: none;
 }
 
+.search-thumb {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.25rem;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.search-thumb-empty {
+  background: var(--sl-color-gray-4);
+}
+
+.search-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
 .search-title {
   color: var(--sl-color-white);
   font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .search-artist {
   color: var(--sl-color-gray-2);
   font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-play {
+  color: var(--sl-color-gray-3);
+  font-size: 1.25rem;
+  flex-shrink: 0;
 }
 
 .search-empty {

@@ -6,25 +6,56 @@ hero:
   title: plyr.fm docs
   tagline: audio streaming on ATProto
   actions:
-    - text: get started
-      link: /local-development/setup/
+    - text: start listening
+      link: https://plyr.fm
       icon: right-arrow
-    - text: contributing
-      link: /contributing/
+    - text: for developers
+      link: /developers/
       variant: minimal
 ---
 
 import Stats from '../../components/Stats.astro';
 import TrackSearch from '../../components/TrackSearch.astro';
+import TrackEmbed from '../../components/TrackEmbed.astro';
+
+<div class="landing-section">
+  <div class="audience-grid">
+    <a href="/listeners/" class="audience-card">
+      <span class="audience-icon">&#9835;</span>
+      <h3>listeners</h3>
+      <p>stream music, build playlists, discover artists</p>
+    </a>
+    <a href="/artists/" class="audience-card">
+      <span class="audience-icon">&#9834;</span>
+      <h3>artists</h3>
+      <p>upload tracks, embed players, own your data</p>
+    </a>
+    <a href="/developers/" class="audience-card">
+      <span class="audience-icon">&lt;/&gt;</span>
+      <h3>developers</h3>
+      <p>public API, python SDK, MCP server</p>
+    </a>
+    <a href="/contributing/" class="audience-card">
+      <span class="audience-icon">&#9881;</span>
+      <h3>contributors</h3>
+      <p>open source — help build the platform</p>
+    </a>
+  </div>
+</div>
+
+<div class="landing-section">
+  <h2>hear it</h2>
+  <TrackEmbed />
+</div>
+
+<div class="landing-section">
+  <h2>search tracks</h2>
+  <TrackSearch />
+</div>
 
 <div class="landing-section">
   <h2>platform stats</h2>
   <Stats />
-</div>
-
-<div class="landing-section">
-  <h2>try it — search tracks</h2>
-  <TrackSearch />
 </div>
 
 <div class="landing-section">
