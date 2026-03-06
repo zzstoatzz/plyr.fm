@@ -33,7 +33,7 @@ just backend run
 just frontend run
 ```
 
-visit http://localhost:5173 to see the app. see [local development setup](./local-development/setup.md) for complete environment configuration, database setup, and troubleshooting.
+visit http://localhost:5173 to see the app. see [local development setup](/local-development/setup/) for complete environment configuration, database setup, and troubleshooting.
 
 ## development workflow
 
@@ -75,7 +75,7 @@ just backend migrate "description of change"
 just backend migrate-up
 ```
 
-see [database migrations](./deployment/database-migrations.md) for the full workflow.
+see [database migrations](/deployment/database-migrations/) for the full workflow.
 
 ## conventions
 
@@ -97,7 +97,7 @@ see [database migrations](./deployment/database-migrations.md) for the full work
 ### frontend
 
 - SvelteKit with **Svelte 5 Runes** — use `$state`, `$derived`, `$effect`
-- see [state management](./frontend/state-management.md) for patterns
+- see [state management](/frontend/state-management/) for patterns
 
 ### ATProto
 
@@ -148,8 +148,8 @@ plyr.fm/
 
 ## further reading
 
-- [local development setup](./local-development/setup.md) — full environment config and troubleshooting
-- [backend configuration](./backend/configuration.md) — settings and environment variables
-- [state management](./frontend/state-management.md) — Svelte 5 runes patterns
-- [deployment environments](./deployment/environments.md) — staging vs production
-- [tools](./tools/) — logfire, neon, pdsx, and other dev tools
+- [local development setup](/local-development/setup/) — full environment config and troubleshooting
+- [backend configuration](/backend/configuration/) — settings and environment variables
+- [state management](/frontend/state-management/) — Svelte 5 runes patterns
+- [deployment environments](/deployment/environments/) — staging vs production
+- [tools](/tools/logfire/) — logfire, neon, pdsx, and other dev tools

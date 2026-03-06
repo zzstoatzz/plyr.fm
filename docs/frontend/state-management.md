@@ -225,7 +225,7 @@ plyr.fm uses global state managers following the Svelte 5 runes pattern for cros
 - optimistic updates with 250ms debounce
 - handles shuffle and repeat modes
 - conflict resolution for multi-device scenarios
-- see [`queue.md`](./queue.md) for details
+- see [queue](/frontend/queue/) for details
 
 ### liked tracks (`frontend/src/lib/tracks.svelte.ts`)
 - like/unlike functions exported from tracks module

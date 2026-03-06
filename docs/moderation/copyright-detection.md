@@ -289,4 +289,4 @@ considerations for where to build the admin UI:
 - **option B**: separate UI on moderation service - isolated, but needs its own auth
 - **option C**: use Ozone - Bluesky's open-source moderation tool, already built for ATProto labels
 
-see [overview.md](./overview.md) for architecture discussion.
+see [overview](/moderation/overview/) for architecture discussion.

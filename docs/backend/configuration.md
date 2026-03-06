@@ -152,7 +152,7 @@ f"{settings.atproto.app_namespace}.track"
 
 ### `settings.atproto.resolved_scope`
 
-constructs the OAuth scope from the app's lexicon collections. this scope is used for all OAuth grants — browser sessions and [developer tokens](../authentication.md#scoping) alike — ensuring tokens can only access plyr.fm's namespace on the user's PDS.
+constructs the OAuth scope from the app's lexicon collections. this scope is used for all OAuth grants — browser sessions and [developer tokens](/authentication/#scoping) alike — ensuring tokens can only access plyr.fm's namespace on the user's PDS.
 
 ```python
 # with permission sets (default when lexicons are published):

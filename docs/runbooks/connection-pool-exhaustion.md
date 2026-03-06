@@ -91,5 +91,5 @@ you should see:
 
 ## related docs
 
-- [connection pooling config](../backend/database/connection-pooling.md)
-- [logfire querying guide](../tools/logfire.md)
+- [connection pooling config](/backend/database/connection-pooling/)
+- [logfire querying guide](/tools/logfire/)
