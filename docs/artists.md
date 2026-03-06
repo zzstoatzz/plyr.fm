@@ -12,7 +12,7 @@ plyr.fm gives artists a place to share music where **you own your data**. every 
 3. add a title, tags, and optional cover art
 4. your track is live — stored in your PDS and indexed by plyr.fm
 
-supported formats: MP3, WAV, FLAC, AAC, OGG. files are transcoded for streaming automatically.
+supported formats: MP3, WAV, FLAC, AAC, OGG.
 
 ## embeds
 
