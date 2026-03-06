@@ -1,27 +1,43 @@
 ---
-// replaces Starlight's default SocialIcons with a single link to the tangled repo
+// replaces Starlight's default SocialIcons with links to status, devlog, and source
 ---
 
 <div class="social-icons">
   <a
-    href="https://tangled.org/zzstoatzz.io/plyr.fm"
-    aria-label="tangled.org"
+    href="https://status.zzstoatzz.io/@plyr.fm"
+    aria-label="status page"
+    title="status"
     target="_blank"
     rel="noopener"
-    class="tangled-link"
+    class="social-link"
   >
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="6" y="14" width="4" height="6" rx="1"></rect>
+      <rect x="14" y="8" width="4" height="12" rx="1"></rect>
+    </svg>
+  </a>
+  <a
+    href="https://plyr.leaflet.pub"
+    aria-label="devlog"
+    title="devlog"
+    target="_blank"
+    rel="noopener"
+    class="social-link"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 20h9"></path>
+      <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.855z"></path>
+    </svg>
+  </a>
+  <a
+    href="https://tangled.org/zzstoatzz.io/plyr.fm"
+    aria-label="source code"
+    title="source"
+    target="_blank"
+    rel="noopener"
+    class="social-link"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
@@ -35,14 +51,14 @@
     gap: 0.5rem;
   }
 
-  .tangled-link {
+  .social-link {
     color: var(--sl-color-gray-1);
     transition: color 0.2s ease;
     display: flex;
     align-items: center;
   }
 
-  .tangled-link:hover {
+  .social-link:hover {
     color: var(--sl-color-white);
   }
 </style>
