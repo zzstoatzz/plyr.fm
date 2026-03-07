@@ -34,6 +34,15 @@ def _add_itunes_ns(fg: FeedGenerator) -> None:
     fg.load_extension("podcast")
 
 
+def _set_feed_image(fg: FeedGenerator, url: str) -> None:
+    """Set feed image, skipping URLs that feedgen rejects (must end in .png/.jpg)."""
+    try:
+        fg.image(url)
+        fg.podcast.itunes_image(url)  # type: ignore[attr-defined]
+    except ValueError:
+        logger.debug("skipping feed image with unsupported URL: %s", url)
+
+
 def _add_track_item(
     fg: FeedGenerator,
     track: Track,
@@ -100,8 +109,7 @@ async def artist_feed(
     fg.language("en")
 
     if artist.avatar_url:
-        fg.image(artist.avatar_url)
-        fg.podcast.itunes_image(artist.avatar_url)  # type: ignore[attr-defined]
+        _set_feed_image(fg, artist.avatar_url)
 
     # self-link for feed readers
     fg.link(
@@ -155,10 +163,8 @@ async def album_feed(
     fg.description(album.description or f"album by {album.artist.display_name}")
     fg.language("en")
 
-    image_url = album.image_url or album.artist.avatar_url
-    if image_url:
-        fg.image(image_url)
-        fg.podcast.itunes_image(image_url)  # type: ignore[attr-defined]
+    if image_url := album.image_url or album.artist.avatar_url:
+        _set_feed_image(fg, image_url)
 
     fg.link(
         href=f"{frontend_url}/api/feeds/album/{handle}/{slug}",
@@ -208,10 +214,8 @@ async def playlist_feed(
     fg.description(f"playlist by {playlist.owner.display_name}")
     fg.language("en")
 
-    image_url = playlist.image_url or playlist.owner.avatar_url
-    if image_url:
-        fg.image(image_url)
-        fg.podcast.itunes_image(image_url)  # type: ignore[attr-defined]
+    if image_url := playlist.image_url or playlist.owner.avatar_url:
+        _set_feed_image(fg, image_url)
 
     fg.link(
         href=f"{frontend_url}/api/feeds/playlist/{playlist_id}",

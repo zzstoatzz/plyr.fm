@@ -201,6 +201,33 @@ async def test_album_feed_404_for_unknown(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+async def test_artist_feed_non_png_jpg_avatar_does_not_500(
+    client: TestClient,
+    db_session: AsyncSession,
+) -> None:
+    """artist feed doesn't crash when avatar URL isn't .png/.jpg (e.g. Bluesky CDN @jpeg)."""
+    artist = Artist(
+        did="did:plc:feed_bad_avatar",
+        handle="bad-avatar.bsky.social",
+        display_name="Bad Avatar Artist",
+        avatar_url="https://cdn.bsky.app/img/avatar/plain/did:plc:abc/bafkrei123@jpeg",
+    )
+    db_session.add(artist)
+    track = Track(
+        title="Some Track",
+        artist_did=artist.did,
+        file_id="feed_bad_av",
+        file_type="mp3",
+        r2_url="https://cdn.example.com/feed_bad_av.mp3",
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    response = client.get(f"/feeds/artist/{artist.handle}")
+    assert response.status_code == 200
+    assert "application/rss+xml" in response.headers["content-type"]
+
+
 async def test_artist_feed_has_enclosure(
     client: TestClient,
     artist: Artist,
