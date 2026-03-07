@@ -1,18 +1,18 @@
 ---
 title: "for artists"
-description: "upload, manage, and distribute your music on ATProto"
+description: "upload, manage, and distribute your music on atproto"
 ---
 
-plyr.fm gives artists a place to share music where **you own your data**. every track you upload is an [ATProto](https://atproto.com) record stored in your personal data server — portable, verifiable, and yours.
+plyr.fm gives artists a place to share music where **you own your data**. every track you upload is an [atproto](https://atproto.com) record stored in your [PDS](https://atproto.com/guides/self-hosting#pds) — the metadata record and the audio blob itself — portable, verifiable, and yours.
 
 ## uploading
 
-1. sign in at [plyr.fm](https://plyr.fm) with your [Atmosphere](https://atproto.com) account (Bluesky, BlackSky, etc.)
+1. sign in at [plyr.fm](https://plyr.fm) with your [atproto](https://atproto.com/specs/account) account (Bluesky, BlackSky, etc.)
 2. click **upload** and drop your audio files
 3. add a title, tags, and optional cover art
 4. your track is live — the audio and metadata are stored on your PDS and indexed by plyr.fm (falls back to plyr.fm storage if your PDS can't accept the file)
 
-supported formats: MP3, WAV, FLAC, AAC, OGG.
+supported formats: MP3, WAV, M4A.
 
 ## embeds
 
@@ -72,15 +72,15 @@ today this is a **binary check**: a listener either supports you or they don't. 
 
 ### what's next
 
-because ATProto doesn't yet have a permissioned data primitive, gated audio currently lives in plyr.fm-managed storage rather than on your PDS. this is the one exception to the "your music, your data" promise — and we want to fix it.
+because atproto doesn't yet have permissioned data, gated audio currently lives in plyr.fm-managed storage (public blob). this is the one exception to the "your music, your data" promise — and we want to fix it.
 
-the ATProto team is [exploring permissioned data](https://dholms.leaflet.pub/3mfrsbcn2gk2a) through concepts like **buckets** — named containers with access control lists that could let private blobs live on your own PDS. once that ships, gated tracks could move back to artist-controlled storage while still enforcing access rules at the protocol level.
+the atproto team is [exploring permissioned data](https://dholms.leaflet.pub/3mfrsbcn2gk2a) through concepts like **buckets** — named containers with access control lists that could let private blobs live on your own PDS. once that ships, gated tracks could move back to artist-controlled storage while still enforcing access rules at the protocol level.
 
 we'd also like to support more expressive gating — tiers, time-limited early access, per-track pricing — as the ecosystem matures.
 
 ## your data
 
-because tracks are ATProto records, you can:
+because tracks are atproto records, you can:
 
 - **[export](https://plyr.fm/portal)** your entire catalog from your PDS at any time
 - **migrate** to a different PDS without losing anything
@@ -89,4 +89,4 @@ your music lives in your repo under the `fm.plyr.track` collection. see the [lex
 
 ## leaving
 
-you can leave plyr.fm at any time. export your full catalog as a zip from the [portal](https://plyr.fm/portal). deleting your account removes all data from plyr.fm's infrastructure — your ATProto records stay on your PDS by default, but you can choose to delete those too. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
+you can leave plyr.fm at any time. export your full catalog as a zip from the [portal](https://plyr.fm/portal). deleting your account removes all data from plyr.fm's infrastructure — your atproto records stay on your PDS by default, but you can choose to delete those too. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
