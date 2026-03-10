@@ -37,8 +37,8 @@ class JetstreamConsumer:
         self._ws: ClientConnection | None = None
         self._known_dids: set[str] = set()
         self._cursor: int | None = None
-        self._last_cursor_flush: float = 0
-        self._last_did_refresh: float = 0
+        self._last_cursor_flush: float = 0.0
+        self._last_did_refresh: float = 0.0
         self._shutdown_event = asyncio.Event()
 
     async def run(self) -> None:

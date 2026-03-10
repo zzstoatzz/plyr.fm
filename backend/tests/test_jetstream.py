@@ -26,7 +26,7 @@ from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 async def artist(db_session: AsyncSession) -> Artist:
     """create a test artist."""
     a = Artist(
-        did="did:plc:test123",
+        did="did:plc:jetstream_test",
         handle="testartist.bsky.social",
         display_name="Test Artist",
         pds_url="https://bsky.social",
@@ -45,7 +45,7 @@ async def track(db_session: AsyncSession, artist: Artist) -> Track:
         file_type="mp3",
         artist_did=artist.did,
         r2_url="https://r2.example.com/abc123.mp3",
-        atproto_record_uri="at://did:plc:test123/fm.plyr.track/existing",
+        atproto_record_uri="at://did:plc:jetstream_test/fm.plyr.track/existing",
         atproto_record_cid="bafyexisting",
         audio_storage="r2",
     )
@@ -63,7 +63,7 @@ class TestJetstreamConsumer:
     async def test_dispatches_track_create(self) -> None:
         """event for known DID dispatches track create task."""
         consumer = JetstreamConsumer()
-        consumer._known_dids = {"did:plc:test123"}
+        consumer._known_dids = {"did:plc:jetstream_test"}
 
         mock_docket = MagicMock()
         dispatched: list[dict] = []
@@ -75,7 +75,7 @@ class TestJetstreamConsumer:
 
         event = {
             "kind": "commit",
-            "did": "did:plc:test123",
+            "did": "did:plc:jetstream_test",
             "time_us": 1000000,
             "commit": {
                 "collection": "fm.plyr.track",
@@ -90,8 +90,10 @@ class TestJetstreamConsumer:
             await consumer._process_event(event)
 
         assert len(dispatched) == 1
-        assert dispatched[0]["did"] == "did:plc:test123"
-        assert dispatched[0]["uri"] == "at://did:plc:test123/fm.plyr.track/abc123"
+        assert dispatched[0]["did"] == "did:plc:jetstream_test"
+        assert (
+            dispatched[0]["uri"] == "at://did:plc:jetstream_test/fm.plyr.track/abc123"
+        )
 
     async def test_skips_unknown_did(self) -> None:
         """events for unknown DIDs are silently skipped."""
@@ -116,10 +118,10 @@ class TestJetstreamConsumer:
     async def test_skips_non_commit_events(self) -> None:
         """non-commit events (identity, account) are skipped."""
         consumer = JetstreamConsumer()
-        consumer._known_dids = {"did:plc:test123"}
+        consumer._known_dids = {"did:plc:jetstream_test"}
         consumer._dispatch = AsyncMock()  # type: ignore[method-assign]
 
-        event = {"kind": "identity", "did": "did:plc:test123"}
+        event = {"kind": "identity", "did": "did:plc:jetstream_test"}
         await consumer._process_event(event)
         consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
 
@@ -187,7 +189,7 @@ class TestIngestTrackCreate:
             "createdAt": "2026-03-10T12:00:00Z",
             "duration": 180,
         }
-        uri = "at://did:plc:test123/fm.plyr.track/newtrack1"
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/newtrack1"
 
         await ingest_track_create(
             did=artist.did, rkey="newtrack1", record=record, uri=uri, cid="bafynew"
@@ -249,7 +251,7 @@ class TestIngestTrackCreate:
             "audioBlob": {"ref": {"$link": "bafyaudioblob"}, "mimeType": "audio/mpeg"},
             "createdAt": "2026-03-10T12:00:00Z",
         }
-        uri = "at://did:plc:test123/fm.plyr.track/pds1"
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/pds1"
 
         await ingest_track_create(
             did=artist.did, rkey="pds1", record=record, uri=uri, cid="bafynew"
@@ -320,7 +322,7 @@ class TestIngestLikeCreate:
             },
             "createdAt": "2026-03-10T12:00:00Z",
         }
-        uri = "at://did:plc:test123/fm.plyr.like/like1"
+        uri = "at://did:plc:jetstream_test/fm.plyr.like/like1"
 
         await ingest_like_create(did=artist.did, rkey="like1", record=record, uri=uri)
 
@@ -336,13 +338,13 @@ class TestIngestLikeCreate:
     ) -> None:
         """like for unknown subject track is skipped."""
         record = {
-            "subject": {"uri": "at://did:plc:test123/fm.plyr.track/nonexistent"},
+            "subject": {"uri": "at://did:plc:jetstream_test/fm.plyr.track/nonexistent"},
         }
         await ingest_like_create(
             did=artist.did,
             rkey="like2",
             record=record,
-            uri="at://did:plc:test123/fm.plyr.like/like2",
+            uri="at://did:plc:jetstream_test/fm.plyr.like/like2",
         )
 
         result = await db_session.execute(select(TrackLike))
@@ -357,7 +359,7 @@ class TestIngestLikeDelete:
         like = TrackLike(
             track_id=track.id,
             user_did=artist.did,
-            atproto_like_uri="at://did:plc:test123/fm.plyr.like/todelete",
+            atproto_like_uri="at://did:plc:jetstream_test/fm.plyr.like/todelete",
         )
         db_session.add(like)
         await db_session.commit()
@@ -365,13 +367,13 @@ class TestIngestLikeDelete:
         await ingest_like_delete(
             did=artist.did,
             rkey="todelete",
-            uri="at://did:plc:test123/fm.plyr.like/todelete",
+            uri="at://did:plc:jetstream_test/fm.plyr.like/todelete",
         )
 
         result = await db_session.execute(
             select(TrackLike).where(
                 TrackLike.atproto_like_uri
-                == "at://did:plc:test123/fm.plyr.like/todelete"
+                == "at://did:plc:jetstream_test/fm.plyr.like/todelete"
             )
         )
         assert result.scalar_one_or_none() is None
@@ -391,7 +393,7 @@ class TestIngestCommentCreate:
             "timestampMs": 5000,
             "createdAt": "2026-03-10T12:00:00Z",
         }
-        uri = "at://did:plc:test123/fm.plyr.comment/c1"
+        uri = "at://did:plc:jetstream_test/fm.plyr.comment/c1"
 
         await ingest_comment_create(did=artist.did, rkey="c1", record=record, uri=uri)
 
@@ -407,7 +409,7 @@ class TestIngestCommentCreate:
     ) -> None:
         """comment for unknown track is skipped."""
         record = {
-            "subject": {"uri": "at://did:plc:test123/fm.plyr.track/nope"},
+            "subject": {"uri": "at://did:plc:jetstream_test/fm.plyr.track/nope"},
             "text": "nope",
             "timestampMs": 0,
         }
@@ -415,7 +417,7 @@ class TestIngestCommentCreate:
             did=artist.did,
             rkey="c2",
             record=record,
-            uri="at://did:plc:test123/fm.plyr.comment/c2",
+            uri="at://did:plc:jetstream_test/fm.plyr.comment/c2",
         )
 
         result = await db_session.execute(select(TrackComment))
@@ -432,7 +434,7 @@ class TestIngestCommentDelete:
             user_did=artist.did,
             text="to delete",
             timestamp_ms=0,
-            atproto_comment_uri="at://did:plc:test123/fm.plyr.comment/del1",
+            atproto_comment_uri="at://did:plc:jetstream_test/fm.plyr.comment/del1",
         )
         db_session.add(comment)
         await db_session.commit()
@@ -440,13 +442,13 @@ class TestIngestCommentDelete:
         await ingest_comment_delete(
             did=artist.did,
             rkey="del1",
-            uri="at://did:plc:test123/fm.plyr.comment/del1",
+            uri="at://did:plc:jetstream_test/fm.plyr.comment/del1",
         )
 
         result = await db_session.execute(
             select(TrackComment).where(
                 TrackComment.atproto_comment_uri
-                == "at://did:plc:test123/fm.plyr.comment/del1"
+                == "at://did:plc:jetstream_test/fm.plyr.comment/del1"
             )
         )
         assert result.scalar_one_or_none() is None
@@ -465,7 +467,7 @@ class TestIngestListCreate:
             "name": "My Playlist",
             "createdAt": "2026-03-10T12:00:00Z",
         }
-        uri = "at://did:plc:test123/fm.plyr.list/pl1"
+        uri = "at://did:plc:jetstream_test/fm.plyr.list/pl1"
 
         await ingest_list_create(
             did=artist.did, rkey="pl1", record=record, uri=uri, cid="bafypl"
@@ -490,7 +492,7 @@ class TestIngestListCreate:
             did=artist.did,
             rkey="al1",
             record=record,
-            uri="at://did:plc:test123/fm.plyr.list/al1",
+            uri="at://did:plc:jetstream_test/fm.plyr.list/al1",
         )
 
         result = await db_session.execute(select(Playlist))
@@ -518,7 +520,7 @@ class TestAudioPdsRedirect:
             r2_url=None,
             audio_storage="pds",
             pds_blob_cid="bafyaudiocid123",
-            atproto_record_uri="at://did:plc:test123/fm.plyr.track/pdsonly",
+            atproto_record_uri="at://did:plc:jetstream_test/fm.plyr.track/pdsonly",
         )
         db_session.add(pds_track)
         await db_session.commit()
