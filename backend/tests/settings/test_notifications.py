@@ -120,7 +120,7 @@ async def test_send_track_notification_refetches_from_session(
     mock_service = AsyncMock()
     mock_service.send_track_notification = AsyncMock(return_value=None)
 
-    with patch("backend._internal.tasks.hooks.notification_service", mock_service):
+    with patch("backend._internal.notifications.notification_service", mock_service):
         # _send_track_notification now opens its own session
         await _send_track_notification(track_id)
 

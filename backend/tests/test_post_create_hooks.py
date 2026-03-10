@@ -14,7 +14,7 @@ MOCK_SETTINGS_PATH = "backend._internal.tasks.hooks.settings"
 MOCK_COPYRIGHT_PATH = "backend._internal.tasks.hooks.schedule_copyright_scan"
 MOCK_EMBEDDING_PATH = "backend._internal.tasks.hooks.schedule_embedding_generation"
 MOCK_GENRE_PATH = "backend._internal.tasks.hooks.schedule_genre_classification"
-MOCK_NOTIFICATION_PATH = "backend._internal.tasks.hooks.notification_service"
+MOCK_NOTIFICATION_PATH = "backend._internal.notifications.notification_service"
 MOCK_REDIS_PATH = "backend._internal.tasks.hooks.get_async_redis_client"
 
 
