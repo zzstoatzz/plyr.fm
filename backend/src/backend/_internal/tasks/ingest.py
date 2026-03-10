@@ -14,6 +14,8 @@ import logfire
 from docket import ConcurrencyLimit, ExponentialRetry
 from sqlalchemy import delete, select, update
 
+from backend._internal.atproto.client import pds_blob_url
+from backend._internal.tasks.hooks import run_post_track_create_hooks
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.utilities.database import db_session
 from backend.utilities.lexicon import validate_record
@@ -119,12 +121,21 @@ async def ingest_track_create(
         )
         db.add(track)
         await db.commit()
+
+        # resolve audio URL for post-creation hooks
+        resolved_audio_url = track.r2_url
+        if not resolved_audio_url and pds_blob_cid and artist.pds_url:
+            resolved_audio_url = pds_blob_url(artist.pds_url, did, pds_blob_cid)
+
         logfire.info(
             "ingest: track created",
             uri=uri,
             artist_did=did,
             audio_storage=audio_storage,
         )
+
+    # shared post-creation hooks (copyright, embeddings, cache, etc.)
+    await run_post_track_create_hooks(track.id, audio_url=resolved_audio_url)
 
 
 async def ingest_track_update(

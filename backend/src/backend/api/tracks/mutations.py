@@ -32,13 +32,13 @@ from backend._internal.tasks import (
     schedule_album_list_sync,
     schedule_move_track_audio,
 )
+from backend._internal.tasks.hooks import invalidate_tracks_discovery_cache
 from backend.config import settings
 from backend.models import Artist, Track, TrackTag, get_db
 from backend.schemas import MessageResponse, TrackResponse
 from backend.storage import storage
 from backend.utilities.tags import get_or_create_tag, parse_tags_json
 
-from .listing import invalidate_tracks_discovery_cache
 from .metadata_service import (
     apply_album_update,
     resolve_feature_handles,

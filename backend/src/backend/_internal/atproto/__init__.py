@@ -1,6 +1,11 @@
 """ATProto integration for relay."""
 
-from backend._internal.atproto.client import BlobRef, PayloadTooLargeError, upload_blob
+from backend._internal.atproto.client import (
+    BlobRef,
+    PayloadTooLargeError,
+    pds_blob_url,
+    upload_blob,
+)
 from backend._internal.atproto.profile import (
     fetch_user_avatar,
     fetch_user_profile,
@@ -34,6 +39,7 @@ __all__ = [
     "fetch_user_profile",
     "get_record_public",
     "normalize_avatar_url",
+    "pds_blob_url",
     "sync_atproto_records",
     "update_comment_record",
     "update_list_record",

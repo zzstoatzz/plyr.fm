@@ -8,6 +8,7 @@ from docket import Perpetual
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend._internal.atproto.client import pds_blob_url
 from backend._internal.jetstream import JetstreamConsumer, consume_jetstream
 from backend._internal.tasks.ingest import (
     ingest_comment_create,
@@ -23,6 +24,16 @@ from backend._internal.tasks.ingest import (
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 
 # --- fixtures ---
+
+
+@pytest.fixture(autouse=True)
+def _mock_post_create_hooks():
+    """prevent ingest_track_create from reaching docket/redis during tests."""
+    with patch(
+        "backend._internal.tasks.ingest.run_post_track_create_hooks",
+        new_callable=AsyncMock,
+    ):
+        yield
 
 
 @pytest.fixture
@@ -291,6 +302,66 @@ class TestIngestTrackCreate:
         assert track.audio_storage == "pds"
         assert track.pds_blob_cid == "bafyaudioblob"
         assert track.r2_url is None
+
+    async def test_track_create_runs_hooks(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """ingest_track_create calls run_post_track_create_hooks with R2 URL."""
+        record = {
+            "title": "Hooked Track",
+            "artist": "Test Artist",
+            "fileId": "hook_001",
+            "fileType": "mp3",
+            "audioUrl": "https://r2.example.com/hook_001.mp3",
+            "createdAt": "2025-01-01T00:00:00Z",
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/hook1"
+
+        with patch(
+            "backend._internal.tasks.ingest.run_post_track_create_hooks",
+            new_callable=AsyncMock,
+        ) as mock_hooks:
+            await ingest_track_create(
+                did=artist.did, rkey="hook1", record=record, uri=uri, cid="bafyhook"
+            )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        track = result.scalar_one()
+        mock_hooks.assert_called_once_with(
+            track.id, audio_url="https://r2.example.com/hook_001.mp3"
+        )
+
+    async def test_track_create_runs_hooks_pds(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """ingest_track_create passes PDS blob URL to hooks when no R2 URL."""
+        record = {
+            "title": "PDS Hooked",
+            "artist": "Test Artist",
+            "fileId": "pds_hook_001",
+            "fileType": "mp3",
+            "audioBlob": {"ref": {"$link": "bafypdsblob"}, "mimeType": "audio/mpeg"},
+            "createdAt": "2025-01-01T00:00:00Z",
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/pdshook1"
+
+        with patch(
+            "backend._internal.tasks.ingest.run_post_track_create_hooks",
+            new_callable=AsyncMock,
+        ) as mock_hooks:
+            await ingest_track_create(
+                did=artist.did, rkey="pdshook1", record=record, uri=uri, cid="bafyh"
+            )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        track = result.scalar_one()
+        assert artist.pds_url is not None
+        expected_url = pds_blob_url(artist.pds_url, artist.did, "bafypdsblob")
+        mock_hooks.assert_called_once_with(track.id, audio_url=expected_url)
 
 
 class TestIngestTrackDelete:

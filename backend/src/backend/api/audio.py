@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_, select
 
 from backend._internal import Session, get_optional_session, validate_supporter
+from backend._internal.atproto.client import pds_blob_url
 from backend.models import Artist, Track
 from backend.storage import storage
 from backend.utilities.database import db_session
@@ -106,13 +107,10 @@ async def stream_audio(
 
     # PDS-only tracks: redirect to PDS getBlob endpoint
     if audio_storage == "pds" and pds_blob_cid and not r2_url:
-        pds_url = await _resolve_pds_url(artist_did)
-        if pds_url:
-            blob_url = (
-                f"{pds_url}/xrpc/com.atproto.sync.getBlob"
-                f"?did={artist_did}&cid={pds_blob_cid}"
+        if artist_pds_url := await _resolve_pds_url(artist_did):
+            return RedirectResponse(
+                url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid)
             )
-            return RedirectResponse(url=blob_url)
 
     # get URL for the requested file (original or transcoded)
     url = await storage.get_url(
@@ -277,14 +275,11 @@ async def get_audio_url(
 
     # PDS-only tracks: return PDS getBlob URL
     if audio_storage == "pds" and pds_blob_cid and not r2_url:
-        pds_url = await _resolve_pds_url(artist_did)
-        if pds_url:
-            blob_url = (
-                f"{pds_url}/xrpc/com.atproto.sync.getBlob"
-                f"?did={artist_did}&cid={pds_blob_cid}"
-            )
+        if artist_pds_url := await _resolve_pds_url(artist_did):
             return AudioUrlResponse(
-                url=blob_url, file_id=serve_file_id, file_type=serve_file_type
+                url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid),
+                file_id=serve_file_id,
+                file_type=serve_file_type,
             )
 
     # otherwise, resolve it

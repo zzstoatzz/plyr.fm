@@ -33,6 +33,10 @@ from backend._internal.tasks.pds import (
     schedule_pds_delete_like,
     schedule_pds_update_comment,
 )
+from backend._internal.tasks.hooks import (
+    invalidate_tracks_discovery_cache,
+    run_post_track_create_hooks,
+)
 from backend._internal.tasks.ingest import (
     ingest_comment_create,
     ingest_comment_delete,
@@ -112,12 +116,14 @@ __all__ = [
     "ingest_track_create",
     "ingest_track_delete",
     "ingest_track_update",
+    "invalidate_tracks_discovery_cache",
     "move_track_audio",
     "pds_create_comment",
     "pds_create_like",
     "pds_delete_comment",
     "pds_delete_like",
     "pds_update_comment",
+    "run_post_track_create_hooks",
     "scan_copyright",
     "schedule_album_list_sync",
     "schedule_atproto_sync",
