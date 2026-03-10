@@ -186,7 +186,6 @@ class TestIngestTrackCreate:
             "fileId": "js_file_001",
             "fileType": "mp3",
             "audioUrl": "https://r2.example.com/js_file_001.mp3",
-            "createdAt": "2026-03-10T12:00:00Z",
             "duration": 180,
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/newtrack1"
@@ -249,7 +248,6 @@ class TestIngestTrackCreate:
             "fileId": "pds_001",
             "fileType": "mp3",
             "audioBlob": {"ref": {"$link": "bafyaudioblob"}, "mimeType": "audio/mpeg"},
-            "createdAt": "2026-03-10T12:00:00Z",
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/pds1"
 
@@ -320,7 +318,6 @@ class TestIngestLikeCreate:
                 "uri": track.atproto_record_uri,
                 "cid": track.atproto_record_cid,
             },
-            "createdAt": "2026-03-10T12:00:00Z",
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.like/like1"
 
@@ -391,7 +388,6 @@ class TestIngestCommentCreate:
             "subject": {"uri": track.atproto_record_uri},
             "text": "great track!",
             "timestampMs": 5000,
-            "createdAt": "2026-03-10T12:00:00Z",
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.comment/c1"
 
@@ -465,7 +461,6 @@ class TestIngestListCreate:
         record = {
             "listType": "playlist",
             "name": "My Playlist",
-            "createdAt": "2026-03-10T12:00:00Z",
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.list/pl1"
 
