@@ -1,8 +1,10 @@
 """tests for Jetstream consumer and ingest tasks."""
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from docket import Perpetual
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -165,10 +167,12 @@ class TestJetstreamConsumer:
 
 
 class TestConsumeJetstreamPerpetual:
-    async def test_noop_when_disabled(self) -> None:
+    async def test_cancels_perpetual_when_disabled(self) -> None:
+        perpetual = Perpetual(every=timedelta(seconds=0))
         with patch("backend._internal.jetstream.settings") as mock_settings:
             mock_settings.jetstream.enabled = False
-            await consume_jetstream()
+            await consume_jetstream(perpetual=perpetual)
+        assert perpetual.cancelled
 
     async def test_runs_consumer_when_enabled(self) -> None:
         with (

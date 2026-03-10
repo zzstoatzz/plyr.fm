@@ -284,6 +284,7 @@ async def consume_jetstream(
     if the consumer exits (crash, disconnect), Perpetual reschedules immediately.
     """
     if not settings.jetstream.enabled:
+        perpetual.cancel()
         return
 
     consumer = JetstreamConsumer()
