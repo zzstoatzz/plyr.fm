@@ -7,6 +7,7 @@ requires DOCKET_URL to be set (Redis is always available).
 """
 
 from backend._internal.export_tasks import process_export
+from backend._internal.jetstream import consume_jetstream
 from backend._internal.pds_backfill_tasks import backfill_tracks_to_pds
 from backend._internal.tasks.copyright import (
     scan_copyright,
@@ -63,6 +64,7 @@ from backend._internal.tasks.sync import (
 
 # collection of all background task functions for docket registration
 background_tasks = [
+    consume_jetstream,
     scan_copyright,
     sync_copyright_resolutions,
     process_export,
@@ -96,6 +98,7 @@ background_tasks = [
 __all__ = [
     "background_tasks",
     "classify_genres",
+    "consume_jetstream",
     "generate_embedding",
     "ingest_comment_create",
     "ingest_comment_delete",

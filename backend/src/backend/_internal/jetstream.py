@@ -12,11 +12,13 @@ import asyncio
 import logging
 import random
 import time
+from datetime import timedelta
 from typing import Any
 
 import logfire
 import orjson
 import websockets
+from docket import Perpetual
 from sqlalchemy import select
 from websockets.asyncio.client import ClientConnection
 
@@ -70,6 +72,7 @@ class JetstreamConsumer:
                 await self._connect_and_consume()
             except asyncio.CancelledError:
                 logger.info("jetstream consumer cancelled")
+                await self._flush_cursor()
                 return
             except Exception:
                 logger.exception("jetstream consumer error, reconnecting")
@@ -271,11 +274,17 @@ class JetstreamConsumer:
         ):
             await self._refresh_known_dids()
 
-    async def shutdown(self) -> None:
-        """graceful shutdown."""
-        self._shutdown_event.set()
-        await self._flush_cursor()
-        if self._ws:
-            await self._ws.close()
-            self._ws = None
-        logger.info("jetstream consumer shut down")
+
+async def consume_jetstream(
+    perpetual: Perpetual = Perpetual(every=timedelta(seconds=0), automatic=True),  # noqa: B008
+) -> None:
+    """perpetual task: run the Jetstream WebSocket consumer.
+
+    docket's Redis lock ensures only one instance runs this across all workers.
+    if the consumer exits (crash, disconnect), Perpetual reschedules immediately.
+    """
+    if not settings.jetstream.enabled:
+        return
+
+    consumer = JetstreamConsumer()
+    await consumer.run()

@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal.jetstream import JetstreamConsumer
+from backend._internal.jetstream import JetstreamConsumer, consume_jetstream
 from backend._internal.tasks.ingest import (
     ingest_comment_create,
     ingest_comment_delete,
@@ -58,10 +58,7 @@ async def track(db_session: AsyncSession, artist: Artist) -> Track:
 
 
 class TestJetstreamConsumer:
-    """tests for JetstreamConsumer event processing."""
-
     async def test_dispatches_track_create(self) -> None:
-        """event for known DID dispatches track create task."""
         consumer = JetstreamConsumer()
         consumer._known_dids = {"did:plc:jetstream_test"}
 
@@ -96,7 +93,6 @@ class TestJetstreamConsumer:
         )
 
     async def test_skips_unknown_did(self) -> None:
-        """events for unknown DIDs are silently skipped."""
         consumer = JetstreamConsumer()
         consumer._known_dids = {"did:plc:known"}
 
@@ -116,7 +112,6 @@ class TestJetstreamConsumer:
         consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
 
     async def test_skips_non_commit_events(self) -> None:
-        """non-commit events (identity, account) are skipped."""
         consumer = JetstreamConsumer()
         consumer._known_dids = {"did:plc:jetstream_test"}
         consumer._dispatch = AsyncMock()  # type: ignore[method-assign]
@@ -126,7 +121,6 @@ class TestJetstreamConsumer:
         consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
 
     async def test_persists_cursor(self) -> None:
-        """cursor is saved to Redis."""
         consumer = JetstreamConsumer()
         mock_redis = AsyncMock()
 
@@ -142,7 +136,6 @@ class TestJetstreamConsumer:
         assert args[0][1] == "12345678"
 
     async def test_resumes_from_cursor(self) -> None:
-        """cursor from Redis is used in connect URL."""
         consumer = JetstreamConsumer()
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value="9999999")
@@ -158,19 +151,33 @@ class TestJetstreamConsumer:
         assert "cursor=" in url
 
     async def test_build_url_without_cursor(self) -> None:
-        """URL without cursor just has wantedCollections."""
         consumer = JetstreamConsumer()
         url = consumer._build_url()
         assert "wantedCollections=fm.plyr.*" in url
         assert "cursor=" not in url
 
     async def test_build_url_with_cursor_rewinds(self) -> None:
-        """cursor is rewound by 5 seconds for idempotent reprocessing."""
         consumer = JetstreamConsumer()
         consumer._cursor = 10_000_000  # 10 seconds in microseconds
         url = consumer._build_url()
         # rewound by 5_000_000 → cursor=5000000
         assert "cursor=5000000" in url
+
+
+class TestConsumeJetstreamPerpetual:
+    async def test_noop_when_disabled(self) -> None:
+        with patch("backend._internal.jetstream.settings") as mock_settings:
+            mock_settings.jetstream.enabled = False
+            await consume_jetstream()
+
+    async def test_runs_consumer_when_enabled(self) -> None:
+        with (
+            patch("backend._internal.jetstream.settings") as mock_settings,
+            patch.object(JetstreamConsumer, "run", new_callable=AsyncMock) as mock_run,
+        ):
+            mock_settings.jetstream.enabled = True
+            await consume_jetstream()
+            mock_run.assert_called_once()
 
 
 # --- track ingestion tests ---
