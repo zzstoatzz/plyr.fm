@@ -296,6 +296,8 @@ class TestIngestTrackUpdate:
             cid="bafyupdated",
         )
 
+        # expire cached objects so the re-query hits the DB
+        db_session.expire_all()
         result = await db_session.execute(
             select(Track).where(Track.atproto_record_uri == track.atproto_record_uri)
         )
