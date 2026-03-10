@@ -81,7 +81,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with background_worker_lifespan() as docket:
         # store docket on app state for access in routes if needed
         app.state.docket = docket
-        yield
+
+        # start jetstream consumer if enabled
+        consumer_task: asyncio.Task[None] | None = None
+        if settings.jetstream.enabled:
+            from backend._internal.jetstream import JetstreamConsumer
+
+            consumer = JetstreamConsumer()
+            consumer_task = asyncio.create_task(
+                consumer.run(), name="jetstream-consumer"
+            )
+            logger.info("jetstream consumer started")
+
+        try:
+            yield
+        finally:
+            if consumer_task:
+                consumer_task.cancel()
+                try:
+                    await asyncio.wait_for(consumer_task, timeout=5.0)
+                except (TimeoutError, asyncio.CancelledError):
+                    logger.debug("jetstream consumer task cancelled")
 
     # shutdown: cleanup resources with timeouts to avoid hanging
     try:

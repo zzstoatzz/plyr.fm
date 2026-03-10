@@ -7,11 +7,20 @@ from pydantic import BaseModel
 from sqlalchemy import or_, select
 
 from backend._internal import Session, get_optional_session, validate_supporter
-from backend.models import Track
+from backend.models import Artist, Track
 from backend.storage import storage
 from backend.utilities.database import db_session
 
 router = APIRouter(prefix="/audio", tags=["audio"])
+
+
+async def _resolve_pds_url(artist_did: str) -> str | None:
+    """look up the cached PDS URL for an artist."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(Artist.pds_url).where(Artist.did == artist_did).limit(1)
+        )
+        return result.scalar_one_or_none()
 
 
 class AudioUrlResponse(BaseModel):
@@ -52,6 +61,8 @@ async def stream_audio(
                 Track.original_file_type,
                 Track.support_gate,
                 Track.artist_did,
+                Track.audio_storage,
+                Track.pds_blob_cid,
             )
             .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
@@ -70,6 +81,8 @@ async def stream_audio(
             original_file_type,
             support_gate,
             artist_did,
+            audio_storage,
+            pds_blob_cid,
         ) = track_data
 
     # determine if we're serving the original lossless file
@@ -90,6 +103,16 @@ async def stream_audio(
     # public track - use cached r2_url only for transcoded version
     if not serving_original and r2_url and r2_url.startswith("http"):
         return RedirectResponse(url=r2_url)
+
+    # PDS-only tracks: redirect to PDS getBlob endpoint
+    if audio_storage == "pds" and pds_blob_cid and not r2_url:
+        pds_url = await _resolve_pds_url(artist_did)
+        if pds_url:
+            blob_url = (
+                f"{pds_url}/xrpc/com.atproto.sync.getBlob"
+                f"?did={artist_did}&cid={pds_blob_cid}"
+            )
+            return RedirectResponse(url=blob_url)
 
     # get URL for the requested file (original or transcoded)
     url = await storage.get_url(
@@ -185,6 +208,8 @@ async def get_audio_url(
                 Track.original_file_type,
                 Track.support_gate,
                 Track.artist_did,
+                Track.audio_storage,
+                Track.pds_blob_cid,
             )
             .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
@@ -203,6 +228,8 @@ async def get_audio_url(
             original_file_type,
             support_gate,
             artist_did,
+            audio_storage,
+            pds_blob_cid,
         ) = track_data
 
     # determine if we're serving the original lossless file
@@ -247,6 +274,18 @@ async def get_audio_url(
         return AudioUrlResponse(
             url=r2_url, file_id=serve_file_id, file_type=serve_file_type
         )
+
+    # PDS-only tracks: return PDS getBlob URL
+    if audio_storage == "pds" and pds_blob_cid and not r2_url:
+        pds_url = await _resolve_pds_url(artist_did)
+        if pds_url:
+            blob_url = (
+                f"{pds_url}/xrpc/com.atproto.sync.getBlob"
+                f"?did={artist_did}&cid={pds_blob_cid}"
+            )
+            return AudioUrlResponse(
+                url=blob_url, file_id=serve_file_id, file_type=serve_file_type
+            )
 
     # otherwise, resolve it
     url = await storage.get_url(
