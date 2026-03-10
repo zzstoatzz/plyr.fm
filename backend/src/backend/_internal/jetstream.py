@@ -14,12 +14,30 @@ import random
 import time
 from typing import Any
 
+import logfire
 import orjson
 import websockets
+from sqlalchemy import select
 from websockets.asyncio.client import ClientConnection
 
 from backend._internal.background import get_docket
+from backend._internal.tasks.ingest import (
+    ingest_comment_create,
+    ingest_comment_delete,
+    ingest_comment_update,
+    ingest_like_create,
+    ingest_like_delete,
+    ingest_list_create,
+    ingest_list_delete,
+    ingest_list_update,
+    ingest_profile_update,
+    ingest_track_create,
+    ingest_track_delete,
+    ingest_track_update,
+)
 from backend.config import settings
+from backend.models import Artist
+from backend.utilities.database import db_session
 from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
@@ -75,26 +93,30 @@ class JetstreamConsumer:
         url = self._build_url()
         logger.info("jetstream connecting to %s", url)
 
-        async with websockets.connect(url, max_size=2**20) as ws:
-            self._ws = ws
-            # reset backoff on successful connect
-            logger.info(
-                "jetstream connected, tracking %d known DIDs",
-                len(self._known_dids),
-            )
+        with logfire.span(
+            "jetstream consume",
+            known_dids=len(self._known_dids),
+            cursor=self._cursor,
+        ):
+            async with websockets.connect(url, max_size=2**20) as ws:
+                self._ws = ws
+                logfire.info(
+                    "jetstream connected",
+                    known_dids=len(self._known_dids),
+                )
 
-            async for raw in ws:
-                if self._shutdown_event.is_set():
-                    return
+                async for raw in ws:
+                    if self._shutdown_event.is_set():
+                        return
 
-                try:
-                    event = orjson.loads(raw)
-                except (orjson.JSONDecodeError, TypeError):
-                    continue
+                    try:
+                        event = orjson.loads(raw)
+                    except (orjson.JSONDecodeError, TypeError):
+                        continue
 
-                await self._process_event(event)
-                await self._maybe_flush_cursor()
-                await self._maybe_refresh_dids()
+                    await self._process_event(event)
+                    await self._maybe_flush_cursor()
+                    await self._maybe_refresh_dids()
 
     async def _process_event(self, event: dict[str, Any]) -> None:
         """check if event is for a known DID and dispatch to docket task."""
@@ -141,21 +163,6 @@ class JetstreamConsumer:
         cid: str | None,
     ) -> None:
         """dispatch event to the appropriate ingest task via docket."""
-        from backend._internal.tasks.ingest import (
-            ingest_comment_create,
-            ingest_comment_delete,
-            ingest_comment_update,
-            ingest_like_create,
-            ingest_like_delete,
-            ingest_list_create,
-            ingest_list_delete,
-            ingest_list_update,
-            ingest_profile_update,
-            ingest_track_create,
-            ingest_track_delete,
-            ingest_track_update,
-        )
-
         docket = get_docket()
 
         # determine which collection type this is (strip namespace prefix)
@@ -182,7 +189,11 @@ class JetstreamConsumer:
         # profile updates are a special case (nested collection)
         if collection.endswith(".actor.profile") and operation == "update":
             await docket.add(ingest_profile_update)(did=did, record=record or {})
-            logger.debug("jetstream dispatched profile update for %s", did)
+            logfire.info(
+                "jetstream dispatched profile.update",
+                did=did,
+                _level="debug",
+            )
             return
 
         if task := task_map.get((record_type, operation)):
@@ -191,8 +202,12 @@ class JetstreamConsumer:
                 kwargs["record"] = record or {}
                 kwargs["cid"] = cid
             await docket.add(task)(**kwargs)
-            logger.debug(
-                "jetstream dispatched %s.%s for %s", record_type, operation, did
+            logfire.info(
+                "jetstream dispatched {record_type}.{operation}",
+                record_type=record_type,
+                operation=operation,
+                did=did,
+                uri=uri,
             )
 
     def _build_url(self) -> str:
@@ -211,7 +226,7 @@ class JetstreamConsumer:
             if raw := await redis.get(settings.jetstream.cursor_key):
                 self._cursor = int(raw)
                 logger.info("jetstream resuming from cursor %d", self._cursor)
-        except (RuntimeError, Exception):
+        except Exception:
             logger.debug("jetstream could not load cursor from redis")
 
     async def _flush_cursor(self) -> None:
@@ -221,7 +236,7 @@ class JetstreamConsumer:
         try:
             redis = get_async_redis_client()
             await redis.set(settings.jetstream.cursor_key, str(self._cursor))
-        except (RuntimeError, Exception):
+        except Exception:
             logger.debug("jetstream could not flush cursor to redis")
         self._last_cursor_flush = time.monotonic()
 
@@ -236,11 +251,6 @@ class JetstreamConsumer:
 
     async def _refresh_known_dids(self) -> None:
         """refresh the known DID set from the database."""
-        from sqlalchemy import select
-
-        from backend.models import Artist
-        from backend.utilities.database import db_session
-
         try:
             async with db_session() as db:
                 result = await db.execute(select(Artist.did))

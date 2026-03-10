@@ -10,6 +10,7 @@ unique constraint checks or existence queries.
 import logging
 from datetime import UTC, datetime
 
+import logfire
 from sqlalchemy import delete, select, update
 
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
@@ -104,7 +105,12 @@ async def ingest_track_create(
         )
         db.add(track)
         await db.commit()
-        logger.info("ingest_track_create: created track %s for %s", uri, did)
+        logfire.info(
+            "ingest: track created",
+            uri=uri,
+            artist_did=did,
+            audio_storage=audio_storage,
+        )
 
 
 async def ingest_track_update(
@@ -134,7 +140,7 @@ async def ingest_track_update(
             track.atproto_record_cid = cid
 
         await db.commit()
-        logger.info("ingest_track_update: updated track %s", uri)
+        logfire.info("ingest: track updated", uri=uri, artist_did=did)
 
 
 async def ingest_track_delete(
@@ -147,7 +153,7 @@ async def ingest_track_delete(
         result = await db.execute(delete(Track).where(Track.atproto_record_uri == uri))
         if result.rowcount:  # type: ignore[union-attr]
             await db.commit()
-            logger.info("ingest_track_delete: deleted track %s", uri)
+            logfire.info("ingest: track deleted", uri=uri, artist_did=did)
         else:
             logger.debug("ingest_track_delete: track %s not found", uri)
 
@@ -196,7 +202,7 @@ async def ingest_like_create(
         )
         db.add(like)
         await db.commit()
-        logger.info("ingest_like_create: created like %s", uri)
+        logfire.info("ingest: like created", uri=uri, user_did=did, track_id=track_id)
 
 
 async def ingest_like_delete(
@@ -211,7 +217,7 @@ async def ingest_like_delete(
         )
         if result.rowcount:  # type: ignore[union-attr]
             await db.commit()
-            logger.info("ingest_like_delete: deleted like %s", uri)
+            logfire.info("ingest: like deleted", uri=uri)
         else:
             logger.debug("ingest_like_delete: like %s not found", uri)
 
@@ -252,7 +258,9 @@ async def ingest_comment_create(
         )
         db.add(comment)
         await db.commit()
-        logger.info("ingest_comment_create: created comment %s", uri)
+        logfire.info(
+            "ingest: comment created", uri=uri, user_did=did, track_id=track_id
+        )
 
 
 async def ingest_comment_update(
@@ -268,10 +276,11 @@ async def ingest_comment_update(
         values["text"] = text
     if (ts := record.get("timestampMs")) is not None:
         values["timestamp_ms"] = ts
-    values["updated_at"] = datetime.now(UTC)
 
     if not values:
         return
+
+    values["updated_at"] = datetime.now(UTC)
 
     async with db_session() as db:
         result = await db.execute(
@@ -281,7 +290,7 @@ async def ingest_comment_update(
         )
         if result.rowcount:  # type: ignore[union-attr]
             await db.commit()
-            logger.info("ingest_comment_update: updated comment %s", uri)
+            logfire.info("ingest: comment updated", uri=uri)
         else:
             logger.debug("ingest_comment_update: comment %s not found", uri)
 
@@ -298,7 +307,7 @@ async def ingest_comment_delete(
         )
         if result.rowcount:  # type: ignore[union-attr]
             await db.commit()
-            logger.info("ingest_comment_delete: deleted comment %s", uri)
+            logfire.info("ingest: comment deleted", uri=uri)
         else:
             logger.debug("ingest_comment_delete: comment %s not found", uri)
 
@@ -346,7 +355,7 @@ async def ingest_list_create(
         )
         db.add(playlist)
         await db.commit()
-        logger.info("ingest_list_create: created playlist %s", uri)
+        logfire.info("ingest: playlist created", uri=uri, owner_did=did)
 
 
 async def ingest_list_update(
@@ -372,7 +381,7 @@ async def ingest_list_update(
             playlist.atproto_record_cid = cid
 
         await db.commit()
-        logger.info("ingest_list_update: updated playlist %s", uri)
+        logfire.info("ingest: playlist updated", uri=uri)
 
 
 async def ingest_list_delete(
@@ -387,7 +396,7 @@ async def ingest_list_delete(
         )
         if result.rowcount:  # type: ignore[union-attr]
             await db.commit()
-            logger.info("ingest_list_delete: deleted playlist %s", uri)
+            logfire.info("ingest: playlist deleted", uri=uri)
         else:
             logger.debug("ingest_list_delete: playlist %s not found", uri)
 
@@ -409,4 +418,4 @@ async def ingest_profile_update(
         if (bio := record.get("bio")) is not None:
             artist.bio = bio
             await db.commit()
-            logger.info("ingest_profile_update: updated bio for %s", did)
+            logfire.info("ingest: profile updated", did=did)
