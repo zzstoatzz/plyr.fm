@@ -8,15 +8,23 @@ unique constraint checks or existence queries.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import logfire
+from docket import ConcurrencyLimit, ExponentialRetry
 from sqlalchemy import delete, select, update
 
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.utilities.database import db_session
+from backend.utilities.lexicon import validate_record
 
 logger = logging.getLogger(__name__)
+
+_INGEST_RETRY = ExponentialRetry(
+    attempts=4,
+    minimum_delay=timedelta(seconds=1),
+    maximum_delay=timedelta(seconds=30),
+)
 
 
 def _parse_datetime(value: str | None) -> datetime:
@@ -39,6 +47,8 @@ async def ingest_track_create(
     record: dict,
     uri: str,
     cid: str | None,
+    retry: ExponentialRetry = _INGEST_RETRY,
+    concurrency: ConcurrencyLimit = ConcurrencyLimit("did", max_concurrent=3),  # noqa: B008
 ) -> None:
     """create a track from a Jetstream event.
 
@@ -49,6 +59,10 @@ async def ingest_track_create(
         uri: the AT URI (at://did/collection/rkey)
         cid: content identifier
     """
+    if errors := validate_record("fm.plyr.track", record):
+        logfire.warn("ingest: invalid track record, skipping", uri=uri, errors=errors)
+        return
+
     async with db_session() as db:
         # verify artist exists
         artist = await db.get(Artist, did)
@@ -119,8 +133,13 @@ async def ingest_track_update(
     record: dict,
     uri: str,
     cid: str | None,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """update mutable fields on an existing track."""
+    if errors := validate_record("fm.plyr.track", record, partial=True):
+        logfire.warn("ingest: invalid track record, skipping", uri=uri, errors=errors)
+        return
+
     async with db_session() as db:
         result = await db.execute(
             select(Track).where(Track.atproto_record_uri == uri).limit(1)
@@ -147,6 +166,7 @@ async def ingest_track_delete(
     did: str,
     rkey: str,
     uri: str,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """delete a track by its AT URI."""
     async with db_session() as db:
@@ -167,8 +187,13 @@ async def ingest_like_create(
     record: dict,
     uri: str,
     cid: str | None = None,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """create a like from a Jetstream event."""
+    if errors := validate_record("fm.plyr.like", record):
+        logfire.warn("ingest: invalid like record, skipping", uri=uri, errors=errors)
+        return
+
     subject = record.get("subject", {})
     subject_uri = subject.get("uri", "")
 
@@ -209,6 +234,7 @@ async def ingest_like_delete(
     did: str,
     rkey: str,
     uri: str,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """delete a like by its AT URI."""
     async with db_session() as db:
@@ -231,8 +257,13 @@ async def ingest_comment_create(
     record: dict,
     uri: str,
     cid: str | None = None,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """create a comment from a Jetstream event."""
+    if errors := validate_record("fm.plyr.comment", record):
+        logfire.warn("ingest: invalid comment record, skipping", uri=uri, errors=errors)
+        return
+
     subject = record.get("subject", {})
     subject_uri = subject.get("uri", "")
 
@@ -269,8 +300,13 @@ async def ingest_comment_update(
     record: dict,
     uri: str,
     cid: str | None = None,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """update comment text and timestamp."""
+    if errors := validate_record("fm.plyr.comment", record, partial=True):
+        logfire.warn("ingest: invalid comment record, skipping", uri=uri, errors=errors)
+        return
+
     values: dict = {}
     if text := record.get("text"):
         values["text"] = text
@@ -299,6 +335,7 @@ async def ingest_comment_delete(
     did: str,
     rkey: str,
     uri: str,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """delete a comment by its AT URI."""
     async with db_session() as db:
@@ -321,11 +358,16 @@ async def ingest_list_create(
     record: dict,
     uri: str,
     cid: str | None = None,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """create a playlist from a Jetstream list event.
 
     only processes listType="playlist" — skips albums and liked lists.
     """
+    if errors := validate_record("fm.plyr.list", record):
+        logfire.warn("ingest: invalid list record, skipping", uri=uri, errors=errors)
+        return
+
     list_type = record.get("listType", "")
     if list_type != "playlist":
         logger.debug("ingest_list_create: skipping listType=%s", list_type)
@@ -364,8 +406,13 @@ async def ingest_list_update(
     record: dict,
     uri: str,
     cid: str | None = None,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """update playlist name."""
+    if errors := validate_record("fm.plyr.list", record, partial=True):
+        logfire.warn("ingest: invalid list record, skipping", uri=uri, errors=errors)
+        return
+
     async with db_session() as db:
         result = await db.execute(
             select(Playlist).where(Playlist.atproto_record_uri == uri).limit(1)
@@ -388,6 +435,7 @@ async def ingest_list_delete(
     did: str,
     rkey: str,
     uri: str,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """delete a playlist by its AT URI."""
     async with db_session() as db:
@@ -407,8 +455,13 @@ async def ingest_list_delete(
 async def ingest_profile_update(
     did: str,
     record: dict,
+    retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """update artist bio from a profile record."""
+    if errors := validate_record("fm.plyr.actor.profile", record, partial=True):
+        logfire.warn("ingest: invalid profile record, skipping", did=did, errors=errors)
+        return
+
     async with db_session() as db:
         artist = await db.get(Artist, did)
         if not artist:

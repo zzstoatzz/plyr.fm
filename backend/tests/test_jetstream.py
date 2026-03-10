@@ -15,6 +15,7 @@ from backend._internal.tasks.ingest import (
     ingest_like_create,
     ingest_like_delete,
     ingest_list_create,
+    ingest_list_update,
     ingest_track_create,
     ingest_track_delete,
     ingest_track_update,
@@ -194,10 +195,12 @@ class TestIngestTrackCreate:
         """valid record creates a Track row."""
         record = {
             "title": "Jetstream Track",
+            "artist": "Test Artist",
             "fileId": "js_file_001",
             "fileType": "mp3",
             "audioUrl": "https://r2.example.com/js_file_001.mp3",
             "duration": 180,
+            "createdAt": "2025-01-01T00:00:00Z",
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/newtrack1"
 
@@ -220,7 +223,13 @@ class TestIngestTrackCreate:
     ) -> None:
         """duplicate AT URI is silently skipped."""
         assert track.atproto_record_uri is not None
-        record = {"title": "Duplicate"}
+        record = {
+            "title": "Duplicate",
+            "artist": "Test Artist",
+            "audioUrl": "https://r2.example.com/dup.mp3",
+            "fileType": "mp3",
+            "createdAt": "2025-01-01T00:00:00Z",
+        }
         await ingest_track_create(
             did=artist.did,
             rkey="existing",
@@ -240,7 +249,13 @@ class TestIngestTrackCreate:
         await ingest_track_create(
             did="did:plc:nonexistent",
             rkey="rk1",
-            record={"title": "Ghost"},
+            record={
+                "title": "Ghost",
+                "artist": "Nobody",
+                "audioUrl": "https://r2.example.com/ghost.mp3",
+                "fileType": "mp3",
+                "createdAt": "2025-01-01T00:00:00Z",
+            },
             uri="at://did:plc:nonexistent/fm.plyr.track/rk1",
             cid="bafy",
         )
@@ -256,9 +271,12 @@ class TestIngestTrackCreate:
         """track with audioBlob gets audio_storage='pds'."""
         record = {
             "title": "PDS Track",
+            "artist": "Test Artist",
             "fileId": "pds_001",
             "fileType": "mp3",
             "audioBlob": {"ref": {"$link": "bafyaudioblob"}, "mimeType": "audio/mpeg"},
+            "audioUrl": "https://r2.example.com/pds_001.mp3",
+            "createdAt": "2025-01-01T00:00:00Z",
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/pds1"
 
@@ -332,6 +350,7 @@ class TestIngestLikeCreate:
                 "uri": track.atproto_record_uri,
                 "cid": track.atproto_record_cid,
             },
+            "createdAt": "2025-01-01T00:00:00Z",
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.like/like1"
 
@@ -350,6 +369,7 @@ class TestIngestLikeCreate:
         """like for unknown subject track is skipped."""
         record = {
             "subject": {"uri": "at://did:plc:jetstream_test/fm.plyr.track/nonexistent"},
+            "createdAt": "2025-01-01T00:00:00Z",
         }
         await ingest_like_create(
             did=artist.did,
@@ -402,6 +422,7 @@ class TestIngestCommentCreate:
             "subject": {"uri": track.atproto_record_uri},
             "text": "great track!",
             "timestampMs": 5000,
+            "createdAt": "2025-01-01T00:00:00Z",
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.comment/c1"
 
@@ -422,6 +443,7 @@ class TestIngestCommentCreate:
             "subject": {"uri": "at://did:plc:jetstream_test/fm.plyr.track/nope"},
             "text": "nope",
             "timestampMs": 0,
+            "createdAt": "2025-01-01T00:00:00Z",
         }
         await ingest_comment_create(
             did=artist.did,
@@ -475,6 +497,8 @@ class TestIngestListCreate:
         record = {
             "listType": "playlist",
             "name": "My Playlist",
+            "items": [],
+            "createdAt": "2025-01-01T00:00:00Z",
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.list/pl1"
 
@@ -496,6 +520,8 @@ class TestIngestListCreate:
         record = {
             "listType": "album",
             "name": "My Album",
+            "items": [],
+            "createdAt": "2025-01-01T00:00:00Z",
         }
         await ingest_list_create(
             did=artist.did,
@@ -541,3 +567,150 @@ class TestAudioPdsRedirect:
         assert "com.atproto.sync.getBlob" in location
         assert f"did={artist.did}" in location
         assert f"cid={pds_track.pds_blob_cid}" in location
+
+
+# --- ingest validation tests ---
+
+
+class TestIngestValidation:
+    """integration tests confirming invalid records are rejected before DB work."""
+
+    async def test_track_empty_title_skipped(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """track with empty title (minLength violation) is skipped."""
+        record = {
+            "title": "",
+            "artist": "Test Artist",
+            "audioUrl": "https://r2.example.com/x.mp3",
+            "fileType": "mp3",
+            "createdAt": "2025-01-01T00:00:00Z",
+        }
+        await ingest_track_create(
+            did=artist.did,
+            rkey="bad1",
+            record=record,
+            uri="at://did:plc:jetstream_test/fm.plyr.track/bad1",
+            cid="bafy",
+        )
+        result = await db_session.execute(
+            select(Track).where(
+                Track.atproto_record_uri
+                == "at://did:plc:jetstream_test/fm.plyr.track/bad1"
+            )
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_track_missing_required_fields_skipped(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """track missing required fields is skipped."""
+        await ingest_track_create(
+            did=artist.did,
+            rkey="bad2",
+            record={"title": "ok"},
+            uri="at://did:plc:jetstream_test/fm.plyr.track/bad2",
+            cid="bafy",
+        )
+        result = await db_session.execute(
+            select(Track).where(
+                Track.atproto_record_uri
+                == "at://did:plc:jetstream_test/fm.plyr.track/bad2"
+            )
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_like_missing_subject_skipped(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """like without subject is skipped."""
+        await ingest_like_create(
+            did=artist.did,
+            rkey="bad3",
+            record={"createdAt": "2025-01-01T00:00:00Z"},
+            uri="at://did:plc:jetstream_test/fm.plyr.like/bad3",
+        )
+        result = await db_session.execute(
+            select(TrackLike).where(
+                TrackLike.atproto_like_uri
+                == "at://did:plc:jetstream_test/fm.plyr.like/bad3"
+            )
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_comment_text_too_long_skipped(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """comment with text exceeding maxLength is skipped."""
+        await ingest_comment_create(
+            did=artist.did,
+            rkey="bad4",
+            record={
+                "subject": {"uri": track.atproto_record_uri},
+                "text": "x" * 1001,
+                "timestampMs": 0,
+                "createdAt": "2025-01-01T00:00:00Z",
+            },
+            uri="at://did:plc:jetstream_test/fm.plyr.comment/bad4",
+        )
+        result = await db_session.execute(
+            select(TrackComment).where(
+                TrackComment.atproto_comment_uri
+                == "at://did:plc:jetstream_test/fm.plyr.comment/bad4"
+            )
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_valid_track_still_ingested(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """sanity check: valid record is still ingested normally."""
+        record = {
+            "title": "Valid Track",
+            "artist": "Test Artist",
+            "audioUrl": "https://r2.example.com/valid.mp3",
+            "fileType": "mp3",
+            "createdAt": "2025-01-01T00:00:00Z",
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/valid1"
+        await ingest_track_create(
+            did=artist.did, rkey="valid1", record=record, uri=uri, cid="bafy"
+        )
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert result.scalar_one().title == "Valid Track"
+
+    async def test_list_missing_items_skipped(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """list missing required items field is skipped."""
+        await ingest_list_create(
+            did=artist.did,
+            rkey="bad5",
+            record={
+                "listType": "playlist",
+                "name": "Bad List",
+                "createdAt": "2025-01-01T00:00:00Z",
+            },
+            uri="at://did:plc:jetstream_test/fm.plyr.list/bad5",
+        )
+        result = await db_session.execute(
+            select(Playlist).where(
+                Playlist.atproto_record_uri
+                == "at://did:plc:jetstream_test/fm.plyr.list/bad5"
+            )
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_list_update_invalid_name_skipped(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """list update with name exceeding maxLength is skipped."""
+        await ingest_list_update(
+            did=artist.did,
+            rkey="bad6",
+            record={"name": "x" * 300},
+            uri="at://did:plc:jetstream_test/fm.plyr.list/bad6",
+        )
+        # nothing to assert on DB — just confirm no exception raised

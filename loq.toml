@@ -218,8 +218,12 @@ path = "frontend/src/routes/login/+page.svelte"
 max_lines = 535
 
 [[rules]]
+path = "backend/src/backend/_internal/tasks/ingest.py"
+max_lines = 510
+
+[[rules]]
 path = "backend/tests/test_jetstream.py"
-max_lines = 560
+max_lines = 750
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
