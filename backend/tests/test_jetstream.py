@@ -288,18 +288,19 @@ class TestIngestTrackUpdate:
     ) -> None:
         """updates title and description."""
         assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
         await ingest_track_update(
             did=artist.did,
             rkey="existing",
             record={"title": "Updated Title", "description": "New desc"},
-            uri=track.atproto_record_uri,
+            uri=uri,
             cid="bafyupdated",
         )
 
         # expire cached objects so the re-query hits the DB
         db_session.expire_all()
         result = await db_session.execute(
-            select(Track).where(Track.atproto_record_uri == track.atproto_record_uri)
+            select(Track).where(Track.atproto_record_uri == uri)
         )
         updated = result.scalar_one()
         assert updated.title == "Updated Title"
