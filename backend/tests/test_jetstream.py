@@ -1,5 +1,6 @@
 """tests for Jetstream consumer and ingest tasks."""
 
+import uuid
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -38,9 +39,10 @@ def _mock_post_create_hooks():
 
 @pytest.fixture
 async def artist(db_session: AsyncSession) -> Artist:
-    """create a test artist."""
+    """create a test artist with a unique DID (xdist-safe)."""
+    did = f"did:plc:jetstream_{uuid.uuid4().hex[:12]}"
     a = Artist(
-        did="did:plc:jetstream_test",
+        did=did,
         handle="testartist.bsky.social",
         display_name="Test Artist",
         pds_url="https://bsky.social",
@@ -59,7 +61,7 @@ async def track(db_session: AsyncSession, artist: Artist) -> Track:
         file_type="mp3",
         artist_did=artist.did,
         r2_url="https://r2.example.com/abc123.mp3",
-        atproto_record_uri="at://did:plc:jetstream_test/fm.plyr.track/existing",
+        atproto_record_uri=f"at://{artist.did}/fm.plyr.track/existing",
         atproto_record_cid="bafyexisting",
         audio_storage="r2",
     )
@@ -626,7 +628,7 @@ class TestAudioPdsRedirect:
             r2_url=None,
             audio_storage="pds",
             pds_blob_cid="bafyaudiocid123",
-            atproto_record_uri="at://did:plc:jetstream_test/fm.plyr.track/pdsonly",
+            atproto_record_uri=f"at://{artist.did}/fm.plyr.track/pdsonly",
         )
         db_session.add(pds_track)
         await db_session.commit()
