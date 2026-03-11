@@ -570,6 +570,78 @@ class TestIngestTrackUpdate:
         assert updated.extra.get("album") == "New Album"
         assert updated.extra.get("duration") == 240
 
+    async def test_updates_audio_storage_to_pds(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """external audioBlob change updates storage fields."""
+        assert track.atproto_record_uri is not None
+        assert track.audio_storage == "r2"
+        uri = track.atproto_record_uri
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={
+                "audioBlob": {
+                    "ref": {"$link": "bafynewblob"},
+                    "mimeType": "audio/mpeg",
+                },
+            },
+            uri=uri,
+            cid="bafyaudio",
+        )
+
+        db_session.expire_all()
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        updated = result.scalar_one()
+        assert updated.audio_storage == "pds"
+        assert updated.pds_blob_cid == "bafynewblob"
+        assert updated.r2_url is None
+
+    async def test_updates_audio_url(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """external audioUrl change updates r2_url."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={"audioUrl": "https://r2.example.com/new_url.mp3"},
+            uri=uri,
+            cid="bafyurl",
+        )
+
+        db_session.expire_all()
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        updated = result.scalar_one()
+        assert updated.r2_url == "https://r2.example.com/new_url.mp3"
+        assert updated.audio_storage == "r2"
+
+    async def test_updates_file_type(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """external fileType change propagates."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={"fileType": "flac"},
+            uri=uri,
+            cid="bafytype",
+        )
+
+        db_session.expire_all()
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        updated = result.scalar_one()
+        assert updated.file_type == "flac"
+
 
 # --- like ingestion tests ---
 
