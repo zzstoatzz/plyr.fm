@@ -893,14 +893,21 @@ class TestAudioPdsRedirect:
         assert f"cid={pds_track.pds_blob_cid}" in location
 
     async def test_gated_pds_redirect(
-        self, db_session: AsyncSession, artist: Artist, client: object
+        self,
+        db_session: AsyncSession,
+        artist: Artist,
+        client: object,
+        fastapi_app: object,
     ) -> None:
         """gated PDS-only track redirects to getBlob (not private R2 bucket)."""
+        from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
+        from backend._internal import get_optional_session
         from backend._internal.auth.session import Session
 
         assert isinstance(client, TestClient)
+        assert isinstance(fastapi_app, FastAPI)
 
         # create a gated PDS-only track
         gated_pds_track = Track(
@@ -917,17 +924,20 @@ class TestAudioPdsRedirect:
         db_session.add(gated_pds_track)
         await db_session.commit()
 
-        # mock auth as the track owner (bypasses supporter validation)
+        # override auth dependency to return the track owner's session
         mock_session = Session(
             session_id="test",
             did=artist.did,
             handle="testartist.bsky.social",
             oauth_session={},
         )
-        with patch("backend.api.audio.get_optional_session", return_value=mock_session):
+        fastapi_app.dependency_overrides[get_optional_session] = lambda: mock_session
+        try:
             response = client.get(
                 f"/audio/{gated_pds_track.file_id}", follow_redirects=False
             )
+        finally:
+            fastapi_app.dependency_overrides.pop(get_optional_session, None)
 
         assert response.status_code == 307
         location = response.headers["location"]
