@@ -658,19 +658,15 @@ async def _create_records(
             extra["duration"] = audio_info.duration
         if ctx.auto_tag:
             extra["auto_tag"] = True
-
-        album_record = None
         if ctx.album:
             extra["album"] = ctx.album
-            album_record = await get_or_create_album(
-                db, artist, ctx.album, image_id, image_url
-            )
 
         has_pds_blob = pds_result and pds_result.cid is not None
         audio_storage = "both" if has_pds_blob else "r2"
 
         artist_display_name = artist.display_name
 
+        # album creation deferred to after PDS success to avoid orphan albums
         track = Track(
             title=ctx.title,
             file_id=sr.file_id,
@@ -680,7 +676,7 @@ async def _create_records(
             artist_did=ctx.artist_did,
             description=ctx.description,
             extra=extra,
-            album_id=album_record.id if album_record else None,
+            album_id=None,
             features=featured_artists,
             r2_url=sr.r2_url,
             atproto_record_uri=uri,
@@ -740,28 +736,57 @@ async def _create_records(
         _, atproto_cid = atproto_result
     except Exception as e:
         logger.error("ATProto sync failed for upload %s: %s", ctx.upload_id, e)
-        # delete the pending row
+        # only delete the row if it's still pending — on ambiguous failures
+        # (timeouts, connection drops) Jetstream may have already finalized it
+        deleted_pending = False
         with contextlib.suppress(Exception):
             async with db_session() as db:
-                await db.execute(delete(Track).where(Track.id == track_id))
+                result = await db.execute(
+                    delete(Track).where(
+                        Track.id == track_id, Track.publish_state == "pending"
+                    )
+                )
                 await db.commit()
-        # cleanup orphaned media
-        with contextlib.suppress(Exception):
-            await storage.delete(sr.file_id, playable_file_type)
-        if sr.original_file_id and sr.original_file_type:
+                deleted_pending = result.rowcount == 1  # type: ignore[union-attr]
+
+        if deleted_pending:
+            # row was still pending — safe to clean up media
             with contextlib.suppress(Exception):
-                await storage.delete(sr.original_file_id, sr.original_file_type)
-        if image_id:
-            with contextlib.suppress(Exception):
-                await storage.delete(image_id)
+                await storage.delete(sr.file_id, playable_file_type)
+            if sr.original_file_id and sr.original_file_type:
+                with contextlib.suppress(Exception):
+                    await storage.delete(sr.original_file_id, sr.original_file_type)
+            if image_id:
+                with contextlib.suppress(Exception):
+                    await storage.delete(image_id)
+        # else: Jetstream finalized the row — media belongs to the published track
+
         raise UploadPhaseError(f"failed to sync track to ATProto: {e}") from e
 
-    # step 3: atomic CAS update pending → published
+    # step 3: atomic CAS update pending → published + deferred album linkage
     async with db_session() as db:
+        # create album now that PDS write succeeded (avoids orphan albums on failure)
+        album_record = None
+        if ctx.album:
+            artist_row = await db.execute(
+                select(Artist).where(Artist.did == ctx.artist_did)
+            )
+            artist_obj = artist_row.scalar_one()
+            album_record = await get_or_create_album(
+                db, artist_obj, ctx.album, image_id, image_url
+            )
+
+        values: dict = {
+            "atproto_record_cid": atproto_cid,
+            "publish_state": "published",
+        }
+        if album_record:
+            values["album_id"] = album_record.id
+
         result = await db.execute(
             update(Track)
             .where(Track.id == track_id, Track.publish_state == "pending")
-            .values(atproto_record_cid=atproto_cid, publish_state="published")
+            .values(**values)
         )
         await db.commit()
         published_by_us = result.rowcount == 1  # type: ignore[union-attr]

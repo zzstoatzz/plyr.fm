@@ -494,6 +494,9 @@ class TestIngestPendingReconciliation:
             did=artist.did, rkey="pending1", record=record, uri=uri, cid="bafyfinalized"
         )
 
+        # ingest commits in its own db_session — expire cached state
+        db_session.expire_all()
+
         # should finalize the existing row, not create a new one
         result = await db_session.execute(
             select(Track).where(Track.atproto_record_uri == uri)
@@ -580,6 +583,8 @@ class TestIngestPendingReconciliation:
         await ingest_track_create(
             did=artist.did, rkey="published1", record=record, uri=uri, cid="bafynew"
         )
+
+        db_session.expire_all()
 
         # CID should NOT be overwritten
         result = await db_session.execute(
