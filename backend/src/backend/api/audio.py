@@ -7,11 +7,21 @@ from pydantic import BaseModel
 from sqlalchemy import or_, select
 
 from backend._internal import Session, get_optional_session, validate_supporter
-from backend.models import Track
+from backend._internal.atproto.client import pds_blob_url
+from backend.models import Artist, Track
 from backend.storage import storage
 from backend.utilities.database import db_session
 
 router = APIRouter(prefix="/audio", tags=["audio"])
+
+
+async def _resolve_pds_url(artist_did: str) -> str | None:
+    """look up the cached PDS URL for an artist."""
+    async with db_session() as db:
+        result = await db.execute(
+            select(Artist.pds_url).where(Artist.did == artist_did).limit(1)
+        )
+        return result.scalar_one_or_none()
 
 
 class AudioUrlResponse(BaseModel):
@@ -52,6 +62,8 @@ async def stream_audio(
                 Track.original_file_type,
                 Track.support_gate,
                 Track.artist_did,
+                Track.audio_storage,
+                Track.pds_blob_cid,
             )
             .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
@@ -70,6 +82,8 @@ async def stream_audio(
             original_file_type,
             support_gate,
             artist_did,
+            audio_storage,
+            pds_blob_cid,
         ) = track_data
 
     # determine if we're serving the original lossless file
@@ -85,11 +99,20 @@ async def stream_audio(
             artist_did=artist_did,
             session=session,
             is_head_request=is_head_request,
+            audio_storage=audio_storage,
+            pds_blob_cid=pds_blob_cid,
         )
 
     # public track - use cached r2_url only for transcoded version
     if not serving_original and r2_url and r2_url.startswith("http"):
         return RedirectResponse(url=r2_url)
+
+    # PDS-only tracks: redirect to PDS getBlob endpoint
+    if audio_storage == "pds" and pds_blob_cid and not r2_url:
+        if artist_pds_url := await _resolve_pds_url(artist_did):
+            return RedirectResponse(
+                url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid)
+            )
 
     # get URL for the requested file (original or transcoded)
     url = await storage.get_url(
@@ -106,13 +129,15 @@ async def _handle_gated_audio(
     artist_did: str,
     session: Session | None,
     is_head_request: bool = False,
+    audio_storage: str = "r2",
+    pds_blob_cid: str | None = None,
 ) -> RedirectResponse | Response:
     """handle streaming for supporter-gated content.
 
     validates that the user is authenticated and either:
     - is the artist who uploaded the track, OR
     - supports the artist via atprotofans
-    before returning a presigned URL for the private bucket.
+    before returning the appropriate URL (presigned R2 or PDS blob).
 
     for HEAD requests (used for pre-flight auth checks), returns 200 status
     without redirecting to avoid CORS issues with cross-origin redirects.
@@ -150,7 +175,7 @@ async def _handle_gated_audio(
     if is_head_request:
         return Response(status_code=200)
 
-    # authorized - generate presigned URL for private bucket
+    # authorized — resolve URL based on storage type
     if session.did != artist_did:
         logfire.info(
             "serving gated content to supporter",
@@ -159,6 +184,15 @@ async def _handle_gated_audio(
             artist_did=artist_did,
         )
 
+    # PDS-backed gated tracks: redirect to PDS blob (unauthenticated endpoint,
+    # gating is enforced by plyr.fm, not the PDS)
+    if audio_storage == "pds" and pds_blob_cid:
+        if artist_pds_url := await _resolve_pds_url(artist_did):
+            return RedirectResponse(
+                url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid)
+            )
+
+    # R2-backed gated tracks: presigned URL for private bucket
     url = await storage.generate_presigned_url(file_id=file_id, extension=file_type)
     return RedirectResponse(url=url)
 
@@ -185,6 +219,8 @@ async def get_audio_url(
                 Track.original_file_type,
                 Track.support_gate,
                 Track.artist_did,
+                Track.audio_storage,
+                Track.pds_blob_cid,
             )
             .where(or_(Track.file_id == file_id, Track.original_file_id == file_id))
             .order_by(Track.r2_url.is_not(None).desc(), Track.created_at.desc())
@@ -203,6 +239,8 @@ async def get_audio_url(
             original_file_type,
             support_gate,
             artist_did,
+            audio_storage,
+            pds_blob_cid,
         ) = track_data
 
     # determine if we're serving the original lossless file
@@ -234,7 +272,16 @@ async def get_audio_url(
                     headers={"X-Support-Required": "true"},
                 )
 
-        # return presigned URL
+        # PDS-backed gated tracks: return PDS blob URL
+        if audio_storage == "pds" and pds_blob_cid:
+            if artist_pds_url := await _resolve_pds_url(artist_did):
+                return AudioUrlResponse(
+                    url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid),
+                    file_id=serve_file_id,
+                    file_type=serve_file_type,
+                )
+
+        # R2-backed gated tracks: presigned URL for private bucket
         url = await storage.generate_presigned_url(
             file_id=serve_file_id, extension=serve_file_type
         )
@@ -247,6 +294,15 @@ async def get_audio_url(
         return AudioUrlResponse(
             url=r2_url, file_id=serve_file_id, file_type=serve_file_type
         )
+
+    # PDS-only tracks: return PDS getBlob URL
+    if audio_storage == "pds" and pds_blob_cid and not r2_url:
+        if artist_pds_url := await _resolve_pds_url(artist_did):
+            return AudioUrlResponse(
+                url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid),
+                file_id=serve_file_id,
+                file_type=serve_file_type,
+            )
 
     # otherwise, resolve it
     url = await storage.get_url(
