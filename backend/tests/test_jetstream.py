@@ -1,13 +1,15 @@
 """tests for Jetstream consumer and ingest tasks."""
 
 import uuid
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from docket import Perpetual
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend._internal.jetstream import JetstreamConsumer, consume_jetstream
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
     ingest_comment_create,
@@ -78,6 +80,134 @@ async def track(db_session: AsyncSession, artist: Artist) -> Track:
     db_session.add(t)
     await db_session.commit()
     return t
+
+
+# --- consumer tests ---
+
+
+class TestJetstreamConsumer:
+    async def test_dispatches_track_create(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:jetstream_test"}
+
+        mock_docket = MagicMock()
+        dispatched: list[dict] = []
+
+        async def capture(**kwargs: object) -> None:
+            dispatched.append(dict(kwargs))
+
+        mock_docket.add = MagicMock(return_value=capture)
+
+        event = {
+            "kind": "commit",
+            "did": "did:plc:jetstream_test",
+            "time_us": 1000000,
+            "commit": {
+                "collection": "fm.plyr.track",
+                "operation": "create",
+                "rkey": "abc123",
+                "record": {"title": "New Track"},
+                "cid": "bafynew",
+            },
+        }
+
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(event)
+
+        assert len(dispatched) == 1
+        assert dispatched[0]["did"] == "did:plc:jetstream_test"
+        assert (
+            dispatched[0]["uri"] == "at://did:plc:jetstream_test/fm.plyr.track/abc123"
+        )
+
+    async def test_skips_unknown_did(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:known"}
+
+        event = {
+            "kind": "commit",
+            "did": "did:plc:unknown",
+            "commit": {
+                "collection": "fm.plyr.track",
+                "operation": "create",
+                "rkey": "abc",
+            },
+        }
+
+        # _dispatch should never be called
+        consumer._dispatch = AsyncMock()  # type: ignore[method-assign]
+        await consumer._process_event(event)
+        consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
+
+    async def test_skips_non_commit_events(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:jetstream_test"}
+        consumer._dispatch = AsyncMock()  # type: ignore[method-assign]
+
+        event = {"kind": "identity", "did": "did:plc:jetstream_test"}
+        await consumer._process_event(event)
+        consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
+
+    async def test_persists_cursor(self) -> None:
+        consumer = JetstreamConsumer()
+        mock_redis = AsyncMock()
+
+        with patch(
+            "backend._internal.jetstream.get_async_redis_client",
+            return_value=mock_redis,
+        ):
+            consumer._cursor = 12345678
+            await consumer._flush_cursor()
+
+        mock_redis.set.assert_called_once()
+        args = mock_redis.set.call_args
+        assert args[0][1] == "12345678"
+
+    async def test_resumes_from_cursor(self) -> None:
+        consumer = JetstreamConsumer()
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value="9999999")
+
+        with patch(
+            "backend._internal.jetstream.get_async_redis_client",
+            return_value=mock_redis,
+        ):
+            await consumer._load_cursor()
+
+        assert consumer._cursor == 9999999
+        url = consumer._build_url()
+        assert "cursor=" in url
+
+    async def test_build_url_without_cursor(self) -> None:
+        consumer = JetstreamConsumer()
+        url = consumer._build_url()
+        assert "wantedCollections=fm.plyr.*" in url
+        assert "cursor=" not in url
+
+    async def test_build_url_with_cursor_rewinds(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._cursor = 10_000_000  # 10 seconds in microseconds
+        url = consumer._build_url()
+        # rewound by 5_000_000 → cursor=5000000
+        assert "cursor=5000000" in url
+
+
+class TestConsumeJetstreamPerpetual:
+    async def test_cancels_perpetual_when_disabled(self) -> None:
+        perpetual = Perpetual(every=timedelta(seconds=0))
+        with patch("backend._internal.jetstream.settings") as mock_settings:
+            mock_settings.jetstream.enabled = False
+            await consume_jetstream(perpetual=perpetual)
+        assert perpetual.cancelled
+
+    async def test_runs_consumer_when_enabled(self) -> None:
+        with (
+            patch("backend._internal.jetstream.settings") as mock_settings,
+            patch.object(JetstreamConsumer, "run", new_callable=AsyncMock) as mock_run,
+        ):
+            mock_settings.jetstream.enabled = True
+            await consume_jetstream()
+            mock_run.assert_called_once()
 
 
 # --- track ingestion tests ---

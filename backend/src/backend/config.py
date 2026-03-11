@@ -756,6 +756,46 @@ class TurbopufferSettings(AppSettingsSection):
     )
 
 
+class JetstreamSettings(AppSettingsSection):
+    """ATProto Jetstream consumer settings for real-time record ingestion."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="JETSTREAM_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Jetstream consumer for real-time ATProto event ingestion",
+    )
+    url: str = Field(
+        default="wss://jetstream2.us-east.bsky.network/subscribe",
+        description="Jetstream WebSocket URL",
+    )
+    cursor_key: str = Field(
+        default="plyr:jetstream:cursor",
+        description="Redis key for persisting the Jetstream cursor",
+    )
+    cursor_flush_interval_seconds: int = Field(
+        default=10,
+        description="How often to flush cursor to Redis (seconds)",
+    )
+    reconnect_base_seconds: float = Field(
+        default=1.0,
+        description="Base delay for exponential backoff on reconnect",
+    )
+    reconnect_max_seconds: float = Field(
+        default=30.0,
+        description="Maximum delay between reconnect attempts",
+    )
+    did_refresh_interval_seconds: int = Field(
+        default=300,
+        description="How often to refresh the known DID set from the database (seconds)",
+    )
+
+
 class DocketSettings(AppSettingsSection):
     """Background task queue configuration using pydocket.
 
@@ -928,6 +968,10 @@ class Settings(AppSettingsSection):
     bufo: BufoSettings = Field(
         default_factory=BufoSettings,
         description="bufo easter egg settings",
+    )
+    jetstream: JetstreamSettings = Field(
+        default_factory=JetstreamSettings,
+        description="ATProto Jetstream consumer settings",
     )
     docket: DocketSettings = Field(
         default_factory=DocketSettings,
