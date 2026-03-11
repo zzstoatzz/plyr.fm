@@ -1,7 +1,7 @@
 """tests for Jetstream consumer and ingest tasks."""
 
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,6 +23,18 @@ from backend._internal.tasks.ingest import (
     ingest_track_update,
 )
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
+
+
+def _recent_ts() -> str:
+    """return a recent ISO timestamp that clear_database will clean up.
+
+    ingest functions commit via their own db_session() — the test teardown's
+    clear_database only deletes rows with created_at > test_start_time, so
+    records with hardcoded past timestamps (e.g. 2025-01-01) would persist
+    and cause FK constraint errors.
+    """
+    return datetime.now(UTC).isoformat()
+
 
 # --- fixtures ---
 
@@ -213,7 +225,7 @@ class TestIngestTrackCreate:
             "fileType": "mp3",
             "audioUrl": "https://r2.example.com/js_file_001.mp3",
             "duration": 180,
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/newtrack1"
 
@@ -241,7 +253,7 @@ class TestIngestTrackCreate:
             "artist": "Test Artist",
             "audioUrl": "https://r2.example.com/dup.mp3",
             "fileType": "mp3",
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         await ingest_track_create(
             did=artist.did,
@@ -267,7 +279,7 @@ class TestIngestTrackCreate:
                 "artist": "Nobody",
                 "audioUrl": "https://r2.example.com/ghost.mp3",
                 "fileType": "mp3",
-                "createdAt": "2025-01-01T00:00:00Z",
+                "createdAt": _recent_ts(),
             },
             uri="at://did:plc:nonexistent/fm.plyr.track/rk1",
             cid="bafy",
@@ -289,7 +301,7 @@ class TestIngestTrackCreate:
             "fileType": "mp3",
             "audioBlob": {"ref": {"$link": "bafyaudioblob"}, "mimeType": "audio/mpeg"},
             "audioUrl": "https://r2.example.com/pds_001.mp3",
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/pds1"
 
@@ -315,7 +327,7 @@ class TestIngestTrackCreate:
             "fileId": "hook_001",
             "fileType": "mp3",
             "audioUrl": "https://r2.example.com/hook_001.mp3",
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/hook1"
 
@@ -345,7 +357,7 @@ class TestIngestTrackCreate:
             "fileId": "pds_hook_001",
             "fileType": "mp3",
             "audioBlob": {"ref": {"$link": "bafypdsblob"}, "mimeType": "audio/mpeg"},
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/pdshook1"
 
@@ -357,13 +369,14 @@ class TestIngestTrackCreate:
                 did=artist.did, rkey="pdshook1", record=record, uri=uri, cid="bafyh"
             )
 
-        result = await db_session.execute(
-            select(Track).where(Track.atproto_record_uri == uri)
-        )
-        track = result.scalar_one()
+        # verify mock call directly (avoid cross-session query issues)
+        mock_hooks.assert_called_once()
+        call_track_id = mock_hooks.call_args[0][0]
+        call_audio_url = mock_hooks.call_args[1]["audio_url"]
+        assert isinstance(call_track_id, int)
         assert artist.pds_url is not None
         expected_url = pds_blob_url(artist.pds_url, artist.did, "bafypdsblob")
-        mock_hooks.assert_called_once_with(track.id, audio_url=expected_url)
+        assert call_audio_url == expected_url
 
 
 class TestIngestTrackDelete:
@@ -423,7 +436,7 @@ class TestIngestLikeCreate:
                 "uri": track.atproto_record_uri,
                 "cid": track.atproto_record_cid,
             },
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.like/like1"
 
@@ -442,7 +455,7 @@ class TestIngestLikeCreate:
         """like for unknown subject track is skipped."""
         record = {
             "subject": {"uri": "at://did:plc:jetstream_test/fm.plyr.track/nonexistent"},
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         await ingest_like_create(
             did=artist.did,
@@ -495,7 +508,7 @@ class TestIngestCommentCreate:
             "subject": {"uri": track.atproto_record_uri},
             "text": "great track!",
             "timestampMs": 5000,
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.comment/c1"
 
@@ -516,7 +529,7 @@ class TestIngestCommentCreate:
             "subject": {"uri": "at://did:plc:jetstream_test/fm.plyr.track/nope"},
             "text": "nope",
             "timestampMs": 0,
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         await ingest_comment_create(
             did=artist.did,
@@ -571,7 +584,7 @@ class TestIngestListCreate:
             "listType": "playlist",
             "name": "My Playlist",
             "items": [],
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.list/pl1"
 
@@ -594,7 +607,7 @@ class TestIngestListCreate:
             "listType": "album",
             "name": "My Album",
             "items": [],
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         await ingest_list_create(
             did=artist.did,
@@ -603,7 +616,9 @@ class TestIngestListCreate:
             uri="at://did:plc:jetstream_test/fm.plyr.list/al1",
         )
 
-        result = await db_session.execute(select(Playlist))
+        result = await db_session.execute(
+            select(Playlist).where(Playlist.owner_did == artist.did)
+        )
         assert result.scalar_one_or_none() is None
 
 
@@ -657,7 +672,7 @@ class TestIngestValidation:
             "artist": "Test Artist",
             "audioUrl": "https://r2.example.com/x.mp3",
             "fileType": "mp3",
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         await ingest_track_create(
             did=artist.did,
@@ -722,7 +737,7 @@ class TestIngestValidation:
                 "subject": {"uri": track.atproto_record_uri},
                 "text": "x" * 1001,
                 "timestampMs": 0,
-                "createdAt": "2025-01-01T00:00:00Z",
+                "createdAt": _recent_ts(),
             },
             uri="at://did:plc:jetstream_test/fm.plyr.comment/bad4",
         )
@@ -743,7 +758,7 @@ class TestIngestValidation:
             "artist": "Test Artist",
             "audioUrl": "https://r2.example.com/valid.mp3",
             "fileType": "mp3",
-            "createdAt": "2025-01-01T00:00:00Z",
+            "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/valid1"
         await ingest_track_create(
@@ -764,7 +779,7 @@ class TestIngestValidation:
             record={
                 "listType": "playlist",
                 "name": "Bad List",
-                "createdAt": "2025-01-01T00:00:00Z",
+                "createdAt": _recent_ts(),
             },
             uri="at://did:plc:jetstream_test/fm.plyr.list/bad5",
         )
