@@ -89,19 +89,20 @@ async def ingest_track_create(
         # determine audio storage type
         audio_blob = record.get("audioBlob")
         audio_url = record.get("audioUrl")
-        if audio_blob:
+        pds_blob_cid = (
+            audio_blob.get("ref", {}).get("$link")
+            if isinstance(audio_blob, dict)
+            else None
+        )
+        if audio_blob and audio_url:
+            audio_storage = "both"
+        elif audio_blob:
             audio_storage = "pds"
-            pds_blob_cid = (
-                audio_blob.get("ref", {}).get("$link")
-                if isinstance(audio_blob, dict)
-                else None
-            )
         elif audio_url:
             audio_storage = "r2"
             pds_blob_cid = None
         else:
             audio_storage = "pds"
-            pds_blob_cid = None
 
         # build extra dict
         extra: dict = {}
@@ -184,7 +185,11 @@ async def ingest_track_update(
         # audio storage fields
         audio_blob = record.get("audioBlob")
         audio_url = record.get("audioUrl")
-        if audio_blob and isinstance(audio_blob, dict):
+        if audio_blob and isinstance(audio_blob, dict) and audio_url:
+            track.audio_storage = "both"
+            track.pds_blob_cid = audio_blob.get("ref", {}).get("$link")
+            track.r2_url = audio_url
+        elif audio_blob and isinstance(audio_blob, dict):
             track.audio_storage = "pds"
             track.pds_blob_cid = audio_blob.get("ref", {}).get("$link")
             track.r2_url = None

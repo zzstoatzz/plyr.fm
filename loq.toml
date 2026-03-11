@@ -223,7 +223,7 @@ max_lines = 540
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
-max_lines = 1170
+max_lines = 1220
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"

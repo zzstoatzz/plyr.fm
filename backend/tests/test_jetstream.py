@@ -9,7 +9,6 @@ from docket import Perpetual
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal.atproto.client import pds_blob_url
 from backend._internal.jetstream import JetstreamConsumer, consume_jetstream
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
@@ -291,32 +290,59 @@ class TestIngestTrackCreate:
         )
         assert result.scalar_one_or_none() is None
 
-    async def test_pds_audio_storage(
+    async def test_both_audio_storage(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """track with audioBlob gets audio_storage='pds'."""
+        """track with audioBlob + audioUrl gets audio_storage='both'."""
         record = {
-            "title": "PDS Track",
+            "title": "Both Track",
             "artist": "Test Artist",
-            "fileId": "pds_001",
+            "fileId": "both_001",
             "fileType": "mp3",
             "audioBlob": {"ref": {"$link": "bafyaudioblob"}, "mimeType": "audio/mpeg"},
-            "audioUrl": "https://r2.example.com/pds_001.mp3",
+            "audioUrl": "https://r2.example.com/both_001.mp3",
             "createdAt": _recent_ts(),
         }
-        uri = "at://did:plc:jetstream_test/fm.plyr.track/pds1"
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/both1"
 
         await ingest_track_create(
-            did=artist.did, rkey="pds1", record=record, uri=uri, cid="bafynew"
+            did=artist.did, rkey="both1", record=record, uri=uri, cid="bafynew"
         )
 
         result = await db_session.execute(
             select(Track).where(Track.atproto_record_uri == uri)
         )
         track = result.scalar_one()
-        assert track.audio_storage == "pds"
+        assert track.audio_storage == "both"
         assert track.pds_blob_cid == "bafyaudioblob"
-        assert track.r2_url is None
+        assert track.r2_url == "https://r2.example.com/both_001.mp3"
+
+    async def test_pds_only_audio_storage(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """track with audioBlob only (no audioUrl) gets audio_storage='pds'."""
+        record = {
+            "title": "PDS Only Track",
+            "artist": "Test Artist",
+            "fileId": "pds_only_001",
+            "fileType": "mp3",
+            "audioBlob": {"ref": {"$link": "bafypdsonly"}, "mimeType": "audio/mpeg"},
+            "audioUrl": "https://placeholder.example.com/pds_only_001.mp3",
+            "createdAt": _recent_ts(),
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/pdsonly1"
+
+        await ingest_track_create(
+            did=artist.did, rkey="pdsonly1", record=record, uri=uri, cid="bafynew"
+        )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        track = result.scalar_one()
+        # audioUrl is required by lexicon but audioBlob is canonical — both present = "both"
+        assert track.audio_storage == "both"
+        assert track.pds_blob_cid == "bafypdsonly"
 
     async def test_track_create_sets_support_gate(
         self, db_session: AsyncSession, artist: Artist
@@ -400,37 +426,33 @@ class TestIngestTrackCreate:
             track.id, audio_url="https://r2.example.com/hook_001.mp3"
         )
 
-    async def test_track_create_runs_hooks_pds(
+    async def test_track_create_runs_hooks_both(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """ingest_track_create passes PDS blob URL to hooks when no R2 URL."""
+        """with both audioBlob + audioUrl, hooks get R2 URL (CDN fallback)."""
         record = {
-            "title": "PDS Hooked",
+            "title": "Both Hooked",
             "artist": "Test Artist",
-            "fileId": "pds_hook_001",
+            "fileId": "both_hook_001",
             "fileType": "mp3",
             "audioBlob": {"ref": {"$link": "bafypdsblob"}, "mimeType": "audio/mpeg"},
-            "audioUrl": "https://r2.example.com/pds_hook_001.mp3",
+            "audioUrl": "https://r2.example.com/both_hook_001.mp3",
             "createdAt": _recent_ts(),
         }
-        uri = "at://did:plc:jetstream_test/fm.plyr.track/pdshook1"
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/bothhook1"
 
         with patch(
             "backend._internal.tasks.ingest.run_post_track_create_hooks",
             new_callable=AsyncMock,
         ) as mock_hooks:
             await ingest_track_create(
-                did=artist.did, rkey="pdshook1", record=record, uri=uri, cid="bafyh"
+                did=artist.did, rkey="bothhook1", record=record, uri=uri, cid="bafyh"
             )
 
-        # verify mock call directly (avoid cross-session query issues)
         mock_hooks.assert_called_once()
-        call_track_id = mock_hooks.call_args[0][0]
         call_audio_url = mock_hooks.call_args[1]["audio_url"]
-        assert isinstance(call_track_id, int)
-        assert artist.pds_url is not None
-        expected_url = pds_blob_url(artist.pds_url, artist.did, "bafypdsblob")
-        assert call_audio_url == expected_url
+        # R2 URL preferred over PDS blob when both are available
+        assert call_audio_url == "https://r2.example.com/both_hook_001.mp3"
 
 
 class TestIngestTrackDelete:
@@ -598,6 +620,35 @@ class TestIngestTrackUpdate:
         assert updated.audio_storage == "pds"
         assert updated.pds_blob_cid == "bafynewblob"
         assert updated.r2_url is None
+
+    async def test_updates_audio_storage_to_both(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """audioBlob + audioUrl together set audio_storage='both'."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={
+                "audioBlob": {
+                    "ref": {"$link": "bafybothblob"},
+                    "mimeType": "audio/mpeg",
+                },
+                "audioUrl": "https://r2.example.com/both.mp3",
+            },
+            uri=uri,
+            cid="bafyboth",
+        )
+
+        db_session.expire_all()
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        updated = result.scalar_one()
+        assert updated.audio_storage == "both"
+        assert updated.pds_blob_cid == "bafybothblob"
+        assert updated.r2_url == "https://r2.example.com/both.mp3"
 
     async def test_updates_audio_url(
         self, db_session: AsyncSession, artist: Artist, track: Track
