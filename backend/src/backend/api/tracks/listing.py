@@ -45,15 +45,6 @@ from .router import router
 logger = logging.getLogger(__name__)
 
 
-async def invalidate_tracks_discovery_cache() -> None:
-    """delete the anonymous discovery feed cache key."""
-    try:
-        redis = get_async_redis_client()
-        await redis.delete(DISCOVERY_CACHE_KEY)
-    except (RuntimeError, RedisError):
-        logger.debug("failed to invalidate discovery cache")
-
-
 if TYPE_CHECKING:
     from backend.storage.r2 import R2Storage
 

@@ -19,6 +19,11 @@ from backend._internal.auth import (
 logger = logging.getLogger(__name__)
 
 
+def pds_blob_url(pds_url: str, did: str, cid: str) -> str:
+    """construct a public URL to fetch a blob from a PDS."""
+    return f"{pds_url}/xrpc/com.atproto.sync.getBlob?did={did}&cid={cid}"
+
+
 class PayloadTooLargeError(Exception):
     """raised when PDS rejects a blob due to size limits."""
 
