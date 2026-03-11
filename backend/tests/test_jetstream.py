@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.jetstream import JetstreamConsumer, consume_jetstream
 from backend._internal.tasks.ingest import (
+    SubjectNotFoundError,
     ingest_comment_create,
     ingest_comment_delete,
     ingest_like_create,
@@ -317,6 +318,58 @@ class TestIngestTrackCreate:
         assert track.pds_blob_cid == "bafyaudioblob"
         assert track.r2_url is None
 
+    async def test_track_create_sets_support_gate(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """gated track record materializes support_gate on the DB row."""
+        record = {
+            "title": "Gated Track",
+            "artist": "Test Artist",
+            "fileId": "gated_001",
+            "fileType": "mp3",
+            "audioUrl": "https://r2.example.com/gated_001.mp3",
+            "supportGate": {"type": "any"},
+            "createdAt": _recent_ts(),
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/gated1"
+
+        await ingest_track_create(
+            did=artist.did, rkey="gated1", record=record, uri=uri, cid="bafygated"
+        )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        track = result.scalar_one()
+        assert track.support_gate == {"type": "any"}
+        assert track.is_gated is True
+
+    async def test_track_create_sets_features(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """featured artists from record are stored on the track."""
+        features = [{"did": "did:plc:feat1", "handle": "feat.bsky.social"}]
+        record = {
+            "title": "Featured Track",
+            "artist": "Test Artist",
+            "fileId": "feat_001",
+            "fileType": "mp3",
+            "audioUrl": "https://r2.example.com/feat_001.mp3",
+            "features": features,
+            "createdAt": _recent_ts(),
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/feat1"
+
+        await ingest_track_create(
+            did=artist.did, rkey="feat1", record=record, uri=uri, cid="bafyfeat"
+        )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        track = result.scalar_one()
+        assert track.features == features
+
     async def test_track_create_runs_hooks(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
@@ -423,6 +476,100 @@ class TestIngestTrackUpdate:
         assert updated.description == "New desc"
         assert updated.atproto_record_cid == "bafyupdated"
 
+    async def test_updates_support_gate(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """external supportGate change propagates to DB."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={"supportGate": {"type": "any"}},
+            uri=uri,
+            cid="bafygated",
+        )
+
+        db_session.expire_all()
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        updated = result.scalar_one()
+        assert updated.support_gate == {"type": "any"}
+        assert updated.is_gated is True
+
+    async def test_removes_support_gate(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """supportGate present as None in record clears gating."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+
+        # first set support_gate
+        track.support_gate = {"type": "any"}
+        await db_session.commit()
+
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={"supportGate": None},
+            uri=uri,
+            cid="bafyungated",
+        )
+
+        db_session.expire_all()
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        updated = result.scalar_one()
+        assert updated.support_gate is None
+        assert updated.is_gated is False
+
+    async def test_updates_features(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """features array propagates to DB."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        features = [{"did": "did:plc:feat1", "handle": "feat.bsky.social"}]
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={"features": features},
+            uri=uri,
+            cid="bafyfeat",
+        )
+
+        db_session.expire_all()
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        updated = result.scalar_one()
+        assert updated.features == features
+
+    async def test_updates_extra_fields(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """album and duration propagate to track.extra."""
+        assert track.atproto_record_uri is not None
+        uri = track.atproto_record_uri
+        await ingest_track_update(
+            did=artist.did,
+            rkey="existing",
+            record={"album": "New Album", "duration": 240},
+            uri=uri,
+            cid="bafyextra",
+        )
+
+        db_session.expire_all()
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        updated = result.scalar_one()
+        assert updated.extra is not None
+        assert updated.extra.get("album") == "New Album"
+        assert updated.extra.get("duration") == 240
+
 
 # --- like ingestion tests ---
 
@@ -450,23 +597,21 @@ class TestIngestLikeCreate:
         assert like.track_id == track.id
         assert like.user_did == artist.did
 
-    async def test_skips_unknown_track(
+    async def test_raises_on_unknown_track(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """like for unknown subject track is skipped."""
+        """like for unknown subject track raises SubjectNotFoundError for retry."""
         record = {
             "subject": {"uri": "at://did:plc:jetstream_test/fm.plyr.track/nonexistent"},
             "createdAt": _recent_ts(),
         }
-        await ingest_like_create(
-            did=artist.did,
-            rkey="like2",
-            record=record,
-            uri="at://did:plc:jetstream_test/fm.plyr.like/like2",
-        )
-
-        result = await db_session.execute(select(TrackLike))
-        assert result.scalar_one_or_none() is None
+        with pytest.raises(SubjectNotFoundError):
+            await ingest_like_create(
+                did=artist.did,
+                rkey="like2",
+                record=record,
+                uri="at://did:plc:jetstream_test/fm.plyr.like/like2",
+            )
 
 
 class TestIngestLikeDelete:
@@ -522,25 +667,23 @@ class TestIngestCommentCreate:
         assert comment.text == "great track!"
         assert comment.timestamp_ms == 5000
 
-    async def test_skips_unknown_track(
+    async def test_raises_on_unknown_track(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """comment for unknown track is skipped."""
+        """comment for unknown track raises SubjectNotFoundError for retry."""
         record = {
             "subject": {"uri": "at://did:plc:jetstream_test/fm.plyr.track/nope"},
             "text": "nope",
             "timestampMs": 0,
             "createdAt": _recent_ts(),
         }
-        await ingest_comment_create(
-            did=artist.did,
-            rkey="c2",
-            record=record,
-            uri="at://did:plc:jetstream_test/fm.plyr.comment/c2",
-        )
-
-        result = await db_session.execute(select(TrackComment))
-        assert result.scalar_one_or_none() is None
+        with pytest.raises(SubjectNotFoundError):
+            await ingest_comment_create(
+                did=artist.did,
+                rkey="c2",
+                record=record,
+                uri="at://did:plc:jetstream_test/fm.plyr.comment/c2",
+            )
 
 
 class TestIngestCommentDelete:
@@ -599,6 +742,33 @@ class TestIngestListCreate:
         playlist = result.scalar_one()
         assert playlist.name == "My Playlist"
         assert playlist.owner_did == artist.did
+        assert playlist.track_count == 0
+
+    async def test_creates_playlist_with_items(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """track_count is set from items array length."""
+        items = [
+            {"subject": {"uri": f"at://x/fm.plyr.track/t{i}", "cid": f"bafy{i}"}}
+            for i in range(3)
+        ]
+        record = {
+            "listType": "playlist",
+            "name": "Populated Playlist",
+            "items": items,
+            "createdAt": _recent_ts(),
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.list/pl_items"
+
+        await ingest_list_create(
+            did=artist.did, rkey="pl_items", record=record, uri=uri, cid="bafyitems"
+        )
+
+        result = await db_session.execute(
+            select(Playlist).where(Playlist.atproto_record_uri == uri)
+        )
+        playlist = result.scalar_one()
+        assert playlist.track_count == 3
 
     async def test_skips_album_type(
         self, db_session: AsyncSession, artist: Artist
@@ -621,6 +791,71 @@ class TestIngestListCreate:
             select(Playlist).where(Playlist.owner_did == artist.did)
         )
         assert result.scalar_one_or_none() is None
+
+
+class TestIngestListUpdate:
+    async def test_updates_name(self, db_session: AsyncSession, artist: Artist) -> None:
+        """playlist name update propagates."""
+        # create playlist first
+        record = {
+            "listType": "playlist",
+            "name": "Original",
+            "items": [],
+            "createdAt": _recent_ts(),
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.list/pl_upd"
+        await ingest_list_create(
+            did=artist.did, rkey="pl_upd", record=record, uri=uri, cid="bafy1"
+        )
+
+        await ingest_list_update(
+            did=artist.did,
+            rkey="pl_upd",
+            record={"name": "Renamed"},
+            uri=uri,
+            cid="bafy2",
+        )
+
+        db_session.expire_all()
+        result = await db_session.execute(
+            select(Playlist).where(Playlist.atproto_record_uri == uri)
+        )
+        playlist = result.scalar_one()
+        assert playlist.name == "Renamed"
+
+    async def test_updates_track_count(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """track_count updates when items change."""
+        record = {
+            "listType": "playlist",
+            "name": "Counting",
+            "items": [],
+            "createdAt": _recent_ts(),
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.list/pl_count"
+        await ingest_list_create(
+            did=artist.did, rkey="pl_count", record=record, uri=uri, cid="bafy1"
+        )
+
+        items = [
+            {"subject": {"uri": f"at://x/fm.plyr.track/t{i}", "cid": f"bafy{i}"}}
+            for i in range(5)
+        ]
+        await ingest_list_update(
+            did=artist.did,
+            rkey="pl_count",
+            record={"items": items},
+            uri=uri,
+            cid="bafy2",
+        )
+
+        db_session.expire_all()
+        result = await db_session.execute(
+            select(Playlist).where(Playlist.atproto_record_uri == uri)
+        )
+        playlist = result.scalar_one()
+        assert playlist.track_count == 5
 
 
 # --- audio PDS redirect test ---

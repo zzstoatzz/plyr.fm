@@ -38,6 +38,7 @@ from backend._internal.tasks.hooks import (
     run_post_track_create_hooks,
 )
 from backend._internal.tasks.ingest import (
+    SubjectNotFoundError,
     ingest_comment_create,
     ingest_comment_delete,
     ingest_comment_update,
@@ -100,6 +101,7 @@ background_tasks = [
 ]
 
 __all__ = [
+    "SubjectNotFoundError",
     "background_tasks",
     "classify_genres",
     "consume_jetstream",

@@ -22,6 +22,11 @@ from backend.utilities.lexicon import validate_record
 
 logger = logging.getLogger(__name__)
 
+
+class SubjectNotFoundError(Exception):
+    """referenced subject (track) not yet indexed — triggers retry."""
+
+
 _INGEST_RETRY = ExponentialRetry(
     attempts=4,
     minimum_delay=timedelta(seconds=1),
@@ -116,6 +121,8 @@ async def ingest_track_create(
             pds_blob_cid=pds_blob_cid,
             description=record.get("description"),
             image_url=record.get("imageUrl"),
+            support_gate=record.get("supportGate"),
+            features=record.get("features"),
             created_at=_parse_datetime(record.get("createdAt")),
             extra=extra,
         )
@@ -169,6 +176,26 @@ async def ingest_track_update(
         if cid:
             track.atproto_record_cid = cid
 
+        # gating
+        if "supportGate" in record:
+            track.support_gate = record["supportGate"]
+
+        # features
+        if (features := record.get("features")) is not None:
+            track.features = features
+
+        # extra fields (album, duration) — reassign to trigger change detection
+        extra = dict(track.extra or {})
+        extra_changed = False
+        if (duration := record.get("duration")) is not None:
+            extra["duration"] = duration
+            extra_changed = True
+        if (album := record.get("album")) is not None:
+            extra["album"] = album
+            extra_changed = True
+        if extra_changed:
+            track.extra = extra
+
         await db.commit()
         logfire.info("ingest: track updated", uri=uri, artist_did=did)
 
@@ -215,8 +242,9 @@ async def ingest_like_create(
         )
         track_id = result.scalar_one_or_none()
         if track_id is None:
-            logger.debug("ingest_like_create: subject track %s not found", subject_uri)
-            return
+            raise SubjectNotFoundError(
+                f"ingest_like_create: subject track {subject_uri} not found"
+            )
 
         # dedup: unique constraint on (track_id, user_did)
         existing = await db.execute(
@@ -285,10 +313,9 @@ async def ingest_comment_create(
         )
         track_id = result.scalar_one_or_none()
         if track_id is None:
-            logger.debug(
-                "ingest_comment_create: subject track %s not found", subject_uri
+            raise SubjectNotFoundError(
+                f"ingest_comment_create: subject track {subject_uri} not found"
             )
-            return
 
         comment = TrackComment(
             track_id=track_id,
@@ -402,6 +429,7 @@ async def ingest_list_create(
         playlist = Playlist(
             owner_did=did,
             name=record.get("name", "untitled"),
+            track_count=len(record.get("items", [])),
             atproto_record_uri=uri,
             atproto_record_cid=cid or "",
             created_at=_parse_datetime(record.get("createdAt")),
@@ -419,7 +447,7 @@ async def ingest_list_update(
     cid: str | None = None,
     retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
-    """update playlist name."""
+    """update playlist metadata."""
     if errors := validate_record("fm.plyr.list", record, partial=True):
         logfire.warn("ingest: invalid list record, skipping", uri=uri, errors=errors)
         return
@@ -437,6 +465,8 @@ async def ingest_list_update(
             playlist.name = name
         if cid:
             playlist.atproto_record_cid = cid
+        if (items := record.get("items")) is not None:
+            playlist.track_count = len(items)
 
         await db.commit()
         logfire.info("ingest: playlist updated", uri=uri)
