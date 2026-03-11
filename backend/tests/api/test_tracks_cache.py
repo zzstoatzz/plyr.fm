@@ -4,11 +4,9 @@ from unittest.mock import AsyncMock, patch
 
 from redis.exceptions import ConnectionError as RedisConnectionError
 
+from backend._internal.tasks.hooks import invalidate_tracks_discovery_cache
 from backend.api.tracks.constants import DISCOVERY_CACHE_KEY
-from backend.api.tracks.listing import (
-    TracksListResponse,
-    invalidate_tracks_discovery_cache,
-)
+from backend.api.tracks.listing import TracksListResponse
 
 SAMPLE_RESPONSE = TracksListResponse(tracks=[], next_cursor=None, has_more=False)
 
@@ -26,7 +24,7 @@ async def test_invalidate_clears_cache() -> None:
     mock_redis.delete = AsyncMock()
 
     with patch(
-        "backend.api.tracks.listing.get_async_redis_client",
+        "backend._internal.tasks.hooks.get_async_redis_client",
         return_value=mock_redis,
     ):
         await invalidate_tracks_discovery_cache()
@@ -40,7 +38,7 @@ async def test_invalidate_handles_redis_error() -> None:
     mock_redis.delete.side_effect = RedisConnectionError("redis down")
 
     with patch(
-        "backend.api.tracks.listing.get_async_redis_client",
+        "backend._internal.tasks.hooks.get_async_redis_client",
         return_value=mock_redis,
     ):
         # should not raise

@@ -26,7 +26,6 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from backend._internal import Session as AuthSession
 from backend._internal import has_flag, require_artist_profile
@@ -41,12 +40,8 @@ from backend._internal.audio import AudioFormat
 from backend._internal.clients.transcoder import get_transcoder_client
 from backend._internal.image import ImageFormat
 from backend._internal.jobs import job_service
-from backend._internal.tasks import (
-    schedule_album_list_sync,
-    schedule_copyright_scan,
-    schedule_embedding_generation,
-    schedule_genre_classification,
-)
+from backend._internal.tasks import schedule_album_list_sync
+from backend._internal.tasks.hooks import run_post_track_create_hooks
 from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.models import Artist, Track, UserPreferences
@@ -59,7 +54,6 @@ from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.rate_limit import limiter
 from backend.utilities.tags import add_tags_to_track, parse_tags_json
 
-from .listing import invalidate_tracks_discovery_cache
 from .router import router
 from .services import get_or_create_album
 
@@ -459,24 +453,6 @@ async def _transcode_audio(
     )
 
 
-async def _send_track_notification(db: AsyncSession, track_id: int) -> None:
-    """send notification for new track upload."""
-    from backend._internal.notifications import notification_service
-
-    try:
-        track = await db.scalar(
-            select(Track).options(joinedload(Track.artist)).where(Track.id == track_id)
-        )
-        if not track:
-            logger.warning(f"track {track_id} not found for notification")
-            return
-        await notification_service.send_track_notification(track)
-        track.notification_sent = True
-        await db.commit()
-    except Exception as e:
-        logger.warning(f"failed to send notification for track {track_id}: {e}")
-
-
 async def _validate_audio(ctx: UploadContext) -> AudioInfo:
     """phase 1: validate file type, extract duration, check gating requirements."""
     ext = Path(ctx.filename).suffix.lower()
@@ -752,35 +728,29 @@ async def _create_records(
 async def _schedule_post_upload(
     ctx: UploadContext, sr: StorageResult, track: Track
 ) -> None:
-    """phase 7: post-upload tasks (tags, notifications, background jobs)."""
+    """phase 7: post-upload tasks (tags, album sync, shared hooks)."""
     async with db_session() as db:
         await add_tags_to_track(db, track.id, ctx.tags, ctx.artist_did)
 
-        # skip notifications and copyright scan for integration tests on staging
-        is_integration_test = (
-            settings.observability.environment == "staging"
-            and "integration-test" in (ctx.tags or [])
-        )
-        if not is_integration_test:
-            await _send_track_notification(db, track.id)
-        if sr.r2_url and not is_integration_test:
-            await schedule_copyright_scan(track.id, sr.r2_url)
-
-    # generate CLAP embedding for vibe search
-    if sr.r2_url and settings.modal.enabled and settings.turbopuffer.enabled:
-        await schedule_embedding_generation(track.id, sr.r2_url)
-
-    # classify genres via Replicate
-    if sr.r2_url and settings.replicate.enabled:
-        await schedule_genre_classification(track.id, sr.r2_url)
-
-    # sync album list record if track is in an album
+    # upload-specific: album list sync
     if track.album_id:
         await schedule_album_list_sync(ctx.auth_session.session_id, track.album_id)
         from backend.api.albums import invalidate_album_cache_by_id
 
         async with db_session() as db:
             await invalidate_album_cache_by_id(db, track.album_id)
+
+    # shared post-creation hooks
+    is_integration_test = (
+        settings.observability.environment == "staging"
+        and "integration-test" in (ctx.tags or [])
+    )
+    await run_post_track_create_hooks(
+        track.id,
+        audio_url=sr.r2_url,
+        skip_notification=is_integration_test,
+        skip_copyright=is_integration_test,
+    )
 
 
 async def _process_upload_background(ctx: UploadContext) -> None:
@@ -820,11 +790,8 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                 ctx, audio_info, sr, pds_result, image_id, image_url, thumbnail_url
             )
 
-            # phase 7: post-upload tasks (tags, notifications, background jobs)
+            # phase 7: post-upload tasks (tags, album sync, shared hooks)
             await _schedule_post_upload(ctx, sr, track)
-
-            # invalidate anonymous discovery feed cache
-            await invalidate_tracks_discovery_cache()
 
             await job_service.update_progress(
                 ctx.upload_id,

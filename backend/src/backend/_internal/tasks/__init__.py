@@ -20,6 +20,10 @@ from backend._internal.tasks.ml import (
     schedule_embedding_generation,
     schedule_genre_classification,
 )
+from backend._internal.tasks.hooks import (
+    invalidate_tracks_discovery_cache,
+    run_post_track_create_hooks,
+)
 from backend._internal.tasks.pds import (
     pds_create_comment,
     pds_create_like,
@@ -71,12 +75,14 @@ __all__ = [
     "background_tasks",
     "classify_genres",
     "generate_embedding",
+    "invalidate_tracks_discovery_cache",
     "move_track_audio",
     "pds_create_comment",
     "pds_create_like",
     "pds_delete_comment",
     "pds_delete_like",
     "pds_update_comment",
+    "run_post_track_create_hooks",
     "scan_copyright",
     "schedule_album_list_sync",
     "schedule_atproto_sync",
