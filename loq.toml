@@ -59,7 +59,7 @@ max_lines = 725
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"
-max_lines = 700
+max_lines = 710
 
 [[rules]]
 path = "backend/tests/api/test_albums.py"
