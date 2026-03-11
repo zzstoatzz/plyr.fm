@@ -25,6 +25,7 @@ def build_track_record(
     support_gate: dict[str, Any] | None = None,
     audio_blob: BlobRef | None = None,
     description: str | None = None,
+    created_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Build a track record dict for ATProto.
 
@@ -40,17 +41,19 @@ def build_track_record(
         support_gate: optional gating config (e.g., {"type": "any"})
         audio_blob: optional blob reference from PDS upload (canonical source when present)
         description: optional track description (liner notes, show notes)
+        created_at: optional timestamp (uses now if not provided)
 
     returns:
         record dict ready for ATProto
     """
+    ts = (created_at or datetime.now(UTC)).isoformat().replace("+00:00", "Z")
     record: dict[str, Any] = {
         "$type": settings.atproto.track_collection,
         "title": title,
         "artist": artist,
         "audioUrl": audio_url,
         "fileType": file_type,
-        "createdAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "createdAt": ts,
     }
 
     # add optional fields
@@ -95,8 +98,14 @@ async def create_track_record(
     support_gate: dict[str, Any] | None = None,
     audio_blob: BlobRef | None = None,
     description: str | None = None,
+    rkey: str | None = None,
+    created_at: datetime | None = None,
 ) -> tuple[str, str]:
     """Create a track record on the user's PDS using the configured collection.
+
+    when rkey is provided, uses putRecord for idempotent creation (safe for retries
+    and avoids races with Jetstream echo). otherwise falls back to createRecord
+    which lets the PDS auto-generate the rkey.
 
     args:
         auth_session: authenticated user session
@@ -111,6 +120,8 @@ async def create_track_record(
         support_gate: optional gating config (e.g., {"type": "any"})
         audio_blob: optional blob reference from PDS upload (canonical source when present)
         description: optional track description (liner notes, show notes)
+        rkey: optional explicit record key (TID). uses putRecord when provided
+        created_at: optional timestamp for the record (uses now if not provided)
 
     returns:
         tuple of (record_uri, record_cid)
@@ -131,17 +142,22 @@ async def create_track_record(
         support_gate=support_gate,
         audio_blob=audio_blob,
         description=description,
+        created_at=created_at,
     )
 
-    payload = {
+    payload: dict[str, Any] = {
         "repo": auth_session.did,
         "collection": settings.atproto.track_collection,
         "record": record,
     }
 
-    result = await make_pds_request(
-        auth_session, "POST", "com.atproto.repo.createRecord", payload
-    )
+    if rkey:
+        payload["rkey"] = rkey
+        endpoint = "com.atproto.repo.putRecord"
+    else:
+        endpoint = "com.atproto.repo.createRecord"
+
+    result = await make_pds_request(auth_session, "POST", endpoint, payload)
     return result["uri"], result["cid"]
 
 

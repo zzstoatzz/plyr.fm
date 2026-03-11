@@ -23,7 +23,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -591,10 +591,48 @@ async def _create_records(
     image_id: str | None,
     image_url: str | None,
     thumbnail_url: str | None = None,
-) -> Track:
-    """phase 6: create ATProto record + DB track record."""
+) -> tuple[Track, bool]:
+    """phase 6: reserve DB row, create ATProto record, finalize.
+
+    uses reserve-then-publish to avoid races with Jetstream ingest:
+    1. generate rkey (TID) upfront and reserve the DB row as "pending"
+    2. publish to PDS with explicit rkey via putRecord
+    3. atomic CAS update pending → published (only winner runs hooks)
+
+    returns:
+        (track, published_by_us) — published_by_us is False if Jetstream
+        ingest finalized the row before we could.
+    """
+    from datetime import UTC, datetime
+
+    from backend._internal.atproto.tid import datetime_to_tid
+
     ext = Path(ctx.filename).suffix.lower()
     playable_file_type = sr.playable_format.value if sr.playable_format else ext[1:]
+
+    # compute audio URL for ATProto record
+    if audio_info.is_gated:
+        from urllib.parse import urljoin
+
+        backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
+        audio_url_for_record = urljoin(backend_url + "/", f"audio/{sr.file_id}")
+    else:
+        assert sr.r2_url is not None
+        audio_url_for_record = sr.r2_url
+
+    # generate deterministic rkey and AT URI
+    created_at = datetime.now(UTC)
+    rkey = datetime_to_tid(created_at)
+    collection = settings.atproto.track_collection
+    uri = f"at://{ctx.artist_did}/{collection}/{rkey}"
+
+    # step 1: reserve DB row as pending
+    await job_service.update_progress(
+        ctx.upload_id,
+        JobStatus.PROCESSING,
+        "saving track metadata...",
+        phase="database",
+    )
 
     async with db_session() as db:
         result = await db.execute(select(Artist).where(Artist.did == ctx.artist_did))
@@ -615,77 +653,20 @@ async def _create_records(
                 ctx.features_json, artist.handle
             )
 
-        # create ATProto record
-        await job_service.update_progress(
-            ctx.upload_id,
-            JobStatus.PROCESSING,
-            "creating atproto record...",
-            phase="atproto",
-        )
-        try:
-            if audio_info.is_gated:
-                from urllib.parse import urljoin
-
-                backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
-                audio_url_for_record = urljoin(backend_url + "/", f"audio/{sr.file_id}")
-            else:
-                assert sr.r2_url is not None
-                audio_url_for_record = sr.r2_url
-
-            atproto_result = await create_track_record(
-                auth_session=ctx.auth_session,
-                title=ctx.title,
-                artist=artist.display_name,
-                audio_url=audio_url_for_record,
-                file_type=playable_file_type,
-                album=ctx.album,
-                duration=audio_info.duration,
-                features=featured_artists or None,
-                image_url=image_url,
-                support_gate=ctx.support_gate,
-                audio_blob=pds_result.blob_ref if pds_result else None,
-                description=ctx.description,
-            )
-            if not atproto_result:
-                raise ValueError("PDS returned no record data")
-            atproto_uri, atproto_cid = atproto_result
-        except Exception as e:
-            logger.error("ATProto sync failed for upload %s: %s", ctx.upload_id, e)
-            # cleanup orphaned media
-            with contextlib.suppress(Exception):
-                await storage.delete(sr.file_id, playable_file_type)
-            if sr.original_file_id and sr.original_file_type:
-                with contextlib.suppress(Exception):
-                    await storage.delete(sr.original_file_id, sr.original_file_type)
-            if image_id:
-                with contextlib.suppress(Exception):
-                    await storage.delete(image_id)
-            raise UploadPhaseError(f"failed to sync track to ATProto: {e}") from e
-
-        # create DB record
-        await job_service.update_progress(
-            ctx.upload_id,
-            JobStatus.PROCESSING,
-            "saving track metadata...",
-            phase="database",
-        )
-
         extra: dict = {}
         if audio_info.duration:
             extra["duration"] = audio_info.duration
         if ctx.auto_tag:
             extra["auto_tag"] = True
-
-        album_record = None
         if ctx.album:
             extra["album"] = ctx.album
-            album_record = await get_or_create_album(
-                db, artist, ctx.album, image_id, image_url
-            )
 
         has_pds_blob = pds_result and pds_result.cid is not None
         audio_storage = "both" if has_pds_blob else "r2"
 
+        artist_display_name = artist.display_name
+
+        # album creation deferred to after PDS success to avoid orphan albums
         track = Track(
             title=ctx.title,
             file_id=sr.file_id,
@@ -695,11 +676,13 @@ async def _create_records(
             artist_did=ctx.artist_did,
             description=ctx.description,
             extra=extra,
-            album_id=album_record.id if album_record else None,
+            album_id=None,
             features=featured_artists,
             r2_url=sr.r2_url,
-            atproto_record_uri=atproto_uri,
-            atproto_record_cid=atproto_cid,
+            atproto_record_uri=uri,
+            atproto_record_cid=None,
+            created_at=created_at,
+            publish_state="pending",
             image_id=image_id,
             image_url=image_url,
             thumbnail_url=thumbnail_url,
@@ -722,13 +705,111 @@ async def _create_records(
                     await storage.delete(sr.original_file_id, sr.original_file_type)
             raise UploadPhaseError(f"database constraint violation: {e!s}") from e
 
-    return track
+        track_id = track.id
+
+    # step 2: publish to PDS with explicit rkey (putRecord for idempotency)
+    await job_service.update_progress(
+        ctx.upload_id,
+        JobStatus.PROCESSING,
+        "creating atproto record...",
+        phase="atproto",
+    )
+    try:
+        atproto_result = await create_track_record(
+            auth_session=ctx.auth_session,
+            title=ctx.title,
+            artist=artist_display_name,
+            audio_url=audio_url_for_record,
+            file_type=playable_file_type,
+            album=ctx.album,
+            duration=audio_info.duration,
+            features=featured_artists or None,
+            image_url=image_url,
+            support_gate=ctx.support_gate,
+            audio_blob=pds_result.blob_ref if pds_result else None,
+            description=ctx.description,
+            rkey=rkey,
+            created_at=created_at,
+        )
+        if not atproto_result:
+            raise ValueError("PDS returned no record data")
+        _, atproto_cid = atproto_result
+    except Exception as e:
+        logger.error("ATProto sync failed for upload %s: %s", ctx.upload_id, e)
+        # only delete the row if it's still pending — on ambiguous failures
+        # (timeouts, connection drops) Jetstream may have already finalized it
+        deleted_pending = False
+        with contextlib.suppress(Exception):
+            async with db_session() as db:
+                result = await db.execute(
+                    delete(Track).where(
+                        Track.id == track_id, Track.publish_state == "pending"
+                    )
+                )
+                await db.commit()
+                deleted_pending = result.rowcount == 1  # type: ignore[union-attr]
+
+        if deleted_pending:
+            # row was still pending — safe to clean up media
+            with contextlib.suppress(Exception):
+                await storage.delete(sr.file_id, playable_file_type)
+            if sr.original_file_id and sr.original_file_type:
+                with contextlib.suppress(Exception):
+                    await storage.delete(sr.original_file_id, sr.original_file_type)
+            if image_id:
+                with contextlib.suppress(Exception):
+                    await storage.delete(image_id)
+        # else: Jetstream finalized the row — media belongs to the published track
+
+        raise UploadPhaseError(f"failed to sync track to ATProto: {e}") from e
+
+    # step 3: atomic CAS update pending → published + deferred album linkage
+    async with db_session() as db:
+        # create album now that PDS write succeeded (avoids orphan albums on failure)
+        album_record = None
+        if ctx.album:
+            artist_row = await db.execute(
+                select(Artist).where(Artist.did == ctx.artist_did)
+            )
+            artist_obj = artist_row.scalar_one()
+            album_record = await get_or_create_album(
+                db, artist_obj, ctx.album, image_id, image_url
+            )
+
+        values: dict = {
+            "atproto_record_cid": atproto_cid,
+            "publish_state": "published",
+        }
+        if album_record:
+            values["album_id"] = album_record.id
+
+        result = await db.execute(
+            update(Track)
+            .where(Track.id == track_id, Track.publish_state == "pending")
+            .values(**values)
+        )
+        await db.commit()
+        published_by_us = result.rowcount == 1  # type: ignore[union-attr]
+
+        # reload the finalized track
+        row = await db.execute(select(Track).where(Track.id == track_id))
+        track = row.scalar_one()
+
+    return track, published_by_us
 
 
 async def _schedule_post_upload(
-    ctx: UploadContext, sr: StorageResult, track: Track
+    ctx: UploadContext,
+    sr: StorageResult,
+    track: Track,
+    *,
+    run_hooks: bool = True,
 ) -> None:
-    """phase 7: post-upload tasks (tags, album sync, shared hooks)."""
+    """phase 7: post-upload tasks (tags, album sync, shared hooks).
+
+    run_hooks is False when Jetstream ingest already finalized the pending
+    row and ran hooks before us (race condition — hooks only run once).
+    """
     async with db_session() as db:
         await add_tags_to_track(db, track.id, ctx.tags, ctx.artist_did)
 
@@ -739,6 +820,9 @@ async def _schedule_post_upload(
 
         async with db_session() as db:
             await invalidate_album_cache_by_id(db, track.album_id)
+
+    if not run_hooks:
+        return
 
     # shared post-creation hooks
     is_integration_test = (
@@ -785,13 +869,13 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             # phase 5: store image (optional)
             image_id, image_url, thumbnail_url = await _store_image(ctx)
 
-            # phase 6: create records (ATProto + DB)
-            track = await _create_records(
+            # phase 6: reserve DB row, create ATProto record, finalize
+            track, published_by_us = await _create_records(
                 ctx, audio_info, sr, pds_result, image_id, image_url, thumbnail_url
             )
 
             # phase 7: post-upload tasks (tags, album sync, shared hooks)
-            await _schedule_post_upload(ctx, sr, track)
+            await _schedule_post_upload(ctx, sr, track, run_hooks=published_by_us)
 
             await job_service.update_progress(
                 ctx.upload_id,

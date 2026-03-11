@@ -84,6 +84,10 @@ class Track(Base):
     pds_blob_cid: Mapped[str | None] = mapped_column(String, nullable=True)
     pds_blob_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # publish state for reserve-then-publish flow
+    # None = legacy (treated as published), "pending" = PDS write pending, "published" = confirmed
+    publish_state: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # track description (liner notes, show notes, etc.)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
 
