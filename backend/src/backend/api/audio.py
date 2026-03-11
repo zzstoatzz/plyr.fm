@@ -99,6 +99,8 @@ async def stream_audio(
             artist_did=artist_did,
             session=session,
             is_head_request=is_head_request,
+            audio_storage=audio_storage,
+            pds_blob_cid=pds_blob_cid,
         )
 
     # public track - use cached r2_url only for transcoded version
@@ -127,13 +129,15 @@ async def _handle_gated_audio(
     artist_did: str,
     session: Session | None,
     is_head_request: bool = False,
+    audio_storage: str = "r2",
+    pds_blob_cid: str | None = None,
 ) -> RedirectResponse | Response:
     """handle streaming for supporter-gated content.
 
     validates that the user is authenticated and either:
     - is the artist who uploaded the track, OR
     - supports the artist via atprotofans
-    before returning a presigned URL for the private bucket.
+    before returning the appropriate URL (presigned R2 or PDS blob).
 
     for HEAD requests (used for pre-flight auth checks), returns 200 status
     without redirecting to avoid CORS issues with cross-origin redirects.
@@ -171,7 +175,7 @@ async def _handle_gated_audio(
     if is_head_request:
         return Response(status_code=200)
 
-    # authorized - generate presigned URL for private bucket
+    # authorized — resolve URL based on storage type
     if session.did != artist_did:
         logfire.info(
             "serving gated content to supporter",
@@ -180,6 +184,15 @@ async def _handle_gated_audio(
             artist_did=artist_did,
         )
 
+    # PDS-backed gated tracks: redirect to PDS blob (unauthenticated endpoint,
+    # gating is enforced by plyr.fm, not the PDS)
+    if audio_storage == "pds" and pds_blob_cid:
+        if artist_pds_url := await _resolve_pds_url(artist_did):
+            return RedirectResponse(
+                url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid)
+            )
+
+    # R2-backed gated tracks: presigned URL for private bucket
     url = await storage.generate_presigned_url(file_id=file_id, extension=file_type)
     return RedirectResponse(url=url)
 
@@ -259,7 +272,16 @@ async def get_audio_url(
                     headers={"X-Support-Required": "true"},
                 )
 
-        # return presigned URL
+        # PDS-backed gated tracks: return PDS blob URL
+        if audio_storage == "pds" and pds_blob_cid:
+            if artist_pds_url := await _resolve_pds_url(artist_did):
+                return AudioUrlResponse(
+                    url=pds_blob_url(artist_pds_url, artist_did, pds_blob_cid),
+                    file_id=serve_file_id,
+                    file_type=serve_file_type,
+                )
+
+        # R2-backed gated tracks: presigned URL for private bucket
         url = await storage.generate_presigned_url(
             file_id=serve_file_id, extension=serve_file_type
         )

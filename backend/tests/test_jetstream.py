@@ -892,6 +892,49 @@ class TestAudioPdsRedirect:
         assert f"did={artist.did}" in location
         assert f"cid={pds_track.pds_blob_cid}" in location
 
+    async def test_gated_pds_redirect(
+        self, db_session: AsyncSession, artist: Artist, client: object
+    ) -> None:
+        """gated PDS-only track redirects to getBlob (not private R2 bucket)."""
+        from fastapi.testclient import TestClient
+
+        from backend._internal.auth.session import Session
+
+        assert isinstance(client, TestClient)
+
+        # create a gated PDS-only track
+        gated_pds_track = Track(
+            title="Gated PDS",
+            file_id="gated_pds_001",
+            file_type="mp3",
+            artist_did=artist.did,
+            r2_url=None,
+            audio_storage="pds",
+            pds_blob_cid="bafygatedblob",
+            support_gate={"type": "any"},
+            atproto_record_uri=f"at://{artist.did}/fm.plyr.track/gatedpds",
+        )
+        db_session.add(gated_pds_track)
+        await db_session.commit()
+
+        # mock auth as the track owner (bypasses supporter validation)
+        mock_session = Session(
+            session_id="test",
+            did=artist.did,
+            handle="testartist.bsky.social",
+            oauth_session={},
+        )
+        with patch("backend.api.audio.get_optional_session", return_value=mock_session):
+            response = client.get(
+                f"/audio/{gated_pds_track.file_id}", follow_redirects=False
+            )
+
+        assert response.status_code == 307
+        location = response.headers["location"]
+        assert "com.atproto.sync.getBlob" in location
+        assert f"did={artist.did}" in location
+        assert f"cid={gated_pds_track.pds_blob_cid}" in location
+
 
 # --- ingest validation tests ---
 

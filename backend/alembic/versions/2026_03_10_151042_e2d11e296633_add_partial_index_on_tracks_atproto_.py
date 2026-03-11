@@ -25,7 +25,7 @@ def upgrade() -> None:
         "ix_tracks_atproto_record_uri_partial",
         "tracks",
         ["atproto_record_uri"],
-        unique=False,
+        unique=True,
         postgresql_where=sa.text("atproto_record_uri IS NOT NULL"),
     )
 

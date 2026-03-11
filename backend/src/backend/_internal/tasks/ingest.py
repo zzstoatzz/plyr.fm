@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 import logfire
 from docket import ConcurrencyLimit, ExponentialRetry
 from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.tasks.hooks import run_post_track_create_hooks
@@ -127,7 +128,11 @@ async def ingest_track_create(
             extra=extra,
         )
         db.add(track)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            logger.debug("ingest_track_create: duplicate URI %s (race), skipping", uri)
+            return
 
         # resolve audio URL for post-creation hooks
         resolved_audio_url = track.r2_url
