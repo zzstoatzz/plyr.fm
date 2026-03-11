@@ -357,6 +357,7 @@ class TestIngestTrackCreate:
             "fileId": "pds_hook_001",
             "fileType": "mp3",
             "audioBlob": {"ref": {"$link": "bafypdsblob"}, "mimeType": "audio/mpeg"},
+            "audioUrl": "https://r2.example.com/pds_hook_001.mp3",
             "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/pdshook1"
