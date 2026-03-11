@@ -78,15 +78,45 @@ async def ingest_track_create(
             logger.debug("ingest_track_create: unknown artist %s, skipping", did)
             return
 
-        # dedup by AT URI
+        # check for existing row by URI (may be pending from upload path)
         existing = await db.execute(
-            select(Track.id).where(Track.atproto_record_uri == uri).limit(1)
+            select(Track).where(Track.atproto_record_uri == uri).limit(1)
         )
-        if existing.scalar_one_or_none() is not None:
-            logger.debug("ingest_track_create: duplicate URI %s, skipping", uri)
+        existing_track = existing.scalar_one_or_none()
+
+        if existing_track is not None:
+            if existing_track.publish_state == "pending":
+                # upload path reserved this row — finalize it
+                existing_track.atproto_record_cid = cid
+                existing_track.publish_state = "published"
+                await db.commit()
+                await db.refresh(existing_track)
+
+                resolved_audio_url = existing_track.r2_url
+                if (
+                    not resolved_audio_url
+                    and existing_track.pds_blob_cid
+                    and artist.pds_url
+                ):
+                    resolved_audio_url = pds_blob_url(
+                        artist.pds_url, did, existing_track.pds_blob_cid
+                    )
+
+                logfire.info(
+                    "ingest: finalized pending track",
+                    uri=uri,
+                    artist_did=did,
+                    track_id=existing_track.id,
+                )
+
+                await run_post_track_create_hooks(
+                    existing_track.id, audio_url=resolved_audio_url
+                )
+            else:
+                logger.debug("ingest_track_create: duplicate URI %s, skipping", uri)
             return
 
-        # determine audio storage type
+        # no existing row — create from scratch (external ATProto client)
         audio_blob = record.get("audioBlob")
         audio_url = record.get("audioUrl")
         pds_blob_cid = (
@@ -104,7 +134,6 @@ async def ingest_track_create(
         else:
             audio_storage = "pds"
 
-        # build extra dict
         extra: dict = {}
         if duration := record.get("duration"):
             extra["duration"] = duration
@@ -121,6 +150,7 @@ async def ingest_track_create(
             atproto_record_cid=cid,
             audio_storage=audio_storage,
             pds_blob_cid=pds_blob_cid,
+            publish_state="published",
             description=record.get("description"),
             image_url=record.get("imageUrl"),
             support_gate=record.get("supportGate"),
@@ -135,7 +165,6 @@ async def ingest_track_create(
             logger.debug("ingest_track_create: duplicate URI %s (race), skipping", uri)
             return
 
-        # resolve audio URL for post-creation hooks
         resolved_audio_url = track.r2_url
         if not resolved_audio_url and pds_blob_cid and artist.pds_url:
             resolved_audio_url = pds_blob_url(artist.pds_url, did, pds_blob_cid)
@@ -147,7 +176,6 @@ async def ingest_track_create(
             audio_storage=audio_storage,
         )
 
-    # shared post-creation hooks (copyright, embeddings, cache, etc.)
     await run_post_track_create_hooks(track.id, audio_url=resolved_audio_url)
 
 

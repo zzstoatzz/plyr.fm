@@ -242,6 +242,7 @@ class TestIngestTrackCreate:
         assert track.r2_url == "https://r2.example.com/js_file_001.mp3"
         assert track.audio_storage == "r2"
         assert track.extra.get("duration") == 180
+        assert track.publish_state == "published"
 
     async def test_dedup_by_uri(
         self, db_session: AsyncSession, artist: Artist, track: Track
@@ -453,6 +454,139 @@ class TestIngestTrackCreate:
         call_audio_url = mock_hooks.call_args[1]["audio_url"]
         # R2 URL preferred over PDS blob when both are available
         assert call_audio_url == "https://r2.example.com/both_hook_001.mp3"
+
+
+class TestIngestPendingReconciliation:
+    """tests for the reserve-then-publish race condition handling."""
+
+    async def test_finalize_pending_track(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """ingest finalizes a pending row reserved by the upload path."""
+        uri = f"at://{artist.did}/fm.plyr.track/pending1"
+
+        # simulate upload path reserving a pending row
+        pending_track = Track(
+            title="Pending Track",
+            file_id="pend_001",
+            file_type="mp3",
+            artist_did=artist.did,
+            r2_url="https://r2.example.com/pend_001.mp3",
+            atproto_record_uri=uri,
+            atproto_record_cid=None,
+            publish_state="pending",
+            audio_storage="r2",
+        )
+        db_session.add(pending_track)
+        await db_session.commit()
+        original_id = pending_track.id
+
+        # ingest arrives with the same URI
+        record = {
+            "title": "Pending Track",
+            "artist": "Test Artist",
+            "fileId": "pend_001",
+            "fileType": "mp3",
+            "audioUrl": "https://r2.example.com/pend_001.mp3",
+            "createdAt": _recent_ts(),
+        }
+        await ingest_track_create(
+            did=artist.did, rkey="pending1", record=record, uri=uri, cid="bafyfinalized"
+        )
+
+        # should finalize the existing row, not create a new one
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        tracks = result.scalars().all()
+        assert len(tracks) == 1
+        track = tracks[0]
+        assert track.id == original_id
+        assert track.publish_state == "published"
+        assert track.atproto_record_cid == "bafyfinalized"
+
+    async def test_finalize_pending_runs_hooks(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """finalizing a pending row runs post-creation hooks."""
+        uri = f"at://{artist.did}/fm.plyr.track/pendhook1"
+
+        pending_track = Track(
+            title="Pending Hook Track",
+            file_id="pendhook_001",
+            file_type="mp3",
+            artist_did=artist.did,
+            r2_url="https://r2.example.com/pendhook_001.mp3",
+            atproto_record_uri=uri,
+            atproto_record_cid=None,
+            publish_state="pending",
+            audio_storage="r2",
+        )
+        db_session.add(pending_track)
+        await db_session.commit()
+
+        record = {
+            "title": "Pending Hook Track",
+            "artist": "Test Artist",
+            "fileId": "pendhook_001",
+            "fileType": "mp3",
+            "audioUrl": "https://r2.example.com/pendhook_001.mp3",
+            "createdAt": _recent_ts(),
+        }
+
+        with patch(
+            "backend._internal.tasks.ingest.run_post_track_create_hooks",
+            new_callable=AsyncMock,
+        ) as mock_hooks:
+            await ingest_track_create(
+                did=artist.did,
+                rkey="pendhook1",
+                record=record,
+                uri=uri,
+                cid="bafypendhook",
+            )
+
+        mock_hooks.assert_called_once()
+        assert mock_hooks.call_args[0][0] == pending_track.id
+
+    async def test_published_track_skips_ingest(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """already-published track is skipped (not re-finalized)."""
+        uri = f"at://{artist.did}/fm.plyr.track/published1"
+
+        published_track = Track(
+            title="Published Track",
+            file_id="pub_001",
+            file_type="mp3",
+            artist_did=artist.did,
+            r2_url="https://r2.example.com/pub_001.mp3",
+            atproto_record_uri=uri,
+            atproto_record_cid="bafyoriginal",
+            publish_state="published",
+            audio_storage="r2",
+        )
+        db_session.add(published_track)
+        await db_session.commit()
+
+        record = {
+            "title": "Published Track",
+            "artist": "Test Artist",
+            "fileId": "pub_001",
+            "fileType": "mp3",
+            "audioUrl": "https://r2.example.com/pub_001.mp3",
+            "createdAt": _recent_ts(),
+        }
+        await ingest_track_create(
+            did=artist.did, rkey="published1", record=record, uri=uri, cid="bafynew"
+        )
+
+        # CID should NOT be overwritten
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        track = result.scalar_one()
+        assert track.atproto_record_cid == "bafyoriginal"
 
 
 class TestIngestTrackDelete:
