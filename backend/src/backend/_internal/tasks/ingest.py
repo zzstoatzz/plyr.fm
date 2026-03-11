@@ -116,7 +116,7 @@ async def ingest_track_create(
             file_id=record.get("fileId", rkey),
             file_type=record.get("fileType", "mp3"),
             artist_did=did,
-            r2_url=audio_url if audio_storage == "r2" else None,
+            r2_url=audio_url if audio_storage in ("r2", "both") else None,
             atproto_record_uri=uri,
             atproto_record_cid=cid,
             audio_storage=audio_storage,
