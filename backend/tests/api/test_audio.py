@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session, require_auth
+from backend._internal import Session, get_optional_session, require_auth
 from backend.main import app
 from backend.models import Artist, Track
 
@@ -607,3 +607,86 @@ async def test_get_audio_url_by_original_file_id(
         assert data["file_type"] == test_track_with_original.original_file_type
     finally:
         test_app.dependency_overrides.pop(require_auth, None)
+
+
+class TestAudioPdsRedirect:
+    """tests for PDS-backed audio streaming."""
+
+    async def test_pds_redirect(
+        self, db_session: AsyncSession, artist: Artist, client: object
+    ) -> None:
+        """PDS-only track redirects to getBlob endpoint."""
+        from fastapi.testclient import TestClient
+
+        assert isinstance(client, TestClient)
+
+        # create a PDS-only track (no r2_url)
+        pds_track = Track(
+            title="PDS Only",
+            file_id="pds_file_001",
+            file_type="mp3",
+            artist_did=artist.did,
+            r2_url=None,
+            audio_storage="pds",
+            pds_blob_cid="bafyaudiocid123",
+            atproto_record_uri=f"at://{artist.did}/fm.plyr.track/pdsonly",
+        )
+        db_session.add(pds_track)
+        await db_session.commit()
+
+        response = client.get(f"/audio/{pds_track.file_id}", follow_redirects=False)
+
+        assert response.status_code == 307
+        location = response.headers["location"]
+        assert "com.atproto.sync.getBlob" in location
+        assert f"did={artist.did}" in location
+        assert f"cid={pds_track.pds_blob_cid}" in location
+
+    async def test_gated_pds_redirect(
+        self,
+        db_session: AsyncSession,
+        artist: Artist,
+        client: object,
+        fastapi_app: object,
+    ) -> None:
+        """gated PDS-only track redirects to getBlob (not private R2 bucket)."""
+        from fastapi.testclient import TestClient
+
+        assert isinstance(client, TestClient)
+        assert isinstance(fastapi_app, FastAPI)
+
+        # create a gated PDS-only track
+        gated_pds_track = Track(
+            title="Gated PDS",
+            file_id="gated_pds_001",
+            file_type="mp3",
+            artist_did=artist.did,
+            r2_url=None,
+            audio_storage="pds",
+            pds_blob_cid="bafygatedblob",
+            support_gate={"type": "any"},
+            atproto_record_uri=f"at://{artist.did}/fm.plyr.track/gatedpds",
+        )
+        db_session.add(gated_pds_track)
+        await db_session.commit()
+
+        # override auth dependency to return the track owner's session
+        owner_session = Session(
+            session_id="test",
+            did=artist.did,
+            handle="testartist.bsky.social",
+            oauth_session={},
+        )
+        fastapi_app.dependency_overrides[get_optional_session] = lambda: owner_session
+        try:
+            response = client.get(
+                f"/audio/{gated_pds_track.file_id}", follow_redirects=False
+            )
+        finally:
+            fastapi_app.dependency_overrides.pop(get_optional_session, None)
+
+        assert response.status_code == 307
+        location = response.headers["location"]
+        assert "com.atproto.sync.getBlob" in location
+        assert f"did={artist.did}" in location
+        assert f"cid={gated_pds_track.pds_blob_cid}" in location
