@@ -47,38 +47,27 @@ plyr.fm should become:
 
 ### March 2026
 
-#### Jetstream real-time ingestion — staging smoketest (PRs #1069-1074, #1076, Mar 10-12)
+#### Jetstream real-time ingestion (PRs #1068-1076, Mar 10-12)
 
-shipped the Jetstream WebSocket consumer for real-time ATProto record ingestion, then ran a full staging smoketest that surfaced two bugs before production. follow-up refactor replaced hand-rolled string parsing with ATProto SDK types.
+user feedback from [@cinny.bun.how](https://bsky.app/profile/cinny.bun.how) pointed out a fundamental gap: plyr.fm writes records to your PDS but never listens. if someone creates a track record using another ATProto client, plyr.fm has no idea it exists. that's not how the protocol is supposed to work — the whole point of putting data on the PDS is that any client can interact with it and the network stays in sync.
 
-**what shipped:**
-- **Jetstream consumer** (PR #1070): perpetual docket task connects to `jetstream2.us-east.bsky.network`, filters for `fm.plyr.*` collections, and dispatches events to ingest tasks. uses `NSID.from_str(collection).name` to extract record type (e.g. `fm.plyr.stg.track` → `track`) across all environments. docket's Redis lock ensures single-instance. exponential backoff on reconnect, cursor persistence in Redis.
-- **lexicon validation + ingest task layer** (PR #1069): 12 ingest tasks covering track/like/comment/list CRUD and profile updates. `validate_record()` checks incoming records against lexicon JSON schemas before ingestion.
-- **reserve-then-publish** (PR #1072): upload API reserves a DB row with `publish_state=pending` and the AT URI before writing to the PDS. when the Jetstream `track.create` event arrives, `ingest_track_create` finds the pending row and promotes it to `published` with the CID — no duplicate, no race.
-- **SDK types refactor** (PR #1076): replaced hand-rolled `rsplit(".", 1)` and `str.split("/")` parsing with `NSID.from_str()` and `AtUri.from_str()` from the ATProto SDK (`atproto_core`). these types provide proper validation and semantic field access (`.name`, `.host`, `.collection`, `.rkey`). cleaned up a dead `_parse_at_uri` re-export.
+**what shipped:** a Jetstream WebSocket consumer that subscribes to the ATProto firehose, filtered to `fm.plyr.*` collections. when a record event arrives for a known artist DID, it's dispatched to one of 12 ingest tasks (track/like/comment/list CRUD + profile updates). incoming records are validated against lexicon JSON schemas before touching the database. the consumer runs as a single-instance perpetual docket task with cursor persistence in Redis for replay on reconnect.
 
-**staging smoketest (Mar 11-12):**
+the interesting design problem was the race between the upload API and Jetstream. when a user uploads through plyr.fm, the API writes a record to the PDS, and Jetstream sees that same write ~2 seconds later. without coordination, you'd get duplicate tracks. the solution: the upload path reserves a DB row with `publish_state=pending` before writing to the PDS, so when Jetstream's event arrives, it finds the pending row and promotes it to `published` with the CID from the PDS response. idempotent — the track exists exactly once regardless of which path commits first.
 
-enabled `JETSTREAM_ENABLED=true` on staging (`relay-api-staging`). ran three rounds of testing:
+PDS-backed audio playback (PR #1071) also landed in this batch — tracks stored on the user's PDS now redirect to `com.atproto.sync.getBlob` instead of 404'ing.
 
-1. **CI integration tests** — all 12 tests passed. Logfire showed `track.create`, `track.update`, `track.delete` dispatches during the run. reserve-then-publish reconciliation working: pending rows promoted to published via UPDATE. 0 duplicate tracks, 0 stranded pending rows.
+**staging smoketest:** enabled on staging and tested three ways — CI integration tests (all 12 pass), SDK uploads via `plyrfm`, and the real test: writing records directly to the PDS with `pdsx` to exercise the "track created outside the API" path end-to-end.
 
-2. **SDK end-to-end** — uploaded a track via `plyrfm upload`, verified Jetstream picked up the `track.create` event ~2.4s later and finalized the pending row. tested edit (`track.update`), like/unlike (`like.create`/`like.delete`), and delete (`track.delete`). all events dispatched and DB state correct.
+**gotchas:**
+- when the API and Jetstream both try to delete the same track simultaneously, Postgres deadlocks on the FK cascade to `track_tags`. harmless (docket retries and the track gets deleted) but noisy. wrapped the delete handlers to swallow the deadlock since the API transaction handles it.
+- the `lexicons/` directory was never copied into the Docker image, so record validation was silently passing everything in staging/production. caught it by creating a record with no audio reference — it got indexed as a valid track. one-line Dockerfile fix.
 
-3. **direct PDS write** — the real test. used `pdsx create fm.plyr.stg.track` to write a record directly to the PDS, bypassing the API entirely. Jetstream consumer received the event and created the track from scratch (the "no existing row" code path). this is the path that matters for third-party ATProto clients. `pdsx delete` → consumer deleted the row. full cycle outside the API.
+**open questions before production:**
+- **audit trail**: ingest events are only in Logfire — no persistent record of what came through the firehose. an audit log surfaced in the activity feed would give visibility into PDS-direct activity, but the volume could grow fast.
+- **moderation**: copyright scanning and genre classification only trigger for API uploads. records ingested via Jetstream run post-creation hooks, but the moderation pipeline may have gaps for externally-created content.
 
-**bugs found and fixed:**
-
-- **deadlock on concurrent deletes** (PR #1073): when the API delete and Jetstream's `ingest_track_delete` race on the same record, the FK cascade to `track_tags` can deadlock. the docket retry handled it (track still got deleted), but it logged noisy exceptions. fix: catch `OperationalError` in all 4 delete handlers — since the API transaction handles the actual delete, the ingest side safely swallows it.
-
-- **lexicon validation was a no-op in Docker** (PR #1074): the `lexicons/` directory was never copied into the Docker image. `_load_lexicon()` resolved to `/lexicons` (doesn't exist), returned `None`, and `validate_record()` silently passed every record. proved it by creating a record with only `title` and `description` (no audio reference) — it was indexed as a valid track. fix: `COPY lexicons ./lexicons` in the Dockerfile, and replaced the fragile `parents[4]` path with an upward directory search. after deploy, the same invalid record was correctly rejected: `ingest: invalid track record, skipping`.
-
-**open design questions:**
-
-- **audit trail**: Jetstream ingest events are currently only visible in Logfire. there's no persistent record of what came through the firehose — rejected records, deletions, creates from external clients. an audit log (possibly surfaced in the activity feed with a toggle) would give visibility into PDS-direct activity. but the volume could grow fast, and records from external clients bypass content moderation — which today assumes everything goes through the UI or API. needs thought before production.
-- **moderation for PDS-direct records**: the current flow (upload → copyright scan → genre classification → moderation) only triggers for API uploads. records written directly to the PDS and ingested via Jetstream skip all of that. the `ingest_track_create` "from scratch" path runs `run_post_track_create_hooks` which includes copyright scan and embedding, but the moderation pipeline may have gaps for externally-created records.
-
-**status**: Jetstream enabled on staging for 24h soak. monitoring for error spikes, stranded pending rows, and reconnect stability before production enablement.
+**status**: Jetstream enabled on staging for 24h soak before production.
 
 ---
 
@@ -277,7 +266,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-Jetstream real-time ingestion enabled on staging — 24h soak in progress. staging smoketest validated reserve-then-publish reconciliation, direct PDS writes, and all 12 event types. two bugs fixed (concurrent delete deadlock, lexicon validation no-op in Docker). ATProto URI/NSID parsing now uses SDK types instead of hand-rolled string splits. open questions on audit trail visibility and moderation for PDS-direct records before production enablement.
+Jetstream real-time ingestion enabled on staging — 24h soak in progress before production. plyr.fm now listens to the ATProto firehose, so records created by any client (not just the plyr.fm API) are ingested automatically. open questions on audit trail persistence and moderation for PDS-direct records.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
