@@ -27,13 +27,11 @@ from backend._internal.atproto.records.fm_teal import (
 from backend._internal.atproto.client import (
     _refresh_session_tokens,
     make_pds_request as _make_pds_request,
-    parse_at_uri as _parse_at_uri,
     reconstruct_oauth_session as _reconstruct_oauth_session,
 )
 
 __all__ = [
     "_make_pds_request",
-    "_parse_at_uri",
     "_reconstruct_oauth_session",
     "_refresh_session_tokens",
     "build_track_record",

@@ -18,6 +18,7 @@ from typing import Any
 import logfire
 import orjson
 import websockets
+from atproto_core.nsid import NSID
 from docket import Perpetual
 from sqlalchemy import select
 from websockets.asyncio.client import ClientConnection
@@ -168,12 +169,12 @@ class JetstreamConsumer:
         """dispatch event to the appropriate ingest task via docket."""
         docket = get_docket()
 
-        # determine which collection type this is (strip namespace prefix)
+        # extract record type from the collection NSID
         # e.g. "fm.plyr.track" or "fm.plyr.dev.track" → "track"
-        parts = collection.rsplit(".", 1)
-        if len(parts) != 2:
+        try:
+            record_type = NSID.from_str(collection).name
+        except Exception:
             return
-        record_type = parts[1]
 
         task_map: dict[tuple[str, str], Any] = {
             ("track", "create"): ingest_track_create,
