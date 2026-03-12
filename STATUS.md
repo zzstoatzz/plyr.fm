@@ -47,14 +47,15 @@ plyr.fm should become:
 
 ### March 2026
 
-#### Jetstream real-time ingestion — staging smoketest (PRs #1069-1074, Mar 10-12)
+#### Jetstream real-time ingestion — staging smoketest (PRs #1069-1074, #1076, Mar 10-12)
 
-shipped the Jetstream WebSocket consumer for real-time ATProto record ingestion, then ran a full staging smoketest that surfaced two bugs before production.
+shipped the Jetstream WebSocket consumer for real-time ATProto record ingestion, then ran a full staging smoketest that surfaced two bugs before production. follow-up refactor replaced hand-rolled string parsing with ATProto SDK types.
 
 **what shipped:**
-- **Jetstream consumer** (PR #1070): perpetual docket task connects to `jetstream2.us-east.bsky.network`, filters for `fm.plyr.*` collections, and dispatches events to ingest tasks. `rsplit(".", 1)` extracts record type, so `fm.plyr.stg.track` → `track` works across all environments. docket's Redis lock ensures single-instance. exponential backoff on reconnect, cursor persistence in Redis.
+- **Jetstream consumer** (PR #1070): perpetual docket task connects to `jetstream2.us-east.bsky.network`, filters for `fm.plyr.*` collections, and dispatches events to ingest tasks. uses `NSID.from_str(collection).name` to extract record type (e.g. `fm.plyr.stg.track` → `track`) across all environments. docket's Redis lock ensures single-instance. exponential backoff on reconnect, cursor persistence in Redis.
 - **lexicon validation + ingest task layer** (PR #1069): 12 ingest tasks covering track/like/comment/list CRUD and profile updates. `validate_record()` checks incoming records against lexicon JSON schemas before ingestion.
 - **reserve-then-publish** (PR #1072): upload API reserves a DB row with `publish_state=pending` and the AT URI before writing to the PDS. when the Jetstream `track.create` event arrives, `ingest_track_create` finds the pending row and promotes it to `published` with the CID — no duplicate, no race.
+- **SDK types refactor** (PR #1076): replaced hand-rolled `rsplit(".", 1)` and `str.split("/")` parsing with `NSID.from_str()` and `AtUri.from_str()` from the ATProto SDK (`atproto_core`). these types provide proper validation and semantic field access (`.name`, `.host`, `.collection`, `.rkey`). cleaned up a dead `_parse_at_uri` re-export.
 
 **staging smoketest (Mar 11-12):**
 
@@ -276,7 +277,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-Jetstream real-time ingestion enabled on staging — 24h soak in progress. staging smoketest validated reserve-then-publish reconciliation, direct PDS writes, and all 12 event types. two bugs fixed (concurrent delete deadlock, lexicon validation no-op in Docker). open questions on audit trail visibility and moderation for PDS-direct records before production enablement.
+Jetstream real-time ingestion enabled on staging — 24h soak in progress. staging smoketest validated reserve-then-publish reconciliation, direct PDS writes, and all 12 event types. two bugs fixed (concurrent delete deadlock, lexicon validation no-op in Docker). ATProto URI/NSID parsing now uses SDK types instead of hand-rolled string splits. open questions on audit trail visibility and moderation for PDS-direct records before production enablement.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -411,5 +412,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-12 (Jetstream staging smoketest).
+this is a living document. last updated 2026-03-12 (Jetstream smoketest + SDK types refactor).
 

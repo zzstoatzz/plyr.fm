@@ -6,6 +6,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, BinaryIO
 
+from atproto import AtUri
 from atproto_oauth.models import OAuthSession
 from cachetools import LRUCache
 
@@ -326,7 +327,5 @@ def parse_at_uri(uri: str) -> tuple[str, str, str]:
 
     thin wrapper around the SDK's AtUri for call-site compatibility.
     """
-    from atproto import AtUri
-
     parsed = AtUri.from_str(uri)
     return parsed.host, parsed.collection, parsed.rkey
