@@ -175,7 +175,7 @@ async def ingest_track_create(
             description=record.get("description"),
             image_url=record.get("imageUrl"),
             support_gate=record.get("supportGate"),
-            features=record.get("features"),
+            features=record.get("features") or [],
             created_at=_parse_datetime(record.get("createdAt")),
             extra=extra,
         )
