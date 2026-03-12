@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 def build_track_record(
     title: str,
     artist: str,
-    audio_url: str,
     file_type: str,
+    audio_url: str | None = None,
     album: str | None = None,
     duration: int | None = None,
     features: list[dict[str, Any]] | None = None,
@@ -32,8 +32,8 @@ def build_track_record(
     args:
         title: track title
         artist: artist name
-        audio_url: R2 URL for audio file (placeholder for gated tracks)
         file_type: file extension (mp3, wav, etc)
+        audio_url: optional R2 URL for audio file (omit when audioBlob is present)
         album: optional album name
         duration: optional duration in seconds
         features: optional list of featured artists [{did, handle, display_name, avatar_url}]
@@ -51,10 +51,11 @@ def build_track_record(
         "$type": settings.atproto.track_collection,
         "title": title,
         "artist": artist,
-        "audioUrl": audio_url,
         "fileType": file_type,
         "createdAt": ts,
     }
+    if audio_url is not None:
+        record["audioUrl"] = audio_url
 
     # add optional fields
     if album:
@@ -89,8 +90,8 @@ async def create_track_record(
     auth_session: AuthSession,
     title: str,
     artist: str,
-    audio_url: str,
     file_type: str,
+    audio_url: str | None = None,
     album: str | None = None,
     duration: int | None = None,
     features: list[dict[str, Any]] | None = None,
@@ -111,8 +112,8 @@ async def create_track_record(
         auth_session: authenticated user session
         title: track title
         artist: artist name
-        audio_url: R2 URL for audio file (placeholder URL for gated tracks)
         file_type: file extension (mp3, wav, etc)
+        audio_url: optional R2 URL for audio file (omit when audioBlob is present)
         album: optional album name
         duration: optional duration in seconds
         features: optional list of featured artists [{did, handle, display_name, avatar_url}]

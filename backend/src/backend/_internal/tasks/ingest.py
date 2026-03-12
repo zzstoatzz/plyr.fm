@@ -35,6 +35,9 @@ _INGEST_RETRY = ExponentialRetry(
 )
 
 
+_MAX_CLOCK_SKEW = timedelta(minutes=5)
+
+
 def _parse_datetime(value: str | None) -> datetime:
     """parse an ISO 8601 datetime string, falling back to now."""
     if not value:
@@ -44,6 +47,14 @@ def _parse_datetime(value: str | None) -> datetime:
         return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
     except (ValueError, AttributeError):
         return datetime.now(UTC)
+
+
+def _is_future_timestamp(value: str | None) -> bool:
+    """return True if the timestamp is beyond acceptable clock skew."""
+    if not value:
+        return False
+    dt = _parse_datetime(value)
+    return dt > datetime.now(UTC) + _MAX_CLOCK_SKEW
 
 
 # --- track tasks ---
@@ -69,6 +80,16 @@ async def ingest_track_create(
     """
     if errors := validate_record("fm.plyr.track", record):
         logfire.warn("ingest: invalid track record, skipping", uri=uri, errors=errors)
+        return
+
+    if not record.get("audioUrl") and not record.get("audioBlob"):
+        logfire.warn(
+            "ingest: track has neither audioUrl nor audioBlob, skipping", uri=uri
+        )
+        return
+
+    if _is_future_timestamp(record.get("createdAt")):
+        logfire.warn("ingest: track createdAt is in the future, skipping", uri=uri)
         return
 
     async with db_session() as db:

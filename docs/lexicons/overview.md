@@ -33,8 +33,9 @@ the core content record - an audio track uploaded by an artist.
 
 ```
 key: tid (timestamp-based ID)
-required: title, artist, audioUrl, fileType, createdAt
-optional: album, duration, features, imageUrl
+required: title, artist, fileType, createdAt
+optional: audioUrl, audioBlob, album, duration, features, imageUrl
+note: at least one of audioUrl or audioBlob must be present
 ```
 
 this was the first lexicon, established when the project began. tracks are stored in the user's PDS (Personal Data Server) and indexed by plyr.fm for discovery.
