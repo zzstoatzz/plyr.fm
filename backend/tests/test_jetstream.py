@@ -180,9 +180,10 @@ class TestJetstreamConsumer:
         assert "cursor=" in url
 
     async def test_build_url_without_cursor(self) -> None:
-        consumer = JetstreamConsumer()
+        consumer = JetstreamConsumer(collections=["fm.plyr.track", "fm.plyr.like"])
         url = consumer._build_url()
-        assert "wantedCollections=fm.plyr.*" in url
+        assert "wantedCollections=fm.plyr.track" in url
+        assert "wantedCollections=fm.plyr.like" in url
         assert "cursor=" not in url
 
     async def test_build_url_with_cursor_rewinds(self) -> None:
@@ -191,6 +192,28 @@ class TestJetstreamConsumer:
         url = consumer._build_url()
         # rewound by 5_000_000 → cursor=5000000
         assert "cursor=5000000" in url
+
+    async def test_default_collections_from_settings(self) -> None:
+        """collections derive from settings.atproto.app_namespace."""
+        with patch("backend._internal.jetstream.settings") as mock_settings:
+            mock_settings.atproto.track_collection = "fm.plyr.stg.track"
+            mock_settings.atproto.like_collection = "fm.plyr.stg.like"
+            mock_settings.atproto.comment_collection = "fm.plyr.stg.comment"
+            mock_settings.atproto.list_collection = "fm.plyr.stg.list"
+            mock_settings.atproto.profile_collection = "fm.plyr.stg.actor.profile"
+            consumer = JetstreamConsumer()
+        assert consumer._collections == [
+            "fm.plyr.stg.track",
+            "fm.plyr.stg.like",
+            "fm.plyr.stg.comment",
+            "fm.plyr.stg.list",
+            "fm.plyr.stg.actor.profile",
+        ]
+
+    async def test_explicit_collections_override(self) -> None:
+        """passing collections explicitly bypasses settings."""
+        consumer = JetstreamConsumer(collections=["fm.plyr.dev.track"])
+        assert consumer._collections == ["fm.plyr.dev.track"]
 
 
 class TestConsumeJetstreamPerpetual:

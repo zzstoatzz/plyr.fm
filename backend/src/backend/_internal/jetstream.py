@@ -47,14 +47,22 @@ logger = logging.getLogger(__name__)
 
 
 class JetstreamConsumer:
-    """consumes ATProto Jetstream events for fm.plyr.* collections.
+    """consumes ATProto Jetstream events for this environment's collections.
 
     args:
-        collections: wildcard collection filter (e.g. "fm.plyr.*")
+        collections: exact collection NSIDs to subscribe to. defaults to the
+            5 collections derived from settings.atproto.app_namespace so each
+            environment only receives its own records.
     """
 
-    def __init__(self, collections: str = "fm.plyr.*") -> None:
-        self._collections = collections
+    def __init__(self, collections: list[str] | None = None) -> None:
+        self._collections = collections or [
+            settings.atproto.track_collection,
+            settings.atproto.like_collection,
+            settings.atproto.comment_collection,
+            settings.atproto.list_collection,
+            settings.atproto.profile_collection,
+        ]
         self._ws: ClientConnection | None = None
         self._known_dids: set[str] = set()
         self._cursor: int | None = None
@@ -216,7 +224,7 @@ class JetstreamConsumer:
 
     def _build_url(self) -> str:
         """build WebSocket URL with query parameters."""
-        params = [f"wantedCollections={self._collections}"]
+        params = [f"wantedCollections={c}" for c in self._collections]
         if self._cursor is not None:
             # rewind cursor by 5 seconds for idempotent reprocessing
             rewound = self._cursor - 5_000_000
