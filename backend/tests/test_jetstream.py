@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal.jetstream import JetstreamConsumer, consume_jetstream
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
+    _write_tombstone,
     ingest_comment_create,
     ingest_comment_delete,
     ingest_like_create,
@@ -1356,3 +1357,119 @@ class TestIngestValidation:
             uri="at://did:plc:jetstream_test/fm.plyr.list/bad6",
         )
         # nothing to assert on DB — just confirm no exception raised
+
+
+# --- ghost track prevention tests ---
+
+
+class TestGhostTrackPrevention:
+    """tombstone mechanism prevents ghost tracks from Jetstream cursor rewind."""
+
+    def _mock_redis(self) -> tuple[AsyncMock, dict[str, str]]:
+        """return a mock redis client backed by an in-memory dict."""
+        store: dict[str, str] = {}
+        mock = AsyncMock()
+
+        async def _set(key: str, value: str, ex: int | None = None) -> None:
+            store[key] = value
+
+        async def _exists(key: str) -> int:
+            return 1 if key in store else 0
+
+        mock.set = AsyncMock(side_effect=_set)
+        mock.exists = AsyncMock(side_effect=_exists)
+        return mock, store
+
+    async def test_delete_then_create_skips_ghost(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """replayed create after delete is skipped via tombstone."""
+        uri = f"at://{artist.did}/fm.plyr.track/ghost1"
+        mock_redis, _store = self._mock_redis()
+
+        with patch(
+            "backend._internal.tasks.ingest.get_async_redis_client",
+            return_value=mock_redis,
+        ):
+            # delete fires tombstone even when row doesn't exist (exact replay scenario)
+            await ingest_track_delete(did=artist.did, rkey="ghost1", uri=uri)
+
+            # replayed create should be skipped
+            record = {
+                "title": "Ghost Track",
+                "artist": "Test",
+                "audioUrl": "https://r2.example.com/ghost.mp3",
+                "fileType": "mp3",
+                "createdAt": _recent_ts(),
+            }
+            await ingest_track_create(
+                did=artist.did, rkey="ghost1", record=record, uri=uri, cid="bafyghost"
+            )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_tombstone_does_not_block_different_uri(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """tombstone for URI A does not block creation of URI B."""
+        uri_a = f"at://{artist.did}/fm.plyr.track/deleted1"
+        uri_b = f"at://{artist.did}/fm.plyr.track/new1"
+        mock_redis, _store = self._mock_redis()
+
+        with patch(
+            "backend._internal.tasks.ingest.get_async_redis_client",
+            return_value=mock_redis,
+        ):
+            await _write_tombstone(uri_a)
+
+            record = {
+                "title": "New Track",
+                "artist": "Test",
+                "audioUrl": "https://r2.example.com/new.mp3",
+                "fileType": "mp3",
+                "createdAt": _recent_ts(),
+            }
+            await ingest_track_create(
+                did=artist.did, rkey="new1", record=record, uri=uri_b, cid="bafynew"
+            )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri_b)
+        )
+        assert result.scalar_one() is not None
+
+    async def test_redis_down_allows_create(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """when Redis is unavailable, create proceeds (fail-open)."""
+        uri = f"at://{artist.did}/fm.plyr.track/failopen1"
+        mock_redis = AsyncMock()
+        mock_redis.exists = AsyncMock(side_effect=ConnectionError("redis down"))
+        mock_redis.set = AsyncMock(side_effect=ConnectionError("redis down"))
+
+        with patch(
+            "backend._internal.tasks.ingest.get_async_redis_client",
+            return_value=mock_redis,
+        ):
+            record = {
+                "title": "Fail Open Track",
+                "artist": "Test",
+                "audioUrl": "https://r2.example.com/failopen.mp3",
+                "fileType": "mp3",
+                "createdAt": _recent_ts(),
+            }
+            await ingest_track_create(
+                did=artist.did,
+                rkey="failopen1",
+                record=record,
+                uri=uri,
+                cid="bafyfailopen",
+            )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert result.scalar_one() is not None
