@@ -47,6 +47,40 @@ plyr.fm should become:
 
 ### March 2026
 
+#### Jetstream real-time ingestion — staging smoketest (PRs #1069-1074, Mar 10-12)
+
+shipped the Jetstream WebSocket consumer for real-time ATProto record ingestion, then ran a full staging smoketest that surfaced two bugs before production.
+
+**what shipped:**
+- **Jetstream consumer** (PR #1070): perpetual docket task connects to `jetstream2.us-east.bsky.network`, filters for `fm.plyr.*` collections, and dispatches events to ingest tasks. `rsplit(".", 1)` extracts record type, so `fm.plyr.stg.track` → `track` works across all environments. docket's Redis lock ensures single-instance. exponential backoff on reconnect, cursor persistence in Redis.
+- **lexicon validation + ingest task layer** (PR #1069): 12 ingest tasks covering track/like/comment/list CRUD and profile updates. `validate_record()` checks incoming records against lexicon JSON schemas before ingestion.
+- **reserve-then-publish** (PR #1072): upload API reserves a DB row with `publish_state=pending` and the AT URI before writing to the PDS. when the Jetstream `track.create` event arrives, `ingest_track_create` finds the pending row and promotes it to `published` with the CID — no duplicate, no race.
+
+**staging smoketest (Mar 11-12):**
+
+enabled `JETSTREAM_ENABLED=true` on staging (`relay-api-staging`). ran three rounds of testing:
+
+1. **CI integration tests** — all 12 tests passed. Logfire showed `track.create`, `track.update`, `track.delete` dispatches during the run. reserve-then-publish reconciliation working: pending rows promoted to published via UPDATE. 0 duplicate tracks, 0 stranded pending rows.
+
+2. **SDK end-to-end** — uploaded a track via `plyrfm upload`, verified Jetstream picked up the `track.create` event ~2.4s later and finalized the pending row. tested edit (`track.update`), like/unlike (`like.create`/`like.delete`), and delete (`track.delete`). all events dispatched and DB state correct.
+
+3. **direct PDS write** — the real test. used `pdsx create fm.plyr.stg.track` to write a record directly to the PDS, bypassing the API entirely. Jetstream consumer received the event and created the track from scratch (the "no existing row" code path). this is the path that matters for third-party ATProto clients. `pdsx delete` → consumer deleted the row. full cycle outside the API.
+
+**bugs found and fixed:**
+
+- **deadlock on concurrent deletes** (PR #1073): when the API delete and Jetstream's `ingest_track_delete` race on the same record, the FK cascade to `track_tags` can deadlock. the docket retry handled it (track still got deleted), but it logged noisy exceptions. fix: catch `OperationalError` in all 4 delete handlers — since the API transaction handles the actual delete, the ingest side safely swallows it.
+
+- **lexicon validation was a no-op in Docker** (PR #1074): the `lexicons/` directory was never copied into the Docker image. `_load_lexicon()` resolved to `/lexicons` (doesn't exist), returned `None`, and `validate_record()` silently passed every record. proved it by creating a record with only `title` and `description` (no audio reference) — it was indexed as a valid track. fix: `COPY lexicons ./lexicons` in the Dockerfile, and replaced the fragile `parents[4]` path with an upward directory search. after deploy, the same invalid record was correctly rejected: `ingest: invalid track record, skipping`.
+
+**open design questions:**
+
+- **audit trail**: Jetstream ingest events are currently only visible in Logfire. there's no persistent record of what came through the firehose — rejected records, deletions, creates from external clients. an audit log (possibly surfaced in the activity feed with a toggle) would give visibility into PDS-direct activity. but the volume could grow fast, and records from external clients bypass content moderation — which today assumes everything goes through the UI or API. needs thought before production.
+- **moderation for PDS-direct records**: the current flow (upload → copyright scan → genre classification → moderation) only triggers for API uploads. records written directly to the PDS and ingested via Jetstream skip all of that. the `ingest_track_create` "from scratch" path runs `run_post_track_create_hooks` which includes copyright scan and embedding, but the moderation pipeline may have gaps for externally-created records.
+
+**status**: Jetstream enabled on staging for 24h soak. monitoring for error spikes, stranded pending rows, and reconnect stability before production enablement.
+
+---
+
 #### public docs restructure (PRs #1035-1041, Mar 6)
 
 rewrote docs.plyr.fm from developer-only internal docs to an audience-first site serving four groups: listeners, artists, developers, and contributors.
@@ -242,15 +276,15 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-public docs restructured at docs.plyr.fm — audience-first pages for listeners, artists, developers, and contributors. internal operational docs moved to `docs-internal/`. landing page with live trending embeds, search, and platform stats. contribute skill for AI coding assistants.
-
-jams shipped to all users — feature flag removed, output device mode (single-speaker) working. image performance: 96x96 WebP thumbnails for all artwork with storage protocol abstraction and backfill script. PDS audio uploads graduated to GA. homepage performance improved with Redis-cached follow graph and parallelized network artists fetch. ATProto scope parsing replaced with spec-compliant SDK implementation.
+Jetstream real-time ingestion enabled on staging — 24h soak in progress. staging smoketest validated reserve-then-publish reconciliation, direct PDS writes, and all 12 event types. two bugs fixed (concurrent delete deadlock, lexicon validation no-op in Docker). open questions on audit trail visibility and moderation for PDS-direct records before production enablement.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
 - audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
 
 ### backlog
+- Jetstream audit trail / activity feed integration — persistent log of firehose events, toggle for visibility
+- moderation pipeline for PDS-direct records ingested via Jetstream
 - share to bluesky (#334)
 - lyrics and annotations (#373)
 - configurable rules engine for moderation (Osprey rules engine PR #958 open)
@@ -377,5 +411,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-06 (public docs restructure).
+this is a living document. last updated 2026-03-12 (Jetstream staging smoketest).
 
