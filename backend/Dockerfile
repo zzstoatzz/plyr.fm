@@ -16,6 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # copy application code
 COPY backend/src ./src
+COPY lexicons ./lexicons
 
 # copy alembic migration files
 COPY backend/alembic.ini .
