@@ -155,6 +155,77 @@ class Settings(BaseSettings):
     password: str = Field(validation_alias="ATPROTO_PASSWORD")
 ```
 
+## creating a track with PDS blob storage
+
+this walkthrough creates a track record whose audio lives entirely on the user's PDS (no R2 CDN). this is how third-party ATProto clients would publish tracks.
+
+### 1. authenticate
+
+```bash
+source .env
+uvx pdsx --handle "$ATPROTO_ALT_HANDLE" --password "$ATPROTO_ALT_PASSWORD" whoami
+# zzstoatzzdevlog.bsky.social (did:plc:o53crari67ge7bvbv273lxln)
+```
+
+### 2. upload audio blob to PDS
+
+```bash
+uvx pdsx --handle "$ATPROTO_ALT_HANDLE" --password "$ATPROTO_ALT_PASSWORD" \
+  upload-blob /path/to/audio.mp3
+```
+
+this returns a blob reference — save it for the next step:
+
+```json
+{
+  "$type": "blob",
+  "ref": { "$link": "bafkrei..." },
+  "mimeType": "audio/mpeg",
+  "size": 241205
+}
+```
+
+### 3. create track record referencing the blob
+
+use the staging namespace (`fm.plyr.stg.track`) and pass the blob reference as `audioBlob`:
+
+```bash
+uvx pdsx --handle "$ATPROTO_ALT_HANDLE" --password "$ATPROTO_ALT_PASSWORD" \
+  create fm.plyr.stg.track \
+  title="my track" \
+  artist="zzstoatzzdevlog" \
+  fileType="mp3" \
+  'audioBlob={"$type":"blob","ref":{"$link":"bafkrei..."},"mimeType":"audio/mpeg","size":241205}'
+```
+
+optional fields: `duration=15`, `description="liner notes"`, `album="album name"`
+
+### 4. verify ingestion
+
+Jetstream picks up the record within ~2 seconds. check the staging API:
+
+```bash
+curl -sL "https://api-stg.plyr.fm/tracks/?limit=1" | python3 -m json.tool
+```
+
+the track should appear with `audio_storage: "pds"` and `r2_url: null`.
+
+### audio source options
+
+| field | `audio_storage` | use case |
+|-------|----------------|----------|
+| `audioBlob` only | `pds` | third-party client, audio lives on user's PDS |
+| `audioUrl` only | `r2` | external link or CDN-hosted audio |
+| both | `both` | plyr.fm upload path (R2 for streaming, PDS for data sovereignty) |
+| neither | rejected | ingest guard rejects — must have at least one |
+
+### cleanup
+
+```bash
+uvx pdsx --handle "$ATPROTO_ALT_HANDLE" --password "$ATPROTO_ALT_PASSWORD" \
+  delete at://did:plc:o53crari67ge7bvbv273lxln/fm.plyr.stg.track/RKEY
+```
+
 ## workflow examples
 
 ### verify backfill success
