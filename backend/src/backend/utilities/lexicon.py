@@ -13,7 +13,19 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_LEXICONS_DIR = Path(__file__).resolve().parents[4] / "lexicons"
+
+def _find_lexicons_dir() -> Path:
+    """locate the lexicons directory, searching upward from this file."""
+    current = Path(__file__).resolve().parent
+    for _ in range(8):
+        candidate = current / "lexicons"
+        if candidate.is_dir():
+            return candidate
+        current = current.parent
+    return Path("/app/lexicons")
+
+
+_LEXICONS_DIR = _find_lexicons_dir()
 
 
 @lru_cache(maxsize=32)

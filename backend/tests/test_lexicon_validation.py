@@ -1,6 +1,16 @@
 """pure unit tests for lexicon record validation."""
 
-from backend.utilities.lexicon import validate_record
+from backend.utilities.lexicon import _LEXICONS_DIR, validate_record
+
+
+class TestLexiconDirectory:
+    def test_lexicons_dir_exists(self) -> None:
+        """regression: lexicons dir must be found (was missing in Docker)."""
+        assert _LEXICONS_DIR.is_dir(), f"lexicons dir not found at {_LEXICONS_DIR}"
+
+    def test_track_lexicon_loadable(self) -> None:
+        """track.json must be present and loadable."""
+        assert (_LEXICONS_DIR / "track.json").exists()
 
 
 class TestValidateTrack:
