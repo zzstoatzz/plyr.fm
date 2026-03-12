@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.models import Album, Track
 from backend.utilities.aggregations import CopyrightInfo
@@ -94,7 +94,7 @@ class TrackResponse(BaseModel):
     artist_avatar_url: str | None
     file_id: str
     file_type: str
-    features: list[dict[str, Any]]
+    features: list[dict[str, Any]] = Field(default_factory=list)
     r2_url: str | None
     atproto_record_uri: str | None
     atproto_record_cid: str | None
@@ -209,7 +209,7 @@ class TrackResponse(BaseModel):
             artist_avatar_url=track.artist.avatar_url,
             file_id=track.file_id,
             file_type=track.file_type,
-            features=track.features,
+            features=track.features or [],
             r2_url=track.r2_url,
             atproto_record_uri=track.atproto_record_uri,
             atproto_record_cid=track.atproto_record_cid,
