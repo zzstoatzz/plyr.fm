@@ -57,7 +57,15 @@ the interesting design problem was the race between the upload API and Jetstream
 
 PDS-backed audio playback (PR #1071) also landed in this batch — tracks stored on the user's PDS now redirect to `com.atproto.sync.getBlob` instead of 404'ing.
 
-**staging smoketest:** enabled on staging and tested three ways — CI integration tests (all 12 pass), SDK uploads via `plyrfm`, and the real test: writing records directly to the PDS with `pdsx` to exercise the "track created outside the API" path end-to-end.
+**staging smoketest:** enabled on staging and tested three ways — CI integration tests (all 12 pass), SDK uploads via `plyrfm`, and the real test: writing records directly to the PDS with `pdsx` to exercise the "track created outside the API" path end-to-end. full lifecycle verified: invalid record (no audio) → rejected by ingest guard, blob-only track → ingested as `audio_storage="pds"`, external audioUrl → ingested as `audio_storage="r2"`, delete + Jetstream replay → blocked by tombstone.
+
+**ghost track fix (PRs #1079-1080):** Jetstream rewinds its cursor by 5 seconds on reconnect for at-least-once delivery. when a track is created and deleted within that window, the replayed delete no-ops (row already gone) and the replayed create re-creates the track as a ghost — no PDS record, no audio, unfixable via UI. 29+ orphan test tracks were polluting the staging feed from integration test runs.
+
+fix: Redis tombstone with 5-minute TTL, following the existing teal scrobble dedup pattern. `_write_tombstone(uri)` fires on every track delete (both API and ingest paths — including when `rowcount == 0`, the exact replay scenario). `_check_tombstone(uri)` runs in `ingest_track_create` before creating from scratch (after the existing-row check, so the pending→published finalization path is unaffected). fail-open on Redis errors — ghost tracks are the current behavior anyway, so degraded Redis doesn't make things worse.
+
+tradeoff: suppresses any create for the same URI within the TTL window, not just stale replays. acceptable because plyr.fm always generates fresh TID-based rkeys for new tracks — a legitimate same-URI re-create never happens in practice.
+
+also fixed: `track.features` could be `None` from the DB, crashing `TrackResponse` serialization with `ValidationError`. ingest now defaults to `[]`, and the response schema coerces `None` → `[]`.
 
 **gotchas:**
 - when the API and Jetstream both try to delete the same track simultaneously, Postgres deadlocks on the FK cascade to `track_tags`. harmless (docket retries and the track gets deleted) but noisy. wrapped the delete handlers to swallow the deadlock since the API transaction handles it.
@@ -67,7 +75,7 @@ PDS-backed audio playback (PR #1071) also landed in this batch — tracks stored
 - **audit trail**: ingest events are only in Logfire — no persistent record of what came through the firehose. an audit log surfaced in the activity feed would give visibility into PDS-direct activity, but the volume could grow fast.
 - **moderation**: copyright scanning and genre classification only trigger for API uploads. records ingested via Jetstream run post-creation hooks, but the moderation pipeline may have gaps for externally-created content.
 
-**status**: Jetstream enabled on staging for 24h soak before production.
+**status**: Jetstream soak on staging complete — ghost track fix deployed and verified via Logfire ("skipping create for tombstoned URI" confirmed blocking replayed creates). ready for production.
 
 ---
 
@@ -266,7 +274,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-Jetstream real-time ingestion enabled on staging — 24h soak in progress before production. plyr.fm now listens to the ATProto firehose, so records created by any client (not just the plyr.fm API) are ingested automatically. open questions on audit trail persistence and moderation for PDS-direct records.
+Jetstream real-time ingestion soak on staging complete — ghost track fix deployed and verified. ready for production rollout. open questions on audit trail persistence and moderation for PDS-direct records.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -401,5 +409,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-12 (Jetstream smoketest + SDK types refactor).
+this is a living document. last updated 2026-03-12 (ghost track fix + PDS blob lifecycle verification).
 
