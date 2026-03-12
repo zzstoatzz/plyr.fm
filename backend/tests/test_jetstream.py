@@ -441,6 +441,30 @@ class TestIngestTrackCreate:
         track = result.scalar_one()
         assert track.features == features
 
+    async def test_track_create_defaults_features_to_empty_list(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """tracks without features field get [] not None (prevents TrackResponse crash)."""
+        record = {
+            "title": "No Features Track",
+            "artist": "Test Artist",
+            "fileId": "nofeat_001",
+            "fileType": "mp3",
+            "audioUrl": "https://r2.example.com/nofeat_001.mp3",
+            "createdAt": _recent_ts(),
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/nofeat1"
+
+        await ingest_track_create(
+            did=artist.did, rkey="nofeat1", record=record, uri=uri, cid="bafynofeat"
+        )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        track = result.scalar_one()
+        assert track.features == []
+
     async def test_track_create_runs_hooks(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
