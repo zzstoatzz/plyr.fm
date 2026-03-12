@@ -322,10 +322,11 @@ async def upload_blob(
 
 
 def parse_at_uri(uri: str) -> tuple[str, str, str]:
-    """parse an AT URI into (repo, collection, rkey)."""
-    if not uri.startswith("at://"):
-        raise ValueError(f"Invalid AT URI format: {uri}")
-    parts = uri.replace("at://", "").split("/")
-    if len(parts) != 3:
-        raise ValueError(f"Invalid AT URI structure: {uri}")
-    return parts[0], parts[1], parts[2]
+    """parse an AT URI into (repo, collection, rkey).
+
+    thin wrapper around the SDK's AtUri for call-site compatibility.
+    """
+    from atproto import AtUri
+
+    parsed = AtUri.from_str(uri)
+    return parsed.host, parsed.collection, parsed.rkey

@@ -11,6 +11,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from atproto_core.nsid import NSID
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +33,7 @@ _LEXICONS_DIR = _find_lexicons_dir()
 @lru_cache(maxsize=32)
 def _load_lexicon(lexicon_id: str) -> dict[str, Any] | None:
     """load a lexicon JSON by its NSID, using the last segment as filename."""
-    filename = lexicon_id.rsplit(".", 1)[-1] + ".json"
+    filename = NSID.from_str(lexicon_id).name + ".json"
     path = _LEXICONS_DIR / filename
     if not path.exists():
         logger.debug("lexicon file not found: %s", path)
