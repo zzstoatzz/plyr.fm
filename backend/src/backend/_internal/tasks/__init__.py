@@ -7,7 +7,6 @@ requires DOCKET_URL to be set (Redis is always available).
 """
 
 from backend._internal.export_tasks import process_export
-from backend._internal.jetstream import consume_jetstream
 from backend._internal.pds_backfill_tasks import backfill_tracks_to_pds
 from backend._internal.tasks.copyright import (
     scan_copyright,
@@ -67,38 +66,63 @@ from backend._internal.tasks.sync import (
     warm_follow_graph,
 )
 
-# collection of all background task functions for docket registration
-background_tasks = [
-    consume_jetstream,
-    scan_copyright,
-    sync_copyright_resolutions,
-    process_export,
-    sync_atproto,
-    scrobble_to_teal,
-    sync_album_list,
-    pds_create_like,
-    pds_delete_like,
-    pds_create_comment,
-    pds_delete_comment,
-    pds_update_comment,
-    backfill_tracks_to_pds,
-    move_track_audio,
-    generate_embedding,
-    classify_genres,
-    warm_follow_graph,
-    ingest_track_create,
-    ingest_track_update,
-    ingest_track_delete,
-    ingest_like_create,
-    ingest_like_delete,
-    ingest_comment_create,
-    ingest_comment_update,
-    ingest_comment_delete,
-    ingest_list_create,
-    ingest_list_update,
-    ingest_list_delete,
-    ingest_profile_update,
-]
+
+def _build_background_tasks() -> list:
+    """build the task list, deferring jetstream import to break circular dep.
+
+    cycle: jetstream.py → tasks.ingest → tasks/__init__.py → jetstream.py
+    """
+    from backend._internal.jetstream import consume_jetstream
+
+    return [
+        consume_jetstream,
+        scan_copyright,
+        sync_copyright_resolutions,
+        process_export,
+        sync_atproto,
+        scrobble_to_teal,
+        sync_album_list,
+        pds_create_like,
+        pds_delete_like,
+        pds_create_comment,
+        pds_delete_comment,
+        pds_update_comment,
+        backfill_tracks_to_pds,
+        move_track_audio,
+        generate_embedding,
+        classify_genres,
+        warm_follow_graph,
+        ingest_track_create,
+        ingest_track_update,
+        ingest_track_delete,
+        ingest_like_create,
+        ingest_like_delete,
+        ingest_comment_create,
+        ingest_comment_update,
+        ingest_comment_delete,
+        ingest_list_create,
+        ingest_list_update,
+        ingest_list_delete,
+        ingest_profile_update,
+    ]
+
+
+# lazily constructed on first access (docket worker startup)
+_background_tasks: list | None = None
+
+
+def __getattr__(name: str):
+    if name == "background_tasks":
+        global _background_tasks
+        if _background_tasks is None:
+            _background_tasks = _build_background_tasks()
+        return _background_tasks
+    if name == "consume_jetstream":
+        from backend._internal.jetstream import consume_jetstream
+
+        return consume_jetstream
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "SubjectNotFoundError",

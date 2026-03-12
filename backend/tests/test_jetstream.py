@@ -328,7 +328,6 @@ class TestIngestTrackCreate:
             "fileId": "pds_only_001",
             "fileType": "mp3",
             "audioBlob": {"ref": {"$link": "bafypdsonly"}, "mimeType": "audio/mpeg"},
-            "audioUrl": "https://placeholder.example.com/pds_only_001.mp3",
             "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/pdsonly1"
@@ -341,9 +340,54 @@ class TestIngestTrackCreate:
             select(Track).where(Track.atproto_record_uri == uri)
         )
         track = result.scalar_one()
-        # audioUrl is required by lexicon but audioBlob is canonical — both present = "both"
-        assert track.audio_storage == "both"
+        assert track.audio_storage == "pds"
         assert track.pds_blob_cid == "bafypdsonly"
+        assert track.r2_url is None
+
+    async def test_neither_audio_field_skipped(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """record with neither audioUrl nor audioBlob is rejected."""
+        record = {
+            "title": "No Audio",
+            "artist": "Test Artist",
+            "fileId": "noaudio_001",
+            "fileType": "mp3",
+            "createdAt": _recent_ts(),
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/noaudio1"
+
+        await ingest_track_create(
+            did=artist.did, rkey="noaudio1", record=record, uri=uri, cid="bafyno"
+        )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_future_timestamp_skipped(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """record with createdAt in the future is rejected."""
+        record = {
+            "title": "Future Track",
+            "artist": "Test Artist",
+            "fileId": "future_001",
+            "fileType": "mp3",
+            "audioUrl": "https://r2.example.com/future_001.mp3",
+            "createdAt": "2099-01-01T00:00:00Z",
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/future1"
+
+        await ingest_track_create(
+            did=artist.did, rkey="future1", record=record, uri=uri, cid="bafyfuture"
+        )
+
+        result = await db_session.execute(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert result.scalar_one_or_none() is None
 
     async def test_track_create_sets_support_gate(
         self, db_session: AsyncSession, artist: Artist

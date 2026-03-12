@@ -28,9 +28,29 @@ class TestValidateTrack:
         errors = validate_record("fm.plyr.track", {})
         assert any("title" in e for e in errors)
         assert any("artist" in e for e in errors)
-        assert any("audioUrl" in e for e in errors)
         assert any("fileType" in e for e in errors)
         assert any("createdAt" in e for e in errors)
+
+    def test_audio_blob_only_valid(self) -> None:
+        """audioBlob alone passes schema validation (audioUrl is optional)."""
+        record = {
+            "title": "blob track",
+            "artist": "test",
+            "fileType": "mp3",
+            "createdAt": "2025-01-01T00:00:00Z",
+            "audioBlob": {"ref": {"$link": "bafytest"}, "mimeType": "audio/mpeg"},
+        }
+        assert validate_record("fm.plyr.track", record) == []
+
+    def test_neither_audio_field_passes_schema(self) -> None:
+        """no audio fields passes schema — business rule enforced at ingest."""
+        record = {
+            "title": "no audio",
+            "artist": "test",
+            "fileType": "mp3",
+            "createdAt": "2025-01-01T00:00:00Z",
+        }
+        assert validate_record("fm.plyr.track", record) == []
 
     def test_title_too_long(self) -> None:
         record = {

@@ -8,7 +8,7 @@
       "key": "tid",
       "record": {
         "type": "object",
-        "required": ["title", "artist", "audioUrl", "fileType", "createdAt"],
+        "required": ["title", "artist", "fileType", "createdAt"],
         "properties": {
           "title": {
             "type": "string",
@@ -25,7 +25,7 @@
           "audioUrl": {
             "type": "string",
             "format": "uri",
-            "description": "URL to the audio file (currently R2 CDN URL)."
+            "description": "URL to the audio file. Optional when audioBlob is present."
           },
           "fileType": {
             "type": "string",
