@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 import logfire
 from docket import ConcurrencyLimit, ExponentialRetry
 from sqlalchemy import delete, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.tasks.hooks import run_post_track_create_hooks
@@ -259,13 +259,19 @@ async def ingest_track_delete(
     retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """delete a track by its AT URI."""
-    async with db_session() as db:
-        result = await db.execute(delete(Track).where(Track.atproto_record_uri == uri))
-        if result.rowcount:  # type: ignore[union-attr]
-            await db.commit()
-            logfire.info("ingest: track deleted", uri=uri, artist_did=did)
-        else:
-            logger.debug("ingest_track_delete: track %s not found", uri)
+    try:
+        async with db_session() as db:
+            result = await db.execute(
+                delete(Track).where(Track.atproto_record_uri == uri)
+            )
+            if result.rowcount:  # type: ignore[union-attr]
+                await db.commit()
+                logfire.info("ingest: track deleted", uri=uri, artist_did=did)
+            else:
+                logger.debug("ingest_track_delete: track %s not found", uri)
+    except OperationalError:
+        # deadlock with the API delete — the other transaction will handle it
+        logger.debug("ingest_track_delete: deadlock on %s, skipping", uri)
 
 
 # --- like tasks ---
@@ -328,15 +334,18 @@ async def ingest_like_delete(
     retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """delete a like by its AT URI."""
-    async with db_session() as db:
-        result = await db.execute(
-            delete(TrackLike).where(TrackLike.atproto_like_uri == uri)
-        )
-        if result.rowcount:  # type: ignore[union-attr]
-            await db.commit()
-            logfire.info("ingest: like deleted", uri=uri)
-        else:
-            logger.debug("ingest_like_delete: like %s not found", uri)
+    try:
+        async with db_session() as db:
+            result = await db.execute(
+                delete(TrackLike).where(TrackLike.atproto_like_uri == uri)
+            )
+            if result.rowcount:  # type: ignore[union-attr]
+                await db.commit()
+                logfire.info("ingest: like deleted", uri=uri)
+            else:
+                logger.debug("ingest_like_delete: like %s not found", uri)
+    except OperationalError:
+        logger.debug("ingest_like_delete: deadlock on %s, skipping", uri)
 
 
 # --- comment tasks ---
@@ -428,15 +437,18 @@ async def ingest_comment_delete(
     retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """delete a comment by its AT URI."""
-    async with db_session() as db:
-        result = await db.execute(
-            delete(TrackComment).where(TrackComment.atproto_comment_uri == uri)
-        )
-        if result.rowcount:  # type: ignore[union-attr]
-            await db.commit()
-            logfire.info("ingest: comment deleted", uri=uri)
-        else:
-            logger.debug("ingest_comment_delete: comment %s not found", uri)
+    try:
+        async with db_session() as db:
+            result = await db.execute(
+                delete(TrackComment).where(TrackComment.atproto_comment_uri == uri)
+            )
+            if result.rowcount:  # type: ignore[union-attr]
+                await db.commit()
+                logfire.info("ingest: comment deleted", uri=uri)
+            else:
+                logger.debug("ingest_comment_delete: comment %s not found", uri)
+    except OperationalError:
+        logger.debug("ingest_comment_delete: deadlock on %s, skipping", uri)
 
 
 # --- list (playlist) tasks ---
@@ -531,15 +543,18 @@ async def ingest_list_delete(
     retry: ExponentialRetry = _INGEST_RETRY,
 ) -> None:
     """delete a playlist by its AT URI."""
-    async with db_session() as db:
-        result = await db.execute(
-            delete(Playlist).where(Playlist.atproto_record_uri == uri)
-        )
-        if result.rowcount:  # type: ignore[union-attr]
-            await db.commit()
-            logfire.info("ingest: playlist deleted", uri=uri)
-        else:
-            logger.debug("ingest_list_delete: playlist %s not found", uri)
+    try:
+        async with db_session() as db:
+            result = await db.execute(
+                delete(Playlist).where(Playlist.atproto_record_uri == uri)
+            )
+            if result.rowcount:  # type: ignore[union-attr]
+                await db.commit()
+                logfire.info("ingest: playlist deleted", uri=uri)
+            else:
+                logger.debug("ingest_list_delete: playlist %s not found", uri)
+    except OperationalError:
+        logger.debug("ingest_list_delete: deadlock on %s, skipping", uri)
 
 
 # --- profile task ---

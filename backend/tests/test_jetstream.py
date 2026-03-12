@@ -611,6 +611,29 @@ class TestIngestTrackDelete:
         )
         assert result.scalar_one_or_none() is None
 
+    async def test_deadlock_does_not_raise(self, artist: Artist) -> None:
+        """deadlock from concurrent API + Jetstream delete is swallowed."""
+        from sqlalchemy.exc import OperationalError
+
+        with patch(
+            "backend._internal.tasks.ingest.db_session",
+        ) as mock_ctx:
+            mock_db = AsyncMock()
+            mock_db.execute = AsyncMock(
+                side_effect=OperationalError(
+                    "deadlock", {}, Exception("deadlock detected")
+                )
+            )
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            # should not raise
+            await ingest_track_delete(
+                did=artist.did,
+                rkey="rkey",
+                uri="at://did:plc:test/fm.plyr.track/deadlocked",
+            )
+
 
 class TestIngestTrackUpdate:
     async def test_updates_mutable_fields(
