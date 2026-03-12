@@ -20,6 +20,7 @@ from backend._internal.tasks.hooks import run_post_track_create_hooks
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.utilities.database import db_session
 from backend.utilities.lexicon import validate_record
+from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,35 @@ def _is_future_timestamp(value: str | None) -> bool:
         return False
     dt = _parse_datetime(value)
     return dt > datetime.now(UTC) + _MAX_CLOCK_SKEW
+
+
+_TOMBSTONE_PREFIX = "plyr:tombstone:"
+_TOMBSTONE_TTL_SECONDS = 300  # 5 min — well beyond 5s cursor rewind
+
+# NOTE: this suppresses ANY create for the same URI within the TTL window,
+# not just stale replays. this is acceptable because plyr.fm always generates
+# fresh TID-based rkeys for new tracks (upload path + restore-record), so a
+# legitimate same-URI re-create never happens in practice. if ATProto same-URI
+# putRecord support is ever needed, this will need a sequence check instead.
+
+
+async def _write_tombstone(uri: str) -> None:
+    """mark a URI as recently deleted so replayed creates are skipped."""
+    try:
+        redis = get_async_redis_client()
+        await redis.set(f"{_TOMBSTONE_PREFIX}{uri}", "1", ex=_TOMBSTONE_TTL_SECONDS)
+    except Exception:
+        logger.debug("tombstone write failed for %s", uri)
+
+
+async def _check_tombstone(uri: str) -> bool:
+    """return True if the URI was recently deleted (fail-open on errors)."""
+    try:
+        redis = get_async_redis_client()
+        return await redis.exists(f"{_TOMBSTONE_PREFIX}{uri}") > 0
+    except Exception:
+        logger.debug("tombstone check failed for %s", uri)
+        return False
 
 
 # --- track tasks ---
@@ -135,6 +165,15 @@ async def ingest_track_create(
                 )
             else:
                 logger.debug("ingest_track_create: duplicate URI %s, skipping", uri)
+            return
+
+        # recently deleted? skip to prevent ghost tracks from cursor rewind
+        if await _check_tombstone(uri):
+            logfire.info(
+                "ingest: skipping create for tombstoned URI",
+                uri=uri,
+                artist_did=did,
+            )
             return
 
         # no existing row — create from scratch (external ATProto client)
@@ -289,10 +328,16 @@ async def ingest_track_delete(
                 await db.commit()
                 logfire.info("ingest: track deleted", uri=uri, artist_did=did)
             else:
-                logger.debug("ingest_track_delete: track %s not found", uri)
+                logfire.warn(
+                    "ingest: track not found for delete",
+                    uri=uri,
+                    artist_did=did,
+                    rkey=rkey,
+                )
     except OperationalError:
-        # deadlock with the API delete — the other transaction will handle it
-        logger.debug("ingest_track_delete: deadlock on %s, skipping", uri)
+        logfire.warn("ingest: deadlock on track delete", uri=uri, artist_did=did)
+
+    await _write_tombstone(uri)
 
 
 # --- like tasks ---

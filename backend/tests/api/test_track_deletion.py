@@ -390,3 +390,46 @@ async def test_track_deletion_deletes_unshared_image(
     # both audio file and image should be deleted (no album shares the image)
     assert "test_file_unshared_img" in delete_calls
     assert track_image_id in delete_calls
+
+
+async def test_api_delete_writes_tombstone(
+    test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
+):
+    """API track deletion writes a Redis tombstone to prevent ghost re-creation."""
+    record_uri = "at://did:plc:artist123/fm.plyr.track/tombstone1"
+    track = Track(
+        title="tombstone test",
+        artist_did=test_artist.did,
+        file_id="test_file_tombstone",
+        file_type="mp3",
+        extra={},
+        atproto_record_uri=record_uri,
+        atproto_record_cid="bafytombstone",
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+
+    mock_redis = AsyncMock()
+    mock_redis.set = AsyncMock()
+
+    with (
+        patch("backend.api.tracks.mutations.storage.delete", new_callable=AsyncMock),
+        patch(
+            "backend.api.tracks.mutations.delete_record_by_uri",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "backend._internal.tasks.ingest.get_async_redis_client",
+            return_value=mock_redis,
+        ),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/tracks/{track.id}")
+
+    assert response.status_code == 200
+    mock_redis.set.assert_called_once()
+    call_args = mock_redis.set.call_args
+    assert record_uri in call_args.args[0]

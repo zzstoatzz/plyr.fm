@@ -33,6 +33,7 @@ from backend._internal.tasks import (
     schedule_move_track_audio,
 )
 from backend._internal.tasks.hooks import invalidate_tracks_discovery_cache
+from backend._internal.tasks.ingest import _write_tombstone
 from backend.config import settings
 from backend.models import Artist, Track, TrackTag, get_db
 from backend.schemas import MessageResponse, TrackResponse
@@ -123,9 +124,16 @@ async def delete_track(
     # capture album_id before deletion for list sync
     album_id_to_sync = track.album_id
 
+    # capture URI before deletion for tombstone
+    record_uri = track.atproto_record_uri
+
     # delete track record
     await db.delete(track)
     await db.commit()
+
+    # write tombstone so Jetstream replay doesn't re-create the track
+    if record_uri:
+        await _write_tombstone(record_uri)
 
     # invalidate anonymous discovery feed cache
     await invalidate_tracks_discovery_cache()
