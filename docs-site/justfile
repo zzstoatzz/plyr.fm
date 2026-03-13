@@ -15,3 +15,17 @@ build: install
 # preview built site
 preview: install
     bun run preview
+
+# regenerate API reference from backend source
+api-ref:
+    cd ../backend && uv run --with mdxify mdxify \
+        --all \
+        --root-module backend.api \
+        --format md \
+        --output-dir ../docs/developers/api-reference \
+        --no-update-nav \
+        --exclude backend.api.tracks.services \
+        --exclude backend.api.tracks.constants \
+        --exclude backend.api.tracks.router \
+        --exclude backend.api.migration \
+        --exclude backend.api.pds_backfill
