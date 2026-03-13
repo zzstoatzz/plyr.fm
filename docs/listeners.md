@@ -10,8 +10,17 @@ plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), 
 ## your first 5 minutes
 
 1. **log in** — go to [plyr.fm](https://plyr.fm), click log in, and enter your handle (e.g. `you.bsky.social`)
+
+   ![plyr.fm login page — enter your handle to sign in](/screenshots/login-page.png)
+
 2. **find a track** — browse the feed or hit `Cmd+K` to search
+
+   ![the feed shows top tracks and latest uploads](/screenshots/landing-page.png)
+
 3. **play it** — click any track to start streaming
+
+   ![a track card showing title, artist, tags, and play count](/screenshots/feed-track-card.png)
+
 4. **like it** — hit the heart. your like is stored as an atproto record you own
 5. **build a playlist** — click "add to playlist" on any track, name your collection
 
@@ -34,6 +43,8 @@ that's it. your likes, playlists, and listening data are yours — stored in [yo
 | `q` | toggle queue |
 | `cmd+k` | search |
 | `m` | mute / unmute |
+
+![Cmd+K search overlay](/screenshots/search-overlay.png)
 
 ## leaving
 
