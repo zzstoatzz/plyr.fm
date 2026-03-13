@@ -9,7 +9,7 @@ plyr.fm-specific terms and ATProto concepts you'll encounter in the docs. for th
 
 ### AppView
 
-an application-level service that indexes and serves data from across the ATProto network. plyr.fm acts as an AppView for music — it reads track records from user PDSes and presents them as a streaming platform. Bluesky is the AppView for social networking.
+an application-level service that indexes and serves data from across the ATProto network. plyr.fm acts as an AppView for audio — it reads track records from user PDSes and presents them as a streaming platform. Bluesky is the AppView for social networking.
 
 ### collection
 
@@ -79,7 +79,7 @@ a shared listening room where multiple users control playback together in real t
 
 ### mood search
 
-semantic search powered by [CLAP](https://github.com/LAION-AI/CLAP) audio embeddings. instead of matching keywords, it understands descriptions like "rainy afternoon jazz" and finds tracks with similar audio characteristics. accessible via `Cmd+K` search or the `/search/vibe` API endpoint.
+semantic search powered by [CLAP](https://github.com/LAION-AI/CLAP) audio embeddings. instead of matching keywords, it understands descriptions like "rainy afternoon jazz" and finds tracks with similar audio characteristics. currently feature-flagged (`vibe-search`) — not available to all users. accessible via `Cmd+K` search or the `/search/vibe` API endpoint when enabled.
 
 ### portal
 

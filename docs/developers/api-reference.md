@@ -37,13 +37,13 @@ GET /search/?q={query}&type=tracks&limit=10
 
 the `type` parameter accepts: `tracks`, `artists`, `albums`, `tags`, `playlists`. omit it to search all types.
 
-### mood search
+### mood search (feature-flagged)
 
 ```
 GET /search/vibe?q=rainy+afternoon+jazz&limit=5
 ```
 
-semantic search via CLAP audio embeddings. describe a mood or vibe instead of a keyword.
+semantic search via CLAP audio embeddings. describe a mood or vibe instead of a keyword. requires the `vibe-search` feature flag — not available to all users.
 
 ### get a track
 
