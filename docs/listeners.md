@@ -9,7 +9,7 @@ plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), 
 
 ## your first 5 minutes
 
-1. **sign in** — go to [plyr.fm](https://plyr.fm), click sign in, and enter your handle (e.g. `you.bsky.social`)
+1. **sign in** — go to [plyr.fm](https://plyr.fm) and enter your handle (e.g. `you.bsky.social`)
 
    ![plyr.fm sign-in page — enter your handle to get started](/screenshots/login-page.png)
 
