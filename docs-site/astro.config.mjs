@@ -20,7 +20,10 @@ export default defineConfig({
           items: [
             { slug: "developers", label: "overview" },
             { slug: "developers/quickstart" },
-            { slug: "developers/api-reference" },
+            {
+              label: "API reference",
+              autogenerate: { directory: "developers/api-reference" },
+            },
             { slug: "developers/auth" },
           ],
         },
