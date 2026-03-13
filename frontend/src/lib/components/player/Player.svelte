@@ -14,6 +14,7 @@
 	import { page } from '$app/stores';
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
+	import DevicePicker from '../DevicePicker.svelte';
 	import type { Track } from '$lib/types';
 
 	// atprotofans base URL for supporter CTAs
@@ -626,6 +627,7 @@
 				bind:this={trackInfoRef}
 			/>
 			<PlaybackControls />
+			<DevicePicker />
 		</div>
 	</div>
 {/if}
@@ -656,14 +658,14 @@
 		width: 100%;
 		margin: 0;
 		display: grid;
-		grid-template-columns: minmax(200px, 420px) minmax(0, 1fr);
+		grid-template-columns: minmax(200px, 420px) minmax(0, 1fr) auto;
 		align-items: center;
 		gap: 1.5rem;
 	}
 
 	@media (max-width: 1100px) {
 		.player-content {
-			grid-template-columns: minmax(160px, 360px) minmax(0, 1fr);
+			grid-template-columns: minmax(160px, 360px) minmax(0, 1fr) auto;
 			gap: 1rem;
 		}
 	}

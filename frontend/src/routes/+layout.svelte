@@ -22,6 +22,7 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { jam } from '$lib/jam.svelte';
+	import { devices } from '$lib/devices.svelte';
 	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
 	let { children } = $props<{ children: any }>();
@@ -79,6 +80,18 @@
 			if (!joinedJam && queue.revision === null) {
 				void queue.fetchQueue();
 			}
+
+			// connect device presence if flag enabled
+			if (auth.user?.enabled_flags?.includes('device-switching')) {
+				devices.connect();
+			}
+		}
+	});
+
+	// disconnect device presence when user logs out
+	$effect(() => {
+		if (!auth.isAuthenticated && devices.connected) {
+			devices.disconnect();
 		}
 	});
 
