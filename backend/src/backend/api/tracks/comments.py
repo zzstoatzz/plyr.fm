@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import Cookie, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -122,10 +122,8 @@ async def get_track_comments(
 async def create_comment(
     track_id: int,
     body: CommentCreate,
-    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> CommentResponse:
     """create a timed comment on a track.
 
@@ -182,11 +180,8 @@ async def create_comment(
     await db.refresh(comment)
 
     # schedule PDS record creation in background
-    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
-        "Bearer ", ""
-    )
     await schedule_pds_create_comment(
-        session_id=session_id,
+        session_id=auth_session.session_id,
         comment_id=comment.id,
         subject_uri=track.atproto_record_uri,
         subject_cid=track.atproto_record_cid,
@@ -216,10 +211,8 @@ async def create_comment(
 @router.delete("/comments/{comment_id}")
 async def delete_comment(
     comment_id: int,
-    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> DeletedResponse:
     """delete a comment. only the author can delete their own comments.
 
@@ -245,11 +238,8 @@ async def delete_comment(
 
     # schedule PDS record deletion in background (if URI exists)
     if comment_uri:
-        session_id = session_id_cookie or request.headers.get(
-            "authorization", ""
-        ).replace("Bearer ", "")
         await schedule_pds_delete_comment(
-            session_id=session_id,
+            session_id=auth_session.session_id,
             comment_uri=comment_uri,
         )
 
@@ -260,10 +250,8 @@ async def delete_comment(
 async def update_comment(
     comment_id: int,
     body: CommentUpdate,
-    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> CommentResponse:
     """update a comment's text. only the author can edit their own comments.
 
@@ -300,11 +288,8 @@ async def update_comment(
 
     # schedule PDS record update in background (if URI exists)
     if comment.atproto_comment_uri:
-        session_id = session_id_cookie or request.headers.get(
-            "authorization", ""
-        ).replace("Bearer ", "")
         await schedule_pds_update_comment(
-            session_id=session_id,
+            session_id=auth_session.session_id,
             comment_id=comment.id,
             comment_uri=comment.atproto_comment_uri,
             subject_uri=track.atproto_record_uri,

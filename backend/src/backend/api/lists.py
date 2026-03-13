@@ -3,19 +3,15 @@
 import contextlib
 import json
 import logging
-from io import BytesIO
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    Cookie,
     Depends,
     File,
     Form,
     HTTPException,
     Query,
-    Request,
     UploadFile,
 )
 from pydantic import BaseModel
@@ -23,23 +19,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
-from backend._internal import require_auth
+from backend._internal import get_optional_session, require_auth
 from backend._internal.atproto.records import (
     _reconstruct_oauth_session,
-    _refresh_session_tokens,
     create_list_record,
     get_record_public_resilient,
     update_list_record,
 )
-from backend._internal.auth import get_session
+from backend._internal.image_uploads import COVER_EXTENSIONS, process_image_upload
 from backend._internal.recommendations import get_playlist_recommendations
-from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackLike, UserPreferences, get_db
 from backend.schemas import DeletedResponse, TrackResponse
 from backend.storage import storage
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
-from backend.utilities.hashing import CHUNK_SIZE
 from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
@@ -142,35 +135,20 @@ async def reorder_liked_list(
             detail="liked list not found - try liking a track first",
         )
 
-    # reconstruct OAuth session for ATProto operations
-    oauth_data = session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise HTTPException(status_code=401, detail="invalid session")
-
-    oauth_session = _reconstruct_oauth_session(oauth_data)
-
     # update the list record with new item order
-    for attempt in range(2):
-        try:
-            uri, cid = await update_list_record(
-                auth_session=session,
-                list_uri=prefs.liked_list_uri,
-                items=body.items,
-                list_type="liked",
-            )
-            return ReorderResponse(uri=uri, cid=cid)
-
-        except Exception as e:
-            error_str = str(e).lower()
-            # token expired - refresh and retry
-            if "expired" in error_str and attempt == 0:
-                oauth_session = await _refresh_session_tokens(session, oauth_session)
-                continue
-            raise HTTPException(
-                status_code=500, detail=f"failed to reorder list: {e}"
-            ) from e
-
-    raise HTTPException(status_code=500, detail="failed to reorder list after retry")
+    # (update_list_record → make_pds_request handles token refresh internally)
+    try:
+        uri, cid = await update_list_record(
+            auth_session=session,
+            list_uri=prefs.liked_list_uri,
+            items=body.items,
+            list_type="liked",
+        )
+        return ReorderResponse(uri=uri, cid=cid)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"failed to reorder list: {e}"
+        ) from e
 
 
 @router.put("/{rkey}/reorder")
@@ -186,45 +164,30 @@ async def reorder_list(
     # construct the full AT URI
     list_uri = f"at://{session.did}/{settings.atproto.list_collection}/{rkey}"
 
-    # reconstruct OAuth session for ATProto operations
-    oauth_data = session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise HTTPException(status_code=401, detail="invalid session")
-
-    oauth_session = _reconstruct_oauth_session(oauth_data)
-
     # update the list record with new item order
-    for attempt in range(2):
-        try:
-            uri, cid = await update_list_record(
-                auth_session=session,
-                list_uri=list_uri,
-                items=body.items,
-            )
+    # (update_list_record → make_pds_request handles token refresh internally)
+    try:
+        uri, cid = await update_list_record(
+            auth_session=session,
+            list_uri=list_uri,
+            items=body.items,
+        )
 
-            # invalidate album cache if this list belongs to an album
-            from backend.api.albums import invalidate_album_cache
-            from backend.models import Album
+        # invalidate album cache if this list belongs to an album
+        from backend.api.albums import invalidate_album_cache
+        from backend.models import Album
 
-            result = await db.execute(
-                select(Album).where(Album.atproto_record_uri == list_uri)
-            )
-            if album := result.scalar_one_or_none():
-                await invalidate_album_cache(session.handle, album.slug)
+        result = await db.execute(
+            select(Album).where(Album.atproto_record_uri == list_uri)
+        )
+        if album := result.scalar_one_or_none():
+            await invalidate_album_cache(session.handle, album.slug)
 
-            return ReorderResponse(uri=uri, cid=cid)
-
-        except Exception as e:
-            error_str = str(e).lower()
-            # token expired - refresh and retry
-            if "expired" in error_str and attempt == 0:
-                oauth_session = await _refresh_session_tokens(session, oauth_session)
-                continue
-            raise HTTPException(
-                status_code=500, detail=f"failed to reorder list: {e}"
-            ) from e
-
-    raise HTTPException(status_code=500, detail="failed to reorder generic list")
+        return ReorderResponse(uri=uri, cid=cid)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"failed to reorder list: {e}"
+        ) from e
 
 
 # --- playlist CRUD endpoints ---
@@ -379,9 +342,8 @@ async def get_playlist_meta(
 @router.get("/playlists/{playlist_id}", response_model=PlaylistWithTracksResponse)
 async def get_playlist(
     playlist_id: str,
-    request: Request,
     db: AsyncSession = Depends(get_db),
-    session_id_cookie: str | None = Cookie(default=None, alias="session_id"),
+    session: AuthSession | None = Depends(get_optional_session),
 ) -> PlaylistWithTracksResponse:
     """get a playlist with full track details (public, auth optional for liked state).
 
@@ -442,14 +404,11 @@ async def get_playlist(
 
         # get authenticated user's likes if session available
         liked_track_ids: set[int] = set()
-        session_id = session_id_cookie or request.headers.get(
-            "authorization", ""
-        ).replace("Bearer ", "")
-        if session_id and (auth_session := await get_session(session_id)):
+        if session:
             if track_ids:
                 liked_result = await db.execute(
                     select(TrackLike.track_id).where(
-                        TrackLike.user_did == auth_session.did,
+                        TrackLike.user_did == session.did,
                         TrackLike.track_id.in_(track_ids),
                     )
                 )
@@ -742,37 +701,10 @@ async def upload_playlist_cover(
             detail="you can only upload cover art for your own playlists",
         )
 
-    if not image.filename:
-        raise HTTPException(status_code=400, detail="no filename provided")
-
-    # validate it's an image by extension
-    ext = Path(image.filename).suffix.lower()
-    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
-        raise HTTPException(
-            status_code=400,
-            detail=f"unsupported image type: {ext}. supported: .jpg, .jpeg, .png, .webp",
-        )
-
-    # read image data (enforcing size limit)
     try:
-        max_image_size = 20 * 1024 * 1024  # 20MB max
-        image_data = bytearray()
-
-        while chunk := await image.read(CHUNK_SIZE):
-            if len(image_data) + len(chunk) > max_image_size:
-                raise HTTPException(
-                    status_code=413,
-                    detail="image too large (max 20MB)",
-                )
-            image_data.extend(chunk)
-
-        image_obj = BytesIO(image_data)
-        # save returns the file_id (hash)
-        image_id = await storage.save(image_obj, image.filename)
-
-        image_url = storage.build_image_url(image_id, ext)
-
-        thumbnail_url = await generate_and_save(bytes(image_data), image_id, "playlist")
+        uploaded = await process_image_upload(
+            image, "playlist", allowed_extensions=COVER_EXTENSIONS
+        )
 
         # delete old image if exists (prevent R2 object leaks)
         if playlist.image_id:
@@ -780,15 +712,15 @@ async def upload_playlist_cover(
                 await storage.delete(playlist.image_id)
 
         # update playlist with new image
-        playlist.image_id = image_id
-        playlist.image_url = image_url
-        playlist.thumbnail_url = thumbnail_url
+        playlist.image_id = uploaded.image_id
+        playlist.image_url = uploaded.image_url
+        playlist.thumbnail_url = uploaded.thumbnail_url
         await db.commit()
 
         return {
-            "image_url": image_url,
-            "image_id": image_id,
-            "thumbnail_url": thumbnail_url,
+            "image_url": uploaded.image_url,
+            "image_id": uploaded.image_id,
+            "thumbnail_url": uploaded.thumbnail_url,
         }
 
     except HTTPException:

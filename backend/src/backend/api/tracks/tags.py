@@ -4,13 +4,14 @@ import asyncio
 import logging
 from typing import Annotated
 
-from fastapi import Cookie, Depends, HTTPException, Query, Request
+from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend._internal.auth import get_session
+from backend._internal import Session as AuthSession
+from backend._internal import get_optional_session
 from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
 from backend.schemas import TrackResponse
@@ -50,9 +51,8 @@ class TagTracksResponse(BaseModel):
 @router.get("/tags/{tag_name}")
 async def get_tracks_by_tag(
     tag_name: str,
-    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
+    session: AuthSession | None = Depends(get_optional_session),
 ) -> TagTracksResponse:
     """get all tracks with a specific tag.
 
@@ -83,12 +83,9 @@ async def get_tracks_by_tag(
 
     # get authenticated user's liked tracks if logged in
     liked_track_ids: set[int] | None = None
-    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
-        "Bearer ", ""
-    )
-    if session_id and (auth_session := await get_session(session_id)):
+    if session:
         liked_result = await db.execute(
-            select(TrackLike.track_id).where(TrackLike.user_did == auth_session.did)
+            select(TrackLike.track_id).where(TrackLike.user_did == session.did)
         )
         liked_track_ids = set(liked_result.scalars().all())
 

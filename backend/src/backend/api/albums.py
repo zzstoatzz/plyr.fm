@@ -3,18 +3,14 @@
 import asyncio
 import contextlib
 import logging
-from io import BytesIO
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    Cookie,
     Depends,
     File,
     HTTPException,
     Query,
-    Request,
     UploadFile,
 )
 from pydantic import BaseModel
@@ -23,12 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
-from backend._internal import require_artist_profile
-from backend._internal.auth import get_session
-from backend._internal.clients.moderation import get_moderation_client
-from backend._internal.notifications import notification_service
-from backend._internal.thumbnails import generate_and_save
-from backend.config import settings
+from backend._internal import get_optional_session, require_artist_profile
+from backend._internal.image_uploads import COVER_EXTENSIONS, process_image_upload
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.storage import storage
@@ -37,7 +29,6 @@ from backend.utilities.aggregations import (
     get_like_counts,
     get_track_tags,
 )
-from backend.utilities.hashing import CHUNK_SIZE
 from backend.utilities.redis import get_async_redis_client
 from backend.utilities.slugs import slugify
 
@@ -304,8 +295,7 @@ async def get_album(
     handle: str,
     slug: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    request: Request,
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
+    session: AuthSession | None = Depends(get_optional_session),
 ) -> AlbumResponse:
     """get album details with tracks (ordered by ATProto list record or created_at)."""
     # check Redis cache first
@@ -399,14 +389,11 @@ async def get_album(
 
     # get authenticated user's likes for this album's tracks only
     liked_track_ids: set[int] | None = None
-    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
-        "Bearer ", ""
-    )
-    if session_id and (auth_session := await get_session(session_id)):
+    if session:
         if track_ids:
             liked_result = await db.execute(
                 select(TrackLike.track_id).where(
-                    TrackLike.user_did == auth_session.did,
+                    TrackLike.user_did == session.did,
                     TrackLike.track_id.in_(track_ids),
                 )
             )
@@ -467,63 +454,10 @@ async def upload_album_cover(
             status_code=403, detail="you can only upload cover art for your own albums"
         )
 
-    if not image.filename:
-        raise HTTPException(status_code=400, detail="no filename provided")
-
-    # validate it's an image by extension (basic check)
-    ext = Path(image.filename).suffix.lower()
-    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
-        raise HTTPException(
-            status_code=400,
-            detail=f"unsupported image type: {ext}. supported: .jpg, .jpeg, .png, .webp",
-        )
-
-    # read image data (enforcing size limit)
     try:
-        max_image_size = 20 * 1024 * 1024  # 20MB max
-        image_data = bytearray()
-
-        while chunk := await image.read(CHUNK_SIZE):
-            if len(image_data) + len(chunk) > max_image_size:
-                raise HTTPException(
-                    status_code=413,
-                    detail="image too large (max 20MB)",
-                )
-            image_data.extend(chunk)
-
-        image_obj = BytesIO(image_data)
-        # save returns the file_id (hash)
-        image_id = await storage.save(image_obj, image.filename)
-
-        image_url = storage.build_image_url(image_id, ext)
-
-        thumbnail_url = await generate_and_save(bytes(image_data), image_id, "album")
-
-        # scan image for policy violations (non-blocking)
-        if settings.moderation.image_moderation_enabled:
-            try:
-                client = get_moderation_client()
-                content_type = {
-                    ".jpg": "image/jpeg",
-                    ".jpeg": "image/jpeg",
-                    ".png": "image/png",
-                    ".webp": "image/webp",
-                }.get(ext, "image/png")
-                result = await client.scan_image(
-                    bytes(image_data), image_id, content_type
-                )
-                # if image is flagged, it's automatically added to sensitive_images
-                # by the moderation service. the image is still saved and returned.
-                if not result.is_safe:
-                    await notification_service.send_image_flag_notification(
-                        image_id=image_id,
-                        severity=result.severity,
-                        categories=result.violated_categories,
-                        context="album cover",
-                    )
-            except Exception as e:
-                # log but don't block upload - moderation is best-effort
-                logger.warning("image moderation failed for %s: %s", image_id, e)
+        uploaded = await process_image_upload(
+            image, "album", allowed_extensions=COVER_EXTENSIONS
+        )
 
         # delete old image if exists (prevent R2 object leaks)
         if album.image_id:
@@ -531,17 +465,17 @@ async def upload_album_cover(
                 await storage.delete(album.image_id)
 
         # update album with new image
-        album.image_id = image_id
-        album.image_url = image_url
-        album.thumbnail_url = thumbnail_url
+        album.image_id = uploaded.image_id
+        album.image_url = uploaded.image_url
+        album.thumbnail_url = uploaded.thumbnail_url
         await db.commit()
 
         await invalidate_album_cache(auth_session.handle, album.slug)
 
         return {
-            "image_url": image_url,
-            "image_id": image_id,
-            "thumbnail_url": thumbnail_url,
+            "image_url": uploaded.image_url,
+            "image_id": uploaded.image_id,
+            "thumbnail_url": uploaded.thumbnail_url,
         }
 
     except HTTPException:
