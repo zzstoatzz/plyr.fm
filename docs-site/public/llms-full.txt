@@ -1,0 +1,347 @@
+# plyr.fm
+
+> audio streaming platform built on the AT Protocol (ATProto). users own their music data in personal data servers (PDS). open API, Python SDK, and MCP server for integrations.
+
+## key URLs
+
+- App: https://plyr.fm
+- API: https://api.plyr.fm
+- Docs: https://docs.plyr.fm
+- OpenAPI spec: https://api.plyr.fm/docs
+- Source: https://github.com/zzstoatzz/plyr.fm
+- Python SDK: https://github.com/zzstoatzz/plyr-python-client
+
+## ATProto namespace
+
+- Production: `fm.plyr` (e.g. `fm.plyr.track`)
+- Staging: `fm.plyr.stg`
+- Development: `fm.plyr.dev`
+- NSIDs are reverse-DNS format, NOT URLs
+
+---
+
+## quickstart (Python SDK)
+
+```bash
+uv add plyrfm
+```
+
+```python
+from plyrfm import PlyrClient
+
+client = PlyrClient()
+
+# search for tracks
+results = client.search("ambient")
+for track in results:
+    print(f"{track.title} by {track.artist}")
+    print(f"  stream: {track.stream_url}")
+
+# get top tracks
+for track in client.top_tracks(limit=5):
+    print(f"{track.title} — {track.play_count} plays")
+
+# authenticated: like a track (requires developer token)
+authed = PlyrClient(token="your_token_from_plyr.fm/portal")
+authed.like(track_id=42)
+```
+
+## MCP server (for AI assistants)
+
+```bash
+claude mcp add plyr-fm -- uvx plyrfm-mcp
+```
+
+Tools: search, list_tracks, top_tracks, tracks_by_tag, get_track, liked_tracks, my_tracks.
+
+---
+
+## API reference
+
+Base URL: `https://api.plyr.fm`
+Auth: `Authorization: Bearer <developer_token>` (get tokens at plyr.fm/portal)
+
+### public endpoints (no auth)
+
+```
+GET  /search/?q={query}&type={tracks|artists|albums|tags|playlists}&limit=10
+GET  /search/vibe?q={mood_description}&limit=5      # semantic mood search
+GET  /tracks/?limit=20&cursor={iso_timestamp}         # list tracks
+GET  /tracks/{id}                                      # get track
+GET  /tracks/{id}/stream                               # stream audio (307 redirect)
+GET  /tracks/top?limit=10                              # top tracks by plays
+GET  /tracks/{id}/likes                                # who liked this track
+GET  /tracks/{id}/comments                             # timed comments
+GET  /tracks/tags                                      # all tags with counts
+GET  /albums/?artist_did={did}                         # list albums
+GET  /albums/{handle}/{slug}                           # album detail
+GET  /lists/?owner_did={did}                           # list playlists
+GET  /lists/{id}                                       # playlist detail
+GET  /artists/{did}                                    # artist profile
+GET  /stats                                            # platform stats
+GET  /oembed?url={plyr.fm_url}                         # oEmbed
+GET  /feeds/artist/{handle}                            # RSS feed
+GET  /feeds/album/{handle}/{slug}                      # album RSS
+GET  /feeds/playlist/{id}                              # playlist RSS
+GET  /health                                           # health check
+GET  /config                                           # platform config
+```
+
+### authenticated endpoints
+
+```
+POST   /tracks/{id}/like                               # like a track
+DELETE /tracks/{id}/like                               # unlike
+POST   /tracks/{id}/play                               # record play
+POST   /tracks/{id}/comments                           # post timed comment
+POST   /tracks/                                        # upload track (multipart)
+PATCH  /tracks/{id}                                    # edit track
+DELETE /tracks/{id}                                    # delete track
+GET    /tracks/liked                                   # your liked tracks
+GET    /tracks/me                                      # your tracks
+POST   /albums/                                        # create album
+PATCH  /albums/{id}                                    # edit album
+DELETE /albums/{id}                                    # delete album
+POST   /lists/                                         # create playlist
+PATCH  /lists/{id}                                     # edit playlist
+DELETE /lists/{id}                                     # delete playlist
+```
+
+### common response: TrackResponse
+
+```json
+{
+  "id": 42,
+  "title": "midnight rain",
+  "description": "late night ambient",
+  "artist": {
+    "did": "did:plc:abc",
+    "handle": "artist.bsky.social",
+    "display_name": "artist",
+    "avatar_url": "https://..."
+  },
+  "album": { "id": "uuid", "title": "nocturne", "slug": "nocturne" },
+  "image_url": "https://...",
+  "thumbnail_url": "https://...",
+  "file_type": "mp3",
+  "duration": 180,
+  "play_count": 1234,
+  "like_count": 56,
+  "comment_count": 12,
+  "is_liked": false,
+  "is_public": true,
+  "tags": ["ambient", "electronic"],
+  "created_at": "2026-01-15T10:30:00Z",
+  "atproto_record_uri": "at://did:plc:abc/fm.plyr.track/3abc123"
+}
+```
+
+### errors
+
+```json
+{ "detail": "error message" }
+```
+
+| status | meaning |
+|--------|---------|
+| 400 | bad request |
+| 401 | unauthorized |
+| 402 | payment required (supporter-gated) |
+| 403 | forbidden (scope or ownership) |
+| 404 | not found |
+| 409 | conflict (queue revision) |
+| 429 | rate limit exceeded |
+
+### pagination
+
+Cursor-based with ISO timestamps:
+```
+GET /tracks/?limit=20
+→ { tracks: [...], next_cursor: "2026-01-15T10:30:00Z", has_more: true }
+```
+
+---
+
+## authentication
+
+### developer tokens (simplest)
+
+1. Go to plyr.fm/portal → "developer tokens"
+2. Name token, choose expiry (default: 180 days)
+3. Authorize via OAuth flow
+4. Use as Bearer token: `Authorization: Bearer <token>`
+
+### OAuth 2.1 flow (for apps)
+
+```
+POST /auth/start?handle=user.bsky.social  → redirect to PDS auth
+GET  /auth/callback?code=...&state=...    → exchange_token
+POST /auth/exchange { exchange_token }     → session_id
+```
+
+Session: HttpOnly cookie (`session_id`), 14-day lifetime, auto-refresh.
+
+### scopes
+
+| scope | purpose |
+|-------|---------|
+| repo:fm.plyr.track | tracks CRUD |
+| repo:fm.plyr.like | likes |
+| repo:fm.plyr.comment | timed comments |
+| repo:fm.plyr.list | playlists/albums |
+| repo:fm.plyr.actor.profile | artist profile |
+| blob:*/* | file uploads |
+
+---
+
+## lexicon schemas
+
+### fm.plyr.track
+
+```json
+{
+  "lexicon": 1,
+  "id": "fm.plyr.track",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "required": ["title", "artist", "fileType", "createdAt"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 256 },
+          "artist": { "type": "string", "maxLength": 256 },
+          "audioUrl": { "type": "string", "format": "uri" },
+          "audioBlob": { "type": "blob", "accept": ["audio/*"], "maxSize": 104857600 },
+          "fileType": { "type": "string", "maxLength": 16 },
+          "album": { "type": "string", "maxLength": 256 },
+          "duration": { "type": "integer", "minimum": 0 },
+          "imageUrl": { "type": "string", "format": "uri" },
+          "description": { "type": "string", "maxLength": 5000 },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "supportGate": { "type": "ref", "ref": "#supportGate" },
+          "features": { "type": "array", "items": { "ref": "#featuredArtist" }, "maxLength": 10 }
+        }
+      }
+    }
+  }
+}
+```
+
+At least one of `audioUrl` or `audioBlob` must be present.
+
+### fm.plyr.like
+
+```json
+{
+  "lexicon": 1,
+  "id": "fm.plyr.like",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "required": ["subject", "createdAt"],
+        "properties": {
+          "subject": { "type": "ref", "ref": "com.atproto.repo.strongRef" },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}
+```
+
+### fm.plyr.comment
+
+```json
+{
+  "lexicon": 1,
+  "id": "fm.plyr.comment",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "required": ["subject", "text", "timestampMs", "createdAt"],
+        "properties": {
+          "subject": { "type": "ref", "ref": "com.atproto.repo.strongRef" },
+          "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "timestampMs": { "type": "integer", "minimum": 0 },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}
+```
+
+### fm.plyr.list
+
+```json
+{
+  "lexicon": 1,
+  "id": "fm.plyr.list",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "required": ["items", "createdAt"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 256 },
+          "listType": { "type": "string", "knownValues": ["album", "playlist", "liked"] },
+          "items": { "type": "array", "items": { "ref": "#item" }, "maxLength": 500 },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}
+```
+
+### fm.plyr.actor.profile
+
+```json
+{
+  "lexicon": 1,
+  "id": "fm.plyr.actor.profile",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "literal:self",
+      "record": {
+        "required": ["createdAt"],
+        "properties": {
+          "bio": { "type": "string", "maxLength": 2560 },
+          "avatar": { "type": "string", "format": "uri" },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## glossary
+
+- **PDS**: Personal Data Server — stores your ATProto records and blobs
+- **DID**: Decentralized Identifier — persistent account ID (e.g. `did:plc:abc123`)
+- **handle**: human-readable account name (e.g. `artist.bsky.social`)
+- **NSID**: Namespace Identifier — reverse-DNS lexicon ID (e.g. `fm.plyr.track`)
+- **lexicon**: ATProto schema defining a record type's structure
+- **collection**: named group of records in a repo, identified by NSID
+- **record**: single data entry in a collection
+- **TID**: Timestamp Identifier — base32-encoded timestamp used as record key
+- **rkey**: Record Key — identifier for a record within a collection
+- **strongRef**: reference to a specific record version (URI + CID content hash)
+- **Jetstream**: real-time ATProto firehose for record change events
+- **AppView**: application service that indexes records from the network
+- **developer token**: API auth token from plyr.fm/portal
+- **jam**: shared listening room with real-time sync
+- **mood search**: semantic search via CLAP audio embeddings

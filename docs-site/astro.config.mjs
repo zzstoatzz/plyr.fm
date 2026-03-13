@@ -15,8 +15,18 @@ export default defineConfig({
       sidebar: [
         { slug: "listeners" },
         { slug: "artists" },
-        { slug: "developers" },
+        {
+          label: "developers",
+          items: [
+            { slug: "developers", label: "overview" },
+            { slug: "developers/quickstart" },
+            { slug: "developers/api-reference" },
+            { slug: "developers/auth" },
+          ],
+        },
         { slug: "lexicons/overview" },
+        { slug: "troubleshooting" },
+        { slug: "glossary" },
         { slug: "contributing" },
         {
           label: "legal",
