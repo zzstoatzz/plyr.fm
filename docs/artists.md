@@ -1,11 +1,11 @@
 ---
-title: "for artists"
-description: "upload, manage, and distribute your music on atproto"
+title: "for creators"
+description: "upload, manage, and distribute your audio on atproto"
 ---
 
-your music, stored in your data repo, playable by any atproto client. no distribution fees, no gatekeepers.
+your audio, stored in your data repo, playable by any atproto client. no distribution fees, no gatekeepers.
 
-plyr.fm gives artists a place to share music where **you own your data**. every track you upload is an [atproto](https://atproto.com) record stored in your [PDS](https://atproto.com/guides/self-hosting#pds) — the metadata record and the audio blob itself — portable, verifiable, and yours.
+plyr.fm gives creators a place to share audio where **you own your data**. every track you upload is an [atproto](https://atproto.com) record stored in your [PDS](https://atproto.com/guides/self-hosting#pds) — the metadata record and the audio blob itself — portable, verifiable, and yours.
 
 ## your first upload
 
@@ -19,7 +19,7 @@ the audio and metadata are stored on your PDS. if your PDS can't accept the file
 
 ## embeds
 
-share your music anywhere with embed iframes. plyr.fm supports track, playlist, and album embeds.
+share your audio anywhere with embed iframes. plyr.fm supports track, playlist, and album embeds.
 
 ### track embed
 
@@ -75,7 +75,7 @@ today this is a **binary check**: a listener either supports you or they don't. 
 
 ### what's next
 
-because atproto doesn't yet have permissioned data, gated audio currently lives in plyr.fm-managed storage (public blob). this is the one exception to the "your music, your data" promise — and we want to fix it.
+because atproto doesn't yet have permissioned data, gated audio currently lives in plyr.fm-managed storage (public blob). this is the one exception to the "your audio, your data" promise — and we want to fix it.
 
 the atproto team is [exploring permissioned data](https://dholms.leaflet.pub/3mfrsbcn2gk2a) through concepts like **buckets** — named containers with access control lists that could let private blobs live on your own PDS. once that ships, gated tracks could move back to artist-controlled storage while still enforcing access rules at the protocol level.
 
@@ -88,7 +88,7 @@ because tracks are atproto records, you can:
 - **[export](https://plyr.fm/portal)** your entire catalog from your PDS at any time
 - **migrate** to a different PDS without losing anything
 
-your music lives in your repo under the `fm.plyr.track` collection. see the [lexicons overview](/lexicons/overview/) for the full schema.
+your audio lives in your repo under the `fm.plyr.track` collection. see the [lexicons overview](/lexicons/overview/) for the full schema.
 
 ## leaving
 

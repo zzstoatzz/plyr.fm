@@ -1,6 +1,6 @@
 # plyr.fm
 
-> audio streaming platform built on the AT Protocol (ATProto). users own their music data in personal data servers (PDS). open API, Python SDK, and MCP server for integrations.
+> audio streaming platform built on the AT Protocol (ATProto). users own their audio data in personal data servers (PDS). open API, Python SDK, and MCP server for integrations.
 
 ## docs
 

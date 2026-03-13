@@ -86,7 +86,6 @@ just dev-services-down
 - like tracks, add to playlists
 - browse by artist, album, tag, or playlist
 - share tracks and albums with embeddable players and link previews
-- mood search - describe a vibe, get matching tracks (CLAP embeddings)
 - unified search with Cmd/Ctrl+K (fuzzy match across tracks, artists, albums, tags, playlists)
 - genre browsing and tag filtering
 - platform media controls (Media Session API)
@@ -107,7 +106,7 @@ just dev-services-down
 - tracks, likes, playlists synced to your PDS as ATProto records
 - bulk media export (download all your tracks)
 - portable identity - your data travels with you
-- public by default - any client can read your music records
+- public by default - any client can read your audio records
 
 > some features may be paywalled in the future for the financial viability of the project. if you have thoughts on what should or shouldn't be gated, open a [discussion on GitHub](https://github.com/zzstoatzz/plyr.fm/discussions) or [tangled](https://tangled.sh/@zzstoatzz.io/plyr.fm).
 
