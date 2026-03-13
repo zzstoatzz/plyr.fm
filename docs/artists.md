@@ -14,9 +14,12 @@ plyr.fm gives creators a place to share audio where **you own your data**. every
    ![plyr.fm login page — enter your handle to sign in](/screenshots/login-page.png)
 
 2. **upload** — click the upload button and drop your audio file (MP3, WAV, or M4A)
-3. **add metadata** — title, tags, and optional cover art. plyr.fm auto-suggests genre tags from the audio
 
    ![the upload form — title, description, album, tags, and audio file](/screenshots/upload-form.png)
+
+3. **add metadata** — edit your track in the [portal](https://plyr.fm/portal) to add tags, cover art, and a description. plyr.fm auto-suggests genre tags from the audio
+
+   ![the track editor — title, description, album, tags, artwork, and suggested tags](/screenshots/portal-track-editor.png)
 
 4. **see it live** — your track is now an atproto record in your PDS, indexed by plyr.fm and playable immediately
 5. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)

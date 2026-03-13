@@ -13,9 +13,11 @@ plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), 
 
    ![plyr.fm login page — enter your handle to sign in](/screenshots/login-page.png)
 
-2. **find a track** — browse the feed or hit `Cmd+K` to search
+2. **find a track** — browse the feed to see what's playing
 
    ![the feed shows top tracks and latest uploads](/screenshots/landing-page.png)
+
+   or hit `Cmd+K` to search for something specific
 
    ![Cmd+K search overlay](/screenshots/search-overlay.png)
 
