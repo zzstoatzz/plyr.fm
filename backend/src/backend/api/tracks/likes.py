@@ -4,7 +4,7 @@ import asyncio
 import logging
 from typing import Annotated
 
-from fastapi import Cookie, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,10 +91,8 @@ async def list_liked_tracks(
 @router.post("/{track_id}/like")
 async def like_track(
     track_id: int,
-    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> LikedResponse:
     """Like a track - stores in database immediately, creates ATProto record in background.
 
@@ -135,11 +133,8 @@ async def like_track(
     await db.refresh(like)
 
     # schedule PDS record creation in background
-    session_id = session_id_cookie or request.headers.get("authorization", "").replace(
-        "Bearer ", ""
-    )
     await schedule_pds_create_like(
-        session_id=session_id,
+        session_id=auth_session.session_id,
         like_id=like.id,
         subject_uri=track.atproto_record_uri,
         subject_cid=track.atproto_record_cid,
@@ -151,10 +146,8 @@ async def like_track(
 @router.delete("/{track_id}/like")
 async def unlike_track(
     track_id: int,
-    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
-    session_id_cookie: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> LikedResponse:
     """Unlike a track - removes from database immediately, deletes ATProto record in background.
 
@@ -180,11 +173,8 @@ async def unlike_track(
 
     # schedule PDS record deletion in background (if URI exists)
     if like_uri:
-        session_id = session_id_cookie or request.headers.get(
-            "authorization", ""
-        ).replace("Bearer ", "")
         await schedule_pds_delete_like(
-            session_id=session_id,
+            session_id=auth_session.session_id,
             like_uri=like_uri,
         )
 

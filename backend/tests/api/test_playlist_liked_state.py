@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session
+from backend._internal.auth.dependencies import get_optional_session
 from backend.main import app
 from backend.models import Artist, Playlist, Track, TrackLike
 
@@ -158,20 +159,18 @@ async def test_playlist_returns_liked_state_for_authenticated_user(
         }
     }
 
-    # mock get_session to return our test user session
+    # override get_optional_session to return our test user session
     mock_session = MockSession()
 
-    with (
-        patch(
-            "backend.api.lists.get_record_public_resilient",
-            new_callable=AsyncMock,
-            return_value=(mock_record_data, None),
-        ),
-        patch(
-            "backend.api.lists.get_session",
-            new_callable=AsyncMock,
-            return_value=mock_session,
-        ),
+    async def _override_session() -> Session:
+        return mock_session
+
+    test_app.dependency_overrides[get_optional_session] = _override_session
+
+    with patch(
+        "backend.api.lists.get_record_public_resilient",
+        new_callable=AsyncMock,
+        return_value=(mock_record_data, None),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app),
@@ -179,6 +178,8 @@ async def test_playlist_returns_liked_state_for_authenticated_user(
             cookies={"session_id": "test_session_id"},
         ) as client:
             response = await client.get(f"/lists/playlists/{test_playlist.id}")
+
+    test_app.dependency_overrides.pop(get_optional_session, None)
 
     assert response.status_code == 200
     data = response.json()
@@ -223,23 +224,24 @@ async def test_playlist_returns_no_liked_state_for_unauthenticated_user(
         }
     }
 
-    with (
-        patch(
-            "backend.api.lists.get_record_public_resilient",
-            new_callable=AsyncMock,
-            return_value=(mock_record_data, None),
-        ),
-        patch(
-            "backend.api.lists.get_session",
-            new_callable=AsyncMock,
-            return_value=None,
-        ),
+    # override get_optional_session to return None (unauthenticated)
+    async def _override_no_session() -> None:
+        return None
+
+    test_app.dependency_overrides[get_optional_session] = _override_no_session
+
+    with patch(
+        "backend.api.lists.get_record_public_resilient",
+        new_callable=AsyncMock,
+        return_value=(mock_record_data, None),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app),
             base_url="http://test",
         ) as client:
             response = await client.get(f"/lists/playlists/{test_playlist.id}")
+
+    test_app.dependency_overrides.pop(get_optional_session, None)
 
     assert response.status_code == 200
     data = response.json()

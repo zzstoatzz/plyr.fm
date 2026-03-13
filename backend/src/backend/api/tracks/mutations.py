@@ -14,15 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
-from backend._internal import get_oauth_client, require_auth
+from backend._internal import require_auth
 from backend._internal.atproto import (
     PayloadTooLargeError,
     delete_record_by_uri,
     upload_blob,
 )
+from backend._internal.atproto.client import make_pds_request
 from backend._internal.atproto.records import (
-    _reconstruct_oauth_session,
-    _refresh_session_tokens,
     build_track_record,
     update_record,
 )
@@ -422,13 +421,6 @@ class RestoreRecordResponse(BaseModel):
     restored_uri: str
 
 
-def _get_oauth_session(auth_session: AuthSession):
-    oauth_data = auth_session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise HTTPException(status_code=401, detail="invalid session")
-    return oauth_data, _reconstruct_oauth_session(oauth_data)
-
-
 async def _check_old_namespace_records(
     auth_session: AuthSession, track_id: int
 ) -> bool:
@@ -440,54 +432,25 @@ async def _check_old_namespace_records(
     if not old_collection:
         return False
 
-    oauth_data, oauth_session = _get_oauth_session(auth_session)
-
-    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.listRecords"
-    params = {
-        "repo": auth_session.did,
-        "collection": old_collection,
-        "limit": 100,
-    }
-
-    # try request with token refresh
-    for attempt in range(2):
-        response = await get_oauth_client().make_authenticated_request(
-            session=oauth_session,
-            method="GET",
-            url=url,
-            params=params,
+    try:
+        result = await make_pds_request(
+            auth_session,
+            "GET",
+            "com.atproto.repo.listRecords",
+            params={
+                "repo": auth_session.did,
+                "collection": old_collection,
+                "limit": 100,
+            },
         )
-
-        if response.status_code == 200:
-            result = response.json()
-            records = result.get("records", [])
-            return len(records) > 0
-
-        # token expired - refresh and retry
-        if response.status_code == 401 and attempt == 0:
-            try:
-                error_data = response.json()
-                if "exp" in error_data.get("message", ""):
-                    logger.info(
-                        f"token expired while checking old namespace for track {track_id}, refreshing"
-                    )
-                    oauth_session = await _refresh_session_tokens(
-                        auth_session, oauth_session
-                    )
-                    continue
-            except Exception as e:
-                logger.warning(
-                    f"failed to parse token expiry for track {track_id}: {e}"
-                )
-                break
-
-        # other errors - log and allow recreation to proceed
+        records = result.get("records", [])
+        return len(records) > 0
+    except Exception:
+        # errors checking old namespace shouldn't block record recreation
         logger.warning(
-            f"failed to check old namespace for track {track_id}: {response.status_code}"
+            f"failed to check old namespace for track {track_id}", exc_info=True
         )
         return False
-
-    return False
 
 
 async def _create_atproto_record(
@@ -497,66 +460,32 @@ async def _create_atproto_record(
     track_record: dict,
 ) -> tuple[str, str]:
     """Create an ATProto record for the track."""
-    oauth_data, oauth_session = _get_oauth_session(auth_session)
-
-    create_url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.createRecord"
-    payload = {
-        "repo": auth_session.did,
-        "collection": settings.atproto.track_collection,
-        "rkey": rkey,
-        "record": track_record,
-    }
-
-    # try create with token refresh
-    for attempt in range(2):
-        response = await get_oauth_client().make_authenticated_request(
-            session=oauth_session,
-            method="POST",
-            url=create_url,
-            json=payload,
+    try:
+        result = await make_pds_request(
+            auth_session,
+            "POST",
+            "com.atproto.repo.createRecord",
+            payload={
+                "repo": auth_session.did,
+                "collection": settings.atproto.track_collection,
+                "rkey": rkey,
+                "record": track_record,
+            },
         )
-
-        if response.status_code == 200:
-            result = response.json()
-            new_uri = result.get("uri")
-            new_cid = result.get("cid")
-            if not new_uri or not new_cid:
-                raise HTTPException(
-                    status_code=500, detail="PDS returned success but missing uri/cid"
-                )
-            return new_uri, new_cid
-
-        # token expired - refresh and retry
-        if response.status_code == 401 and attempt == 0:
-            try:
-                error_data = response.json()
-                if "exp" in error_data.get("message", ""):
-                    logger.info(
-                        f"token expired while creating record for track {track.id}, refreshing"
-                    )
-                    oauth_session = await _refresh_session_tokens(
-                        auth_session, oauth_session
-                    )
-                    continue
-            except Exception as e:
-                logger.warning(
-                    f"failed to parse token expiry for track {track.id}: {e}"
-                )
-                # fall through to error handling
-
-        # creation failed
-        error_text = response.text
-        logger.error(
-            f"failed to create ATProto record for track {track.id}: {response.status_code} {error_text}"
-        )
+    except Exception as e:
+        logger.error(f"failed to create ATProto record for track {track.id}: {e}")
         raise HTTPException(
-            status_code=response.status_code,
-            detail=f"failed to create ATProto record: {error_text}",
-        )
+            status_code=500,
+            detail=f"failed to create ATProto record: {e}",
+        ) from e
 
-    raise HTTPException(
-        status_code=500, detail="failed to create record after token refresh retry"
-    )
+    new_uri = result.get("uri")
+    new_cid = result.get("cid")
+    if not new_uri or not new_cid:
+        raise HTTPException(
+            status_code=500, detail="PDS returned success but missing uri/cid"
+        )
+    return new_uri, new_cid
 
 
 @router.post("/{track_id}/restore-record")
