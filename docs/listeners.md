@@ -17,12 +17,16 @@ plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), 
 
    ![the feed shows top tracks and latest uploads](/screenshots/landing-page.png)
 
+   ![Cmd+K search overlay](/screenshots/search-overlay.png)
+
 3. **play it** — click any track to start streaming
 
    ![a track card showing title, artist, tags, and play count](/screenshots/feed-track-card.png)
 
-4. **like it** — hit the heart. your like is stored as an atproto record you own
-5. **build a playlist** — click "add to playlist" on any track, name your collection
+4. **like it** — click the three-dot menu on any track and hit "add to liked". your like is stored as an atproto record you own
+5. **build a playlist** — click "add to playlist" from the same menu, name your collection
+
+   ![track actions menu — like, add to playlist, queue, share](/screenshots/track-actions-menu.png)
 
 that's it. your likes, playlists, and listening data are yours — stored in [your personal data repo](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io), portable to any atproto app.
 
@@ -43,8 +47,6 @@ that's it. your likes, playlists, and listening data are yours — stored in [yo
 | `q` | toggle queue |
 | `cmd+k` | search |
 | `m` | mute / unmute |
-
-![Cmd+K search overlay](/screenshots/search-overlay.png)
 
 ## leaving
 
