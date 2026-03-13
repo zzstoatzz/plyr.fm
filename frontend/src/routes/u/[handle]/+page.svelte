@@ -394,12 +394,6 @@ $effect(() => {
 		{#if data.artist.avatar_url && !moderation.isSensitive(data.artist.avatar_url)}
 			<meta name="twitter:image" content="{data.artist.avatar_url}" />
 		{/if}
-		<link
-			rel="alternate"
-			type="application/rss+xml"
-			title="{data.artist?.display_name} RSS feed"
-			href="{API_URL}/feeds/artist/{data.artist?.handle}"
-		/>
 	{/if}
 </svelte:head>
 
