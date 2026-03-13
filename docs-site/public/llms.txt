@@ -1,0 +1,45 @@
+# plyr.fm
+
+> audio streaming platform built on the AT Protocol (ATProto). users own their music data in personal data servers (PDS). open API, Python SDK, and MCP server for integrations.
+
+## docs
+
+- [for listeners](https://docs.plyr.fm/listeners/): sign in with your atproto handle, stream tracks, build playlists, leave timed comments
+- [for artists](https://docs.plyr.fm/artists/): upload tracks, embed players, supporter-gated content, oEmbed support
+- [developer overview](https://docs.plyr.fm/developers/): Python SDK, MCP server, architecture overview
+- [developer quickstart](https://docs.plyr.fm/developers/quickstart/): build a track player in 30 lines with the plyrfm SDK
+- [API reference](https://docs.plyr.fm/developers/api-reference/): REST API endpoints, request/response examples, error codes, pagination
+- [authentication](https://docs.plyr.fm/developers/auth/): ATProto OAuth 2.1 flow, developer tokens, scoped requests
+- [lexicons overview](https://docs.plyr.fm/lexicons/overview/): ATProto record schemas (fm.plyr.track, fm.plyr.like, fm.plyr.comment, fm.plyr.list, fm.plyr.actor.profile)
+- [troubleshooting](https://docs.plyr.fm/troubleshooting/): common issues with auth, uploads, playback, embeds, PDS sync
+- [glossary](https://docs.plyr.fm/glossary/): ATProto and plyr.fm terminology
+- [contributing](https://docs.plyr.fm/contributing/): fork workflow, prerequisites, dev commands
+
+## API
+
+- [OpenAPI spec](https://api.plyr.fm/docs): interactive API documentation
+- Base URL: `https://api.plyr.fm`
+- Auth: Bearer token via developer tokens from [plyr.fm/portal](https://plyr.fm/portal)
+- Public endpoints (no auth): search, list tracks, stream audio, stats, oEmbed, RSS feeds
+- Authenticated endpoints: upload, like, comment, playlist management, account settings
+
+## SDK
+
+- Python SDK: `uv add plyrfm` ([GitHub](https://github.com/zzstoatzz/plyr-python-client))
+- MCP server: `uvx plyrfm-mcp` (tools: search, list_tracks, top_tracks, tracks_by_tag, get_track, liked_tracks, my_tracks)
+
+## ATProto namespace
+
+- Production: `fm.plyr` (e.g. `fm.plyr.track`)
+- Staging: `fm.plyr.stg`
+- Development: `fm.plyr.dev`
+- NSIDs are reverse-DNS format, NOT URLs
+- Lexicon JSON schemas: `/lexicons/` directory in the repository
+
+## key URLs
+
+- App: https://plyr.fm
+- API: https://api.plyr.fm
+- Docs: https://docs.plyr.fm
+- Staging: https://stg.plyr.fm / https://api-stg.plyr.fm
+- Source: https://github.com/zzstoatzz/plyr.fm

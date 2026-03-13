@@ -3,16 +3,19 @@ title: "for artists"
 description: "upload, manage, and distribute your music on atproto"
 ---
 
+your music, stored in your data repo, playable by any atproto client. no distribution fees, no gatekeepers.
+
 plyr.fm gives artists a place to share music where **you own your data**. every track you upload is an [atproto](https://atproto.com) record stored in your [PDS](https://atproto.com/guides/self-hosting#pds) — the metadata record and the audio blob itself — portable, verifiable, and yours.
 
-## uploading
+## your first upload
 
-1. sign in at [plyr.fm](https://plyr.fm) with your [atproto](https://atproto.com/specs/account) account (Bluesky, BlackSky, etc.)
-2. click **upload** and drop your audio files
-3. add a title, tags, and optional cover art
-4. your track is live — the audio and metadata are stored on your PDS and indexed by plyr.fm (falls back to plyr.fm storage if your PDS can't accept the file)
+1. **sign in** at [plyr.fm](https://plyr.fm) with your atproto handle (e.g. `you.bsky.social`)
+2. **upload** — click the upload button and drop your audio file (MP3, WAV, or M4A)
+3. **add metadata** — title, tags, and optional cover art. plyr.fm auto-suggests genre tags from the audio
+4. **see it live** — your track is now an atproto record in your PDS, indexed by plyr.fm and playable immediately
+5. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
 
-supported formats: MP3, WAV, M4A.
+the audio and metadata are stored on your PDS. if your PDS can't accept the file (blob size limits), plyr.fm falls back to R2 storage — but the metadata record always lives in your repo.
 
 ## embeds
 

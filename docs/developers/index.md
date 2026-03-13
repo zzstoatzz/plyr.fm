@@ -3,21 +3,15 @@ title: "for developers"
 description: "build on plyr.fm — API, lexicons, and architecture"
 ---
 
-plyr.fm exposes a public API, a Python SDK, and an MCP server. build players, analytics, recommendation engines, or integrations on top of the open data.
+open API, open data, open protocol. build a player, a recommendation engine, or something nobody's thought of yet.
 
-## API
+plyr.fm exposes a public API, a Python SDK, and an MCP server. all track data is atproto records — portable, verifiable, and queryable by any client.
 
-the full OpenAPI spec is at [api.plyr.fm/docs](https://api.plyr.fm/docs). key endpoints:
+## get started
 
-| endpoint | description |
-|----------|-------------|
-| `GET /search/` | search tracks, artists, playlists |
-| `GET /tracks/{id}` | get track metadata |
-| `GET /tracks/{id}/stream` | stream audio |
-| `GET /stats` | platform stats |
-| `GET /oembed` | oEmbed endpoint |
-
-authenticated endpoints require a developer token from [plyr.fm/portal](https://plyr.fm/portal).
+1. **[quickstart](/developers/quickstart/)** — build a track player in 30 lines
+2. **[API reference](/developers/api-reference/)** — endpoints, request/response examples, error codes
+3. **[auth](/developers/auth/)** — OAuth flow, developer tokens, scoped requests
 
 ## Python SDK
 
@@ -38,7 +32,7 @@ for track in client.list_tracks(limit=5):
 track = client.get_track(42)
 ```
 
-authenticated operations (upload, download, manage your tracks) require a token:
+authenticated operations (upload, download, manage your tracks) require a [developer token](/developers/auth/):
 
 ```python
 client = PlyrClient(token="your_token")
@@ -46,7 +40,7 @@ my_tracks = client.my_tracks()
 client.upload("song.mp3", "My Song")
 ```
 
-see the [plyr-python-client repo](https://github.com/zzstoatzz/plyr-python-client) for full docs.
+see the [plyr-python-client repo](https://github.com/zzstoatzz/plyr-python-client) for full SDK docs.
 
 ## MCP server
 
@@ -63,10 +57,6 @@ claude mcp add plyr-fm -- uvx plyrfm-mcp
 ```
 
 tools include `search`, `list_tracks`, `top_tracks`, `tracks_by_tag`, and more. see the [repo](https://github.com/zzstoatzz/plyr-python-client) for setup options.
-
-## developer tokens
-
-generate tokens at [plyr.fm/portal](https://plyr.fm/portal). tokens are scoped to your account and can be revoked at any time.
 
 ## ATProto lexicons
 
