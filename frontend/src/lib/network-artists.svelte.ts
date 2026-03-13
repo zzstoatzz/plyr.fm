@@ -13,8 +13,10 @@ export interface NetworkArtist {
 class NetworkArtistsCache {
 	artists = $state<NetworkArtist[]>([]);
 	loading = $state(false);
-	private lastFetch = 0;
+	private lastAttempt = 0;
+	private lastSuccess = 0;
 	private readonly CACHE_DURATION = 300_000; // 5 minutes
+	private readonly RETRY_COOLDOWN = 30_000; // 30 seconds after failure
 
 	get hasArtists(): boolean {
 		return this.artists.length > 0;
@@ -25,19 +27,22 @@ class NetworkArtistsCache {
 
 		const now = Date.now();
 		const isCacheValid =
-			this.artists.length > 0 && now - this.lastFetch < this.CACHE_DURATION;
+			this.artists.length > 0 && now - this.lastSuccess < this.CACHE_DURATION;
 
 		if (!force && isCacheValid) return;
 		if (this.loading) return;
+		// back off after failures to prevent retry storms
+		if (!force && now - this.lastAttempt < this.RETRY_COOLDOWN) return;
 
 		this.loading = true;
+		this.lastAttempt = now;
 		try {
 			const response = await fetch(`${API_URL}/discover/network`, {
 				credentials: 'include'
 			});
 			if (response.ok) {
 				this.artists = await response.json();
-				this.lastFetch = now;
+				this.lastSuccess = now;
 			}
 		} catch (e) {
 			console.error('failed to load network artists:', e);

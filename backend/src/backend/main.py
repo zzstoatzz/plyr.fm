@@ -125,8 +125,10 @@ app.add_exception_handler(Exception, _unhandled_exception_handler)
 if logfire:
     logfire.instrument_fastapi(app, request_attributes_mapper=request_attributes_mapper)
 
-# middleware
+# middleware — order matters: last-added runs first in Starlette.
+# CORS must wrap SlowAPI so 429 responses include CORS headers.
 app.add_middleware(SecurityHeadersMiddleware)  # type: ignore[arg-type]
+app.add_middleware(SlowAPIMiddleware)  # type: ignore[arg-type]
 app.add_middleware(
     CORSMiddleware,  # type: ignore[arg-type]
     allow_origin_regex=settings.frontend.resolved_cors_origin_regex,
@@ -134,7 +136,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(SlowAPIMiddleware)  # type: ignore[arg-type]
 
 # routers
 app.include_router(auth_router)
