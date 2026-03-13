@@ -5,17 +5,17 @@ description: "discover and stream audio on plyr.fm"
 
 you have a handle. you like sound. let's go.
 
-plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), the open protocol behind [Bluesky](https://bsky.app) and [BlackSky](https://blacksky.community). sign in with your atproto handle (sometimes called your [internet handle](https://internethandle.org)) and start listening.
+plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), the open protocol behind [Bluesky](https://bsky.app) and [BlackSky](https://blacksky.community). log in with your handle (sometimes called your [internet handle](https://internethandle.org)) and start listening.
 
 ## your first 5 minutes
 
-1. **sign in** — go to [plyr.fm](https://plyr.fm) and enter your handle (e.g. `you.bsky.social`)
+1. **log in** — go to [plyr.fm](https://plyr.fm), click log in, and enter your handle (e.g. `you.bsky.social`)
 2. **find a track** — browse the feed or hit `Cmd+K` to search
 3. **play it** — click any track to start streaming
-4. **like it** — hit the heart. your like is stored in your [PDS](https://atproto.com/guides/self-hosting#pds) as an atproto record you own
+4. **like it** — hit the heart. your like is stored as an atproto record you own
 5. **build a playlist** — click "add to playlist" on any track, name your collection
 
-that's it. your likes, playlists, and listening data live in your personal data repo — not locked in plyr.fm's database.
+that's it. your likes, playlists, and listening data are yours — stored in [your personal data repo](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io), portable to any atproto app.
 
 ## what you get
 

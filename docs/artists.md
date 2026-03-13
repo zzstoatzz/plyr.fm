@@ -9,7 +9,7 @@ plyr.fm gives creators a place to share audio where **you own your data**. every
 
 ## your first upload
 
-1. **sign in** at [plyr.fm](https://plyr.fm) with your handle (e.g. `you.bsky.social`)
+1. **log in** at [plyr.fm](https://plyr.fm) with your handle (e.g. `you.bsky.social`)
 2. **upload** — click the upload button and drop your audio file (MP3, WAV, or M4A)
 3. **add metadata** — title, tags, and optional cover art. plyr.fm auto-suggests genre tags from the audio
 4. **see it live** — your track is now an atproto record in your PDS, indexed by plyr.fm and playable immediately

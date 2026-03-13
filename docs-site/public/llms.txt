@@ -4,7 +4,7 @@
 
 ## docs
 
-- [for listeners](https://docs.plyr.fm/listeners/): sign in with your handle, stream tracks, build playlists, leave timed comments
+- [for listeners](https://docs.plyr.fm/listeners/): log in with your handle, stream tracks, build playlists, leave timed comments
 - [for artists](https://docs.plyr.fm/artists/): upload tracks, embed players, supporter-gated content, oEmbed support
 - [developer overview](https://docs.plyr.fm/developers/): Python SDK, MCP server, architecture overview
 - [developer quickstart](https://docs.plyr.fm/developers/quickstart/): build a track player in 30 lines with the plyrfm SDK
