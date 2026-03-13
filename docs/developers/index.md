@@ -7,6 +7,20 @@ open API, open data, open protocol. build a player, a recommendation engine, or 
 
 plyr.fm exposes a public API, a Python SDK, and an MCP server. all track data is atproto records — portable, verifiable, and queryable by any client.
 
+## using a coding assistant?
+
+paste this into Claude Code, Cursor, or similar to get started:
+
+```
+i want to build an integration with plyr.fm. the API docs are at
+https://docs.plyr.fm/developers/api-reference/ and the OpenAPI spec is at
+https://api.plyr.fm/docs. the Python SDK is `plyrfm` (uv add plyrfm).
+
+public endpoints (no auth): search, list tracks, stream audio, top tracks,
+tags, albums, playlists, RSS feeds, oEmbed. authenticated endpoints require
+a developer token from plyr.fm/portal.
+```
+
 ## get started
 
 1. **[quickstart](/developers/quickstart/)** — build a track player in 30 lines

@@ -225,7 +225,7 @@ permission sets are resolved by PDS servers at authorization time — the `inclu
 
 ## login scopes
 
-when you sign in to plyr.fm, the app requests OAuth scopes for the collections it needs to write to:
+when you log in to plyr.fm, the app requests OAuth scopes for the collections it needs to write to:
 
 | scope | purpose |
 |-------|---------|

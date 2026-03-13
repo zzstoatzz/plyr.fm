@@ -7,7 +7,7 @@ description: "common issues and solutions for plyr.fm"
 
 ### OAuth login fails or loops
 
-**symptom**: clicking "sign in" redirects to your PDS but returns an error, or you end up back at the login page.
+**symptom**: clicking "log in" redirects to your PDS but returns an error, or you end up back at the login page.
 
 **solutions**:
 - check that your system clock is accurate — OAuth tokens are time-sensitive, and clock skew causes signature validation failures
@@ -21,7 +21,7 @@ description: "common issues and solutions for plyr.fm"
 
 **cause**: sessions last 14 days with auto-refresh. if the underlying OAuth token refresh fails (e.g. your PDS revokes the grant), the session becomes invalid.
 
-**solution**: sign in again. your data (likes, playlists, tracks) is stored on your PDS — nothing is lost.
+**solution**: log in again. your data (likes, playlists, tracks) is stored on your PDS — nothing is lost.
 
 ### developer token stopped working
 
@@ -111,7 +111,7 @@ description: "common issues and solutions for plyr.fm"
 
 ### data migration between PDS providers
 
-migrating your PDS (e.g. from bsky.social to a self-hosted instance) preserves your ATProto records. plyr.fm will re-index your records from your new PDS the next time you sign in.
+migrating your PDS (e.g. from bsky.social to a self-hosted instance) preserves your ATProto records. plyr.fm will re-index your records from your new PDS the next time you log in.
 
 ## general
 
