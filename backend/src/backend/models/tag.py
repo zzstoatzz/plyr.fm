@@ -46,6 +46,7 @@ class TrackTag(Base):
     __table_args__ = (
         UniqueConstraint("track_id", "tag_id", name="uq_track_tag"),
         Index("ix_track_tags_tag_id", "tag_id"),
+        Index("ix_track_tags_track_id", "track_id"),
     )
 
     track_id: Mapped[int] = mapped_column(

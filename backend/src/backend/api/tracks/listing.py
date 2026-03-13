@@ -139,15 +139,14 @@ async def list_tracks(
         filter_hidden_tags if filter_hidden_tags is not None else (artist_did is None)
     )
     if hidden_tags and should_filter:
-        # subquery: track IDs that have any of the hidden tags
-        hidden_track_ids_subq = (
+        hidden_exists = (
             select(TrackTag.track_id)
             .join(Tag, TrackTag.tag_id == Tag.id)
             .where(Tag.name.in_(hidden_tags))
-            .distinct()
-            .scalar_subquery()
+            .where(TrackTag.track_id == Track.id)
+            .exists()
         )
-        stmt = stmt.where(Track.id.not_in(hidden_track_ids_subq))
+        stmt = stmt.where(~hidden_exists)
 
     # apply cursor-based pagination (tracks older than cursor timestamp)
     if cursor:
