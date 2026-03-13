@@ -52,6 +52,18 @@
 		>
 			<img src="https://cdn.bsky.app/img/avatar/plain/did:plc:wshs7t2adsemcrrd4snkeqli/bafkreif6z53z4ukqmdgwstspwh5asmhxheblcd2adisoccl4fflozc3kva@jpeg" alt="Tangled" width="18" height="18" class="tangled-icon" />
 		</a>
+		<a
+			href="https://docs.plyr.fm"
+			target="_blank"
+			rel="noopener noreferrer"
+			class="social-link"
+			title="documentation"
+		>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+				<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+			</svg>
+		</a>
 	</div>
 
 	<!-- Report button in right margin, outside main content flow -->
