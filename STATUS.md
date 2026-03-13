@@ -77,6 +77,24 @@ also fixed: `track.features` could be `None` from the DB, crashing `TrackRespons
 
 **status**: Jetstream soak on staging complete — ghost track fix deployed and verified via Logfire ("skipping create for tombstoned URI" confirmed blocking replayed creates). ready for production.
 
+#### Jetstream hardening for production (PRs #1083-1084, Mar 12-13)
+
+two security/correctness fixes before production rollout:
+
+**environment-scoped collection filter (PR #1083):** the Jetstream consumer was subscribing to all `fm.plyr.*` collections regardless of environment. staging (`fm.plyr.stg.track`) and production (`fm.plyr.track`) share the same firehose — without scoping, staging would ingest production records and vice versa. fixed by deriving the collection filter from `settings.atproto` namespace settings so each environment only sees its own records.
+
+**audioUrl/imageUrl origin trust validation (PR #1084):** the ingest pipeline blindly stored any `audioUrl` from incoming ATProto records as `r2_url` in the database. the `/audio/{file_id}` endpoint then does `RedirectResponse(url=r2_url)` — so a YouTube link, a tracking pixel, or any arbitrary URL would be accepted and served as if it were a track. same gap for `imageUrl`.
+
+fix: `is_trusted_audio_origin` and `is_trusted_image_origin` check the URL origin against the platform's R2 CDN domain before accepting. the async signature and `artist_did` parameter are forward-compatible with a future "bring your own storage" feature where artists register trusted external origins. validation logic at ingest:
+- trusted origin → accept normally
+- untrusted `audioUrl` + `audioBlob` present → strip URL, use blob-only (`audio_storage="pds"`)
+- untrusted `audioUrl` + no blob → reject the track
+- untrusted `imageUrl` → strip (track without art is still valid)
+
+14 regression tests covering all trust/strip/reject scenarios.
+
+**status**: both fixes deployed to production. Jetstream is live.
+
 ---
 
 #### public docs restructure (PRs #1035-1041, Mar 6)
@@ -274,7 +292,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-Jetstream real-time ingestion soak on staging complete — ghost track fix deployed and verified. ready for production rollout. open questions on audit trail persistence and moderation for PDS-direct records.
+Jetstream deployed to production with environment-scoped collection filtering and origin trust validation for ingest URLs. open questions on audit trail persistence and moderation for PDS-direct records.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -409,5 +427,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-12 (ghost track fix + PDS blob lifecycle verification).
+this is a living document. last updated 2026-03-13 (Jetstream production rollout with origin trust validation).
 
