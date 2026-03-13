@@ -50,6 +50,20 @@ def _mock_post_create_hooks():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _mock_trusted_origins():
+    """bypass origin trust checks — tested separately in test_origin_trust.py."""
+    with (
+        patch(
+            "backend._internal.tasks.ingest.is_trusted_audio_origin", return_value=True
+        ),
+        patch(
+            "backend._internal.tasks.ingest.is_trusted_image_origin", return_value=True
+        ),
+    ):
+        yield
+
+
 @pytest.fixture
 async def artist(db_session: AsyncSession) -> Artist:
     """create a test artist with a unique DID (xdist-safe)."""

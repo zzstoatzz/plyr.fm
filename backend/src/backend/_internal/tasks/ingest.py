@@ -17,6 +17,10 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 
 from backend._internal.atproto.client import pds_blob_url
 from backend._internal.tasks.hooks import run_post_track_create_hooks
+from backend._internal.tasks.origin_trust import (
+    is_trusted_audio_origin,
+    is_trusted_image_origin,
+)
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.utilities.database import db_session
 from backend.utilities.lexicon import validate_record
@@ -179,6 +183,24 @@ async def ingest_track_create(
         # no existing row — create from scratch (external ATProto client)
         audio_blob = record.get("audioBlob")
         audio_url = record.get("audioUrl")
+
+        # validate audioUrl origin — untrusted URLs are stripped or rejected
+        if audio_url and not await is_trusted_audio_origin(audio_url, artist_did=did):
+            if audio_blob:
+                logfire.warn(
+                    "ingest: stripping untrusted audioUrl, using blob only",
+                    uri=uri,
+                    audio_url=audio_url,
+                )
+                audio_url = None
+            else:
+                logfire.warn(
+                    "ingest: rejecting track with untrusted audioUrl and no blob",
+                    uri=uri,
+                    audio_url=audio_url,
+                )
+                return
+
         pds_blob_cid = (
             audio_blob.get("ref", {}).get("$link")
             if isinstance(audio_blob, dict)
@@ -200,6 +222,16 @@ async def ingest_track_create(
         if album := record.get("album"):
             extra["album"] = album
 
+        # validate imageUrl origin — untrusted URLs are stripped (track is still valid)
+        image_url = record.get("imageUrl")
+        if image_url and not await is_trusted_image_origin(image_url, artist_did=did):
+            logfire.warn(
+                "ingest: stripping untrusted imageUrl",
+                uri=uri,
+                image_url=image_url,
+            )
+            image_url = None
+
         track = Track(
             title=record.get("title", "untitled"),
             file_id=record.get("fileId", rkey),
@@ -212,7 +244,7 @@ async def ingest_track_create(
             pds_blob_cid=pds_blob_cid,
             publish_state="published",
             description=record.get("description"),
-            image_url=record.get("imageUrl"),
+            image_url=image_url,
             support_gate=record.get("supportGate"),
             features=record.get("features") or [],
             created_at=_parse_datetime(record.get("createdAt")),
@@ -266,13 +298,30 @@ async def ingest_track_update(
         if description := record.get("description"):
             track.description = description
         if image_url := record.get("imageUrl"):
-            track.image_url = image_url
+            if await is_trusted_image_origin(image_url, artist_did=did):
+                track.image_url = image_url
+            else:
+                logfire.warn(
+                    "ingest: stripping untrusted imageUrl on update",
+                    uri=uri,
+                    image_url=image_url,
+                )
         if cid:
             track.atproto_record_cid = cid
 
         # audio storage fields
         audio_blob = record.get("audioBlob")
         audio_url = record.get("audioUrl")
+
+        # strip untrusted audioUrl on update (don't reject the whole update)
+        if audio_url and not await is_trusted_audio_origin(audio_url, artist_did=did):
+            logfire.warn(
+                "ingest: stripping untrusted audioUrl on update",
+                uri=uri,
+                audio_url=audio_url,
+            )
+            audio_url = None
+
         if audio_blob and isinstance(audio_blob, dict) and audio_url:
             track.audio_storage = "both"
             track.pds_blob_cid = audio_blob.get("ref", {}).get("$link")
