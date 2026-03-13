@@ -23,7 +23,7 @@ plyr.fm uses the `fm.plyr` namespace for all custom record types. this is enviro
 | staging     | `fm.plyr.stg` |
 | development | `fm.plyr.dev` |
 
-plyr.fm defines its own lexicons for music-specific concepts (tracks, likes, comments, playlists) rather than reusing `app.bsky.*` equivalents — this keeps the schema independent and music-focused. we also write to `fm.teal.*` collections for [teal.fm](https://teal.fm) scrobble integration. at login, plyr.fm requests OAuth scopes for each collection it needs to write to (see [permission sets](#permission-sets) below).
+plyr.fm defines its own lexicons for audio-specific concepts (tracks, likes, comments, playlists) rather than reusing `app.bsky.*` equivalents — this keeps the schema independent and audio-focused. we also write to `fm.teal.*` collections for [teal.fm](https://teal.fm) scrobble integration. at login, plyr.fm requests OAuth scopes for each collection it needs to write to (see [permission sets](#permission-sets) below).
 
 ## current lexicons
 
@@ -209,7 +209,7 @@ the sync pattern: when a user logs in, we fetch their records from their PDS and
 
 ## permission sets
 
-permission sets bundle OAuth permissions under human-readable titles. instead of users seeing "fm.plyr.track, fm.plyr.like, ..." they see "plyr.fm Music Library".
+permission sets bundle OAuth permissions under human-readable titles. instead of users seeing "fm.plyr.track, fm.plyr.like, ..." they see "plyr.fm Audio Library".
 
 ### fm.plyr.authFullApp
 

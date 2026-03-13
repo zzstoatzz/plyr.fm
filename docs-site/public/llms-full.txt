@@ -1,6 +1,6 @@
 # plyr.fm
 
-> audio streaming platform built on the AT Protocol (ATProto). users own their music data in personal data servers (PDS). open API, Python SDK, and MCP server for integrations.
+> audio streaming platform built on the AT Protocol (ATProto). users own their audio data in personal data servers (PDS). open API, Python SDK, and MCP server for integrations.
 
 ## key URLs
 
@@ -65,7 +65,6 @@ Auth: `Authorization: Bearer <developer_token>` (get tokens at plyr.fm/portal)
 
 ```
 GET  /search/?q={query}&type={tracks|artists|albums|tags|playlists}&limit=10
-GET  /search/vibe?q={mood_description}&limit=5      # semantic mood search
 GET  /tracks/?limit=20&cursor={iso_timestamp}         # list tracks
 GET  /tracks/{id}                                      # get track
 GET  /tracks/{id}/stream                               # stream audio (307 redirect)
@@ -344,4 +343,3 @@ At least one of `audioUrl` or `audioBlob` must be present.
 - **AppView**: application service that indexes records from the network
 - **developer token**: API auth token from plyr.fm/portal
 - **jam**: shared listening room with real-time sync
-- **mood search**: semantic search via CLAP audio embeddings
