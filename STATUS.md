@@ -47,9 +47,29 @@ plyr.fm should become:
 
 ### March 2026
 
+#### [community feedback](https://bsky.app/profile/cinny.bun.how/post/3mgq2bao26s2p) (Mar 10)
+
+three pieces of feedback on Bluesky:
+
+> this application doesnt subscribe to an atproto event stream at all. lol okay
+
+> it has "backfill" but it uses that word to mean "writing track records to the PDS" ???
+
+> idk why plyr feature-flags flac upload behind transcoding to mp3 when flac playback is supported in literally every browser that isnt IE11
+
+[public response](https://bsky.app/profile/zzstoatzz.io): all the feedback is welcome — PDS blob size limits motivated the initial R2-first design, the "backfill" terminology is confusing, and lossless uploads are feature-flagged because the transcoder sidecar was still in development.
+
+what we did about each:
+
+- **event stream**: shipped Jetstream subscription (see below). the reason it wasn't trivial is that firehose records need to hit the same treatment as API uploads — moderation, origin trust validation, dedup against the race between the API write and the firehose echo. this required refactoring the ingest paths so Jetstream events enter through the same codepaths as the API. there's an interesting design tension here: an external service could watch the firehose for `fm.plyr.*` records and POST them to the API as unauthenticated tips ("this record exists on this PDS"), which would eliminate the separate ingest path entirely. we opted against that for now but it's the kind of architectural question that made this non-trivial. addressed across PRs #1068-1084.
+- **"backfill" terminology**: checked all public-facing surfaces. the portal UI says "migrate audio to your PDS" and "copy N audio blobs to your PDS" — the word "backfill" only appears in internal code (`PdsBackfillControl.svelte` variable names, `/pds-backfill/` API path) and internal docs, never in user-visible text. no action needed.
+- **lossless uploads**: consciously deferred ([#1065](https://github.com/zzstoatzz/plyr.fm/issues/1065)). FLAC is web-playable in every modern browser, so the feature flag isn't a technical limitation — it's a product decision about how to roll out file format support. hardening format support across the board is on the roadmap.
+
+---
+
 #### Jetstream real-time ingestion (PRs #1068-1076, Mar 10-12)
 
-user feedback from [@cinny.bun.how](https://bsky.app/profile/cinny.bun.how) pointed out a fundamental gap: plyr.fm writes records to your PDS but never listens. if someone creates a track record using another ATProto client, plyr.fm has no idea it exists. that's not how the protocol is supposed to work — the whole point of putting data on the PDS is that any client can interact with it and the network stays in sync.
+motivated by the event stream feedback above. plyr.fm was push-only — it wrote records to your PDS but never listened. if someone creates a track record using another ATProto client, plyr.fm had no idea it existed. that's not how the protocol is supposed to work — the whole point of putting data on the PDS is that any client can interact with it and the network stays in sync.
 
 **what shipped:** a Jetstream WebSocket consumer that subscribes to the ATProto firehose, filtered to `fm.plyr.*` collections. when a record event arrives for a known artist DID, it's dispatched to one of 12 ingest tasks (track/like/comment/list CRUD + profile updates). incoming records are validated against lexicon JSON schemas before touching the database. the consumer runs as a single-instance perpetual docket task with cursor persistence in Redis for replay on reconnect.
 
@@ -94,6 +114,10 @@ fix: `is_trusted_audio_origin` and `is_trusted_image_origin` check the URL origi
 14 regression tests covering all trust/strip/reject scenarios.
 
 **status**: both fixes deployed to production. Jetstream is live.
+
+#### API layer dedup (PR #1086, Mar 13)
+
+housekeeping refactor across the API layer: extracted shared image upload helper (`_internal/image_uploads.py`), replaced manual cookie/header extraction with `Depends(get_optional_session)`, and removed redundant OAuth token-refresh retry loops (already handled by `make_pds_request`). playlist covers now get moderation scanning (previously missing). net -303 lines.
 
 ---
 
@@ -299,6 +323,7 @@ Jetstream deployed to production with environment-scoped collection filtering an
 - audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
 
 ### backlog
+- harden file format support — graduate lossless uploads (#1065), revisit transcoding pipeline
 - Jetstream audit trail / activity feed integration — persistent log of firehose events, toggle for visibility
 - moderation pipeline for PDS-direct records ingested via Jetstream
 - share to bluesky (#334)
@@ -427,5 +452,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-13 (Jetstream production rollout with origin trust validation).
+this is a living document. last updated 2026-03-13 (community feedback section, API dedup refactor).
 
