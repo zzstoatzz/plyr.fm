@@ -472,21 +472,20 @@ async def _create_atproto_record(
                 "record": track_record,
             },
         )
-        new_uri = result.get("uri")
-        new_cid = result.get("cid")
-        if not new_uri or not new_cid:
-            raise HTTPException(
-                status_code=500, detail="PDS returned success but missing uri/cid"
-            )
-        return new_uri, new_cid
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"failed to create ATProto record for track {track.id}: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"failed to create ATProto record: {e}",
         ) from e
+
+    new_uri = result.get("uri")
+    new_cid = result.get("cid")
+    if not new_uri or not new_cid:
+        raise HTTPException(
+            status_code=500, detail="PDS returned success but missing uri/cid"
+        )
+    return new_uri, new_cid
 
 
 @router.post("/{track_id}/restore-record")

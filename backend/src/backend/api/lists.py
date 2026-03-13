@@ -28,8 +28,17 @@ from backend._internal.atproto.records import (
 )
 from backend._internal.image_uploads import COVER_EXTENSIONS, process_image_upload
 from backend._internal.recommendations import get_playlist_recommendations
+from backend.api.albums import invalidate_album_cache
 from backend.config import settings
-from backend.models import Artist, Playlist, Track, TrackLike, UserPreferences, get_db
+from backend.models import (
+    Album,
+    Artist,
+    Playlist,
+    Track,
+    TrackLike,
+    UserPreferences,
+    get_db,
+)
 from backend.schemas import DeletedResponse, TrackResponse
 from backend.storage import storage
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
@@ -174,9 +183,6 @@ async def reorder_list(
         )
 
         # invalidate album cache if this list belongs to an album
-        from backend.api.albums import invalidate_album_cache
-        from backend.models import Album
-
         result = await db.execute(
             select(Album).where(Album.atproto_record_uri == list_uri)
         )
