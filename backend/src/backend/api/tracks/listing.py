@@ -158,8 +158,10 @@ async def list_tracks(
 
     # order by created_at desc and fetch one extra to check if there's more
     stmt = stmt.order_by(Track.created_at.desc()).limit(limit + 1)
-    result = await db.execute(stmt)
-    tracks = list(result.scalars().all())
+    with logfire.span("db execute tracks query"):
+        result = await db.execute(stmt)
+    with logfire.span("materialize track objects"):
+        tracks = list(result.scalars().all())
 
     # check if there are more results and trim to requested limit
     if has_more := len(tracks) > limit:
@@ -172,71 +174,65 @@ async def list_tracks(
     # note: copyright_info is intentionally excluded here - it requires an HTTP call
     # to the moderation service and is only displayed in /tracks/me (artist portal)
     track_ids = [track.id for track in tracks]
-    like_counts, comment_counts, track_tags = await asyncio.gather(
-        get_like_counts(db, track_ids),
-        get_comment_counts(db, track_ids),
-        get_track_tags(db, track_ids),
-    )
+    with logfire.span("batch aggregations", track_count=len(track_ids)):
+        like_counts, comment_counts, track_tags = await asyncio.gather(
+            get_like_counts(db, track_ids),
+            get_comment_counts(db, track_ids),
+            get_track_tags(db, track_ids),
+        )
 
     # use cached PDS URLs with fallback on failure
-    resolver = AsyncDidResolver()
-    pds_cache = {}
+    with logfire.span("resolve PDS URLs"):
+        resolver = AsyncDidResolver()
+        pds_cache = {}
 
-    # first pass: collect already-cached PDS URLs and artists needing resolution
-    artists_to_resolve = {}  # dict for O(1) deduplication by DID
-    for track in tracks:
-        if track.artist_did not in pds_cache:
-            if track.artist.pds_url:
-                pds_cache[track.artist_did] = track.artist.pds_url
-            else:
-                # need to resolve this artist
-                if track.artist_did not in artists_to_resolve:
-                    artists_to_resolve[track.artist_did] = track.artist
+        # first pass: collect already-cached PDS URLs and artists needing resolution
+        artists_to_resolve = {}  # dict for O(1) deduplication by DID
+        for track in tracks:
+            if track.artist_did not in pds_cache:
+                if track.artist.pds_url:
+                    pds_cache[track.artist_did] = track.artist.pds_url
+                else:
+                    # need to resolve this artist
+                    if track.artist_did not in artists_to_resolve:
+                        artists_to_resolve[track.artist_did] = track.artist
 
-    # resolve all uncached PDS URLs concurrently
-    if artists_to_resolve:
-        with logfire.span(
-            "resolve PDS URLs",
-            artist_count=len(artists_to_resolve),
-            _level="debug",
-        ):
+        # resolve all uncached PDS URLs concurrently
+        if artists_to_resolve:
 
             async def resolve_artist(artist: Artist) -> tuple[str, str | None]:
                 """Resolve PDS URL for an artist, returning (did, pds_url)."""
-                with logfire.span("resolve single PDS", did=artist.did, _level="debug"):
-                    try:
-                        atproto_data = await resolver.resolve_atproto_data(artist.did)
-                        return (artist.did, atproto_data.pds)
-                    except Exception as e:
-                        logfire.warn(
-                            f"failed to resolve PDS for {artist.did}", error=str(e)
-                        )
-                        return (artist.did, None)
+                try:
+                    atproto_data = await resolver.resolve_atproto_data(artist.did)
+                    return (artist.did, atproto_data.pds)
+                except Exception as e:
+                    logfire.warn(
+                        f"failed to resolve PDS for {artist.did}", error=str(e)
+                    )
+                    return (artist.did, None)
 
-            # resolve all concurrently
             results = await asyncio.gather(
                 *[resolve_artist(a) for a in artists_to_resolve.values()]
             )
 
-        # update cache and database with O(1) lookups
-        for did, pds_url in results:
-            pds_cache[did] = pds_url
-            if pds_url:
-                artist = artists_to_resolve.get(did)
-                if artist:
-                    artist.pds_url = pds_url
-                    db.add(artist)
+            # update cache and database with O(1) lookups
+            for did, pds_url in results:
+                pds_cache[did] = pds_url
+                if pds_url:
+                    artist = artists_to_resolve.get(did)
+                    if artist:
+                        artist.pds_url = pds_url
+                        db.add(artist)
 
     # commit any PDS URL updates
-    await db.commit()
+    with logfire.span("commit PDS updates"):
+        await db.commit()
 
     # resolve missing image URLs and self-heal invalid image_ids
     # this prevents repeated R2 404 checks ("ghost reads") for missing files
     tracks_needing_images = [t for t in tracks if t.image_id and not t.image_url]
     if tracks_needing_images:
-        with logfire.span(
-            "resolve missing images", count=len(tracks_needing_images), _level="debug"
-        ):
+        with logfire.span("resolve missing images", count=len(tracks_needing_images)):
 
             async def resolve_image(track: Track) -> None:
                 """Resolve image URL and update track state."""
@@ -245,9 +241,6 @@ async def list_tracks(
                     if url:
                         track.image_url = url
                     else:
-                        # image_id exists but file not found in R2
-                        # log error but don't clear - this indicates a bug (e.g. extension mismatch)
-                        # clearing would destroy the reference and make debugging harder
                         logfire.error(
                             "image_id exists but file not found in R2",
                             track_id=track.id,
@@ -280,21 +273,22 @@ async def list_tracks(
             )
 
     # fetch all track responses concurrently with like status and counts
-    track_responses = await asyncio.gather(
-        *[
-            TrackResponse.from_track(
-                track,
-                pds_cache.get(track.artist_did),
-                liked_track_ids,
-                like_counts,
-                comment_counts,
-                track_tags=track_tags,
-                viewer_did=viewer_did,
-                supported_artist_dids=supported_artist_dids,
-            )
-            for track in tracks
-        ]
-    )
+    with logfire.span("build track responses", track_count=len(tracks)):
+        track_responses = await asyncio.gather(
+            *[
+                TrackResponse.from_track(
+                    track,
+                    pds_cache.get(track.artist_did),
+                    liked_track_ids,
+                    like_counts,
+                    comment_counts,
+                    track_tags=track_tags,
+                    viewer_did=viewer_did,
+                    supported_artist_dids=supported_artist_dids,
+                )
+                for track in tracks
+            ]
+        )
 
     response = TracksListResponse(
         tracks=list(track_responses),
