@@ -17,7 +17,7 @@ default to production unless told otherwise.
 
 | target | URL path |
 |--------|----------|
-| login page | `/` (click "log in") |
+| login page | `/` (click "sign in") |
 | feed | `/` (after auth) |
 | search | `/` then `Cmd+K` |
 | portal | `/portal` (needs auth) |
@@ -53,7 +53,7 @@ never attempt to automate credential entry — always pause and ask.
 `{page}-{element}.png`
 
 examples:
-- `login-button.png` — the log in button on the landing page
+- `login-button.png` — the sign in button on the landing page
 - `feed-track-card.png` — a track card in the feed
 - `player-controls.png` — the bottom player bar
 - `search-overlay.png` — the Cmd+K search modal
@@ -78,7 +78,7 @@ user: /screenshot-docs login page
 agent:
 1. resize_page(500, 580)  ← viewport sized to fit the login modal
 2. new_page("https://plyr.fm")
-3. wait_for(["log in"])
+3. wait_for(["sign in"])
 4. click(login_button_uid)
 5. wait_for(["handle"])
 6. take_screenshot({ filePath: "docs-site/public/screenshots/login-page.png" })

@@ -5,13 +5,13 @@ description: "discover and stream audio on plyr.fm"
 
 you have a handle. you like sound. let's go.
 
-plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), the open protocol behind [Bluesky](https://bsky.app) and [BlackSky](https://blacksky.community). log in with your handle (sometimes called your [internet handle](https://internethandle.org)) and start listening.
+plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), the open protocol behind [Bluesky](https://bsky.app) and [BlackSky](https://blacksky.community). sign in with your handle (sometimes called your [internet handle](https://internethandle.org)) and start listening.
 
 ## your first 5 minutes
 
-1. **log in** — go to [plyr.fm](https://plyr.fm), click log in, and enter your handle (e.g. `you.bsky.social`)
+1. **sign in** — go to [plyr.fm](https://plyr.fm), click sign in, and enter your handle (e.g. `you.bsky.social`)
 
-   ![plyr.fm login page — enter your handle to sign in](/screenshots/login-page.png)
+   ![plyr.fm sign-in page — enter your handle to get started](/screenshots/login-page.png)
 
 2. **find a track** — browse the feed to see what's playing
 

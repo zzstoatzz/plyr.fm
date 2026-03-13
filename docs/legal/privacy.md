@@ -25,7 +25,7 @@ plyr.fm uses the AT Protocol for identity and social features. this has importan
 
 ## 2. data we collect
 
-**you provide:** your AT Protocol identity when you log in, audio files and metadata you upload, and preferences like accent color.
+**you provide:** your AT Protocol identity when you sign in, audio files and metadata you upload, and preferences like accent color.
 
 **automatically:** play counts, IP addresses, browser info, and session cookies for authentication.
 
