@@ -63,7 +63,7 @@
 
 		<section>
 			<h2>2. Data We Collect</h2>
-			<p><strong>You provide:</strong> Your AT Protocol identity when you log in, audio files
+			<p><strong>You provide:</strong> Your AT Protocol identity when you sign in, audio files
 				and metadata you upload, and preferences like accent color.</p>
 			<p><strong>Automatically:</strong> Play counts, IP addresses, browser info, and
 				session cookies for authentication.</p>

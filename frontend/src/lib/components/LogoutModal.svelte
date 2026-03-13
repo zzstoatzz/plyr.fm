@@ -15,7 +15,7 @@
 	role="presentation"
 	onclick={handleBackdropClick}
 >
-	<div class="logout-modal" role="dialog" aria-modal="true" aria-label="logout options">
+	<div class="logout-modal" role="dialog" aria-modal="true" aria-label="sign out options">
 		<div class="logout-modal-header">switch accounts?</div>
 		<div class="logout-modal-accounts">
 			{#each logout.otherAccounts as account}
@@ -41,7 +41,7 @@
 					<polyline points="16 17 21 12 16 7"></polyline>
 					<line x1="21" y1="12" x2="9" y2="12"></line>
 				</svg>
-				<span>log out of all accounts</span>
+				<span>sign out of all accounts</span>
 			</button>
 			<button class="logout-modal-cancel" onclick={() => logout.close()}>
 				cancel

@@ -9,9 +9,9 @@ plyr.fm gives creators a place to share audio where **you own your data**. every
 
 ## your first upload
 
-1. **log in** at [plyr.fm](https://plyr.fm) with your handle (e.g. `you.bsky.social`)
+1. **sign in** at [plyr.fm](https://plyr.fm) with your handle (e.g. `you.bsky.social`)
 
-   ![plyr.fm login page — enter your handle to sign in](/screenshots/login-page.png)
+   ![plyr.fm sign-in page — enter your handle to get started](/screenshots/login-page.png)
 
 2. **upload** — click the upload button and drop your audio file (MP3, WAV, or M4A)
 

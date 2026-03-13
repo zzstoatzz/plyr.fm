@@ -102,7 +102,7 @@
 
 			<UserMenu {user} {onLogout} />
 		{:else}
-			<a href="/login" class="btn-primary">log in</a>
+			<a href="/login" class="btn-primary">sign in</a>
 		{/if}
 	</div>
 
@@ -137,7 +137,7 @@
 		{#if isAuthenticated}
 			<ProfileMenu {user} {onLogout} />
 		{:else}
-			<a href="/login" class="btn-primary">log in</a>
+			<a href="/login" class="btn-primary">sign in</a>
 		{/if}
 	</div>
 </header>

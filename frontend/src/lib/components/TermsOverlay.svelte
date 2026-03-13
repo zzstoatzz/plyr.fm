@@ -77,7 +77,7 @@
 				{accepting ? 'Accepting...' : 'I Accept'}
 			</button>
 			<button class="decline-btn" onclick={handleDecline} disabled={accepting}>
-				Decline & Logout
+				Decline & Sign Out
 			</button>
 		</div>
 	</div>

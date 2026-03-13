@@ -46,7 +46,7 @@ class AuthManager {
 					this.scopeUpgradeRequired = true;
 					this.clearSession();
 					toast.info(
-						"plyr.fm's permissions have changed since you logged in. please log in again",
+						"plyr.fm's permissions have changed since you signed in. please sign in again",
 						5000,
 						{ label: 'see changes', href: 'https://github.com/zzstoatzz/plyr.fm/releases/latest' }
 					);

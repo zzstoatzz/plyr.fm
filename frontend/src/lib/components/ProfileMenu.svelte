@@ -341,7 +341,7 @@
 							<line x1="21" y1="12" x2="9" y2="12"></line>
 						</svg>
 						<div class="item-content">
-							<span class="item-title">logout</span>
+							<span class="item-title">sign out</span>
 						</div>
 					</button>
 				</nav>

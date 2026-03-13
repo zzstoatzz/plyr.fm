@@ -23,7 +23,7 @@ plyr.fm uses the `fm.plyr` namespace for all custom record types. this is enviro
 | staging     | `fm.plyr.stg` |
 | development | `fm.plyr.dev` |
 
-plyr.fm defines its own lexicons for audio-specific concepts (tracks, likes, comments, playlists) rather than reusing `app.bsky.*` equivalents — this keeps the schema independent and audio-focused. we also write to `fm.teal.*` collections for [teal.fm](https://teal.fm) scrobble integration. at login, plyr.fm requests OAuth scopes for each collection it needs to write to (see [permission sets](#permission-sets) below).
+plyr.fm defines its own lexicons for audio-specific concepts (tracks, likes, comments, playlists) rather than reusing `app.bsky.*` equivalents — this keeps the schema independent and audio-focused. we also write to `fm.teal.*` collections for [teal.fm](https://teal.fm) scrobble integration. at sign-in, plyr.fm requests OAuth scopes for each collection it needs to write to (see [permission sets](#permission-sets) below).
 
 ## current lexicons
 
@@ -223,9 +223,9 @@ set `ATPROTO_USE_PERMISSION_SETS=true` to use `include:fm.plyr.authFullApp` inst
 
 permission sets are resolved by PDS servers at authorization time — the `include:` token is expanded into granular `repo:` scopes and never appears in the granted token. the authority namespace (e.g. `fm.plyr`) must match the requesting app's domain.
 
-## login scopes
+## sign-in scopes
 
-when you log in to plyr.fm, the app requests OAuth scopes for the collections it needs to write to:
+when you sign in to plyr.fm, the app requests OAuth scopes for the collections it needs to write to:
 
 | scope | purpose |
 |-------|---------|

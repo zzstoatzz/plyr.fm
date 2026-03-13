@@ -706,7 +706,7 @@ $effect(() => {
 					</form>
 				{:else if !loadingComments}
 					<p class="login-prompt">
-						<a href="/login">log in</a> to leave a comment
+						<a href="/login">sign in</a> to leave a comment
 					</p>
 				{/if}
 
