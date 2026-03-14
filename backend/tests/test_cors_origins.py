@@ -37,7 +37,10 @@ class TestProductionCorsOrigins:
             "https://stg.plyr.fm",
             "https://zzstoatzz.github.io",
             "https://zzstoatzz.io",
+            "https://montoulieu.dev",
+            "https://example.com",
             "http://localhost:5173",
+            "http://localhost:3000",
         ],
     )
     def test_allowed(self, regex: str, origin: str) -> None:
@@ -46,9 +49,8 @@ class TestProductionCorsOrigins:
     @pytest.mark.parametrize(
         "origin",
         [
-            "https://evil-plyr.fm",
-            "https://notplyr.fm",
-            "http://plyr.fm",
+            "http://plyr.fm",  # non-HTTPS remote
+            "http://example.com",  # non-HTTPS remote
         ],
     )
     def test_rejected(self, regex: str, origin: str) -> None:
@@ -67,6 +69,7 @@ class TestStagingCorsOrigins:
         [
             "https://stg.plyr.fm",
             "https://docs.stg.plyr.fm",
+            "https://any-site.example.com",
             "http://localhost:5173",
         ],
     )
@@ -76,8 +79,7 @@ class TestStagingCorsOrigins:
     @pytest.mark.parametrize(
         "origin",
         [
-            "https://plyr.fm",
-            "https://evil-stg.plyr.fm",
+            "http://plyr.fm",  # non-HTTPS remote
         ],
     )
     def test_rejected(self, regex: str, origin: str) -> None:
@@ -93,6 +95,9 @@ class TestLocalDevCorsOrigins:
 
     def test_allows_localhost(self, regex: str) -> None:
         assert _matches(regex, "http://localhost:5173")
+
+    def test_allows_other_localhost_ports(self, regex: str) -> None:
+        assert _matches(regex, "http://localhost:3000")
 
     def test_rejects_remote(self, regex: str) -> None:
         assert not _matches(regex, "https://plyr.fm")
