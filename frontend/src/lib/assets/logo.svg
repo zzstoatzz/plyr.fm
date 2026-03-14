@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- translucent fill disk -->
+  <circle cx="256" cy="256" r="160" fill="rgba(58,125,255,0.2)" />
+  <!-- outer ring -->
+  <circle cx="256" cy="256" r="136.5" fill="none" stroke="rgb(58,125,255)" stroke-width="6" />
+  <!-- middle ring -->
+  <circle cx="256" cy="256" r="98.5" fill="none" stroke="rgb(58,125,255)" stroke-width="2" />
+  <!-- inner ring -->
+  <circle cx="256" cy="256" r="58.5" fill="none" stroke="rgb(58,125,255)" stroke-width="2" />
+  <!-- center dot -->
+  <circle cx="256" cy="256" r="30.5" fill="rgb(58,125,255)" />
+</svg>
