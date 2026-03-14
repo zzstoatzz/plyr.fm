@@ -6,6 +6,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, BinaryIO
 
+import httpcore
+import httpx
 from atproto import AtUri
 from atproto_oauth.models import OAuthSession
 from cachetools import LRUCache
@@ -224,12 +226,28 @@ async def make_pds_request(
         if params:
             kwargs["params"] = params
 
-        response = await get_oauth_client().make_authenticated_request(
-            session=oauth_session,
-            method=method,
-            url=url,
-            **kwargs,
-        )
+        try:
+            response = await get_oauth_client().make_authenticated_request(
+                session=oauth_session,
+                method=method,
+                url=url,
+                **kwargs,
+            )
+        except (
+            httpx.ReadError,
+            httpx.ConnectError,
+            httpcore.ReadError,
+            httpcore.ConnectError,
+        ) as e:
+            if attempt == 0:
+                logger.warning(
+                    f"PDS network error for {auth_session.did}, retrying: {type(e).__name__}: {e}"
+                )
+                await asyncio.sleep(1)
+                continue
+            raise Exception(
+                f"PDS request failed after retry: {type(e).__name__}: {e}"
+            ) from e
 
         if response.status_code in success_codes:
             if response.status_code == 204:
@@ -287,13 +305,29 @@ async def upload_blob(
     blob_data = data if isinstance(data, bytes) else data.read()
 
     for attempt in range(2):
-        response = await get_oauth_client().make_authenticated_request(
-            session=oauth_session,
-            method="POST",
-            url=url,
-            content=blob_data,
-            headers={"Content-Type": content_type},
-        )
+        try:
+            response = await get_oauth_client().make_authenticated_request(
+                session=oauth_session,
+                method="POST",
+                url=url,
+                content=blob_data,
+                headers={"Content-Type": content_type},
+            )
+        except (
+            httpx.ReadError,
+            httpx.ConnectError,
+            httpcore.ReadError,
+            httpcore.ConnectError,
+        ) as e:
+            if attempt == 0:
+                logger.warning(
+                    f"PDS blob upload network error for {auth_session.did}, retrying: {type(e).__name__}: {e}"
+                )
+                await asyncio.sleep(1)
+                continue
+            raise Exception(
+                f"blob upload failed after retry: {type(e).__name__}: {e}"
+            ) from e
 
         if response.status_code == 200:
             return response.json()["blob"]

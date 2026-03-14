@@ -201,10 +201,9 @@ class JetstreamConsumer:
         # profile updates are a special case (nested collection)
         if collection.endswith(".actor.profile") and operation == "update":
             await docket.add(ingest_profile_update)(did=did, record=record or {})
-            logfire.info(
+            logfire.debug(
                 "jetstream dispatched profile.update",
                 did=did,
-                _level="debug",
             )
             return
 
