@@ -93,7 +93,6 @@ also fixed: `track.features` could be `None` from the DB, crashing `TrackRespons
 
 **open questions before production:**
 - **audit trail**: ingest events are only in Logfire — no persistent record of what came through the firehose. an audit log surfaced in the activity feed would give visibility into PDS-direct activity, but the volume could grow fast.
-- **moderation**: copyright scanning and genre classification only trigger for API uploads. records ingested via Jetstream run post-creation hooks, but the moderation pipeline may have gaps for externally-created content.
 
 **status**: Jetstream soak on staging complete — ghost track fix deployed and verified via Logfire ("skipping create for tombstoned URI" confirmed blocking replayed creates). ready for production.
 
@@ -198,7 +197,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-Jetstream deployed to production with environment-scoped collection filtering and origin trust validation for ingest URLs. open questions on audit trail persistence and moderation for PDS-direct records.
+Jetstream deployed to production with environment-scoped collection filtering and origin trust validation for ingest URLs. both API uploads and Jetstream ingest share a unified `run_post_track_create_hooks()` path for copyright scanning, genre classification, and embedding generation. remaining open question: audit trail persistence for firehose events.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -207,7 +206,6 @@ Jetstream deployed to production with environment-scoped collection filtering an
 ### backlog
 - harden file format support — graduate lossless uploads (#1065), revisit transcoding pipeline
 - Jetstream audit trail / activity feed integration — persistent log of firehose events, toggle for visibility
-- moderation pipeline for PDS-direct records ingested via Jetstream
 - share to bluesky (#334)
 - lyrics and annotations (#373)
 - configurable rules engine for moderation (Osprey rules engine PR #958 open)
