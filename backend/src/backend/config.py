@@ -189,7 +189,7 @@ class FrontendSettings(AppSettingsSection):
     cors_origin_regex: str | None = Field(
         default=None,
         validation_alias="FRONTEND_CORS_ORIGIN_REGEX",
-        description="CORS origin regex pattern (if not set, uses default for plyr.fm and relay-4i6.pages.dev)",
+        description="CORS origin regex pattern (if not set, allows any HTTPS origin in prod/staging)",
     )
 
     @computed_field
@@ -208,25 +208,20 @@ class FrontendSettings(AppSettingsSection):
         if self.cors_origin_regex is not None:
             return self.cors_origin_regex
 
-        # derive allowed origins based on FRONTEND_URL
-        # production: FRONTEND_URL=https://plyr.fm → allow plyr.fm + www.plyr.fm
-        # staging: FRONTEND_URL=https://stg.plyr.fm → allow stg.plyr.fm
-        # always allow localhost for local dev and cloudflare preview deployments
+        # the API is public — allow any HTTPS origin (plus localhost for dev).
+        # auth uses HttpOnly cookies scoped to plyr.fm, so credentialed
+        # cross-origin requests from third-party sites won't carry session cookies.
 
         from urllib.parse import urlparse
 
         parsed = urlparse(self.url)
         hostname = parsed.hostname or "localhost"
 
-        if hostname == "stg.plyr.fm":
-            # staging: allow stg.plyr.fm and *.stg.plyr.fm subdomains
-            return r"^(https://([a-z0-9-]+\.)?stg\.plyr\.fm|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
-        elif hostname in ("plyr.fm", "www.plyr.fm"):
-            # production: allow plyr.fm, *.plyr.fm subdomains, and embed consumers
-            return r"^(https://([a-z0-9-]+\.)?plyr\.fm|https://zzstoatzz\.(github\.io|io)|https://([a-z0-9]+\.)?relay-4i6\.pages\.dev|http://localhost:5173)$"
+        if hostname in ("localhost", "127.0.0.1"):
+            return r"^http://localhost:\d+$"
         else:
-            # local dev: allow localhost
-            return r"^(http://localhost:5173)$"
+            # production / staging: any HTTPS origin + localhost for dev
+            return r"^(https://.+|http://localhost:\d+)$"
 
 
 class DatabaseSettings(AppSettingsSection):
