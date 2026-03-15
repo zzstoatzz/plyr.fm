@@ -28,7 +28,7 @@ the audio and metadata are stored on your PDS. if your PDS can't accept the file
 
 ### auto-tagging
 
-when you upload a track, you can opt in to **auto-tag with recommended genres**. plyr.fm runs ML genre classification on the audio and suggests tags automatically — you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
+when you upload a track, you can opt in to **auto-tag with recommended genres**. plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and suggests tags automatically — you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
 
 ## embeds
 
@@ -86,11 +86,11 @@ today this is a **binary check**: a listener either supports you or they don't. 
 2. when a listener hits play, plyr.fm checks their support status via ATProtoFans
 3. supporters get access; everyone else sees a lock
 
-### what's next
+### how gated audio is stored
 
-because atproto doesn't yet have permissioned data, gated audio currently lives in plyr.fm-managed storage (public blob). this is the one exception to the "your audio, your data" promise — and we want to fix it.
+gated audio lives in a **private bucket** on plyr.fm's infrastructure — not on your PDS, and not publicly accessible. when a supporter plays a gated track, plyr.fm validates their support status and generates a time-limited presigned URL. the audio is never exposed without authentication.
 
-the atproto team is [exploring permissioned data](https://dholms.leaflet.pub/3mfrsbcn2gk2a) through concepts like **buckets** — named containers with access control lists that could let private blobs live on your own PDS. once that ships, gated tracks could move back to artist-controlled storage while still enforcing access rules at the protocol level.
+this is the one exception to the "your audio, your data" promise: because atproto doesn't yet have permissioned data, there's no way to store private blobs on your PDS with access control. the atproto team is [exploring permissioned data](https://dholms.leaflet.pub/3mfrsbcn2gk2a) through concepts like **buckets** — named containers with access control lists that could let private blobs live on your own PDS. once that ships, gated tracks could move back to artist-controlled storage while still enforcing access rules at the protocol level.
 
 we'd also like to support more expressive gating — tiers, time-limited early access, per-track pricing — as the ecosystem matures.
 
