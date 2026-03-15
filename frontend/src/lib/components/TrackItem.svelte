@@ -137,6 +137,9 @@
 	}
 
 	function handleLikesClick(e: Event) {
+		if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
+			return;
+		}
 		e.stopPropagation();
 		if (isMobile) {
 			likersSheet.open(track.id, likeCount);
