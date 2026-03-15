@@ -38,6 +38,10 @@ dev-services:
 dev-services-down:
     docker compose down
 
+# raise loq line limit for files that exceed it
+loq-relax *FILES:
+    uvx loq relax {{ FILES }}
+
 # expose backend via ngrok tunnel
 tunnel:
     ngrok http 8001 --domain tunnel.zzstoatzz.io

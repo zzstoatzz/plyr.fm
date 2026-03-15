@@ -36,6 +36,7 @@
 *   **Frontend:** `just frontend run`
 *   **Tests:** `just backend test` (run from repo root, not from backend/)
 *   **Linting:** `just backend lint` (Python) / `just frontend check` (Svelte)
+*   **loq (line count):** when a file exceeds its limit, run `just loq-relax <file>` — never manually edit loq.toml or play code golf to fit
 *   **Migrations:** `just backend migrate "message"` (create), `just backend migrate-up` (apply)
 
 ## 📂 Project Structure
