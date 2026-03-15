@@ -4,7 +4,7 @@
 	import Header from "$lib/components/Header.svelte";
 	import HandleSearch from "$lib/components/HandleSearch.svelte";
 	import AlbumSelect from "$lib/components/AlbumSelect.svelte";
-	import PdsUploadNote from "$lib/components/PdsUploadNote.svelte";
+	import PdsTooltip from "$lib/components/PdsTooltip.svelte";
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
 	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
@@ -267,7 +267,10 @@
 			</div>
 
 			<div class="form-group">
-				<label for="file-input">audio file</label>
+				<label for="file-input" class="label-with-tooltip">
+					audio file
+					<PdsTooltip />
+				</label>
 				<input
 					id="file-input"
 					type="file"
@@ -278,7 +281,6 @@
 				<p class="format-hint">
 					supported: {getAcceptedExtensions().map(e => e.slice(1)).join(", ")}
 				</p>
-				<PdsUploadNote />
 				{#if file}
 					<p class="file-info">
 						{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
@@ -533,6 +535,12 @@
 		font-size: var(--text-base);
 		font-family: inherit;
 		cursor: pointer;
+	}
+
+	.label-with-tooltip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
 	}
 
 	.format-hint {

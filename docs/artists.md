@@ -94,13 +94,14 @@ we'd also like to support more expressive gating — tiers, time-limited early a
 
 ![the artist portal — manage your profile, tracks, and albums](/screenshots/portal-dashboard.png)
 
-because tracks are atproto records, you can:
+every track you upload creates a record in your [PDS](https://atproto.com/guides/self-hosting#pds) under the `fm.plyr.track` collection — the metadata and, when your PDS accepts it, the audio blob itself. these are standard atproto records that belong to you, not to plyr.fm. you can inspect them directly in a [PDS viewer](https://pdsls.dev), and they travel with your account if you [migrate](https://atproto.com/guides/account-migration) to a different PDS.
 
-- **[export](https://plyr.fm/portal)** your entire catalog from your PDS at any time
-- **migrate** to a different PDS without losing anything
+if your PDS has a blob size limit that prevents storing the audio (common on shared hosting), plyr.fm stores the audio file in its own CDN instead. the metadata record still lives on your PDS either way.
 
-your audio lives in your repo under the `fm.plyr.track` collection. see the [lexicons overview](/lexicons/overview/) for the full schema.
+for convenience, the [portal](https://plyr.fm/portal) also offers a **bulk export** — it packages your tracks as a ZIP (using lossless originals when available) that you can download directly.
+
+see the [lexicons overview](/lexicons/overview/) for the full record schema.
 
 ## leaving
 
-you can leave plyr.fm at any time. export your full catalog as a zip from the [portal](https://plyr.fm/portal). deleting your account removes all data from plyr.fm's infrastructure — your atproto records stay on your PDS by default, but you can choose to delete those too. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
+you can leave plyr.fm at any time. download your tracks as a ZIP from the [portal](https://plyr.fm/portal), then delete your account — this removes all data from plyr.fm's infrastructure. your atproto records stay on your PDS by default, but you can choose to delete those too. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
