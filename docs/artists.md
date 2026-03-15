@@ -29,16 +29,14 @@ your catalog isn't trapped here — other apps can access your tracks without pl
 
    ![the upload form — title, audio file, description, album, tags, and artwork](/screenshots/upload-form.png)
 
-3. **add metadata** — edit your track in the [portal](https://plyr.fm/portal) to add tags, cover art, and a description. plyr.fm auto-suggests genre tags from the audio
+3. **add metadata** — edit your track in the [portal](https://plyr.fm/portal) to add tags, cover art, and a description
 
    ![the track editor — title, description, album, tags, artwork, and suggested tags](/screenshots/portal-track-editor.png)
 
+   <span id="auto-tagging"></span>when you add tags, you can opt in to **auto-tag with recommended genres** — plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and suggests tags automatically. you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
+
 4. **see it live** — your track is playable immediately and indexed for discovery
 5. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
-
-### auto-tagging
-
-when you upload a track, you can opt in to **auto-tag with recommended genres**. plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and suggests tags automatically — you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
 
 ## embeds
 
