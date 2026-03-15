@@ -22,6 +22,7 @@ export default defineConfig({
             { slug: "developers/quickstart" },
             {
               label: "API reference",
+              collapsed: true,
               autogenerate: { directory: "developers/api-reference" },
             },
             { slug: "developers/auth" },
