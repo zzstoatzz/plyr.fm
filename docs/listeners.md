@@ -3,11 +3,11 @@ title: "for listeners"
 description: "discover and stream audio on plyr.fm"
 ---
 
-:::tip[don't have an account yet?]
-head to the [sign-in page](https://plyr.fm/login) — you can create one right there, or sign up with [Bluesky](https://bsky.app) or [Blacksky](https://blacksky.community) first and come back.
-:::
-
 you have a handle. you like sound. let's go!
+
+:::note
+don't have a handle? head to [plyr.fm/login](https://plyr.fm/login) to create an account.
+:::
 
 plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), the open protocol behind [Bluesky](https://bsky.app) and [Blacksky](https://blacksky.community). sign in with your handle (sometimes called your [internet handle](https://internethandle.org)) and start listening.
 
