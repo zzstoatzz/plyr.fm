@@ -3,13 +3,15 @@ title: "for listeners"
 description: "discover and stream audio on plyr.fm"
 ---
 
-don't have an account yet? head to the [sign-in page](https://plyr.fm/login) — you can create one right there, or sign up with [Bluesky](https://bsky.app) or [Blacksky](https://blacksky.community) first and come back.
+:::tip[don't have an account yet?]
+head to the [sign-in page](https://plyr.fm/login) — you can create one right there, or sign up with [Bluesky](https://bsky.app) or [Blacksky](https://blacksky.community) first and come back.
+:::
 
 you have a handle. you like sound. let's go!
 
 plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), the open protocol behind [Bluesky](https://bsky.app) and [Blacksky](https://blacksky.community). sign in with your handle (sometimes called your [internet handle](https://internethandle.org)) and start listening.
 
-what makes this different: your likes, playlists, and activity are stored in [your own data repo](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io) — a personal space you control, not plyr.fm's database. if plyr.fm shut down tomorrow, your data would still be there, in a standard format any compatible app can read.
+*because* plyr.fm is built on atproto, your likes, playlists, and activity are stored in [your own data repo](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io) — personal storage you control (by default hosted by [Bluesky](https://bsky.app) or [Blacksky](https://blacksky.community), unless you use a tool like [PDS Moover](https://github.com/DauntlessStudio/PDS-Moover) to move to a different host like [selfhosted.social](https://selfhosted.social) or [pckt.cafe](https://pckt.cafe)). if plyr.fm shut down tomorrow, your listening history would still be stored on your PDS, and another app could use it to recreate the experience that plyr.fm offers today.
 
 ## your first 5 minutes
 
