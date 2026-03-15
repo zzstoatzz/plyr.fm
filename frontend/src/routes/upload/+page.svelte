@@ -267,6 +267,26 @@
 			</div>
 
 			<div class="form-group">
+				<label for="file-input">audio file</label>
+				<input
+					id="file-input"
+					type="file"
+					accept={getFileInputAccept()}
+					onchange={handleFileChange}
+					required
+				/>
+				<p class="format-hint">
+					supported: {getAcceptedExtensions().map(e => e.slice(1)).join(", ")}
+				</p>
+				<PdsUploadNote />
+				{#if file}
+					<p class="file-info">
+						{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+					</p>
+				{/if}
+			</div>
+
+			<div class="form-group">
 				<label for="description">description (optional)</label>
 				<textarea
 					id="description"
@@ -314,26 +334,6 @@
 					<input type="checkbox" bind:checked={autoTag} />
 					<span class="checkbox-text">auto-tag with recommended genres</span>
 				</label>
-			</div>
-
-			<div class="form-group">
-				<label for="file-input">audio file</label>
-				<input
-					id="file-input"
-					type="file"
-					accept={getFileInputAccept()}
-					onchange={handleFileChange}
-					required
-				/>
-				<p class="format-hint">
-					supported: {getAcceptedExtensions().map(e => e.slice(1)).join(", ")}
-				</p>
-				<PdsUploadNote />
-				{#if file}
-					<p class="file-info">
-						{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-					</p>
-				{/if}
 			</div>
 
 			<div class="form-group">
