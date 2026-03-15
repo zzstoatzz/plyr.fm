@@ -26,6 +26,10 @@ plyr.fm gives creators a place to share audio where **you own your data**. every
 
 the audio and metadata are stored on your PDS. if your PDS can't accept the file (blob size limits), plyr.fm falls back to R2 storage — but the metadata record always lives in your repo.
 
+### auto-tagging
+
+when you upload a track, you can opt in to **auto-tag with recommended genres**. plyr.fm runs ML genre classification on the audio and suggests tags automatically — you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
+
 ## embeds
 
 share your audio anywhere with embed iframes. plyr.fm supports track, playlist, and album embeds.

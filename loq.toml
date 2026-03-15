@@ -183,7 +183,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 720
+max_lines = 725
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
