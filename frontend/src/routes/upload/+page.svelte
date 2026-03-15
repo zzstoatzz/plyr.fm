@@ -5,6 +5,7 @@
 	import HandleSearch from "$lib/components/HandleSearch.svelte";
 	import AlbumSelect from "$lib/components/AlbumSelect.svelte";
 	import PdsTooltip from "$lib/components/PdsTooltip.svelte";
+	import InfoTooltip from "$lib/components/InfoTooltip.svelte";
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
 	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
@@ -335,6 +336,10 @@
 				<label class="checkbox-label" style="margin-top: 0.75rem;">
 					<input type="checkbox" bind:checked={autoTag} />
 					<span class="checkbox-text">auto-tag with recommended genres</span>
+					<InfoTooltip label="auto-tagging info">
+						ML genre classification suggests tags from your audio.
+						<a href="https://docs.plyr.fm/artists/#auto-tagging" target="_blank" rel="noopener">learn more</a>
+					</InfoTooltip>
 				</label>
 			</div>
 
