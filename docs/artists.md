@@ -13,7 +13,7 @@ on plyr.fm, you can share **music**, **podcasts**, **sound art**, **ASMR**, and 
 
 when you upload a track:
 - it's stored in [a place you control](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io), tied to your identity
-- plyr.fm [auto-suggests genre tags](#auto-tagging) from the audio
+- share your track with anyone, even if they don't have a handle
 - you can [embed a player](#embeds) on your website or blog
 - you can [gate tracks](#supporter-gated-tracks) behind supporter status
 
