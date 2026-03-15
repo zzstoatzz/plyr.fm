@@ -27,7 +27,7 @@ your catalog isn't trapped here — other apps can access your tracks without pl
 
 2. **upload** — click the upload button and drop your audio file (MP3, WAV, or M4A)
 
-   ![the upload form — title, description, album, tags, and audio file](/screenshots/upload-form.png)
+   ![the upload form — title, audio file, description, album, tags, and artwork](/screenshots/upload-form.png)
 
 3. **add metadata** — edit your track in the [portal](https://plyr.fm/portal) to add tags, cover art, and a description. plyr.fm auto-suggests genre tags from the audio
 
