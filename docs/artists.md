@@ -1,11 +1,23 @@
 ---
 title: "for creators"
-description: "upload, manage, and distribute your audio on atproto"
+description: "upload, manage, and distribute your audio"
 ---
 
-your audio, stored in your data repo, playable by any atproto client. no distribution fees, no gatekeepers.
+you make sound! let's get it out there!
 
-plyr.fm gives creators a place to share audio where **you own your data**. every track you upload is an [atproto](https://atproto.com) record stored in your [PDS](https://atproto.com/guides/self-hosting#pds) — the metadata record and the audio blob itself — portable, verifiable, and yours.
+:::caution[🚦]
+you _don't_ have a handle? head to [plyr.fm/login](https://plyr.fm/login) to create an account.
+:::
+
+on plyr.fm, you can share **music**, **podcasts**, **sound art**, **ASMR**, and anything else that makes noise — no distribution fees, no gatekeepers.
+
+when you upload a track:
+- it's stored in [a place you control](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io), tied to your identity
+- plyr.fm [auto-suggests genre tags](#auto-tagging) from the audio
+- you can [embed a player](#embeds) on your website or blog
+- you can [gate tracks](#supporter-gated-tracks) behind supporter status
+
+your catalog isn't trapped here — other apps can access your tracks without plyr.fm's permission, and you can export everything as a ZIP from the [portal](https://plyr.fm/portal) at any time.
 
 ## your first upload
 
@@ -21,10 +33,8 @@ plyr.fm gives creators a place to share audio where **you own your data**. every
 
    ![the track editor — title, description, album, tags, artwork, and suggested tags](/screenshots/portal-track-editor.png)
 
-4. **see it live** — your track is now an atproto record in your PDS, indexed by plyr.fm and playable immediately
+4. **see it live** — your track is playable immediately and indexed for discovery
 5. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
-
-the audio and metadata are stored on your PDS. if your PDS can't accept the file (blob size limits), plyr.fm falls back to R2 storage — but the metadata record always lives in your repo.
 
 ### auto-tagging
 
@@ -88,7 +98,7 @@ today this is a **binary check**: a listener either supports you or they don't. 
 
 ### how gated audio is stored
 
-gated audio lives in a **private bucket** on plyr.fm's infrastructure — not on your PDS, and not publicly accessible. when a supporter plays a gated track, plyr.fm validates their support status and generates a time-limited presigned URL. the audio is never exposed without authentication.
+gated audio lives in a **private bucket** on plyr.fm's infrastructure — not publicly accessible. when a supporter plays a gated track, plyr.fm validates their support status and generates a time-limited presigned URL. the audio is never exposed without authentication.
 
 this is the one exception to the "your audio, your data" promise: because atproto doesn't yet have permissioned data, there's no way to store private blobs on your PDS with access control. the atproto team is [exploring permissioned data](https://dholms.leaflet.pub/3mfrsbcn2gk2a) through concepts like **buckets** — named containers with access control lists that could let private blobs live on your own PDS. once that ships, gated tracks could move back to artist-controlled storage while still enforcing access rules at the protocol level.
 
@@ -98,11 +108,11 @@ we'd also like to support more expressive gating — tiers, time-limited early a
 
 ![the artist portal — manage your profile, tracks, and albums](/screenshots/portal-dashboard.png)
 
-every track you upload creates a record in your [PDS](https://atproto.com/guides/self-hosting#pds) under the `fm.plyr.track` collection — the metadata and, when your PDS accepts it, the audio blob itself. these are standard atproto records that belong to you, not to plyr.fm. you can inspect them directly in a [PDS viewer](https://pdsls.dev), and they travel with your account if you [migrate](https://atproto.com/guides/account-migration) to a different PDS.
+every track you upload is tied to [your account](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io) — you can inspect your records in a [PDS viewer](https://pdsls.dev), and they travel with you if you move to a different host.
 
-if your PDS has a blob size limit that prevents storing the audio (common on shared hosting), plyr.fm stores the audio file in its own CDN instead. the metadata record still lives on your PDS either way.
+if your host has a size limit that prevents storing the audio file directly (common on shared hosting), plyr.fm stores the audio in its own CDN instead. the metadata always stays with your account either way.
 
-for convenience, the [portal](https://plyr.fm/portal) also offers a **bulk export** — it packages your tracks as a ZIP (using lossless originals when available) that you can download directly.
+the [portal](https://plyr.fm/portal) offers a **bulk export** — it packages your tracks as a ZIP (using lossless originals when available) that you can download directly.
 
 see the [lexicons overview](/lexicons/overview/) for the full record schema.
 
