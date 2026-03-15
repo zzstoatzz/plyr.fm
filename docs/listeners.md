@@ -5,13 +5,13 @@ description: "discover and stream audio on plyr.fm"
 
 you have a handle. you like sound. let's go!
 
-:::note
+:::caution[🚦]
 don't have a handle? head to [plyr.fm/login](https://plyr.fm/login) to create an account.
 :::
 
-plyr.fm is an audio streaming platform built on [atproto](https://atproto.com), the open protocol behind [Bluesky](https://bsky.app) and [Blacksky](https://blacksky.community). sign in with your handle (sometimes called your [internet handle](https://internethandle.org)) and start listening.
+plyr.fm is where you stream audio with your [internet handle](https://internethandle.org) — the same identity you use on [Bluesky](https://bsky.app), [Blacksky](https://blacksky.community), and a growing number of apps in [the atmosphere](https://atproto.com). sign in and start listening.
 
-*because* plyr.fm is built on atproto, your likes, playlists, and activity are stored in [your own data repo](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io) — personal storage you control (by default hosted by [Bluesky](https://bsky.app) or [Blacksky](https://blacksky.community), unless you use a tool like [PDS Moover](https://github.com/DauntlessStudio/PDS-Moover) to move to a different host like [selfhosted.social](https://selfhosted.social) or [pckt.cafe](https://pckt.cafe)). if plyr.fm shut down tomorrow, your listening history would still be stored on your PDS, and another app could use it to recreate the experience that plyr.fm offers today.
+your likes, playlists, and listening activity are tied to the identity you control, independent of any app in the atmosphere. other apps can already use plyr.fm records — like [aetheros.computer](https://bsky.app/profile/plyr.fm/post/3mh23kjcelc2u).
 
 ## your first 5 minutes
 
