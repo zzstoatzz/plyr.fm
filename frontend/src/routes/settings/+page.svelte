@@ -448,8 +448,8 @@
 						{#each themes as theme}
 							<button
 								class="theme-btn"
-								class:active={currentTheme === theme.value}
-								onclick={() => selectTheme(theme.value)}
+								class:active={currentTheme === theme.value && !ambientEnabled}
+								onclick={() => { if (ambientEnabled) ambient.disable(); selectTheme(theme.value); }}
 								title={theme.label}
 							>
 								{#if theme.icon === 'moon'}
@@ -471,8 +471,32 @@
 								<span>{theme.label}</span>
 							</button>
 						{/each}
+						<button
+							class="theme-btn aura-btn"
+							class:active={ambientEnabled}
+							class:aura-loading={ambientLoading}
+							onclick={() => ambientEnabled ? ambient.disable() : toggleAmbient(true)}
+							title={ambientEnabled ? ambientCondition ?? 'aura' : '?'}
+						>
+							{#if ambientEnabled && ambientGradient}
+								<div class="aura-orb-inline" style="background: {ambientGradient}"></div>
+							{:else if ambientLoading}
+								<div class="aura-orb-inline aura-orb-loading"></div>
+							{:else}
+								<svg viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+									<circle cx="12" cy="12" r="9" />
+								</svg>
+							{/if}
+							<span>{ambientEnabled ? 'aura' : '?'}</span>
+						</button>
 					</div>
 				</div>
+
+				{#if ambientError}
+					<div class="aura-error-row">
+						<span>{ambientError}</span>
+					</div>
+				{/if}
 
 				<div class="setting-row">
 					<div class="setting-info">
@@ -536,42 +560,6 @@
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
-			</div>
-		</section>
-
-		<section class="settings-section">
-			<h2>aura</h2>
-			<div class="settings-card aura-card" class:aura-active={ambientEnabled}>
-				{#if !ambientEnabled && !ambientLoading && !ambientError}
-					<button class="aura-unlock" onclick={() => toggleAmbient(true)}>
-						<div class="aura-silhouette">
-							<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4">
-								<circle cx="12" cy="12" r="10" />
-							</svg>
-							<span class="aura-question">?</span>
-						</div>
-					</button>
-				{:else if ambientLoading}
-					<div class="aura-loading">
-						<div class="aura-orb aura-orb-loading"></div>
-						<span class="aura-loading-text">...</span>
-					</div>
-				{:else if ambientError}
-					<div class="aura-state">
-						<span class="aura-error">{ambientError}</span>
-					</div>
-				{:else}
-					<div class="aura-revealed">
-						<div class="aura-orb" style="background: {ambientGradient}"></div>
-						<span class="aura-conditions">{ambientCondition}</span>
-						<button class="aura-disable" onclick={() => toggleAmbient(false)} title="disable">
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<line x1="18" y1="6" x2="6" y2="18"></line>
-								<line x1="6" y1="6" x2="18" y2="18"></line>
-							</svg>
-						</button>
-					</div>
-				{/if}
 			</div>
 		</section>
 
@@ -1148,68 +1136,24 @@
 		accent-color: var(--accent);
 	}
 
-	/* aura card — locked state */
-	.aura-card {
-		border-color: var(--border-subtle);
+	/* aura theme button */
+	.aura-btn {
 		border-style: dashed;
-		transition: all 0.4s ease;
 	}
 
-	.aura-card.aura-active {
+	.aura-btn.active {
 		border-style: solid;
-		border-color: color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
 	}
 
-	.aura-unlock {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 100%;
-		padding: 1.25rem;
-		background: transparent;
-		border: none;
-		cursor: pointer;
-		transition: all 0.3s ease;
+	.aura-btn.aura-loading {
+		opacity: 0.6;
+		pointer-events: none;
 	}
 
-	.aura-unlock:hover {
-		transform: scale(1.02);
-	}
-
-	.aura-unlock:hover .aura-silhouette {
-		opacity: 0.8;
-	}
-
-	.aura-silhouette {
-		position: relative;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		opacity: 0.5;
-		transition: opacity 0.3s ease;
-		color: var(--text-muted);
-	}
-
-	.aura-question {
-		position: absolute;
-		font-size: var(--text-xl);
-		font-weight: 700;
-		color: var(--bg-primary);
-	}
-
-	/* aura card — revealed state */
-	.aura-revealed {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.5rem 0;
-	}
-
-	.aura-orb {
-		width: 36px;
-		height: 36px;
+	.aura-orb-inline {
+		width: 18px;
+		height: 18px;
 		border-radius: var(--radius-full);
-		flex-shrink: 0;
 		animation: aura-breathe 6s ease-in-out infinite;
 	}
 
@@ -1222,54 +1166,11 @@
 		50% { transform: scale(1.08); opacity: 1; }
 	}
 
-	.aura-conditions {
-		flex: 1;
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
-	}
-
-	.aura-disable {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 28px;
-		background: transparent;
-		border: none;
-		border-radius: var(--radius-sm);
-		color: var(--text-muted);
-		cursor: pointer;
-		transition: all 0.15s;
-		flex-shrink: 0;
-	}
-
-	.aura-disable:hover {
-		color: var(--text-secondary);
-		background: var(--bg-hover);
-	}
-
-	.aura-loading {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.75rem;
-		padding: 1rem 0;
-	}
-
-	.aura-loading-text {
-		font-size: var(--text-sm);
-		color: var(--text-muted);
-		letter-spacing: 0.2em;
-	}
-
-	.aura-state {
-		padding: 0.75rem 0;
-		text-align: center;
-	}
-
-	.aura-error {
+	.aura-error-row {
 		font-size: var(--text-sm);
 		color: var(--error);
+		padding: 0.5rem 0;
+		border-bottom: 1px solid var(--border-subtle);
 	}
 
 	/* toggle switch */
