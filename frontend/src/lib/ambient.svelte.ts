@@ -1,4 +1,4 @@
-// ambient weather theme — location-aware atmospheric background
+// ambient weather theme — location-aware atmospheric background + full tinting
 import { browser } from '$app/environment';
 
 interface WeatherData {
@@ -11,6 +11,36 @@ interface AmbientLocation {
 	lat: number;
 	lon: number;
 }
+
+interface RGB {
+	r: number;
+	g: number;
+	b: number;
+}
+
+interface RGBA extends RGB {
+	a: number;
+}
+
+/** CSS variables to tint and their blend strengths */
+const TINTED_VARS: [string, number][] = [
+	// glass surfaces (15%)
+	['--glass-bg', 0.15],
+	['--glass-border', 0.15],
+	// borders (8-10%)
+	['--border-subtle', 0.08],
+	['--border-default', 0.10],
+	// track cards (10-14%)
+	['--track-bg', 0.10],
+	['--track-bg-hover', 0.12],
+	['--track-bg-playing', 0.10],
+	['--track-border', 0.12],
+	['--track-border-hover', 0.14],
+	// backgrounds (6-8%)
+	['--bg-secondary', 0.06],
+	['--bg-tertiary', 0.07],
+	['--bg-hover', 0.08],
+];
 
 function getConditionLabel(code: number): string {
 	if (code <= 3) return 'clear';
@@ -79,6 +109,85 @@ function computeGradient(w: WeatherData): string {
 	return 'linear-gradient(135deg, rgb(35, 38, 48), rgb(28, 30, 40), rgb(22, 24, 32))';
 }
 
+/** one representative tint color per weather condition */
+function computeTint(w: WeatherData): RGB {
+	const condition = getConditionLabel(w.weathercode);
+	const warmth = Math.min(1, Math.max(0, (w.temperature - 5) / 30));
+
+	if (w.is_day) {
+		switch (condition) {
+			case 'clear': return {
+				r: Math.round(200 + warmth * 40),
+				g: Math.round(160 + warmth * 20),
+				b: Math.round(60 - warmth * 20)
+			};
+			case 'fog': return { r: 160, g: 155, b: 175 };
+			case 'rain': return { r: 70, g: 100, b: 140 };
+			case 'snow': return { r: 190, g: 200, b: 215 };
+			case 'storm': return { r: 80, g: 50, b: 100 };
+			default: return { r: 130, g: 140, b: 155 }; // cloudy
+		}
+	}
+	switch (condition) {
+		case 'clear': return { r: 30, g: 30, b: 80 };
+		case 'fog': return { r: 50, g: 50, b: 65 };
+		case 'rain': return { r: 20, g: 30, b: 50 };
+		case 'snow': return { r: 50, g: 55, b: 75 };
+		case 'storm': return { r: 25, g: 15, b: 40 };
+		default: return { r: 35, g: 38, b: 48 }; // cloudy
+	}
+}
+
+/** parse rgb(), rgba(), or hex color string to RGBA */
+function parseColor(css: string): RGBA | null {
+	const trimmed = css.trim();
+
+	// hex: #rgb, #rrggbb, #rrggbbaa
+	if (trimmed.startsWith('#')) {
+		const hex = trimmed.slice(1);
+		if (hex.length === 3) {
+			return {
+				r: parseInt(hex[0] + hex[0], 16),
+				g: parseInt(hex[1] + hex[1], 16),
+				b: parseInt(hex[2] + hex[2], 16),
+				a: 1
+			};
+		}
+		if (hex.length >= 6) {
+			return {
+				r: parseInt(hex.slice(0, 2), 16),
+				g: parseInt(hex.slice(2, 4), 16),
+				b: parseInt(hex.slice(4, 6), 16),
+				a: hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1
+			};
+		}
+		return null;
+	}
+
+	// rgba(r, g, b, a) or rgb(r, g, b)
+	const match = trimmed.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/);
+	if (match) {
+		return {
+			r: parseFloat(match[1]),
+			g: parseFloat(match[2]),
+			b: parseFloat(match[3]),
+			a: match[4] !== undefined ? parseFloat(match[4]) : 1
+		};
+	}
+	return null;
+}
+
+/** blend a base color with a tint at given strength, preserving alpha */
+function blendColor(base: RGBA, tint: RGB, strength: number): string {
+	const r = Math.round(base.r + (tint.r - base.r) * strength);
+	const g = Math.round(base.g + (tint.g - base.g) * strength);
+	const b = Math.round(base.b + (tint.b - base.b) * strength);
+	if (base.a < 1) {
+		return `rgba(${r}, ${g}, ${b}, ${base.a})`;
+	}
+	return `rgb(${r}, ${g}, ${b})`;
+}
+
 class AmbientManager {
 	enabled = $state(false);
 	location = $state<AmbientLocation | null>(null);
@@ -89,6 +198,7 @@ class AmbientManager {
 	private fetchIntervalId: ReturnType<typeof window.setInterval> | null = null;
 	private lastFetchTime = 0;
 	private readonly STALE_MS = 30 * 60 * 1000; // 30 minutes
+	private baseValues: Map<string, string> = new Map();
 
 	get gradient(): string | null {
 		if (!this.weather) return null;
@@ -162,20 +272,67 @@ class AmbientManager {
 			this.fetchIntervalId = null;
 		}
 
-		document.body.classList.remove('ambient-active');
-		document.documentElement.style.removeProperty('--ambient-gradient');
+		this.clearFromDOM();
 	}
 
 	applyToDOM(): void {
-		if (!browser || !this.enabled || !this.gradient) return;
+		if (!browser || !this.enabled || !this.gradient || !this.weather) return;
+
 		document.body.classList.add('ambient-active');
 		document.documentElement.style.setProperty('--ambient-gradient', this.gradient);
+
+		// snapshot base values on first apply (or after refresh)
+		if (this.baseValues.size === 0) {
+			this.snapshotBaseValues();
+		}
+
+		const tint = computeTint(this.weather);
+		for (const [varName, strength] of TINTED_VARS) {
+			const baseVal = this.baseValues.get(varName);
+			if (!baseVal) continue;
+			const parsed = parseColor(baseVal);
+			if (!parsed) continue;
+			document.documentElement.style.setProperty(varName, blendColor(parsed, tint, strength));
+		}
 	}
 
 	clearFromDOM(): void {
 		if (!browser) return;
+
+		// remove tinted variable overrides
+		for (const [varName] of TINTED_VARS) {
+			document.documentElement.style.removeProperty(varName);
+		}
+		this.baseValues.clear();
+
 		document.body.classList.remove('ambient-active');
 		document.documentElement.style.removeProperty('--ambient-gradient');
+	}
+
+	/** remove overrides, re-snapshot base values from current theme, re-apply tint */
+	refreshBaseValues(): void {
+		if (!browser || !this.enabled) return;
+
+		// temporarily remove our overrides so getComputedStyle returns the theme's base
+		for (const [varName] of TINTED_VARS) {
+			document.documentElement.style.removeProperty(varName);
+		}
+		this.baseValues.clear();
+
+		// re-apply on next frame so computed styles reflect the new theme
+		window.requestAnimationFrame(() => {
+			this.applyToDOM();
+		});
+	}
+
+	private snapshotBaseValues(): void {
+		const computed = window.getComputedStyle(document.documentElement);
+		for (const [varName] of TINTED_VARS) {
+			const val = computed.getPropertyValue(varName).trim();
+			if (val) {
+				this.baseValues.set(varName, val);
+			}
+		}
 	}
 
 	private requestLocation(): Promise<AmbientLocation> {

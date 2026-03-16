@@ -38,7 +38,7 @@
 	let loadingTokens = $state(false);
 	let revokingToken = $state<string | null>(null);
 
-	// ambient aura state
+	// ambient live state
 	let ambientEnabled = $derived(ambient.enabled);
 	let ambientGradient = $derived(ambient.gradient);
 	let ambientLoading = $derived(ambient.loading);
@@ -472,28 +472,28 @@
 							</button>
 						{/each}
 						<button
-							class="theme-btn aura-btn"
+							class="theme-btn live-btn"
 							class:active={ambientEnabled}
-							class:aura-loading={ambientLoading}
+							class:live-loading={ambientLoading}
 							onclick={() => ambientEnabled ? ambient.disable() : toggleAmbient(true)}
-							title={ambientEnabled ? ambientCondition ?? 'aura' : '?'}
+							title={ambientEnabled ? ambientCondition ?? 'live' : '?'}
 						>
 							{#if ambientEnabled && ambientGradient}
-								<div class="aura-orb-inline" style="background: {ambientGradient}"></div>
+								<div class="live-orb-inline" style="background: {ambientGradient}"></div>
 							{:else if ambientLoading}
-								<div class="aura-orb-inline aura-orb-loading"></div>
+								<div class="live-orb-inline live-orb-loading"></div>
 							{:else}
 								<svg viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
 									<circle cx="12" cy="12" r="9" />
 								</svg>
 							{/if}
-							<span>{ambientEnabled ? 'aura' : '?'}</span>
+							<span>{ambientEnabled ? 'live' : '?'}</span>
 						</button>
 					</div>
 				</div>
 
 				{#if ambientError}
-					<div class="aura-error-row">
+					<div class="live-error-row">
 						<span>{ambientError}</span>
 					</div>
 				{/if}
@@ -1136,37 +1136,37 @@
 		accent-color: var(--accent);
 	}
 
-	/* aura theme button */
-	.aura-btn {
+	/* live theme button */
+	.live-btn {
 		border-style: dashed;
 	}
 
-	.aura-btn.active {
+	.live-btn.active {
 		border-style: solid;
 	}
 
-	.aura-btn.aura-loading {
+	.live-btn.live-loading {
 		opacity: 0.6;
 		pointer-events: none;
 	}
 
-	.aura-orb-inline {
+	.live-orb-inline {
 		width: 18px;
 		height: 18px;
 		border-radius: var(--radius-full);
-		animation: aura-breathe 6s ease-in-out infinite;
+		animation: live-breathe 6s ease-in-out infinite;
 	}
 
-	.aura-orb-loading {
+	.live-orb-loading {
 		background: var(--border-default);
 	}
 
-	@keyframes aura-breathe {
+	@keyframes live-breathe {
 		0%, 100% { transform: scale(1); opacity: 0.85; }
 		50% { transform: scale(1.08); opacity: 1; }
 	}
 
-	.aura-error-row {
+	.live-error-row {
 		font-size: var(--text-sm);
 		color: var(--error);
 		padding: 0.5rem 0;
