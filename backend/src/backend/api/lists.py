@@ -314,6 +314,98 @@ async def list_artist_public_playlists(
     ]
 
 
+@router.get("/playlists/by-uri", response_model=PlaylistWithTracksResponse)
+async def get_playlist_by_uri(
+    uri: Annotated[str, Query(description="AT-URI of the playlist list record")],
+    db: AsyncSession = Depends(get_db),
+    session: AuthSession | None = Depends(get_optional_session),
+) -> PlaylistWithTracksResponse:
+    """get a playlist by its ATProto record URI (public, auth optional for liked state)."""
+    result = await db.execute(
+        select(Playlist, Artist)
+        .join(Artist, Playlist.owner_did == Artist.did)
+        .where(Playlist.atproto_record_uri == uri)
+    )
+    row = result.first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="playlist not found")
+
+    playlist, artist = row
+
+    # fetch ATProto record (public - no auth needed)
+    try:
+        record_data, resolved_pds_url = await get_record_public_resilient(
+            record_uri=playlist.atproto_record_uri,
+            pds_url=artist.pds_url,
+        )
+        if resolved_pds_url:
+            artist.pds_url = resolved_pds_url
+            db.add(artist)
+            await db.commit()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"failed to fetch playlist record: {e}"
+        ) from e
+
+    items = record_data.get("value", {}).get("items", [])
+
+    # extract track URIs in order
+    track_uris = [item.get("subject", {}).get("uri") for item in items]
+    track_uris = [u for u in track_uris if u]
+
+    # hydrate track metadata from database
+    tracks: list[TrackResponse] = []
+    if track_uris:
+        from sqlalchemy.orm import selectinload
+
+        track_result = await db.execute(
+            select(Track)
+            .options(selectinload(Track.artist), selectinload(Track.album_rel))
+            .where(Track.atproto_record_uri.in_(track_uris))
+        )
+        all_tracks = track_result.scalars().all()
+        track_by_uri = {t.atproto_record_uri: t for t in all_tracks}
+
+        track_ids = [t.id for t in all_tracks]
+        like_counts = await get_like_counts(db, track_ids) if track_ids else {}
+        comment_counts = await get_comment_counts(db, track_ids) if track_ids else {}
+
+        liked_track_ids: set[int] = set()
+        if session and track_ids:
+            liked_result = await db.execute(
+                select(TrackLike.track_id).where(
+                    TrackLike.user_did == session.did,
+                    TrackLike.track_id.in_(track_ids),
+                )
+            )
+            liked_track_ids = set(liked_result.scalars().all())
+
+        for u in track_uris:
+            if u in track_by_uri:
+                track = track_by_uri[u]
+                track_response = await TrackResponse.from_track(
+                    track,
+                    liked_track_ids=liked_track_ids,
+                    like_counts=like_counts,
+                    comment_counts=comment_counts,
+                )
+                tracks.append(track_response)
+
+    return PlaylistWithTracksResponse(
+        id=playlist.id,
+        name=playlist.name,
+        owner_did=playlist.owner_did,
+        owner_handle=artist.handle,
+        track_count=len(tracks),
+        image_url=playlist.image_url,
+        show_on_profile=playlist.show_on_profile,
+        atproto_record_uri=playlist.atproto_record_uri,
+        created_at=playlist.created_at.isoformat(),
+        tracks=tracks,
+    )
+
+
 @router.get("/playlists/{playlist_id}/meta", response_model=PlaylistResponse)
 async def get_playlist_meta(
     playlist_id: str,

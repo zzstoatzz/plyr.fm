@@ -5,7 +5,7 @@ import logging
 from typing import Annotated
 
 from atproto_oauth.scopes import ScopesSet
-from fastapi import Body, Depends, HTTPException
+from fastapi import Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +37,52 @@ class PlayRequest(BaseModel):
     ref: str | None = None
 
 
+async def _resolve_track(
+    db: AsyncSession,
+    track: Track,
+    session: Session | None,
+) -> TrackResponse:
+    """build a TrackResponse with likes, tags, etc."""
+    liked_track_ids: set[int] | None = None
+    if session and await db.scalar(
+        select(TrackLike.track_id).where(
+            TrackLike.user_did == session.did, TrackLike.track_id == track.id
+        )
+    ):
+        liked_track_ids = {track.id}
+
+    like_counts, track_tags = await asyncio.gather(
+        get_like_counts(db, [track.id]),
+        get_track_tags(db, [track.id]),
+    )
+
+    return await TrackResponse.from_track(
+        track,
+        liked_track_ids=liked_track_ids,
+        like_counts=like_counts,
+        track_tags=track_tags,
+    )
+
+
+@router.get("/by-uri")
+async def get_track_by_uri(
+    uri: Annotated[str, Query(description="AT-URI of the track record")],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    session: Session | None = Depends(get_optional_session),
+) -> TrackResponse:
+    """Get a track by its ATProto record URI."""
+    result = await db.execute(
+        select(Track)
+        .join(Artist)
+        .options(selectinload(Track.artist), selectinload(Track.album_rel))
+        .where(Track.atproto_record_uri == uri)
+    )
+    if not (track := result.scalar_one_or_none()):
+        raise HTTPException(status_code=404, detail="track not found")
+
+    return await _resolve_track(db, track, session)
+
+
 @router.get("/{track_id}")
 async def get_track(
     track_id: int,
@@ -44,14 +90,6 @@ async def get_track(
     session: Session | None = Depends(get_optional_session),
 ) -> TrackResponse:
     """Get a specific track."""
-    liked_track_ids: set[int] | None = None
-    if session and await db.scalar(
-        select(TrackLike.track_id).where(
-            TrackLike.user_did == session.did, TrackLike.track_id == track_id
-        )
-    ):
-        liked_track_ids = {track_id}
-
     result = await db.execute(
         select(Track)
         .join(Artist)
@@ -61,17 +99,7 @@ async def get_track(
     if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
 
-    like_counts, track_tags = await asyncio.gather(
-        get_like_counts(db, [track_id]),
-        get_track_tags(db, [track_id]),
-    )
-
-    return await TrackResponse.from_track(
-        track,
-        liked_track_ids=liked_track_ids,
-        like_counts=like_counts,
-        track_tags=track_tags,
-    )
+    return await _resolve_track(db, track, session)
 
 
 @router.post("/{track_id}/play")
