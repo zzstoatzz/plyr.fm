@@ -9,6 +9,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences, type Theme } from '$lib/preferences.svelte';
+	import { ambient } from '$lib/ambient.svelte';
 	import { queue } from '$lib/queue.svelte';
 
 	let loading = $state(true);
@@ -36,6 +37,21 @@
 	let existingTokens = $state<TokenInfo[]>([]);
 	let loadingTokens = $state(false);
 	let revokingToken = $state<string | null>(null);
+
+	// ambient aura state
+	let ambientEnabled = $derived(ambient.enabled);
+	let ambientGradient = $derived(ambient.gradient);
+	let ambientLoading = $derived(ambient.loading);
+	let ambientError = $derived(ambient.error);
+	let ambientCondition = $derived(ambient.conditionLabel);
+
+	async function toggleAmbient(enabled: boolean) {
+		if (enabled) {
+			await ambient.enable();
+		} else {
+			ambient.disable();
+		}
+	}
 
 	const presetColors = [
 		{ name: 'blue', value: '#6a9fff' },
@@ -520,6 +536,42 @@
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
+			</div>
+		</section>
+
+		<section class="settings-section">
+			<h2>aura</h2>
+			<div class="settings-card aura-card">
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>ambient mode</h3>
+						<p>the app responds to your local weather, shifting its atmosphere throughout the day</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={ambientEnabled}
+							disabled={ambientLoading}
+							onchange={(e) => toggleAmbient((e.target as HTMLInputElement).checked)}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+
+				{#if ambientEnabled && ambientCondition}
+					<div class="aura-preview">
+						<div class="aura-orb" style="background: {ambientGradient}"></div>
+						<span class="aura-conditions">{ambientCondition}</span>
+					</div>
+				{:else if ambientLoading}
+					<div class="aura-notice">
+						<span>reading the sky...</span>
+					</div>
+				{:else if ambientError}
+					<div class="aura-notice error">
+						<span>{ambientError}</span>
+					</div>
+				{/if}
 			</div>
 		</section>
 
@@ -1094,6 +1146,51 @@
 
 	.tile-toggle input {
 		accent-color: var(--accent);
+	}
+
+	/* aura card */
+	.aura-card {
+		border-color: color-mix(in srgb, var(--accent) 20%, var(--border-subtle));
+	}
+
+	.aura-preview {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem 0 0;
+		margin-top: 0.5rem;
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	.aura-orb {
+		width: 36px;
+		height: 36px;
+		border-radius: var(--radius-full);
+		flex-shrink: 0;
+		animation: aura-breathe 6s ease-in-out infinite;
+		box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent);
+	}
+
+	@keyframes aura-breathe {
+		0%, 100% { transform: scale(1); opacity: 0.85; }
+		50% { transform: scale(1.08); opacity: 1; }
+	}
+
+	.aura-conditions {
+		font-size: var(--text-sm);
+		color: var(--text-tertiary);
+	}
+
+	.aura-notice {
+		font-size: var(--text-sm);
+		color: var(--text-tertiary);
+		padding-top: 0.75rem;
+		margin-top: 0.5rem;
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	.aura-notice.error {
+		color: var(--error);
 	}
 
 	/* toggle switch */

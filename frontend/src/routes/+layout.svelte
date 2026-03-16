@@ -18,6 +18,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
+	import { ambient } from '$lib/ambient.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -65,6 +66,7 @@
 		// if authenticated, fetch preferences and reconnect to active jam or personal queue
 		if (auth.isAuthenticated) {
 			await preferences.initialize();
+			ambient.initialize();
 
 			// check for active jam first — if rejoining, jam owns the queue state
 			let joinedJam = false;
@@ -179,6 +181,16 @@
 			root.style.removeProperty('--glass-btn-bg-hover');
 			root.style.removeProperty('--glass-btn-border');
 			root.style.removeProperty('--text-shadow');
+		}
+	});
+
+	// apply or clear ambient gradient
+	$effect(() => {
+		if (!browser) return;
+		if (ambient.enabled && ambient.gradient) {
+			ambient.applyToDOM();
+		} else {
+			ambient.clearFromDOM();
 		}
 	});
 
@@ -414,6 +426,11 @@
 					effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 				}
 				root.classList.add('theme-' + effectiveTheme);
+
+			// ambient: add class early so ::after is visible when gradient loads
+			if (localStorage.getItem('ambient_enabled') === '1') {
+				document.body.classList.add('ambient-active');
+			}
 			})();
 		}
 	</script>
@@ -593,6 +610,28 @@
 		background-color: var(--bg-primary);
 		color: var(--text-primary);
 		-webkit-font-smoothing: antialiased;
+	}
+
+	/* ambient weather gradient layer */
+	:global(body::after) {
+		content: '';
+		position: fixed;
+		inset: 0;
+		background: var(--ambient-gradient, none);
+		opacity: 0;
+		z-index: -2;
+		pointer-events: none;
+		transition: opacity 1.5s ease-in-out, background 3s ease-in-out;
+	}
+
+	:global(body.ambient-active::after) {
+		opacity: 0.4;
+		animation: ambient-drift 12s ease-in-out infinite;
+	}
+
+	@keyframes -global-ambient-drift {
+		0%, 100% { opacity: 0.35; filter: brightness(1); }
+		50% { opacity: 0.5; filter: brightness(1.08); }
 	}
 
 	/* background image with blur effect */
