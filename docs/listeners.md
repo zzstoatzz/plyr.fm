@@ -7,6 +7,8 @@ you have a handle! you like _sound_! let's go!
 
 :::caution[🚦]
 you _don't_ have a handle? head to [plyr.fm/login](https://plyr.fm/login) to create an account.
+
+if you don't want to create an account, you can still queue and listen to audio on plyr.fm. you just won't be able to like, comment, build playlists, support creators, or save your preferences.
 :::
 
 on plyr.fm, you'll find **music**, **spoken word**, **ringtones**, **ASMR**, and other assorted sounds from people all over the internet.
