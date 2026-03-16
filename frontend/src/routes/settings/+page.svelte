@@ -541,35 +541,35 @@
 
 		<section class="settings-section">
 			<h2>aura</h2>
-			<div class="settings-card aura-card">
-				<div class="setting-row">
-					<div class="setting-info">
-						<h3>ambient mode</h3>
-						<p>the app responds to your local weather, shifting its atmosphere throughout the day</p>
-					</div>
-					<label class="toggle-switch">
-						<input
-							type="checkbox"
-							checked={ambientEnabled}
-							disabled={ambientLoading}
-							onchange={(e) => toggleAmbient((e.target as HTMLInputElement).checked)}
-						/>
-						<span class="toggle-slider"></span>
-					</label>
-				</div>
-
-				{#if ambientEnabled && ambientCondition}
-					<div class="aura-preview">
-						<div class="aura-orb" style="background: {ambientGradient}"></div>
-						<span class="aura-conditions">{ambientCondition}</span>
-					</div>
+			<div class="settings-card aura-card" class:aura-active={ambientEnabled}>
+				{#if !ambientEnabled && !ambientLoading && !ambientError}
+					<button class="aura-unlock" onclick={() => toggleAmbient(true)}>
+						<div class="aura-silhouette">
+							<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4">
+								<circle cx="12" cy="12" r="10" />
+							</svg>
+							<span class="aura-question">?</span>
+						</div>
+					</button>
 				{:else if ambientLoading}
-					<div class="aura-notice">
-						<span>reading the sky...</span>
+					<div class="aura-loading">
+						<div class="aura-orb aura-orb-loading"></div>
+						<span class="aura-loading-text">...</span>
 					</div>
 				{:else if ambientError}
-					<div class="aura-notice error">
-						<span>{ambientError}</span>
+					<div class="aura-state">
+						<span class="aura-error">{ambientError}</span>
+					</div>
+				{:else}
+					<div class="aura-revealed">
+						<div class="aura-orb" style="background: {ambientGradient}"></div>
+						<span class="aura-conditions">{ambientCondition}</span>
+						<button class="aura-disable" onclick={() => toggleAmbient(false)} title="disable">
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="18" y1="6" x2="6" y2="18"></line>
+								<line x1="6" y1="6" x2="18" y2="18"></line>
+							</svg>
+						</button>
 					</div>
 				{/if}
 			</div>
@@ -1148,18 +1148,61 @@
 		accent-color: var(--accent);
 	}
 
-	/* aura card */
+	/* aura card — locked state */
 	.aura-card {
-		border-color: color-mix(in srgb, var(--accent) 20%, var(--border-subtle));
+		border-color: var(--border-subtle);
+		border-style: dashed;
+		transition: all 0.4s ease;
 	}
 
-	.aura-preview {
+	.aura-card.aura-active {
+		border-style: solid;
+		border-color: color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
+	}
+
+	.aura-unlock {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		padding: 1.25rem;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		transition: all 0.3s ease;
+	}
+
+	.aura-unlock:hover {
+		transform: scale(1.02);
+	}
+
+	.aura-unlock:hover .aura-silhouette {
+		opacity: 0.8;
+	}
+
+	.aura-silhouette {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0.5;
+		transition: opacity 0.3s ease;
+		color: var(--text-muted);
+	}
+
+	.aura-question {
+		position: absolute;
+		font-size: var(--text-xl);
+		font-weight: 700;
+		color: var(--bg-primary);
+	}
+
+	/* aura card — revealed state */
+	.aura-revealed {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		padding: 0.75rem 0 0;
-		margin-top: 0.5rem;
-		border-top: 1px solid var(--border-subtle);
+		padding: 0.5rem 0;
 	}
 
 	.aura-orb {
@@ -1168,7 +1211,10 @@
 		border-radius: var(--radius-full);
 		flex-shrink: 0;
 		animation: aura-breathe 6s ease-in-out infinite;
-		box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent);
+	}
+
+	.aura-orb-loading {
+		background: var(--border-default);
 	}
 
 	@keyframes aura-breathe {
@@ -1177,19 +1223,52 @@
 	}
 
 	.aura-conditions {
+		flex: 1;
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 	}
 
-	.aura-notice {
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
-		padding-top: 0.75rem;
-		margin-top: 0.5rem;
-		border-top: 1px solid var(--border-subtle);
+	.aura-disable {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all 0.15s;
+		flex-shrink: 0;
 	}
 
-	.aura-notice.error {
+	.aura-disable:hover {
+		color: var(--text-secondary);
+		background: var(--bg-hover);
+	}
+
+	.aura-loading {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.75rem;
+		padding: 1rem 0;
+	}
+
+	.aura-loading-text {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+		letter-spacing: 0.2em;
+	}
+
+	.aura-state {
+		padding: 0.75rem 0;
+		text-align: center;
+	}
+
+	.aura-error {
+		font-size: var(--text-sm);
 		color: var(--error);
 	}
 
