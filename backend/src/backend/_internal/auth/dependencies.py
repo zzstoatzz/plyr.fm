@@ -4,6 +4,7 @@ import logging
 from typing import Annotated
 
 from fastapi import Cookie, Header, HTTPException
+from opentelemetry import trace
 
 from backend._internal.auth.oauth import check_artist_profile_exists
 from backend._internal.auth.scopes import check_scope_coverage, get_missing_scopes
@@ -11,6 +12,13 @@ from backend._internal.auth.session import Session, get_session
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _tag_span_with_user(session: Session) -> None:
+    """attach user identity to the current OpenTelemetry span."""
+    span = trace.get_current_span()
+    span.set_attribute("user.did", session.did)
+    span.set_attribute("user.handle", session.handle)
 
 
 async def require_auth(
@@ -60,6 +68,7 @@ async def require_auth(
             detail="scope_upgrade_required",
         )
 
+    _tag_span_with_user(session)
     return session
 
 
@@ -82,7 +91,9 @@ async def get_optional_session(
     if not session_id_value:
         return None
 
-    return await get_session(session_id_value)
+    if session := await get_session(session_id_value):
+        _tag_span_with_user(session)
+    return session
 
 
 async def require_artist_profile(
