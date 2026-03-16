@@ -199,6 +199,11 @@ class AmbientManager {
 	private lastFetchTime = 0;
 	private readonly STALE_MS = 30 * 60 * 1000; // 30 minutes
 	private baseValues: Map<string, string> = new Map();
+	private did: string | null = null;
+
+	private key(name: string): string {
+		return this.did ? `${name}:${this.did}` : name;
+	}
 
 	get gradient(): string | null {
 		if (!this.weather) return null;
@@ -214,13 +219,15 @@ class AmbientManager {
 		return `${temp}° · ${condition} · ${time}`;
 	}
 
-	initialize(): void {
+	initialize(did?: string): void {
 		if (!browser) return;
 
-		const stored = localStorage.getItem('ambient_enabled');
+		this.did = did ?? null;
+
+		const stored = localStorage.getItem(this.key('ambient_enabled'));
 		if (stored !== '1') return;
 
-		const locStr = localStorage.getItem('ambient_location');
+		const locStr = localStorage.getItem(this.key('ambient_location'));
 		if (!locStr) return;
 
 		try {
@@ -243,8 +250,8 @@ class AmbientManager {
 		try {
 			const coords = await this.requestLocation();
 			this.location = coords;
-			localStorage.setItem('ambient_location', JSON.stringify(coords));
-			localStorage.setItem('ambient_enabled', '1');
+			localStorage.setItem(this.key('ambient_location'), JSON.stringify(coords));
+			localStorage.setItem(this.key('ambient_enabled'), '1');
 			this.enabled = true;
 			await this.fetchWeather();
 			this.startRefreshCycle();
@@ -253,7 +260,7 @@ class AmbientManager {
 				? 'location access denied — ambient mode needs your location to read the sky'
 				: 'could not determine location';
 			this.enabled = false;
-			localStorage.removeItem('ambient_enabled');
+			localStorage.removeItem(this.key('ambient_enabled'));
 		} finally {
 			this.loading = false;
 		}
@@ -265,7 +272,7 @@ class AmbientManager {
 		this.enabled = false;
 		this.weather = null;
 		this.error = null;
-		localStorage.setItem('ambient_enabled', '0');
+		localStorage.setItem(this.key('ambient_enabled'), '0');
 
 		if (this.fetchIntervalId !== null) {
 			window.clearInterval(this.fetchIntervalId);

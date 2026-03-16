@@ -66,7 +66,7 @@
 		// if authenticated, fetch preferences and reconnect to active jam or personal queue
 		if (auth.isAuthenticated) {
 			await preferences.initialize();
-			ambient.initialize();
+			ambient.initialize(auth.user?.did);
 
 			// check for active jam first — if rejoining, jam owns the queue state
 			let joinedJam = false;
@@ -434,10 +434,6 @@
 				}
 				root.classList.add('theme-' + effectiveTheme);
 
-			// ambient: add class early so ::after is visible when gradient loads
-			if (localStorage.getItem('ambient_enabled') === '1') {
-				document.body.classList.add('ambient-active');
-			}
 			})();
 		}
 	</script>
