@@ -194,6 +194,13 @@
 		}
 	});
 
+	// re-snapshot base values when theme changes while ambient is active
+	$effect(() => {
+		if (!browser) return;
+		const _theme = preferences.theme;
+		if (ambient.enabled) ambient.refreshBaseValues();
+	});
+
 	const SEEK_AMOUNT = 10; // seconds
 	let previousVolume = 0.7; // for mute toggle
 

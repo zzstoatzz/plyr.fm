@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { queue } from '$lib/queue.svelte';
 	import { preferences, type Theme } from '$lib/preferences.svelte';
+	import { ambient } from '$lib/ambient.svelte';
 	import { API_URL } from '$lib/config';
 	import type { User, LinkedAccount } from '$lib/types';
 	import HandleAutocomplete from './HandleAutocomplete.svelte';
@@ -44,6 +45,18 @@
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let autoAdvance = $derived(preferences.autoAdvance);
 	let currentTheme = $derived(preferences.theme);
+
+	let ambientEnabled = $derived(ambient.enabled);
+	let ambientGradient = $derived(ambient.gradient);
+	let ambientLoading = $derived(ambient.loading);
+
+	async function toggleAmbient(enabled: boolean) {
+		if (enabled) {
+			await ambient.enable();
+		} else {
+			ambient.disable();
+		}
+	}
 
 	// derive linked accounts (excluding current user)
 	const otherAccounts = $derived(
@@ -360,8 +373,8 @@
 							{#each themes as theme}
 								<button
 									class="theme-btn"
-									class:active={currentTheme === theme.value}
-									onclick={() => selectTheme(theme.value)}
+									class:active={currentTheme === theme.value && !ambientEnabled}
+									onclick={() => { if (ambientEnabled) ambient.disable(); selectTheme(theme.value); }}
 									title={theme.label}
 								>
 									{#if theme.icon === 'moon'}
@@ -383,6 +396,24 @@
 									<span>{theme.label}</span>
 								</button>
 							{/each}
+							<button
+								class="theme-btn live-btn"
+								class:active={ambientEnabled}
+								class:live-loading={ambientLoading}
+								onclick={() => ambientEnabled ? ambient.disable() : toggleAmbient(true)}
+								title={ambientEnabled ? ambient.conditionLabel ?? 'live' : '?'}
+							>
+								{#if ambientEnabled && ambientGradient}
+									<div class="live-orb-inline" style="background: {ambientGradient}"></div>
+								{:else if ambientLoading}
+									<div class="live-orb-inline live-orb-loading"></div>
+								{:else}
+									<svg viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+										<circle cx="12" cy="12" r="9" />
+									</svg>
+								{/if}
+								<span>{ambientEnabled ? 'live' : '?'}</span>
+							</button>
 						</div>
 					</section>
 
@@ -866,6 +897,36 @@
 		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
+	}
+
+	/* live theme button */
+	.live-btn {
+		border-style: dashed;
+	}
+
+	.live-btn.active {
+		border-style: solid;
+	}
+
+	.live-btn.live-loading {
+		opacity: 0.6;
+		pointer-events: none;
+	}
+
+	.live-orb-inline {
+		width: 18px;
+		height: 18px;
+		border-radius: var(--radius-full);
+		animation: live-breathe 6s ease-in-out infinite;
+	}
+
+	.live-orb-loading {
+		background: var(--border-default);
+	}
+
+	@keyframes live-breathe {
+		0%, 100% { transform: scale(1); opacity: 0.85; }
+		50% { transform: scale(1.08); opacity: 1; }
 	}
 
 	.color-row {
