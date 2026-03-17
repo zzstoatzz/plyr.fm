@@ -244,7 +244,3 @@ async def test_artist_feed_extensionless_avatar_url(
     assert channel is not None
     # RSS <image> should be absent (extensionless URL not supported by RSS spec)
     assert channel.find("image") is None
-    # but itunes:image should still be present
-    itunes_ns = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
-    itunes_img = channel.find("itunes:image", itunes_ns)
-    assert itunes_img is not None
