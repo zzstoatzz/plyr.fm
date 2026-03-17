@@ -8,7 +8,6 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal.atproto.handles import search_handles
 from backend._internal.clients.clap import get_clap_client
 from backend._internal.clients.tpuf import query as tpuf_query
 from backend.config import settings
@@ -79,21 +78,6 @@ class PlaylistSearchResult(BaseModel):
     relevance: float
 
 
-class HandleSearchResult(BaseModel):
-    """ATProto handle search result."""
-
-    did: str
-    handle: str
-    display_name: str | None
-    avatar_url: str | None
-
-
-class HandleSearchResponse(BaseModel):
-    """response for handle search."""
-
-    results: list[HandleSearchResult]
-
-
 SearchResult = (
     TrackSearchResult
     | ArtistSearchResult
@@ -108,16 +92,6 @@ class SearchResponse(BaseModel):
 
     results: list[SearchResult]
     counts: dict[str, int]
-
-
-@router.get("/handles")
-async def search_atproto_handles(
-    q: str = Query(..., min_length=2, description="search query (handle prefix)"),
-    limit: int = Query(10, ge=1, le=25, description="max results"),
-) -> HandleSearchResponse:
-    """search for ATProto handles by prefix."""
-    results = await search_handles(q, limit=limit)
-    return HandleSearchResponse(results=[HandleSearchResult(**r) for r in results])
 
 
 @router.get("/")

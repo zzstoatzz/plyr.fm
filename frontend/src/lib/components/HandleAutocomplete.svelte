@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { API_URL } from '$lib/config';
+	import { TYPEAHEAD_URL } from '$lib/config';
 	import SensitiveImage from './SensitiveImage.svelte';
 
 	interface HandleResult {
@@ -31,10 +31,15 @@
 
 		searching = true;
 		try {
-			const response = await fetch(`${API_URL}/search/handles?q=${encodeURIComponent(value)}`);
+			const response = await fetch(`${TYPEAHEAD_URL}/xrpc/app.bsky.actor.searchActorsTypeahead?q=${encodeURIComponent(value)}&limit=10`);
 			if (response.ok) {
 				const data = await response.json();
-				results = data.results;
+				results = (data.actors ?? []).map((actor: { did: string; handle: string; displayName?: string; avatar?: string }) => ({
+					did: actor.did,
+					handle: actor.handle,
+					display_name: actor.displayName ?? actor.handle,
+					avatar_url: actor.avatar ?? null,
+				}));
 				showResults = results.length > 0;
 			}
 		} catch (e) {
