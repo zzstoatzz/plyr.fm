@@ -47,6 +47,58 @@ plyr.fm should become:
 
 ### March 2026
 
+#### ambient weather theme — "live" (PRs #1127-1136, Mar 16)
+
+**why**: plyr.fm had dark/light/system themes but no personality. the ambient "live" theme adds a location-aware atmospheric background that reflects real weather conditions — making the app feel connected to the listener's environment.
+
+**what shipped**:
+- new "live" theme option alongside dark/light/auto in both desktop and mobile settings
+- fetches weather from Open-Meteo API using device geolocation, renders gradient background based on conditions (clear/cloudy/rain/snow/fog/storm × day/night × temperature warmth)
+- full UI tinting: 12 CSS variables (glass surfaces, borders, track cards, backgrounds) are blended with weather-derived tint colors at 6-15% strength
+- live is a first-class peer theme, not a toggle layer — server-persisted per account via new `theme` column on `user_preferences` (alembic migration)
+- localStorage is a flash-prevention cache synced from server, not source of truth
+
+**technical notes**:
+- initial implementation (#1127-1132) built live as a separate toggle, which caused bugs on account switch (light base + ambient gradient = broken UI). redesigned in #1134 to make live a peer of dark/light/system
+- theme was never server-persisted before this work — it was purely localStorage. added the DB column and wired preferences.fetch() to sync server → localStorage → DOM
+- accent color had the same sync gap (#1136): server stored it, but preferences.fetch() never applied it to the DOM or localStorage. on fresh loads, `--accent` fell back to CSS default blue regardless of saved preference
+- geolocation is cached device-global (`ambient_location` in localStorage) — survives theme switches for instant re-activation. old DID-scoped keys are auto-migrated
+- live resolves to dark base theme (CSS class `theme-dark`), with gradient overlay and tinted variables on top
+
+---
+
+#### CORS open access + Jetstream fixes (PRs #1106-1107, Mar 14)
+
+**why**: CORS was restricted to `*.plyr.fm` subdomains, blocking third-party ATProto clients and embeds from calling the API. separately, the Jetstream consumer was crash-looping due to OpenTelemetry span errors, and PDS uploads failed silently on transient network errors.
+
+**what shipped**:
+- CORS now allows any HTTPS origin to call the API
+- fixed Jetstream crash loop caused by OTEL span context errors
+- added retry logic for PDS upload network failures
+
+---
+
+#### AT-URI lookup endpoints (PR #1123, Mar 15)
+
+**why**: external ATProto clients need to resolve `at://` URIs to plyr.fm page URLs. without this, a client that discovers a `fm.plyr.track` record on the network has no way to link to it on plyr.fm.
+
+**what shipped**:
+- `GET /tracks/by-uri?uri=at://...` and `GET /playlists/by-uri?uri=at://...` endpoints
+- returns the track/playlist object if found, 404 otherwise
+
+---
+
+#### docs rewrite + UX polish (PRs #1108-1120, Mar 14-16)
+
+**what shipped**:
+- rewrote listeners and creators docs pages — lead with experience, not protocol jargon
+- reordered upload form: required fields first
+- PDS tooltip on upload form explaining what "store on your PDS" means
+- fixed liker profile links interrupting playback (#1121)
+- PDS tooltip hover uses delayed hide to prevent flicker (#1110)
+
+---
+
 #### [community feedback](https://bsky.app/profile/cinny.bun.how/post/3mgq2bao26s2p) (Mar 10)
 
 three pieces of feedback on Bluesky:
@@ -197,7 +249,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-Jetstream deployed to production with environment-scoped collection filtering and origin trust validation for ingest URLs. both API uploads and Jetstream ingest share a unified `run_post_track_create_hooks()` path for copyright scanning, genre classification, and embedding generation. remaining open question: audit trail persistence for firehose events.
+ambient "live" theme shipped to production — weather-aware atmospheric UI with server-persisted theme preference per account. theme and accent color now sync from server on every preferences fetch, fixing long-standing issue where preferences were localStorage-only and didn't survive account switches or fresh loads. Jetstream remains stable in production.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -332,5 +384,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-13 (status maintenance: archived February, added missing March entries).
+this is a living document. last updated 2026-03-16 (added ambient theme, CORS, AT-URI lookup, docs rewrite, UX fixes).
 
