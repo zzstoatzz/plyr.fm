@@ -30,7 +30,7 @@ from rich.table import Table
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    cf_api_token: str
+    script_cf_api_token: str
     cf_zone_id: str | None = None
     cf_account_id: str | None = None
 
@@ -90,7 +90,7 @@ def clear_old_cache() -> None:
 def query_cf(query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
     """hit the cloudflare graphql api"""
     headers = {
-        "Authorization": f"Bearer {settings.cf_api_token}",
+        "Authorization": f"Bearer {settings.script_cf_api_token}",
         "Content-Type": "application/json",
     }
     payload: dict[str, Any] = {"query": query}
