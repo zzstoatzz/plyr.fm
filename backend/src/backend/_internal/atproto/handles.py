@@ -120,7 +120,10 @@ async def resolve_featured_artists(
 
 
 async def search_handles(query: str, limit: int = 10) -> list[dict]:
-    """search for ATProto handles by prefix.
+    """search for ATProto handles by prefix via community typeahead service.
+
+    uses typeahead.waow.tech (drop-in replacement for bsky searchActorsTypeahead).
+    degrades to no results on failure — no fallback to bluesky.
 
     args:
         query: search query (handle prefix)
@@ -129,20 +132,24 @@ async def search_handles(query: str, limit: int = 10) -> list[dict]:
     returns:
         list of {did, handle, display_name, avatar_url}
     """
+    from backend.config import settings
+
     if not query or len(query) < 2:
         return []
 
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                "https://public.api.bsky.app/xrpc/app.bsky.actor.searchActorsTypeahead",
+                settings.atproto.typeahead_url,
                 params={"q": query, "limit": min(limit, 25)},
                 timeout=5.0,
             )
 
             if response.status_code != 200:
                 logger.warning(
-                    f"search failed for query {query}: {response.status_code}"
+                    "typeahead search failed for query %s: %s",
+                    query,
+                    response.status_code,
                 )
                 return []
 
@@ -158,8 +165,8 @@ async def search_handles(query: str, limit: int = 10) -> list[dict]:
             ]
 
     except httpx.TimeoutException:
-        logger.error(f"timeout searching for {query}")
+        logger.warning("typeahead timeout for query %s", query)
         return []
     except Exception as e:
-        logger.error(f"error searching for {query}: {e}", exc_info=True)
+        logger.warning("typeahead unavailable for query %s: %s", query, e)
         return []
