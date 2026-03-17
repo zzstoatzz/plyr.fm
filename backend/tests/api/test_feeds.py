@@ -4,6 +4,7 @@ from xml.etree import ElementTree
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models import Artist, Track
@@ -218,3 +219,32 @@ async def test_artist_feed_has_enclosure(
     assert enclosure is not None
     assert enclosure.get("url", "").startswith("https://")
     assert enclosure.get("type") == "audio/mpeg"
+
+
+async def test_artist_feed_extensionless_avatar_url(
+    client: TestClient,
+    db_session: AsyncSession,
+    public_tracks: list[Track],
+) -> None:
+    """artist feed does not 500 when avatar URL has no file extension (e.g. Bluesky CDN)."""
+    # update artist avatar to an extensionless Bluesky CDN URL
+    artist = (
+        await db_session.execute(
+            select(Artist).where(Artist.did == "did:plc:feed_test_artist")
+        )
+    ).scalar_one()
+    artist.avatar_url = "https://cdn.bsky.app/img/avatar/plain/did:plc:abc123/bafkreibvouwftoeioineclc2ldmkajtu5au4yypan3lfkotouxvb7m5cu4"
+    await db_session.commit()
+
+    response = client.get(f"/feeds/artist/{artist.handle}")
+    assert response.status_code == 200
+
+    root = _parse_rss(response.content)
+    channel = root.find("channel")
+    assert channel is not None
+    # RSS <image> should be absent (extensionless URL not supported by RSS spec)
+    assert channel.find("image") is None
+    # but itunes:image should still be present
+    itunes_ns = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
+    itunes_img = channel.find("itunes:image", itunes_ns)
+    assert itunes_img is not None

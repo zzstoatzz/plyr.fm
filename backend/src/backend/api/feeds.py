@@ -100,7 +100,9 @@ async def artist_feed(
     fg.language("en")
 
     if artist.avatar_url:
-        fg.image(artist.avatar_url)
+        # fg.image() enforces RSS 2.0 spec (png/jpg only) — skip for extensionless CDN URLs
+        if artist.avatar_url.lower().endswith((".png", ".jpg", ".jpeg", ".gif")):
+            fg.image(artist.avatar_url)
         fg.podcast.itunes_image(artist.avatar_url)  # type: ignore[attr-defined]
 
     # self-link for feed readers
@@ -157,7 +159,8 @@ async def album_feed(
 
     image_url = album.image_url or album.artist.avatar_url
     if image_url:
-        fg.image(image_url)
+        if image_url.lower().endswith((".png", ".jpg", ".jpeg", ".gif")):
+            fg.image(image_url)
         fg.podcast.itunes_image(image_url)  # type: ignore[attr-defined]
 
     fg.link(
@@ -210,7 +213,8 @@ async def playlist_feed(
 
     image_url = playlist.image_url or playlist.owner.avatar_url
     if image_url:
-        fg.image(image_url)
+        if image_url.lower().endswith((".png", ".jpg", ".jpeg", ".gif")):
+            fg.image(image_url)
         fg.podcast.itunes_image(image_url)  # type: ignore[attr-defined]
 
     fg.link(
