@@ -12,6 +12,7 @@ from backend.models.feature_flag import FeatureFlag
 # known flags - add new flags here for documentation
 KNOWN_FLAGS = frozenset(
     {
+        "device-switching",  # enable cross-session device presence and transfer
         "lossless-uploads",  # enable AIFF/FLAC upload support
         "vibe-search",  # enable semantic vibe search in Cmd+K
     }
