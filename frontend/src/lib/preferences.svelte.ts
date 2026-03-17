@@ -143,6 +143,17 @@ class PreferencesManager {
 		this.update({ theme });
 	}
 
+	applyAccentColor(color: string): void {
+		if (!browser) return;
+		const root = document.documentElement;
+		root.style.setProperty('--accent', color);
+		const r = parseInt(color.slice(1, 3), 16);
+		const g = parseInt(color.slice(3, 5), 16);
+		const b = parseInt(color.slice(5, 7), 16);
+		const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
+		root.style.setProperty('--accent-hover', hover);
+	}
+
 	applyTheme(theme: Theme): void {
 		if (!browser) return;
 		const root = document.documentElement;
@@ -210,6 +221,10 @@ class PreferencesManager {
 			// sync localStorage cache and apply
 			if (browser) {
 				localStorage.setItem('theme', this.data.theme);
+				if (this.data.accent_color) {
+					localStorage.setItem('accentColor', this.data.accent_color);
+					this.applyAccentColor(this.data.accent_color);
+				}
 				this.applyTheme(this.data.theme);
 				if (this.data.theme === 'live') {
 					ambient.activate();
