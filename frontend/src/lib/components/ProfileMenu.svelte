@@ -39,7 +39,8 @@
 	const themes: { value: Theme; label: string; icon: string }[] = [
 		{ value: 'dark', label: 'dark', icon: 'moon' },
 		{ value: 'light', label: 'light', icon: 'sun' },
-		{ value: 'system', label: 'auto', icon: 'auto' }
+		{ value: 'system', label: 'auto', icon: 'auto' },
+		{ value: 'live', label: 'live', icon: 'live' }
 	];
 
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
