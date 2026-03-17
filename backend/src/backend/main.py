@@ -24,7 +24,6 @@ from backend.api import (
     auth_router,
     discover_router,
     exports_router,
-    feeds_router,
     jams_router,
     meta_router,
     moderation_router,
@@ -153,7 +152,6 @@ app.include_router(queue_router)
 app.include_router(now_playing_router)
 app.include_router(migration_router)
 app.include_router(exports_router)
-app.include_router(feeds_router)
 app.include_router(jams_router)
 app.include_router(pds_backfill_router)
 app.include_router(moderation_router)
