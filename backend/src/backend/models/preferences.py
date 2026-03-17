@@ -19,6 +19,9 @@ class UserPreferences(Base):
     did: Mapped[str] = mapped_column(String, primary_key=True)
 
     # ui preferences
+    theme: Mapped[str] = mapped_column(
+        String, nullable=False, default="dark", server_default=text("'dark'")
+    )
     accent_color: Mapped[str] = mapped_column(String, nullable=False, default="#6a9fff")
     auto_advance: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")

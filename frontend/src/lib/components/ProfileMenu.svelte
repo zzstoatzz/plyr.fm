@@ -46,17 +46,8 @@
 	let autoAdvance = $derived(preferences.autoAdvance);
 	let currentTheme = $derived(preferences.theme);
 
-	let ambientEnabled = $derived(ambient.enabled);
 	let ambientGradient = $derived(ambient.gradient);
 	let ambientLoading = $derived(ambient.loading);
-
-	async function toggleAmbient(enabled: boolean) {
-		if (enabled) {
-			await ambient.enable();
-		} else {
-			ambient.disable();
-		}
-	}
 
 	// derive linked accounts (excluding current user)
 	const otherAccounts = $derived(
@@ -373,11 +364,23 @@
 							{#each themes as theme}
 								<button
 									class="theme-btn"
-									class:active={currentTheme === theme.value && !ambientEnabled}
-									onclick={() => { if (ambientEnabled) ambient.disable(); selectTheme(theme.value); }}
-									title={theme.label}
+									class:live-btn={theme.icon === 'live'}
+									class:active={currentTheme === theme.value}
+									class:live-loading={theme.icon === 'live' && ambientLoading}
+									onclick={() => selectTheme(theme.value)}
+									title={theme.icon === 'live' ? (currentTheme === 'live' ? ambient.conditionLabel ?? 'live' : 'live') : theme.label}
 								>
-									{#if theme.icon === 'moon'}
+									{#if theme.icon === 'live'}
+										{#if currentTheme === 'live' && ambientGradient}
+											<div class="live-orb-inline" style="background: {ambientGradient}"></div>
+										{:else if ambientLoading}
+											<div class="live-orb-inline live-orb-loading"></div>
+										{:else}
+											<svg viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+												<circle cx="12" cy="12" r="9" />
+											</svg>
+										{/if}
+									{:else if theme.icon === 'moon'}
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 											<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
 										</svg>
@@ -396,24 +399,6 @@
 									<span>{theme.label}</span>
 								</button>
 							{/each}
-							<button
-								class="theme-btn live-btn"
-								class:active={ambientEnabled}
-								class:live-loading={ambientLoading}
-								onclick={() => ambientEnabled ? ambient.disable() : toggleAmbient(true)}
-								title={ambientEnabled ? ambient.conditionLabel ?? 'live' : '?'}
-							>
-								{#if ambientEnabled && ambientGradient}
-									<div class="live-orb-inline" style="background: {ambientGradient}"></div>
-								{:else if ambientLoading}
-									<div class="live-orb-inline live-orb-loading"></div>
-								{:else}
-									<svg viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
-										<circle cx="12" cy="12" r="9" />
-									</svg>
-								{/if}
-								<span>{ambientEnabled ? 'live' : '?'}</span>
-							</button>
 						</div>
 					</section>
 

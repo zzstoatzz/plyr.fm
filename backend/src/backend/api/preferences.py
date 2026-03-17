@@ -23,6 +23,7 @@ ATPROTOFANS_MODE = "atprotofans"
 class PreferencesResponse(BaseModel):
     """user preferences response model."""
 
+    theme: str
     accent_color: str
     auto_advance: bool
     allow_comments: bool
@@ -41,6 +42,7 @@ class PreferencesResponse(BaseModel):
 class PreferencesUpdate(BaseModel):
     """user preferences update model."""
 
+    theme: str | None = None
     accent_color: str | None = None
     auto_advance: bool | None = None
     allow_comments: bool | None = None
@@ -103,6 +105,7 @@ async def get_preferences(
     teal_needs_reauth = prefs.enable_teal_scrobbling and not has_scope
 
     return PreferencesResponse(
+        theme=prefs.theme,
         accent_color=prefs.accent_color,
         auto_advance=prefs.auto_advance,
         allow_comments=prefs.allow_comments,
@@ -133,6 +136,7 @@ async def update_preferences(
         # create new preferences
         prefs = UserPreferences(
             did=session.did,
+            theme=update.theme or "dark",
             accent_color=update.accent_color or "#6a9fff",
             auto_advance=update.auto_advance
             if update.auto_advance is not None
@@ -158,6 +162,8 @@ async def update_preferences(
         db.add(prefs)
     else:
         # update existing
+        if update.theme is not None:
+            prefs.theme = update.theme
         if update.accent_color is not None:
             prefs.accent_color = update.accent_color
         if update.auto_advance is not None:
@@ -187,6 +193,7 @@ async def update_preferences(
     teal_needs_reauth = prefs.enable_teal_scrobbling and not has_scope
 
     return PreferencesResponse(
+        theme=prefs.theme,
         accent_color=prefs.accent_color,
         auto_advance=prefs.auto_advance,
         allow_comments=prefs.allow_comments,
