@@ -2,8 +2,9 @@
 import { browser } from '$app/environment';
 import { API_URL, getServerConfig } from '$lib/config';
 import { auth } from '$lib/auth.svelte';
+import { ambient } from '$lib/ambient.svelte';
 
-export type Theme = 'dark' | 'light' | 'system';
+export type Theme = 'dark' | 'light' | 'system' | 'live';
 
 export interface UiSettings {
 	background_image_url?: string;
@@ -122,8 +123,20 @@ class PreferencesManager {
 		}
 	}
 
-	setTheme(theme: Theme): void {
+	async setTheme(theme: Theme): Promise<void> {
 		if (browser) {
+			if (theme === 'live') {
+				// attempt activation — revert to dark if geolocation denied
+				const ok = await ambient.activate();
+				if (!ok) {
+					localStorage.setItem('theme', 'dark');
+					this.applyTheme('dark');
+					this.update({ theme: 'dark' });
+					return;
+				}
+			} else {
+				ambient.deactivate();
+			}
 			localStorage.setItem('theme', theme);
 			this.applyTheme(theme);
 		}
@@ -136,7 +149,9 @@ class PreferencesManager {
 		root.classList.remove('theme-dark', 'theme-light');
 
 		let effectiveTheme: 'dark' | 'light';
-		if (theme === 'system') {
+		if (theme === 'live') {
+			effectiveTheme = 'dark';
+		} else if (theme === 'system') {
 			effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 		} else {
 			effectiveTheme = theme;
@@ -163,23 +178,20 @@ class PreferencesManager {
 
 		this.loading = true;
 		try {
-			// preserve theme from localStorage (theme is client-side only)
-			const storedTheme = localStorage.getItem('theme') as Theme | null;
-			const currentTheme = storedTheme ?? this.data?.theme ?? DEFAULT_PREFERENCES.theme;
-
 			const response = await fetch(`${API_URL}/preferences/`, {
 				credentials: 'include'
 			});
 			if (response.ok) {
 				const data = await response.json();
-				// auto_download_liked is stored locally since it's device-specific
+				// theme comes from server (per-account), localStorage is just a flash-prevention cache
+				const serverTheme = (data.theme as Theme) ?? DEFAULT_PREFERENCES.theme;
 				const storedAutoDownload = localStorage.getItem('autoDownloadLiked') === '1';
 				this.data = {
 					accent_color: data.accent_color ?? null,
 					auto_advance: data.auto_advance ?? DEFAULT_PREFERENCES.auto_advance,
 					allow_comments: data.allow_comments ?? DEFAULT_PREFERENCES.allow_comments,
 					hidden_tags: data.hidden_tags ?? DEFAULT_PREFERENCES.hidden_tags,
-					theme: currentTheme,
+					theme: serverTheme,
 					enable_teal_scrobbling: data.enable_teal_scrobbling ?? DEFAULT_PREFERENCES.enable_teal_scrobbling,
 					teal_needs_reauth: data.teal_needs_reauth ?? DEFAULT_PREFERENCES.teal_needs_reauth,
 					show_sensitive_artwork: data.show_sensitive_artwork ?? DEFAULT_PREFERENCES.show_sensitive_artwork,
@@ -190,16 +202,24 @@ class PreferencesManager {
 					terms_accepted_at: data.terms_accepted_at ?? null
 				};
 			} else {
+				// server error — fall back to localStorage cache
+				const storedTheme = localStorage.getItem('theme') as Theme | null;
 				const storedAutoDownload = localStorage.getItem('autoDownloadLiked') === '1';
-				this.data = { ...DEFAULT_PREFERENCES, theme: currentTheme, auto_download_liked: storedAutoDownload };
+				this.data = { ...DEFAULT_PREFERENCES, theme: storedTheme ?? DEFAULT_PREFERENCES.theme, auto_download_liked: storedAutoDownload };
 			}
-			// apply theme after fetching
+			// sync localStorage cache and apply
 			if (browser) {
+				localStorage.setItem('theme', this.data.theme);
 				this.applyTheme(this.data.theme);
+				if (this.data.theme === 'live') {
+					ambient.activate();
+				} else {
+					ambient.deactivate();
+				}
 			}
 		} catch (error) {
 			console.error('failed to fetch preferences:', error);
-			// preserve theme on error too
+			// network error — fall back to localStorage cache
 			const storedTheme = localStorage.getItem('theme') as Theme | null;
 			this.data = { ...DEFAULT_PREFERENCES, theme: storedTheme ?? DEFAULT_PREFERENCES.theme };
 		} finally {

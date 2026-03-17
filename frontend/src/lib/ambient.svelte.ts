@@ -199,11 +199,6 @@ class AmbientManager {
 	private lastFetchTime = 0;
 	private readonly STALE_MS = 30 * 60 * 1000; // 30 minutes
 	private baseValues: Map<string, string> = new Map();
-	private did: string | null = null;
-
-	private key(name: string): string {
-		return this.did ? `${name}:${this.did}` : name;
-	}
 
 	get gradient(): string | null {
 		if (!this.weather) return null;
@@ -219,60 +214,69 @@ class AmbientManager {
 		return `${temp}° · ${condition} · ${time}`;
 	}
 
-	initialize(did?: string): void {
-		if (!browser) return;
-
-		this.did = did ?? null;
-
-		const stored = localStorage.getItem(this.key('ambient_enabled'));
-		if (stored !== '1') return;
-
-		const locStr = localStorage.getItem(this.key('ambient_location'));
-		if (!locStr) return;
-
-		try {
-			this.location = JSON.parse(locStr);
-		} catch {
-			return;
-		}
-
-		this.enabled = true;
-		this.fetchWeather();
-		this.startRefreshCycle();
-	}
-
-	async enable(): Promise<void> {
-		if (!browser) return;
+	/** activate ambient mode. returns false if geolocation denied or unavailable. */
+	async activate(): Promise<boolean> {
+		if (!browser) return false;
 
 		this.loading = true;
 		this.error = null;
 
 		try {
-			const coords = await this.requestLocation();
-			this.location = coords;
-			localStorage.setItem(this.key('ambient_location'), JSON.stringify(coords));
-			localStorage.setItem(this.key('ambient_enabled'), '1');
+			// check device-global location cache first
+			let locStr = localStorage.getItem('ambient_location');
+
+			// migrate from old DID-scoped keys if needed
+			if (!locStr) {
+				for (let i = 0; i < localStorage.length; i++) {
+					const k = localStorage.key(i);
+					if (k && k.startsWith('ambient_location:')) {
+						locStr = localStorage.getItem(k);
+						if (locStr) {
+							localStorage.setItem('ambient_location', locStr);
+							localStorage.removeItem(k);
+						}
+						break;
+					}
+				}
+			}
+
+			if (locStr) {
+				try {
+					this.location = JSON.parse(locStr);
+				} catch {
+					this.location = null;
+				}
+			}
+
+			// prompt geolocation if no cached location
+			if (!this.location) {
+				const coords = await this.requestLocation();
+				this.location = coords;
+				localStorage.setItem('ambient_location', JSON.stringify(coords));
+			}
+
 			this.enabled = true;
 			await this.fetchWeather();
 			this.startRefreshCycle();
+			return true;
 		} catch (err) {
 			this.error = err instanceof GeolocationPositionError
 				? 'location access denied — ambient mode needs your location to read the sky'
 				: 'could not determine location';
 			this.enabled = false;
-			localStorage.removeItem(this.key('ambient_enabled'));
+			return false;
 		} finally {
 			this.loading = false;
 		}
 	}
 
-	disable(): void {
+	/** deactivate ambient mode. keeps cached location for next activation. */
+	deactivate(): void {
 		if (!browser) return;
 
 		this.enabled = false;
 		this.weather = null;
 		this.error = null;
-		localStorage.setItem(this.key('ambient_enabled'), '0');
 
 		if (this.fetchIntervalId !== null) {
 			window.clearInterval(this.fetchIntervalId);
@@ -280,6 +284,14 @@ class AmbientManager {
 		}
 
 		this.clearFromDOM();
+
+		// clean up old DID-scoped enabled keys
+		for (let i = localStorage.length - 1; i >= 0; i--) {
+			const k = localStorage.key(i);
+			if (k && k.startsWith('ambient_enabled')) {
+				localStorage.removeItem(k);
+			}
+		}
 	}
 
 	applyToDOM(): void {

@@ -66,7 +66,6 @@
 		// if authenticated, fetch preferences and reconnect to active jam or personal queue
 		if (auth.isAuthenticated) {
 			await preferences.initialize();
-			ambient.initialize(auth.user?.did);
 
 			// check for active jam first — if rejoining, jam owns the queue state
 			let joinedJam = false;
@@ -321,7 +320,7 @@
 		}
 
 		// apply saved theme from localStorage
-		const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | 'system' | null;
+		const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | 'system' | 'live' | null;
 		if (savedTheme) {
 			preferences.applyTheme(savedTheme);
 		} else {
@@ -429,7 +428,9 @@
 				// apply theme
 				const savedTheme = localStorage.getItem('theme') || 'dark';
 				let effectiveTheme = savedTheme;
-				if (savedTheme === 'system') {
+				if (savedTheme === 'live') {
+					effectiveTheme = 'dark';
+				} else if (savedTheme === 'system') {
 					effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 				}
 				root.classList.add('theme-' + effectiveTheme);
