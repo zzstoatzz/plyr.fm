@@ -415,11 +415,6 @@ class AtprotoSettings(AppSettingsSection):
         validation_alias="ATPROTO_USE_PERMISSION_SETS",
         description="Use ATProto permission sets instead of granular repo scopes. Requires permission set lexicons to be published to the app namespace authority.",
     )
-    typeahead_url: str = Field(
-        default="https://typeahead.waow.tech/xrpc/app.bsky.actor.searchActorsTypeahead",
-        validation_alias="ATPROTO_TYPEAHEAD_URL",
-        description="URL for handle typeahead/autocomplete search. Falls back to no results on failure.",
-    )
     oauth_encryption_key: str = Field(
         default="",
         validation_alias="OAUTH_ENCRYPTION_KEY",
