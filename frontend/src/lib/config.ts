@@ -1,7 +1,7 @@
-import { PUBLIC_API_URL, PUBLIC_TYPEAHEAD_URL } from '$env/static/public';
+import { PUBLIC_API_URL } from '$env/static/public';
 
 export const API_URL = PUBLIC_API_URL || 'http://localhost:8001';
-export const TYPEAHEAD_URL = PUBLIC_TYPEAHEAD_URL || 'https://typeahead.waow.tech';
+export const TYPEAHEAD_URL = 'https://typeahead.waow.tech';
 
 export const VIBE_SEARCH_FLAG = 'vibe-search';
 
