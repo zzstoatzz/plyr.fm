@@ -1,8 +1,14 @@
 # copyright detection rules
 #
-# thresholds match the existing moderation service config:
-# - MODERATION_SCORE_THRESHOLD = 70 (in fly.toml)
-# - dominant_match_pct >= 85 is high confidence
+# signals come from AudD with accurate_offsets=1:
+# - DominantMatchPct: % of audio segments matching the same song
+# - MatchCount: number of distinct segment matches
+#
+# note: highest_score is always 0 with accurate_offsets — do NOT use it.
+#
+# the existing Rust moderation service flags at its configured threshold
+# (default 30% dominant match) and DMs the admin. Osprey adds label
+# emission on top of that existing flow.
 
 Import(rules=['models/copyright.sml'])
 
@@ -14,17 +20,16 @@ HighConfidenceCopyright = Rule(
   description='dominant match covers 85%+ of audio',
 )
 
-# medium-confidence: score above threshold with multiple matches
-MediumConfidenceCopyright = Rule(
+# moderate-confidence: 50%+ dominant match with multiple segment matches
+ModerateConfidenceCopyright = Rule(
   when_all=[
-    CopyrightScore >= 70,
-    MatchCount >= 2,
     DominantMatchPct >= 50,
+    MatchCount >= 3,
   ],
-  description='multiple matches with moderate confidence',
+  description='50%+ dominant match with 3+ segment matches',
 )
 
-# high confidence → label as copyright-violation
+# high confidence → auto-emit copyright-violation label
 WhenRules(
   rules_any=[HighConfidenceCopyright],
   then=[
@@ -32,9 +37,9 @@ WhenRules(
   ],
 )
 
-# medium confidence → label for review
+# moderate confidence → emit copyright-review label for manual review
 WhenRules(
-  rules_any=[MediumConfidenceCopyright],
+  rules_any=[ModerateConfidenceCopyright],
   then=[
     LabelAdd(entity=TrackAtUri, label='copyright-review'),
   ],

@@ -145,6 +145,13 @@ class RedisStreamInput(BaseInputStream[BaseAckingContext[Action]]):
                 else datetime.now(timezone.utc)
             )
 
+            logger.info(
+                "ingested %s from msg %s (track_id=%s)",
+                action_type,
+                msg_id,
+                payload.get("track_id"),
+            )
+
             return Action(
                 action_id=_next_action_id(),
                 action_name=action_type,

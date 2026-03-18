@@ -53,6 +53,14 @@ class PlyrOutputSink(BaseOutputSink):
 
     def push(self, result: ExecutionResult) -> None:
         """process label effects from rule evaluation."""
+        action_data = result.action.data if result.action else {}
+        logger.info(
+            "evaluating rules for %s (track_id=%s, dominant_match_pct=%s, match_count=%s)",
+            action_data.get("action_type", "unknown"),
+            action_data.get("track_id"),
+            action_data.get("scan", {}).get("dominant_match_pct"),
+            action_data.get("scan", {}).get("match_count"),
+        )
         for label_effect in result.label_effects:
             self._handle_label_effect(label_effect, result)
 
@@ -85,8 +93,9 @@ class PlyrOutputSink(BaseOutputSink):
                     import json
 
                     scan = json.loads(scan)
-                context["highest_score"] = scan.get("highest_score")
-                context["matches"] = scan.get("matches")
+                context["dominant_match_pct"] = scan.get("dominant_match_pct")
+                context["match_count"] = scan.get("match_count")
+                context["dominant_match"] = scan.get("dominant_match")
             payload["context"] = context
 
         try:
