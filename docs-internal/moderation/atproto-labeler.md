@@ -6,86 +6,31 @@ technical documentation for the moderation service's ATProto labeling capabiliti
 
 ## overview
 
-the moderation service (`moderation.plyr.fm`) acts as an ATProto labeler - a service that produces signed labels about content. labels are metadata objects that follow the `com.atproto.label.defs#label` schema and can be queried by any ATProto-compatible app.
+the moderation service (`moderation.plyr.fm`) acts as an ATProto labeler — a service that produces signed labels about content. labels are metadata objects that follow the `com.atproto.label.defs#label` schema and can be queried by any ATProto-compatible app.
 
-key distinction: **labels are signed data objects, not repository records**. they don't live in a user's repo - they're served directly by the labeler via XRPC endpoints.
+key distinction: **labels are signed data objects, not repository records**. they don't live in a user's repo — they're served directly by the labeler via XRPC endpoints.
 
 ## why labels?
 
 from [Bluesky's labeling architecture](https://docs.bsky.app/docs/advanced-guides/moderation):
 
-> "Labels are assertions made about content or accounts. They don't enforce anything on their own - clients decide how to interpret them."
+> "Labels are assertions made about content or accounts. They don't enforce anything on their own — clients decide how to interpret them."
 
 this enables **stackable moderation**: multiple labelers can label the same content, and clients can choose which labelers to trust and how to handle different label values.
 
 for plyr.fm, this means:
-- we produce `copyright-violation` labels when tracks are flagged
+- we produce `copyright-violation` labels when admin confirms a match (or Osprey auto-emits)
 - other ATProto apps can query our labels and apply their own policies
 - users/apps can choose to subscribe to our labeler or ignore it
 - we can revoke labels by emitting negations (`neg: true`)
 
-## architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     moderation service                           │
-│                     (moderation.plyr.fm)                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
-│  │  /scan      │    │ /emit-label │    │ /xrpc/com.atproto.  │  │
-│  │  endpoint   │    │  endpoint   │    │ label.queryLabels   │  │
-│  └──────┬──────┘    └──────┬──────┘    └──────────┬──────────┘  │
-│         │                  │                      │              │
-│         ▼                  ▼                      ▼              │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
-│  │   AuDD      │    │   sign      │    │   query labels      │  │
-│  │   client    │    │   label     │    │   from postgres     │  │
-│  └─────────────┘    └─────────────┘    └─────────────────────┘  │
-│                            │                                     │
-│                            ▼                                     │
-│                     ┌─────────────┐                              │
-│                     │   labels    │                              │
-│                     │   table     │                              │
-│                     └─────────────┘                              │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
 ## endpoints
 
-### POST /scan
-
-scans audio for copyright matches via AuDD.
-
-```bash
-curl -X POST https://moderation.plyr.fm/scan \
-  -H "X-Moderation-Key: $MODERATION_AUTH_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"audio_url": "https://r2.plyr.fm/audio/abc123.mp3"}'
-```
-
-response:
-
-```json
-{
-  "matches": [
-    {
-      "artist": "Taylor Swift",
-      "title": "Love Story",
-      "score": 95,
-      "isrc": "USRC10701234"
-    }
-  ],
-  "is_flagged": true,
-  "highest_score": 95,
-  "raw_response": { ... }
-}
-```
+the moderation service exposes these label-related endpoints:
 
 ### POST /emit-label
 
-creates a signed ATProto label.
+creates a signed ATProto label. called by the admin dashboard (manual) or Osprey output sink (automatic).
 
 ```bash
 curl -X POST https://moderation.plyr.fm/emit-label \
@@ -94,14 +39,40 @@ curl -X POST https://moderation.plyr.fm/emit-label \
   -d '{
     "uri": "at://did:plc:abc123/fm.plyr.track/xyz789",
     "val": "copyright-violation",
-    "cid": "bafyreiabc123"
+    "neg": false,
+    "context": {
+      "track_id": 123,
+      "artist_handle": "someone.bsky.social",
+      "artist_did": "did:plc:abc123",
+      "dominant_match_pct": 85,
+      "match_count": 12,
+      "dominant_match": "Artist - Song Title"
+    }
   }'
 ```
 
 the service:
-1. creates label with current timestamp
-2. signs with labeler's secp256k1 private key (DAG-CBOR encoded)
-3. stores in `labels` table with monotonic sequence number
+1. creates label with current timestamp and labeler DID as `src`
+2. encodes as DAG-CBOR (without `sig`)
+3. signs SHA-256 hash with labeler's secp256k1 private key
+4. stores in `labels` table with monotonic sequence number
+5. stores context in `label_contexts` for admin dashboard display
+6. broadcasts to WebSocket subscribers via `subscribeLabels`
+
+response:
+
+```json
+{
+  "seq": 12345,
+  "label": {
+    "src": "did:plc:plyr-labeler",
+    "uri": "at://did:plc:abc123/fm.plyr.track/xyz789",
+    "val": "copyright-violation",
+    "cts": "2026-03-18T12:00:00.000Z",
+    "sig": "base64-encoded-secp256k1-signature"
+  }
+}
+```
 
 ### GET /xrpc/com.atproto.label.queryLabels
 
@@ -113,58 +84,53 @@ curl "https://moderation.plyr.fm/xrpc/com.atproto.label.queryLabels?uriPatterns=
 
 # query by source (labeler DID)
 curl "https://moderation.plyr.fm/xrpc/com.atproto.label.queryLabels?sources=did:plc:plyr-labeler"
-
-# query by cursor (pagination)
-curl "https://moderation.plyr.fm/xrpc/com.atproto.label.queryLabels?cursor=123&limit=50"
 ```
 
-response:
+### GET /xrpc/com.atproto.label.subscribeLabels
 
-```json
-{
-  "cursor": "456",
-  "labels": [
-    {
-      "ver": 1,
-      "src": "did:plc:plyr-labeler",
-      "uri": "at://did:plc:abc123/fm.plyr.track/xyz789",
-      "cid": "bafyreiabc123",
-      "val": "copyright-violation",
-      "neg": false,
-      "cts": "2025-11-30T12:00:00.000Z",
-      "sig": "base64-encoded-secp256k1-signature"
-    }
-  ]
-}
+WebSocket endpoint for real-time label streaming. apps can subscribe to receive new labels as they're created (monotonic sequence cursor).
+
+### POST /admin/active-labels
+
+backend uses this to check which track URIs have active (non-negated) `copyright-violation` labels. powers the label cache in `backend/_internal/clients/moderation.py`.
+
+```bash
+curl -X POST https://moderation.plyr.fm/admin/active-labels \
+  -H "X-Moderation-Key: $MODERATION_AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"uris": ["at://did:plc:abc123/fm.plyr.track/xyz789"]}'
 ```
 
-## label signing
+## admin dashboard
 
-labels are signed using DAG-CBOR serialization with secp256k1 keys (same as ATProto repo commits).
+the admin dashboard is an htmx UI served directly by the Rust moderation service at `/admin`. it's auth-protected via `X-Moderation-Key`.
 
-signing process:
-1. construct label object without `sig` field
-2. encode as DAG-CBOR (deterministic CBOR)
-3. compute SHA-256 hash of encoded bytes
-4. sign hash with labeler's secp256k1 private key
-5. attach signature as `sig` field
+### what it shows
 
-this allows any client to verify labels came from our labeler by checking the signature against our public key (in our DID document).
+- list of flagged tracks with status (pending/resolved)
+- track title (linked to plyr.fm), artist handle (linked to profile)
+- environment badge (stg/dev for non-production URIs)
+- top 3 copyright matches per flag
+- match count badge
+
+### what it does
+
+- **resolve false positives**: emits a negation label (`neg: true`) with a reason (false_positive, legitimate_use, etc.)
+- **batch review**: create review batches for bulk processing
+- htmx live updates via `flagsUpdated` event
+
+### where the admin UI decision landed
+
+the original overview discussed three options. we went with **option B** — the admin UI lives on the moderation service itself. this keeps moderation self-contained: scanning, labeling, and review all happen in one service.
 
 ## label values
 
-current supported values:
+| val | meaning | emitted by |
+|-----|---------|------------|
+| `copyright-violation` | confirmed copyright match | admin dashboard (now), Osprey high-confidence rule (future) |
+| `copyright-review` | needs manual review | Osprey moderate-confidence rule (future) |
 
-| val | meaning | when emitted |
-|-----|---------|--------------|
-| `copyright-violation` | track flagged for potential copyright infringement | scan returns matches |
-
-future values could include:
-- `explicit` - explicit content marker
-- `spam` - suspected spam upload
-- `dmca-takedown` - formal DMCA notice received
-
-## negation labels
+### negation labels
 
 to revoke a label, emit the same label with `neg: true`:
 
@@ -177,11 +143,24 @@ to revoke a label, emit the same label with `neg: true`:
 ```
 
 use cases:
-- false positive resolved after manual review
+- false positive resolved after admin review
 - artist provided proof of licensing
 - DMCA counter-notice accepted
 
-## database schema
+## label signing
+
+labels are signed using DAG-CBOR serialization with secp256k1 keys (same as ATProto repo commits).
+
+signing process:
+1. construct label object without `sig` field
+2. encode as DAG-CBOR (deterministic CBOR)
+3. compute SHA-256 hash of encoded bytes
+4. sign hash with labeler's secp256k1 private key
+5. attach 64-byte signature as `sig` field
+
+this allows any client to verify labels came from our labeler by checking the signature against our public key (in our DID document).
+
+## database schema (moderation service postgres)
 
 ```sql
 CREATE TABLE labels (
@@ -197,78 +176,56 @@ CREATE TABLE labels (
     sig BYTEA NOT NULL,                 -- signature bytes
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-CREATE INDEX idx_labels_uri ON labels(uri);
-CREATE INDEX idx_labels_src ON labels(src);
-CREATE INDEX idx_labels_seq ON labels(seq);
-CREATE INDEX idx_labels_val ON labels(val);
 ```
 
 ## deployment
 
-the moderation service runs on Fly.io:
+the moderation service runs on Fly.io as `plyr-moderation`:
 
 ```bash
-# deploy
-cd services/moderation && fly deploy
-
-# check logs
 fly logs -a plyr-moderation
 
-# secrets
-fly secrets set -a plyr-moderation \
-  LABELER_DID=did:plc:xxx \
-  LABELER_SIGNING_KEY=hex-private-key \
-  DATABASE_URL=postgres://... \
-  AUDD_API_KEY=xxx \
-  MODERATION_AUTH_TOKEN=xxx
+# required secrets
+fly secrets list -a plyr-moderation
+# MODERATION_AUTH_TOKEN, MODERATION_AUDD_API_TOKEN, MODERATION_DATABASE_URL,
+# MODERATION_LABELER_DID, MODERATION_LABELER_SIGNING_KEY, ANTHROPIC_API_KEY
 ```
+
+deployment happens via CI on merge to main (no local `fly deploy`).
+
+### feature gates
+
+the Rust service has two feature gates (`config.rs`):
+- `labeler_enabled()`: requires `MODERATION_DATABASE_URL` + `MODERATION_LABELER_DID` + `MODERATION_LABELER_SIGNING_KEY`
+- `claude_enabled()`: requires `ANTHROPIC_API_KEY` + `MODERATION_DATABASE_URL`
+
+if labeler isn't configured, `/emit-label` returns an error and the admin dashboard is unavailable.
 
 ## integration with backend
 
-the backend calls the moderation service in two places:
+the backend interacts with the labeler in two ways:
 
-1. **scan on upload** (`_internal/moderation.py:scan_track_for_copyright`)
-   - POST to `/scan` with R2 URL
-   - store result in `copyright_scans` table
+1. **label cache** (`_internal/clients/moderation.py`): periodically checks which URIs have active labels via `POST /admin/active-labels`. used to determine track visibility.
 
-2. **emit label on flag** (`_internal/moderation.py:_store_scan_result`)
-   - if `is_flagged` and track has `atproto_record_uri`
-   - POST to `/emit-label` with track's AT URI and CID
+2. **label invalidation**: when admin resolves a flag (negation label), the backend's cache is invalidated so the track becomes visible again.
 
-```python
-async def _emit_copyright_label(uri: str, cid: str | None) -> None:
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        await client.post(
-            f"{settings.moderation.labeler_url}/emit-label",
-            json={"uri": uri, "val": "copyright-violation", "cid": cid},
-            headers={"X-Moderation-Key": settings.moderation.auth_token},
-        )
-```
+the backend does **not** call `/emit-label` directly. labels are emitted by:
+- admin via the htmx dashboard (manual)
+- Osprey output sink calling `/emit-label` (future, automatic)
 
 ## troubleshooting
 
 ### label not appearing in queries
 
-1. check moderation service logs for emit errors
-2. verify track has `atproto_record_uri` set
-3. query labels table directly:
-   ```sql
-   SELECT * FROM labels WHERE uri LIKE '%track_rkey%';
-   ```
+1. check moderation service logs: `fly logs -a plyr-moderation`
+2. verify labeler is enabled: `GET /health` returns `labeler_enabled: true`
+3. query labels table directly via the database
 
 ### signature verification failing
 
-1. ensure `LABELER_SIGNING_KEY` matches DID document's public key
+1. ensure `MODERATION_LABELER_SIGNING_KEY` matches DID document's public key
 2. check DAG-CBOR encoding is deterministic
 3. verify hash algorithm is SHA-256
-
-### scan returning empty matches
-
-AuDD requires actual audio fingerprints. common issues:
-- audio too short (< 3 seconds usable)
-- microphone recordings don't match source audio
-- very low bitrate or corrupted files
 
 ## references
 
