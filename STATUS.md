@@ -281,7 +281,8 @@ switching to the community typeahead service surfaced an unnecessary backend pro
 - Jetstream audit trail / activity feed integration — persistent log of firehose events, toggle for visibility
 - share to bluesky (#334)
 - lyrics and annotations (#373)
-- configurable rules engine for moderation (Osprey rules engine PR #958 open)
+- configurable rules engine for moderation (Osprey rules engine PR #958 — on hold pending infrastructure consolidation, see #907)
+- infrastructure consolidation — audit and migrate from Fly.io sprawl to Helm/K8s pattern (#907, reference: `../relay`)
 - time-release gating (#642)
 - social activity feed (#971)
 
@@ -374,7 +375,7 @@ current monthly costs: ~$20/month (plyr.fm specific)
 
 see live dashboard: [plyr.fm/costs](https://plyr.fm/costs)
 
-- fly.io (backend + redis + moderation): ~$14/month
+- fly.io (backend + redis + transcoder + moderation): ~$24/month
 - neon postgres: $5/month
 - cloudflare (R2 + pages + domain): ~$1/month
 - audd audio fingerprinting: $5-10/month (usage-based)

@@ -4,7 +4,7 @@ title: "sensitive content moderation"
 
 ## overview
 
-plyr.fm allows artists to upload cover art and use their Bluesky avatars. some of this content may be inappropriate for general audiences (nudity, graphic imagery, etc.). rather than blocking uploads, we blur sensitive images by default and let users opt-in to view them.
+plyr.fm allows creators to upload cover art and use their Bluesky avatars. some of this content may be inappropriate for general audiences (nudity, graphic imagery, etc.). rather than blocking uploads, we blur sensitive images by default and let users opt-in to view them.
 
 this follows our core moderation philosophy: **information, not enforcement**. we flag content and let users decide what they want to see.
 
@@ -177,6 +177,6 @@ VALUES (
 
 ## related documentation
 
-- [overview](/moderation/overview/) - moderation philosophy and architecture
-- [copyright detection](/moderation/copyright-detection/) - automated copyright scanning
-- [ATProto labeler](/moderation/atproto-labeler/) - ATProto label emission
+- [overview](overview.md) — moderation philosophy and architecture
+- [copyright detection](copyright-detection.md) — automated copyright scanning
+- [ATProto labeler](atproto-labeler.md) — ATProto label emission
