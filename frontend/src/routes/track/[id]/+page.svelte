@@ -610,7 +610,7 @@ $effect(() => {
 							<p class="track-description" bind:this={descriptionEl} style:max-height={!descriptionExpanded && descriptionOverflows ? `${DESC_COLLAPSED_HEIGHT}px` : 'none'}>{track.description}</p>
 							{#if descriptionOverflows}
 								<button class="description-toggle" onclick={() => descriptionExpanded = !descriptionExpanded}>
-									{descriptionExpanded ? 'show less' : 'show more'}
+									{descriptionExpanded ? 'show less ▴' : 'show more ▾'}
 								</button>
 							{/if}
 						</div>
@@ -1037,6 +1037,7 @@ $effect(() => {
 	.track-description-wrapper {
 		position: relative;
 		margin: 0.75rem 0 0;
+		text-align: center;
 	}
 
 	.track-description-wrapper.collapsed .track-description {
@@ -1065,21 +1066,24 @@ $effect(() => {
 	}
 
 	.description-toggle {
-		display: block;
-		margin-top: 0.5rem;
-		padding: 0;
-		background: none;
-		border: none;
-		color: var(--accent);
-		font-size: var(--text-sm);
+		display: inline-block;
+		margin: 0.75rem auto 0;
+		padding: 0.25rem 0.75rem;
+		background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
+		border: 1px solid var(--border-subtle);
+		color: var(--text-secondary);
+		font-size: var(--text-xs);
 		font-family: inherit;
+		border-radius: var(--radius-full);
 		cursor: pointer;
-		text-decoration: none;
-		transition: color 0.15s;
+		transition: all 0.15s ease;
+		white-space: nowrap;
 	}
 
 	.description-toggle:hover {
-		color: var(--accent-hover);
+		color: var(--accent);
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.track-tags {
