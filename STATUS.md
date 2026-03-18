@@ -47,6 +47,27 @@ plyr.fm should become:
 
 ### March 2026
 
+#### handle typeahead migration (PRs #1140-1141, Mar 17)
+
+**why**: handle autocomplete (login, add account, featured artists) was calling Bluesky's `searchActorsTypeahead` through a backend proxy. the proxy added ~500ms of latency for no benefit — no auth, caching, or transformation happened server-side.
+
+**what shipped**:
+- switched from Bluesky's typeahead API to the community service at `typeahead.waow.tech` (#1140)
+- moved the call entirely to the frontend, eliminating the backend proxy hop (#1141)
+- backend `/search/handles` endpoint removed from the router but the underlying code stays for SDK consumers
+- configurable via `PUBLIC_TYPEAHEAD_URL` env var, degrades to empty results on failure
+
+---
+
+#### RSS feed removal (PR #1139, Mar 17)
+
+**why**: per-artist RSS feeds (shipped in PR #1045, Mar 6) had 19 total hits in 30 days. the `feedgen` + `lxml` dependencies added weight for a feature nobody used.
+
+**what shipped**:
+- removed `feeds.py` module, tests, `feedgen`/`lxml` dependencies, and `<link rel="alternate">` tags from artist/album/playlist pages
+
+---
+
 #### ambient weather theme — "live" (PRs #1127-1136, Mar 16)
 
 **why**: plyr.fm had dark/light/system themes but no personality. the ambient "live" theme adds a location-aware atmospheric background that reflects real weather conditions — making the app feel connected to the listener's environment.
@@ -172,9 +193,9 @@ housekeeping refactor across the API layer: extracted shared image upload helper
 
 ---
 
-#### track descriptions + RSS feeds (PR #1045, Mar 6)
+#### track descriptions (PR #1045, Mar 6)
 
-new `description` field on tracks — free-text, persisted in the ATProto record and the database. displayed on track detail pages. also added per-artist RSS feed generation (`/feeds/{handle}/rss`) with enclosures pointing to audio URLs, so any podcast client can subscribe to an artist's uploads.
+new `description` field on tracks — free-text, persisted in the ATProto record and the database. displayed on track detail pages. (this PR also shipped RSS feeds, later removed in #1139 due to low usage.)
 
 #### public docs restructure (PRs #1031-1041, Mar 6)
 
@@ -249,7 +270,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-ambient "live" theme shipped to production — weather-aware atmospheric UI with server-persisted theme preference per account. theme and accent color now sync from server on every preferences fetch, fixing long-standing issue where preferences were localStorage-only and didn't survive account switches or fresh loads. Jetstream remains stable in production.
+handle typeahead migrated from Bluesky to community service and moved to frontend-direct calls (~500ms latency improvement). RSS feeds removed after low adoption. ambient "live" theme and Jetstream remain stable in production.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -384,5 +405,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-16 (added ambient theme, CORS, AT-URI lookup, docs rewrite, UX fixes).
+this is a living document. last updated 2026-03-17 (handle typeahead migration, RSS removal).
 
