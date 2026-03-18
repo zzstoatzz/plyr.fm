@@ -49,19 +49,19 @@ plyr.fm should become:
 
 #### handle typeahead migration (PRs #1140-1141, Mar 17)
 
-**why**: handle autocomplete (login, add account, featured artists) was calling Bluesky's `searchActorsTypeahead` through a backend proxy. the proxy added ~500ms of latency for no benefit — no auth, caching, or transformation happened server-side.
+**why**: switching handle autocomplete to [`typeahead.waow.tech`](https://typeahead.waow.tech) — a community ATProto actor search service (Zig ingester on Fly.io → Cloudflare Worker + D1/FTS5) — revealed that the backend `/search/handles` endpoint was just a passthrough proxy. no auth, caching, or transformation — just an extra hop adding ~500ms of latency.
 
 **what shipped**:
-- switched from Bluesky's typeahead API to the community service at `typeahead.waow.tech` (#1140)
-- moved the call entirely to the frontend, eliminating the backend proxy hop (#1141)
-- backend `/search/handles` endpoint removed from the router but the underlying code stays for SDK consumers
+- switched from Bluesky's `searchActorsTypeahead` to the community typeahead service (#1140)
+- moved the call entirely to the frontend, eliminating the unnecessary backend proxy (#1141)
+- backend `/search/handles` endpoint removed from the router (underlying code stays for SDK consumers)
 - configurable via `PUBLIC_TYPEAHEAD_URL` env var, degrades to empty results on failure
 
 ---
 
 #### RSS feed removal (PR #1139, Mar 17)
 
-**why**: per-artist RSS feeds (shipped in PR #1045, Mar 6) had 19 total hits in 30 days. the `feedgen` + `lxml` dependencies added weight for a feature nobody used.
+**why**: per-artist RSS feeds (shipped in PR #1045, Mar 6) were an over-eager introduction — added speculatively without clear demand. 19 total hits in 30 days confirmed it. the `feedgen` + `lxml` dependencies weren't worth carrying for something nobody asked for.
 
 **what shipped**:
 - removed `feeds.py` module, tests, `feedgen`/`lxml` dependencies, and `<link rel="alternate">` tags from artist/album/playlist pages
@@ -270,7 +270,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-handle typeahead migrated from Bluesky to community service and moved to frontend-direct calls (~500ms latency improvement). RSS feeds removed after low adoption. ambient "live" theme and Jetstream remain stable in production.
+switching to the community typeahead service surfaced an unnecessary backend proxy hop — moved handle autocomplete to frontend-direct calls (~500ms improvement). RSS feeds pulled back as an over-eager introduction. ambient "live" theme and Jetstream remain stable in production.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
