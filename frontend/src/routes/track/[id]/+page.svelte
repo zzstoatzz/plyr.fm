@@ -66,6 +66,18 @@
 		}
 	});
 
+	// collapsible description
+	const DESC_COLLAPSED_HEIGHT = 128; // ~5 lines at 1.6 line-height
+	let descriptionExpanded = $state(false);
+	let descriptionOverflows = $state(false);
+	let descriptionEl: HTMLParagraphElement | undefined = $state();
+
+	$effect(() => {
+		if (descriptionEl) {
+			descriptionOverflows = descriptionEl.scrollHeight > DESC_COLLAPSED_HEIGHT;
+		}
+	});
+
 	// likers tooltip state
 	let showLikersTooltip = $state(false);
 	let likersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -594,7 +606,14 @@ $effect(() => {
 					{/if}
 
 					{#if track.description}
-						<p class="track-description">{track.description}</p>
+						<div class="track-description-wrapper" class:collapsed={!descriptionExpanded && descriptionOverflows}>
+							<p class="track-description" bind:this={descriptionEl} style:max-height={!descriptionExpanded && descriptionOverflows ? `${DESC_COLLAPSED_HEIGHT}px` : 'none'}>{track.description}</p>
+							{#if descriptionOverflows}
+								<button class="description-toggle" onclick={() => descriptionExpanded = !descriptionExpanded}>
+									{descriptionExpanded ? 'show less' : 'show more'}
+								</button>
+							{/if}
+						</div>
 					{/if}
 
 					<div class="track-stats">
@@ -1015,12 +1034,49 @@ $effect(() => {
 		outline: none;
 	}
 
+	.track-description-wrapper {
+		position: relative;
+		margin: 0.75rem 0 0;
+	}
+
+	.track-description-wrapper.collapsed .track-description {
+		overflow: hidden;
+	}
+
+	.track-description-wrapper.collapsed::after {
+		content: '';
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: 3rem;
+		background: linear-gradient(transparent, var(--bg-primary));
+		pointer-events: none;
+	}
+
 	.track-description {
 		color: var(--text-secondary);
 		font-size: var(--text-base);
 		line-height: 1.6;
-		margin: 0.75rem 0 0;
+		margin: 0;
 		white-space: pre-wrap;
+		overflow: hidden;
+	}
+
+	.description-toggle {
+		display: block;
+		margin-top: 0.25rem;
+		padding: 0;
+		background: none;
+		border: none;
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
+		cursor: pointer;
+		text-decoration: none;
+	}
+
+	.description-toggle:hover {
+		color: var(--text-secondary);
 	}
 
 	.track-tags {
