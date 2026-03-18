@@ -1043,7 +1043,7 @@ $effect(() => {
 		overflow: hidden;
 	}
 
-	.track-description-wrapper.collapsed::after {
+	.track-description-wrapper.collapsed .track-description::after {
 		content: '';
 		position: absolute;
 		bottom: 0;
@@ -1061,22 +1061,25 @@ $effect(() => {
 		margin: 0;
 		white-space: pre-wrap;
 		overflow: hidden;
+		position: relative;
 	}
 
 	.description-toggle {
 		display: block;
-		margin-top: 0.25rem;
+		margin-top: 0.5rem;
 		padding: 0;
 		background: none;
 		border: none;
-		color: var(--text-tertiary);
+		color: var(--accent);
 		font-size: var(--text-sm);
+		font-family: inherit;
 		cursor: pointer;
 		text-decoration: none;
+		transition: color 0.15s;
 	}
 
 	.description-toggle:hover {
-		color: var(--text-secondary);
+		color: var(--accent-hover);
 	}
 
 	.track-tags {
