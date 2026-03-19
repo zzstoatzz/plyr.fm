@@ -36,7 +36,9 @@
 		searching = true;
 		noResultsFound = false;
 		try {
-			const response = await fetch(`${TYPEAHEAD_URL}/xrpc/app.bsky.actor.searchActorsTypeahead?q=${encodeURIComponent(query)}&limit=10`);
+			const response = await fetch(`${TYPEAHEAD_URL}/xrpc/app.bsky.actor.searchActorsTypeahead?q=${encodeURIComponent(query)}&limit=10`, {
+				headers: { 'X-Client': 'plyr.fm' }
+			});
 			if (response.ok) {
 				const data = await response.json();
 				results = (data.actors ?? []).map((actor: { did: string; handle: string; displayName?: string; avatar?: string }) => ({
