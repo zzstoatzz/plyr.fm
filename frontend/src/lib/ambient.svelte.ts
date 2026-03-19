@@ -1,10 +1,21 @@
 // ambient weather theme — location-aware atmospheric background + full tinting
 import { browser } from '$app/environment';
 
+type TemperatureUnit = 'fahrenheit' | 'celsius';
+
 interface WeatherData {
 	temperature: number;
 	weathercode: number;
 	is_day: boolean;
+}
+
+/** regions that use Fahrenheit (ISO 3166-1 alpha-2) */
+const FAHRENHEIT_REGIONS = new Set(['US', 'BS', 'BZ', 'KY', 'LR', 'MH', 'FM', 'PW']);
+
+function detectTemperatureUnit(): TemperatureUnit {
+	if (!browser) return 'celsius';
+	const region = navigator.language?.split('-')[1]?.toUpperCase();
+	return FAHRENHEIT_REGIONS.has(region ?? '') ? 'fahrenheit' : 'celsius';
 }
 
 interface AmbientLocation {
@@ -51,10 +62,15 @@ function getConditionLabel(code: number): string {
 	return 'cloudy';
 }
 
-function computeGradient(w: WeatherData): string {
+/** 0 (cold) to 1 (hot), unit-aware: 5–35°C or 41–95°F */
+function computeWarmth(temperature: number, unit: TemperatureUnit): number {
+	const [cold, hot] = unit === 'fahrenheit' ? [41, 95] : [5, 35];
+	return Math.min(1, Math.max(0, (temperature - cold) / (hot - cold)));
+}
+
+function computeGradient(w: WeatherData, unit: TemperatureUnit): string {
 	const { weathercode, is_day, temperature } = w;
-	// temperature warmth factor: 0 (cold, <=5°C) to 1 (hot, >=35°C)
-	const warmth = Math.min(1, Math.max(0, (temperature - 5) / 30));
+	const warmth = computeWarmth(temperature, unit);
 
 	if (is_day) {
 		if (weathercode <= 3) {
@@ -110,9 +126,9 @@ function computeGradient(w: WeatherData): string {
 }
 
 /** one representative tint color per weather condition */
-function computeTint(w: WeatherData): RGB {
+function computeTint(w: WeatherData, unit: TemperatureUnit): RGB {
 	const condition = getConditionLabel(w.weathercode);
-	const warmth = Math.min(1, Math.max(0, (w.temperature - 5) / 30));
+	const warmth = computeWarmth(w.temperature, unit);
 
 	if (w.is_day) {
 		switch (condition) {
@@ -194,6 +210,7 @@ class AmbientManager {
 	weather = $state<WeatherData | null>(null);
 	loading = $state(false);
 	error = $state<string | null>(null);
+	readonly temperatureUnit: TemperatureUnit = detectTemperatureUnit();
 
 	private fetchIntervalId: ReturnType<typeof window.setInterval> | null = null;
 	private lastFetchTime = 0;
@@ -202,16 +219,17 @@ class AmbientManager {
 
 	get gradient(): string | null {
 		if (!this.weather) return null;
-		return computeGradient(this.weather);
+		return computeGradient(this.weather, this.temperatureUnit);
 	}
 
 	get conditionLabel(): string | null {
 		if (!this.weather) return null;
 		const w = this.weather;
 		const temp = Math.round(w.temperature);
+		const unit = this.temperatureUnit === 'fahrenheit' ? 'F' : 'C';
 		const condition = getConditionLabel(w.weathercode);
 		const time = w.is_day ? 'day' : 'night';
-		return `${temp}° · ${condition} · ${time}`;
+		return `${temp}°${unit} · ${condition} · ${time}`;
 	}
 
 	/** activate ambient mode. returns false if geolocation denied or unavailable. */
@@ -305,7 +323,7 @@ class AmbientManager {
 			this.snapshotBaseValues();
 		}
 
-		const tint = computeTint(this.weather);
+		const tint = computeTint(this.weather, this.temperatureUnit);
 		for (const [varName, strength] of TINTED_VARS) {
 			const baseVal = this.baseValues.get(varName);
 			if (!baseVal) continue;
@@ -373,7 +391,7 @@ class AmbientManager {
 
 		const { lat, lon } = this.location;
 		try {
-			const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode,is_day&timezone=auto`;
+			const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode,is_day&timezone=auto&temperature_unit=${this.temperatureUnit}`;
 			const res = await fetch(url);
 			if (!res.ok) throw new Error(`weather API returned ${res.status}`);
 			const data = await res.json();
