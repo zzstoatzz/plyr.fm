@@ -263,6 +263,7 @@
 					type="text"
 					bind:value={title}
 					required
+					maxlength="256"
 					placeholder="my awesome song"
 				/>
 			</div>
@@ -298,6 +299,9 @@
 					rows="3"
 					maxlength="5000"
 				></textarea>
+				{#if description.length > 0}
+					<div class="char-count">{description.length} / 5000</div>
+				{/if}
 			</div>
 
 			<div class="form-group">
@@ -552,6 +556,12 @@
 		margin-top: 0.25rem;
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
+	}
+
+	.char-count {
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+		text-align: right;
 	}
 
 	.file-info {

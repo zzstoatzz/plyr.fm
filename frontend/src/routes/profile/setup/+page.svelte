@@ -163,7 +163,11 @@
 						disabled={saving}
 						placeholder="tell us about your music..."
 						rows="4"
+						maxlength="2560"
 					></textarea>
+					{#if bio.length > 0}
+						<div class="char-count">{bio.length} / 2560</div>
+					{/if}
 				</div>
 
 				<div class="form-group">
@@ -294,6 +298,12 @@
 		margin-top: 0.5rem;
 		font-size: var(--text-sm);
 		color: var(--text-muted);
+	}
+
+	.char-count {
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+		text-align: right;
 	}
 
 	button {

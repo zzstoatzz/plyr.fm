@@ -223,6 +223,7 @@
 					type="text"
 					bind:value={newPlaylistName}
 					placeholder="my playlist"
+					maxlength="256"
 					disabled={creating}
 					autofocus
 				/>
