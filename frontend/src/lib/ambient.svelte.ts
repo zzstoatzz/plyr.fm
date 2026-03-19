@@ -68,6 +68,22 @@ function computeWarmth(temperature: number, unit: TemperatureUnit): number {
 	return Math.min(1, Math.max(0, (temperature - cold) / (hot - cold)));
 }
 
+/** interpolate 3 color stops into 7 for smoother gradients (reduces banding) */
+function smoothGradient(c1: RGB, c2: RGB, c3: RGB): string {
+	const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
+	const stops: string[] = [];
+	// 4 stops from c1→c2, 4 stops from c2→c3 (c2 shared = 7 total)
+	for (let i = 0; i <= 3; i++) {
+		const t = i / 3;
+		stops.push(`rgb(${lerp(c1.r, c2.r, t)}, ${lerp(c1.g, c2.g, t)}, ${lerp(c1.b, c2.b, t)})`);
+	}
+	for (let i = 1; i <= 3; i++) {
+		const t = i / 3;
+		stops.push(`rgb(${lerp(c2.r, c3.r, t)}, ${lerp(c2.g, c3.g, t)}, ${lerp(c2.b, c3.b, t)})`);
+	}
+	return `linear-gradient(135deg, ${stops.join(', ')})`;
+}
+
 function computeGradient(w: WeatherData, unit: TemperatureUnit): string {
 	const { weathercode, is_day, temperature } = w;
 	const warmth = computeWarmth(temperature, unit);
@@ -75,54 +91,35 @@ function computeGradient(w: WeatherData, unit: TemperatureUnit): string {
 	if (is_day) {
 		if (weathercode <= 3) {
 			// clear day: warm gold → amber → soft sky
-			const r1 = Math.round(200 + warmth * 55);
-			const g1 = Math.round(160 + warmth * 40);
-			const b1 = Math.round(60 + (1 - warmth) * 80);
-			return `linear-gradient(135deg, rgb(${r1}, ${g1}, ${b1}), rgb(180, 140, 80), rgb(100, 140, 180))`;
+			return smoothGradient(
+				{ r: Math.round(200 + warmth * 55), g: Math.round(160 + warmth * 40), b: Math.round(60 + (1 - warmth) * 80) },
+				{ r: 180, g: 140, b: 80 },
+				{ r: 100, g: 140, b: 180 }
+			);
 		}
-		if (weathercode >= 45 && weathercode <= 48) {
-			// fog: desaturated lavender → pale grey
-			return 'linear-gradient(135deg, rgb(160, 155, 175), rgb(180, 178, 182), rgb(150, 150, 155))';
-		}
-		if ((weathercode >= 51 && weathercode <= 67) || (weathercode >= 80 && weathercode <= 82)) {
-			// rain: steel blue → muted teal
-			return 'linear-gradient(135deg, rgb(70, 100, 140), rgb(60, 110, 120), rgb(80, 95, 130))';
-		}
-		if ((weathercode >= 71 && weathercode <= 77) || (weathercode >= 85 && weathercode <= 86)) {
-			// snow: silvery white → pale blue
-			return 'linear-gradient(135deg, rgb(200, 210, 220), rgb(180, 195, 215), rgb(170, 185, 200))';
-		}
-		if (weathercode >= 95) {
-			// storm: deep purple → charcoal
-			return 'linear-gradient(135deg, rgb(80, 50, 100), rgb(60, 55, 75), rgb(50, 45, 60))';
-		}
-		// default cloudy day
-		return 'linear-gradient(135deg, rgb(140, 150, 165), rgb(120, 130, 145), rgb(110, 115, 130))';
+		if (weathercode >= 45 && weathercode <= 48)
+			return smoothGradient({ r: 160, g: 155, b: 175 }, { r: 180, g: 178, b: 182 }, { r: 150, g: 150, b: 155 });
+		if ((weathercode >= 51 && weathercode <= 67) || (weathercode >= 80 && weathercode <= 82))
+			return smoothGradient({ r: 70, g: 100, b: 140 }, { r: 60, g: 110, b: 120 }, { r: 80, g: 95, b: 130 });
+		if ((weathercode >= 71 && weathercode <= 77) || (weathercode >= 85 && weathercode <= 86))
+			return smoothGradient({ r: 200, g: 210, b: 220 }, { r: 180, g: 195, b: 215 }, { r: 170, g: 185, b: 200 });
+		if (weathercode >= 95)
+			return smoothGradient({ r: 80, g: 50, b: 100 }, { r: 60, g: 55, b: 75 }, { r: 50, g: 45, b: 60 });
+		return smoothGradient({ r: 140, g: 150, b: 165 }, { r: 120, g: 130, b: 145 }, { r: 110, g: 115, b: 130 });
 	}
 
 	// night variants
-	if (weathercode <= 3) {
-		// clear night: deep indigo → dark navy
-		return 'linear-gradient(135deg, rgb(20, 20, 60), rgb(15, 25, 50), rgb(10, 15, 40))';
-	}
-	if (weathercode >= 45 && weathercode <= 48) {
-		// fog night: muted slate → charcoal
-		return 'linear-gradient(135deg, rgb(50, 50, 60), rgb(40, 42, 50), rgb(35, 35, 42))';
-	}
-	if ((weathercode >= 51 && weathercode <= 67) || (weathercode >= 80 && weathercode <= 82)) {
-		// rain night: near-black teal → dark blue
-		return 'linear-gradient(135deg, rgb(15, 30, 40), rgb(20, 25, 45), rgb(12, 20, 35))';
-	}
-	if ((weathercode >= 71 && weathercode <= 77) || (weathercode >= 85 && weathercode <= 86)) {
-		// snow night: cool silver → deep blue
-		return 'linear-gradient(135deg, rgb(60, 65, 80), rgb(40, 50, 70), rgb(30, 35, 55))';
-	}
-	if (weathercode >= 95) {
-		// storm night: dark indigo → near-black
-		return 'linear-gradient(135deg, rgb(30, 15, 45), rgb(20, 18, 30), rgb(12, 10, 20))';
-	}
-	// default cloudy night
-	return 'linear-gradient(135deg, rgb(35, 38, 48), rgb(28, 30, 40), rgb(22, 24, 32))';
+	if (weathercode <= 3)
+		return smoothGradient({ r: 20, g: 20, b: 60 }, { r: 15, g: 25, b: 50 }, { r: 10, g: 15, b: 40 });
+	if (weathercode >= 45 && weathercode <= 48)
+		return smoothGradient({ r: 50, g: 50, b: 60 }, { r: 40, g: 42, b: 50 }, { r: 35, g: 35, b: 42 });
+	if ((weathercode >= 51 && weathercode <= 67) || (weathercode >= 80 && weathercode <= 82))
+		return smoothGradient({ r: 15, g: 30, b: 40 }, { r: 20, g: 25, b: 45 }, { r: 12, g: 20, b: 35 });
+	if ((weathercode >= 71 && weathercode <= 77) || (weathercode >= 85 && weathercode <= 86))
+		return smoothGradient({ r: 60, g: 65, b: 80 }, { r: 40, g: 50, b: 70 }, { r: 30, g: 35, b: 55 });
+	if (weathercode >= 95)
+		return smoothGradient({ r: 30, g: 15, b: 45 }, { r: 20, g: 18, b: 30 }, { r: 12, g: 10, b: 20 });
+	return smoothGradient({ r: 35, g: 38, b: 48 }, { r: 28, g: 30, b: 40 }, { r: 22, g: 24, b: 32 });
 }
 
 /** one representative tint color per weather condition */
