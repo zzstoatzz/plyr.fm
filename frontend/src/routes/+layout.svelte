@@ -373,6 +373,15 @@
 	}
 </script>
 
+<!-- SVG noise filter to reduce gradient color banding -->
+<svg style="position:absolute;width:0;height:0" aria-hidden="true">
+	<filter id="ambient-noise">
+		<feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+		<feColorMatrix type="saturate" values="0" />
+		<feBlend in="SourceGraphic" mode="soft-light" />
+	</filter>
+</svg>
+
 <svelte:head>
 	<link rel="icon" href={logo} />
 	<link rel="manifest" href="/manifest.webmanifest" />
@@ -634,8 +643,8 @@
 	}
 
 	@keyframes -global-ambient-drift {
-		0%, 100% { opacity: 0.35; filter: brightness(1); }
-		50% { opacity: 0.5; filter: brightness(1.08); }
+		0%, 100% { opacity: 0.35; filter: brightness(1) url(#ambient-noise); }
+		50% { opacity: 0.5; filter: brightness(1.08) url(#ambient-noise); }
 	}
 
 	/* background image with blur effect */
