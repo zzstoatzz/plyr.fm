@@ -47,6 +47,26 @@ plyr.fm should become:
 
 ### March 2026
 
+#### frontend validation alignment (PR #1148, Mar 18)
+
+audited every backend validation limit (lexicon schemas, pydantic models, manual checks) against frontend form enforcement. found 8 fields with backend limits but no frontend `maxlength`, one upload path missing a client-side file size check, and two limit mismatches between the lexicon and API layer.
+
+**what shipped**:
+- raised API comment text limit from 300 to 1000 to match the `fm.plyr.comment` lexicon (network-wide scan confirmed no existing records exceed 254 chars)
+- raised `HandleSearch` default `maxFeatures` from 5 to 10 to match the `fm.plyr.track` lexicon (max in the wild: 2)
+- added `maxlength` on track title (256), album name (256), bio (2560), playlist name (256), tag input (50 per tag), search inputs (100)
+- added character counters on description, bio, and comment fields (follows existing `FeedbackModal` pattern)
+- capped `TagInput` at 10 tags with a "maximum 10 tags" message
+- added 20MB image size check on portal track artwork upload (was the only upload path without client-side validation)
+
+---
+
+#### collapsible track descriptions (PRs #1144-1146, Mar 18)
+
+long track descriptions were pushing the track page layout down with no way to collapse them. added a collapsible wrapper that truncates descriptions taller than ~5 lines (128px) with a fade-out gradient. the "show more" toggle started as a bare left-aligned text link, then was restyled as a centered pill button with chevron indicators (▾/▴) to match the existing `.pill-btn` pattern used in Queue and tag badges.
+
+---
+
 #### handle typeahead migration (PRs #1140-1141, Mar 17)
 
 **why**: switching handle autocomplete to [`typeahead.waow.tech`](https://typeahead.waow.tech) — a community ATProto actor search service (Zig ingester on Fly.io → Cloudflare Worker + D1/FTS5) — revealed that the backend `/search/handles` endpoint was just a passthrough proxy. no auth, caching, or transformation — just an extra hop adding ~500ms of latency.
@@ -207,6 +227,14 @@ rewrote docs.plyr.fm from developer-only internal docs to an audience-first site
 
 **PDS default for uploads (PR #1060)**: new uploads now default to storing audio on the user's PDS instead of R2. one-line change — flips the default so user data ownership is opt-out rather than opt-in.
 
+#### early March fixes (PRs #1001-1027, Mar 1-5)
+
+**activity feed** (PRs #1001-1021): new `/activity` page showing platform-wide upload/like/play events with glass cards, artist avatars, artwork thumbnails, and a per-day histogram sparkline. iterated heavily on layout (lava lamp background → cleaner glass), fixed a histogram 500 caused by SQLAlchemy bind collision with `::` cast syntax, and landed on a homepage pulse icon link. ultimately reverted the homepage integration (#1021) to keep the feed as a standalone page.
+
+**other fixes**: homepage load time regression fixed (PR #1025) — slow query from activity integration. teal.fm scrobble dedup (PR #1024). resilient PDS record fetching with DID resolution fallback (PR #1022). playcount lock reactivity fix (PR #1026). deploy failure DM notifications via Bluesky (PR #1027).
+
+---
+
 #### embed glow bar + share button (PRs #996-998, Mar 1)
 
 **glow bar**: 1px accent-colored bar (`#6a9fff`) on track and collection embeds that lights up on playback and dims on pause, matching the main Player's `::before` style. uses `color-mix()` for the box-shadow glow. works across all container query breakpoints.
@@ -270,7 +298,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-switching to the community typeahead service surfaced an unnecessary backend proxy hop — moved handle autocomplete to frontend-direct calls (~500ms improvement). RSS feeds pulled back as an over-eager introduction. ambient "live" theme and Jetstream remain stable in production.
+aligned frontend form validation with backend limits — audited every lexicon constraint and added missing `maxlength` attributes, character counters, and client-side file size checks. collapsible descriptions and a centered pill toggle landed for long track pages. typeahead moved to frontend-direct calls. ambient "live" theme and Jetstream remain stable in production.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -406,5 +434,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-17 (handle typeahead migration, RSS removal).
+this is a living document. last updated 2026-03-18 (validation alignment, collapsible descriptions, activity feed backfill).
 
