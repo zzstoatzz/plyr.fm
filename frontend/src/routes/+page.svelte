@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import TrackCard from '$lib/components/TrackCard.svelte';
+	import ActivityCard from '$lib/components/ActivityCard.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import HiddenTagsFilter from '$lib/components/HiddenTagsFilter.svelte';
@@ -10,7 +11,9 @@
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache, fetchTopTracks } from '$lib/tracks.svelte';
 	import { networkArtistsCache } from '$lib/network-artists.svelte';
-	import type { Track } from '$lib/types';
+	import { dismissedSections } from '$lib/dismissed-sections.svelte';
+	import { API_URL } from '$lib/config';
+	import type { Track, ActivityEvent } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
 	import { fade } from 'svelte/transition';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
@@ -33,6 +36,11 @@
 	let loadingTopTracks = $state(true);
 	let hasTopTracks = $derived(topTracks.length > 0);
 
+	// recent activity
+	let activityEvents = $state<ActivityEvent[]>([]);
+	let loadingActivity = $state(true);
+	let hasActivity = $derived(activityEvents.length > 0);
+
 	// network artists (people you follow on bluesky who have music here)
 	let networkArtists = $derived(networkArtistsCache.artists);
 	let hasNetworkArtists = $derived(networkArtistsCache.hasArtists);
@@ -47,11 +55,27 @@
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 
 	onMount(async () => {
-		const [topResult] = await Promise.all([fetchTopTracks(10), tracksCache.fetch()]);
+		const [topResult, , activityResult] = await Promise.all([
+			fetchTopTracks(10),
+			tracksCache.fetch(),
+			fetchActivity()
+		]);
 		topTracks = topResult;
 		loadingTopTracks = false;
+		activityEvents = activityResult;
+		loadingActivity = false;
 		initialLoad = false;
 	});
+
+	async function fetchActivity(): Promise<ActivityEvent[]> {
+		try {
+			const res = await fetch(`${API_URL}/activity/?limit=10`);
+			if (!res.ok) return [];
+			return (await res.json()).events ?? [];
+		} catch {
+			return [];
+		}
+	}
 
 	// fetch network artists reactively — auth.isAuthenticated is false on
 	// initial load and flips to true after the async /auth/me call resolves
@@ -128,40 +152,68 @@
 
 <main>
 	<!-- top tracks section -->
-	{#key loadingTopTracks}
-		{#if loadingTopTracks}
-			<section class="top-tracks" transition:fade={{ duration: 200 }}>
-				<h2>
-					top tracks
-				</h2>
-				<div class="loading-container compact">
-					<WaveLoading size="sm" message="loading..." />
-				</div>
-			</section>
-		{:else if hasTopTracks}
-			<section class="top-tracks" transition:fade={{ duration: 200 }}>
-				<h2>
-					top tracks
-				</h2>
-				<div class="top-tracks-grid">
-					{#each topTracks as track, i}
-						<TrackCard
-							{track}
-							index={i}
-							isPlaying={player.currentTrack?.id === track.id}
-							onPlay={(t) => queue.playNow(t)}
-						/>
-					{/each}
-				</div>
-			</section>
-		{/if}
-	{/key}
+	{#if !dismissedSections.has('top-tracks')}
+		{#key loadingTopTracks}
+			{#if loadingTopTracks}
+				<section class="shelf" transition:fade={{ duration: 200 }}>
+					<div class="shelf-header">
+						<h2>top tracks</h2>
+						<button
+							class="dismiss-btn"
+							onclick={() => dismissedSections.dismiss('top-tracks')}
+							aria-label="hide top tracks"
+							title="hide this section"
+						>
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+						</button>
+					</div>
+					<div class="loading-container compact">
+						<WaveLoading size="sm" message="loading..." />
+					</div>
+				</section>
+			{:else if hasTopTracks}
+				<section class="shelf" transition:fade={{ duration: 200 }}>
+					<div class="shelf-header">
+						<h2>top tracks</h2>
+						<button
+							class="dismiss-btn"
+							onclick={() => dismissedSections.dismiss('top-tracks')}
+							aria-label="hide top tracks"
+							title="hide this section"
+						>
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+						</button>
+					</div>
+					<div class="shelf-grid">
+						{#each topTracks as track, i}
+							<TrackCard
+								{track}
+								index={i}
+								isPlaying={player.currentTrack?.id === track.id}
+								onPlay={(t) => queue.playNow(t)}
+							/>
+						{/each}
+					</div>
+				</section>
+			{/if}
+		{/key}
+	{/if}
 
 	<!-- artists from your bluesky network -->
-	{#if hasNetworkArtists}
-		<section class="network-artists" transition:fade={{ duration: 200 }}>
-			<h2>artists you know</h2>
-			<div class="artist-grid">
+	{#if hasNetworkArtists && !dismissedSections.has('network-artists')}
+		<section class="shelf" transition:fade={{ duration: 200 }}>
+			<div class="shelf-header">
+				<h2>artists you know</h2>
+				<button
+					class="dismiss-btn"
+					onclick={() => dismissedSections.dismiss('network-artists')}
+					aria-label="hide artists you know"
+					title="hide this section"
+				>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+				</button>
+			</div>
+			<div class="shelf-grid">
 				{#each networkArtists as artist}
 					{@const refreshedUrl = getRefreshedAvatar(artist.did)}
 					{@const displayUrl = refreshedUrl ?? artist.avatar_url}
@@ -188,6 +240,63 @@
 				{/each}
 			</div>
 		</section>
+	{/if}
+
+	<!-- recent activity -->
+	{#if !dismissedSections.has('activity')}
+		{#if loadingActivity}
+			<section class="shelf" transition:fade={{ duration: 200 }}>
+				<div class="shelf-header">
+					<h2>recent activity</h2>
+					<div class="shelf-actions">
+						<a href="/activity" class="see-all">see all</a>
+						<button
+							class="dismiss-btn"
+							onclick={() => dismissedSections.dismiss('activity')}
+							aria-label="hide recent activity"
+							title="hide this section"
+						>
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+						</button>
+					</div>
+				</div>
+				<div class="loading-container compact">
+					<WaveLoading size="sm" message="loading..." />
+				</div>
+			</section>
+		{:else if hasActivity}
+			<section class="shelf" transition:fade={{ duration: 200 }}>
+				<div class="shelf-header">
+					<h2>recent activity</h2>
+					<div class="shelf-actions">
+						<a href="/activity" class="see-all">see all</a>
+						<button
+							class="dismiss-btn"
+							onclick={() => dismissedSections.dismiss('activity')}
+							aria-label="hide recent activity"
+							title="hide this section"
+						>
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+						</button>
+					</div>
+				</div>
+				<div class="shelf-grid">
+					{#each activityEvents as event (event.created_at + event.actor.did + event.type)}
+						<ActivityCard {event} />
+					{/each}
+				</div>
+			</section>
+		{/if}
+	{/if}
+
+	<!-- restore dismissed sections -->
+	{#if dismissedSections.hasDismissed}
+		<button
+			class="restore-btn"
+			onclick={() => dismissedSections.restoreAll()}
+		>
+			show all sections
+		</button>
 	{/if}
 
 	<section class="tracks">
@@ -253,18 +362,66 @@
 		padding: 1.5rem 1rem;
 	}
 
-	.top-tracks {
+	/* shared shelf layout for horizontal scroll sections */
+	.shelf {
 		margin-bottom: 2.5rem;
 	}
 
-	.top-tracks h2 {
+	.shelf-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 1rem;
+	}
+
+	.shelf-header h2 {
 		font-size: var(--text-page-heading);
 		font-weight: 700;
 		color: var(--text-primary);
-		margin: 0 0 1rem 0;
+		margin: 0;
 	}
 
-	.top-tracks-grid {
+	.shelf-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.see-all {
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+		text-decoration: none;
+		transition: color 0.15s;
+	}
+
+	.see-all:hover {
+		color: var(--accent);
+	}
+
+	.dismiss-btn {
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		padding: 0.2rem;
+		border-radius: var(--radius-sm);
+		opacity: 0;
+		transition: opacity 0.15s, color 0.15s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.shelf-header:hover .dismiss-btn {
+		opacity: 1;
+	}
+
+	.dismiss-btn:hover {
+		color: var(--text-primary);
+	}
+
+	.shelf-grid {
 		display: flex;
 		gap: 0.75rem;
 		overflow-x: auto;
@@ -274,33 +431,26 @@
 		scroll-padding-inline: 1rem;
 	}
 
-	.top-tracks-grid::-webkit-scrollbar {
+	.shelf-grid::-webkit-scrollbar {
 		display: none;
 	}
 
-	.network-artists {
-		margin-bottom: 2.5rem;
+	.restore-btn {
+		display: block;
+		margin: 0 auto 1.5rem;
+		background: none;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-full);
+		color: var(--text-tertiary);
+		font-size: var(--text-xs);
+		padding: 0.3rem 0.75rem;
+		cursor: pointer;
+		transition: color 0.15s, border-color 0.15s;
 	}
 
-	.network-artists h2 {
-		font-size: var(--text-page-heading);
-		font-weight: 700;
+	.restore-btn:hover {
 		color: var(--text-primary);
-		margin: 0 0 1rem 0;
-	}
-
-	.artist-grid {
-		display: flex;
-		gap: 0.75rem;
-		overflow-x: auto;
-		padding-bottom: 0.5rem;
-		scrollbar-width: none;
-		scroll-snap-type: x proximity;
-		scroll-padding-inline: 1rem;
-	}
-
-	.artist-grid::-webkit-scrollbar {
-		display: none;
+		border-color: var(--border-default);
 	}
 
 	.artist-card {
@@ -426,10 +576,14 @@
 			padding: 0 0.75rem calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px));
 		}
 
-		.section-header h2,
-		.top-tracks h2,
-		.network-artists h2 {
+		.shelf-header h2,
+		.section-header h2 {
 			font-size: var(--text-2xl);
+		}
+
+		/* always show dismiss on mobile (no hover) */
+		.dismiss-btn {
+			opacity: 0.5;
 		}
 	}
 </style>
