@@ -4,7 +4,6 @@
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import TrackCard from '$lib/components/TrackCard.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import FloatingActivity from '$lib/components/FloatingActivity.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import HiddenTagsFilter from '$lib/components/HiddenTagsFilter.svelte';
 	import { player } from '$lib/player.svelte';
@@ -126,8 +125,6 @@
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
-
-<FloatingActivity />
 
 <main>
 	<!-- top tracks section -->
