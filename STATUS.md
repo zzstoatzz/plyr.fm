@@ -47,6 +47,28 @@ plyr.fm should become:
 
 ### March 2026
 
+#### homepage activity integration — failed experiment (PRs #1151-1156, Mar 19)
+
+**goal**: inject life into the homepage by surfacing recent platform activity (likes, uploads, comments, joins).
+
+**attempt 1 — floating pills** (#1151): glassmorphic pill-shaped elements drifting across the page background with CSS keyframe animations. identical shapes for all event types, slow 25-45s drift cycles, visible for ~75% of each cycle. deployed to staging: looked like dopey submarines hanging around the background. not ephemeral, not legible, not visually distinct between event types. **3/10.**
+
+**attempt 2 — restyled pills** (#1152): distinct shapes per event type (circles, rectangles, speech bubbles), faster 14-24s cycles visible only ~25% of the time, type-colored backgrounds with glow. better than v1 but still fundamentally the same problem — random floating elements in the background look corny regardless of styling. **5/10.**
+
+**attempt 3 — text echoes** (#1153): researched internet.dev's text-first design philosophy. stripped all card/pill chrome, rendered bare monospace text with type-colored glow, added sonar ring ping animations, JS-driven slot cycling with staggered timing. more refined than the pills but the core concept of randomly positioned background elements was still bad. still corny.
+
+**attempt 4 — activity shelf** (#1155): abandoned the background approach entirely. built a horizontal scroll section (like top tracks / artists you know) with compact `ActivityCard` components, plus dismissible sections with localStorage persistence. closer to the right idea structurally, but the cards weren't good enough and the overall execution didn't meet the bar.
+
+**outcome**: all four attempts reverted (#1154, #1156). homepage is back to its pre-experiment state. the `ActivityCard`, `FloatingActivity`, and `dismissed-sections` modules were all deleted.
+
+**lessons**:
+- floating/background elements for activity feeds are a fundamentally bad idea — they look gimmicky regardless of visual polish
+- research into design systems (internet.dev, Spotify shelves, etc.) was useful but didn't compensate for weak visual execution
+- should have started with the simplest inline approach (attempt 4) instead of the most ambitious one (attempt 1)
+- the activity data is available via `/activity/` API and the dedicated `/activity` page — homepage integration remains an open question
+
+---
+
 #### frontend validation alignment (PR #1148, Mar 18)
 
 audited every backend validation limit (lexicon schemas, pydantic models, manual checks) against frontend form enforcement. found 8 fields with backend limits but no frontend `maxlength`, one upload path missing a client-side file size check, and two limit mismatches between the lexicon and API layer.
