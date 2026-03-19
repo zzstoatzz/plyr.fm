@@ -55,6 +55,7 @@
 			placeholder={placeholder}
 			{disabled}
 			class="album-input"
+			maxlength="256"
 			onfocus={() => { if (albums.length > 0) showResults = true; }}
 			oninput={() => { showResults = albums.length > 0; }}
 			autocomplete="off"

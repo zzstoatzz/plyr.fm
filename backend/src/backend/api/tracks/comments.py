@@ -30,14 +30,14 @@ MAX_COMMENTS_PER_TRACK = 20
 class CommentCreate(BaseModel):
     """request body for creating a comment."""
 
-    text: str = Field(..., min_length=1, max_length=300)
+    text: str = Field(..., min_length=1, max_length=1000)
     timestamp_ms: int = Field(..., ge=0)
 
 
 class CommentUpdate(BaseModel):
     """request body for updating a comment."""
 
-    text: str = Field(..., min_length=1, max_length=300)
+    text: str = Field(..., min_length=1, max_length=1000)
 
 
 class CommentResponse(BaseModel):

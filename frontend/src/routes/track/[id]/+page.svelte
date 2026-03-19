@@ -706,15 +706,20 @@ $effect(() => {
 
 				{#if auth.isAuthenticated}
 					<form class="comment-form" onsubmit={(e) => { e.preventDefault(); submitComment(); }}>
-						<input
-							type="text"
-							class="comment-input"
-							aria-label="Add a timed comment"
-							placeholder={player.currentTrack?.id === track.id ? `comment at ${formatTimestamp((player.currentTime || 0) * 1000)}...` : 'add a comment...'}
-							bind:value={newCommentText}
-							maxlength={300}
-							disabled={submittingComment}
-						/>
+						<div class="comment-input-wrapper">
+							<input
+								type="text"
+								class="comment-input"
+								aria-label="Add a timed comment"
+								placeholder={player.currentTrack?.id === track.id ? `comment at ${formatTimestamp((player.currentTime || 0) * 1000)}...` : 'add a comment...'}
+								bind:value={newCommentText}
+								maxlength={1000}
+								disabled={submittingComment}
+							/>
+							{#if newCommentText.length > 0}
+								<span class="comment-char-count">{newCommentText.length} / 1000</span>
+							{/if}
+						</div>
 						<button
 							type="submit"
 							class="comment-submit"
@@ -785,7 +790,7 @@ $effect(() => {
 														type="text"
 														class="comment-edit-input"
 														bind:value={editingCommentText}
-														maxlength={300}
+														maxlength={1000}
 														onkeydown={(e) => {
 															if (e.key === 'Enter') saveEdit(comment.id);
 															if (e.key === 'Escape') cancelEditing();
@@ -1282,8 +1287,13 @@ $effect(() => {
 		margin-bottom: 0.75rem;
 	}
 
-	.comment-input {
+	.comment-input-wrapper {
 		flex: 1;
+		position: relative;
+	}
+
+	.comment-input {
+		width: 100%;
 		padding: 0.6rem 0.8rem;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border-default);
@@ -1291,6 +1301,14 @@ $effect(() => {
 		color: var(--text-primary);
 		font-size: var(--text-base);
 		font-family: inherit;
+	}
+
+	.comment-char-count {
+		position: absolute;
+		right: 0.5rem;
+		top: -1.25rem;
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
 	}
 
 	.comment-input:focus {

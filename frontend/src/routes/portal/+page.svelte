@@ -694,7 +694,11 @@
 						disabled={savingProfile}
 						placeholder="tell us about your music..."
 						rows="4"
+						maxlength="2560"
 					></textarea>
+					{#if bio.length > 0}
+						<div class="char-count">{bio.length} / 2560</div>
+					{/if}
 				</div>
 
 				<div class="form-group">
@@ -821,6 +825,7 @@
 												bind:value={editTitle}
 												placeholder="track title"
 												class="edit-input"
+												maxlength="256"
 											/>
 										</div>
 										<div class="edit-field-group">
@@ -833,6 +838,9 @@
 												maxlength="5000"
 												class="edit-input"
 											></textarea>
+											{#if editDescription.length > 0}
+												<div class="char-count">{editDescription.length} / 5000</div>
+											{/if}
 										</div>
 										<div class="edit-field-group">
 											<label for="edit-album" class="edit-label">album (optional)</label>
@@ -968,6 +976,11 @@
 																const target = e.target as HTMLInputElement;
 																const file = target.files?.[0];
 																if (file) {
+																	if (file.size > 20 * 1024 * 1024) {
+																		toast.error('image must be under 20 MB');
+																		target.value = '';
+																		return;
+																	}
 																	editImageFile = file;
 																	if (editImagePreviewUrl) {
 																		URL.revokeObjectURL(editImagePreviewUrl);
@@ -1711,6 +1724,12 @@
 		margin-top: 0.35rem;
 		font-size: var(--text-xs);
 		color: var(--text-muted);
+	}
+
+	.char-count {
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+		text-align: right;
 	}
 
 	.hint a {

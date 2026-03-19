@@ -12,7 +12,7 @@
 		hasUnresolvedInput?: boolean;
 	}
 
-	let { selected = $bindable([]), onAdd, onRemove, maxFeatures = 5, disabled = false, hasUnresolvedInput = $bindable(false) }: Props = $props();
+	let { selected = $bindable([]), onAdd, onRemove, maxFeatures = 10, disabled = false, hasUnresolvedInput = $bindable(false) }: Props = $props();
 
 	let query = $state('');
 	let results = $state<FeaturedArtist[]>([]);

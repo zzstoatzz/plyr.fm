@@ -151,7 +151,7 @@ max_lines = 555
 
 [[rules]]
 path = "frontend/src/routes/library/+page.svelte"
-max_lines = 633
+max_lines = 634
 
 [[rules]]
 path = "frontend/src/routes/liked/+page.svelte"
@@ -163,7 +163,7 @@ max_lines = 2446
 
 [[rules]]
 path = "frontend/src/routes/portal/+page.svelte"
-max_lines = 3447
+max_lines = 3466
 
 [[rules]]
 path = "frontend/src/routes/settings/+page.svelte"
@@ -183,7 +183,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 725
+max_lines = 735
 
 [[rules]]
 path = "services/moderation/src/admin.rs"

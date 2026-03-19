@@ -1304,6 +1304,7 @@
 					type="text"
 					bind:value={searchQuery}
 					placeholder="search for tracks..."
+					maxlength="100"
 					autofocus
 				/>
 				{#if searching}

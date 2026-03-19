@@ -158,6 +158,7 @@
 				placeholder="search tracks, artists, albums, playlists..."
 				value={search.query}
 				oninput={(e) => search.setQuery(e.currentTarget.value)}
+				maxlength="100"
 				autocomplete="off"
 				autocorrect="off"
 				autocapitalize="off"

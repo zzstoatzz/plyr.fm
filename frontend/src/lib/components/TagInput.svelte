@@ -6,6 +6,9 @@
 		track_count: number;
 	}
 
+	const MAX_TAGS = 10;
+	const MAX_TAG_LENGTH = 50;
+
 	interface Props {
 		tags: string[];
 		onAdd: (_tag: string) => void;
@@ -54,8 +57,8 @@
 	}
 
 	function addTag(tag: string) {
-		const normalized = tag.trim().toLowerCase();
-		if (normalized && !tags.includes(normalized)) {
+		const normalized = tag.trim().toLowerCase().slice(0, MAX_TAG_LENGTH);
+		if (normalized && !tags.includes(normalized) && tags.length < MAX_TAGS) {
 			onAdd(normalized);
 		}
 		inputValue = '';
@@ -137,7 +140,8 @@
 			onfocus={() => { if (suggestions.length > 0) showSuggestions = true; }}
 			placeholder={tags.length === 0 ? placeholder : ''}
 			class="tag-input"
-			{disabled}
+			disabled={disabled || tags.length >= MAX_TAGS}
+			maxlength={MAX_TAG_LENGTH}
 			autocomplete="off"
 			autocapitalize="off"
 			spellcheck="false"
@@ -146,6 +150,10 @@
 			<span class="spinner">...</span>
 		{/if}
 	</div>
+
+	{#if tags.length >= MAX_TAGS}
+		<div class="max-tags-message">maximum {MAX_TAGS} tags</div>
+	{/if}
 
 	{#if showSuggestions && suggestions.length > 0}
 		<div class="suggestions">
@@ -245,6 +253,12 @@
 	.tag-input:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.max-tags-message {
+		margin-top: 0.5rem;
+		font-size: var(--text-sm);
+		color: var(--text-tertiary);
 	}
 
 	.spinner {
