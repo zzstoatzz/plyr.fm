@@ -52,7 +52,7 @@ fn default_label_val() -> String {
 }
 
 /// Normalize a score from integer (0-100) to float (0.0-1.0) range.
-/// AuDD returns scores as integers like 85 meaning 85%.
+/// AcoustID returns scores as integers like 85 meaning 85%.
 fn normalize_score(score: f64) -> f64 {
     if score > 1.0 {
         score / 100.0
