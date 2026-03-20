@@ -10,11 +10,10 @@
 		[key: string]: number;
 	}
 
-	interface DailyData {
+	interface ScanDailyData {
 		date: string;
 		scans: number;
 		flagged: number;
-		requests: number;
 	}
 
 	interface CostData {
@@ -35,18 +34,12 @@
 				breakdown: CostBreakdown;
 				note: string;
 			};
-			audd: {
+			copyright_scanning: {
 				amount: number;
-				base_cost: number;
-				overage_cost: number;
-				scans_this_period: number;
-				requests_this_period: number;
-				audio_seconds: number;
-				free_requests: number;
-				remaining_free: number;
-				billable_requests: number;
+				scans_30d: number;
+				flagged_30d: number;
 				flag_rate: number;
-				daily: DailyData[];
+				daily: ScanDailyData[];
 				note: string;
 			};
 		};
@@ -59,48 +52,16 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let data = $state<CostData | null>(null);
-	let timeRange = $state<'day' | 'week' | 'month'>('month');
-
-	// filter daily data based on selected time range
-	// returns the last N days of data based on selection
-	let filteredDaily = $derived.by(() => {
-		if (!data?.costs.audd.daily.length) return [];
-		const daily = data.costs.audd.daily;
-		if (timeRange === 'day') {
-			// show last 2 days (today + yesterday) for 24h view
-			return daily.slice(-2);
-		} else if (timeRange === 'week') {
-			// show last 7 days
-			return daily.slice(-7);
-		} else {
-			// show all (up to 30 days)
-			return daily;
-		}
-	});
-
-	// calculate totals for selected time range
-	let filteredTotals = $derived.by(() => {
-		return {
-			requests: filteredDaily.reduce((sum, d) => sum + d.requests, 0),
-			scans: filteredDaily.reduce((sum, d) => sum + d.scans, 0)
-		};
-	});
-
 	// derived values for bar chart scaling
 	let maxCost = $derived(
 		data
 			? Math.max(
 					data.costs.fly_io.amount,
 					data.costs.neon.amount,
-					data.costs.cloudflare.amount,
-					data.costs.audd.amount
+					data.costs.cloudflare.amount
 				)
 			: 1
 	);
-
-	let maxRequests = $derived.by(() => {
-		return filteredDaily.length ? Math.max(...filteredDaily.map((d) => d.requests)) : 1;
-	});
 
 	onMount(async () => {
 		try {
@@ -222,90 +183,24 @@
 					<span class="cost-note">{data.costs.cloudflare.note}</span>
 				</div>
 
-				<div class="cost-item">
-					<div class="cost-header">
-						<span class="cost-name">audd</span>
-						<span class="cost-amount">{formatCurrency(data.costs.audd.amount)}</span>
-					</div>
-					<div class="cost-bar-bg">
-						<div
-							class="cost-bar audd"
-							style="width: {barWidth(data.costs.audd.amount, maxCost)}%"
-						></div>
-					</div>
-					<span class="cost-note">{data.costs.audd.note}</span>
-				</div>
 			</div>
 		</section>
 
-		<!-- audd details -->
-		<section class="audd-section">
-			<div class="audd-header">
-				<h2>api requests (audd)</h2>
-				<div class="time-range-toggle">
-					<button
-						class:active={timeRange === 'day'}
-						onclick={() => (timeRange = 'day')}
-					>
-						24h
-					</button>
-					<button
-						class:active={timeRange === 'week'}
-						onclick={() => (timeRange = 'week')}
-					>
-						7d
-					</button>
-					<button
-						class:active={timeRange === 'month'}
-						onclick={() => (timeRange = 'month')}
-					>
-						30d
-					</button>
+		<!-- copyright scanning -->
+		<section class="scanning-section">
+			<div class="cost-item">
+				<div class="cost-header">
+					<span class="cost-name">copyright scanning</span>
+					<span class="cost-amount free">free</span>
 				</div>
-			</div>
-
-			<div class="audd-stats">
-				<div class="stat">
-					<span class="stat-value">{filteredTotals.requests.toLocaleString()}</span>
-					<span class="stat-label">requests ({timeRange === 'day' ? '24h' : timeRange === 'week' ? '7d' : '30d'})</span>
-				</div>
-				<div class="stat">
-					<span class="stat-value">{data.costs.audd.remaining_free.toLocaleString()}</span>
-					<span class="stat-label">free remaining</span>
-				</div>
-				<div class="stat">
-					<span class="stat-value">{filteredTotals.scans.toLocaleString()}</span>
-					<span class="stat-label">tracks scanned</span>
-				</div>
-			</div>
-
-			<p class="audd-explainer">
-				1 request = 12s of audio. {data.costs.audd.free_requests.toLocaleString()} free/month,
-				then ${(5).toFixed(2)}/1k requests.
-				{#if data.costs.audd.billable_requests > 0}
-					<strong>{data.costs.audd.billable_requests.toLocaleString()} billable</strong> this billing period.
+				<span class="cost-note">{data.costs.copyright_scanning.note}</span>
+				{#if data.costs.copyright_scanning.scans_30d > 0}
+					<span class="cost-note">
+						{data.costs.copyright_scanning.scans_30d} scans last 30 days
+						({data.costs.copyright_scanning.flag_rate}% flagged)
+					</span>
 				{/if}
-			</p>
-
-			{#if filteredDaily.length > 0}
-				<div class="daily-chart">
-					<h3>daily requests</h3>
-					<div class="chart-bars">
-						{#each filteredDaily as day}
-							<div class="chart-bar-container">
-								<div
-									class="chart-bar"
-									style="height: {Math.max(4, (day.requests / maxRequests) * 100)}%"
-									title="{day.date}: {day.requests} requests ({day.scans} tracks)"
-								></div>
-								<span class="chart-label">{day.date.slice(5)}</span>
-							</div>
-						{/each}
-					</div>
-				</div>
-			{:else}
-				<p class="no-data">no requests in this time range</p>
-			{/if}
+			</div>
 		</section>
 
 		<!-- support cta -->
@@ -415,8 +310,7 @@
 		margin-bottom: 2rem;
 	}
 
-	.breakdown-section h2,
-	.audd-section h2 {
+	.breakdown-section h2 {
 		font-size: var(--text-sm);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
@@ -470,170 +364,18 @@
 		transition: width 0.3s ease;
 	}
 
-	.cost-bar.audd {
-		background: var(--warning);
-	}
-
 	.cost-note {
 		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 	}
 
-	/* audd section */
-	.audd-section {
+	/* scanning section */
+	.scanning-section {
 		margin-bottom: 2rem;
 	}
 
-	.audd-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 1rem;
-		gap: 1rem;
-	}
-
-	.audd-header h2 {
-		margin-bottom: 0;
-	}
-
-	.time-range-toggle {
-		display: flex;
-		gap: 0.25rem;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-base);
-		padding: 0.25rem;
-	}
-
-	.time-range-toggle button {
-		padding: 0.35rem 0.75rem;
-		font-family: inherit;
-		font-size: var(--text-xs);
-		font-weight: 500;
-		background: transparent;
-		border: none;
-		border-radius: var(--radius-sm);
-		color: var(--text-secondary);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.time-range-toggle button:hover {
-		color: var(--text-primary);
-	}
-
-	.time-range-toggle button.active {
-		background: var(--accent);
-		color: white;
-	}
-
-	.no-data {
-		text-align: center;
-		color: var(--text-tertiary);
-		font-size: var(--text-sm);
-		padding: 2rem;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-md);
-	}
-
-	.audd-stats {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: 1rem;
-		margin-bottom: 1rem;
-	}
-
-	.audd-explainer {
-		font-size: var(--text-sm);
-		color: var(--text-secondary);
-		margin-bottom: 1.5rem;
-		line-height: 1.5;
-	}
-
-	.audd-explainer strong {
-		color: var(--warning);
-	}
-
-	.stat {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		padding: 1rem;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-md);
-	}
-
-	.stat-value {
-		font-size: var(--text-2xl);
-		font-weight: 700;
-		color: var(--text-primary);
-		font-variant-numeric: tabular-nums;
-	}
-
-	.stat-label {
-		font-size: var(--text-xs);
-		color: var(--text-tertiary);
-		text-align: center;
-		margin-top: 0.25rem;
-	}
-
-	/* daily chart */
-	.daily-chart {
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-md);
-		padding: 1rem;
-		overflow: hidden;
-	}
-
-	.daily-chart h3 {
-		font-size: var(--text-xs);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-tertiary);
-		margin: 0 0 1rem;
-	}
-
-	.chart-bars {
-		display: flex;
-		align-items: flex-end;
-		gap: 2px;
-		height: 100px;
-		width: 100%;
-	}
-
-	.chart-bar-container {
-		flex: 1 1 0;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		height: 100%;
-	}
-
-	.chart-bar {
-		width: 100%;
-		background: var(--accent);
-		border-radius: 2px 2px 0 0;
-		min-height: 4px;
-		margin-top: auto;
-		transition: height 0.3s ease;
-	}
-
-	.chart-bar:hover {
-		opacity: 0.8;
-	}
-
-	.chart-label {
-		font-size: 0.55rem;
-		color: var(--text-tertiary);
-		margin-top: 0.25rem;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		max-width: 100%;
+	.cost-amount.free {
+		color: var(--success, #4caf50);
 	}
 
 	/* support section */
@@ -711,14 +453,6 @@
 	@media (max-width: 480px) {
 		.total-amount {
 			font-size: 2.5rem;
-		}
-
-		.audd-stats {
-			grid-template-columns: 1fr;
-		}
-
-		.chart-label {
-			display: none;
 		}
 	}
 </style>

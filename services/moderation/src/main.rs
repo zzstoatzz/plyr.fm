@@ -1,7 +1,7 @@
 //! plyr.fm moderation service
 //!
 //! Provides:
-//! - AuDD audio fingerprinting for copyright detection
+//! - Audio fingerprinting via fpcalc + AcoustID for copyright detection
 //! - ATProto labeler endpoints (queryLabels, subscribeLabels)
 //! - Label emission for copyright violations
 //! - Admin UI for reviewing and resolving flags
@@ -76,8 +76,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let state = AppState {
-        audd_api_token: config.audd_api_token,
-        audd_api_url: config.audd_api_url,
+        acoustid_api_key: config.acoustid_api_key,
         db: db.map(Arc::new),
         signer: signer.map(Arc::new),
         label_tx,
@@ -92,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(handlers::health))
         // Sensitive images (public)
         .route("/sensitive-images", get(handlers::get_sensitive_images))
-        // AuDD scanning
+        // Copyright scanning (fpcalc + AcoustID)
         .route("/scan", post(audd::scan))
         // Image moderation via Claude
         .route("/scan-image", post(handlers::scan_image))

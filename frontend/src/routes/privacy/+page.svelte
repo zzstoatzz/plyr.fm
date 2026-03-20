@@ -83,7 +83,7 @@
 				<li><strong><a href="https://fly.io" target="_blank" rel="noopener">Fly.io</a></strong> - backend hosting</li>
 				<li><strong><a href="https://neon.tech" target="_blank" rel="noopener">Neon</a></strong> - database</li>
 				<li><strong><a href="https://logfire.pydantic.dev" target="_blank" rel="noopener">Logfire</a></strong> - error monitoring</li>
-				<li><strong><a href="https://audd.io" target="_blank" rel="noopener">AudD</a></strong> - audio fingerprinting for copyright detection</li>
+				<li><strong><a href="https://acoustid.org" target="_blank" rel="noopener">AcoustID</a></strong> - audio fingerprinting for copyright detection</li>
 				<li><strong><a href="https://anthropic.com" target="_blank" rel="noopener">Anthropic</a></strong> - image analysis for content moderation</li>
 				<li><strong><a href="https://atprotofans.com" target="_blank" rel="noopener">ATProtoFans</a></strong> - supporter validation for gated content</li>
 				<li><strong><a href="https://modal.com" target="_blank" rel="noopener">Modal</a></strong> - audio processing for search embeddings</li>

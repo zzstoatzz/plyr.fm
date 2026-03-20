@@ -8,8 +8,7 @@ pub struct Config {
     pub host: String,
     pub port: u16,
     pub auth_token: Option<String>,
-    pub audd_api_token: String,
-    pub audd_api_url: String,
+    pub acoustid_api_key: String,
     pub database_url: Option<String>,
     pub labeler_did: Option<String>,
     pub labeler_signing_key: Option<String>,
@@ -17,8 +16,7 @@ pub struct Config {
     pub claude_api_key: Option<String>,
     /// Claude model to use (default: claude-sonnet-4-5-20250929)
     pub claude_model: String,
-    /// Minimum percentage of matches that must belong to a single song to flag (default: 30)
-    /// AudD doesn't return confidence scores, so we use match frequency as a proxy.
+    /// Minimum AcoustID score (0-100) to flag a track as a copyright match (default: 30)
     pub copyright_score_threshold: i32,
 }
 
@@ -32,10 +30,8 @@ impl Config {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(8083),
             auth_token: env::var("MODERATION_AUTH_TOKEN").ok(),
-            audd_api_token: env::var("MODERATION_AUDD_API_TOKEN")
-                .map_err(|_| anyhow!("MODERATION_AUDD_API_TOKEN is required"))?,
-            audd_api_url: env::var("MODERATION_AUDD_API_URL")
-                .unwrap_or_else(|_| "https://enterprise.audd.io/".to_string()),
+            acoustid_api_key: env::var("MODERATION_ACOUSTID_API_KEY")
+                .map_err(|_| anyhow!("MODERATION_ACOUSTID_API_KEY is required"))?,
             database_url: env::var("MODERATION_DATABASE_URL").ok(),
             labeler_did: env::var("MODERATION_LABELER_DID").ok(),
             labeler_signing_key: env::var("MODERATION_LABELER_SIGNING_KEY").ok(),

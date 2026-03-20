@@ -47,6 +47,35 @@ plyr.fm should become:
 
 ### March 2026
 
+#### chromaprint.zig — standalone audio fingerprinting in pure zig (Mar 19)
+
+**why**: plyr.fm pays AuDD ~$5/1000 requests for copyright moderation fingerprinting. AcoustID is a free, open-source alternative that uses Chromaprint fingerprints, but the official library requires FFmpeg. we wanted a zero-dependency fingerprinting tool.
+
+**what shipped**: a standalone zig 0.16 library at [`@zzstoatzz.io/chromaprint.zig`](https://tangled.sh/@zzstoatzz.io/chromaprint.zig) that generates Chromaprint audio fingerprints and looks them up on AcoustID — no FFmpeg, no C dependencies, just a static binary.
+
+- ported the core algorithm from Andrew Kelley's [groovebasin](https://codeberg.org/andrewrk/groovebasin) implementation (~578 lines)
+- wrote a pure zig radix-2 Cooley-Tukey FFT (4096-point, comptime twiddle factors) to replace FFmpeg's `av.TXContext`
+- WAV reader for PCM16/Float32 mono 11025 Hz (replaces FFmpeg's decode pipeline)
+- AcoustID HTTP client with gzip-compressed POST (`std.compress.flate`)
+- MusicBrainz enrichment (recording ID → title/artist)
+- **fingerprints are an exact match against `fpcalc`** (the reference C implementation) — verified on real plyr.fm tracks including a rickroll flagged by the moderation system
+
+**technical notes**:
+- zig 0.16 has massive breaking changes from 0.15 (new `Io` context threading, `std.process.Init` for main, `client.fetch()` replacing `client.open()`). notes captured in memory for upcoming SDK migrations (zat, etc.)
+- AcoustID returns HTTP 400 (not 200) for API errors — discovered by testing with an expired test key. the JSON body must be parsed regardless of HTTP status
+- AcoustID's docs recommend compressed POST because fingerprints are large (~5KB base64). switched from query-string GET to gzip POST
+- the pure zig approach means the moderation service can embed fingerprinting directly instead of calling an external API
+
+**what's next**: replace AuDD with AcoustID in the moderation service, remove AuDD from costs and terms of service.
+
+---
+
+#### ambient theme polish (PRs #1158-1161, Mar 19)
+
+temperature unit detection for US users (Fahrenheit vs Celsius from browser locale), gradient banding reduction via interpolated color stops (7 stops instead of 3), and cached weather data for instant theme restore on page load.
+
+---
+
 #### homepage activity integration — failed experiment (PRs #1151-1156, Mar 19)
 
 **goal**: inject life into the homepage by surfacing recent platform activity (likes, uploads, comments, joins).
@@ -320,7 +349,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-aligned frontend form validation with backend limits — audited every lexicon constraint and added missing `maxlength` attributes, character counters, and client-side file size checks. collapsible descriptions and a centered pill toggle landed for long track pages. typeahead moved to frontend-direct calls. ambient "live" theme and Jetstream remain stable in production.
+replacing AuDD audio fingerprinting ($5/1000 requests) with free AcoustID lookups. a pure zig chromaprint library ([`@zzstoatzz.io/chromaprint.zig`](https://tangled.sh/@zzstoatzz.io/chromaprint.zig)) produces exact-match fingerprints against the reference `fpcalc` implementation. next step: integrate into the moderation service and remove AuDD from costs/terms.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -428,7 +457,7 @@ see live dashboard: [plyr.fm/costs](https://plyr.fm/costs)
 - fly.io (backend + redis + transcoder + moderation): ~$24/month
 - neon postgres: $5/month
 - cloudflare (R2 + pages + domain): ~$1/month
-- audd audio fingerprinting: $5-10/month (usage-based)
+- audd audio fingerprinting: $5-10/month (usage-based) — replacing with free AcoustID lookups
 - replicate (genre classification): <$1/month (scales to zero, ~$0.00019/run)
 - logfire: $0 (free tier)
 
@@ -456,5 +485,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-18 (validation alignment, collapsible descriptions, activity feed backfill).
+this is a living document. last updated 2026-03-19 (chromaprint.zig, ambient theme polish, AuDD → AcoustID migration in progress).
 
