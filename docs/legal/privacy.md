@@ -5,7 +5,7 @@ description: "how plyr.fm handles your data"
 
 > **note:** the source of truth is `frontend/src/routes/privacy/+page.svelte`. this markdown is a plain-text mirror for reference.
 
-**last updated:** february 6, 2026
+**last updated:** march 20, 2026
 
 plyr.fm ("we", "us", or "our") is an audio streaming application built on the [AT Protocol](https://atproto.com). this privacy policy applies to the instance at https://plyr.fm (the "site").
 
