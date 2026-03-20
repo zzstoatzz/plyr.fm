@@ -237,6 +237,19 @@ async def create_playlist(
         track_count=0,
     )
     db.add(playlist)
+    await db.flush()
+
+    # emit collection event
+    from backend.models import CollectionEvent
+
+    db.add(
+        CollectionEvent(
+            event_type="playlist_create",
+            actor_did=session.did,
+            playlist_id=playlist.id,
+        )
+    )
+
     await db.commit()
     await db.refresh(playlist)
 
@@ -623,6 +636,23 @@ async def add_track_to_playlist(
     # update database cache
     playlist.atproto_record_cid = cid
     playlist.track_count = len(new_items)
+
+    # emit collection event — resolve track_id from URI
+    from backend.models import CollectionEvent
+
+    track_result = await db.execute(
+        select(Track.id).where(Track.atproto_record_uri == body.track_uri)
+    )
+    resolved_track_id = track_result.scalar_one_or_none()
+    db.add(
+        CollectionEvent(
+            event_type="track_added_to_playlist",
+            actor_did=session.did,
+            playlist_id=playlist.id,
+            track_id=resolved_track_id,
+        )
+    )
+
     await db.commit()
     await db.refresh(playlist)
 

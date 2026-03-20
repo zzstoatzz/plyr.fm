@@ -772,9 +772,20 @@ async def _create_records(
                 select(Artist).where(Artist.did == ctx.artist_did)
             )
             artist_obj = artist_row.scalar_one()
-            album_record = await get_or_create_album(
+            album_record, album_created = await get_or_create_album(
                 db, artist_obj, ctx.album, image_id, image_url
             )
+
+            if album_created:
+                from backend.models import CollectionEvent
+
+                db.add(
+                    CollectionEvent(
+                        event_type="album_release",
+                        actor_did=ctx.artist_did,
+                        album_id=album_record.id,
+                    )
+                )
 
         values: dict = {
             "atproto_record_cid": atproto_cid,

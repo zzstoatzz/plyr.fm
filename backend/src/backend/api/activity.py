@@ -47,13 +47,33 @@ class ActivityTrack(BaseModel):
         return normalize_avatar_url(v)
 
 
+class ActivityCollection(BaseModel):
+    """collection referenced in an activity event."""
+
+    type: Literal["playlist", "album"]
+    id: str
+    name: str
+    image_url: str | None = None
+    owner_handle: str
+    slug: str | None = None  # albums only, for URL: /u/{handle}/album/{slug}
+
+
 class ActivityEvent(BaseModel):
     """single activity event."""
 
-    type: Literal["like", "track", "comment", "join"]
+    type: Literal[
+        "like",
+        "track",
+        "comment",
+        "join",
+        "playlist_create",
+        "album_release",
+        "track_added_to_playlist",
+    ]
     actor: ActivityActor
     track: ActivityTrack | None = None
     comment_text: str | None = None
+    collection: ActivityCollection | None = None
     created_at: datetime
 
 
@@ -95,11 +115,21 @@ _TRACK_COLUMNS = """
     ta.avatar_url AS track_artist_avatar_url
 """
 
+_NULL_COLLECTION_COLUMNS = """
+    NULL AS collection_type,
+    NULL AS collection_id,
+    NULL AS collection_name,
+    NULL AS collection_image_url,
+    NULL AS collection_owner_handle,
+    NULL AS collection_slug
+"""
+
 _LIKE_QUERY = f"""
     (SELECT 'like' AS event_type,
         {_BASE_COLUMNS},
         {_TRACK_COLUMNS},
         NULL AS comment_text,
+        {_NULL_COLLECTION_COLUMNS},
         tl.created_at AS created_at
     FROM track_likes tl
     JOIN artists a ON a.did = tl.user_did
@@ -119,6 +149,7 @@ _TRACK_QUERY = f"""
         t.thumbnail_url AS track_thumbnail_url,
         a.avatar_url AS track_artist_avatar_url,
         NULL AS comment_text,
+        {_NULL_COLLECTION_COLUMNS},
         t.created_at AS created_at
     FROM tracks t
     JOIN artists a ON a.did = t.artist_did
@@ -131,6 +162,7 @@ _COMMENT_QUERY = f"""
         {_BASE_COLUMNS},
         {_TRACK_COLUMNS},
         tc.text AS comment_text,
+        {_NULL_COLLECTION_COLUMNS},
         tc.created_at AS created_at
     FROM track_comments tc
     JOIN artists a ON a.did = tc.user_did
@@ -150,11 +182,42 @@ _JOIN_QUERY = f"""
         NULL AS track_thumbnail_url,
         NULL AS track_artist_avatar_url,
         NULL AS comment_text,
+        {_NULL_COLLECTION_COLUMNS},
         a.created_at AS created_at
     FROM artists a
     WHERE a.handle != '' AND a.display_name != ''
     {{cursor_clause}}
     ORDER BY a.created_at DESC LIMIT :limit)
+"""
+
+_COLLECTION_QUERY = f"""
+    (SELECT ce.event_type AS event_type,
+        {_BASE_COLUMNS},
+        t.id AS track_id,
+        t.title AS track_title,
+        ta.handle AS track_artist_handle,
+        t.image_url AS track_image_url,
+        t.thumbnail_url AS track_thumbnail_url,
+        ta.avatar_url AS track_artist_avatar_url,
+        NULL AS comment_text,
+        CASE WHEN ce.playlist_id IS NOT NULL THEN 'playlist'
+             WHEN ce.album_id IS NOT NULL THEN 'album' END AS collection_type,
+        COALESCE(p.id, al.id) AS collection_id,
+        COALESCE(p.name, al.title) AS collection_name,
+        COALESCE(p.image_url, al.image_url) AS collection_image_url,
+        COALESCE(pa.handle, ala.handle) AS collection_owner_handle,
+        al.slug AS collection_slug,
+        ce.created_at AS created_at
+    FROM collection_events ce
+    JOIN artists a ON a.did = ce.actor_did
+    LEFT JOIN playlists p ON p.id = ce.playlist_id
+    LEFT JOIN artists pa ON pa.did = p.owner_did
+    LEFT JOIN albums al ON al.id = ce.album_id
+    LEFT JOIN artists ala ON ala.did = al.artist_did
+    LEFT JOIN tracks t ON t.id = ce.track_id
+    LEFT JOIN artists ta ON ta.did = t.artist_did
+    {{cursor_clause}}
+    ORDER BY ce.created_at DESC LIMIT :limit)
 """
 
 
@@ -170,17 +233,20 @@ def _build_query(cursor: datetime | None) -> str:
         track_clause = "WHERE t.created_at < :cursor"
         comment_clause = "WHERE tc.created_at < :cursor"
         join_clause = "AND a.created_at < :cursor"
+        collection_clause = "WHERE ce.created_at < :cursor"
     else:
         like_clause = ""
         track_clause = ""
         comment_clause = ""
         join_clause = ""
+        collection_clause = ""
 
     parts = [
         _LIKE_QUERY.format(cursor_clause=like_clause),
         _TRACK_QUERY.format(cursor_clause=track_clause),
         _COMMENT_QUERY.format(cursor_clause=comment_clause),
         _JOIN_QUERY.format(cursor_clause=join_clause),
+        _COLLECTION_QUERY.format(cursor_clause=collection_clause),
     ]
 
     return " UNION ALL ".join(parts) + " ORDER BY created_at DESC LIMIT :limit"
@@ -214,30 +280,43 @@ async def get_activity_feed(
     if has_more:
         rows = rows[:limit]
 
-    events = [
-        ActivityEvent(
-            type=row.event_type,
-            actor=ActivityActor(
-                did=row.actor_did,
-                handle=row.actor_handle,
-                display_name=row.actor_display_name,
-                avatar_url=row.actor_avatar_url,
-            ),
-            track=ActivityTrack(
-                id=row.track_id,
-                title=row.track_title,
-                artist_handle=row.track_artist_handle,
-                image_url=row.track_image_url,
-                thumbnail_url=row.track_thumbnail_url,
-                artist_avatar_url=row.track_artist_avatar_url,
+    events: list[ActivityEvent] = []
+    for row in rows:
+        collection: ActivityCollection | None = None
+        if row.collection_type and row.collection_id:
+            collection = ActivityCollection(
+                type=row.collection_type,
+                id=row.collection_id,
+                name=row.collection_name or "",
+                image_url=row.collection_image_url,
+                owner_handle=row.collection_owner_handle or "",
+                slug=row.collection_slug,
             )
-            if row.track_id is not None
-            else None,
-            comment_text=row.comment_text,
-            created_at=row.created_at,
+
+        events.append(
+            ActivityEvent(
+                type=row.event_type,
+                actor=ActivityActor(
+                    did=row.actor_did,
+                    handle=row.actor_handle,
+                    display_name=row.actor_display_name,
+                    avatar_url=row.actor_avatar_url,
+                ),
+                track=ActivityTrack(
+                    id=row.track_id,
+                    title=row.track_title,
+                    artist_handle=row.track_artist_handle,
+                    image_url=row.track_image_url,
+                    thumbnail_url=row.track_thumbnail_url,
+                    artist_avatar_url=row.track_artist_avatar_url,
+                )
+                if row.track_id is not None
+                else None,
+                comment_text=row.comment_text,
+                collection=collection,
+                created_at=row.created_at,
+            )
         )
-        for row in rows
-    ]
 
     next_cursor = events[-1].created_at.isoformat() if has_more and events else None
 
@@ -261,6 +340,8 @@ _HISTOGRAM_QUERY = """
             UNION ALL
             SELECT a.created_at FROM artists a
                 WHERE a.handle != '' AND a.display_name != '' AND a.created_at >= :start
+            UNION ALL
+            SELECT ce.created_at FROM collection_events ce WHERE ce.created_at >= :start
         ) events GROUP BY day
     ) c ON c.day = CAST(d AS date)
     ORDER BY bucket_date

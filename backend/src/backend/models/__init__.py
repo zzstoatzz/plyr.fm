@@ -2,6 +2,7 @@
 
 from backend.models.album import Album
 from backend.models.artist import Artist
+from backend.models.collection_event import CollectionEvent
 from backend.models.copyright_scan import CopyrightScan
 from backend.models.database import Base
 from backend.models.sensitive_image import SensitiveImage
@@ -28,6 +29,7 @@ __all__ = [
     "Album",
     "Artist",
     "Base",
+    "CollectionEvent",
     "CopyrightScan",
     "ExchangeToken",
     "FeatureFlag",
