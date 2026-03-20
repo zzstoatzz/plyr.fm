@@ -18,7 +18,7 @@
 <div class="legal-container">
 	<article class="legal-content">
 		<h1>Privacy Policy</h1>
-		<p class="last-updated">Last updated: February 6, 2026</p>
+		<p class="last-updated">Last updated: March 20, 2026</p>
 
 		<p class="intro">
 			{APP_NAME} ("we", "us", or "our") is an audio streaming application built on the
