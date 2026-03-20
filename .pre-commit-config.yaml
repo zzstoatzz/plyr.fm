@@ -52,7 +52,7 @@ repos:
         name: check legal dates
         entry: python scripts/check_legal_dates.py
         language: system
-        files: ^frontend/src/routes/privacy/
+        files: ^frontend/src/routes/privacy/\+page\.svelte$
         pass_filenames: true
 
       - id: cargo-check-moderation
