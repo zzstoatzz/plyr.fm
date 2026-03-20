@@ -89,12 +89,4 @@
 		pointer-events: auto;
 	}
 
-	.tooltip-content a {
-		color: var(--accent);
-		text-decoration: none;
-	}
-
-	.tooltip-content a:hover {
-		text-decoration: underline;
-	}
 </style>

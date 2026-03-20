@@ -201,6 +201,17 @@ function blendColor(base: RGBA, tint: RGB, strength: number): string {
 	return `rgb(${r}, ${g}, ${b})`;
 }
 
+function cacheWeather(w: WeatherData): void {
+	try { localStorage.setItem('ambient_weather', JSON.stringify(w)); } catch { /* quota */ }
+}
+
+function getCachedWeather(): WeatherData | null {
+	try {
+		const raw = localStorage.getItem('ambient_weather');
+		return raw ? JSON.parse(raw) as WeatherData : null;
+	} catch { return null; }
+}
+
 class AmbientManager {
 	enabled = $state(false);
 	location = $state<AmbientLocation | null>(null);
@@ -270,9 +281,18 @@ class AmbientManager {
 				localStorage.setItem('ambient_location', JSON.stringify(coords));
 			}
 
-			this.enabled = true;
-			await this.fetchWeather();
-			this.startRefreshCycle();
+			// restore cached weather for instant gradient, then refresh in background
+			const cached = getCachedWeather();
+			if (cached) {
+				this.weather = cached;
+				this.enabled = true;
+				this.startRefreshCycle();
+				this.fetchWeather(); // background refresh — no await
+			} else {
+				this.enabled = true;
+				await this.fetchWeather();
+				this.startRefreshCycle();
+			}
 			return true;
 		} catch (err) {
 			this.error = err instanceof GeolocationPositionError
@@ -399,6 +419,7 @@ class AmbientManager {
 			};
 			this.lastFetchTime = Date.now();
 			this.error = null;
+			cacheWeather(this.weather);
 		} catch (err) {
 			console.error('ambient: failed to fetch weather', err);
 			// keep previous weather data if available, only show error if no data
