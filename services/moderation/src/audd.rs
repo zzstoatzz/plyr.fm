@@ -252,3 +252,258 @@ fn find_dominant_match(matches: &[AuddMatch]) -> (Option<String>, i32) {
 
     (Some(dominant_name), pct)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_match(artist: &str, title: &str, score: i32) -> AuddMatch {
+        AuddMatch {
+            artist: artist.to_string(),
+            title: title.to_string(),
+            album: None,
+            score,
+            isrc: None,
+            timecode: None,
+            offset_ms: None,
+        }
+    }
+
+    // --- extract_matches ---
+
+    #[test]
+    fn test_extract_matches_basic() {
+        let response = AcoustidResponse {
+            status: "ok".to_string(),
+            results: vec![AcoustidResult {
+                score: 0.97,
+                recordings: vec![AcoustidRecording {
+                    title: Some("Never Gonna Give You Up".to_string()),
+                    artists: vec![AcoustidArtist {
+                        name: "Rick Astley".to_string(),
+                    }],
+                }],
+            }],
+            error: None,
+        };
+
+        let matches = extract_matches(&response);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].artist, "Rick Astley");
+        assert_eq!(matches[0].title, "Never Gonna Give You Up");
+        assert_eq!(matches[0].score, 97);
+    }
+
+    #[test]
+    fn test_extract_matches_multiple_artists() {
+        let response = AcoustidResponse {
+            status: "ok".to_string(),
+            results: vec![AcoustidResult {
+                score: 0.85,
+                recordings: vec![AcoustidRecording {
+                    title: Some("Under Pressure".to_string()),
+                    artists: vec![
+                        AcoustidArtist {
+                            name: "Queen".to_string(),
+                        },
+                        AcoustidArtist {
+                            name: "David Bowie".to_string(),
+                        },
+                    ],
+                }],
+            }],
+            error: None,
+        };
+
+        let matches = extract_matches(&response);
+        assert_eq!(matches[0].artist, "Queen, David Bowie");
+        assert_eq!(matches[0].score, 85);
+    }
+
+    #[test]
+    fn test_extract_matches_missing_fields() {
+        let response = AcoustidResponse {
+            status: "ok".to_string(),
+            results: vec![AcoustidResult {
+                score: 0.5,
+                recordings: vec![AcoustidRecording {
+                    title: None,
+                    artists: vec![],
+                }],
+            }],
+            error: None,
+        };
+
+        let matches = extract_matches(&response);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].artist, "Unknown");
+        assert_eq!(matches[0].title, "Unknown");
+        assert_eq!(matches[0].score, 50);
+    }
+
+    #[test]
+    fn test_extract_matches_empty_results() {
+        let response = AcoustidResponse {
+            status: "ok".to_string(),
+            results: vec![],
+            error: None,
+        };
+
+        let matches = extract_matches(&response);
+        assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn test_extract_matches_multiple_results_and_recordings() {
+        let response = AcoustidResponse {
+            status: "ok".to_string(),
+            results: vec![
+                AcoustidResult {
+                    score: 0.97,
+                    recordings: vec![
+                        AcoustidRecording {
+                            title: Some("Song A".to_string()),
+                            artists: vec![AcoustidArtist {
+                                name: "Artist 1".to_string(),
+                            }],
+                        },
+                        AcoustidRecording {
+                            title: Some("Song B".to_string()),
+                            artists: vec![AcoustidArtist {
+                                name: "Artist 2".to_string(),
+                            }],
+                        },
+                    ],
+                },
+                AcoustidResult {
+                    score: 0.42,
+                    recordings: vec![AcoustidRecording {
+                        title: Some("Song C".to_string()),
+                        artists: vec![AcoustidArtist {
+                            name: "Artist 3".to_string(),
+                        }],
+                    }],
+                },
+            ],
+            error: None,
+        };
+
+        let matches = extract_matches(&response);
+        assert_eq!(matches.len(), 3);
+        // First result's recordings get score 97
+        assert_eq!(matches[0].score, 97);
+        assert_eq!(matches[1].score, 97);
+        // Second result's recording gets score 42
+        assert_eq!(matches[2].score, 42);
+    }
+
+    // --- find_dominant_match ---
+
+    #[test]
+    fn test_find_dominant_empty() {
+        let (name, pct) = find_dominant_match(&[]);
+        assert!(name.is_none());
+        assert_eq!(pct, 0);
+    }
+
+    #[test]
+    fn test_find_dominant_single_match() {
+        let matches = vec![make_match("Rick Astley", "Never Gonna Give You Up", 97)];
+        let (name, pct) = find_dominant_match(&matches);
+        assert_eq!(name.unwrap(), "rick astley - never gonna give you up");
+        assert_eq!(pct, 100);
+    }
+
+    #[test]
+    fn test_find_dominant_clear_winner() {
+        let matches = vec![
+            make_match("Rick Astley", "Never Gonna Give You Up", 97),
+            make_match("Rick Astley", "Never Gonna Give You Up", 95),
+            make_match("Rick Astley", "Never Gonna Give You Up", 90),
+            make_match("Other Artist", "Other Song", 40),
+        ];
+        let (name, pct) = find_dominant_match(&matches);
+        assert_eq!(name.unwrap(), "rick astley - never gonna give you up");
+        assert_eq!(pct, 75); // 3 out of 4
+    }
+
+    #[test]
+    fn test_find_dominant_case_insensitive() {
+        let matches = vec![
+            make_match("RICK ASTLEY", "Never Gonna Give You Up", 97),
+            make_match("rick astley", "never gonna give you up", 95),
+        ];
+        let (_name, pct) = find_dominant_match(&matches);
+        assert_eq!(pct, 100); // both collapse to same key
+    }
+
+    // --- AcoustID response deserialization ---
+
+    #[test]
+    fn test_acoustid_response_parsing() {
+        let json = serde_json::json!({
+            "status": "ok",
+            "results": [{
+                "score": 0.971652,
+                "recordings": [{
+                    "title": "Never Gonna Give You Up",
+                    "artists": [{"name": "Rick Astley"}]
+                }]
+            }]
+        });
+
+        let response: AcoustidResponse = serde_json::from_value(json).unwrap();
+        assert_eq!(response.status, "ok");
+        assert_eq!(response.results.len(), 1);
+        assert!((response.results[0].score - 0.971652).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_acoustid_error_response_parsing() {
+        let json = serde_json::json!({
+            "status": "error",
+            "error": {"message": "invalid api key"}
+        });
+
+        let response: AcoustidResponse = serde_json::from_value(json).unwrap();
+        assert_eq!(response.status, "error");
+        assert_eq!(response.error.unwrap().message, "invalid api key");
+    }
+
+    #[test]
+    fn test_acoustid_empty_results() {
+        let json = serde_json::json!({
+            "status": "ok",
+            "results": []
+        });
+
+        let response: AcoustidResponse = serde_json::from_value(json).unwrap();
+        assert!(response.results.is_empty());
+    }
+
+    #[test]
+    fn test_acoustid_missing_recordings() {
+        // AcoustID can return results with no recordings
+        let json = serde_json::json!({
+            "status": "ok",
+            "results": [{
+                "score": 0.5
+            }]
+        });
+
+        let response: AcoustidResponse = serde_json::from_value(json).unwrap();
+        assert!(response.results[0].recordings.is_empty());
+    }
+
+    #[test]
+    fn test_fpcalc_output_parsing() {
+        let json = serde_json::json!({
+            "duration": 211.48,
+            "fingerprint": "AQADtNIiTUkkOcmRH5d0HNFxXMdxHPmR"
+        });
+
+        let output: FpcalcOutput = serde_json::from_value(json).unwrap();
+        assert!((output.duration - 211.48).abs() < 0.01);
+        assert!(output.fingerprint.starts_with("AQADt"));
+    }
+}
