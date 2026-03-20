@@ -48,6 +48,13 @@ repos:
         files: ^frontend/.*\.(ts|svelte)$
         pass_filenames: false
 
+      - id: check-legal-dates
+        name: check legal dates
+        entry: python scripts/check_legal_dates.py
+        language: system
+        files: ^frontend/src/routes/privacy/
+        pass_filenames: true
+
       - id: cargo-check-moderation
         name: cargo check (moderation)
         entry: bash -c 'cd services/moderation && cargo check --quiet'

@@ -13,6 +13,7 @@ usage:
 
 import asyncio
 import json
+import os
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -213,6 +214,10 @@ def main(
     env: str = typer.Option("prd", "--env", "-e", help="environment: prd, stg, dev"),
 ) -> None:
     """export platform costs to R2 for public dashboard"""
+    if not os.environ.get("CI") and not dry_run:
+        typer.echo("costs export should only run in CI (GitHub Actions)")
+        typer.echo("  use --dry-run for local testing")
+        raise typer.Exit(1)
 
     async def run():
         db_url = settings.get_db_url(env)

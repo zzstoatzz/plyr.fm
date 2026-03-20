@@ -31,7 +31,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: get latest release tag
+        id: release
+        run: echo "tag=$(gh release view --json tagName -q .tagName)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
 
       - uses: astral-sh/setup-uv@v4
 
