@@ -47,6 +47,20 @@ plyr.fm should become:
 
 ### March 2026
 
+#### costs export tied to release tags + legal date guard (PRs #1166-1168, Mar 20)
+
+**why**: merging PR #1163 (AuDD → AcoustID) changed the costs JSON shape (`audd` → `copyright_scanning`), which broke the production `/costs` page. the hourly `export_costs.py` runs from `main`, but the production frontend deploys on a separate release cadence — so the script's output shape changed before the frontend was ready for it. separately, the privacy policy content was updated (#1164) but the backend `terms_last_updated` config wasn't bumped, so users weren't prompted to re-accept.
+
+**what shipped**:
+- costs export workflow now checks out the **latest release tag** instead of `main`, so the script shape always matches the deployed frontend. data stays fresh (hourly from prod DB), but the shape only changes when a release is cut
+- CI-only guard on `export_costs.py` — refuses non-dry-run outside GitHub Actions
+- pre-commit hook (`check-legal-dates`) that catches two things: stale privacy policy "Last updated" dates when content changes, and `LegalSettings.terms_last_updated` falling behind the privacy policy date
+- removed dead `R2_BUCKET` / `R2_PUBLIC_BUCKET_URL` env vars from the workflow (script uses `R2_STATS_BUCKET` with defaults)
+- bumped `terms_last_updated` from `2026-02-06` to `2026-03-20`
+- filed #1165 for moderation staging environment (same class of problem — deploys directly to prod)
+
+---
+
 #### chromaprint.zig — standalone audio fingerprinting in pure zig (Mar 19)
 
 **why**: plyr.fm pays AuDD ~$5/1000 requests for copyright moderation fingerprinting. AcoustID is a free, open-source alternative that uses Chromaprint fingerprints, but the official library requires FFmpeg. we wanted a zero-dependency fingerprinting tool.
@@ -349,7 +363,7 @@ See `.status_history/2025-11.md` for detailed history including:
 
 ### current focus
 
-replacing AuDD audio fingerprinting ($5/1000 requests) with free AcoustID lookups. a pure zig chromaprint library ([`@zzstoatzz.io/chromaprint.zig`](https://tangled.sh/@zzstoatzz.io/chromaprint.zig)) produces exact-match fingerprints against the reference `fpcalc` implementation. next step: integrate into the moderation service and remove AuDD from costs/terms.
+AuDD audio fingerprinting ($5/1000 requests) has been replaced with free AcoustID lookups via `fpcalc` (#1163). the moderation service now shells out to a vendored `fpcalc` binary and queries AcoustID directly. a pure zig chromaprint library ([`@zzstoatzz.io/chromaprint.zig`](https://tangled.sh/@zzstoatzz.io/chromaprint.zig)) was built as a learning exercise and produces exact-match fingerprints. next: add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -457,7 +471,7 @@ see live dashboard: [plyr.fm/costs](https://plyr.fm/costs)
 - fly.io (backend + redis + transcoder + moderation): ~$24/month
 - neon postgres: $5/month
 - cloudflare (R2 + pages + domain): ~$1/month
-- audd audio fingerprinting: $5-10/month (usage-based) — replacing with free AcoustID lookups
+- copyright scanning (AcoustID + fpcalc): $0 (replaced AuDD)
 - replicate (genre classification): <$1/month (scales to zero, ~$0.00019/run)
 - logfire: $0 (free tier)
 
@@ -485,5 +499,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-19 (chromaprint.zig, ambient theme polish, AuDD → AcoustID migration in progress).
+this is a living document. last updated 2026-03-20 (AuDD → AcoustID complete, costs export tied to release tags, terms re-acceptance fix).
 
