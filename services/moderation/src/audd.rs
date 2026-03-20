@@ -122,7 +122,7 @@ pub async fn scan(
 
     // 2. run fpcalc
     let fpcalc_output = tokio::process::Command::new("fpcalc")
-        .arg("--json")
+        .arg("-json")
         .arg(&tmp_path)
         .output()
         .await
