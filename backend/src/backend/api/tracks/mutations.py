@@ -264,7 +264,7 @@ async def update_track_metadata(
         # handle image upload/replacement
         image_id, image_url, thumbnail_url = await upload_track_image(image)
 
-        if track.image_id:
+        if track.image_id and track.image_id != image_id:
             # only delete old image from R2 if album doesn't share it
             # (albums inherit track's image_id on creation, so they may reference the same file)
             album_shares_image = (

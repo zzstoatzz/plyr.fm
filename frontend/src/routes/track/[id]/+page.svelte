@@ -1047,17 +1047,8 @@ $effect(() => {
 
 	.track-description-wrapper.collapsed .track-description {
 		overflow: hidden;
-	}
-
-	.track-description-wrapper.collapsed .track-description::after {
-		content: '';
-		position: absolute;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		height: 3rem;
-		background: linear-gradient(transparent, var(--bg-primary));
-		pointer-events: none;
+		-webkit-mask-image: linear-gradient(to bottom, black calc(100% - 3rem), transparent);
+		mask-image: linear-gradient(to bottom, black calc(100% - 3rem), transparent);
 	}
 
 	.track-description {

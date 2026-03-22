@@ -460,7 +460,7 @@ async def upload_album_cover(
         )
 
         # delete old image if exists (prevent R2 object leaks)
-        if album.image_id:
+        if album.image_id and album.image_id != uploaded.image_id:
             with contextlib.suppress(Exception):
                 await storage.delete(album.image_id)
 
