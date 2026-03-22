@@ -4,22 +4,43 @@ title: "logfire querying guide"
 
 ## Basic Concepts
 
-Logfire uses PostgreSQL-flavored SQL to query trace data. All data is stored in the `records` table.
+Logfire uses Apache DataFusion (PostgreSQL-flavored SQL) to query trace data. All data is stored in the `records` table.
+
+## Environment Filtering
+
+**ALWAYS filter by `deployment_environment`** — it's a top-level column, not in attributes.
+
+| environment | `deployment_environment` value |
+|------------|-------------------------------|
+| production | `'production'` |
+| staging | `'staging'` |
+| local dev | `'local'` |
+
+`service_name` is `unknown_service` for all environments — do NOT use it to distinguish environments.
+
+Every query in this guide includes the environment filter. Omitting it mixes prod/staging/local data.
 
 ## Key Fields
 
-- `deployment_environment` - environment name (local/staging/production) - **ALWAYS filter by this when investigating issues**
-- `is_exception` - boolean field to filter spans that contain exceptions
+top-level columns (use these, not attributes):
+- `deployment_environment` - **ALWAYS filter by this**
+- `span_name` - name of the span (e.g., "GET /tracks/")
+- `message` - human-readable message
+- `http_method` - GET, POST, PUT, DELETE, etc.
+- `http_response_status_code` - integer status code
+- `http_route` - route pattern (e.g., "/tracks/")
+- `url_full` - full request URL
+- `exception_type` - exception class name
+- `exception_message` - exception message text
+- `is_exception` - boolean
 - `kind` - either 'span' or 'event'
 - `trace_id` - unique identifier for a trace (group of related spans)
 - `span_id` - unique identifier for this specific span
-- `span_name` - name of the span (e.g., "GET /tracks/")
-- `message` - human-readable message
-- `attributes` - JSONB field containing span metadata, exception details, etc.
 - `start_timestamp` - when the span started
 - `duration` - span duration (in seconds, multiply by 1000 for ms)
 - `otel_status_code` - OpenTelemetry status (OK, ERROR, UNSET)
-- `otel_status_message` - **IMPORTANT: Error messages appear here, not in exception.message**
+- `otel_status_message` - **error details appear here, not in exception_message**
+- `attributes` - JSONB field for span metadata not covered by top-level columns
 
 ## Querying for Exceptions
 
@@ -29,9 +50,10 @@ SELECT
   message,
   start_timestamp,
   otel_status_message,
-  attributes->>'exception.type' as exc_type
+  exception_type
 FROM records
 WHERE is_exception = true
+  AND deployment_environment = 'production'
 ORDER BY start_timestamp DESC
 LIMIT 10
 ```
@@ -41,12 +63,13 @@ LIMIT 10
 SELECT
   message,
   otel_status_message as error_summary,
-  attributes->>'exception.type' as exc_type,
-  attributes->>'exception.message' as exc_msg,
+  exception_type,
+  exception_message,
   attributes->>'exception.stacktrace' as stacktrace,
   start_timestamp
 FROM records
 WHERE is_exception = true
+  AND deployment_environment = 'production'
 ORDER BY start_timestamp DESC
 LIMIT 5
 ```
@@ -67,11 +90,13 @@ SELECT
   span_name,
   start_timestamp,
   duration * 1000 as duration_ms,
-  (attributes->>'http.status_code')::int as status_code,
-  attributes->>'http.route' as route,
+  http_response_status_code as status_code,
+  http_route,
   otel_status_code
 FROM records
-WHERE kind = 'span' AND span_name LIKE 'GET%'
+WHERE kind = 'span'
+  AND http_method = 'GET'
+  AND deployment_environment = 'production'
 ORDER BY start_timestamp DESC
 LIMIT 20
 ```
@@ -82,15 +107,36 @@ SELECT
   span_name,
   start_timestamp,
   duration * 1000 as duration_ms,
-  (attributes->>'http.status_code')::int as status_code,
+  http_response_status_code as status_code,
   otel_status_message
 FROM records
 WHERE kind = 'span'
-  AND span_name LIKE 'GET%'
+  AND http_method IS NOT NULL
   AND (duration > 1.0 OR otel_status_code = 'ERROR')
+  AND deployment_environment = 'production'
 ORDER BY duration DESC
 LIMIT 20
 ```
+
+**Identify the caller of a request (user identity + client info):**
+```sql
+SELECT
+  span_name,
+  start_timestamp,
+  duration * 1000 as duration_ms,
+  attributes->>'user.did' as user_did,
+  attributes->>'user.handle' as user_handle,
+  attributes->>'http.user_agent' as user_agent,
+  attributes->>'client_type' as client_type,
+  trace_id
+FROM records
+WHERE span_name = 'POST /now-playing/'
+  AND deployment_environment = 'production'
+ORDER BY start_timestamp DESC
+LIMIT 10
+```
+
+user identity is attached to the span by auth dependencies — use `attributes->>'user.did'` and `attributes->>'user.handle'`.
 
 **Understanding 307 Redirects:**
 
@@ -100,11 +146,12 @@ When querying for audio streaming requests, you'll see HTTP 307 (Temporary Redir
 SELECT
   span_name,
   message,
-  (attributes->>'http.status_code')::int as status_code,
-  attributes->>'http.url' as url
+  http_response_status_code as status_code,
+  url_full
 FROM records
 WHERE span_name = 'GET /audio/{file_id}'
-  AND (attributes->>'http.status_code')::int = 307
+  AND http_response_status_code = 307
+  AND deployment_environment = 'production'
 ORDER BY start_timestamp DESC
 ```
 
@@ -127,6 +174,7 @@ SELECT
 FROM records
 WHERE span_name LIKE 'SELECT%'
   AND duration > 0.1
+  AND deployment_environment = 'production'
 ORDER BY duration DESC
 LIMIT 10
 ```
@@ -146,7 +194,8 @@ SELECT
   AVG(duration * 1000) as avg_duration_ms,
   MAX(duration * 1000) as max_duration_ms
 FROM records
-WHERE span_name LIKE '%FROM%' OR span_name LIKE '%INTO%'
+WHERE (span_name LIKE '%FROM%' OR span_name LIKE '%INTO%')
+  AND deployment_environment = 'production'
 GROUP BY query_type
 ORDER BY count DESC
 ```
@@ -161,7 +210,8 @@ SELECT
   start_timestamp,
   attributes
 FROM records
-WHERE message LIKE '%R2%' OR message LIKE '%upload%'
+WHERE (message LIKE '%R2%' OR message LIKE '%upload%')
+  AND deployment_environment = 'production'
 ORDER BY start_timestamp DESC
 LIMIT 10
 ```
@@ -172,6 +222,7 @@ LIMIT 10
 SELECT trace_id, message, start_timestamp
 FROM records
 WHERE span_name = 'process upload background'
+  AND deployment_environment = 'production'
 ORDER BY start_timestamp DESC
 LIMIT 1;
 
@@ -197,22 +248,9 @@ SELECT
   start_timestamp
 FROM records
 WHERE message = 'uploading to R2'
+  AND deployment_environment = 'production'
 ORDER BY start_timestamp DESC
 LIMIT 5;
-```
-
-**Find spans within a time range:**
-```sql
-SELECT
-  span_name,
-  message,
-  start_timestamp,
-  duration * 1000 as duration_ms
-FROM records
-WHERE start_timestamp > '2025-11-11T04:56:50Z'
-  AND start_timestamp < '2025-11-11T04:57:10Z'
-  AND (span_name LIKE '%R2%' OR message LIKE '%save%')
-ORDER BY start_timestamp ASC;
 ```
 
 **Common mistake: Not all log levels create spans**
@@ -228,19 +266,22 @@ Example:
 SELECT * FROM records WHERE span_name = 'preparing to save audio file';
 
 -- RIGHT: Search by message instead
-SELECT * FROM records WHERE message LIKE '%preparing%';
+SELECT * FROM records
+WHERE message LIKE '%preparing%'
+  AND deployment_environment = 'production';
 ```
 
 **Aggregate errors by type:**
 ```sql
 SELECT
-  attributes->>'exception.type' as error_type,
+  exception_type as error_type,
   COUNT(*) as occurrences,
   MAX(start_timestamp) as last_seen,
   COUNT(DISTINCT trace_id) as unique_traces
 FROM records
 WHERE is_exception = true
   AND start_timestamp > NOW() - INTERVAL '24 hours'
+  AND deployment_environment = 'production'
 GROUP BY error_type
 ORDER BY occurrences DESC
 ```
@@ -248,12 +289,13 @@ ORDER BY occurrences DESC
 **Find errors by endpoint:**
 ```sql
 SELECT
-  attributes->>'http.route' as endpoint,
+  http_route as endpoint,
   COUNT(*) as error_count,
-  COUNT(DISTINCT attributes->>'exception.type') as unique_error_types
+  COUNT(DISTINCT exception_type) as unique_error_types
 FROM records
 WHERE otel_status_code = 'ERROR'
-  AND attributes->>'http.route' IS NOT NULL
+  AND http_route IS NOT NULL
+  AND deployment_environment = 'production'
 GROUP BY endpoint
 ORDER BY error_count DESC
 ```
