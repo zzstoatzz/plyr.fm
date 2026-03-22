@@ -572,7 +572,7 @@ fn render_flag_card(track: &FlaggedTrack) -> String {
         })
         .unwrap_or_default();
 
-    // Show match count badge
+    // Show match count instead of score (AuDD doesn't provide scores in accurate_offsets mode)
     let match_count_badge = ctx
         .and_then(|c| c.matches.as_ref())
         .filter(|m| !m.is_empty())

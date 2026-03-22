@@ -41,7 +41,7 @@ we use:
 - [Fly.io](https://fly.io) - backend hosting
 - [Neon](https://neon.tech) - database
 - [Logfire](https://logfire.pydantic.dev) - error monitoring
-- [AcoustID](https://acoustid.org) - audio fingerprinting for copyright detection
+- [AuDD](https://audd.io) - audio fingerprinting for copyright detection
 - [Anthropic](https://anthropic.com) - image analysis for content moderation
 - [ATProtoFans](https://atprotofans.com) - supporter validation for gated content
 - [Modal](https://modal.com) - audio processing for search embeddings
