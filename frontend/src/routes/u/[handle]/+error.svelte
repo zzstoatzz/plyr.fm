@@ -6,12 +6,16 @@
 
 	const status = $page.status;
 	const handle = $page.params.handle;
+	const isDid = handle?.startsWith('did:') ?? false;
 
 	let checkingBluesky = $state(false);
 	let blueskyProfileExists = $state(false);
 	let blueskyUrl = $state('');
 
 	onMount(async () => {
+		// bluesky handle resolution only works with handles, not DIDs
+		if (isDid) return;
+
 		// if this is a 404, check if the handle exists on the ATProto network
 		if (status === 404 && handle) {
 			checkingBluesky = true;
@@ -60,6 +64,10 @@
 			</a>
 			<a href="/" class="home-link">go home</a>
 		</div>
+	{:else if isDid}
+		<p class="error-message">we couldn't find anyone with this identifier</p>
+		<p class="error-detail">{handle}</p>
+		<a href="/" class="home-link">go home</a>
 	{:else}
 		<p class="error-message">we couldn't find anyone by @{handle}</p>
 		<p class="error-detail">the handle might not exist or could be misspelled</p>
