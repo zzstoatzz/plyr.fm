@@ -3,8 +3,8 @@
 # runs hourly to update the costs.json file in R2
 # the frontend /costs page fetches this static JSON
 #
-# copyright scanning is free (AcoustID + fpcalc), but we still
-# track scan counts for the dashboard
+# AudD costs are derived from track duration (1 request = 12s of audio)
+# so this gives near real-time cost visibility as uploads happen
 #
 # required secrets:
 #   NEON_DATABASE_URL_PRD - production database URL
