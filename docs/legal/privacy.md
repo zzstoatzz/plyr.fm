@@ -5,7 +5,7 @@ description: "how plyr.fm handles your data"
 
 > **note:** the source of truth is `frontend/src/routes/privacy/+page.svelte`. this markdown is a plain-text mirror for reference.
 
-**last updated:** march 20, 2026
+**last updated:** march 22, 2026
 
 plyr.fm ("we", "us", or "our") is an audio streaming application built on the [AT Protocol](https://atproto.com). this privacy policy applies to the instance at https://plyr.fm (the "site").
 
@@ -41,7 +41,7 @@ we use:
 - [Fly.io](https://fly.io) - backend hosting
 - [Neon](https://neon.tech) - database
 - [Logfire](https://logfire.pydantic.dev) - error monitoring
-- [AuDD](https://audd.io) - audio fingerprinting for copyright detection
+- [AudD](https://audd.io) - audio fingerprinting for copyright detection
 - [Anthropic](https://anthropic.com) - image analysis for content moderation
 - [ATProtoFans](https://atprotofans.com) - supporter validation for gated content
 - [Modal](https://modal.com) - audio processing for search embeddings
