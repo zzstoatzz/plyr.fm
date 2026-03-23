@@ -183,11 +183,21 @@ export interface ActivityTrack {
 	artist_avatar_url: string | null;
 }
 
+export interface ActivityCollection {
+	type: 'playlist' | 'album';
+	id: string;
+	name: string;
+	image_url: string | null;
+	owner_handle: string;
+	slug: string | null;
+}
+
 export interface ActivityEvent {
-	type: 'like' | 'track' | 'comment' | 'join';
+	type: 'like' | 'track' | 'comment' | 'join' | 'playlist_create' | 'album_release' | 'track_added_to_playlist';
 	actor: ActivityActor;
 	track: ActivityTrack | null;
 	comment_text: string | null;
+	collection: ActivityCollection | null;
 	created_at: string;
 }
 

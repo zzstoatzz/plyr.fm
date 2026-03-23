@@ -157,7 +157,7 @@
 		<p class="empty">no activity yet</p>
 	{:else}
 		<div class="event-list">
-			{#each events as event, i (event.created_at + event.actor.did + event.type)}
+			{#each events as event, i (event.created_at + event.actor.did + event.type + (event.collection?.id ?? ''))}
 				{@const hasArt = event.track && (event.track.thumbnail_url || event.track.image_url)}
 				{@const batchIndex = i >= previousCount ? i - previousCount : -1}
 				{@const isSelfAction = event.track && event.actor.handle === event.track.artist_handle}
@@ -169,6 +169,10 @@
 						{#if hasArt && event.track}
 							<a href="/track/{event.track.id}" class="art-link">
 								<img src={event.track.thumbnail_url || event.track.image_url} alt={event.track.title} class="art-img" />
+							</a>
+						{:else if event.collection?.image_url}
+							<a href={event.collection.type === 'album' ? `/u/${event.collection.owner_handle}/album/${event.collection.slug}` : `/playlist/${event.collection.id}`} class="art-link">
+								<img src={event.collection.image_url} alt={event.collection.name} class="art-img" />
 							</a>
 						{:else}
 							<a href="/u/{event.actor.handle}" class="art-link">
@@ -254,6 +258,26 @@
 							<p class="event-action">
 								<span class="icon-slot"><svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></span>
 								<span class="verb">joined</span> plyr.fm
+							</p>
+						{:else if event.type === 'playlist_create' && event.collection}
+							<p class="event-action">
+								<span class="icon-slot"><svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+								<span class="verb">created playlist</span> <a href="/playlist/{event.collection.id}" class="track-link">{event.collection.name}</a>
+							</p>
+						{:else if event.type === 'album_release' && event.collection}
+							<p class="event-action">
+								<span class="icon-slot"><svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></span>
+								<span class="verb">released</span> <a href="/u/{event.collection.owner_handle}/album/{event.collection.slug}" class="track-link">{event.collection.name}</a>
+							</p>
+						{:else if event.type === 'track_added_to_playlist' && event.collection}
+							<p class="event-action">
+								<span class="icon-slot"><svg class="action-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></span>
+								<span class="verb">added</span>
+								{#if event.track}
+									<a href="/track/{event.track.id}" class="track-link">{event.track.title}</a>
+									<span class="by-artist">to</span>
+								{/if}
+								<a href="/playlist/{event.collection.id}" class="track-link">{event.collection.name}</a>
 							</p>
 						{/if}
 						{#if event.type === 'comment' && event.comment_text}
@@ -384,6 +408,9 @@
 	.event-item.track { --type-color: var(--accent); }
 	.event-item.comment { --type-color: #a78bfa; }
 	.event-item.join { --type-color: #4ade80; }
+	.event-item.playlist_create { --type-color: #38bdf8; }
+	.event-item.album_release { --type-color: #f59e0b; }
+	.event-item.track_added_to_playlist { --type-color: #38bdf8; }
 
 	.left-col { flex-shrink: 0; position: relative; width: 44px; height: 44px; }
 	.art-link { display: block; width: 44px; height: 44px; text-decoration: none; }

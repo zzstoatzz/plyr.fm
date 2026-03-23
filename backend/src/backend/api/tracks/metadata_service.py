@@ -89,7 +89,7 @@ async def apply_album_update(
             track.extra = {}
         track.extra["album"] = album_value
         attributes.flag_modified(track, "extra")
-        album_record = await get_or_create_album(
+        album_record, album_created = await get_or_create_album(
             db,
             track.artist,
             album_value,
@@ -97,6 +97,17 @@ async def apply_album_update(
             track.image_url,
         )
         track.album_id = album_record.id
+
+        if album_created:
+            from backend.models import CollectionEvent
+
+            db.add(
+                CollectionEvent(
+                    event_type="album_release",
+                    actor_did=track.artist_did,
+                    album_id=album_record.id,
+                )
+            )
     else:
         if track.extra and "album" in track.extra:
             del track.extra["album"]
