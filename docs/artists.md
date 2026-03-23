@@ -29,14 +29,28 @@ your catalog isn't trapped here — other apps can access your tracks without pl
 
    ![the upload form — title, audio file, description, album, tags, and artwork](/screenshots/upload-form.png)
 
-3. **add metadata** — edit your track in the [portal](https://plyr.fm/portal) to add tags, cover art, and a description
+3. **add artwork** — attach cover art to your track. see [artwork guidelines](#artwork-guidelines) for format and size recommendations
+
+4. **add metadata** — edit your track in the [portal](https://plyr.fm/portal) to add tags, cover art, and a description
 
    ![the track editor — title, description, album, tags, artwork, and suggested tags](/screenshots/portal-track-editor.png)
 
    <span id="auto-tagging"></span>when you add tags, you can opt in to **auto-tag with recommended genres** — plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and suggests tags automatically. you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
 
-4. **see it live** — your track is playable immediately and indexed for discovery
-5. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
+5. **see it live** — your track is playable immediately and indexed for discovery
+6. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
+
+## artwork guidelines
+
+track artwork is displayed as a square across the app — in lists, the player, and on track pages. for best results:
+
+- **use square images** (1:1 aspect ratio) — at least **500 × 500 px** for clarity at all display sizes
+- **supported formats**: JPG, PNG, WebP, or GIF
+- **max file size**: 20 MB
+
+non-square images are automatically center-cropped to fit a square frame. if your artwork is wider than it is tall, the left and right edges are trimmed; if taller, the top and bottom are trimmed. there's no manual crop tool, so square images give you full control over what's visible.
+
+album and playlist covers accept the same formats except GIF.
 
 ## embeds
 
