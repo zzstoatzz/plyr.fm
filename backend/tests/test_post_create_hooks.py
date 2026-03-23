@@ -224,6 +224,48 @@ class TestRunPostTrackCreateHooks:
             )
 
         mock_service.send_track_notification.assert_not_called()
+        # notification_sent should be marked True so Jetstream won't fire it later
+        await db_session.refresh(track)
+        assert track.notification_sent is True
+
+    async def test_skip_notification_prevents_jetstream_resend(
+        self, db_session: AsyncSession
+    ) -> None:
+        """regression: upload path skips notification, then Jetstream calls hooks
+        again without skip_notification — the DM should NOT fire."""
+        artist = await _create_artist(db_session)
+        track = await _create_track(db_session, artist)
+
+        mock_service = AsyncMock()
+        mock_service.send_track_notification = AsyncMock(return_value=None)
+
+        with (
+            patch(MOCK_COPYRIGHT_PATH, new_callable=AsyncMock),
+            patch(MOCK_EMBEDDING_PATH, new_callable=AsyncMock),
+            patch(MOCK_GENRE_PATH, new_callable=AsyncMock),
+            patch(MOCK_NOTIFICATION_PATH, mock_service),
+            patch(MOCK_REDIS_PATH, return_value=AsyncMock()),
+            patch(MOCK_SETTINGS_PATH) as mock_settings,
+        ):
+            mock_settings.modal.enabled = False
+            mock_settings.turbopuffer.enabled = False
+            mock_settings.replicate.enabled = False
+
+            # 1. upload path — skip notification
+            await run_post_track_create_hooks(
+                track.id,
+                audio_url="https://r2.example.com/test.mp3",
+                skip_notification=True,
+            )
+            mock_service.send_track_notification.assert_not_called()
+
+            # 2. Jetstream ingest — no skip flag
+            await run_post_track_create_hooks(
+                track.id,
+                audio_url="https://r2.example.com/test.mp3",
+            )
+            # notification should still not fire — notification_sent was marked True
+            mock_service.send_track_notification.assert_not_called()
 
     async def test_skips_notification_when_already_sent(
         self, db_session: AsyncSession
