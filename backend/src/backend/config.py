@@ -691,7 +691,11 @@ class ModalSettings(AppSettingsSection):
     )
     timeout_seconds: int = Field(
         default=120,
-        description="Timeout for Modal requests (includes cold start)",
+        description="Timeout for Modal audio embedding requests (includes cold start)",
+    )
+    text_timeout_seconds: int = Field(
+        default=5,
+        description="Timeout for Modal text embedding requests (user-facing search)",
     )
 
 
