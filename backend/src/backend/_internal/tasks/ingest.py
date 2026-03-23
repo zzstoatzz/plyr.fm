@@ -21,6 +21,7 @@ from backend._internal.tasks.origin_trust import (
     is_trusted_audio_origin,
     is_trusted_image_origin,
 )
+from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.utilities.database import db_session
 from backend.utilities.lexicon import validate_record
@@ -164,8 +165,12 @@ async def ingest_track_create(
                     track_id=existing_track.id,
                 )
 
+                is_staging = settings.observability.environment == "staging"
                 await run_post_track_create_hooks(
-                    existing_track.id, audio_url=resolved_audio_url
+                    existing_track.id,
+                    audio_url=resolved_audio_url,
+                    skip_notification=is_staging,
+                    skip_copyright=is_staging,
                 )
             else:
                 logger.debug("ingest_track_create: duplicate URI %s, skipping", uri)
@@ -268,7 +273,13 @@ async def ingest_track_create(
             audio_storage=audio_storage,
         )
 
-    await run_post_track_create_hooks(track.id, audio_url=resolved_audio_url)
+    is_staging = settings.observability.environment == "staging"
+    await run_post_track_create_hooks(
+        track.id,
+        audio_url=resolved_audio_url,
+        skip_notification=is_staging,
+        skip_copyright=is_staging,
+    )
 
 
 async def ingest_track_update(

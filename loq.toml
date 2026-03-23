@@ -219,7 +219,7 @@ max_lines = 535
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 705
+max_lines = 708
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
