@@ -28,7 +28,7 @@ Upload a new track (requires authentication and artist profile).
 Requires atprotofans to be enabled in settings.
 Example\: {"type"\: "any"} - requires any atprotofans support.
 - `file`: Audio file to upload (required).
-- `image`: Optional image file for track artwork.
+- `image`: Optional image file for track artwork. Accepted formats: JPG, PNG, WebP, GIF. Max 20 MB. Square images (1:1) recommended — non-square images are center-cropped.
 - `background_tasks`: FastAPI background-task runner.
 - `auth_session`: Authenticated artist session (dependency-injected).
 
