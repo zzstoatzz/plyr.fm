@@ -6,7 +6,12 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ params, fetch }) => {
 	try {
 		// fetch artist info server-side for SEO/link previews
-		const artistResponse = await fetch(`${API_URL}/artists/by-handle/${params.handle}`);
+		// support both handle and DID in the URL for permalinks
+		const isDid = params.handle.startsWith('did:');
+		const artistUrl = isDid
+			? `${API_URL}/artists/${params.handle}`
+			: `${API_URL}/artists/by-handle/${params.handle}`;
+		const artistResponse = await fetch(artistUrl);
 
 		if (!artistResponse.ok) {
 			throw error(404, 'artist not found');
@@ -27,7 +32,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 			nextCursor = data.next_cursor || null;
 		}
 
-		const albumsResponse = await fetch(`${API_URL}/albums/${params.handle}`);
+		const albumsResponse = await fetch(`${API_URL}/albums/${artist.handle}`);
 		let albums: ArtistAlbumSummary[] = [];
 
 		if (albumsResponse.ok) {

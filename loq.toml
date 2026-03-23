@@ -230,9 +230,5 @@ path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
 max_lines = 580
 
 [[rules]]
-path = "services/moderation/src/audd.rs"
-max_lines = 509
-
-[[rules]]
 path = "backend/tests/api/test_track_deletion.py"
 max_lines = 505

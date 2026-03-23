@@ -3,7 +3,17 @@ import type { AlbumResponse } from '$lib/types';
 import { API_URL } from '$lib/config';
 
 export const load: PageLoad = async ({ params, fetch }) => {
-	const response = await fetch(`${API_URL}/albums/${params.handle}/${params.slug}`, {
+	// resolve DID to handle if needed (albums endpoint expects handle)
+	let handle = params.handle;
+	if (handle.startsWith('did:')) {
+		const res = await fetch(`${API_URL}/artists/${handle}`);
+		if (res.ok) {
+			const artist = await res.json();
+			handle = artist.handle;
+		}
+	}
+
+	const response = await fetch(`${API_URL}/albums/${handle}/${params.slug}`, {
 		credentials: 'include'
 	});
 

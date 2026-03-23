@@ -9,6 +9,13 @@ usage:
     uv run scripts/costs/export_costs.py              # export to R2 (prod)
     uv run scripts/costs/export_costs.py --dry-run    # print JSON, don't upload
     uv run scripts/costs/export_costs.py --env stg    # use staging db
+
+AudD billing model:
+    - $5/month base (indie plan)
+    - 6000 free requests/month (1000 base + 5000 bonus)
+    - $5 per 1000 requests after free tier
+    - 1 request = 12 seconds of audio
+    - so a 5-minute track = ceil(300/12) = 25 requests
 """
 
 import asyncio
@@ -21,6 +28,13 @@ from typing import Any
 import typer
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# billing constants
+AUDD_BILLING_DAY = 24
+AUDD_SECONDS_PER_REQUEST = 12
+AUDD_FREE_REQUESTS = 6000  # 1000 base + 5000 bonus on indie plan
+AUDD_COST_PER_1000 = 5.00  # $5 per 1000 requests
+AUDD_BASE_COST = 5.00  # $5/month base
 
 # fixed monthly costs (updated 2025-12-26)
 # fly.io: manually updated from cost explorer (TODO: use fly billing API)
@@ -83,51 +97,95 @@ settings = Settings()
 app = typer.Typer(add_completion=False)
 
 
-async def get_scan_stats(db_url: str) -> dict[str, Any]:
-    """fetch copyright scan stats from postgres."""
+def get_billing_period_start() -> datetime:
+    """get the start of current billing period (24th of month)"""
+    now = datetime.now()
+    if now.day >= AUDD_BILLING_DAY:
+        return datetime(now.year, now.month, AUDD_BILLING_DAY)
+    else:
+        first_of_month = datetime(now.year, now.month, 1)
+        prev_month = first_of_month - timedelta(days=1)
+        return datetime(prev_month.year, prev_month.month, AUDD_BILLING_DAY)
+
+
+async def get_audd_stats(db_url: str) -> dict[str, Any]:
+    """fetch audd scan stats from postgres.
+
+    calculates AudD API requests from track duration:
+    - each 12 seconds of audio = 1 API request
+    - derived by joining copyright_scans with tracks table
+    """
     import asyncpg
 
-    # 30 days of history for the daily chart
+    billing_start = get_billing_period_start()
+    # 30 days of history for the daily chart (independent of billing cycle)
     history_start = datetime.now() - timedelta(days=30)
 
     conn = await asyncpg.connect(db_url)
     try:
+        # get totals: scans, flagged, and derived API requests from duration
+        # uses billing period for accurate cost calculation
         row = await conn.fetchrow(
             """
             SELECT
                 COUNT(*) as total_scans,
-                COUNT(CASE WHEN cs.is_flagged THEN 1 END) as flagged
+                COUNT(CASE WHEN cs.is_flagged THEN 1 END) as flagged,
+                COALESCE(SUM(CEIL((t.extra->>'duration')::float / $2)), 0)::bigint as total_requests,
+                COALESCE(SUM((t.extra->>'duration')::int), 0)::bigint as total_seconds
             FROM copyright_scans cs
+            JOIN tracks t ON t.id = cs.track_id
             WHERE cs.scanned_at >= $1
             """,
-            history_start,
+            billing_start,
+            AUDD_SECONDS_PER_REQUEST,
         )
         total_scans = row["total_scans"]
         flagged = row["flagged"]
+        total_requests = row["total_requests"]
+        total_seconds = row["total_seconds"]
 
+        # daily breakdown for chart - 30 days of history for flexible views
         daily = await conn.fetch(
             """
             SELECT
                 DATE(cs.scanned_at) as date,
                 COUNT(*) as scans,
-                COUNT(CASE WHEN cs.is_flagged THEN 1 END) as flagged
+                COUNT(CASE WHEN cs.is_flagged THEN 1 END) as flagged,
+                COALESCE(SUM(CEIL((t.extra->>'duration')::float / $2)), 0)::bigint as requests
             FROM copyright_scans cs
+            JOIN tracks t ON t.id = cs.track_id
             WHERE cs.scanned_at >= $1
             GROUP BY DATE(cs.scanned_at)
             ORDER BY date
             """,
             history_start,
+            AUDD_SECONDS_PER_REQUEST,
         )
 
+        # calculate costs
+        billable_requests = max(0, total_requests - AUDD_FREE_REQUESTS)
+        overage_cost = round(billable_requests * AUDD_COST_PER_1000 / 1000, 2)
+        total_cost = AUDD_BASE_COST + overage_cost
+
         return {
+            "billing_period_start": billing_start.isoformat(),
             "total_scans": total_scans,
+            "total_requests": total_requests,
+            "total_audio_seconds": total_seconds,
             "flagged": flagged,
             "flag_rate": round(flagged / total_scans * 100, 1) if total_scans else 0,
+            "free_requests": AUDD_FREE_REQUESTS,
+            "remaining_free": max(0, AUDD_FREE_REQUESTS - total_requests),
+            "billable_requests": billable_requests,
+            "base_cost": AUDD_BASE_COST,
+            "overage_cost": overage_cost,
+            "estimated_cost": total_cost,
             "daily": [
                 {
                     "date": r["date"].isoformat(),
                     "scans": r["scans"],
                     "flagged": r["flagged"],
+                    "requests": r["requests"],
                 }
                 for r in daily
             ],
@@ -136,12 +194,16 @@ async def get_scan_stats(db_url: str) -> dict[str, Any]:
         await conn.close()
 
 
-def build_cost_data(scan_stats: dict[str, Any]) -> dict[str, Any]:
+def build_cost_data(audd_stats: dict[str, Any]) -> dict[str, Any]:
     """assemble full cost dashboard data"""
+    # calculate plyr-specific fly costs
     plyr_fly = sum(FIXED_COSTS["fly_io"]["breakdown"].values())
 
     monthly_total = (
-        plyr_fly + FIXED_COSTS["neon"]["total"] + FIXED_COSTS["cloudflare"]["total"]
+        plyr_fly
+        + FIXED_COSTS["neon"]["total"]
+        + FIXED_COSTS["cloudflare"]["total"]
+        + audd_stats["estimated_cost"]
     )
 
     return {
@@ -166,13 +228,19 @@ def build_cost_data(scan_stats: dict[str, Any]) -> dict[str, Any]:
                 },
                 "note": FIXED_COSTS["cloudflare"]["note"],
             },
-            "copyright_scanning": {
-                "amount": 0,
-                "scans_30d": scan_stats["total_scans"],
-                "flagged_30d": scan_stats["flagged"],
-                "flag_rate": scan_stats["flag_rate"],
-                "daily": scan_stats["daily"],
-                "note": "free (AcoustID + fpcalc)",
+            "audd": {
+                "amount": audd_stats["estimated_cost"],
+                "base_cost": audd_stats["base_cost"],
+                "overage_cost": audd_stats["overage_cost"],
+                "scans_this_period": audd_stats["total_scans"],
+                "requests_this_period": audd_stats["total_requests"],
+                "audio_seconds": audd_stats["total_audio_seconds"],
+                "free_requests": audd_stats["free_requests"],
+                "remaining_free": audd_stats["remaining_free"],
+                "billable_requests": audd_stats["billable_requests"],
+                "flag_rate": audd_stats["flag_rate"],
+                "daily": audd_stats["daily"],
+                "note": f"copyright detection ($5 base + ${AUDD_COST_PER_1000}/1k requests over {AUDD_FREE_REQUESTS})",
             },
         },
         "support": {
@@ -221,8 +289,8 @@ def main(
 
     async def run():
         db_url = settings.get_db_url(env)
-        scan_stats = await get_scan_stats(db_url)
-        data = build_cost_data(scan_stats)
+        audd_stats = await get_audd_stats(db_url)
+        data = build_cost_data(audd_stats)
 
         if dry_run:
             print(json.dumps(data, indent=2))

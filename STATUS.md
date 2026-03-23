@@ -231,7 +231,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-AuDD audio fingerprinting ($5/1000 requests) has been replaced with free AcoustID lookups via `fpcalc` (#1163). the moderation service now shells out to a vendored `fpcalc` binary and queries AcoustID directly. a pure zig chromaprint library ([`@zzstoatzz.io/chromaprint.zig`](https://tangled.sh/@zzstoatzz.io/chromaprint.zig)) was built as a learning exercise and produces exact-match fingerprints. next: add a staging environment for the moderation service (#1165).
+reverted from AcoustID/fpcalc back to AuDD for copyright scanning (#1173). AcoustID's fingerprint database doesn't match well for DJ sets and sample-heavy tracks — AuDD handles these via fuzzy matching. the chromaprint.zig learning exercise remains at [`@zzstoatzz.io/chromaprint.zig`](https://tangled.sh/@zzstoatzz.io/chromaprint.zig). next: add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -339,7 +339,7 @@ see live dashboard: [plyr.fm/costs](https://plyr.fm/costs)
 - fly.io (backend + redis + transcoder + moderation): ~$24/month
 - neon postgres: $5/month
 - cloudflare (R2 + pages + domain): ~$1/month
-- copyright scanning (AcoustID + fpcalc): $0 (replaced AuDD)
+- copyright scanning (AuDD): ~$5-10/month
 - replicate (genre classification): <$1/month (scales to zero, ~$0.00019/run)
 - logfire: $0 (free tier)
 
@@ -367,5 +367,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-20 (early March archived, AuDD → AcoustID complete, costs export tied to release tags).
+this is a living document. last updated 2026-03-22 (reverted AcoustID back to AuDD — better fuzzy matching for DJ sets/samples).
 
