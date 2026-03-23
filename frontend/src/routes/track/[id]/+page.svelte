@@ -13,6 +13,7 @@
 	import LikersTooltip from '$lib/components/LikersTooltip.svelte';
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import LosslessBadge from '$lib/components/LosslessBadge.svelte';
+	import RichText from '$lib/components/RichText.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
@@ -119,36 +120,6 @@
 		}
 	}
 
-	// URL regex pattern for linkifying comment text
-	const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
-
-	type TextSegment = { type: 'text'; content: string } | { type: 'link'; url: string };
-
-	function parseTextWithLinks(text: string): TextSegment[] {
-		const segments: TextSegment[] = [];
-		let lastIndex = 0;
-		let match: RegExpExecArray | null;
-
-		// reset regex state
-		urlPattern.lastIndex = 0;
-
-		while ((match = urlPattern.exec(text)) !== null) {
-			// add text before the URL
-			if (match.index > lastIndex) {
-				segments.push({ type: 'text', content: text.slice(lastIndex, match.index) });
-			}
-			// add the URL as a link
-			segments.push({ type: 'link', url: match[0] });
-			lastIndex = match.index + match[0].length;
-		}
-
-		// add remaining text after the last URL
-		if (lastIndex < text.length) {
-			segments.push({ type: 'text', content: text.slice(lastIndex) });
-		}
-
-		return segments.length > 0 ? segments : [{ type: 'text', content: text }];
-	}
 
 	async function loadLikedState() {
 		try {
@@ -607,7 +578,7 @@ $effect(() => {
 
 					{#if track.description}
 						<div class="track-description-wrapper" class:collapsed={!descriptionExpanded && descriptionOverflows}>
-							<p class="track-description" bind:this={descriptionEl} style:max-height={!descriptionExpanded && descriptionOverflows ? `${DESC_COLLAPSED_HEIGHT}px` : 'none'}>{track.description}</p>
+							<p class="track-description" bind:this={descriptionEl} style:max-height={!descriptionExpanded && descriptionOverflows ? `${DESC_COLLAPSED_HEIGHT}px` : 'none'}><RichText text={track.description} /></p>
 							{#if descriptionOverflows}
 								<button class="description-toggle" onclick={() => descriptionExpanded = !descriptionExpanded}>
 									{descriptionExpanded ? 'show less ▴' : 'show more ▾'}
@@ -802,7 +773,7 @@ $effect(() => {
 													</div>
 												</div>
 											{:else}
-												<p class="comment-text">{#each parseTextWithLinks(comment.text) as segment}{#if segment.type === 'link'}<a href={segment.url} target="_blank" rel="noopener noreferrer" class="comment-link">{segment.url}</a>{:else}{segment.content}{/if}{/each}</p>
+												<p class="comment-text"><RichText text={comment.text} /></p>
 												<div class="comment-actions">
 													<button class="comment-action-btn" onclick={() => copyCommentLink(comment.timestamp_ms)}>share</button>
 													{#if auth.user?.did === comment.user_did}
@@ -1473,17 +1444,7 @@ $effect(() => {
 		word-break: break-word;
 	}
 
-	.comment-link {
-		color: var(--accent);
-		text-decoration: none;
-		word-break: break-all;
-	}
-
-	.comment-link:hover {
-		text-decoration: underline;
-	}
-
-	.edited-indicator {
+.edited-indicator {
 		color: var(--text-muted);
 		font-style: italic;
 	}
