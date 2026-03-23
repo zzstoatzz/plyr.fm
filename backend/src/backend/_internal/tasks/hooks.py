@@ -85,7 +85,9 @@ async def run_post_track_create_hooks(
         audio_url = await resolve_audio_url(track_id)
 
     # 1. notification
-    if not skip_notification:
+    if skip_notification:
+        await _mark_notification_sent(track_id)
+    else:
         await _send_track_notification(track_id)
 
     # 2. copyright scan
@@ -108,6 +110,18 @@ async def run_post_track_create_hooks(
         track_id=track_id,
         has_audio_url=audio_url is not None,
     )
+
+
+async def _mark_notification_sent(track_id: int) -> None:
+    """mark notification as sent without actually sending — prevents Jetstream from firing it later."""
+    try:
+        async with db_session() as db:
+            track = await db.get(Track, track_id)
+            if track and not track.notification_sent:
+                track.notification_sent = True
+                await db.commit()
+    except Exception as e:
+        logger.warning(f"failed to mark notification sent for track {track_id}: {e}")
 
 
 async def _send_track_notification(track_id: int) -> None:
