@@ -100,6 +100,8 @@ plyr.fm should become:
 
 **what was restored**: full AuDD integration in moderation service (9 files), AuDD billing logic in costs export/dashboard, privacy policy references, terms versioning date.
 
+**deploy incident**: the moderation service was down for ~1 hour during the revert (22:25–23:24 UTC, Mar 22). the new binary required `MODERATION_AUDD_API_TOKEN` but the secret hadn't been set yet — service crashed on startup in a loop. once the token was set the service recovered, but the first AuDD call returned `error_code: 19` ("Recognition failed: Internal error") from AuDD's side. subsequent scans succeeded — two copyright scans processed successfully (01:09 and 02:55 UTC, Mar 23), and `sync_copyright_resolutions` has been running clean every 5 minutes since. filed #1165 remains relevant — a staging environment for the moderation service would have caught this.
+
 ---
 
 #### costs export tied to release tags + legal date guard (PRs #1166-1168, Mar 20)
@@ -422,5 +424,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-23 (R2 image fix, artwork docs, logfire observability, DID profile URLs, AcoustID→AuDD revert chronicled).
+this is a living document. last updated 2026-03-23 (moderation deploy incident documented, R2 image fix, artwork docs, logfire observability, DID profile URLs, AcoustID→AuDD revert chronicled).
 
