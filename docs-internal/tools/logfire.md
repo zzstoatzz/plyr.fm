@@ -16,7 +16,7 @@ Logfire uses Apache DataFusion (PostgreSQL-flavored SQL) to query trace data. Al
 | staging | `'staging'` |
 | local dev | `'local'` |
 
-`service_name` is `unknown_service` for all environments — do NOT use it to distinguish environments.
+`service_name` is `plyr-api` for all environments — use `deployment_environment` to distinguish environments, not `service_name`.
 
 Every query in this guide includes the environment filter. Omitting it mixes prod/staging/local data.
 
