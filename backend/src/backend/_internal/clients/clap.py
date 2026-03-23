@@ -44,10 +44,12 @@ class ClapClient:
         embed_audio_url: str,
         embed_text_url: str,
         timeout_seconds: float | int,
+        text_timeout_seconds: float | int,
     ) -> None:
         self.embed_audio_url = embed_audio_url.rstrip("/")
         self.embed_text_url = embed_text_url.rstrip("/")
-        self.timeout = httpx.Timeout(timeout_seconds)
+        self.audio_timeout = httpx.Timeout(timeout_seconds)
+        self.text_timeout = httpx.Timeout(text_timeout_seconds)
 
     @classmethod
     def from_settings(cls) -> Self:
@@ -56,6 +58,7 @@ class ClapClient:
             embed_audio_url=str(settings.modal.embed_audio_url or ""),
             embed_text_url=str(settings.modal.embed_text_url or ""),
             timeout_seconds=settings.modal.timeout_seconds,
+            text_timeout_seconds=settings.modal.text_timeout_seconds,
         )
 
     async def embed_audio(self, audio_bytes: bytes) -> EmbeddingResult:
@@ -75,7 +78,7 @@ class ClapClient:
         )
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with httpx.AsyncClient(timeout=self.audio_timeout) as client:
                 response = await client.post(
                     self.embed_audio_url,
                     json={"audio_b64": b64_audio},
@@ -102,7 +105,7 @@ class ClapClient:
                 success=False,
                 embedding=None,
                 dimensions=None,
-                error=f"embedding timed out after {self.timeout.read}s",
+                error=f"embedding timed out after {self.audio_timeout.read}s",
             )
 
         except httpx.HTTPStatusError as e:
@@ -140,7 +143,7 @@ class ClapClient:
         logfire.info("requesting text embedding", text=text)
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with httpx.AsyncClient(timeout=self.text_timeout) as client:
                 response = await client.post(
                     self.embed_text_url,
                     json={"text": text},
@@ -167,7 +170,7 @@ class ClapClient:
                 success=False,
                 embedding=None,
                 dimensions=None,
-                error=f"embedding timed out after {self.timeout.read}s",
+                error=f"embedding timed out after {self.text_timeout.read}s",
             )
 
         except httpx.HTTPStatusError as e:
