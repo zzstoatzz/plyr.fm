@@ -91,7 +91,7 @@ plyr.fm should become:
 
 **the arc**: PR #1163 (Mar 20) replaced AuDD (~$5/1000 requests) with fpcalc + AcoustID (free) for copyright scanning. the chromaprint.zig work (see below) had proven fingerprint generation worked, and AcoustID's API was straightforward. the migration shipped with costs page updates, privacy policy changes, and a flurry of follow-up fixes (#1164, #1166-1171) for the costs export shape mismatch and legal date sync issues.
 
-**why it was reverted**: AcoustID's fingerprint database is built from MusicBrainz contributions — it works well for exact song identification but doesn't match DJ sets, sample-heavy tracks, or remixes. these are common on plyr.fm. AuDD handles these cases via fuzzy audio matching, which is why we were using it in the first place. the $5-10/month cost is worth it for the moderation accuracy.
+**why it was reverted**: AcoustID does whole-file fingerprint matching — it generates one fingerprint for the entire upload and looks for that fingerprint in its database. this works for identifying exact songs, but plyr.fm needs segment-level detection: a 60-minute DJ set with 1 minute of copyrighted material won't match, because the whole-file fingerprint looks nothing like the original 3-minute song's fingerprint. same problem with sample-heavy tracks or remixes that contain fragments of copyrighted material surrounded by original content. AuDD does segment-level analysis — it scans within the audio to find partial matches, which is exactly what copyright moderation requires. the $5-10/month cost is worth it for the detection accuracy.
 
 **what was kept from the AcoustID arc**:
 - `check_legal_dates` pre-commit hook (#1168) — catches stale privacy policy dates and terms version mismatches
@@ -135,7 +135,7 @@ plyr.fm should become:
 - AcoustID's docs recommend compressed POST because fingerprints are large (~5KB base64). switched from query-string GET to gzip POST
 - the pure zig approach means the moderation service can embed fingerprinting directly instead of calling an external API
 
-**what happened next**: PR #1163 integrated AcoustID into the moderation service, but AcoustID's fingerprint database didn't match well for DJ sets and sample-heavy tracks (common on plyr.fm). reverted to AuDD in #1174. the chromaprint.zig library remains a standalone tool and learning exercise — the fingerprinting itself works perfectly, it's AcoustID's database coverage that's the limitation.
+**what happened next**: PR #1163 integrated AcoustID into the moderation service, but AcoustID does whole-file matching — it can't detect copyrighted segments within longer uploads (DJ sets, sample-heavy tracks). reverted to AuDD in #1174 (see above for full explanation). the chromaprint.zig library remains a standalone tool and learning exercise — the fingerprinting itself works perfectly, it's AcoustID's whole-file matching model that doesn't fit plyr.fm's moderation needs.
 
 ---
 
