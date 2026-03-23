@@ -47,6 +47,61 @@ plyr.fm should become:
 
 ### March 2026
 
+#### artwork documentation + R2 image fix (PRs #1176-1178, Mar 22-23)
+
+**what happened**: user `jdhitsolutions.com` reported "I just don't see all of the image that I expect" on their track artwork. investigation via Logfire spans revealed two separate issues:
+
+1. **R2 image self-deletion bug** (#1176): when editing a track and re-submitting the same image file, the content hash produces the same `image_id`. the old cleanup logic unconditionally deleted the "previous" image — which was the file just uploaded. confirmed via traces: Jeff hit this 3 times on track 833 (Mar 20-21). the image only survived the third attempt because the previous deletes had already removed the old file, so cleanup found nothing to delete. fix: one-line guard (`if old_image_id and old_image_id != new_image_id`) in tracks, albums, and playlists.
+
+2. **no artwork guidance**: all display contexts use `object-fit: cover` on square containers, center-cropping non-square images. no documentation existed anywhere telling creators about this.
+
+**what shipped**:
+- R2 deletion guard + regression test in tracks, albums, and playlists (#1176)
+- theme-aware description fade (CSS `mask-image` instead of `linear-gradient` pseudo-element)
+- internal docs: `docs-internal/backend/image-formats.md` — full pipeline reference (#1177)
+- public docs: artwork guidelines in `docs/artists.md`, image parameter docs in API reference (#1178)
+
+---
+
+#### logfire observability fix (PR #1130, Mar 22)
+
+**why**: spans in Logfire showed `service_name: unknown_service` and had no user identity attached, making it impossible to trace who was making requests or filter by service.
+
+**what shipped**:
+- set `service_name="plyr-api"` in `logfire.configure()`
+- tag HTTP spans with `user.did` and `user.handle` via `_tag_span_with_user()` in both `require_auth` and `get_optional_session` auth dependencies
+- rewrote logfire querying guide with `deployment_environment` filtering and top-level column usage
+
+**note**: this PR was opened Mar 16 but sat unmerged until Mar 22 when we noticed null user identity on a terms acceptance span. the fix was already correct — just never merged.
+
+---
+
+#### DID-based profile URLs (PR #1173, Mar 22)
+
+**why**: community request from `@blooym.dev` — ATProto DIDs are immutable, so `plyr.fm/u/did:plc:xxxx` links survive handle changes, giving artists stable permalinks.
+
+**what shipped**:
+- `/u/did:plc:xxxx` resolves to artist profile (DID → handle lookup for backend calls)
+- sub-pages (liked, album) work with DID URLs
+- error page shows appropriate messaging for DID 404s
+
+---
+
+#### AcoustID → AuDD revert (PR #1174, Mar 22)
+
+**the arc**: PR #1163 (Mar 20) replaced AuDD (~$5/1000 requests) with fpcalc + AcoustID (free) for copyright scanning. the chromaprint.zig work (see below) had proven fingerprint generation worked, and AcoustID's API was straightforward. the migration shipped with costs page updates, privacy policy changes, and a flurry of follow-up fixes (#1164, #1166-1171) for the costs export shape mismatch and legal date sync issues.
+
+**why it was reverted**: AcoustID's fingerprint database is built from MusicBrainz contributions — it works well for exact song identification but doesn't match DJ sets, sample-heavy tracks, or remixes. these are common on plyr.fm. AuDD handles these cases via fuzzy audio matching, which is why we were using it in the first place. the $5-10/month cost is worth it for the moderation accuracy.
+
+**what was kept from the AcoustID arc**:
+- `check_legal_dates` pre-commit hook (#1168) — catches stale privacy policy dates and terms version mismatches
+- costs export CI-only guard and release tag checkout (#1166) — script shape always matches deployed frontend
+- `check-legal-dates` narrowing to `+page.svelte` only (#1171)
+
+**what was restored**: full AuDD integration in moderation service (9 files), AuDD billing logic in costs export/dashboard, privacy policy references, terms versioning date.
+
+---
+
 #### costs export tied to release tags + legal date guard (PRs #1166-1168, Mar 20)
 
 **why**: merging PR #1163 (AuDD → AcoustID) changed the costs JSON shape (`audd` → `copyright_scanning`), which broke the production `/costs` page. the hourly `export_costs.py` runs from `main`, but the production frontend deploys on a separate release cadence — so the script's output shape changed before the frontend was ready for it. separately, the privacy policy content was updated (#1164) but the backend `terms_last_updated` config wasn't bumped, so users weren't prompted to re-accept.
@@ -80,7 +135,7 @@ plyr.fm should become:
 - AcoustID's docs recommend compressed POST because fingerprints are large (~5KB base64). switched from query-string GET to gzip POST
 - the pure zig approach means the moderation service can embed fingerprinting directly instead of calling an external API
 
-**what's next**: replace AuDD with AcoustID in the moderation service, remove AuDD from costs and terms of service.
+**what happened next**: PR #1163 integrated AcoustID into the moderation service, but AcoustID's fingerprint database didn't match well for DJ sets and sample-heavy tracks (common on plyr.fm). reverted to AuDD in #1174. the chromaprint.zig library remains a standalone tool and learning exercise — the fingerprinting itself works perfectly, it's AcoustID's database coverage that's the limitation.
 
 ---
 
@@ -231,7 +286,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-reverted from AcoustID/fpcalc back to AuDD for copyright scanning (#1173). AcoustID's fingerprint database doesn't match well for DJ sets and sample-heavy tracks — AuDD handles these via fuzzy matching. the chromaprint.zig learning exercise remains at [`@zzstoatzz.io/chromaprint.zig`](https://tangled.sh/@zzstoatzz.io/chromaprint.zig). next: add a staging environment for the moderation service (#1165).
+AuDD is back for copyright scanning (#1174), logfire observability is fixed (#1130 — `service_name` + user identity tagging), R2 image deletion bug fixed (#1176), and artwork guidelines documented for creators (#1177-1178). next: add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -367,5 +422,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-22 (reverted AcoustID back to AuDD — better fuzzy matching for DJ sets/samples).
+this is a living document. last updated 2026-03-23 (R2 image fix, artwork docs, logfire observability, DID profile URLs, AcoustID→AuDD revert chronicled).
 
