@@ -228,3 +228,7 @@ max_lines = 1520
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
 max_lines = 580
+
+[[rules]]
+path = "backend/tests/api/test_track_deletion.py"
+max_lines = 505

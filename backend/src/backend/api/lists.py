@@ -805,7 +805,7 @@ async def upload_playlist_cover(
         )
 
         # delete old image if exists (prevent R2 object leaks)
-        if playlist.image_id:
+        if playlist.image_id and playlist.image_id != uploaded.image_id:
             with contextlib.suppress(Exception):
                 await storage.delete(playlist.image_id)
 

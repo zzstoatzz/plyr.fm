@@ -433,3 +433,73 @@ async def test_api_delete_writes_tombstone(
     mock_redis.set.assert_called_once()
     call_args = mock_redis.set.call_args
     assert record_uri in call_args.args[0]
+
+
+async def test_edit_same_image_does_not_delete(
+    test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
+):
+    """regression: re-uploading the same image should not delete the R2 file.
+
+    when a user edits a track and re-submits the same image file, the content
+    hash produces the same image_id. the "delete old image" step must skip
+    deletion when old_image_id == new_image_id, otherwise it deletes the file
+    that was just uploaded.
+
+    root cause: jdhitsolutions.com edited track 833 artwork with the same file,
+    producing image_id 2a8c7e83859a6f2b both times. the old-image cleanup
+    deleted the just-uploaded file, leaving a 404 in R2.
+    """
+    same_image_id = "same_content_hash"
+
+    track = Track(
+        title="test track",
+        artist_did=test_artist.did,
+        file_id="test_file_same_img",
+        file_type="mp3",
+        extra={},
+        image_id=same_image_id,
+        image_url=f"https://example.com/images/{same_image_id}.png",
+        thumbnail_url=f"https://example.com/images/{same_image_id}_thumb.webp",
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+
+    delete_calls: list[str] = []
+
+    async def mock_delete(file_id: str, file_type: str | None = None) -> bool:
+        delete_calls.append(file_id)
+        return True
+
+    with (
+        patch(
+            "backend.api.tracks.mutations.upload_track_image",
+            new_callable=AsyncMock,
+            return_value=(
+                same_image_id,
+                f"https://example.com/images/{same_image_id}.png",
+                f"https://example.com/images/{same_image_id}_thumb.webp",
+            ),
+        ),
+        patch(
+            "backend.api.tracks.mutations.storage.delete",
+            side_effect=mock_delete,
+        ),
+        patch(
+            "backend.api.tracks.mutations._update_atproto_record",
+            new_callable=AsyncMock,
+        ),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.patch(
+                f"/tracks/{track.id}",
+                data={"title": track.title},
+                files={"image": ("test.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+            )
+
+    assert response.status_code == 200
+
+    # the same image_id should NOT appear in delete calls
+    assert same_image_id not in delete_calls
