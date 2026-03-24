@@ -92,11 +92,11 @@ class TestAudioFormat:
         assert ".flac" in ext_str
 
     def test_is_web_playable(self):
-        """test web playable detection - browsers can play mp3/wav/m4a natively."""
+        """test web playable detection - browsers can play mp3/wav/m4a/flac natively."""
         # web-playable formats (no transcoding needed)
         assert AudioFormat.MP3.is_web_playable is True
         assert AudioFormat.WAV.is_web_playable is True
         assert AudioFormat.M4A.is_web_playable is True
-        # lossless formats require transcoding for browser playback
+        assert AudioFormat.FLAC.is_web_playable is True
+        # AIFF requires transcoding (only Safari supports it)
         assert AudioFormat.AIFF.is_web_playable is False
-        assert AudioFormat.FLAC.is_web_playable is False

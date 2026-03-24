@@ -6,7 +6,7 @@
 	import LikersTooltip from './LikersTooltip.svelte';
 	import CommentersTooltip from './CommentersTooltip.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
-	import { hasPlayableLossless } from '$lib/audio-support';
+	import { hasPlayableLossless, isLosslessFormat } from '$lib/audio-support';
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
@@ -198,9 +198,9 @@
 	class="track-container"
 	class:playing={isPlaying}
 	class:likers-tooltip-open={showLikersTooltip}
-	class:lossless={hasPlayableLossless(track.original_file_type)}
+	class:lossless={hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type)}
 >
-	{#if hasPlayableLossless(track.original_file_type)}
+	{#if hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type)}
 		<div class="lossless-badge" title="lossless audio available">
 			<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 				<path d="M8 1L14 6L8 15L2 6L8 1Z" stroke="currentColor" stroke-width="1.2" fill="currentColor" fill-opacity="0.15" stroke-linejoin="round"/>

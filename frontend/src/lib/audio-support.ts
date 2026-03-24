@@ -54,3 +54,12 @@ export function canPlayFormat(format: string | null | undefined): boolean {
 export function hasPlayableLossless(originalFileType: string | null | undefined): boolean {
 	return canPlayFormat(originalFileType);
 }
+
+/**
+ * Check if a format is lossless (regardless of browser playback support).
+ */
+export function isLosslessFormat(format: string | null | undefined): boolean {
+	if (!format) return false;
+	const normalized = format.toLowerCase().replace('.', '');
+	return normalized in LOSSLESS_MIME_TYPES;
+}

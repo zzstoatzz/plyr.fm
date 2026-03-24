@@ -28,7 +28,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
-from backend._internal import has_flag, require_artist_profile
+from backend._internal import require_artist_profile
 from backend._internal.atproto import (
     BlobRef,
     PayloadTooLargeError,
@@ -997,16 +997,6 @@ async def upload_track(
             detail=f"unsupported file type: {ext}. "
             f"supported: {AudioFormat.supported_extensions_str()}",
         )
-
-    # lossless formats (AIFF/FLAC) require feature flag
-    if not audio_format.is_web_playable:
-        async with db_session() as db:
-            if not await has_flag(db, auth_session.did, "lossless-uploads"):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"lossless format {ext} is not yet supported. "
-                    "supported: .mp3, .wav, .m4a",
-                )
 
     # stream file to temp file (constant memory)
     file_path = None
