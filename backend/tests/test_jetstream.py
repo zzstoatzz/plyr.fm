@@ -530,7 +530,10 @@ class TestIngestTrackCreate:
         )
         track = result.scalar_one()
         mock_hooks.assert_called_once_with(
-            track.id, audio_url="https://r2.example.com/hook_001.mp3"
+            track.id,
+            audio_url="https://r2.example.com/hook_001.mp3",
+            skip_notification=False,
+            skip_copyright=False,
         )
 
     async def test_track_create_runs_hooks_both(
