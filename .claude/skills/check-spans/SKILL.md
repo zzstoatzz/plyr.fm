@@ -3,7 +3,7 @@ description: Investigate Logfire spans and traces to answer questions about appl
 argument-hint: [your question about what happened]
 ---
 
-First read the Logfire documentation: @docs/tools/logfire.md
+First read the Logfire documentation: @docs-internal/tools/logfire.md
 
 Investigate: $ARGUMENTS
 
