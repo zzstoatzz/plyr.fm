@@ -1,16 +1,17 @@
 <script lang="ts">
-	import { hasPlayableLossless } from '$lib/audio-support';
+	import { hasPlayableLossless, isLosslessFormat } from '$lib/audio-support';
 
 	interface Props {
 		originalFileType: string | null | undefined;
+		fileType?: string | null | undefined;
 		withSeparator?: boolean;
 		separatorClass?: string;
 	}
 
-	let { originalFileType, withSeparator = false, separatorClass = '' }: Props = $props();
+	let { originalFileType, fileType, withSeparator = false, separatorClass = '' }: Props = $props();
 
-	// only show if browser can play this lossless format
-	let showBadge = $derived(hasPlayableLossless(originalFileType));
+	// show if browser can play the lossless original, or if the file type itself is lossless
+	let showBadge = $derived(hasPlayableLossless(originalFileType) || isLosslessFormat(fileType));
 </script>
 
 {#if showBadge}

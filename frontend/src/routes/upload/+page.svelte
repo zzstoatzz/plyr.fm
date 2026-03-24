@@ -14,41 +14,18 @@
 	import { toast } from "$lib/toast.svelte";
 	import { auth } from "$lib/auth.svelte";
 
-	// browser-compatible audio formats
-	const BASE_AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a"];
-	const BASE_AUDIO_MIME_TYPES = ["audio/mpeg", "audio/wav", "audio/mp4"];
-	// lossless formats (require transcoding, feature-flagged)
-	const LOSSLESS_EXTENSIONS = [".aiff", ".aif", ".flac"];
-	const LOSSLESS_MIME_TYPES = ["audio/aiff", "audio/x-aiff", "audio/flac"];
-
-	// check if user has lossless uploads enabled
-	function hasLosslessUploads(): boolean {
-		return auth.user?.enabled_flags?.includes("lossless-uploads") ?? false;
-	}
-
-	// compute accepted formats based on feature flag
-	function getAcceptedExtensions(): string[] {
-		const extensions = [...BASE_AUDIO_EXTENSIONS];
-		if (hasLosslessUploads()) {
-			extensions.push(...LOSSLESS_EXTENSIONS);
-		}
-		return extensions;
-	}
-
-	function getFileInputAccept(): string {
-		const extensions = getAcceptedExtensions();
-		const mimeTypes = [...BASE_AUDIO_MIME_TYPES];
-		if (hasLosslessUploads()) {
-			mimeTypes.push(...LOSSLESS_MIME_TYPES);
-		}
-		return [...extensions, ...mimeTypes].join(",");
-	}
+	const AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a", ".aiff", ".aif", ".flac"];
+	const AUDIO_MIME_TYPES = [
+		"audio/mpeg", "audio/wav", "audio/mp4",
+		"audio/aiff", "audio/x-aiff", "audio/flac",
+	];
+	const FILE_INPUT_ACCEPT = [...AUDIO_EXTENSIONS, ...AUDIO_MIME_TYPES].join(",");
 
 	function isSupportedAudioFile(name: string): boolean {
 		const dotIndex = name.lastIndexOf(".");
 		if (dotIndex === -1) return false;
 		const ext = name.slice(dotIndex).toLowerCase();
-		return getAcceptedExtensions().includes(ext);
+		return AUDIO_EXTENSIONS.includes(ext);
 	}
 
 	let loading = $state(true);
@@ -180,7 +157,7 @@
 			const selected = target.files[0];
 			if (!isSupportedAudioFile(selected.name)) {
 				toast.error(
-					`unsupported file type. supported: ${getAcceptedExtensions().join(", ")}`,
+					`unsupported file type. supported: ${AUDIO_EXTENSIONS.join(", ")}`,
 				);
 				target.value = "";
 				file = null;
@@ -276,12 +253,12 @@
 				<input
 					id="file-input"
 					type="file"
-					accept={getFileInputAccept()}
+					accept={FILE_INPUT_ACCEPT}
 					onchange={handleFileChange}
 					required
 				/>
 				<p class="format-hint">
-					supported: {getAcceptedExtensions().map(e => e.slice(1)).join(", ")}
+					supported: {AUDIO_EXTENSIONS.map(e => e.slice(1)).join(", ")}
 				</p>
 				{#if file}
 					<p class="file-info">

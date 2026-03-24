@@ -1,12 +1,10 @@
 """integration tests for lossless audio uploads (FLAC, AIFF, AIF).
 
-these tests verify the transcoding pipeline:
-1. upload lossless format → transcoded to MP3 for browser playback
-2. if file_type is "mp3" after upload, transcoding succeeded
+FLAC is web-playable (Chrome 56+, Firefox 51+, Safari 11+) and stored directly.
+AIFF still requires transcoding to MP3 for browser playback.
 
 requires:
 - ffmpeg installed (for generating test files)
-- test user must have 'lossless-uploads' feature flag enabled
 """
 
 from __future__ import annotations
@@ -23,7 +21,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.timeout(180)]
 
 
 async def test_upload_flac(user1_client: AsyncPlyrClient, drone_flac: Path):
-    """upload FLAC file - should transcode to MP3."""
+    """upload FLAC file - stored directly as FLAC (web-playable, no transcoding)."""
     client = user1_client
 
     result = await client.upload(
@@ -37,8 +35,8 @@ async def test_upload_flac(user1_client: AsyncPlyrClient, drone_flac: Path):
     try:
         track = await client.get_track(track_id)
         assert track.title == "Test FLAC Upload"
-        # transcoded version is MP3 (proves transcoding worked)
-        assert track.file_type == "mp3", f"expected mp3, got {track.file_type}"
+        # FLAC is web-playable — stored directly, no transcoding
+        assert track.file_type == "flac", f"expected flac, got {track.file_type}"
 
     finally:
         await client.delete(track_id)
