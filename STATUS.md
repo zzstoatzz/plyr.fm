@@ -47,6 +47,18 @@ plyr.fm should become:
 
 ### March 2026
 
+#### collection activity feed + RichText + observability fixes (PRs #1172, 1183-1185, Mar 23-24)
+
+**RichText unification** (#1183): track descriptions and comments now auto-link URLs using the shared `RichText` component (already used on artist bios). removed 39 lines of inline URL parsing code from the track page. comments gained markdown link support (`[text](url)`) and better domain/path detection.
+
+**collection activity feed** (#1172): new `collection_events` table (append-only event log) tracking playlist creation, album releases, and tracks added to playlists. the `/activity` page now surfaces these alongside existing events (uploads, likes, comments, joins) with type-colored accents and histogram inclusion. events cascade on delete (SET NULL → omitted from feed).
+
+**CLAP text embedding timeout** (#1184): the CLAP client used a single 120s timeout for both audio (background task) and text (user-facing search) embedding requests. when Modal cold starts, semantic search hung for 14+ seconds waiting for a 408 from Modal. split into separate timeouts: 120s for audio embedding (background tasks can wait) and 5s for text embedding (user-facing search fails fast). configurable via `MODAL_TEXT_TIMEOUT_SECONDS`.
+
+**integration test notification leak** (#1185): integration tests on staging were sending DM notifications about test tracks. root cause: Jetstream processes events with a lag. tests create a track, verify it, then delete it — all before Jetstream catches up. when Jetstream finally processes the create event, the DB row is gone, so it creates the track from scratch with `notification_sent=False` and fires the DM. the tombstone system (designed to prevent ghost tracks) couldn't help because Jetstream processes events in order — the create comes before the delete. fix: suppress notifications and copyright scans from both Jetstream ingest paths on staging. defense-in-depth: the hooks layer also marks `notification_sent=True` when skipping, preventing the finalize-pending path from double-firing.
+
+---
+
 #### artwork documentation + R2 image fix (PRs #1176-1178, Mar 22-23)
 
 **what happened**: user `jdhitsolutions.com` reported "I just don't see all of the image that I expect" on their track artwork. investigation via Logfire spans revealed two separate issues:
@@ -288,7 +300,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-AuDD is back for copyright scanning (#1174), logfire observability is fixed (#1130 — `service_name` + user identity tagging), R2 image deletion bug fixed (#1176), and artwork guidelines documented for creators (#1177-1178). next: add a staging environment for the moderation service (#1165).
+collection activity feed shipped (#1172), CLAP text embedding timeout fixed (#1184), integration test DM leak fixed (#1185), RichText unified across descriptions/comments (#1183). next: add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -424,5 +436,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-23 (moderation deploy incident documented, R2 image fix, artwork docs, logfire observability, DID profile URLs, AcoustID→AuDD revert chronicled).
+this is a living document. last updated 2026-03-24 (collection activity feed, CLAP timeout fix, integration test notification leak fix, RichText unification).
 
