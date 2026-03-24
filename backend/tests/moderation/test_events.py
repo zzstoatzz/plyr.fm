@@ -70,6 +70,66 @@ async def test_publish_moderation_event_on_scan_result(
     assert payload["scan"]["match_count"] == 1
 
 
+async def test_event_payload_matches_osprey_sml_model(
+    db_session: AsyncSession,
+    mock_scan_result: ScanResult,
+) -> None:
+    """verify event payload contains fields expected by Osprey SML rules.
+
+    SML models read: $.scan.dominant_match_pct, $.scan.match_count,
+    $.scan.dominant_match, and $.track_at_uri (TrackAtUri).
+    """
+    artist = Artist(
+        did="did:plc:smltest",
+        handle="smltest.bsky.social",
+        display_name="SML Test User",
+    )
+    db_session.add(artist)
+    await db_session.commit()
+
+    track = Track(
+        title="SML Test Track",
+        file_id="sml_test_file",
+        file_type="mp3",
+        artist_did=artist.did,
+        r2_url="https://example.com/sml.mp3",
+        atproto_record_uri="at://did:plc:smltest/fm.plyr.track/sml1",
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    mock_redis = AsyncMock()
+    mock_redis.xadd = AsyncMock()
+
+    with (
+        patch("backend._internal.moderation.settings") as mock_settings,
+        patch("backend._internal.moderation.get_moderation_client") as mock_get_client,
+        patch("backend._internal.moderation.get_async_redis_client") as mock_get_redis,
+    ):
+        mock_settings.moderation.enabled = True
+        mock_settings.moderation.auth_token = "test-token"
+
+        mock_client = AsyncMock()
+        mock_client.scan.return_value = mock_scan_result
+        mock_get_client.return_value = mock_client
+        mock_get_redis.return_value = mock_redis
+
+        assert track.r2_url is not None
+        await scan_track_for_copyright(track.id, track.r2_url)
+
+    payload = json.loads(mock_redis.xadd.call_args[0][1]["payload"])
+
+    # fields read by SML models
+    assert payload["scan"]["dominant_match_pct"] == 85
+    assert payload["scan"]["match_count"] == 1
+    assert payload["scan"]["dominant_match"] == {
+        "artist": "Test Artist",
+        "title": "Test Song",
+    }
+    assert payload["track_at_uri"] == "at://did:plc:smltest/fm.plyr.track/sml1"
+    assert payload["artist_did"] == "did:plc:smltest"
+
+
 async def test_publish_moderation_event_failure_does_not_block(
     db_session: AsyncSession,
     mock_scan_result: ScanResult,

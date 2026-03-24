@@ -24,7 +24,12 @@ def mock_scan_result() -> ScanResult:
                 "isrc": "USRC12345678",
             }
         ],
-        raw_response={"status": "success", "result": []},
+        raw_response={
+            "status": "success",
+            "result": [],
+            "dominant_match_pct": 85,
+            "dominant_match": {"artist": "Test Artist", "title": "Test Song"},
+        },
     )
 
 
