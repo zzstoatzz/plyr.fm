@@ -1,3 +1,7 @@
+---
+description: update STATUS.md to reflect recent work
+---
+
 # status update
 
 update STATUS.md to reflect recent work.

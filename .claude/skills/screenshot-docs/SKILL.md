@@ -1,3 +1,8 @@
+---
+description: capture screenshots of plyr.fm UI and embed them in documentation
+argument-hint: "[target]"
+---
+
 # screenshot capture for docs
 
 capture screenshots of plyr.fm UI and embed them in documentation.

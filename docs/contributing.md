@@ -21,7 +21,7 @@ for frontend, and `just` as the task runner. see backend/.env.example for all
 environment variables.
 ```
 
-or install the [contribute skill](https://github.com/zzstoatzz/plyr.fm/tree/main/skills/contribute) for richer agent context.
+or install the [contribute skill](https://github.com/zzstoatzz/plyr.fm/tree/main/.claude/skills/contribute) for richer agent context.
 
 ## prerequisites
 
