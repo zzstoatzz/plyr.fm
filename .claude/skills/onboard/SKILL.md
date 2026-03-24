@@ -1,3 +1,7 @@
+---
+description: get up to speed on the project quickly
+---
+
 # onboard
 
 get up to speed on the project quickly.

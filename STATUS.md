@@ -426,7 +426,7 @@ uv run scripts/delete_track.py --url https://plyr.fm/track/34
 
 ## for new contributors
 
-see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instructions, or install the [contribute skill](skills/contribute/SKILL.md) for AI coding assistants.
+see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instructions, or install the [contribute skill](.claude/skills/contribute/SKILL.md) for AI coding assistants.
 
 ## documentation
 

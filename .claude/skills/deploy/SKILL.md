@@ -1,3 +1,8 @@
+---
+description: deploy to production with preflight checks
+disable-model-invocation: true
+---
+
 # deploy
 
 deploy to production with preflight checks.
