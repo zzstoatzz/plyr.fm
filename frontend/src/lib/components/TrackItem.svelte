@@ -771,6 +771,7 @@
 		gap: 0.25rem;
 		margin-top: 0.15rem;
 		overflow: hidden;
+		max-width: 100%;
 	}
 
 	.tags-line.expanded {
