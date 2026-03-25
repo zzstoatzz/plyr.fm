@@ -16,7 +16,7 @@ run these checks and report any issues before proceeding:
 3. **up to date with origin** - `git fetch origin && git status` should not be behind
 4. **no open PRs from your branch** - check for any unmerged work
 
-## analyze changes
+## analyze changes and deploy
 
 determine what changed since last release:
 
@@ -24,32 +24,22 @@ determine what changed since last release:
 just changelog
 ```
 
-categorize changes:
-- **backend changes**: anything in `backend/`, `scripts/`, root config files
-- **frontend changes**: anything in `frontend/`
-- **docs only**: only changes to `docs/`, `STATUS.md`, `*.md` files
+Use `git diff` on the commit range to determine which directories were touched. Then pick the right release command — this is not a choice, it's deterministic:
 
-report the change summary to the user.
+- **backend changes** (anything in `backend/`, `scripts/`, root config files like `pyproject.toml`): `just release` (full release — tags, bumps version, triggers backend + frontend deploy)
+- **frontend-only** (only `frontend/`, `.claude/`, `docs/`, `STATUS.md`, other non-backend files): `just release-frontend-only` (skips backend deploy)
+- **docs/config only** (only `.claude/`, `docs/`, `STATUS.md`, `.md` files, no runtime code): no deployment needed — tell the user and stop
 
-## deployment decision
-
-based on the changes:
-- if **backend changes**: full release needed (`just release`)
-- if **frontend only**: can use `just release-frontend-only` (faster)
-- if **docs only**: no deployment needed, but can release if desired
-
-ask for confirmation before proceeding.
+Report the change summary and which release command you're running, then execute it. Do not ask the user to choose — the changes determine the command.
 
 ## execute deployment
 
-if confirmed:
-
-1. run `just release` (or `just release-frontend-only` if applicable)
+1. run the appropriate release command
 2. push to tangled remote: `git push tangled main --tags`
 3. report the release tag and deployment status
 
 ## post-deployment
 
 remind the user to:
-- monitor fly.io dashboard for backend deployment status
+- monitor fly.io dashboard for backend deployment status (if full release)
 - check https://plyr.fm once deployment completes
