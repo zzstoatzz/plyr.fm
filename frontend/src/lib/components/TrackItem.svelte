@@ -788,8 +788,10 @@
 		font-weight: 500;
 		text-decoration: none;
 		transition: all 0.15s;
-		flex-shrink: 0;
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 2rem;
 	}
 
 	.tag-badge:hover {

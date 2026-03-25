@@ -16,7 +16,7 @@ class AuthManager {
 	isAuthenticated = $state(false);
 	loading = $state(true);
 	scopeUpgradeRequired = $state(false);
-	private initialized = false;
+	private initPromise: Promise<void> | null = null;
 
 	async initialize(): Promise<void> {
 		if (!browser) {
@@ -24,12 +24,13 @@ class AuthManager {
 			return;
 		}
 
-		// only fetch once - subsequent calls are no-ops
-		if (this.initialized) {
-			return;
-		}
-		this.initialized = true;
+		// return existing promise so concurrent callers all wait for the same fetch
+		if (this.initPromise) return this.initPromise;
+		this.initPromise = this.doInitialize();
+		return this.initPromise;
+	}
 
+	private async doInitialize(): Promise<void> {
 		try {
 			const response = await fetch(`${API_URL}/auth/me`, {
 				credentials: 'include'
@@ -68,11 +69,11 @@ class AuthManager {
 		if (!browser) return;
 		this.user = null;
 		this.isAuthenticated = false;
-		this.initialized = false;
+		this.initPromise = null;
 	}
 
 	async refresh(): Promise<void> {
-		this.initialized = false;
+		this.initPromise = null;
 		await this.initialize();
 	}
 
