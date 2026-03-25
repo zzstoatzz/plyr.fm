@@ -301,7 +301,7 @@
 </main>
 
 <style>
-	.lava-bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+	.lava-bg { position: fixed; inset: 0; z-index: -3; overflow: hidden; pointer-events: none; }
 	.lava-blob {
 		position: absolute; border-radius: 50%; filter: blur(50px);
 		opacity: 0.1; will-change: transform;
