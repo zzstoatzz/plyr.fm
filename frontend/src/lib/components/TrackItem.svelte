@@ -197,17 +197,10 @@
 <div
 	class="track-container"
 	class:playing={isPlaying}
+	class:lossless={hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type)}
 	class:likers-tooltip-open={showLikersTooltip}
+	title={hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type) ? 'lossless audio available' : undefined}
 >
-	{#if hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type)}
-		<div class="lossless-badge" title="lossless audio available">
-			<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-				<path d="M8 1L14 6L8 15L2 6L8 1Z" stroke="currentColor" stroke-width="1.2" fill="currentColor" fill-opacity="0.15" stroke-linejoin="round"/>
-				<path d="M2 6H14" stroke="currentColor" stroke-width="1.2"/>
-				<path d="M8 1L6 6L8 15L10 6L8 1Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
-			</svg>
-			</div>
-	{/if}
 	{#if showIndex}
 		<span class="track-index">{index + 1}</span>
 	{/if}
@@ -395,6 +388,10 @@
 						{/if}
 					</span>
 				{/if}
+			{#if hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type)}
+				<span class="meta-separator">·</span>
+				<span class="lossless-indicator" title="lossless audio available">lossless</span>
+			{/if}
 			</div>
 		</div>
 	</button>
@@ -498,6 +495,21 @@
 		border-color: color-mix(in srgb, var(--accent) 20%, var(--track-border, var(--border-subtle)));
 	}
 
+	.track-container.lossless {
+		border-color: color-mix(in srgb, var(--accent) 12%, var(--track-border, var(--border-subtle)));
+		box-shadow:
+			0 1px 2px rgba(0, 0, 0, 0.04),
+			inset 0 0 0 1px color-mix(in srgb, var(--accent) 6%, transparent);
+	}
+
+	.track-container.lossless:hover {
+		border-color: color-mix(in srgb, var(--accent) 18%, var(--track-border-hover, var(--border-default)));
+		box-shadow:
+			0 1px 3px rgba(0, 0, 0, 0.06),
+			0 0 8px color-mix(in srgb, var(--accent) 8%, transparent),
+			inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
 	/* elevate entire track container when likers tooltip is open
 	   z-index: 60 is above header (50) and sibling tracks */
 	.track-container.likers-tooltip-open {
@@ -549,28 +561,6 @@
 		border-radius: var(--radius-full);
 		color: white;
 		z-index: 1;
-	}
-
-	.lossless-badge {
-		position: absolute;
-		top: -8px;
-		right: 12px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0.2rem;
-		background: var(--bg-primary);
-		border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-		border-radius: var(--radius-full);
-		color: var(--accent);
-		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-		z-index: 2;
-	}
-
-	.lossless-badge svg {
-		width: 12px;
-		height: 12px;
-		flex-shrink: 0;
 	}
 
 	.track-image,
@@ -895,6 +885,17 @@
 		font-family: inherit;
 	}
 
+	.lossless-indicator {
+		color: var(--accent-muted, var(--text-tertiary));
+		font-weight: 500;
+		cursor: default;
+		transition: color 0.2s;
+	}
+
+	.lossless-indicator:hover {
+		color: var(--accent);
+	}
+
 	.action-button {
 		width: 32px;
 		height: 32px;
@@ -968,17 +969,6 @@
 			height: 8px;
 		}
 
-		.lossless-badge {
-			top: -6px;
-			right: 8px;
-			padding: 0.15rem;
-		}
-
-		.lossless-badge svg {
-			width: 10px;
-			height: 10px;
-		}
-
 		.track-title {
 			font-size: var(--text-base);
 		}
@@ -1030,17 +1020,6 @@
 		.gated-badge svg {
 			width: 7px;
 			height: 7px;
-		}
-
-		.lossless-badge {
-			top: -5px;
-			right: 6px;
-			padding: 0.125rem;
-		}
-
-		.lossless-badge svg {
-			width: 9px;
-			height: 9px;
 		}
 
 		.track-title {
