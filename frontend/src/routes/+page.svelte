@@ -6,12 +6,14 @@
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import HiddenTagsFilter from '$lib/components/HiddenTagsFilter.svelte';
+	import { goto } from '$app/navigation';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache, fetchTopTracks } from '$lib/tracks.svelte';
 	import { networkArtistsCache } from '$lib/network-artists.svelte';
 	import type { Track } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
+	import { toast } from '$lib/toast.svelte';
 	import { fade } from 'svelte/transition';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
 	import {
@@ -51,6 +53,20 @@
 		topTracks = topResult;
 		loadingTopTracks = false;
 		initialLoad = false;
+
+		// show toast for OAuth errors (e.g. PDS scope mismatch)
+		const authError = $page.url.searchParams.get('auth_error');
+		if (authError) {
+			const messages: Record<string, string> = {
+				scope_mismatch:
+					'sign-in failed — your PDS did not grant the permissions plyr.fm needs. it may not support permission sets yet.',
+				expired: 'sign-in expired — please try again.',
+				failed: 'sign-in failed — please try again.'
+			};
+			toast.error(messages[authError] ?? messages.failed, authError === 'scope_mismatch' ? 8000 : 5000);
+			// clean auth_error from URL without navigation
+			goto('/', { replaceState: true });
+		}
 	});
 
 	// fetch network artists reactively — auth.isAuthenticated is false on
