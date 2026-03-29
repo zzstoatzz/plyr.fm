@@ -185,7 +185,15 @@ async def oauth_callback(
     3. add account flow - creates session in existing group, redirects to portal
     4. regular login flow - creates session, redirects to portal or profile setup
     """
-    did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
+    try:
+        did, handle, oauth_session = await handle_oauth_callback(code, state, iss)
+    except HTTPException as e:
+        error_code = _classify_auth_error(str(e.detail))
+        logger.warning("OAuth callback failed (code=%s): %s", error_code, e.detail)
+        return RedirectResponse(
+            url=f"{settings.frontend.url}/?auth_error={error_code}",
+            status_code=303,
+        )
 
     # ensure Artist record exists for all authenticated users
     # this creates a minimal record if needed, so we can display handles in
@@ -784,3 +792,13 @@ async def logout_all(
         )
 
     return response
+
+
+def _classify_auth_error(detail: str) -> str:
+    """classify an OAuth error detail string into a short error code."""
+    lower = detail.lower()
+    if "scope mismatch" in lower:
+        return "scope_mismatch"
+    if "expired" in lower or "invalid" in lower:
+        return "expired"
+    return "failed"
