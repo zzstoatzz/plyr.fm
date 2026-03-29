@@ -47,6 +47,37 @@ plyr.fm should become:
 
 ### March 2026
 
+#### graceful OAuth error handling (PR #1198, Mar 29)
+
+**why**: users with older self-hosted PDS instances that don't support `include:` permission sets got raw JSON (`{"detail":"OAuth callback failed: Scope mismatch: ..."}`) instead of a human-readable error when signing in.
+
+**what shipped**:
+- OAuth callback errors now redirect to the homepage with `?auth_error=<code>` instead of returning JSON
+- frontend shows a toast with the error — scope mismatch explains the PDS didn't grant required permissions and may not support permission sets yet (8s duration), expired/failed get standard 5s toasts
+- URL is cleaned after displaying the toast
+
+---
+
+#### FLAC uploads graduated + lossless badge redesign (PRs #1189-1190, #1193, Mar 25-27)
+
+**why**: FLAC was behind a feature flag requiring transcoding, but every modern browser has supported native FLAC playback since 2017 (Chrome 56+, Firefox 51+, Safari 11+). the feature flag was outdated.
+
+**what shipped**:
+- FLAC uploads now GA — stored directly without transcoding, available to all users
+- AIFF still transcodes to MP3 (browsers can't play AIFF natively)
+- lossless badge evolved through three iterations: diamond icon with "lossless" text and pulsing glow (#1189) → icon-only with tooltip (#1190) → removed floating badge entirely, replaced with subtle accent-tinted card border and inline "lossless" text in the metadata row (#1193)
+
+---
+
+#### activity page fixes (PRs #1194-1197, Mar 27-28)
+
+**what shipped**:
+- **ambient theme race condition** (#1197): `auth.initialize()` used a boolean flag that conflated "started" with "completed". the activity page's `onMount` (child mounts before parent in Svelte) called it without `await`, setting the flag before the fetch finished. the layout's `onMount` then returned immediately — `isAuthenticated` was still `false`, so `preferences.initialize()` and `ambient.activate()` never ran. fixed by replacing the boolean with a stored Promise so all concurrent callers wait for the same in-flight auth check
+- **lava-bg z-index** (#1194-1195): lava blobs were at the same z-index as the themed background, occluding the ambient gradient. moved to `z-index: 0` so blobs sit in front of the background but behind page content
+- **tags overflow** (#1196-1197): tag badges overflowed card boundaries on mobile. added `max-width: 100%` constraint and `text-overflow: ellipsis` on individual badges, with `flex-shrink: 0` on the "+N" counter so it stays visible
+
+---
+
 #### collection activity feed + RichText + observability fixes (PRs #1172, 1183-1185, Mar 23-24)
 
 **RichText unification** (#1183): track descriptions and comments now auto-link URLs using the shared `RichText` component (already used on artist bios). removed 39 lines of inline URL parsing code from the track page. comments gained markdown link support (`[text](url)`) and better domain/path detection.
@@ -300,14 +331,14 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-collection activity feed shipped (#1172), CLAP text embedding timeout fixed (#1184), integration test DM leak fixed (#1185), RichText unified across descriptions/comments (#1183). next: add a staging environment for the moderation service (#1165).
+FLAC uploads graduated (#1189), OAuth error handling improved (#1198), activity page ambient theme race condition fixed (#1197). next: add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
 - audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
 
 ### backlog
-- harden file format support — graduate lossless uploads (#1065), revisit transcoding pipeline
+- harden file format support — revisit transcoding pipeline (FLAC graduated in #1189, AIFF still transcodes)
 - Jetstream audit trail / activity feed integration — persistent log of firehose events, toggle for visibility
 - share to bluesky (#334)
 - lyrics and annotations (#373)
@@ -436,5 +467,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-24 (collection activity feed, CLAP timeout fix, integration test notification leak fix, RichText unification).
+this is a living document. last updated 2026-03-29 (FLAC GA, OAuth error handling, activity page fixes, lossless badge redesign).
 
