@@ -59,7 +59,7 @@
 		if (authError) {
 			const messages: Record<string, string> = {
 				scope_mismatch:
-					'sign-in failed — your PDS may not support the permissions plyr.fm needs. try updating your PDS software.',
+					'sign-in failed — your PDS did not grant the permissions plyr.fm needs. it may not support permission sets yet.',
 				expired: 'sign-in expired — please try again.',
 				failed: 'sign-in failed — please try again.'
 			};
