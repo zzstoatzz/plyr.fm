@@ -23,6 +23,7 @@ from backend._internal.tasks.origin_trust import (
 )
 from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
+from backend.models.session import UserSession
 from backend.utilities.database import db_session
 from backend.utilities.lexicon import validate_record
 from backend.utilities.redis import get_async_redis_client
@@ -706,3 +707,37 @@ async def ingest_profile_update(
             artist.bio = bio
             await db.commit()
             logfire.info("ingest: profile updated", did=did)
+
+
+# --- handle update task ---
+
+
+async def ingest_handle_update(
+    did: str,
+    handle: str,
+) -> None:
+    """update artist and session handles when an identity event arrives."""
+    async with db_session() as db:
+        artist = await db.get(Artist, did)
+        if not artist:
+            logger.debug("ingest_handle_update: unknown artist %s", did)
+            return
+
+        if artist.handle == handle:
+            return
+
+        old_handle = artist.handle
+        artist.handle = handle
+
+        # update active sessions so session handles stay current
+        await db.execute(
+            update(UserSession).where(UserSession.did == did).values(handle=handle)
+        )
+
+        await db.commit()
+        logfire.info(
+            "ingest: handle updated",
+            did=did,
+            old_handle=old_handle,
+            new_handle=handle,
+        )

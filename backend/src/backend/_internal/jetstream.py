@@ -28,6 +28,7 @@ from backend._internal.tasks.ingest import (
     ingest_comment_create,
     ingest_comment_delete,
     ingest_comment_update,
+    ingest_handle_update,
     ingest_like_create,
     ingest_like_delete,
     ingest_list_create,
@@ -133,6 +134,22 @@ class JetstreamConsumer:
     async def _process_event(self, event: dict[str, Any]) -> None:
         """check if event is for a known DID and dispatch to docket task."""
         kind = event.get("kind")
+
+        if kind == "identity":
+            did = event.get("did")
+            handle = (event.get("identity") or {}).get("handle")
+            if did and handle and did in self._known_dids:
+                docket = get_docket()
+                await docket.add(ingest_handle_update)(did=did, handle=handle)
+                logfire.info(
+                    "jetstream dispatched handle update",
+                    did=did,
+                    handle=handle,
+                )
+            if time_us := event.get("time_us"):
+                self._cursor = time_us
+            return
+
         if kind != "commit":
             return
 

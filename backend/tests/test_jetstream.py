@@ -15,6 +15,7 @@ from backend._internal.tasks.ingest import (
     _write_tombstone,
     ingest_comment_create,
     ingest_comment_delete,
+    ingest_handle_update,
     ingest_like_create,
     ingest_like_delete,
     ingest_list_create,
@@ -24,6 +25,7 @@ from backend._internal.tasks.ingest import (
     ingest_track_update,
 )
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
+from backend.models.session import UserSession
 
 
 def _recent_ts() -> str:
@@ -154,14 +156,59 @@ class TestJetstreamConsumer:
         await consumer._process_event(event)
         consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
 
-    async def test_skips_non_commit_events(self) -> None:
+    async def test_skips_non_commit_non_identity_events(self) -> None:
         consumer = JetstreamConsumer()
         consumer._known_dids = {"did:plc:jetstream_test"}
         consumer._dispatch = AsyncMock()  # type: ignore[method-assign]
 
-        event = {"kind": "identity", "did": "did:plc:jetstream_test"}
+        event = {"kind": "account", "did": "did:plc:jetstream_test"}
         await consumer._process_event(event)
         consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
+
+    async def test_dispatches_identity_event(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:jetstream_test"}
+
+        mock_docket = MagicMock()
+        dispatched: list[dict] = []
+
+        async def capture(**kwargs: object) -> None:
+            dispatched.append(dict(kwargs))
+
+        mock_docket.add = MagicMock(return_value=capture)
+
+        event = {
+            "kind": "identity",
+            "did": "did:plc:jetstream_test",
+            "time_us": 2000000,
+            "identity": {"handle": "new.handle.example"},
+        }
+
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(event)
+
+        assert len(dispatched) == 1
+        assert dispatched[0]["did"] == "did:plc:jetstream_test"
+        assert dispatched[0]["handle"] == "new.handle.example"
+        assert consumer._cursor == 2000000
+
+    async def test_identity_event_skips_unknown_did(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:known"}
+
+        mock_docket = MagicMock()
+        mock_docket.add = MagicMock()
+
+        event = {
+            "kind": "identity",
+            "did": "did:plc:unknown",
+            "identity": {"handle": "new.handle"},
+        }
+
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(event)
+
+        mock_docket.add.assert_not_called()
 
     async def test_persists_cursor(self) -> None:
         consumer = JetstreamConsumer()
@@ -1513,3 +1560,49 @@ class TestGhostTrackPrevention:
             select(Track).where(Track.atproto_record_uri == uri)
         )
         assert result.scalar_one() is not None
+
+
+# --- handle update tests ---
+
+
+class TestIngestHandleUpdate:
+    async def test_updates_artist_handle(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        new_handle = "updated.handle.example"
+        await ingest_handle_update(did=artist.did, handle=new_handle)
+
+        await db_session.refresh(artist)
+        assert artist.handle == new_handle
+
+    async def test_updates_session_handles(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        session = UserSession(
+            session_id=f"sess_{uuid.uuid4().hex[:12]}",
+            did=artist.did,
+            handle=artist.handle,
+            oauth_session_data="{}",
+        )
+        db_session.add(session)
+        await db_session.commit()
+
+        new_handle = "updated.handle.example"
+        await ingest_handle_update(did=artist.did, handle=new_handle)
+
+        await db_session.refresh(session)
+        assert session.handle == new_handle
+
+    async def test_noop_when_handle_unchanged(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """no commit when handle already matches — idempotent."""
+        original_handle = artist.handle
+        await ingest_handle_update(did=artist.did, handle=original_handle)
+
+        await db_session.refresh(artist)
+        assert artist.handle == original_handle
+
+    async def test_noop_for_unknown_did(self, db_session: AsyncSession) -> None:
+        """unknown DID is silently skipped."""
+        await ingest_handle_update(did="did:plc:nonexistent", handle="ghost.handle")
