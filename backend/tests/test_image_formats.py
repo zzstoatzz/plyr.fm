@@ -1,8 +1,11 @@
 """tests for image format validation."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from backend._internal.image import ImageFormat
+from backend._internal.image_uploads import process_image_upload
 
 
 class TestImageFormat:
@@ -149,3 +152,47 @@ class TestImageFormat:
         """test that JPEG_ALT has the same media type as JPEG."""
         assert ImageFormat.JPEG_ALT.media_type == "image/jpeg"
         assert ImageFormat.JPEG_ALT.media_type == ImageFormat.JPEG.media_type
+
+
+class TestImageUploadExtensionMatch:
+    """regression: .jpeg files got .jpg URLs, causing 404s in R2."""
+
+    @pytest.mark.parametrize(
+        ("filename", "content_type", "expected_ext"),
+        [
+            ("photo.jpeg", "image/jpeg", ".jpeg"),
+            ("photo.jpg", "image/jpeg", ".jpg"),
+            ("cover.png", "image/png", ".png"),
+            ("art.webp", "image/webp", ".webp"),
+        ],
+    )
+    async def test_image_url_matches_filename_extension(
+        self, filename: str, content_type: str, expected_ext: str
+    ) -> None:
+        """URL extension must match the filename extension R2 stores."""
+        fake_upload = AsyncMock()
+        fake_upload.filename = filename
+        fake_upload.content_type = content_type
+        fake_upload.read = AsyncMock(side_effect=[b"fake-image-data", b""])
+
+        with (
+            patch(
+                "backend._internal.image_uploads.storage.save",
+                new_callable=AsyncMock,
+                return_value="abc123",
+            ),
+            patch(
+                "backend._internal.image_uploads.storage.build_image_url",
+                side_effect=lambda fid, ext: f"https://r2.dev/images/{fid}{ext}",
+            ),
+            patch(
+                "backend._internal.image_uploads.generate_and_save",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+        ):
+            result = await process_image_upload(
+                fake_upload, "track", scan_moderation=False
+            )
+
+        assert result.image_url == f"https://r2.dev/images/abc123{expected_ext}"
