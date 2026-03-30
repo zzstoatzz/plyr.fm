@@ -3,6 +3,7 @@
 import logging
 from dataclasses import dataclass
 from io import BytesIO
+from pathlib import PurePosixPath
 
 from fastapi import HTTPException
 from starlette.datastructures import UploadFile
@@ -92,7 +93,8 @@ async def process_image_upload(
 
     image_obj = BytesIO(image_data)
     image_id = await storage.save(image_obj, image.filename)
-    ext = f".{image_format.value}" if image_format else ".png"
+    # use the actual filename extension — must match the key R2.save() stored
+    ext = PurePosixPath(image.filename).suffix.lower() or ".png"
     image_url = storage.build_image_url(image_id, ext)
     thumbnail_url = await generate_and_save(bytes(image_data), image_id, entity_type)
 
