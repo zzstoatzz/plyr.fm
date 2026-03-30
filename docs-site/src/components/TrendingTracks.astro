@@ -11,7 +11,15 @@
 <script>
   const API = "https://api.plyr.fm";
   const SITE = "https://plyr.fm";
+  const PINNED_ID = 778;
   const container = document.getElementById("trending-container")!;
+
+  type Track = {
+    id: number;
+    title: string;
+    artist_display_name?: string;
+    artist_handle: string;
+  };
 
   function escapeHtml(s: string) {
     const div = document.createElement("div");
@@ -19,41 +27,64 @@
     return div.innerHTML;
   }
 
-  async function loadTrending() {
-    try {
-      const res = await fetch(`${API}/tracks/top?limit=3`);
-      if (!res.ok) throw new Error("fetch failed");
-      const tracks: {
-        id: number;
-        title: string;
-        artist_display_name?: string;
-        artist_handle: string;
-      }[] = await res.json();
+  function trackEmbed(t: { id: number; title?: string; artist?: string }) {
+    const titleAttr = t.title && t.artist
+      ? `title="${escapeHtml(t.title)} by ${escapeHtml(t.artist)}"`
+      : `title="track ${t.id}"`;
+    return `<div class="trending-track">
+      <iframe
+        src="${SITE}/embed/track/${t.id}"
+        width="100%"
+        height="152"
+        frameborder="0"
+        allow="autoplay; encrypted-media"
+        loading="lazy"
+        ${titleAttr}
+      ></iframe>
+    </div>`;
+  }
 
-      if (!tracks?.length) {
-        showFallback();
-        return;
+  async function loadTrending() {
+    const embeds: string[] = [];
+
+    // always lead with the pinned track (rendered by ID alone)
+    embeds.push(trackEmbed({ id: PINNED_ID }));
+
+    try {
+      const res = await fetch(`${API}/tracks/top?limit=6`);
+      if (!res.ok) throw new Error("fetch failed");
+      const tracks: Track[] = await res.json();
+
+      // exclude pinned track, deduplicate by artist handle
+      const seen = new Set<string>();
+      const fill: Track[] = [];
+      for (const t of tracks) {
+        if (t.id === PINNED_ID) continue;
+        if (seen.has(t.artist_handle)) continue;
+        seen.add(t.artist_handle);
+        fill.push(t);
+        if (fill.length >= 2) break;
       }
 
-      container.innerHTML = tracks
-        .map(
-          (t) =>
-            `<div class="trending-track">
-              <iframe
-                src="${SITE}/embed/track/${t.id}"
-                width="100%"
-                height="152"
-                frameborder="0"
-                allow="autoplay; encrypted-media"
-                loading="lazy"
-                title="${escapeHtml(t.title)} by ${escapeHtml(t.artist_display_name || t.artist_handle)}"
-              ></iframe>
-            </div>`,
-        )
-        .join("");
+      for (const t of fill) {
+        embeds.push(
+          trackEmbed({
+            id: t.id,
+            title: t.title,
+            artist: t.artist_display_name || t.artist_handle,
+          }),
+        );
+      }
     } catch {
-      showFallback();
+      // top tracks failed — pinned embed still shows
     }
+
+    if (!embeds.length) {
+      showFallback();
+      return;
+    }
+
+    container.innerHTML = embeds.join("");
   }
 
   function showFallback() {
