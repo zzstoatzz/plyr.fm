@@ -45,6 +45,46 @@ plyr.fm should become:
 
 ## recent work
 
+### April 2026
+
+#### AT-URI top-level route resolution (PRs #1206, #1208, Apr 1)
+
+**why**: every atproto app should support AT-URIs as top-level routes ([streamplace/streamplace#1012](https://github.com/streamplace/streamplace/issues/1012)). this lets anyone paste `https://plyr.fm/at://did:plc:xxx/fm.plyr.track/rkey` and land on the right page.
+
+**what shipped**:
+- new SvelteKit catch-all route at `/at/[...uri]` that parses AT-URIs via `AtUri` from `@atproto/api`, resolves them against existing backend `/tracks/by-uri` and `/lists/playlists/by-uri` endpoints, and 301 redirects to the canonical page (`/track/{id}`, `/playlist/{id}`)
+- handles browser normalization of `://` in URL paths
+- follow-up (#1208): replaced 7 instances of manual `.split("/")` AT-URI parsing across backend and frontend with proper library utilities (`parse_at_uri()` wrapper in Python, `AtUri` class in TypeScript)
+
+---
+
+#### track detail page: title width + metadata disclosure (PR #1205, Apr 1)
+
+**why**: long track titles like "better hate (jessica pratt cover)" wrapped onto two lines because `.track-info-wrapper` was capped at `max-width: 600px`. the inline description also added visual weight without user opt-in.
+
+**what shipped**:
+- widened `.track-info-wrapper` from `max-width: 600px` to `min(900px, 90%)` — long titles stay on one line on desktop, 90% prevents edge-touching on narrower viewports
+- replaced the inline collapsible description (gradient mask + "show more/less" toggle) with a circled `(i)` icon in the stats row that slides open a metadata panel on click. only renders when `track.description` exists
+
+---
+
+#### WebSocket hardening (PRs #1203-1204, Apr 1)
+
+**what shipped**:
+- **security** (#1203): origin validation rejects WebSocket upgrades from non-allowlisted origins, `session_id` omitted from client-facing messages
+- **reliability** (#1204): idle timeout disconnects inactive connections, per-IP rate limiting and connection limits prevent abuse
+
+---
+
+#### Jetstream identity sync + image URL fix (PRs #1200-1202, Mar 31)
+
+**what shipped**:
+- **handle sync** (#1200): Jetstream identity events now trigger handle updates — when an artist changes their handle on Bluesky, plyr.fm picks it up automatically instead of waiting for their next sign-in
+- **image URL fix** (#1202): R2 storage keys use the original file extension, but the image URL construction wasn't preserving it. images uploaded as `.jpeg` were served with `.jpg` URLs (or vice versa), returning 404s from R2
+- **docs homepage** (#1201): pinned track 778 on docs homepage, deduplicated tracks-by-artist in the showcase
+
+---
+
 ### March 2026
 
 #### graceful OAuth error handling (PR #1198, Mar 29)
@@ -226,9 +266,9 @@ audited every backend validation limit (lexicon schemas, pydantic models, manual
 
 ---
 
-#### collapsible track descriptions (PRs #1144-1146, Mar 18)
+#### collapsible track descriptions (PRs #1144-1146, Mar 18; superseded by #1205)
 
-long track descriptions were pushing the track page layout down with no way to collapse them. added a collapsible wrapper that truncates descriptions taller than ~5 lines (128px) with a fade-out gradient. the "show more" toggle started as a bare left-aligned text link, then was restyled as a centered pill button with chevron indicators (▾/▴) to match the existing `.pill-btn` pattern used in Queue and tag badges.
+long track descriptions were pushing the track page layout down with no way to collapse them. added a collapsible wrapper that truncates descriptions taller than ~5 lines (128px) with a fade-out gradient. the "show more" toggle started as a bare left-aligned text link, then was restyled as a centered pill button with chevron indicators (▾/▴) to match the existing `.pill-btn` pattern used in Queue and tag badges. **replaced in #1205** with the metadata disclosure icon approach.
 
 ---
 
@@ -331,7 +371,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-FLAC uploads graduated (#1189), OAuth error handling improved (#1198), activity page ambient theme race condition fixed (#1197). next: add a staging environment for the moderation service (#1165).
+AT-URI resolution route shipped (#1206), standardized AT-URI parsing across codebase (#1208), WebSocket hardening (#1203-1204), Jetstream identity sync (#1200). next: add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -467,5 +507,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-03-29 (FLAC GA, OAuth error handling, activity page fixes, lossless badge redesign).
+this is a living document. last updated 2026-04-01 (AT-URI resolution, track detail redesign, WebSocket hardening, Jetstream identity sync).
 
