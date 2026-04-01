@@ -314,7 +314,7 @@ async def jam_websocket(
         logger.debug("ws disconnected from jam %s: %s", jam_id, session.did)
     except Exception:
         logger.exception("ws error in jam %s", jam_id)
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(RuntimeError, WebSocketDisconnect):
             await ws.close(code=1011, reason="internal error")
     finally:
         await jam_service.disconnect_ws(jam_id, ws)
