@@ -258,7 +258,7 @@ class JamState {
 			this.connected = false;
 			console.warn('[jam] ws closed:', { code: event.code, reason: event.reason });
 			// terminal codes: server rejected us, don't retry
-			if (event.code === 4003 || event.code === 4010) {
+			if (event.code === 4002 || event.code === 4003 || event.code === 4010) {
 				console.warn('[jam] terminal close — leaving jam (code %d: %s)', event.code, event.reason);
 				this.closeWs();
 				this.reset();

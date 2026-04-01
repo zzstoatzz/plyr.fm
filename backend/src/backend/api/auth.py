@@ -371,6 +371,9 @@ async def exchange_token(
             max_age=14 * 24 * 60 * 60,
         )
 
+        # browser flows get session via HttpOnly cookie — don't leak raw value
+        return ExchangeTokenResponse(session_id="")
+
     return ExchangeTokenResponse(session_id=session_id)
 
 
