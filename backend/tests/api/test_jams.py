@@ -2,12 +2,14 @@
 
 from collections.abc import AsyncGenerator
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.websockets import WebSocketDisconnect
 
 from backend._internal import Session
 from backend._internal.jams import JamService, jam_service
@@ -839,15 +841,17 @@ async def test_non_output_disconnect_no_effect() -> None:
     await service.connect_ws(jam_id, ws_joiner, "did:test:joiner")
     service._ws_client_ids[ws_joiner] = "joiner-client"
 
-    # disconnect the non-output joiner
-    await service.disconnect_ws(jam_id, ws_joiner)
+    # mock _clear_output_if_matches to avoid DB access (standalone JamService has no DB)
+    with patch.object(service, "_clear_output_if_matches", new_callable=AsyncMock):
+        # disconnect the non-output joiner
+        await service.disconnect_ws(jam_id, ws_joiner)
 
-    # host's client_id should still be tracked
-    assert service._ws_client_ids[ws_host] == "host-client"
-    assert ws_host in service._connections[jam_id]
+        # host's client_id should still be tracked
+        assert service._ws_client_ids[ws_host] == "host-client"
+        assert ws_host in service._connections[jam_id]
 
-    # cleanup
-    await service.disconnect_ws(jam_id, ws_host)
+        # cleanup
+        await service.disconnect_ws(jam_id, ws_host)
 
 
 # ── cross-client command tests ────────────────────────────────────
@@ -1574,3 +1578,303 @@ async def test_jam_preview_not_found(
         response = await client.get("/jams/nonexist/preview")
 
     assert response.status_code == 404
+
+
+# ── WebSocket security tests ──────────────────────────────────────
+
+
+def _assert_ws_close_code(
+    exc_info: pytest.ExceptionInfo[WebSocketDisconnect], expected: int
+) -> None:
+    """assert that a WebSocketDisconnect has the expected close code."""
+    assert exc_info.value.code == expected, (
+        f"expected close code {expected}, got {exc_info.value.code}"
+    )
+
+
+async def test_ws_rejects_without_session(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """WebSocket without session cookie should be closed with 4001."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "ws auth test"})
+        code = create_response.json()["code"]
+
+    with (
+        TestClient(test_app) as tc,
+        pytest.raises(WebSocketDisconnect) as exc_info,
+        tc.websocket_connect(f"/jams/{code}/ws"),
+    ):
+        pass
+
+    _assert_ws_close_code(exc_info, 4001)
+
+
+async def test_ws_rejects_invalid_session(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """WebSocket with invalid session cookie should be closed with 4001."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "ws bad session"})
+        code = create_response.json()["code"]
+
+    with (
+        TestClient(test_app) as tc,
+        pytest.raises(WebSocketDisconnect) as exc_info,
+        tc.websocket_connect(
+            f"/jams/{code}/ws", cookies={"session_id": "totally-fake"}
+        ),
+    ):
+        pass
+
+    _assert_ws_close_code(exc_info, 4001)
+
+
+async def test_ws_rejects_non_participant(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """WebSocket from authenticated non-participant should be closed with 4003."""
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/jams/", json={"name": "ws non-participant"}
+        )
+        code = create_response.json()["code"]
+
+    non_participant = MockSession(did="did:test:outsider")
+
+    with (
+        patch("backend.api.jams.get_session", return_value=non_participant),
+        TestClient(test_app) as tc,
+        pytest.raises(WebSocketDisconnect) as exc_info,
+        tc.websocket_connect(
+            f"/jams/{code}/ws", cookies={"session_id": "mock-session"}
+        ),
+    ):
+        pass
+
+    _assert_ws_close_code(exc_info, 4003)
+
+
+async def test_ws_rejects_bad_origin(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """WebSocket with wrong Origin header should be closed with 4002."""
+    from backend.config import settings
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "ws origin test"})
+        code = create_response.json()["code"]
+
+    host_session = MockSession(did="did:test:host")
+
+    with (
+        patch("backend.api.jams.get_session", return_value=host_session),
+        patch.object(settings.app, "debug", False),
+        TestClient(test_app) as tc,
+        pytest.raises(WebSocketDisconnect) as exc_info,
+        tc.websocket_connect(
+            f"/jams/{code}/ws",
+            cookies={"session_id": "mock-session"},
+            headers={"origin": "https://evil.example.com"},
+        ),
+    ):
+        pass
+
+    _assert_ws_close_code(exc_info, 4002)
+
+
+async def test_ws_accepts_valid_origin(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """WebSocket with correct Origin header should connect successfully."""
+    from backend.config import settings
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "ws valid origin"})
+        code = create_response.json()["code"]
+
+    host_session = MockSession(did="did:test:host")
+
+    with (
+        patch("backend.api.jams.get_session", return_value=host_session),
+        patch.object(settings.app, "debug", False),
+        TestClient(test_app) as tc,
+        tc.websocket_connect(
+            f"/jams/{code}/ws",
+            cookies={"session_id": "mock-session"},
+            headers={"origin": settings.frontend.url},
+        ) as ws,
+    ):
+        ws.send_json({"type": "ping"})
+        response = ws.receive_json()
+        assert response["type"] == "pong"
+
+
+async def test_ws_ping_pong(test_app: FastAPI, db_session: AsyncSession) -> None:
+    """WebSocket ping message should return pong."""
+    from backend.config import settings
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "ws ping"})
+        code = create_response.json()["code"]
+
+    host_session = MockSession(did="did:test:host")
+
+    with (
+        patch("backend.api.jams.get_session", return_value=host_session),
+        TestClient(test_app) as tc,
+        tc.websocket_connect(
+            f"/jams/{code}/ws",
+            cookies={"session_id": "mock-session"},
+            headers={"origin": settings.frontend.url},
+        ) as ws,
+    ):
+        ws.send_json({"type": "ping"})
+        response = ws.receive_json()
+        assert response["type"] == "pong"
+
+
+async def test_ws_sync_returns_state(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """sync message should return full jam state snapshot."""
+    from backend.config import settings
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/jams/", json={"name": "ws sync", "track_ids": ["t1", "t2"]}
+        )
+        code = create_response.json()["code"]
+
+    host_session = MockSession(did="did:test:host")
+
+    with (
+        patch("backend.api.jams.get_session", return_value=host_session),
+        TestClient(test_app) as tc,
+        tc.websocket_connect(
+            f"/jams/{code}/ws",
+            cookies={"session_id": "mock-session"},
+            headers={"origin": settings.frontend.url},
+        ) as ws,
+    ):
+        ws.send_json({"type": "sync", "last_id": None, "client_id": "test-client"})
+        response = ws.receive_json()
+        assert response["type"] == "state"
+        assert response["state"]["track_ids"] == ["t1", "t2"]
+        assert "revision" in response
+
+
+async def test_exchange_omits_session_id_for_browser(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """browser exchange should omit session_id from body (delivered via cookie)."""
+    with patch(
+        "backend.api.auth.consume_exchange_token",
+        return_value=("real-session-id-123", False),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/auth/exchange",
+                json={"exchange_token": "test-token"},
+                headers={"user-agent": "Mozilla/5.0 Chrome/120"},
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session_id"] is None
+    # cookie should still be set
+    assert "session_id" in response.cookies
+
+
+async def test_exchange_returns_session_id_for_non_browser(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """non-browser exchange should return real session_id."""
+    with patch(
+        "backend.api.auth.consume_exchange_token",
+        return_value=("real-session-id-456", False),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/auth/exchange",
+                json={"exchange_token": "test-token"},
+                headers={"user-agent": "plyr-sdk/1.0"},
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session_id"] == "real-session-id-456"
+
+
+def test_is_allowed_ws_origin_valid() -> None:
+    """origin matching frontend URL should be allowed."""
+    from starlette.websockets import WebSocket
+
+    from backend.api.jams import _is_allowed_ws_origin
+    from backend.config import settings
+
+    ws = AsyncMock(spec=WebSocket)
+    ws.headers = {"origin": settings.frontend.url}
+
+    with patch.object(settings.app, "debug", False):
+        assert _is_allowed_ws_origin(ws) is True
+
+
+def test_is_allowed_ws_origin_rejected() -> None:
+    """origin not matching frontend URL should be rejected."""
+    from starlette.websockets import WebSocket
+
+    from backend.api.jams import _is_allowed_ws_origin
+    from backend.config import settings
+
+    ws = AsyncMock(spec=WebSocket)
+    ws.headers = {"origin": "https://evil.example.com"}
+
+    with patch.object(settings.app, "debug", False):
+        assert _is_allowed_ws_origin(ws) is False
+
+
+def test_is_allowed_ws_origin_missing_in_debug() -> None:
+    """missing origin should be allowed in debug mode."""
+    from starlette.websockets import WebSocket
+
+    from backend.api.jams import _is_allowed_ws_origin
+    from backend.config import settings
+
+    ws = AsyncMock(spec=WebSocket)
+    ws.headers = {}
+
+    with patch.object(settings.app, "debug", True):
+        assert _is_allowed_ws_origin(ws) is True
+
+
+def test_is_allowed_ws_origin_missing_in_prod() -> None:
+    """missing origin should be rejected in production."""
+    from starlette.websockets import WebSocket
+
+    from backend.api.jams import _is_allowed_ws_origin
+    from backend.config import settings
+
+    ws = AsyncMock(spec=WebSocket)
+    ws.headers = {}
+
+    with patch.object(settings.app, "debug", False):
+        assert _is_allowed_ws_origin(ws) is False

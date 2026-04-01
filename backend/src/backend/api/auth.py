@@ -319,7 +319,7 @@ class ExchangeTokenRequest(BaseModel):
 class ExchangeTokenResponse(BaseModel):
     """response model for exchange token endpoint."""
 
-    session_id: str
+    session_id: str | None = None
 
 
 @router.post("/exchange")
@@ -370,6 +370,9 @@ async def exchange_token(
             samesite="lax",
             max_age=14 * 24 * 60 * 60,
         )
+
+        # browser flows get session via HttpOnly cookie — omit from response body
+        return ExchangeTokenResponse()
 
     return ExchangeTokenResponse(session_id=session_id)
 

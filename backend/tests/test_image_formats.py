@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from starlette.datastructures import UploadFile
 
 from backend._internal.image import ImageFormat
 from backend._internal.image_uploads import process_image_upload
@@ -170,7 +171,7 @@ class TestImageUploadExtensionMatch:
         self, filename: str, content_type: str, expected_ext: str
     ) -> None:
         """URL extension must match the filename extension R2 stores."""
-        fake_upload = AsyncMock()
+        fake_upload = AsyncMock(spec=UploadFile)
         fake_upload.filename = filename
         fake_upload.content_type = content_type
         fake_upload.read = AsyncMock(side_effect=[b"fake-image-data", b""])

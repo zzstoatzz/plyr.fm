@@ -1,8 +1,10 @@
 """jam api endpoints for shared listening rooms."""
 
+import contextlib
 import json
 import logging
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 from fastapi import (
     APIRouter,
@@ -17,6 +19,7 @@ from sqlalchemy import func, select
 
 from backend._internal import Session, jam_service, require_auth
 from backend._internal.auth.session import get_session
+from backend.config import settings
 from backend.models.artist import Artist
 from backend.models.jam import Jam, JamParticipant
 from backend.utilities.database import db_session
@@ -222,6 +225,29 @@ async def jam_command(
 # ── WebSocket endpoint ─────────────────────────────────────────────
 
 
+def _is_allowed_ws_origin(ws: WebSocket) -> bool:
+    """check if the WebSocket Origin header is allowed.
+
+    WebSocket jams use cookie auth — only the plyr.fm frontend should connect.
+    this is intentionally stricter than CORS (which allows any HTTPS origin
+    for the public REST API). third-party clients use dev tokens + REST.
+    """
+    origin = ws.headers.get("origin")
+    if not origin:
+        return settings.app.debug  # allow missing origin in dev only
+
+    parsed = urlparse(settings.frontend.url)
+    allowed = f"{parsed.scheme}://{parsed.netloc}"
+
+    if origin == allowed:
+        return True
+
+    # also allow localhost variations in debug
+    return settings.app.debug and origin.startswith(
+        ("http://localhost:", "http://127.0.0.1:")
+    )
+
+
 async def _get_ws_session(ws: WebSocket) -> Session | None:
     """extract session from WebSocket cookies."""
     session_id = ws.cookies.get("session_id")
@@ -268,6 +294,11 @@ async def jam_websocket(
             await ws.close(code=4003, reason="not a participant")
             return
 
+    # origin validation — only allow frontend origin
+    if not _is_allowed_ws_origin(ws):
+        await ws.close(code=4002, reason="origin not allowed")
+        return
+
     await ws.accept()
 
     try:
@@ -283,5 +314,7 @@ async def jam_websocket(
         logger.debug("ws disconnected from jam %s: %s", jam_id, session.did)
     except Exception:
         logger.exception("ws error in jam %s", jam_id)
+        with contextlib.suppress(RuntimeError, WebSocketDisconnect):
+            await ws.close(code=1011, reason="internal error")
     finally:
         await jam_service.disconnect_ws(jam_id, ws)
