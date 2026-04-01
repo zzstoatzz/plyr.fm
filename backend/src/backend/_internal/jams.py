@@ -482,7 +482,7 @@ class JamService:
             await self._clear_output_if_matches(old_jam_id, client_id)
         if old_jam_id in self._connections:
             self._connections[old_jam_id].discard(old_ws)
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(RuntimeError, WebSocketDisconnect):
             await old_ws.close(code=4010, reason="replaced by new connection")
 
     def _find_fallback_output(

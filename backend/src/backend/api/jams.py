@@ -320,7 +320,7 @@ async def jam_websocket(
                 )
             except TimeoutError:
                 logger.info("ws idle timeout in jam %s: %s", jam_id, session.did)
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(RuntimeError, WebSocketDisconnect):
                     await ws.close(code=4008, reason="idle timeout")
                 break
 
