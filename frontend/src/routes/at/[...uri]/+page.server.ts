@@ -1,7 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import { AtUri } from '@atproto/api';
 import { API_URL } from '$lib/config';
-import type { RequestHandler } from './$types';
+import type { PageServerLoad } from './$types';
 
 /**
  * resolve AT-URIs to canonical plyr.fm pages.
@@ -9,7 +9,7 @@ import type { RequestHandler } from './$types';
  * handles URLs like: https://plyr.fm/at://did:plc:xxx/fm.plyr.track/rkey
  * browsers may normalize the :// so we accept multiple path forms.
  */
-export const GET: RequestHandler = async ({ params, fetch }) => {
+export const load: PageServerLoad = async ({ params, fetch }) => {
 	// reconstruct AT-URI from the catch-all path segment.
 	// browsers may collapse "://" to ":/" or strip it entirely,
 	// so we normalize by stripping any leading ":/" or "://" prefix.
@@ -50,6 +50,10 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
 		}
 		const playlist: { id: number } = await response.json();
 		throw redirect(301, `/playlist/${playlist.id}`);
+	}
+
+	if (uri.collection.endsWith('.actor.profile')) {
+		throw redirect(301, `/u/${uri.hostname}`);
 	}
 
 	throw error(404, `unsupported collection: ${uri.collection}`);
