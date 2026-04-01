@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { AtUri } from "@atproto/api";
 	import Header from "$lib/components/Header.svelte";
 	import ShareButton from "$lib/components/ShareButton.svelte";
 	import SensitiveImage from "$lib/components/SensitiveImage.svelte";
@@ -453,8 +454,7 @@
 	async function saveOrder() {
 		if (!playlist.atproto_record_uri) return;
 
-		// extract rkey from list URI (at://did/collection/rkey)
-		const rkey = playlist.atproto_record_uri.split("/").pop();
+		const rkey = new AtUri(playlist.atproto_record_uri).rkey;
 		if (!rkey) return;
 
 		// build strongRefs from current track order

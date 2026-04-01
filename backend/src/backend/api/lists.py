@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, require_auth
+from backend._internal.atproto.client import parse_at_uri
 from backend._internal.atproto.records import (
     _reconstruct_oauth_session,
     create_list_record,
@@ -588,8 +589,7 @@ async def add_track_to_playlist(
     oauth_session = _reconstruct_oauth_session(oauth_data)
     from backend._internal import get_oauth_client
 
-    parts = playlist.atproto_record_uri.replace("at://", "").split("/")
-    repo, collection, rkey = parts
+    repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
     params = {"repo": repo, "collection": collection, "rkey": rkey}
@@ -701,8 +701,7 @@ async def remove_track_from_playlist(
     oauth_session = _reconstruct_oauth_session(oauth_data)
     from backend._internal import get_oauth_client
 
-    parts = playlist.atproto_record_uri.replace("at://", "").split("/")
-    repo, collection, rkey = parts
+    repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
     params = {"repo": repo, "collection": collection, "rkey": rkey}
@@ -905,8 +904,7 @@ async def update_playlist(
 
                 oauth_session = _reconstruct_oauth_session(oauth_data)
 
-                parts = playlist.atproto_record_uri.replace("at://", "").split("/")
-                repo, collection, rkey = parts
+                repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
                 url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
                 params = {"repo": repo, "collection": collection, "rkey": rkey}
