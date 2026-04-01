@@ -841,15 +841,17 @@ async def test_non_output_disconnect_no_effect() -> None:
     await service.connect_ws(jam_id, ws_joiner, "did:test:joiner")
     service._ws_client_ids[ws_joiner] = "joiner-client"
 
-    # disconnect the non-output joiner
-    await service.disconnect_ws(jam_id, ws_joiner)
+    # mock _clear_output_if_matches to avoid DB access (standalone JamService has no DB)
+    with patch.object(service, "_clear_output_if_matches", new_callable=AsyncMock):
+        # disconnect the non-output joiner
+        await service.disconnect_ws(jam_id, ws_joiner)
 
-    # host's client_id should still be tracked
-    assert service._ws_client_ids[ws_host] == "host-client"
-    assert ws_host in service._connections[jam_id]
+        # host's client_id should still be tracked
+        assert service._ws_client_ids[ws_host] == "host-client"
+        assert ws_host in service._connections[jam_id]
 
-    # cleanup
-    await service.disconnect_ws(jam_id, ws_host)
+        # cleanup
+        await service.disconnect_ws(jam_id, ws_host)
 
 
 # ── cross-client command tests ────────────────────────────────────
