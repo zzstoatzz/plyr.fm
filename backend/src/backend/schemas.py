@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from backend._internal.atproto.client import parse_at_uri
 from backend.models import Album, Track
 from backend.utilities.aggregations import CopyrightInfo
 
@@ -175,7 +176,7 @@ class TrackResponse(BaseModel):
         if track.atproto_record_uri and pds_url:
             from backend.config import settings
 
-            rkey = track.atproto_record_uri.split("/")[-1]
+            _, _, rkey = parse_at_uri(track.atproto_record_uri)
             atproto_record_url = (
                 f"{pds_url}/xrpc/com.atproto.repo.getRecord"
                 f"?repo={track.artist_did}&collection={settings.atproto.track_collection}"

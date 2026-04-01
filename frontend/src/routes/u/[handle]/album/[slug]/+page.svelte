@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { AtUri } from '@atproto/api';
 	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
@@ -254,8 +255,7 @@
 	async function saveOrder() {
 		if (!albumMetadata.list_uri) return;
 
-		// extract rkey from list URI (at://did/collection/rkey)
-		const rkey = albumMetadata.list_uri.split('/').pop();
+		const rkey = new AtUri(albumMetadata.list_uri).rkey;
 		if (!rkey) return;
 
 		// build strongRefs from current track order

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_auth
-from backend._internal.atproto.client import make_pds_request
+from backend._internal.atproto.client import make_pds_request, parse_at_uri
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -189,7 +189,7 @@ async def migrate_records(
                 # delete old record after successful migration
                 old_uri = old_record.get("uri", "")
                 if old_uri:
-                    rkey = old_uri.split("/")[-1]
+                    _, _, rkey = parse_at_uri(old_uri)
                     try:
                         await make_pds_request(
                             session,
