@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fade } from 'svelte/transition';
+	import { fade, slide } from 'svelte/transition';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
@@ -67,17 +67,8 @@
 		}
 	});
 
-	// collapsible description
-	const DESC_COLLAPSED_HEIGHT = 128; // ~5 lines at 1.6 line-height
-	let descriptionExpanded = $state(false);
-	let descriptionOverflows = $state(false);
-	let descriptionEl: HTMLParagraphElement | undefined = $state();
-
-	$effect(() => {
-		if (descriptionEl) {
-			descriptionOverflows = descriptionEl.scrollHeight > DESC_COLLAPSED_HEIGHT;
-		}
-	});
+	// metadata disclosure panel
+	let metadataOpen = $state(false);
 
 	// likers tooltip state
 	let showLikersTooltip = $state(false);
@@ -576,17 +567,6 @@ $effect(() => {
 						</div>
 					{/if}
 
-					{#if track.description}
-						<div class="track-description-wrapper" class:collapsed={!descriptionExpanded && descriptionOverflows}>
-							<p class="track-description" bind:this={descriptionEl} style:max-height={!descriptionExpanded && descriptionOverflows ? `${DESC_COLLAPSED_HEIGHT}px` : 'none'}><RichText text={track.description} /></p>
-							{#if descriptionOverflows}
-								<button class="description-toggle" onclick={() => descriptionExpanded = !descriptionExpanded}>
-									{descriptionExpanded ? 'show less ▴' : 'show more ▾'}
-								</button>
-							{/if}
-						</div>
-					{/if}
-
 					<div class="track-stats">
 						<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
 						<LosslessBadge originalFileType={track.original_file_type} fileType={track.file_type} withSeparator separatorClass="separator" />
@@ -616,7 +596,23 @@ $effect(() => {
 								{/if}
 							</span>
 						{/if}
+						{#if track.description}
+							<span class="separator">•</span>
+							<button
+								class="metadata-toggle"
+								class:open={metadataOpen}
+								onclick={() => metadataOpen = !metadataOpen}
+								aria-label={metadataOpen ? 'hide details' : 'show details'}
+								aria-expanded={metadataOpen}
+							>i</button>
+						{/if}
 					</div>
+
+					{#if track.description && metadataOpen}
+						<div class="metadata-panel" transition:slide={{ duration: 200 }}>
+							<p class="metadata-description"><RichText text={track.description} /></p>
+						</div>
+					{/if}
 
 					<div class="side-buttons">
 						{#if auth.isAuthenticated}
@@ -847,7 +843,7 @@ $effect(() => {
 
 	.track-info-wrapper {
 		width: 100%;
-		max-width: 600px;
+		max-width: min(900px, 90%);
 		display: flex;
 		align-items: flex-start;
 		justify-content: center;
@@ -1008,47 +1004,46 @@ $effect(() => {
 		outline: none;
 	}
 
-	.track-description-wrapper {
-		position: relative;
-		margin: 0.75rem 0 0;
-		text-align: center;
+	.metadata-toggle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.1rem;
+		height: 1.1rem;
+		border-radius: 50%;
+		border: 1px solid var(--text-tertiary);
+		color: var(--text-tertiary);
+		font-size: 0.65rem;
+		font-weight: 600;
+		cursor: pointer;
+		background: none;
+		font-family: inherit;
+		line-height: 1;
+		transition: color 0.15s, border-color 0.15s;
+		padding: 0;
 	}
 
-	.track-description-wrapper.collapsed .track-description {
-		overflow: hidden;
-		-webkit-mask-image: linear-gradient(to bottom, black calc(100% - 3rem), transparent);
-		mask-image: linear-gradient(to bottom, black calc(100% - 3rem), transparent);
+	.metadata-toggle:hover,
+	.metadata-toggle.open {
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 
-	.track-description {
+	.metadata-panel {
+		margin-top: 0.75rem;
+		padding: 0.75rem 0;
+		border-top: 1px solid var(--border-subtle);
+		text-align: left;
+	}
+
+	.metadata-description {
 		color: var(--text-secondary);
 		font-size: var(--text-base);
 		line-height: 1.6;
 		margin: 0;
 		white-space: pre-wrap;
-		overflow: hidden;
-		position: relative;
-	}
-
-	.description-toggle {
-		display: inline-block;
-		margin: 0.75rem auto 0;
-		padding: 0.25rem 0.75rem;
-		background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
-		border: 1px solid var(--border-subtle);
-		color: var(--text-secondary);
-		font-size: var(--text-xs);
-		font-family: inherit;
-		border-radius: var(--radius-full);
-		cursor: pointer;
-		transition: all 0.15s ease;
-		white-space: nowrap;
-	}
-
-	.description-toggle:hover {
-		color: var(--accent);
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		word-wrap: break-word;
+		overflow-wrap: break-word;
 	}
 
 	.track-tags {
