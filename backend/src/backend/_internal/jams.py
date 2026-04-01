@@ -15,7 +15,8 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
@@ -30,6 +31,27 @@ logger = logging.getLogger(__name__)
 CODE_ALPHABET = string.ascii_lowercase + string.digits
 CODE_LENGTH = 8
 MAX_CODE_ATTEMPTS = 10
+MAX_MESSAGES_PER_SECOND = 20
+
+# exceptions that represent normal WebSocket disconnection
+NORMAL_DISCONNECT_EXCEPTIONS = (IOError, WebSocketDisconnect)
+
+
+def _is_ws_send_error(error: RuntimeError) -> bool:
+    """check if a RuntimeError is a WebSocket send failure (connection already closed)."""
+    msg = str(error)
+    return "websocket.send" in msg and (
+        "websocket.close" in msg or "response already completed" in msg
+    )
+
+
+class WsMessage(BaseModel):
+    """lightweight validation for incoming WebSocket messages."""
+
+    type: str
+    client_id: str | None = None
+    last_id: str | None = None
+    payload: dict[str, Any] | None = None
 
 
 def _generate_code() -> str:
@@ -59,6 +81,9 @@ class JamService:
         self._connections: dict[str, set[WebSocket]] = {}
         self._ws_by_did: dict[str, tuple[str, WebSocket]] = {}  # did → (jam_id, ws)
         self._ws_client_ids: dict[WebSocket, str] = {}  # ws → client_id
+        self._ws_msg_counts: dict[
+            WebSocket, tuple[float, int]
+        ] = {}  # ws → (window_start, count)
         self._reader_tasks: dict[str, asyncio.Task] = {}
 
     async def setup(self) -> None:
@@ -76,6 +101,7 @@ class JamService:
         self._reader_tasks.clear()
         self._connections.clear()
         self._ws_client_ids.clear()
+        self._ws_msg_counts.clear()
 
     # ── jam lifecycle ──────────────────────────────────────────────
 
@@ -417,6 +443,9 @@ class JamService:
         if jam_id in self._connections:
             self._connections[jam_id].discard(ws)
 
+        # clean up rate limit tracking
+        self._ws_msg_counts.pop(ws, None)
+
         # check if disconnecting WS was the output device
         disconnecting_client_id = self._ws_client_ids.pop(ws, None)
         if disconnecting_client_id:
@@ -518,24 +547,53 @@ class JamService:
                 },
             )
 
+    def _check_rate_limit(self, ws: WebSocket) -> bool:
+        """check if a WebSocket connection is within the message rate limit.
+
+        uses a 1-second sliding window. returns True if allowed, False if rate-limited.
+        """
+        now = time.monotonic()
+        window_start, count = self._ws_msg_counts.get(ws, (now, 0))
+
+        if now - window_start >= 1.0:
+            # new window
+            self._ws_msg_counts[ws] = (now, 1)
+            return True
+
+        if count >= MAX_MESSAGES_PER_SECOND:
+            return False
+
+        self._ws_msg_counts[ws] = (window_start, count + 1)
+        return True
+
     async def handle_ws_message(
         self, jam_id: str, did: str, message: dict[str, Any], ws: WebSocket
     ) -> None:
         """process an incoming WebSocket message."""
-        msg_type = message.get("type")
+        # rate limit check
+        if not self._check_rate_limit(ws):
+            await ws.send_json({"type": "error", "message": "rate limit exceeded"})
+            return
 
-        if msg_type == "ping":
+        # validate message structure
+        try:
+            validated = WsMessage.model_validate(message)
+        except Exception:
+            await ws.send_json({"type": "error", "message": "invalid message format"})
+            return
+
+        if validated.type == "ping":
             await ws.send_json({"type": "pong"})
-        elif msg_type == "sync":
+        elif validated.type == "sync":
             await self._handle_sync(jam_id, did, message, ws)
-        elif msg_type == "command":
-            payload = message.get("payload", {})
+        elif validated.type == "command":
+            payload = validated.payload or {}
             result = await self.handle_command(jam_id, did, payload)
             if not result:
                 await ws.send_json({"type": "error", "message": "command failed"})
         else:
             await ws.send_json(
-                {"type": "error", "message": f"unknown message type: {msg_type}"}
+                {"type": "error", "message": f"unknown message type: {validated.type}"}
             )
 
     async def _handle_sync(
@@ -687,11 +745,21 @@ class JamService:
         for ws in connections:
             try:
                 await ws.send_json(payload)
+            except NORMAL_DISCONNECT_EXCEPTIONS:
+                dead.append(ws)
+            except RuntimeError as exc:
+                if _is_ws_send_error(exc):
+                    dead.append(ws)
+                else:
+                    logger.exception("unexpected error in fan_out for jam %s", jam_id)
+                    dead.append(ws)
             except Exception:
+                logger.exception("unexpected error in fan_out for jam %s", jam_id)
                 dead.append(ws)
 
         for ws in dead:
             connections.discard(ws)
+            await self.disconnect_ws(jam_id, ws)
 
     # ── internal helpers ───────────────────────────────────────────
 

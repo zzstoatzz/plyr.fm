@@ -30,6 +30,7 @@ class JamState {
 	private reconnectDelay = RECONNECT_BASE_MS;
 	private visibilityHandler: (() => void) | null = null;
 	private currentCode: string | null = null;
+	private pingInterval: number | null = null;
 
 	constructor() {
 		if (browser) {
@@ -245,6 +246,12 @@ class JamState {
 			);
 		};
 
+		this.pingInterval = window.setInterval(() => {
+			if (this.ws?.readyState === WebSocket.OPEN) {
+				this.ws.send(JSON.stringify({ type: 'ping' }));
+			}
+		}, 60_000);
+
 		this.ws.onmessage = (event) => {
 			try {
 				const data = JSON.parse(event.data);
@@ -258,7 +265,8 @@ class JamState {
 			this.connected = false;
 			console.warn('[jam] ws closed:', { code: event.code, reason: event.reason });
 			// terminal codes: server rejected us, don't retry
-			if (event.code === 4002 || event.code === 4003 || event.code === 4010) {
+			const terminalCodes = [4002, 4003, 4008, 4009, 4010];
+			if (terminalCodes.includes(event.code)) {
 				console.warn('[jam] terminal close — leaving jam (code %d: %s)', event.code, event.reason);
 				this.closeWs();
 				this.reset();
@@ -299,6 +307,10 @@ class JamState {
 		if (this.reconnectTimer !== null) {
 			window.clearTimeout(this.reconnectTimer);
 			this.reconnectTimer = null;
+		}
+		if (this.pingInterval !== null) {
+			window.clearInterval(this.pingInterval);
+			this.pingInterval = null;
 		}
 		if (this.ws) {
 			this.ws.onclose = null;

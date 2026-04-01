@@ -1878,3 +1878,204 @@ def test_is_allowed_ws_origin_missing_in_prod() -> None:
 
     with patch.object(settings.app, "debug", False):
         assert _is_allowed_ws_origin(ws) is False
+
+
+# ── WebSocket reliability tests ────────────────────────────────────
+
+
+async def test_ws_idle_timeout(test_app: FastAPI, db_session: AsyncSession) -> None:
+    """connection should be closed with 4008 after idle timeout."""
+    from backend.config import settings
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "ws idle"})
+        code = create_response.json()["code"]
+
+    host_session = MockSession(did="did:test:host")
+
+    with (
+        patch("backend.api.jams.get_session", return_value=host_session),
+        patch("backend.api.jams.IDLE_TIMEOUT_SECONDS", 0.1),
+        TestClient(test_app) as tc,
+        pytest.raises(WebSocketDisconnect, match="4008"),
+        tc.websocket_connect(
+            f"/jams/{code}/ws",
+            cookies={"session_id": "mock-session"},
+            headers={"origin": settings.frontend.url},
+        ) as ws,
+    ):
+        # don't send anything — let the timeout fire
+        ws.receive_json()  # should get the close frame
+
+
+async def test_ws_rate_limit(test_app: FastAPI, db_session: AsyncSession) -> None:
+    """spamming messages beyond limit should return rate limit error."""
+    from backend._internal.jams import MAX_MESSAGES_PER_SECOND
+    from backend.config import settings
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "ws rate limit"})
+        code = create_response.json()["code"]
+
+    host_session = MockSession(did="did:test:host")
+
+    with (
+        patch("backend.api.jams.get_session", return_value=host_session),
+        TestClient(test_app) as tc,
+        tc.websocket_connect(
+            f"/jams/{code}/ws",
+            cookies={"session_id": "mock-session"},
+            headers={"origin": settings.frontend.url},
+        ) as ws,
+    ):
+        # spam pings beyond the limit
+        for _ in range(MAX_MESSAGES_PER_SECOND + 5):
+            ws.send_json({"type": "ping"})
+
+        # collect all responses — at least one should be a rate limit error
+        responses = []
+        for _ in range(MAX_MESSAGES_PER_SECOND + 5):
+            responses.append(ws.receive_json())
+
+        rate_limited = [
+            r for r in responses if r.get("message") == "rate limit exceeded"
+        ]
+        assert len(rate_limited) > 0
+
+
+async def test_ws_connection_limit(
+    test_app: FastAPI, db_session: AsyncSession, second_user: str
+) -> None:
+    """exceeding max connections should close with 4009."""
+    from backend.config import settings
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "ws conn limit"})
+        code = create_response.json()["code"]
+
+    host_session = MockSession(did="did:test:host")
+
+    # set limit to 1 so the second connection fails
+    ws_url = f"/jams/{code}/ws"
+    ws_kwargs: dict[str, Any] = {
+        "cookies": {"session_id": "mock-session"},
+        "headers": {"origin": settings.frontend.url},
+    }
+
+    with (
+        patch("backend.api.jams.get_session", return_value=host_session),
+        patch("backend.api.jams.MAX_CONNECTIONS_PER_JAM", 1),
+        TestClient(test_app) as tc,
+        tc.websocket_connect(ws_url, **ws_kwargs),
+        # second connection should fail
+        pytest.raises(WebSocketDisconnect, match="4009"),
+        tc.websocket_connect(ws_url, **ws_kwargs),
+    ):
+        pass
+
+
+async def test_ws_invalid_json(test_app: FastAPI, db_session: AsyncSession) -> None:
+    """non-JSON message should return error."""
+    from backend.config import settings
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "ws bad json"})
+        code = create_response.json()["code"]
+
+    host_session = MockSession(did="did:test:host")
+
+    with (
+        patch("backend.api.jams.get_session", return_value=host_session),
+        TestClient(test_app) as tc,
+        tc.websocket_connect(
+            f"/jams/{code}/ws",
+            cookies={"session_id": "mock-session"},
+            headers={"origin": settings.frontend.url},
+        ) as ws,
+    ):
+        ws.send_text("not json at all{{{")
+        response = ws.receive_json()
+        assert response["type"] == "error"
+        assert "invalid JSON" in response["message"]
+
+
+async def test_ws_invalid_message_format(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """valid JSON but bad shape should return error."""
+    from backend.config import settings
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post("/jams/", json={"name": "ws bad shape"})
+        code = create_response.json()["code"]
+
+    host_session = MockSession(did="did:test:host")
+
+    with (
+        patch("backend.api.jams.get_session", return_value=host_session),
+        TestClient(test_app) as tc,
+        tc.websocket_connect(
+            f"/jams/{code}/ws",
+            cookies={"session_id": "mock-session"},
+            headers={"origin": settings.frontend.url},
+        ) as ws,
+    ):
+        # missing required "type" field
+        ws.send_json({"payload": {"foo": "bar"}})
+        response = ws.receive_json()
+        assert response["type"] == "error"
+        assert "invalid message format" in response["message"]
+
+
+async def test_ws_command_round_trip(
+    test_app: FastAPI, db_session: AsyncSession
+) -> None:
+    """send a command via WS and receive state update."""
+    from backend.config import settings
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        create_response = await client.post(
+            "/jams/",
+            json={
+                "name": "ws round trip",
+                "track_ids": ["track1", "track2"],
+                "is_playing": False,
+            },
+        )
+        code = create_response.json()["code"]
+
+    host_session = MockSession(did="did:test:host")
+
+    with (
+        patch("backend.api.jams.get_session", return_value=host_session),
+        TestClient(test_app) as tc,
+        tc.websocket_connect(
+            f"/jams/{code}/ws",
+            cookies={"session_id": "mock-session"},
+            headers={"origin": settings.frontend.url},
+        ) as ws,
+    ):
+        # sync first to get initial state
+        ws.send_json({"type": "sync", "last_id": None, "client_id": "test-client"})
+        sync_response = ws.receive_json()
+        assert sync_response["type"] == "state"
+        assert sync_response["state"]["is_playing"] is False
+
+        # send play command via WS
+        ws.send_json({"type": "command", "payload": {"type": "play"}})
+        # receive the state update broadcast
+        state_response = ws.receive_json()
+        assert state_response["type"] == "state"
+        assert state_response["state"]["is_playing"] is True

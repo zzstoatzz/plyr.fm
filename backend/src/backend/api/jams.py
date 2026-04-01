@@ -1,5 +1,6 @@
 """jam api endpoints for shared listening rooms."""
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -27,6 +28,9 @@ from backend.utilities.database import db_session
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jams", tags=["jams"])
+
+IDLE_TIMEOUT_SECONDS = 300  # 5 minutes — close idle connections
+MAX_CONNECTIONS_PER_JAM = 50
 
 # ── request/response models ───────────────────────────────────────
 
@@ -299,12 +303,27 @@ async def jam_websocket(
         await ws.close(code=4002, reason="origin not allowed")
         return
 
+    # connection limit — prevent resource exhaustion
+    current_count = len(jam_service._connections.get(jam_id, set()))
+    if current_count >= MAX_CONNECTIONS_PER_JAM:
+        await ws.close(code=4009, reason="jam is full")
+        return
+
     await ws.accept()
 
     try:
         await jam_service.connect_ws(jam_id, ws, session.did)
         while True:
-            data = await ws.receive_text()
+            try:
+                data = await asyncio.wait_for(
+                    ws.receive_text(), timeout=IDLE_TIMEOUT_SECONDS
+                )
+            except TimeoutError:
+                logger.info("ws idle timeout in jam %s: %s", jam_id, session.did)
+                with contextlib.suppress(Exception):
+                    await ws.close(code=4008, reason="idle timeout")
+                break
+
             try:
                 message = json.loads(data)
                 await jam_service.handle_ws_message(jam_id, session.did, message, ws)
