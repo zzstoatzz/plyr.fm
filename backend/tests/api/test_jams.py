@@ -1899,7 +1899,7 @@ async def test_ws_idle_timeout(test_app: FastAPI, db_session: AsyncSession) -> N
         patch("backend.api.jams.get_session", return_value=host_session),
         patch("backend.api.jams.IDLE_TIMEOUT_SECONDS", 0.1),
         TestClient(test_app) as tc,
-        pytest.raises(WebSocketDisconnect, match="4008"),
+        pytest.raises(WebSocketDisconnect) as exc_info,
         tc.websocket_connect(
             f"/jams/{code}/ws",
             cookies={"session_id": "mock-session"},
@@ -1908,6 +1908,8 @@ async def test_ws_idle_timeout(test_app: FastAPI, db_session: AsyncSession) -> N
     ):
         # don't send anything — let the timeout fire
         ws.receive_json()  # should get the close frame
+
+    _assert_ws_close_code(exc_info, 4008)
 
 
 async def test_ws_rate_limit(test_app: FastAPI, db_session: AsyncSession) -> None:
@@ -1974,10 +1976,12 @@ async def test_ws_connection_limit(
         TestClient(test_app) as tc,
         tc.websocket_connect(ws_url, **ws_kwargs),
         # second connection should fail
-        pytest.raises(WebSocketDisconnect, match="4009"),
+        pytest.raises(WebSocketDisconnect) as exc_info,
         tc.websocket_connect(ws_url, **ws_kwargs),
     ):
         pass
+
+    _assert_ws_close_code(exc_info, 4009)
 
 
 async def test_ws_invalid_json(test_app: FastAPI, db_session: AsyncSession) -> None:
