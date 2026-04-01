@@ -1581,6 +1581,15 @@ async def test_jam_preview_not_found(
 # ── WebSocket security tests ──────────────────────────────────────
 
 
+def _assert_ws_close_code(
+    exc_info: pytest.ExceptionInfo[WebSocketDisconnect], expected: int
+) -> None:
+    """assert that a WebSocketDisconnect has the expected close code."""
+    assert exc_info.value.code == expected, (
+        f"expected close code {expected}, got {exc_info.value.code}"
+    )
+
+
 async def test_ws_rejects_without_session(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
@@ -1593,10 +1602,12 @@ async def test_ws_rejects_without_session(
 
     with (
         TestClient(test_app) as tc,
-        pytest.raises(WebSocketDisconnect, match="4001"),
+        pytest.raises(WebSocketDisconnect) as exc_info,
         tc.websocket_connect(f"/jams/{code}/ws"),
     ):
-        pass  # should not reach here
+        pass
+
+    _assert_ws_close_code(exc_info, 4001)
 
 
 async def test_ws_rejects_invalid_session(
@@ -1611,12 +1622,14 @@ async def test_ws_rejects_invalid_session(
 
     with (
         TestClient(test_app) as tc,
-        pytest.raises(WebSocketDisconnect, match="4001"),
+        pytest.raises(WebSocketDisconnect) as exc_info,
         tc.websocket_connect(
             f"/jams/{code}/ws", cookies={"session_id": "totally-fake"}
         ),
     ):
         pass
+
+    _assert_ws_close_code(exc_info, 4001)
 
 
 async def test_ws_rejects_non_participant(
@@ -1636,12 +1649,14 @@ async def test_ws_rejects_non_participant(
     with (
         patch("backend.api.jams.get_session", return_value=non_participant),
         TestClient(test_app) as tc,
-        pytest.raises(WebSocketDisconnect, match="4003"),
+        pytest.raises(WebSocketDisconnect) as exc_info,
         tc.websocket_connect(
             f"/jams/{code}/ws", cookies={"session_id": "mock-session"}
         ),
     ):
         pass
+
+    _assert_ws_close_code(exc_info, 4003)
 
 
 async def test_ws_rejects_bad_origin(
@@ -1662,7 +1677,7 @@ async def test_ws_rejects_bad_origin(
         patch("backend.api.jams.get_session", return_value=host_session),
         patch.object(settings.app, "debug", False),
         TestClient(test_app) as tc,
-        pytest.raises(WebSocketDisconnect, match="4002"),
+        pytest.raises(WebSocketDisconnect) as exc_info,
         tc.websocket_connect(
             f"/jams/{code}/ws",
             cookies={"session_id": "mock-session"},
@@ -1670,6 +1685,8 @@ async def test_ws_rejects_bad_origin(
         ),
     ):
         pass
+
+    _assert_ws_close_code(exc_info, 4002)
 
 
 async def test_ws_accepts_valid_origin(
@@ -1762,7 +1779,7 @@ async def test_ws_sync_returns_state(
 async def test_exchange_omits_session_id_for_browser(
     test_app: FastAPI, db_session: AsyncSession
 ) -> None:
-    """browser exchange should return empty session_id (delivered via cookie)."""
+    """browser exchange should omit session_id from body (delivered via cookie)."""
     with patch(
         "backend.api.auth.consume_exchange_token",
         return_value=("real-session-id-123", False),
@@ -1778,7 +1795,7 @@ async def test_exchange_omits_session_id_for_browser(
 
     assert response.status_code == 200
     data = response.json()
-    assert data["session_id"] == ""
+    assert data["session_id"] is None
     # cookie should still be set
     assert "session_id" in response.cookies
 
@@ -1807,12 +1824,12 @@ async def test_exchange_returns_session_id_for_non_browser(
 
 def test_is_allowed_ws_origin_valid() -> None:
     """origin matching frontend URL should be allowed."""
-    from unittest.mock import MagicMock
+    from starlette.websockets import WebSocket
 
     from backend.api.jams import _is_allowed_ws_origin
     from backend.config import settings
 
-    ws = MagicMock()
+    ws = AsyncMock(spec=WebSocket)
     ws.headers = {"origin": settings.frontend.url}
 
     with patch.object(settings.app, "debug", False):
@@ -1821,12 +1838,12 @@ def test_is_allowed_ws_origin_valid() -> None:
 
 def test_is_allowed_ws_origin_rejected() -> None:
     """origin not matching frontend URL should be rejected."""
-    from unittest.mock import MagicMock
+    from starlette.websockets import WebSocket
 
     from backend.api.jams import _is_allowed_ws_origin
     from backend.config import settings
 
-    ws = MagicMock()
+    ws = AsyncMock(spec=WebSocket)
     ws.headers = {"origin": "https://evil.example.com"}
 
     with patch.object(settings.app, "debug", False):
@@ -1835,12 +1852,12 @@ def test_is_allowed_ws_origin_rejected() -> None:
 
 def test_is_allowed_ws_origin_missing_in_debug() -> None:
     """missing origin should be allowed in debug mode."""
-    from unittest.mock import MagicMock
+    from starlette.websockets import WebSocket
 
     from backend.api.jams import _is_allowed_ws_origin
     from backend.config import settings
 
-    ws = MagicMock()
+    ws = AsyncMock(spec=WebSocket)
     ws.headers = {}
 
     with patch.object(settings.app, "debug", True):
@@ -1849,12 +1866,12 @@ def test_is_allowed_ws_origin_missing_in_debug() -> None:
 
 def test_is_allowed_ws_origin_missing_in_prod() -> None:
     """missing origin should be rejected in production."""
-    from unittest.mock import MagicMock
+    from starlette.websockets import WebSocket
 
     from backend.api.jams import _is_allowed_ws_origin
     from backend.config import settings
 
-    ws = MagicMock()
+    ws = AsyncMock(spec=WebSocket)
     ws.headers = {}
 
     with patch.object(settings.app, "debug", False):
