@@ -2079,7 +2079,14 @@ async def test_ws_command_round_trip(
 
         # send play command via WS
         ws.send_json({"type": "command", "payload": {"type": "play"}})
-        # receive the state update broadcast
-        state_response = ws.receive_json()
-        assert state_response["type"] == "state"
-        assert state_response["state"]["is_playing"] is True
+        # consume messages until we get a state update with is_playing=True
+        # (the stream reader processes async so there may be intermediate messages)
+        for _ in range(10):
+            msg = ws.receive_json()
+            if (
+                msg.get("type") == "state"
+                and msg.get("state", {}).get("is_playing") is True
+            ):
+                break
+        else:
+            pytest.fail("never received state update with is_playing=True")
