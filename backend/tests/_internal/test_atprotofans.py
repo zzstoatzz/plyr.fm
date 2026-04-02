@@ -1,6 +1,6 @@
 """tests for atprotofans supporter validation caching."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -28,7 +28,7 @@ async def _clear_supporter_cache() -> None:
 
 async def test_validate_supporter_caches_result() -> None:
     """first call hits external API, second call hits Redis cache."""
-    mock_response = AsyncMock()
+    mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"valid": True, "profile": None}
 
@@ -58,7 +58,7 @@ async def test_validate_supporter_caches_result() -> None:
 
 async def test_validate_supporter_caches_negative() -> None:
     """non-supporter results are also cached to avoid repeated lookups."""
-    mock_response = AsyncMock()
+    mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"valid": False}
 
@@ -84,7 +84,7 @@ async def test_validate_supporter_caches_negative() -> None:
 
 async def test_cache_ttl_is_set() -> None:
     """cached value should have a TTL."""
-    mock_response = AsyncMock()
+    mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"valid": True, "profile": None}
 
