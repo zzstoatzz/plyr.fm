@@ -226,14 +226,14 @@
 					latest tracks
 				</button>
 			</h2>
-			<div class="header-actions">
-				<HiddenTagsFilter />
 			</div>
+		<div class="filter-row">
+			<TagFilter
+				onTagsChange={(tags) => tracksCache.setTags(tags)}
+				hiddenTags={preferences.hiddenTags}
+			/>
+			<HiddenTagsFilter />
 		</div>
-		<TagFilter
-			onTagsChange={(tags) => tracksCache.setTags(tags)}
-			hiddenTags={preferences.hiddenTags}
-		/>
 		{#if showLoading}
 			<div class="loading-container">
 				<WaveLoading size="lg" message="loading tracks..." />
@@ -392,7 +392,7 @@
 		justify-content: space-between;
 		align-items: center;
 		gap: 1rem;
-		margin-bottom: 1.5rem;
+		margin-bottom: 0.75rem;
 		flex-wrap: wrap;
 	}
 
@@ -403,10 +403,11 @@
 		margin: 0;
 	}
 
-	.header-actions {
+	.filter-row {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
 	}
 
 	.clickable-heading {
