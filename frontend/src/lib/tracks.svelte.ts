@@ -49,9 +49,10 @@ class TracksCache {
 	loadingMore = $state(false);
 	nextCursor = $state<string | null>(loadCachedTracks().nextCursor);
 	hasMore = $state(loadCachedTracks().hasMore);
+	activeTags = $state<string[]>([]);
 
 	private persistToStorage(): void {
-		if (typeof window !== 'undefined') {
+		if (typeof window !== 'undefined' && this.activeTags.length === 0) {
 			try {
 				localStorage.setItem(
 					'tracks_cache',
@@ -76,7 +77,12 @@ class TracksCache {
 
 		this.loading = true;
 		try {
-			const response = await fetch(`${API_URL}/tracks/`, {
+			const url = new URL(`${API_URL}/tracks/`);
+			for (const tag of this.activeTags) {
+				url.searchParams.append('tags', tag);
+			}
+
+			const response = await fetch(url.toString(), {
 				credentials: 'include'
 			});
 			const data: TracksApiResponse = await response.json();
@@ -102,6 +108,9 @@ class TracksCache {
 		try {
 			const url = new URL(`${API_URL}/tracks/`);
 			url.searchParams.set('cursor', this.nextCursor);
+			for (const tag of this.activeTags) {
+				url.searchParams.append('tags', tag);
+			}
 
 			const response = await fetch(url.toString(), {
 				credentials: 'include'
@@ -128,6 +137,14 @@ class TracksCache {
 		}
 		this.nextCursor = null;
 		this.hasMore = true;
+	}
+
+	setTags(tags: string[]): void {
+		this.activeTags = tags;
+		this.tracks = [];
+		this.nextCursor = null;
+		this.hasMore = true;
+		this.fetch(true);
 	}
 }
 
