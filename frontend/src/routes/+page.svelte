@@ -241,7 +241,7 @@
 		{:else if !hasTracks}
 			<p class="empty">no tracks yet</p>
 		{:else}
-			<div class="track-list">
+			<div class="track-list" class:refreshing={loadingTracks && hasTracks}>
 				{#each tracks as track, i}
 					<TrackItem
 						{track}
@@ -435,6 +435,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+		transition: opacity 0.15s;
+	}
+
+	.track-list.refreshing {
+		opacity: 0.5;
+		transition: opacity 0.15s;
+		pointer-events: none;
 	}
 
 	.scroll-sentinel {
