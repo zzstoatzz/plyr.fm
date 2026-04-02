@@ -47,6 +47,22 @@ plyr.fm should become:
 
 ### April 2026
 
+#### Fly HTTP health checks + outage retro (PR #1214, Apr 2)
+
+**why**: production outage (~6 min, 02:34-02:40 UTC Apr 2). after a deploy, Fly auto-stopped one machine for low traffic. the remaining machine became unresponsive but Fly had no health checks configured — it kept reporting the machine as "started" while it served nothing. when a replacement machine finally started, it was OOM killed (1GB exhausted in 20 seconds from queued request burst). manual `fly machine restart` was required to recover.
+
+**what shipped**:
+- added `[[http_service.checks]]` to both `fly.toml` and `fly.staging.toml` — Fly now polls `GET /health` every 10s with a 5s timeout and 30s startup grace period
+- Fly will auto-restart machines that stop responding, eliminating the class of outage where a frozen process goes undetected
+
+**what we learned**:
+- the Dec 2025 database pool fixes (pool_size=10, max_overflow=5, connection_timeout=10s) were already in place — initial analysis incorrectly blamed stale recommendations
+- the queue listener is already decoupled from the app lifecycle (`asyncio.create_task`, catches all exceptions) — it was not the cause of the process death
+- what actually froze the remaining machine is still unknown (no Logfire output for 6 minutes while Fly reported it as "started"). possible causes: memory pressure on 1GB VM, blocked event loop, or a hard crash whose Fly event was truncated from the 5-event log
+- full retro: `sandbox/retrospectives/2026-04-02-deploy-outage-oom-kill.md`
+
+---
+
 #### AT-URI top-level route resolution (PRs #1206, #1208, Apr 1)
 
 **why**: every atproto app should support AT-URIs as top-level routes ([streamplace/streamplace#1012](https://github.com/streamplace/streamplace/issues/1012)). this lets anyone paste `https://plyr.fm/at://did:plc:xxx/fm.plyr.track/rkey` and land on the right page.
@@ -371,7 +387,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-AT-URI resolution route shipped (#1206), standardized AT-URI parsing across codebase (#1208), WebSocket hardening (#1203-1204), Jetstream identity sync (#1200). next: add a staging environment for the moderation service (#1165).
+Fly health checks deployed after production outage (#1214). AT-URI resolution route shipped (#1206), standardized AT-URI parsing across codebase (#1208), WebSocket hardening (#1203-1204), Jetstream identity sync (#1200). next: investigate what froze the remaining machine during the Apr 2 outage (no Logfire output for 6 min despite Fly reporting "started"); add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -507,5 +523,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-01 (AT-URI resolution, track detail redesign, WebSocket hardening, Jetstream identity sync).
+this is a living document. last updated 2026-04-02 (Fly health checks after production outage).
 
