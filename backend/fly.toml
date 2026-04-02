@@ -21,6 +21,13 @@ primary_region = 'iad'
     hard_limit = 250
     soft_limit = 200
 
+  [[http_service.checks]]
+    interval = "10s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'
