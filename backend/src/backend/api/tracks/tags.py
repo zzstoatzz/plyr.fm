@@ -27,10 +27,11 @@ logger = logging.getLogger(__name__)
 
 
 class TagWithCount(BaseModel):
-    """tag with track count for autocomplete."""
+    """tag with track count and total plays for ranking."""
 
     name: str
     track_count: int
+    total_plays: int
 
 
 class TagDetail(BaseModel):
@@ -133,12 +134,17 @@ async def list_tags(
     returns tags sorted by track count (most used first).
     use `q` parameter for prefix search (case-insensitive).
     """
-    # build query: tags with their track counts
+    # build query: tags with track counts and total plays, ranked by engagement
     query = (
-        select(Tag.name, func.count(TrackTag.track_id).label("track_count"))
+        select(
+            Tag.name,
+            func.count(TrackTag.track_id).label("track_count"),
+            func.coalesce(func.sum(Track.play_count), 0).label("total_plays"),
+        )
         .outerjoin(TrackTag, Tag.id == TrackTag.tag_id)
+        .outerjoin(Track, TrackTag.track_id == Track.id)
         .group_by(Tag.id, Tag.name)
-        .order_by(func.count(TrackTag.track_id).desc(), Tag.name)
+        .order_by(func.coalesce(func.sum(Track.play_count), 0).desc(), Tag.name)
         .limit(limit)
     )
 
@@ -149,7 +155,12 @@ async def list_tags(
     result = await db.execute(query)
     rows = result.all()
 
-    return [TagWithCount(name=row.name, track_count=row.track_count) for row in rows]
+    return [
+        TagWithCount(
+            name=row.name, track_count=row.track_count, total_plays=row.total_plays
+        )
+        for row in rows
+    ]
 
 
 class RecommendedTag(BaseModel):
