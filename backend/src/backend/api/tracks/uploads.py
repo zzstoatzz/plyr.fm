@@ -8,7 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import aiofiles
 import logfire
@@ -241,6 +241,7 @@ class PdsBlobResult:
     blob_ref: BlobRef | None
     cid: str | None
     size: int | None
+    warning: str | None = None
 
 
 async def _try_upload_to_pds(
@@ -303,7 +304,20 @@ async def _try_upload_to_pds(
         )
         return PdsBlobResult(blob_ref=None, cid=None, size=None)
 
-    # any other exception is unexpected - let it propagate to fail the upload
+    except Exception as e:
+        # any other failure (timeout, network, auth) — fall back to R2-only.
+        # PDS upload is best-effort; users can migrate via the portal later.
+        logfire.warning(
+            "pds blob upload failed, falling back to plyr.fm storage",
+            error=f"{type(e).__name__}: {e}",
+            did=auth_session.did,
+        )
+        return PdsBlobResult(
+            blob_ref=None,
+            cid=None,
+            size=None,
+            warning="couldn't upload to your PDS — stored on plyr.fm instead. you can migrate it later on the portal page.",
+        )
 
 
 async def _should_upload_pds_blob(db: AsyncSession, user_did: str) -> bool:
@@ -888,11 +902,15 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             # phase 7: post-upload tasks (tags, album sync, shared hooks)
             await _schedule_post_upload(ctx, sr, track, run_hooks=published_by_us)
 
+            result: dict[str, Any] = {"track_id": track.id}
+            if pds_result and pds_result.warning:
+                result["warnings"] = [pds_result.warning]
+
             await job_service.update_progress(
                 ctx.upload_id,
                 JobStatus.COMPLETED,
                 "upload completed successfully",
-                result={"track_id": track.id},
+                result=result,
             )
 
         except UploadPhaseError as e:
@@ -1124,6 +1142,8 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
                 }
                 if job.result and "track_id" in job.result:
                     payload["track_id"] = job.result["track_id"]
+                if job.result and "warnings" in job.result:
+                    payload["warnings"] = job.result["warnings"]
 
                 yield f"data: {json.dumps(payload)}\n\n"
 

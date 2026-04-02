@@ -24,8 +24,13 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		throw error(400, 'invalid AT-URI');
 	}
 
-	if (!uri.collection || !uri.rkey) {
-		throw error(400, 'AT-URI must include collection and rkey');
+	// bare authority (at://did:plc:xxx) → profile page
+	if (!uri.collection) {
+		throw redirect(301, `/u/${uri.hostname}`);
+	}
+
+	if (!uri.rkey) {
+		throw error(400, 'AT-URI with collection must include rkey');
 	}
 
 	// route by collection suffix — handles environment-aware namespaces
@@ -50,10 +55,6 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		}
 		const playlist: { id: number } = await response.json();
 		throw redirect(301, `/playlist/${playlist.id}`);
-	}
-
-	if (uri.collection.endsWith('.actor.profile')) {
-		throw redirect(301, `/u/${uri.hostname}`);
 	}
 
 	throw error(404, `unsupported collection: ${uri.collection}`);
