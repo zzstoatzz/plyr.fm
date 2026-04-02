@@ -277,9 +277,8 @@
 		-webkit-backdrop-filter: blur(4px);
 		z-index: 9999;
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: center;
-		padding-top: 15vh;
 		/* hidden by default - use opacity only (not visibility) so input remains focusable for mobile keyboard */
 		opacity: 0;
 		pointer-events: none;
@@ -294,14 +293,15 @@
 	.search-modal {
 		width: 100%;
 		max-width: 560px;
-		background: color-mix(in srgb, var(--bg-secondary) 95%, transparent);
-		backdrop-filter: blur(20px) saturate(180%);
-		-webkit-backdrop-filter: blur(20px) saturate(180%);
-		border: 1px solid var(--border-subtle);
+		background: var(--glass-bg, color-mix(in srgb, var(--bg-secondary) 95%, transparent));
+		backdrop-filter: blur(24px) saturate(180%);
+		-webkit-backdrop-filter: blur(24px) saturate(180%);
+		border: 1px solid var(--glass-border, var(--border-subtle));
 		border-radius: var(--radius-xl);
 		box-shadow:
 			0 24px 80px color-mix(in srgb, var(--bg-primary) 50%, transparent),
-			0 0 1px var(--border-subtle) inset;
+			0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent),
+			0 0 40px color-mix(in srgb, var(--accent) 6%, transparent);
 		overflow: hidden;
 		margin: 0 1rem;
 	}
@@ -536,12 +536,8 @@
 
 	/* mobile optimizations */
 	@media (max-width: 768px) {
-		.search-backdrop {
-			padding-top: 10vh;
-		}
-
 		.search-modal {
-			margin: 0 0.75rem;
+			margin: 0 0.5rem;
 			max-height: 80vh;
 		}
 
