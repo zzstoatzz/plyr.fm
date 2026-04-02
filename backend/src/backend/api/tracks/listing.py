@@ -70,6 +70,7 @@ async def list_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     artist_did: str | None = None,
     filter_hidden_tags: bool | None = None,
+    tags: Annotated[list[str] | None, Query()] = None,
     cursor: str | None = None,
     limit: int | None = None,
     session: AuthSession | None = Depends(get_optional_session),
@@ -88,7 +89,9 @@ async def list_tracks(
         limit: Maximum number of tracks to return (default from settings, max 100).
     """
     # anonymous first-page discovery feed — serve from cache if available
-    is_cacheable = session is None and artist_did is None and cursor is None
+    is_cacheable = (
+        session is None and artist_did is None and cursor is None and not tags
+    )
     if is_cacheable:
         try:
             redis = get_async_redis_client()
@@ -147,6 +150,17 @@ async def list_tracks(
             .exists()
         )
         stmt = stmt.where(~hidden_exists)
+
+    # positive tag filter — show only tracks matching any of the selected tags
+    if tags:
+        include_exists = (
+            select(TrackTag.track_id)
+            .join(Tag, TrackTag.tag_id == Tag.id)
+            .where(Tag.name.in_(tags))
+            .where(TrackTag.track_id == Track.id)
+            .exists()
+        )
+        stmt = stmt.where(include_exists)
 
     # apply cursor-based pagination (tracks older than cursor timestamp)
     if cursor:

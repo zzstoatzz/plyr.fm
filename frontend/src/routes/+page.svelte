@@ -6,6 +6,7 @@
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import HiddenTagsFilter from '$lib/components/HiddenTagsFilter.svelte';
+	import TagFilter from '$lib/components/TagFilter.svelte';
 	import { goto } from '$app/navigation';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -13,6 +14,7 @@
 	import { networkArtistsCache } from '$lib/network-artists.svelte';
 	import type { Track } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
+	import { preferences } from '$lib/preferences.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { fade } from 'svelte/transition';
 	import { APP_NAME, APP_TAGLINE, APP_CANONICAL_URL } from '$lib/branding';
@@ -228,6 +230,10 @@
 				<HiddenTagsFilter />
 			</div>
 		</div>
+		<TagFilter
+			onTagsChange={(tags) => tracksCache.setTags(tags)}
+			hiddenTags={preferences.hiddenTags}
+		/>
 		{#if showLoading}
 			<div class="loading-container">
 				<WaveLoading size="lg" message="loading tracks..." />
