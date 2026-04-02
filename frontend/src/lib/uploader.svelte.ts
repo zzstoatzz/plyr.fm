@@ -189,6 +189,12 @@ class UploaderState {
 								label: 'view track',
 								href: `/track/${trackId}`
 							} : undefined);
+
+							const warnings: string[] = update.warnings ?? [];
+							for (const w of warnings) {
+								toast.warning(w, 8000);
+							}
+
 							tracksCache.invalidate();
 							tracksCache.fetch(true);
 							if (onSuccess) {
