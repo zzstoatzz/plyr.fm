@@ -7,6 +7,7 @@
 	interface Tag {
 		name: string;
 		track_count: number;
+		total_plays: number;
 	}
 
 	interface Props {
@@ -27,7 +28,7 @@
 			.toSorted((a, b) => {
 				const aSelected = selectedTags.has(a.name) ? 1 : 0;
 				const bSelected = selectedTags.has(b.name) ? 1 : 0;
-				return bSelected - aSelected || b.track_count - a.track_count;
+				return bSelected - aSelected || b.total_plays - a.total_plays;
 			})
 	);
 
