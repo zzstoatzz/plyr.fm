@@ -184,6 +184,21 @@ async def list_tracks(
     # generate next cursor from the last track's created_at
     next_cursor = tracks[-1].created_at.isoformat() if has_more and tracks else None
 
+    # kick off supporter validation early — it makes external HTTP calls that
+    # benefit from running concurrently with DB aggregations and PDS resolution
+    viewer_did = session.did if session else None
+    supporter_task: asyncio.Task[set[str]] | None = None
+    if viewer_did:
+        gated_artist_dids = {
+            t.artist_did
+            for t in tracks
+            if t.support_gate and t.artist_did != viewer_did
+        }
+        if gated_artist_dids:
+            supporter_task = asyncio.create_task(
+                get_supported_artists(viewer_did, gated_artist_dids)
+            )
+
     # batch fetch like counts, comment counts, and tags for all tracks
     # note: copyright_info is intentionally excluded here - it requires an HTTP call
     # to the moderation service and is only displayed in /tracks/me (artist portal)
@@ -271,20 +286,8 @@ async def list_tracks(
             await asyncio.gather(*[resolve_image(t) for t in tracks_needing_images])
             await db.commit()
 
-    # resolve supporter status for gated content
-    viewer_did = session.did if session else None
-    supported_artist_dids: set[str] = set()
-    if viewer_did:
-        # collect artist DIDs with gated tracks (excluding viewer's own tracks)
-        gated_artist_dids = {
-            t.artist_did
-            for t in tracks
-            if t.support_gate and t.artist_did != viewer_did
-        }
-        if gated_artist_dids:
-            supported_artist_dids = await get_supported_artists(
-                viewer_did, gated_artist_dids
-            )
+    # await supporter validation (started earlier, ran concurrently with above work)
+    supported_artist_dids = await supporter_task if supporter_task else set()
 
     # fetch all track responses concurrently with like status and counts
     with logfire.span("build track responses", track_count=len(tracks)):

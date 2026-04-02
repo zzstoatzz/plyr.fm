@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { API_URL } from '$lib/config';
+	import { tracksCache } from '$lib/tracks.svelte';
 
 	interface Tag {
 		name: string;
@@ -16,10 +17,19 @@
 	let { onTagsChange, hiddenTags = [] }: Props = $props();
 
 	let tags = $state<Tag[]>([]);
-	let selectedTags = new SvelteSet<string>();
+	let selectedTags = new SvelteSet<string>(tracksCache.activeTags);
 	let loaded = $state(false);
 
-	let visibleTags = $derived(tags.filter((t) => !hiddenTags.includes(t.name)));
+	// selected tags sort to the front, then by track count
+	let visibleTags = $derived(
+		tags
+			.filter((t) => !hiddenTags.includes(t.name))
+			.toSorted((a, b) => {
+				const aSelected = selectedTags.has(a.name) ? 1 : 0;
+				const bSelected = selectedTags.has(b.name) ? 1 : 0;
+				return bSelected - aSelected || b.track_count - a.track_count;
+			})
+	);
 
 	/** deterministic hue from tag name (0–360) */
 	function tagHue(name: string): number {

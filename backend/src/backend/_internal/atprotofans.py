@@ -15,10 +15,18 @@ see: https://atprotofans.leaflet.pub/3mabsmts3rs2b
 """
 
 import asyncio
+import logging
 
 import httpx
 import logfire
 from pydantic import BaseModel
+from redis.exceptions import RedisError
+
+from backend.utilities.redis import get_async_redis_client
+
+logger = logging.getLogger(__name__)
+
+SUPPORTER_CACHE_TTL = 300  # 5 minutes
 
 
 class SupporterValidation(BaseModel):
@@ -26,6 +34,35 @@ class SupporterValidation(BaseModel):
 
     valid: bool
     profile: dict | None = None
+
+
+def _cache_key(supporter_did: str, artist_did: str) -> str:
+    return f"supporter:{supporter_did}:{artist_did}"
+
+
+async def _get_cached(supporter_did: str, artist_did: str) -> bool | None:
+    """check Redis for cached supporter validation. returns True/False or None on miss."""
+    try:
+        redis = get_async_redis_client()
+        val = await redis.get(_cache_key(supporter_did, artist_did))
+        if val is not None:
+            return val == "1"
+    except (RuntimeError, RedisError):
+        pass
+    return None
+
+
+async def _set_cached(supporter_did: str, artist_did: str, valid: bool) -> None:
+    """cache supporter validation result in Redis."""
+    try:
+        redis = get_async_redis_client()
+        await redis.set(
+            _cache_key(supporter_did, artist_did),
+            "1" if valid else "0",
+            ex=SUPPORTER_CACHE_TTL,
+        )
+    except (RuntimeError, RedisError):
+        logger.debug("failed to cache supporter validation")
 
 
 async def validate_supporter(
@@ -36,6 +73,7 @@ async def validate_supporter(
     """validate if a user supports an artist via atprotofans.
 
     for direct atprotofans contributions, the signer is the artist's DID.
+    results are cached in Redis for 5 minutes.
 
     args:
         supporter_did: DID of the potential supporter
@@ -45,6 +83,17 @@ async def validate_supporter(
     returns:
         SupporterValidation with valid=True if supporter, valid=False otherwise
     """
+    # check cache first
+    cached = await _get_cached(supporter_did, artist_did)
+    if cached is not None:
+        logfire.info(
+            "atprotofans cache hit",
+            valid=cached,
+            supporter_did=supporter_did,
+            artist_did=artist_did,
+        )
+        return SupporterValidation(valid=cached)
+
     url = "https://atprotofans.com/xrpc/com.atprotofans.validateSupporter"
     params = {
         "supporter": supporter_did,
@@ -67,6 +116,7 @@ async def validate_supporter(
                         status_code=response.status_code,
                         response_text=response.text[:200],
                     )
+                    await _set_cached(supporter_did, artist_did, False)
                     return SupporterValidation(valid=False)
 
                 data = response.json()
@@ -78,6 +128,7 @@ async def validate_supporter(
                     has_profile=data.get("profile") is not None,
                 )
 
+                await _set_cached(supporter_did, artist_did, is_valid)
                 return SupporterValidation(
                     valid=is_valid,
                     profile=data.get("profile"),
