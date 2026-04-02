@@ -48,13 +48,17 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 
 	if (uri.collection.endsWith('.list')) {
 		const response = await fetch(
-			`${API_URL}/lists/playlists/by-uri?uri=${encodeURIComponent(uri.toString())}`
+			`${API_URL}/lists/by-uri?uri=${encodeURIComponent(uri.toString())}`
 		);
 		if (!response.ok) {
-			throw error(404, 'playlist not found');
+			throw error(404, 'list not found');
 		}
-		const playlist: { id: number } = await response.json();
-		throw redirect(301, `/playlist/${playlist.id}`);
+		const list: { type: 'album' | 'playlist'; id: string; handle?: string; slug?: string } =
+			await response.json();
+		if (list.type === 'album' && list.handle && list.slug) {
+			throw redirect(301, `/u/${list.handle}/album/${list.slug}`);
+		}
+		throw redirect(301, `/playlist/${list.id}`);
 	}
 
 	throw error(404, `unsupported collection: ${uri.collection}`);
