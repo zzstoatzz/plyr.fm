@@ -220,7 +220,7 @@ class AmbientManager {
 	error = $state<string | null>(null);
 	readonly temperatureUnit: TemperatureUnit = detectTemperatureUnit();
 
-	private fetchIntervalId: ReturnType<typeof window.setInterval> | null = null;
+	private fetchIntervalId: number | null = null;
 	private lastFetchTime = 0;
 	private readonly STALE_MS = 30 * 60 * 1000; // 30 minutes
 	private baseValues: Map<string, string> = new Map();

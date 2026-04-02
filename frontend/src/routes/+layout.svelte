@@ -25,6 +25,7 @@
 	import { jam } from '$lib/jam.svelte';
 	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
+	import { initObservability } from '$lib/observability';
 	let { children } = $props<{ children: any }>();
 	let showQueue = $state(false);
 
@@ -57,6 +58,9 @@
 	// initialize auth and preferences once on mount (not on every navigation)
 	// this prevents repeated /auth/me calls for unauthenticated users
 	onMount(async () => {
+		// set up browser observability before any fetch calls
+		initObservability();
+
 		// fetch sensitive images client-side (small payload, fast)
 		moderation.initialize();
 
