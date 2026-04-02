@@ -42,6 +42,16 @@ function loadCachedTracks(): CachedTracksData {
 	return { tracks: [], nextCursor: null, hasMore: true };
 }
 
+function loadSavedTags(): string[] {
+	if (typeof window === 'undefined') return [];
+	try {
+		const saved = localStorage.getItem('active_tags');
+		return saved ? JSON.parse(saved) : [];
+	} catch {
+		return [];
+	}
+}
+
 // global tracks cache using Svelte 5 runes
 class TracksCache {
 	tracks = $state<Track[]>(loadCachedTracks().tracks);
@@ -49,7 +59,7 @@ class TracksCache {
 	loadingMore = $state(false);
 	nextCursor = $state<string | null>(loadCachedTracks().nextCursor);
 	hasMore = $state(loadCachedTracks().hasMore);
-	activeTags = $state<string[]>([]);
+	activeTags = $state<string[]>(loadSavedTags());
 
 	private persistToStorage(): void {
 		if (typeof window !== 'undefined' && this.activeTags.length === 0) {
@@ -141,9 +151,15 @@ class TracksCache {
 
 	setTags(tags: string[]): void {
 		this.activeTags = tags;
-		this.tracks = [];
 		this.nextCursor = null;
 		this.hasMore = true;
+		if (typeof window !== 'undefined') {
+			if (tags.length > 0) {
+				localStorage.setItem('active_tags', JSON.stringify(tags));
+			} else {
+				localStorage.removeItem('active_tags');
+			}
+		}
 		this.fetch(true);
 	}
 }
