@@ -21,6 +21,23 @@
 
 	let visibleTags = $derived(tags.filter((t) => !hiddenTags.includes(t.name)));
 
+	/** deterministic hue from tag name (0–360) */
+	function tagHue(name: string): number {
+		let hash = 0;
+		for (let i = 0; i < name.length; i++) {
+			hash = name.charCodeAt(i) + ((hash << 5) - hash);
+		}
+		return ((hash % 360) + 360) % 360;
+	}
+
+	function chipStyle(name: string, selected: boolean): string {
+		const hue = tagHue(name);
+		if (selected) {
+			return `--chip-hue: ${hue}; background: hsl(${hue} 60% 50% / 0.2); border-color: hsl(${hue} 55% 55%); color: hsl(${hue} 70% 75%);`;
+		}
+		return `--chip-hue: ${hue}; border-color: hsl(${hue} 30% 40% / 0.4); color: hsl(${hue} 30% 70%);`;
+	}
+
 	onMount(async () => {
 		try {
 			const res = await fetch(`${API_URL}/tracks/tags?limit=15`);
@@ -61,9 +78,11 @@
 				type="button"
 				class="chip"
 				class:selected={selectedTags.has(tag.name)}
+				style={chipStyle(tag.name, selectedTags.has(tag.name))}
 				onclick={() => toggle(tag.name)}
 			>
-				{tag.name} ({tag.track_count})
+				{tag.name}
+				<span class="count">({tag.track_count})</span>
 			</button>
 		{/each}
 	</div>
@@ -77,7 +96,8 @@
 		scrollbar-width: none;
 		scroll-snap-type: x proximity;
 		padding-bottom: 0.25rem;
-		margin-bottom: 1rem;
+		flex: 1;
+		min-width: 0;
 	}
 
 	.tag-filter-row::-webkit-scrollbar {
@@ -88,6 +108,7 @@
 		flex-shrink: 0;
 		display: inline-flex;
 		align-items: center;
+		gap: 0.25rem;
 		padding: 0.3rem 0.7rem;
 		background: transparent;
 		border: 1px solid var(--border-subtle);
@@ -102,22 +123,29 @@
 	}
 
 	.chip:hover {
-		border-color: var(--accent);
+		background: hsl(var(--chip-hue, 0) 50% 50% / 0.1);
+		border-color: hsl(var(--chip-hue, 0) 50% 55%);
 	}
 
 	.chip.selected {
-		background: color-mix(in srgb, var(--accent) 15%, transparent);
-		border-color: var(--accent);
-		color: var(--accent-hover);
+		font-weight: 600;
+	}
+
+	.count {
+		opacity: 0.6;
+		font-size: 0.65rem;
 	}
 
 	.clear-chip {
-		color: var(--text-tertiary);
+		color: var(--text-tertiary) !important;
+		border-color: var(--border-subtle) !important;
 		border-style: dashed;
+		background: transparent !important;
 	}
 
 	.clear-chip:hover {
-		border-color: var(--error);
-		color: var(--error);
+		border-color: var(--error) !important;
+		color: var(--error) !important;
+		background: transparent !important;
 	}
 </style>
