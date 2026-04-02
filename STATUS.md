@@ -47,6 +47,24 @@ plyr.fm should become:
 
 ### April 2026
 
+#### homepage tag filtering + backend performance (PRs #1216-1220, Apr 2)
+
+**why**: the homepage had no way to positively filter tracks by genre. you could hide tags (negative filter) but not say "show me electronic and ambient." the dedicated `/tag/[name]` page only supports one tag and navigates away from the homepage. separately, the `GET /tracks/` endpoint was 250-1200ms for authenticated users due to an uncached external HTTP call to atprotofans.com for supporter validation on every single request.
+
+**what shipped**:
+- **tag filter chips**: horizontal scrollable row of popular tag chips below "latest tracks." multi-select with OR logic (tracks matching any selected tag). per-tag hue colors via deterministic hash. selected tags sort to the left. selection persists in localStorage across page refreshes
+- **backend `tags` query param**: `GET /tracks/?tags=electronic&tags=ambient` filters to tracks matching any selected tag. composes with hidden tag filtering. skips Redis cache when tags are active
+- **tag ranking by plays**: tags are now ordered by total play count (sum of `play_count` across all tracks with that tag) instead of just track count. surfaces genres with actual listener engagement
+- **atprotofans Redis cache**: supporter validation results cached in Redis with 5-min TTL per (supporter, artist) pair. eliminates the 80-1100ms external HTTP call on repeat page loads
+- **parallelized supporter validation**: `asyncio.create_task()` kicks off the atprotofans call immediately after getting the track list, running concurrently with batch aggregations (~19ms), PDS resolution (~58ms), and image resolution. previously these all ran sequentially
+
+**performance impact** (authenticated users, production):
+- before: 250-1200ms (validate_supporter was 82% of request time on slow calls)
+- after (cache miss): ~170ms (validate_supporter runs in parallel with other work)
+- after (cache hit): ~170ms (no external call at all)
+
+---
+
 #### Fly HTTP health checks + outage retro (PR #1214, Apr 2)
 
 **why**: production outage (~6 min, 02:34-02:40 UTC Apr 2). after a deploy, Fly auto-stopped one machine for low traffic. the remaining machine became unresponsive but Fly had no health checks configured — it kept reporting the machine as "started" while it served nothing. when a replacement machine finally started, it was OOM killed (1GB exhausted in 20 seconds from queued request burst). manual `fly machine restart` was required to recover.
@@ -387,7 +405,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-Fly health checks deployed after production outage (#1214). AT-URI resolution route shipped (#1206), standardized AT-URI parsing across codebase (#1208), WebSocket hardening (#1203-1204), Jetstream identity sync (#1200). next: investigate what froze the remaining machine during the Apr 2 outage (no Logfire output for 6 min despite Fly reporting "started"); add a staging environment for the moderation service (#1165).
+Homepage tag filtering shipped (#1216-1220) with backend performance work — atprotofans validation cached in Redis and parallelized, cutting authenticated `/tracks/` from 250-1200ms to ~170ms. Fly health checks deployed after production outage (#1214). next: search modal (Cmd+K) polish; investigate what froze the remaining machine during the Apr 2 outage; add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -523,5 +541,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-02 (Fly health checks after production outage).
+this is a living document. last updated 2026-04-02 (homepage tag filtering + backend performance).
 
