@@ -1,11 +1,13 @@
 """artist profile API endpoints."""
 
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
+from redis.exceptions import RedisError
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +18,8 @@ from backend._internal.atproto import (
     upsert_profile_record,
 )
 from backend.models import Artist, Track, TrackLike, UserPreferences, get_db
+from backend.utilities.aggregations import get_top_artists_by_plays
+from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +81,7 @@ class AnalyticsResponse(BaseModel):
     total_duration_seconds: int
     top_item: TopItemResponse | None
     top_liked: TopItemResponse | None
+    rank: int | None = None
 
 
 # endpoints
@@ -280,6 +285,43 @@ async def get_artist_profile_by_did(
     return response
 
 
+LEADERBOARD_CACHE_KEY = "artist_leaderboard:top10"
+LEADERBOARD_CACHE_TTL = 300  # 5 minutes
+
+
+async def _get_leaderboard(db: AsyncSession) -> list[tuple[str, int]]:
+    """get top-10 artist leaderboard, cached in Redis for 5 minutes."""
+    try:
+        redis = get_async_redis_client()
+        if cached := await redis.get(LEADERBOARD_CACHE_KEY):
+            return [tuple(row) for row in json.loads(cached)]
+    except (RuntimeError, RedisError):
+        pass
+
+    leaderboard = await get_top_artists_by_plays(db, limit=10)
+
+    try:
+        redis = get_async_redis_client()
+        await redis.set(
+            LEADERBOARD_CACHE_KEY,
+            json.dumps(leaderboard),
+            ex=LEADERBOARD_CACHE_TTL,
+        )
+    except (RuntimeError, RedisError):
+        logger.debug("failed to cache artist leaderboard")
+
+    return leaderboard
+
+
+async def _get_artist_rank(db: AsyncSession, artist_did: str) -> int | None:
+    """return 1-indexed rank if artist is in the top 10, else None."""
+    leaderboard = await _get_leaderboard(db)
+    for i, (did, _plays) in enumerate(leaderboard):
+        if did == artist_did:
+            return i + 1
+    return None
+
+
 @router.get("/{artist_did}/analytics")
 async def get_artist_analytics(
     artist_did: str,
@@ -338,12 +380,16 @@ async def get_artist_analytics(
                 play_count=top_liked_row[2],  # reuse play_count field for like count
             )
 
+    # check artist's rank in the top-10 leaderboard (Redis-cached, 5 min TTL)
+    rank = await _get_artist_rank(db, artist_did)
+
     return AnalyticsResponse(
         total_plays=total_plays,
         total_items=total_items,
         total_duration_seconds=total_duration,
         top_item=top_item,
         top_liked=top_liked,
+        rank=rank,
     )
 
 

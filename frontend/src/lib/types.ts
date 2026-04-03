@@ -117,6 +117,7 @@ export interface Analytics {
 	total_duration_seconds: number;
 	top_item: TopItem | null;
 	top_liked: TopItem | null;
+	rank?: number | null;
 }
 
 export interface ArtistAlbumSummary extends AlbumSummary {}

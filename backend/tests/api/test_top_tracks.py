@@ -1,6 +1,7 @@
 """tests for GET /tracks/top endpoint."""
 
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -355,3 +356,148 @@ async def test_top_tracks_includes_tags(
 
     assert "electronic" in tags_by_title["Top Track 0"]
     assert tags_by_title["Top Track 1"] == []
+
+
+# --- period filtering tests ---
+
+
+@pytest.fixture
+async def tracks_with_timed_likes(
+    db_session: AsyncSession, artist: Artist
+) -> list[Track]:
+    """create tracks with likes at different times.
+
+    track A: 2 likes (1 recent, 1 old)
+    track B: 1 like (recent)
+    track C: 2 likes (both old)
+    """
+    tracks = []
+    for label in ("A", "B", "C"):
+        track = Track(
+            title=f"Timed Track {label}",
+            artist_did=artist.did,
+            file_id=f"timed_{label}",
+            file_type="mp3",
+            extra={"duration": 120},
+            atproto_record_uri=f"at://did:plc:topartist/fm.plyr.track/timed{label}",
+            atproto_record_cid=f"bafytimed{label}",
+        )
+        db_session.add(track)
+        tracks.append(track)
+
+    await db_session.flush()
+
+    now = datetime.now(UTC)
+    old = now - timedelta(days=60)
+    recent = now - timedelta(hours=6)
+
+    # track A: 1 recent + 1 old
+    db_session.add(
+        TrackLike(
+            track_id=tracks[0].id,
+            user_did="did:test:t1",
+            atproto_like_uri="at://did:test:t1/fm.plyr.like/tA1",
+            created_at=recent,
+        )
+    )
+    db_session.add(
+        TrackLike(
+            track_id=tracks[0].id,
+            user_did="did:test:t2",
+            atproto_like_uri="at://did:test:t2/fm.plyr.like/tA2",
+            created_at=old,
+        )
+    )
+
+    # track B: 1 recent
+    db_session.add(
+        TrackLike(
+            track_id=tracks[1].id,
+            user_did="did:test:t3",
+            atproto_like_uri="at://did:test:t3/fm.plyr.like/tB1",
+            created_at=recent,
+        )
+    )
+
+    # track C: 2 old
+    for i in range(2):
+        db_session.add(
+            TrackLike(
+                track_id=tracks[2].id,
+                user_did=f"did:test:t{i + 10}",
+                atproto_like_uri=f"at://did:test:t{i + 10}/fm.plyr.like/tC{i}",
+                created_at=old,
+            )
+        )
+
+    await db_session.commit()
+    for track in tracks:
+        await db_session.refresh(track)
+
+    return tracks
+
+
+async def test_top_tracks_period_default_is_all_time(
+    unauthenticated_app: FastAPI,
+    tracks_with_timed_likes: list[Track],
+):
+    """default period returns all likes regardless of time."""
+    async with AsyncClient(
+        transport=ASGITransport(app=unauthenticated_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/tracks/top")
+
+    assert response.status_code == 200
+    tracks = response.json()
+    titles = [t["title"] for t in tracks]
+
+    # all three tracks have at least one like
+    assert len(titles) == 3
+    # track A (2 likes) and track C (2 likes) tied, then track B (1 like)
+    assert "Timed Track A" in titles
+    assert "Timed Track B" in titles
+    assert "Timed Track C" in titles
+
+
+async def test_top_tracks_period_month(
+    unauthenticated_app: FastAPI,
+    tracks_with_timed_likes: list[Track],
+):
+    """period=month only counts likes from the past 30 days."""
+    async with AsyncClient(
+        transport=ASGITransport(app=unauthenticated_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/tracks/top?period=month")
+
+    assert response.status_code == 200
+    tracks = response.json()
+    titles = [t["title"] for t in tracks]
+
+    # only recent likes count: track A (1 recent), track B (1 recent)
+    # track C has only old likes → excluded
+    assert "Timed Track A" in titles
+    assert "Timed Track B" in titles
+    assert "Timed Track C" not in titles
+
+
+async def test_top_tracks_period_day(
+    unauthenticated_app: FastAPI,
+    tracks_with_timed_likes: list[Track],
+):
+    """period=day only counts likes from the past 24 hours."""
+    async with AsyncClient(
+        transport=ASGITransport(app=unauthenticated_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/tracks/top?period=day")
+
+    assert response.status_code == 200
+    tracks = response.json()
+    titles = [t["title"] for t in tracks]
+
+    # recent likes were 6 hours ago — within "day" window
+    assert "Timed Track A" in titles
+    assert "Timed Track B" in titles
+    assert "Timed Track C" not in titles

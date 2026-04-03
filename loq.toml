@@ -39,7 +39,7 @@ max_lines = 1137
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 563
+max_lines = 576
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -232,3 +232,15 @@ max_lines = 580
 [[rules]]
 path = "backend/tests/api/test_track_deletion.py"
 max_lines = 505
+
+[[rules]]
+path = "backend/tests/api/test_top_tracks.py"
+max_lines = 503
+
+[[rules]]
+path = "frontend/src/routes/+page.svelte"
+max_lines = 501
+
+[[rules]]
+path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
+max_lines = 1468

@@ -2,8 +2,8 @@
 
 import asyncio
 import logging
-from datetime import datetime
-from typing import TYPE_CHECKING, Annotated, cast
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Annotated, Literal, cast
 
 import logfire
 from botocore.exceptions import ClientError
@@ -328,17 +328,30 @@ async def list_tracks(
     return response
 
 
+PERIOD_DELTAS: dict[str, timedelta | None] = {
+    "all_time": None,
+    "month": timedelta(days=30),
+    "week": timedelta(days=7),
+    "day": timedelta(days=1),
+}
+
+
 @router.get("/top")
 async def list_top_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: int = 10,
+    period: Literal["all_time", "month", "week", "day"] = "all_time",
     session: AuthSession | None = Depends(get_optional_session),
 ) -> list[TrackResponse]:
     """get top tracks by like count (most liked first, at least one like)."""
     limit = max(1, min(limit, 50))
 
+    since: datetime | None = None
+    if (delta := PERIOD_DELTAS.get(period)) is not None:
+        since = datetime.now(UTC) - delta
+
     # get top track IDs with like counts in a single query
-    top_tracks_with_counts = await get_top_tracks_with_counts(db, limit)
+    top_tracks_with_counts = await get_top_tracks_with_counts(db, limit, since=since)
     if not top_tracks_with_counts:
         return []
 
