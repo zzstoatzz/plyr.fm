@@ -47,6 +47,32 @@ plyr.fm should become:
 
 ### April 2026
 
+#### browser observability + now-playing flood fix (PRs #1224-1225, Apr 2-3)
+
+**why**: a login redirect failure had zero frontend traces to debug — backend spans showed success, but something broke between the 303 redirect and the frontend. separately, a single user's client hammered `POST /now-playing/` every 5 seconds for an hour (2,758 requests), driving p95 latency to 2.9s and max to 13.6s across the entire API. zero 5xx errors, but the app felt down for everyone.
+
+**what shipped**:
+- **browser observability** (#1224): `@pydantic/logfire-browser` SDK auto-instruments fetch, document-load, user-interaction, and XHR. telemetry proxied through `POST /logfire-proxy/{path:path}` on the backend (via `logfire.experimental.forwarding.logfire_proxy`) so the write token stays server-side. `traceparent` headers propagate to the API for distributed tracing — a single trace now spans browser → API → database. service name `plyr-web` distinguishes from backend's `plyr-api` in Logfire
+- **now-playing throttle fix** (#1225): the frontend's `progressBucket` rounded to 5 seconds but the throttle interval was 10 seconds — the state fingerprint changed mid-throttle, bypassing the "skip if unchanged" check and firing reports every 5s instead of 10s. aligned bucket granularity to match `REPORT_INTERVAL_MS` (10s). backend: replaced `@limiter.exempt` with `30/minute` rate limit as a server-side safety net (normal playback is 6/min, generous headroom for rapid play/pause/seek)
+
+**incident timeline** (2026-04-02 23:17–23:40 UTC):
+- 23:17: traffic spikes to 1,624 requests/minute (10x normal), p95 = 1.6s
+- 23:18: 458 requests, p95 = 2.9s, max = 3.0s
+- 23:22: second spike, max latency hits 13.6s
+- 23:38: third spike, 1,945 requests/minute, max = 7.8s
+- 00:00: traffic returns to normal (~30 requests/minute)
+- root cause: joebasser.com's client firing `POST /now-playing/` every 5s for ~1 hour
+
+---
+
+#### album AT-URI resolution + search modal polish (PRs #1222-1223, Apr 2)
+
+**what shipped**:
+- **album AT-URI fix** (#1223): the `/at/[...uri]` catch-all route only resolved tracks and playlists. album AT-URIs (`fm.plyr.album`) returned 404. refactored the route to use a generic list resolver that handles both playlists and albums through the existing `/lists/*/by-uri` endpoints. added regression tests
+- **search modal** (#1222): centered vertically in viewport, enhanced glass effect
+
+---
+
 #### homepage tag filtering + backend performance (PRs #1216-1220, Apr 2)
 
 **why**: the homepage had no way to positively filter tracks by genre. you could hide tags (negative filter) but not say "show me electronic and ambient." the dedicated `/tag/[name]` page only supports one tag and navigates away from the homepage. separately, the `GET /tracks/` endpoint was 250-1200ms for authenticated users due to an uncached external HTTP call to atprotofans.com for supporter validation on every single request.
@@ -405,7 +431,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-Homepage tag filtering shipped (#1216-1220) with backend performance work — atprotofans validation cached in Redis and parallelized, cutting authenticated `/tracks/` from 250-1200ms to ~170ms. Fly health checks deployed after production outage (#1214). next: search modal (Cmd+K) polish; investigate what froze the remaining machine during the Apr 2 outage; add a staging environment for the moderation service (#1165).
+Browser observability live (#1224) — frontend traces now flow to Logfire via `plyr-web` service, enabling distributed tracing from browser through API to database. now-playing flood incident investigated and fixed (#1225) with both client-side throttle alignment and server-side rate limit safety net. next: monitor browser telemetry volume (add sampling if needed); investigate what froze the remaining machine during the Apr 2 outage; add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -541,5 +567,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-02 (homepage tag filtering + backend performance).
+this is a living document. last updated 2026-04-03 (browser observability, now-playing flood fix).
 
