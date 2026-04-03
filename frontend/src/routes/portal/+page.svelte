@@ -9,6 +9,7 @@
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
+	import PdsAudioUploadsToggle from '$lib/components/PdsAudioUploadsToggle.svelte';
 	import PdsBackfillControl from '$lib/components/PdsBackfillControl.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary, Playlist } from '$lib/types';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
@@ -1413,6 +1414,9 @@
 			</div>
 
 			{#if tracksTotal > 0}
+				<div class="data-control">
+					<PdsAudioUploadsToggle />
+				</div>
 				<PdsBackfillControl tracks={tracks} onComplete={loadMyTracks} />
 
 				<div class="data-control">

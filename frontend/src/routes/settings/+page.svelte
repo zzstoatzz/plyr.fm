@@ -2,8 +2,7 @@
 	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
-	import PdsAudioUploadsToggle from '$lib/components/PdsAudioUploadsToggle.svelte';
-	import WaveLoading from '$lib/components/WaveLoading.svelte';
+import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import type { TokenInfo } from '$lib/types';
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
@@ -760,8 +759,7 @@
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
-				<PdsAudioUploadsToggle />
-			</div>
+				</div>
 		</section>
 	</main>
 {/if}
