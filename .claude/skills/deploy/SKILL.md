@@ -30,7 +30,7 @@ Use `git diff` on the commit range to determine which directories were touched. 
 - **frontend-only** (only `frontend/`, `.claude/`, `docs/`, `STATUS.md`, other non-backend files): `just release-frontend-only` (skips backend deploy)
 - **docs/config only** (only `.claude/`, `docs/`, `STATUS.md`, `.md` files, no runtime code): no deployment needed — tell the user and stop
 
-Report the change summary and which release command you're running, then execute it. Do not ask the user to choose — the changes determine the command.
+Report the change summary and which release command you've determined, then **ask the user to confirm before executing**. The changes determine the command, but the user must approve it.
 
 ## execute deployment
 
