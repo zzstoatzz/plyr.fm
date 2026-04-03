@@ -356,7 +356,6 @@ async def list_top_tracks(
         return []
 
     top_track_ids = [tid for tid, _ in top_tracks_with_counts]
-    like_counts = dict(top_tracks_with_counts)
 
     # fetch tracks with relationships
     stmt = (
@@ -383,8 +382,10 @@ async def list_top_tracks(
         )
         liked_track_ids = set(liked_result.scalars().all())
 
-    # batch fetch remaining aggregations (like_counts already computed above)
-    comment_counts, track_tags = await asyncio.gather(
+    # batch fetch aggregations — always use all-time like counts for display
+    # (period filtering only affects which tracks appear and their ordering)
+    like_counts, comment_counts, track_tags = await asyncio.gather(
+        get_like_counts(db, track_ids),
         get_comment_counts(db, track_ids),
         get_track_tags(db, track_ids),
     )
