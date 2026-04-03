@@ -3,13 +3,14 @@
 import logging
 from collections import Counter
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
-from backend.models import CopyrightScan, Tag, TrackComment, TrackLike, TrackTag
+from backend.models import CopyrightScan, Tag, Track, TrackComment, TrackLike, TrackTag
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,7 @@ async def get_top_track_ids(db: AsyncSession, limit: int = 10) -> list[int]:
 
 
 async def get_top_tracks_with_counts(
-    db: AsyncSession, limit: int = 10
+    db: AsyncSession, limit: int = 10, since: datetime | None = None
 ) -> list[tuple[int, int]]:
     """get top track IDs with their like counts in a single query.
 
@@ -165,14 +166,40 @@ async def get_top_tracks_with_counts(
     args:
         db: database session
         limit: max number of tracks to return
+        since: only count likes created at or after this time (None = all time)
 
     returns:
         list of (track_id, like_count) tuples ordered by like count descending
     """
+    stmt = select(TrackLike.track_id, func.count(TrackLike.id).label("like_count"))
+    if since is not None:
+        stmt = stmt.where(TrackLike.created_at >= since)
     stmt = (
-        select(TrackLike.track_id, func.count(TrackLike.id).label("like_count"))
-        .group_by(TrackLike.track_id)
+        stmt.group_by(TrackLike.track_id)
         .order_by(func.count(TrackLike.id).desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return [(row[0], row[1]) for row in result.all()]
+
+
+async def get_top_artists_by_plays(
+    db: AsyncSession, limit: int = 10
+) -> list[tuple[str, int]]:
+    """get top artists ordered by total play count.
+
+    args:
+        db: database session
+        limit: max number of artists to return
+
+    returns:
+        list of (artist_did, total_plays) tuples ordered by plays descending
+    """
+    stmt = (
+        select(Track.artist_did, func.sum(Track.play_count).label("total_plays"))
+        .where(Track.play_count > 0)
+        .group_by(Track.artist_did)
+        .order_by(func.sum(Track.play_count).desc())
         .limit(limit)
     )
     result = await db.execute(stmt)

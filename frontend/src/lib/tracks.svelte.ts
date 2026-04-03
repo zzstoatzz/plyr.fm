@@ -228,9 +228,15 @@ export async function unlikeTrack(trackId: number): Promise<boolean> {
 	}
 }
 
-export async function fetchTopTracks(limit = 10): Promise<Track[]> {
+export async function fetchTopTracks(limit = 10, period = 'all_time'): Promise<Track[]> {
 	try {
-		const response = await fetch(`${API_URL}/tracks/top?limit=${limit}`, {
+		const url = new URL(`${API_URL}/tracks/top`);
+		url.searchParams.set('limit', String(limit));
+		if (period !== 'all_time') {
+			url.searchParams.set('period', period);
+		}
+
+		const response = await fetch(url.toString(), {
 			credentials: 'include'
 		});
 

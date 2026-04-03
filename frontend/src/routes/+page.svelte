@@ -37,6 +37,32 @@
 	let loadingTopTracks = $state(true);
 	let hasTopTracks = $derived(topTracks.length > 0);
 
+	// top tracks period toggle
+	const PERIODS = ['all_time', 'month', 'week', 'day'] as const;
+	const PERIOD_LABELS: Record<string, string> = {
+		all_time: 'all time',
+		month: 'past month',
+		week: 'past week',
+		day: 'past day'
+	};
+	let topTracksPeriod = $state(
+		(typeof window !== 'undefined' && localStorage.getItem('topTracksPeriod')) || 'all_time'
+	);
+	let periodLabel = $derived(PERIOD_LABELS[topTracksPeriod] ?? 'all time');
+
+	function cyclePeriod() {
+		const idx = PERIODS.indexOf(topTracksPeriod as typeof PERIODS[number]);
+		topTracksPeriod = PERIODS[(idx + 1) % PERIODS.length];
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('topTracksPeriod', topTracksPeriod);
+		}
+		loadingTopTracks = true;
+		fetchTopTracks(10, topTracksPeriod).then((result) => {
+			topTracks = result;
+			loadingTopTracks = false;
+		});
+	}
+
 	// network artists (people you follow on bluesky who have music here)
 	let networkArtists = $derived(networkArtistsCache.artists);
 	let hasNetworkArtists = $derived(networkArtistsCache.hasArtists);
@@ -51,7 +77,7 @@
 	let sentinelElement = $state<HTMLDivElement | null>(null);
 
 	onMount(async () => {
-		const [topResult] = await Promise.all([fetchTopTracks(10), tracksCache.fetch()]);
+		const [topResult] = await Promise.all([fetchTopTracks(10, topTracksPeriod), tracksCache.fetch()]);
 		topTracks = topResult;
 		loadingTopTracks = false;
 		initialLoad = false;
@@ -150,7 +176,7 @@
 		{#if loadingTopTracks}
 			<section class="top-tracks" transition:fade={{ duration: 200 }}>
 				<h2>
-					top tracks
+					top tracks <button class="period-toggle" onclick={cyclePeriod}>{periodLabel}</button>
 				</h2>
 				<div class="loading-container compact">
 					<WaveLoading size="sm" message="loading..." />
@@ -159,7 +185,7 @@
 		{:else if hasTopTracks}
 			<section class="top-tracks" transition:fade={{ duration: 200 }}>
 				<h2>
-					top tracks
+					top tracks <button class="period-toggle" onclick={cyclePeriod}>{periodLabel}</button>
 				</h2>
 				<div class="top-tracks-grid">
 					{#each topTracks as track, i}
@@ -284,6 +310,23 @@
 		font-weight: 700;
 		color: var(--text-primary);
 		margin: 0 0 1rem 0;
+	}
+
+	.period-toggle {
+		background: transparent;
+		border: none;
+		padding: 0;
+		font: inherit;
+		font-size: var(--text-base);
+		font-weight: 400;
+		color: var(--accent);
+		cursor: pointer;
+		transition: opacity 0.15s;
+		user-select: none;
+	}
+
+	.period-toggle:hover {
+		opacity: 0.7;
 	}
 
 	.top-tracks-grid {

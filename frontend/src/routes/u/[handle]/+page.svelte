@@ -512,6 +512,12 @@ $effect(() => {
 							<div class="skeleton-bar small"></div>
 						</div>
 					{:else if analytics}
+						{#if analytics.rank}
+							<div class="stat-card rank-card" class:rank-gold={analytics.rank === 1} class:rank-silver={analytics.rank === 2} class:rank-bronze={analytics.rank === 3} transition:fade={{ duration: 200 }}>
+								<div class="stat-value rank-value">#{analytics.rank}</div>
+								<div class="stat-label">top artist</div>
+							</div>
+						{/if}
 						<div class="stat-card" transition:fade={{ duration: 200 }}>
 							<div class="stat-value">{analytics.total_plays.toLocaleString()}</div>
 							<div class="stat-label">total plays</div>
@@ -1030,6 +1036,38 @@ $effect(() => {
 
 	.stat-card:hover {
 		border-color: var(--border-emphasis);
+	}
+
+	.rank-card {
+		border-color: var(--accent);
+	}
+
+	.rank-value {
+		font-variant-numeric: tabular-nums;
+	}
+
+	.rank-gold {
+		border-color: #FFD700;
+	}
+
+	.rank-gold .rank-value {
+		color: #FFD700;
+	}
+
+	.rank-silver {
+		border-color: #C0C0C0;
+	}
+
+	.rank-silver .rank-value {
+		color: #C0C0C0;
+	}
+
+	.rank-bronze {
+		border-color: #CD7F32;
+	}
+
+	.rank-bronze .rank-value {
+		color: #CD7F32;
 	}
 
 	.stat-value {
