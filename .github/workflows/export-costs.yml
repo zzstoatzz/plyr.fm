@@ -39,7 +39,7 @@ jobs:
         with:
           ref: ${{ steps.release.outputs.tag }}
 
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
 
       - name: Export costs to R2
         run: |

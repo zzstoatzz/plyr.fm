@@ -56,7 +56,7 @@ def main() -> None:
 
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
-        model="gemini-2.5-flash-preview-tts",
+        model="gemini-2.5-pro-preview-tts",
         contents=script,
         config=types.GenerateContentConfig(
             response_modalities=["AUDIO"],

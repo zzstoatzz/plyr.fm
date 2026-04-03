@@ -53,7 +53,7 @@ class LoopSettings(BaseSettings):
     )
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
     anthropic_model: str = Field(
-        default="claude-sonnet-4-20250514", validation_alias="ANTHROPIC_MODEL"
+        default="claude-sonnet-4-6", validation_alias="ANTHROPIC_MODEL"
     )
     bot_handle: str = Field(default="", validation_alias="NOTIFY_BOT_HANDLE")
     bot_password: str = Field(default="", validation_alias="NOTIFY_BOT_PASSWORD")
