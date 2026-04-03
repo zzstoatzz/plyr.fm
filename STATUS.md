@@ -47,6 +47,21 @@ plyr.fm should become:
 
 ### April 2026
 
+#### top tracks time-range toggle + like count fix (PRs #1228-1230, Apr 3)
+
+**why**: the homepage "top tracks" section showed all-time most-liked tracks with no way to see recent trends. separately, the artist leaderboard rank feature (play-count-based) rewarded volume uploaders and self-listeners over genuine community engagement — shipped and pulled in the same session.
+
+**what shipped**:
+- **period toggle** (#1228): cycling label on "top tracks" heading — "all time" → "past month" → "past week" → "past day" — filters which tracks appear by when their likes were created. selection persists in localStorage. backend `GET /tracks/top?period=month` accepts `all_time|month|week|day`, maps to `since` cutoff on `TrackLike.created_at` (indexed column)
+- **like count fix** (#1230): the period filter was reusing the time-scoped like count for display — filtering to "past day" showed "1 like" even if a track had many total likes. now uses period-filtered counts only for ordering/inclusion, fetches all-time totals separately for the displayed `like_count`
+- **rank card pulled** (#1229): artist leaderboard rank (top 10 by total plays) shipped in #1228 but immediately pulled from the frontend — the #1 ranked artist was an archiver uploading Internet Archive content and listening to it himself, not a community-recognized artist. backend infrastructure (`rank` field in analytics response, Redis-cached leaderboard) remains intact for re-enabling with better criteria (likely likes-based)
+
+**decisions**:
+- play count is a poor ranking signal — it rewards self-listening and volume. likes are better but still raise questions about what "top artist" means on a platform hosting archives, podcasts, ASMR, etc.
+- kept the backend rank infrastructure to avoid throwaway work — the leaderboard query and caching are correct, just need a better ranking formula
+
+---
+
 #### browser observability + now-playing flood fix (PRs #1224-1225, Apr 2-3)
 
 **why**: a login redirect failure had zero frontend traces to debug — backend spans showed success, but something broke between the 303 redirect and the frontend. separately, a single user's client hammered `POST /now-playing/` every 5 seconds for an hour (2,758 requests), driving p95 latency to 2.9s and max to 13.6s across the entire API. zero 5xx errors, but the app felt down for everyone.
@@ -431,7 +446,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-Browser observability live (#1224) — frontend traces now flow to Logfire via `plyr-web` service, enabling distributed tracing from browser through API to database. now-playing flood incident investigated and fixed (#1225) with both client-side throttle alignment and server-side rate limit safety net. next: monitor browser telemetry volume (add sampling if needed); investigate what froze the remaining machine during the Apr 2 outage; add a staging environment for the moderation service (#1165).
+Top tracks time-range toggle shipped (#1228-1230) — homepage "top tracks" now cycles through all-time/month/week/day filters. artist leaderboard rank shipped and pulled in the same session (#1228-1229) — play count rewards volume, not engagement. backend rank infrastructure kept for re-enabling with likes-based criteria. next: define what "top artist" means on a platform with diverse content types; monitor browser telemetry volume (add sampling if needed); add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -567,5 +582,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-03 (browser observability, now-playing flood fix).
+this is a living document. last updated 2026-04-03 (top tracks period toggle, artist rank pulled).
 
