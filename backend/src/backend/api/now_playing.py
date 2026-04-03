@@ -65,7 +65,7 @@ class NowPlayingResponse(BaseModel):
 
 
 @router.post("/")
-@limiter.limit("12/minute")
+@limiter.limit("30/minute")
 async def update_now_playing(
     request: Request,
     update: NowPlayingUpdate,
@@ -96,7 +96,7 @@ async def update_now_playing(
 
 
 @router.delete("/")
-@limiter.limit("12/minute")
+@limiter.limit("30/minute")
 async def clear_now_playing(
     request: Request,
     session: Session = Depends(require_auth),
