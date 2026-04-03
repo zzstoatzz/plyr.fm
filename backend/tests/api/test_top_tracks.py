@@ -501,3 +501,24 @@ async def test_top_tracks_period_day(
     assert "Timed Track A" in titles
     assert "Timed Track B" in titles
     assert "Timed Track C" not in titles
+
+
+async def test_top_tracks_period_shows_all_time_like_count(
+    unauthenticated_app: FastAPI,
+    tracks_with_timed_likes: list[Track],
+):
+    """like_count always reflects all-time total, even with period filter."""
+    async with AsyncClient(
+        transport=ASGITransport(app=unauthenticated_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/tracks/top?period=month")
+
+    assert response.status_code == 200
+    tracks = response.json()
+    counts = {t["title"]: t["like_count"] for t in tracks}
+
+    # track A has 2 total likes (1 recent + 1 old) — period only filters ordering
+    assert counts["Timed Track A"] == 2
+    # track B has 1 total like
+    assert counts["Timed Track B"] == 1
