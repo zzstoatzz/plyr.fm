@@ -1441,7 +1441,7 @@
 					<h3>delete account</h3>
 					<p class="control-description">
 						permanently delete all your data from plyr.fm.
-						<a href="https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md#account-deletion" target="_blank" rel="noopener">learn more</a>
+						<a href="https://docs.plyr.fm/artists#leaving" target="_blank" rel="noopener">learn more</a>
 					</p>
 				</div>
 				{#if !showDeleteConfirm}
