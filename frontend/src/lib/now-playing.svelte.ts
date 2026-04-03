@@ -38,11 +38,12 @@ class NowPlayingService {
 		}
 
 		// create state fingerprint to detect actual changes
+		// bucket must be >= REPORT_INTERVAL_MS so the fingerprint doesn't
+		// change mid-throttle and bypass the interval check
 		const stateFingerprint = JSON.stringify({
 			trackId: track.id,
 			isPlaying,
-			// round progress to nearest 5 seconds to reduce noise
-			progressBucket: Math.floor(currentTimeMs / 5000)
+			progressBucket: Math.floor(currentTimeMs / REPORT_INTERVAL_MS)
 		});
 
 		// skip if state hasn't meaningfully changed
@@ -103,7 +104,7 @@ class NowPlayingService {
 				this.lastReportedState = JSON.stringify({
 					trackId: track.id,
 					isPlaying,
-					progressBucket: Math.floor(currentTimeMs / 5000)
+					progressBucket: Math.floor(currentTimeMs / REPORT_INTERVAL_MS)
 				});
 			}
 		}, REPORT_DEBOUNCE_MS);

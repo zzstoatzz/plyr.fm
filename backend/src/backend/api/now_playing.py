@@ -2,13 +2,14 @@
 
 exposes real-time playback state for services like teal.fm/Piper.
 
-note: these endpoints are exempt from rate limiting because they're
-already throttled client-side (10-second intervals, 1-second debounce).
+note: POST/DELETE are rate-limited server-side as a safety net.
+the frontend also throttles client-side (10-second intervals).
+GET endpoints for Piper are exempt since they're read-only.
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,8 +65,9 @@ class NowPlayingResponse(BaseModel):
 
 
 @router.post("/")
-@limiter.exempt
+@limiter.limit("12/minute")
 async def update_now_playing(
+    request: Request,
     update: NowPlayingUpdate,
     session: Session = Depends(require_auth),
 ) -> StatusResponse:
@@ -94,8 +96,9 @@ async def update_now_playing(
 
 
 @router.delete("/")
-@limiter.exempt
+@limiter.limit("12/minute")
 async def clear_now_playing(
+    request: Request,
     session: Session = Depends(require_auth),
 ) -> StatusResponse:
     """clear now playing state (authenticated).
