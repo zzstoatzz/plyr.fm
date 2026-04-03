@@ -34,6 +34,8 @@
 	},
 	"dependencies": {
 		"@atproto/api": "^0.18.7",
+		"@opentelemetry/auto-instrumentations-web": "^0.59.0",
+		"@pydantic/logfire-browser": "^0.14.0",
 		"svelte-portal": "^2.2.1"
 	}
 }

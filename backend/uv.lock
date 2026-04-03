@@ -388,7 +388,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "greenlet", specifier = ">=3.2.4" },
     { name = "httpx", specifier = ">=0.28.0" },
-    { name = "logfire", extras = ["fastapi", "sqlalchemy"], specifier = ">=4.14.2" },
+    { name = "logfire", extras = ["fastapi", "sqlalchemy"], specifier = ">=4.26.0" },
     { name = "mutagen", specifier = ">=1.47.0" },
     { name = "orjson", specifier = ">=3.11.4" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
@@ -1392,7 +1392,7 @@ wheels = [
 
 [[package]]
 name = "logfire"
-version = "4.20.0"
+version = "4.31.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "executing" },
@@ -1403,9 +1403,9 @@ dependencies = [
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/58/77/ffe5d45e28db9907ab4ae5e475522a69bfc71fa1bef91d38bf7e5434b394/logfire-4.20.0.tar.gz", hash = "sha256:9f0253b4b72543e9fd6ad6bebd4ca319f50c4407876958e26fbf3065d3cc8499", size = 648954, upload-time = "2026-01-26T10:59:25.722Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/61/fc/21f923243d8c3ca2ebfa97de46970ced734e66ac634c1c35b6abb41300f1/logfire-4.31.0.tar.gz", hash = "sha256:361bfda17c9d70ada5d220211033bae06b871ddac9d5b06978bc0ceca6b8e658", size = 1080609, upload-time = "2026-03-27T19:00:46.339Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/77/58/49d0a33b01ab85b96ece46775a879ea57429a468429af8565dccaec75981/logfire-4.20.0-py3-none-any.whl", hash = "sha256:ea492cace9b6e50399cc87b9d36abbc5f58af78839384c43a8c3d0fd14aeeffe", size = 240939, upload-time = "2026-01-26T10:59:22.565Z" },
+    { url = "https://files.pythonhosted.org/packages/49/1a/8c860e35bf847ac0d647d94bad89dccbb66cbcafdd61d8334f8cc7cfdd58/logfire-4.31.0-py3-none-any.whl", hash = "sha256:49fad38b5e6f199a98e9c8814e860c8a42595bb81479b52a20413e53ee475b72", size = 308896, upload-time = "2026-03-27T19:00:43.107Z" },
 ]
 
 [package.optional-dependencies]

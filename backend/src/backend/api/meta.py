@@ -2,8 +2,9 @@
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
+from logfire.experimental.forwarding import logfire_proxy
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -147,3 +148,14 @@ async def sitemap_data(
     ]
 
     return {"tracks": tracks, "artists": artists, "albums": albums}
+
+
+@router.post("/logfire-proxy/{path:path}")
+async def proxy_browser_telemetry(request: Request):
+    """forward browser telemetry to Logfire.
+
+    proxies OpenTelemetry data from the browser SDK so the write token
+    stays server-side. protected by CORS (allowed origins only) and
+    global rate limiting.
+    """
+    return await logfire_proxy(request)
