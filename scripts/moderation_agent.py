@@ -259,7 +259,7 @@ def create_agent(api_key: str) -> Agent[None, BatchAnalysis]:
 
     provider = AnthropicProvider(api_key=api_key)
     return Agent(
-        model=AnthropicModel("claude-sonnet-4-20250514", provider=provider),
+        model=AnthropicModel("claude-sonnet-4-6", provider=provider),
         output_type=BatchAnalysis,
         system_prompt=SYSTEM_PROMPT,
     )

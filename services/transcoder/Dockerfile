@@ -12,7 +12,7 @@ RUN mkdir -p /tmp/ffmpeg \
     && curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
         | tar -xJ --strip-components=1 -C /tmp/ffmpeg
 
-FROM rust:1.81-slim AS builder
+FROM rust:1.85-slim AS builder
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev \

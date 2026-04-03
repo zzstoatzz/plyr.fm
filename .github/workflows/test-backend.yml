@@ -19,7 +19,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:14-alpine
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: relay_test
           POSTGRES_PASSWORD: relay_test
@@ -43,7 +43,7 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: set up python
         uses: actions/setup-python@v5

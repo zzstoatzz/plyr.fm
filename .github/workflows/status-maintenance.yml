@@ -12,9 +12,6 @@
 name: status maintenance
 
 on:
-  # TODO: restore schedule after testing
-  # schedule:
-  #   - cron: "0 9 * * 1" # every monday 9am UTC
   workflow_dispatch:
     inputs:
       skip_audio:
@@ -40,7 +37,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
 
       - uses: anthropics/claude-code-action@v1
         with:
@@ -273,7 +270,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
 
       - name: Upload audio to plyr.fm
         run: |
