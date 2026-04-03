@@ -2,13 +2,16 @@
 
 from collections.abc import Generator
 
+import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
+from backend.api.artists import LEADERBOARD_CACHE_KEY
 from backend.main import app
 from backend.models import Artist, Track, get_db
+from backend.utilities.redis import get_async_redis_client
 
 
 class MockSession(Session):
@@ -34,8 +37,27 @@ class MockSession(Session):
         }
 
 
-def _make_test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
-    """create test app with mocked DB."""
+@pytest.fixture
+async def _clear_leaderboard_cache():
+    """clear leaderboard cache to prevent cross-test pollution."""
+    try:
+        redis = get_async_redis_client()
+        await redis.delete(LEADERBOARD_CACHE_KEY)
+    except Exception:
+        pass
+    yield
+    try:
+        redis = get_async_redis_client()
+        await redis.delete(LEADERBOARD_CACHE_KEY)
+    except Exception:
+        pass
+
+
+@pytest.fixture
+def test_app(
+    db_session: AsyncSession, _clear_leaderboard_cache: None
+) -> Generator[FastAPI, None, None]:
+    """test app with overridden DB session and cleared leaderboard cache."""
 
     async def mock_require_auth() -> Session:
         return MockSession()
@@ -51,9 +73,8 @@ def _make_test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
     app.dependency_overrides.clear()
 
 
-async def test_rank_appears_for_top_artist(db_session: AsyncSession):
+async def test_rank_appears_for_top_artist(test_app: FastAPI, db_session: AsyncSession):
     """artist with the most plays gets rank=1 in analytics."""
-    # create two artists with different play counts
     top_artist = Artist(
         did="did:plc:leader1",
         handle="leader.bsky.social",
@@ -69,7 +90,6 @@ async def test_rank_appears_for_top_artist(db_session: AsyncSession):
     db_session.add_all([top_artist, other_artist])
     await db_session.flush()
 
-    # top_artist: 200 plays
     db_session.add(
         Track(
             title="Hit Song",
@@ -79,8 +99,6 @@ async def test_rank_appears_for_top_artist(db_session: AsyncSession):
             play_count=200,
         )
     )
-
-    # other_artist: 50 plays
     db_session.add(
         Track(
             title="Decent Song",
@@ -90,22 +108,19 @@ async def test_rank_appears_for_top_artist(db_session: AsyncSession):
             play_count=50,
         )
     )
-
     await db_session.commit()
 
-    for test_app in _make_test_app(db_session):
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app),
-            base_url="http://test",
-        ) as client:
-            response = await client.get(f"/artists/{top_artist.did}/analytics")
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(f"/artists/{top_artist.did}/analytics")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["rank"] == 1
+    assert response.status_code == 200
+    assert response.json()["rank"] == 1
 
 
-async def test_rank_ordering_is_correct(db_session: AsyncSession):
+async def test_rank_ordering_is_correct(test_app: FastAPI, db_session: AsyncSession):
     """artists are ranked by total plays descending."""
     artists_data = [
         ("did:plc:r1", "first.bsky.social", "First", 300),
@@ -113,22 +128,19 @@ async def test_rank_ordering_is_correct(db_session: AsyncSession):
         ("did:plc:r3", "third.bsky.social", "Third", 100),
     ]
 
-    artists = []
     for did, handle, name, _plays in artists_data:
-        artist = Artist(
-            did=did,
-            handle=handle,
-            display_name=name,
-            pds_url="https://test.pds",
+        db_session.add(
+            Artist(
+                did=did,
+                handle=handle,
+                display_name=name,
+                pds_url="https://test.pds",
+            )
         )
-        db_session.add(artist)
-        artists.append(artist)
 
     await db_session.flush()
 
-    for (did, _handle, _name, plays), _artist in zip(
-        artists_data, artists, strict=True
-    ):
+    for did, _handle, _name, plays in artists_data:
         db_session.add(
             Track(
                 title=f"Track by {did}",
@@ -141,27 +153,22 @@ async def test_rank_ordering_is_correct(db_session: AsyncSession):
 
     await db_session.commit()
 
-    for test_app in _make_test_app(db_session):
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app),
-            base_url="http://test",
-        ) as client:
-            # first place
-            resp = await client.get("/artists/did:plc:r1/analytics")
-            assert resp.json()["rank"] == 1
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app),
+        base_url="http://test",
+    ) as client:
+        resp = await client.get("/artists/did:plc:r1/analytics")
+        assert resp.json()["rank"] == 1
 
-            # second place
-            resp = await client.get("/artists/did:plc:r2/analytics")
-            assert resp.json()["rank"] == 2
+        resp = await client.get("/artists/did:plc:r2/analytics")
+        assert resp.json()["rank"] == 2
 
-            # third place
-            resp = await client.get("/artists/did:plc:r3/analytics")
-            assert resp.json()["rank"] == 3
+        resp = await client.get("/artists/did:plc:r3/analytics")
+        assert resp.json()["rank"] == 3
 
 
-async def test_rank_is_null_outside_top_10(db_session: AsyncSession):
+async def test_rank_is_null_outside_top_10(test_app: FastAPI, db_session: AsyncSession):
     """artists outside the top 10 get rank=null."""
-    # create 11 artists
     artists = []
     for i in range(11):
         artist = Artist(
@@ -175,7 +182,6 @@ async def test_rank_is_null_outside_top_10(db_session: AsyncSession):
 
     await db_session.flush()
 
-    # give each progressively fewer plays (artist 0 = 1100, artist 10 = 100)
     for i, artist in enumerate(artists):
         db_session.add(
             Track(
@@ -189,19 +195,18 @@ async def test_rank_is_null_outside_top_10(db_session: AsyncSession):
 
     await db_session.commit()
 
-    for test_app in _make_test_app(db_session):
-        async with AsyncClient(
-            transport=ASGITransport(app=test_app),
-            base_url="http://test",
-        ) as client:
-            # artist 0 (highest plays) should be rank 1
-            resp = await client.get(f"/artists/{artists[0].did}/analytics")
-            assert resp.json()["rank"] == 1
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app),
+        base_url="http://test",
+    ) as client:
+        # artist 0 (highest plays) should be rank 1
+        resp = await client.get(f"/artists/{artists[0].did}/analytics")
+        assert resp.json()["rank"] == 1
 
-            # artist 9 (10th highest) should be rank 10
-            resp = await client.get(f"/artists/{artists[9].did}/analytics")
-            assert resp.json()["rank"] == 10
+        # artist 9 (10th highest) should be rank 10
+        resp = await client.get(f"/artists/{artists[9].did}/analytics")
+        assert resp.json()["rank"] == 10
 
-            # artist 10 (11th) should be null
-            resp = await client.get(f"/artists/{artists[10].did}/analytics")
-            assert resp.json()["rank"] is None
+        # artist 10 (11th) should be null
+        resp = await client.get(f"/artists/{artists[10].did}/analytics")
+        assert resp.json()["rank"] is None
