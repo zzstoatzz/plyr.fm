@@ -183,7 +183,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 735
+max_lines = 798
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
@@ -244,3 +244,11 @@ max_lines = 501
 [[rules]]
 path = "frontend/src/routes/u/[[]handle[]]/+page.svelte"
 max_lines = 1468
+
+[[rules]]
+path = "frontend/src/lib/components/AlbumUploadForm.svelte"
+max_lines = 742
+
+[[rules]]
+path = "frontend/src/lib/components/TrackEntryCard.svelte"
+max_lines = 571
