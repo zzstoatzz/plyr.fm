@@ -4,6 +4,7 @@
 	import Header from "$lib/components/Header.svelte";
 	import HandleSearch from "$lib/components/HandleSearch.svelte";
 	import AlbumSelect from "$lib/components/AlbumSelect.svelte";
+	import AlbumUploadForm from "$lib/components/AlbumUploadForm.svelte";
 	import PdsTooltip from "$lib/components/PdsTooltip.svelte";
 	import InfoTooltip from "$lib/components/InfoTooltip.svelte";
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
@@ -29,6 +30,24 @@
 	}
 
 	let loading = $state(true);
+
+	// upload mode: track (single) or album (multi-track)
+	let mode = $state<'track' | 'album'>(
+		typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mode') === 'album'
+			? 'album'
+			: 'track'
+	);
+
+	function setMode(newMode: 'track' | 'album') {
+		mode = newMode;
+		const url = new URL(window.location.href);
+		if (newMode === 'album') {
+			url.searchParams.set('mode', 'album');
+		} else {
+			url.searchParams.delete('mode');
+		}
+		window.history.replaceState({}, '', url.toString());
+	}
 
 	// upload form fields
 	let title = $state("");
@@ -214,7 +233,7 @@
 </script>
 
 <svelte:head>
-	<title>upload track • plyr</title>
+	<title>upload {mode === 'album' ? 'album' : 'track'} • plyr</title>
 </svelte:head>
 
 {#if loading}
@@ -229,9 +248,25 @@
 	/>
 	<main>
 		<div class="section-header">
-			<h2>upload track</h2>
+			<h2>upload {mode === 'album' ? 'album' : 'track'}</h2>
 		</div>
 
+		<div class="mode-toggle">
+			<button
+				type="button"
+				class="mode-btn"
+				class:active={mode === 'track'}
+				onclick={() => setMode('track')}
+			>track</button>
+			<button
+				type="button"
+				class="mode-btn"
+				class:active={mode === 'album'}
+				onclick={() => setMode('album')}
+			>album</button>
+		</div>
+
+		{#if mode === 'track'}
 		<form onsubmit={handleUpload}>
 			<div class="form-group">
 				<label for="title">track title</label>
@@ -418,6 +453,13 @@
 			</button>
 
 		</form>
+		{:else}
+		<AlbumUploadForm
+			{albums}
+			{artistProfile}
+			onAlbumsReload={loadMyAlbums}
+		/>
+		{/if}
 	</main>
 {/if}
 
@@ -455,6 +497,50 @@
 		font-weight: 700;
 		color: var(--text-primary);
 		margin: 0;
+	}
+
+	.mode-toggle {
+		display: flex;
+		gap: 0;
+		margin-bottom: 1.5rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
+		padding: 0.25rem;
+		width: fit-content;
+	}
+
+	.mode-btn {
+		width: auto;
+		padding: 0.5rem 1.25rem;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--text-tertiary);
+		font-size: var(--text-base);
+		font-weight: 500;
+		font-family: inherit;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.mode-btn:hover {
+		transform: none;
+		box-shadow: none;
+	}
+
+	.mode-btn:hover:not(.active) {
+		color: var(--text-secondary);
+		background: transparent;
+	}
+
+	.mode-btn.active {
+		background: var(--accent);
+		color: var(--text-primary);
+	}
+
+	.mode-btn.active:hover {
+		background: var(--accent);
 	}
 
 	form {
