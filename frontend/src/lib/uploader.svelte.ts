@@ -73,11 +73,13 @@ class UploaderState {
 		autoTag: boolean,
 		description: string,
 		onSuccess?: () => void,
-		callbacks?: UploadProgressCallback
+		callbacks?: UploadProgressCallback,
+		label?: string
 	): void {
 		const taskId = crypto.randomUUID();
 		const fileSizeMB = file.size / 1024 / 1024;
 		const isMobile = isMobileDevice();
+		const displayName = label ?? title;
 
 		// warn about large files on mobile
 		if (isMobile && fileSizeMB > MOBILE_LARGE_FILE_THRESHOLD_MB) {
@@ -85,8 +87,8 @@ class UploaderState {
 		}
 
 		const uploadMessage = fileSizeMB > 10
-			? 'uploading track... (large file, this may take a moment)'
-			: 'uploading track...';
+			? `uploading "${displayName}"... (large file)`
+			: `uploading "${displayName}"...`;
 		// 0 means infinite/persist until dismissed
 		const toastId = toast.info(uploadMessage, 0);
 
@@ -185,7 +187,7 @@ class UploaderState {
 							this.activeUploads.delete(taskId);
 
 							const trackId = update.track_id;
-							toast.success('track uploaded successfully!', 5000, trackId ? {
+							toast.success(`"${displayName}" uploaded`, 5000, trackId ? {
 								label: 'view track',
 								href: `/track/${trackId}`
 							} : undefined);

@@ -36,7 +36,7 @@
 	);
 
 	let completedCount = $derived(tracks.filter((t) => t.status === 'completed').length);
-	let currentUploadIndex = $derived(tracks.findIndex((t) => t.status === 'uploading' || t.status === 'processing'));
+	let activeUploadCount = $derived(tracks.filter((t) => t.status === 'uploading' || t.status === 'processing').length);
 	let hasUnresolvedFeatures = $derived(tracks.some((t) => t.hasUnresolvedFeaturesInput));
 
 	let canSubmit = $derived(
@@ -238,11 +238,10 @@
 		let completed = 0;
 		let failed = 0;
 
-		for (let i = 0; i < tracks.length; i++) {
-			const track = tracks[i];
+		const promises = tracks.map((track, i) => {
 			tracks[i] = { ...tracks[i], status: 'uploading' };
 
-			await new Promise<void>((resolve) => {
+			return new Promise<void>((resolve) => {
 				let resolved = false;
 				const safeResolve = () => {
 					if (!resolved) {
@@ -264,7 +263,7 @@
 					track.title,
 					albumTitle.trim(),
 					[...track.featuredArtists],
-					i === 0 ? coverArtFile : null,
+					coverArtFile,
 					[...track.tags],
 					track.supportGated,
 					track.autoTag,
@@ -289,9 +288,11 @@
 							safeResolve();
 						},
 					},
+					track.title,
 				);
 			});
-		}
+		});
+		await Promise.allSettled(promises);
 
 		// refresh albums so we can find the slug for the "view album" link
 		await onAlbumsReload();
@@ -404,9 +405,9 @@
 
 	{#if uploading}
 		<div class="upload-progress">
-			{#if currentUploadIndex >= 0}
+			{#if activeUploadCount > 0}
 				<p class="progress-text">
-					uploading track {currentUploadIndex + 1} of {tracks.length}...
+					{completedCount} of {tracks.length} completed, {activeUploadCount} uploading...
 				</p>
 			{:else}
 				<p class="progress-text">

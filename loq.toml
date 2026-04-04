@@ -247,7 +247,7 @@ max_lines = 1468
 
 [[rules]]
 path = "frontend/src/lib/components/AlbumUploadForm.svelte"
-max_lines = 742
+max_lines = 743
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEntryCard.svelte"
