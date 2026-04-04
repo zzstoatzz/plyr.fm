@@ -13,7 +13,7 @@ lightweight, zero-dependency toast notification system providing immediate user 
 ## use cases
 
 the toast system provides UX feedback for:
-- **uploads**: "uploading track... 45%" → "track uploaded successfully!"
+- **uploads**: `uploading "track title"... 45%` → `"track title" uploaded`
 - **upload errors**: detailed error messages with specific failure reasons
 - **network errors**: "network error: connection failed"
 - **processing updates**: real-time SSE progress updates during transcoding
@@ -87,13 +87,15 @@ toast.warning('approaching rate limit');
 
 ### progress updates (uploader pattern)
 ```typescript
-// initial upload progress
-const toastId = toast.info('uploading track...');
+// initial upload — toast includes track title for identification
+// (especially useful during concurrent album uploads)
+const displayName = label ?? title;
+const toastId = toast.info(`uploading "${displayName}"...`);
 
 // update progress inline
 xhr.upload.addEventListener('progress', (e) => {
   const percent = Math.round((e.loaded / e.total) * 100);
-  toast.update(toastId, `uploading track... ${percent}%`);
+  toast.update(toastId, `retrieving your file... ${percent}%`);
 });
 
 // processing updates via SSE
@@ -104,7 +106,7 @@ eventSource.onmessage = (event) => {
   }
   if (update.status === 'completed') {
     toast.dismiss(toastId);
-    toast.success('track uploaded successfully!');
+    toast.success(`"${displayName}" uploaded`);
   }
 };
 ```
