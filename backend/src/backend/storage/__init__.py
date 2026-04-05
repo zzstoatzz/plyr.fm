@@ -2,15 +2,14 @@
 
 from typing import TYPE_CHECKING
 
+from typing import Any
+
 from backend.storage.protocol import StorageProtocol
 
-if TYPE_CHECKING:
-    from backend.storage.r2 import R2Storage
-
-_storage: "R2Storage | None" = None
+_storage: Any = None
 
 
-def _get_storage() -> "R2Storage":
+def _get_storage():
     """lazily initialize storage on first access."""
     global _storage
     if _storage is None:
