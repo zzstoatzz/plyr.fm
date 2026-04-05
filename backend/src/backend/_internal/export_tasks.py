@@ -10,11 +10,20 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+import aioboto3
+import aiofiles
 import logfire
+from sqlalchemy import select
 
 from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
+from backend.config import settings
+from backend.models import Track
 from backend.models.job import JobStatus
+from backend.storage import storage
+from backend.storage.r2 import UploadProgressTracker
+from backend.utilities.database import db_session
+from backend.utilities.progress import R2ProgressTracker
 
 logger = logging.getLogger(__name__)
 
@@ -29,19 +38,6 @@ async def process_export(export_id: str, artist_did: str) -> None:
         export_id: job ID for tracking progress
         artist_did: DID of the artist whose tracks to export
     """
-    # heavy imports deferred: this background task runs rarely and
-    # aioboto3 pulls in all of boto3/botocore (~30-40MB RSS)
-    import aioboto3
-    import aiofiles
-    from sqlalchemy import select
-
-    from backend.config import settings
-    from backend.models import Track
-    from backend.storage import storage
-    from backend.storage.r2 import UploadProgressTracker
-    from backend.utilities.database import db_session
-    from backend.utilities.progress import R2ProgressTracker
-
     try:
         await job_service.update_progress(
             export_id, JobStatus.PROCESSING, "fetching tracks..."

@@ -6,6 +6,7 @@ they should be self-contained and handle their own database sessions.
 requires DOCKET_URL to be set (Redis is always available).
 """
 
+from backend._internal.export_tasks import process_export
 from backend._internal.pds_backfill_tasks import backfill_tracks_to_pds
 from backend._internal.tasks.copyright import (
     scan_copyright,
@@ -67,11 +68,10 @@ from backend._internal.tasks.sync import (
 
 
 def _build_background_tasks() -> list:
-    """build the task list, deferring heavy imports to reduce startup memory.
+    """build the task list, deferring jetstream import to break circular dep.
 
-    deferred: jetstream (circular dep), export_tasks (pulls in boto3/botocore)
+    cycle: jetstream.py → tasks.ingest → tasks/__init__.py → jetstream.py
     """
-    from backend._internal.export_tasks import process_export
     from backend._internal.jetstream import consume_jetstream
 
     return [
