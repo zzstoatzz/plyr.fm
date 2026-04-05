@@ -14,6 +14,7 @@ from backend._internal.atproto.records.fm_plyr.list import (
 )
 from backend._internal.atproto.records.fm_plyr.profile import upsert_profile_record
 from backend._internal.atproto.records.fm_plyr.track import (
+    RecordNotFound,
     build_track_record,
     create_track_record,
     delete_record_by_uri,
@@ -23,6 +24,7 @@ from backend._internal.atproto.records.fm_plyr.track import (
 )
 
 __all__ = [
+    "RecordNotFound",
     "build_list_record",
     "build_track_record",
     "create_comment_record",

@@ -13,6 +13,10 @@ from backend.config import settings
 logger = logging.getLogger(__name__)
 
 
+class RecordNotFound(Exception):
+    """raised when an ATProto record does not exist on the PDS."""
+
+
 def build_track_record(
     title: str,
     artist: str,
@@ -201,6 +205,8 @@ async def get_record_public(
         async with httpx.AsyncClient() as client:
             response = await client.get(url, params=params, timeout=10.0)
 
+    if response.status_code == 404:
+        raise RecordNotFound(f"record not found: {record_uri}")
     if response.status_code != 200:
         raise Exception(
             f"failed to fetch record: {response.status_code} {response.text}"
@@ -222,9 +228,6 @@ async def get_record_public_resilient(
     try:
         return await get_record_public(record_uri, pds_url), None
     except Exception as original_error:
-        if not pds_url:
-            raise
-
         # resolve the DID to find the current PDS
         repo, _, _ = parse_at_uri(record_uri)
         try:
@@ -238,7 +241,8 @@ async def get_record_public_resilient(
             raise original_error
 
         logger.info(
-            "PDS URL changed for %s: %s -> %s, retrying",
+            "PDS URL %s for %s: %s -> %s, retrying",
+            "resolved" if not pds_url else "changed",
             repo,
             pds_url,
             resolved_url,

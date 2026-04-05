@@ -22,6 +22,7 @@ from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, require_auth
 from backend._internal.atproto.client import parse_at_uri
 from backend._internal.atproto.records import (
+    RecordNotFound,
     _reconstruct_oauth_session,
     create_list_record,
     get_record_public_resilient,
@@ -397,6 +398,10 @@ async def get_playlist_by_uri(
             artist.pds_url = resolved_pds_url
             db.add(artist)
             await db.commit()
+    except RecordNotFound:
+        raise HTTPException(
+            status_code=404, detail="playlist record not found on PDS"
+        ) from None
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"failed to fetch playlist record: {e}"
@@ -525,6 +530,10 @@ async def get_playlist(
             artist.pds_url = resolved_pds_url
             db.add(artist)
             await db.commit()
+    except RecordNotFound:
+        raise HTTPException(
+            status_code=404, detail="playlist record not found on PDS"
+        ) from None
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"failed to fetch playlist record: {e}"
