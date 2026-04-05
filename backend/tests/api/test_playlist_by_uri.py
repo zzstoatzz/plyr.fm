@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
+from backend._internal.atproto.records import RecordNotFound
 from backend.main import app
 from backend.models import Artist, Playlist
 
@@ -120,3 +121,44 @@ async def test_get_playlist_by_uri_not_found(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "playlist not found"
+
+
+async def test_get_playlist_by_uri_pds_record_not_found(
+    test_app: FastAPI, db_session: AsyncSession, test_playlist: Playlist
+) -> None:
+    """playlist exists in DB but PDS record is gone — returns 404 not 500."""
+    with patch(
+        "backend.api.lists.get_record_public_resilient",
+        new_callable=AsyncMock,
+        side_effect=RecordNotFound("record not found"),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                "/lists/playlists/by-uri",
+                params={"uri": PLAYLIST_URI},
+            )
+
+    assert response.status_code == 404
+    assert "not found on PDS" in response.json()["detail"]
+
+
+async def test_get_playlist_by_id_pds_record_not_found(
+    test_app: FastAPI, db_session: AsyncSession, test_playlist: Playlist
+) -> None:
+    """playlist exists in DB but PDS record is gone — returns 404 not 500."""
+    with patch(
+        "backend.api.lists.get_record_public_resilient",
+        new_callable=AsyncMock,
+        side_effect=RecordNotFound("record not found"),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                f"/lists/playlists/{test_playlist.id}",
+            )
+
+    assert response.status_code == 404
+    assert "not found on PDS" in response.json()["detail"]

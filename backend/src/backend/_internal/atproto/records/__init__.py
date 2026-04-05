@@ -2,6 +2,7 @@
 
 # re-export commonly used functions for convenience
 from backend._internal.atproto.records.fm_plyr import (
+    RecordNotFound,
     build_track_record,
     create_comment_record,
     create_like_record,
@@ -31,6 +32,7 @@ from backend._internal.atproto.client import (
 )
 
 __all__ = [
+    "RecordNotFound",
     "_make_pds_request",
     "_reconstruct_oauth_session",
     "_refresh_session_tokens",
