@@ -198,6 +198,13 @@
 					{/each}
 				</div>
 			</section>
+		{:else}
+			<section class="top-tracks" transition:fade={{ duration: 200 }}>
+				<h2>
+					top tracks <button class="period-toggle" onclick={cyclePeriod}>{periodLabel}</button>
+				</h2>
+				<p class="empty-period">no liked tracks {periodLabel}</p>
+			</section>
 		{/if}
 	{/key}
 
@@ -341,6 +348,13 @@
 
 	.top-tracks-grid::-webkit-scrollbar {
 		display: none;
+	}
+
+	.empty-period {
+		color: var(--text-secondary);
+		font-size: var(--text-sm);
+		margin: 0;
+		padding: 1rem 0;
 	}
 
 	.network-artists {
