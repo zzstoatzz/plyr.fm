@@ -4,6 +4,7 @@ respect_gitignore = true
 # paths, files, or glob patterns to exclude
 exclude = [
     ".git/**",
+    ".claude/worktrees/**",
     ".status_history/**",
 ]
 
@@ -39,7 +40,7 @@ max_lines = 1146
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 577
+max_lines = 581
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"

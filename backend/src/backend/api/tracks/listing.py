@@ -90,7 +90,11 @@ async def list_tracks(
     """
     # anonymous first-page discovery feed — serve from cache if available
     is_cacheable = (
-        session is None and artist_did is None and cursor is None and not tags
+        session is None
+        and artist_did is None
+        and cursor is None
+        and not tags
+        and limit is None
     )
     if is_cacheable:
         try:
