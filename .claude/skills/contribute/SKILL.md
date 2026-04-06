@@ -15,7 +15,7 @@ read these files in the repo — they have everything you need:
 - `CLAUDE.md` — project rules, stack, structure, conventions
 - `STATUS.md` — active tasks and known issues
 - `backend/.env.example` — all environment variables with comments
-- `docs-internal/local-development/setup.md` — full local dev walkthrough
+- `docs/internal/local-development/setup.md` — full local dev walkthrough
 
 check [open issues](https://github.com/zzstoatzz/plyr.fm/issues) for things to work on.
 
@@ -29,7 +29,7 @@ cp backend/.env.example backend/.env
 # edit backend/.env — DATABASE_URL is required, see the file for details
 ```
 
-if you need to run the full stack locally, read `docs-internal/local-development/setup.md`. for frontend-only changes you may not need the backend running at all.
+if you need to run the full stack locally, read `docs/internal/local-development/setup.md`. for frontend-only changes you may not need the backend running at all.
 
 ## step 3: make your change
 

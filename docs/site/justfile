@@ -18,12 +18,12 @@ preview: install
 
 # regenerate API reference from backend source
 api-ref:
-    rm -rf ../docs/developers/api-reference
-    cd ../backend && uv run --with mdxify mdxify \
+    rm -rf ../public/developers/api-reference
+    cd ../../backend && uv run --with mdxify mdxify \
         --all \
         --root-module backend.api \
         --format md \
-        --output-dir ../docs/developers/api-reference \
+        --output-dir ../docs/public/developers/api-reference \
         --no-update-nav \
         --exclude backend.api.tracks.services \
         --exclude backend.api.tracks.constants \
@@ -31,7 +31,7 @@ api-ref:
         --exclude backend.api.migration \
         --exclude backend.api.pds_backfill
     # strip backend-api- prefix, nest tracks subpackage
-    cd ../docs/developers/api-reference && \
+    cd ../public/developers/api-reference && \
         for f in backend-api-*.md; do mv "$f" "${f#backend-api-}"; done && \
         mkdir -p tracks && \
         for f in tracks-*.md; do mv "$f" "tracks/${f#tracks-}"; done && \

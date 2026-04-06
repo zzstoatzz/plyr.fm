@@ -116,9 +116,9 @@ this will:
 **plyr-fm-docs**:
 - framework: astro (starlight)
 - deployed via GHA workflow (`.github/workflows/deploy-docs.yml`) using `wrangler pages deploy`
-- triggers on push to `main` when `docs/**` or `docs-site/**` change
-- build command: `cd docs-site && bun install && bun run build`
-- build output: `docs-site/dist`
+- triggers on push to `main` when `docs/public/**` or `docs/site/**` change
+- build command: `cd docs/site && bun install && bun run build`
+- build output: `docs/site/dist`
 - custom domain: `docs.plyr.fm`
 
 ### secrets management

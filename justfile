@@ -3,7 +3,7 @@ mod frontend
 mod backend
 mod transcoder 'services/transcoder'
 mod moderation 'services/moderation'
-mod docs 'docs-site'
+mod docs 'docs/site'
 
 
 # show available commands
