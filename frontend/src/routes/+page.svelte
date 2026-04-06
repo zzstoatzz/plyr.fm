@@ -50,17 +50,25 @@
 	);
 	let periodLabel = $derived(PERIOD_LABELS[topTracksPeriod] ?? 'all time');
 
-	function cyclePeriod() {
-		const idx = PERIODS.indexOf(topTracksPeriod as typeof PERIODS[number]);
-		topTracksPeriod = PERIODS[(idx + 1) % PERIODS.length];
+	async function cyclePeriod() {
+		const startIdx = PERIODS.indexOf(topTracksPeriod as (typeof PERIODS)[number]);
+		loadingTopTracks = true;
+
+		// try each subsequent period, skipping empty ones
+		for (let i = 1; i <= PERIODS.length; i++) {
+			const candidate = PERIODS[(startIdx + i) % PERIODS.length];
+			const result = await fetchTopTracks(10, candidate);
+			if (result.length > 0 || i === PERIODS.length) {
+				topTracksPeriod = candidate;
+				topTracks = result;
+				break;
+			}
+		}
+
 		if (typeof window !== 'undefined') {
 			localStorage.setItem('topTracksPeriod', topTracksPeriod);
 		}
-		loadingTopTracks = true;
-		fetchTopTracks(10, topTracksPeriod).then((result) => {
-			topTracks = result;
-			loadingTopTracks = false;
-		});
+		loadingTopTracks = false;
 	}
 
 	// network artists (people you follow on bluesky who have music here)
@@ -78,7 +86,26 @@
 
 	onMount(async () => {
 		const [topResult] = await Promise.all([fetchTopTracks(10, topTracksPeriod), tracksCache.fetch()]);
-		topTracks = topResult;
+
+		// if saved period is empty, find the first non-empty one
+		if (topResult.length === 0) {
+			const startIdx = PERIODS.indexOf(topTracksPeriod as (typeof PERIODS)[number]);
+			for (let i = 1; i < PERIODS.length; i++) {
+				const candidate = PERIODS[(startIdx + i) % PERIODS.length];
+				const result = await fetchTopTracks(10, candidate);
+				if (result.length > 0) {
+					topTracksPeriod = candidate;
+					topTracks = result;
+					if (typeof window !== 'undefined') {
+						localStorage.setItem('topTracksPeriod', topTracksPeriod);
+					}
+					break;
+				}
+			}
+		} else {
+			topTracks = topResult;
+		}
+
 		loadingTopTracks = false;
 		initialLoad = false;
 
@@ -197,13 +224,6 @@
 						/>
 					{/each}
 				</div>
-			</section>
-		{:else}
-			<section class="top-tracks" transition:fade={{ duration: 200 }}>
-				<h2>
-					top tracks <button class="period-toggle" onclick={cyclePeriod}>{periodLabel}</button>
-				</h2>
-				<p class="empty-period">no liked tracks {periodLabel}</p>
 			</section>
 		{/if}
 	{/key}
@@ -348,13 +368,6 @@
 
 	.top-tracks-grid::-webkit-scrollbar {
 		display: none;
-	}
-
-	.empty-period {
-		color: var(--text-secondary);
-		font-size: var(--text-sm);
-		margin: 0;
-		padding: 1rem 0;
 	}
 
 	.network-artists {
