@@ -319,7 +319,7 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 ## documentation
 
 - **public docs**: [docs.plyr.fm](https://docs.plyr.fm) — for listeners, artists, developers, and contributors
-- **internal docs**: [docs-internal/](docs-internal/) — deployment, auth internals, runbooks, moderation
+- **internal docs**: [docs/internal/](docs/internal/) — deployment, auth internals, runbooks, moderation
 - **lexicons**: [docs.plyr.fm/lexicons/overview](https://docs.plyr.fm/lexicons/overview/) — ATProto record schemas
 
 ---

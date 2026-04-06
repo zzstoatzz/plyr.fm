@@ -35,7 +35,7 @@ your catalog isn't trapped here — other apps can access your tracks without pl
 
    ![the track editor — title, description, album, tags, artwork, and suggested tags](/screenshots/portal-track-editor.png)
 
-   <span id="auto-tagging"></span>when you add tags, you can opt in to **auto-tag with recommended genres** — plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and suggests tags automatically. you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
+   <span id="auto-tagging"></span>when you add tags, you can opt in to **auto-tag with recommended genres** — plyr.fm runs [ML genre classification](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/backend/genre-classification.md) on the audio using the [effnet-discogs](https://replicate.com/mtg/effnet-discogs) model and suggests tags automatically. you can accept, remove, or add your own. auto-suggested tags typically appear within a few seconds of upload.
 
 5. **see it live** — your track is playable immediately and indexed for discovery
 6. **embed it** — copy the embed code to put a player on your website or blog (see [embeds](#embeds) below)
@@ -130,4 +130,4 @@ see the [lexicons overview](/lexicons/overview/) for the full record schema.
 
 ## leaving
 
-you can leave plyr.fm at any time. download your tracks as a ZIP from the [portal](https://plyr.fm/portal), then delete your account — this removes all data from plyr.fm's infrastructure. your atproto records stay on your PDS by default, but you can choose to delete those too. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
+you can leave plyr.fm at any time. download your tracks as a ZIP from the [portal](https://plyr.fm/portal), then delete your account — this removes all data from plyr.fm's infrastructure. your atproto records stay on your PDS by default, but you can choose to delete those too. for the full technical details, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/offboarding.md).

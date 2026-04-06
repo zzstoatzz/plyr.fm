@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - "docs/**"
-      - "docs-site/**"
+      - "docs/public/**"
+      - "docs/site/**"
       - ".github/workflows/deploy-docs.yml"
   workflow_dispatch:
 
@@ -24,11 +24,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: build
-        run: cd docs-site && bun install && bun run build
+        run: cd docs/site && bun install && bun run build
 
       - name: deploy to cloudflare pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy docs-site/dist --project-name plyr-fm-docs --branch main
+          command: pages deploy docs/site/dist --project-name plyr-fm-docs --branch main

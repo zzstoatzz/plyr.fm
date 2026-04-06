@@ -59,7 +59,7 @@ just backend run
 just frontend run
 ```
 
-the backend needs a Postgres connection. you can use the [Neon](https://neon.tech) dev instance or a local Postgres — set `DATABASE_URL` in your `.env`. see [`backend/.env.example`](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/.env.example) for all configuration options and the [local development setup guide](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/local-development/setup.md) for detailed walkthrough.
+the backend needs a Postgres connection. you can use the [Neon](https://neon.tech) dev instance or a local Postgres — set `DATABASE_URL` in your `.env`. see [`backend/.env.example`](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/.env.example) for all configuration options and the [local development setup guide](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/local-development/setup.md) for detailed walkthrough.
 
 ## workflow
 
@@ -89,4 +89,4 @@ just backend migrate-up   # apply database migrations
 - use `uv` for Python (never `pip`)
 - add regression tests when fixing bugs
 
-detailed internal documentation (environment setup, deployment, architecture) is in [`docs-internal/`](https://github.com/zzstoatzz/plyr.fm/tree/main/docs-internal).
+detailed internal documentation (environment setup, deployment, architecture) is in [`docs/internal/`](https://github.com/zzstoatzz/plyr.fm/tree/main/docs/internal).

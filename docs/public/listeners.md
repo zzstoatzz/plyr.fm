@@ -68,7 +68,7 @@ to track and [visualize your listening history](https://teal-appview-production.
 
 ## leaving
 
-you can leave anytime (we're sad to see you go 😢). to delete your account and all your data from plyr.fm, go to the [portal](https://plyr.fm/portal) and click "delete account". for full detail on what gets deleted, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs-internal/offboarding.md).
+you can leave anytime (we're sad to see you go 😢). to delete your account and all your data from plyr.fm, go to the [portal](https://plyr.fm/portal) and click "delete account". for full detail on what gets deleted, see the [offboarding documentation](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/offboarding.md).
 
 ## even after you leave
 

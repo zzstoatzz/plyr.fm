@@ -87,19 +87,19 @@ path = "backend/tests/test_moderation.py"
 max_lines = 715
 
 [[rules]]
-path = "docs-internal/authentication.md"
+path = "docs/internal/authentication.md"
 max_lines = 631
 
 [[rules]]
-path = "docs/backend/liked-tracks.md"
+path = "docs/internal/backend/liked-tracks.md"
 max_lines = 507
 
 [[rules]]
-path = "docs/deployment/database-migrations.md"
+path = "docs/internal/deployment/database-migrations.md"
 max_lines = 633
 
 [[rules]]
-path = "docs/tools/neon.md"
+path = "docs/internal/tools/neon.md"
 max_lines = 523
 
 [[rules]]

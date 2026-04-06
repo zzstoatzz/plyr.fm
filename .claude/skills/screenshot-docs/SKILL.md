@@ -40,7 +40,7 @@ use the chrome-devtools MCP tools:
 4. **snapshot**: `take_snapshot()` to get accessibility tree with element UIDs
 5. **interact** (if needed): `click(uid)` / `fill(uid, value)` to reach the target state
 6. **capture**: `take_screenshot(filePath, uid, fullPage, format, quality)` — use `format: "png"`
-7. **save to**: `docs-site/public/screenshots/{name}.png`
+7. **save to**: `docs/site/public/screenshots/{name}.png`
 8. **review**: `open -a Preview <path>` and ask the user if framing looks right before committing
 
 ### auth handling
@@ -73,7 +73,7 @@ reference screenshots in markdown as:
 ![description](/screenshots/filename.png)
 ```
 
-the `docs-site/public/` directory is served at the root, so `/screenshots/` resolves correctly.
+the `docs/site/public/` directory is served at the root, so `/screenshots/` resolves correctly.
 
 ## example session
 
@@ -86,7 +86,7 @@ agent:
 3. wait_for(["sign in"])
 4. click(login_button_uid)
 5. wait_for(["handle"])
-6. take_screenshot({ filePath: "docs-site/public/screenshots/login-page.png" })
+6. take_screenshot({ filePath: "docs/site/public/screenshots/login-page.png" })
 7. Read the image file to self-review framing
 8. open -a Preview <path> and ask user to confirm
 ```
@@ -136,9 +136,9 @@ when a viewport screenshot has excess space (e.g. browser minimum height > eleme
 ```bash
 uv run --with Pillow python3 -c "
 from PIL import Image
-img = Image.open('docs-site/public/screenshots/name.png')
+img = Image.open('docs/site/public/screenshots/name.png')
 cropped = img.crop((0, 0, img.width, TARGET_HEIGHT))  # top-anchored crop
-cropped.save('docs-site/public/screenshots/name.png')
+cropped.save('docs/site/public/screenshots/name.png')
 "
 ```
 
