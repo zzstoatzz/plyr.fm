@@ -44,7 +44,7 @@ from backend._internal.tasks import schedule_album_list_sync
 from backend._internal.tasks.hooks import run_post_track_create_hooks
 from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
-from backend.models import Artist, Track, UserPreferences
+from backend.models import Album, Artist, Track, UserPreferences
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.audio import extract_duration
@@ -84,7 +84,8 @@ class UploadContext:
     # track metadata
     title: str
     artist_did: str
-    album: str | None
+    album: str | None  # legacy: album display name for get_or_create_album
+    album_id: str | None  # new: explicit reference to an existing Album row
     features_json: str | None
     tags: list[str]
 
@@ -667,6 +668,22 @@ async def _create_records(
                 ctx.features_json, artist.handle
             )
 
+        # if an explicit album_id was passed, resolve the album up front so the
+        # ATProto track record includes the correct album title and the row is
+        # linked at creation (instead of the legacy defer-until-after-PDS flow).
+        album_row: Album | None = None
+        if ctx.album_id:
+            album_lookup = await db.execute(
+                select(Album).where(Album.id == ctx.album_id)
+            )
+            album_row = album_lookup.scalar_one_or_none()
+            if not album_row:
+                raise UploadPhaseError(f"album {ctx.album_id} not found")
+            if album_row.artist_did != ctx.artist_did:
+                raise UploadPhaseError("album does not belong to this artist")
+            # sync the display name so build_track_record embeds the right value
+            ctx.album = album_row.title
+
         extra: dict = {}
         if audio_info.duration:
             extra["duration"] = audio_info.duration
@@ -681,6 +698,7 @@ async def _create_records(
         artist_display_name = artist.display_name
 
         # album creation deferred to after PDS success to avoid orphan albums
+        # (legacy path only — new path uses album_row set above)
         track = Track(
             title=ctx.title,
             file_id=sr.file_id,
@@ -690,7 +708,7 @@ async def _create_records(
             artist_did=ctx.artist_did,
             description=ctx.description,
             extra=extra,
-            album_id=None,
+            album_id=album_row.id if album_row else None,
             features=featured_artists,
             r2_url=sr.r2_url,
             atproto_record_uri=uri,
@@ -779,9 +797,11 @@ async def _create_records(
 
     # step 3: atomic CAS update pending → published + deferred album linkage
     async with db_session() as db:
-        # create album now that PDS write succeeded (avoids orphan albums on failure)
+        # legacy path: create album now that PDS write succeeded (avoids orphan
+        # albums on failure). the new explicit-album_id path has already linked
+        # the track to its album at row-creation time, so this block is skipped.
         album_record = None
-        if ctx.album:
+        if ctx.album and not ctx.album_id:
             artist_row = await db.execute(
                 select(Artist).where(Artist.did == ctx.artist_did)
             )
@@ -838,9 +858,19 @@ async def _schedule_post_upload(
     async with db_session() as db:
         await add_tags_to_track(db, track.id, ctx.tags, ctx.artist_did)
 
-    # upload-specific: album list sync
-    if track.album_id:
+    # upload-specific: album list sync (legacy path only — the explicit
+    # album_id path defers list creation to POST /albums/{id}/finalize so the
+    # record is written once with the user-intended order instead of racing
+    # per-track sync tasks on `created_at`)
+    if track.album_id and not ctx.album_id:
         await schedule_album_list_sync(ctx.auth_session.session_id, track.album_id)
+        from backend.api.albums import invalidate_album_cache_by_id
+
+        async with db_session() as db:
+            await invalidate_album_cache_by_id(db, track.album_id)
+    elif track.album_id and ctx.album_id:
+        # still invalidate cache so the album page reflects the new track once
+        # finalize runs
         from backend.api.albums import invalidate_album_cache_by_id
 
         async with db_session() as db:
@@ -902,7 +932,11 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             # phase 7: post-upload tasks (tags, album sync, shared hooks)
             await _schedule_post_upload(ctx, sr, track, run_hooks=published_by_us)
 
-            result: dict[str, Any] = {"track_id": track.id}
+            result: dict[str, Any] = {
+                "track_id": track.id,
+                "atproto_uri": track.atproto_record_uri,
+                "atproto_cid": track.atproto_record_cid,
+            }
             if pds_result and pds_result.warning:
                 result["warnings"] = [pds_result.warning]
 
@@ -942,6 +976,12 @@ async def upload_track(
     background_tasks: BackgroundTasks,
     auth_session: AuthSession = Depends(require_artist_profile),
     album: Annotated[str | None, Form()] = None,
+    album_id: Annotated[
+        str | None,
+        Form(
+            description="explicit album id to attach to (mutually exclusive with album)"
+        ),
+    ] = None,
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form(description="JSON array of tag names")] = None,
     support_gate: Annotated[
@@ -977,6 +1017,13 @@ async def upload_track(
     Returns:
         dict: A payload containing `upload_id` for monitoring progress via SSE.
     """
+    # album and album_id are mutually exclusive
+    if album and album_id:
+        raise HTTPException(
+            status_code=400,
+            detail="album and album_id are mutually exclusive — provide one or the other",
+        )
+
     # validate tags upfront before any processing
     try:
         validated_tags = parse_tags_json(tags)
@@ -1084,6 +1131,7 @@ async def upload_track(
             title=title,
             artist_did=auth_session.did,
             album=album,
+            album_id=album_id,
             features_json=features,
             tags=validated_tags,
             description=description,

@@ -915,3 +915,270 @@ async def test_remove_track_not_in_album(test_app: FastAPI, db_session: AsyncSes
 
     assert response.status_code == 400
     assert "not in this album" in response.json()["detail"]
+
+
+# -----------------------------------------------------------------------------
+# POST /albums/ and POST /albums/{id}/finalize
+# -----------------------------------------------------------------------------
+
+
+async def test_create_album_endpoint(test_app: FastAPI, db_session: AsyncSession):
+    """POST /albums/ creates an empty album shell without tracks or list record."""
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+        pds_url="https://test.pds",
+    )
+    db_session.add(artist)
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/albums/",
+            json={"title": "My New Album", "description": "some notes"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "My New Album"
+    assert data["slug"] == "my-new-album"
+    assert data["description"] == "some notes"
+    assert data["track_count"] == 0
+    assert data["list_uri"] is None  # no PDS list record yet
+
+    # verify it landed in the DB
+    result = await db_session.execute(select(Album).where(Album.slug == "my-new-album"))
+    album = result.scalar_one()
+    assert album.artist_did == artist.did
+    assert album.atproto_record_uri is None
+
+
+async def test_create_album_idempotent_on_duplicate_slug(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """POST /albums/ with a duplicate title returns the existing row."""
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+        pds_url="https://test.pds",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    existing = Album(
+        artist_did=artist.did,
+        slug="my-album",
+        title="My Album",
+    )
+    db_session.add(existing)
+    await db_session.commit()
+    existing_id = existing.id
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.post("/albums/", json={"title": "My Album"})
+
+    assert response.status_code == 200
+    assert response.json()["id"] == existing_id
+
+
+async def test_finalize_album_writes_list_in_requested_order(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """finalize uses the track_ids array order, ignoring created_at.
+
+    regression test for concurrent-album-upload ordering: the frontend posts
+    track_ids in user-intended order; the backend must build the ATProto
+    list record using that exact ordering, not Track.created_at (which is
+    racy under concurrent inserts).
+    """
+    from datetime import UTC, datetime, timedelta
+
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+        pds_url="https://test.pds",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    album = Album(
+        artist_did=artist.did,
+        slug="finalize-test",
+        title="Finalize Test",
+    )
+    db_session.add(album)
+    await db_session.flush()
+
+    # intentionally stagger created_at to differ from user-intended order.
+    # user-intended order (as passed to finalize): [t_a, t_b, t_c]
+    # created_at order (if we were dumb): [t_c, t_b, t_a]
+    base = datetime.now(UTC)
+    t_a = Track(
+        title="First by user intent",
+        file_id="fin-a",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        atproto_record_uri="at://did:test:user123/fm.plyr.track/aaa",
+        atproto_record_cid="cidA",
+        created_at=base + timedelta(hours=2),
+    )
+    t_b = Track(
+        title="Second",
+        file_id="fin-b",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        atproto_record_uri="at://did:test:user123/fm.plyr.track/bbb",
+        atproto_record_cid="cidB",
+        created_at=base + timedelta(hours=1),
+    )
+    t_c = Track(
+        title="Third",
+        file_id="fin-c",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        atproto_record_uri="at://did:test:user123/fm.plyr.track/ccc",
+        atproto_record_cid="cidC",
+        created_at=base,
+    )
+    db_session.add_all([t_a, t_b, t_c])
+    await db_session.commit()
+
+    album_id = album.id
+    ordered_ids = [t_a.id, t_b.id, t_c.id]
+
+    captured: dict[str, object] = {}
+
+    async def fake_upsert(
+        auth_session: object,
+        *,
+        album_id: str,
+        album_title: str,
+        track_refs: list[dict[str, str]],
+        existing_uri: str | None = None,
+        existing_created_at: object = None,
+    ) -> tuple[str, str]:
+        captured["track_refs"] = track_refs
+        return (
+            f"at://did:test:user123/fm.plyr.list/{album_id}",
+            "new-list-cid",
+        )
+
+    with patch(
+        "backend._internal.atproto.records.fm_plyr.list.upsert_album_list_record",
+        side_effect=fake_upsert,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                f"/albums/{album_id}/finalize",
+                json={"track_ids": ordered_ids},
+            )
+
+    assert response.status_code == 200, response.json()
+    data = response.json()
+    assert data["list_uri"] == f"at://did:test:user123/fm.plyr.list/{album_id}"
+
+    # the strongRefs passed to upsert_album_list_record must be in the exact
+    # order requested (t_a → t_b → t_c), NOT the created_at order
+    track_refs = captured["track_refs"]
+    assert isinstance(track_refs, list)
+    uris: list[str] = [ref["uri"] for ref in track_refs]  # type: ignore[index]
+    assert uris == [
+        "at://did:test:user123/fm.plyr.track/aaa",
+        "at://did:test:user123/fm.plyr.track/bbb",
+        "at://did:test:user123/fm.plyr.track/ccc",
+    ]
+
+
+async def test_finalize_album_rejects_foreign_tracks(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """finalize 400s if a track_id doesn't belong to the album."""
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+        pds_url="https://test.pds",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    album = Album(artist_did=artist.did, slug="album-a", title="Album A")
+    other_album = Album(artist_did=artist.did, slug="album-b", title="Album B")
+    db_session.add_all([album, other_album])
+    await db_session.flush()
+
+    foreign_track = Track(
+        title="Foreign",
+        file_id="foreign-1",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=other_album.id,
+        atproto_record_uri="at://did:test:user123/fm.plyr.track/foreign",
+        atproto_record_cid="cidF",
+    )
+    db_session.add(foreign_track)
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/albums/{album.id}/finalize",
+            json={"track_ids": [foreign_track.id]},
+        )
+
+    assert response.status_code == 400
+    assert "do not belong" in response.json()["detail"]
+
+
+async def test_finalize_album_rejects_tracks_missing_pds_record(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """finalize 400s if a track hasn't completed its PDS write yet."""
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+        pds_url="https://test.pds",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    album = Album(artist_did=artist.did, slug="pending-album", title="Pending")
+    db_session.add(album)
+    await db_session.flush()
+
+    pending_track = Track(
+        title="Still pending",
+        file_id="pending-1",
+        file_type="audio/mpeg",
+        artist_did=artist.did,
+        album_id=album.id,
+        atproto_record_uri=None,  # not yet published
+        atproto_record_cid=None,
+    )
+    db_session.add(pending_track)
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/albums/{album.id}/finalize",
+            json={"track_ids": [pending_track.id]},
+        )
+
+    assert response.status_code == 400
+    assert "PDS record" in response.json()["detail"]

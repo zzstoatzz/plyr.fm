@@ -49,6 +49,7 @@ class TestSessionReloadAfterPdsUpload:
             title="test track",
             artist_did="did:plc:test",
             album=None,
+            album_id=None,
             features_json=None,
             tags=[],
         )
@@ -135,6 +136,7 @@ class TestSessionReloadAfterPdsUpload:
             title="test track",
             artist_did="did:plc:test",
             album=None,
+            album_id=None,
             features_json=None,
             tags=[],
         )

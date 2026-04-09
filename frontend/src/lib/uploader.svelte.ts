@@ -23,6 +23,12 @@ interface UploadProgressCallback {
 	onError?: (_error: string) => void;
 }
 
+export interface UploadResult {
+	trackId: number;
+	atprotoUri: string | null;
+	atprotoCid: string | null;
+}
+
 function isMobileDevice(): boolean {
 	if (!browser) return false;
 	return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -72,9 +78,10 @@ class UploaderState {
 		supportGated: boolean,
 		autoTag: boolean,
 		description: string,
-		onSuccess?: () => void,
+		onSuccess?: (_result?: UploadResult) => void,
 		callbacks?: UploadProgressCallback,
-		label?: string
+		label?: string,
+		albumId?: string
 	): void {
 		const taskId = crypto.randomUUID();
 		const fileSizeMB = file.size / 1024 / 1024;
@@ -99,7 +106,11 @@ class UploaderState {
 		const formData = new FormData();
 		formData.append('file', file);
 		formData.append('title', title);
-		if (album) formData.append('album', album);
+		if (albumId) {
+			formData.append('album_id', albumId);
+		} else if (album) {
+			formData.append('album', album);
+		}
 		if (features.length > 0) {
 			const handles = features.map(a => a.handle);
 			formData.append('features', JSON.stringify(handles));
@@ -200,7 +211,15 @@ class UploaderState {
 							tracksCache.invalidate();
 							tracksCache.fetch(true);
 							if (onSuccess) {
-								onSuccess();
+								onSuccess(
+									typeof trackId === 'number'
+										? {
+												trackId,
+												atprotoUri: update.atproto_uri ?? null,
+												atprotoCid: update.atproto_cid ?? null
+											}
+										: undefined
+								);
 							}
 						}
 

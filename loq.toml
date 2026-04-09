@@ -28,7 +28,7 @@ max_lines = 896
 
 [[rules]]
 path = "backend/src/backend/api/albums.py"
-max_lines = 784
+max_lines = 892
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
@@ -48,7 +48,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1167
+max_lines = 1215
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -64,7 +64,7 @@ max_lines = 710
 
 [[rules]]
 path = "backend/tests/api/test_albums.py"
-max_lines = 917
+max_lines = 1184
 
 [[rules]]
 path = "backend/tests/api/test_list_record_sync.py"
@@ -248,7 +248,7 @@ max_lines = 1468
 
 [[rules]]
 path = "frontend/src/lib/components/AlbumUploadForm.svelte"
-max_lines = 743
+max_lines = 823
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEntryCard.svelte"
