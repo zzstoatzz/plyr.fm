@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from .utils.audio import save_drone, save_drone_as
+from .utils.audio import save_drone, save_drone_as, save_drone_as_opus
 
 if TYPE_CHECKING:
     from plyrfm import AsyncPlyrClient
@@ -171,4 +171,23 @@ def drone_aif(tmp_path: Path) -> Generator[Path, None, None]:
     """generate a 2-second A4 drone as AIF (alias for AIFF)."""
     path = tmp_path / "drone_a4.aif"
     save_drone_as(path, "A4", duration_sec=2.0)
+    yield path
+
+
+# /record page format fixtures — browser MediaRecorder output shapes
+
+
+@pytest.fixture
+def drone_webm(tmp_path: Path) -> Generator[Path, None, None]:
+    """generate a 2-second A4 drone as opus-in-webm (Chrome MediaRecorder)."""
+    path = tmp_path / "drone_a4.webm"
+    save_drone_as_opus(path, "A4", duration_sec=2.0)
+    yield path
+
+
+@pytest.fixture
+def drone_ogg(tmp_path: Path) -> Generator[Path, None, None]:
+    """generate a 2-second A4 drone as opus-in-ogg (Firefox MediaRecorder)."""
+    path = tmp_path / "drone_a4.ogg"
+    save_drone_as_opus(path, "A4", duration_sec=2.0)
     yield path

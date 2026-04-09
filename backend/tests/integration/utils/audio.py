@@ -212,3 +212,54 @@ def save_drone_as(
         wav_path.unlink(missing_ok=True)
 
     return path
+
+
+def save_drone_as_opus(
+    path: Path,
+    note: str = "A4",
+    duration_sec: float = 2.0,
+) -> Path:
+    """generate an opus-encoded drone wrapped in the container inferred
+    from the file extension.
+
+    supports .webm and .ogg — these are the containers browser
+    MediaRecorder emits on Chrome/Firefox respectively. unlike
+    save_drone_as (which lets ffmpeg pick a default codec and ends up
+    with FLAC-in-ogg), this forces libopus so the resulting file matches
+    what the /record page actually posts.
+    """
+    import shutil
+    import subprocess
+
+    if not shutil.which("ffmpeg"):
+        msg = "ffmpeg not found - required for opus/webm/ogg format tests"
+        raise FileNotFoundError(msg)
+
+    suffix = path.suffix.lower()
+    if suffix not in {".webm", ".ogg"}:
+        msg = f"save_drone_as_opus expects .webm or .ogg, got {suffix}"
+        raise ValueError(msg)
+
+    wav_path = path.with_suffix(".wav")
+    save_drone(wav_path, note, duration_sec)
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                str(wav_path),
+                "-c:a",
+                "libopus",
+                str(path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    finally:
+        wav_path.unlink(missing_ok=True)
+
+    return path

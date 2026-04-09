@@ -11,7 +11,6 @@ run with: uv run pytest tests/test_integration_upload.py -m integration -v
 import json
 import os
 import struct
-import subprocess
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
@@ -21,17 +20,6 @@ import pytest
 
 API_URL = os.getenv("PLYR_API_URL", "http://localhost:8001")
 TOKEN = os.getenv("PLYR_TOKEN") or os.getenv("PLYRFM_API_TOKEN")
-
-# formats exercised by the integration suite — each variant runs the full
-# upload → process → verify → delete flow. webm and ogg are the formats
-# produced by browser MediaRecorder on Chrome/Firefox and are routed
-# through the transcoder service on upload, so parameterizing covers the
-# /record page end-to-end.
-AUDIO_FORMATS: dict[str, str] = {
-    "wav": "audio/wav",
-    "webm": "audio/webm",
-    "ogg": "audio/ogg",
-}
 
 
 def generate_wav_file(duration_seconds: float = 1.0, sample_rate: int = 44100) -> bytes:
@@ -65,90 +53,24 @@ def generate_wav_file(duration_seconds: float = 1.0, sample_rate: int = 44100) -
     return header + audio_data
 
 
-def _ffmpeg_generate_tone(target_fmt: str, duration: float = 2.0) -> bytes:
-    """use ffmpeg's lavfi sine generator to produce a short tone in the
-    target container format.
+@pytest.fixture
+def test_audio_file() -> Generator[Path, None, None]:
+    """create a temporary test audio file."""
+    wav_data = generate_wav_file(duration_seconds=1.0)
 
-    webm and ogg both use opus via libopus and can stream to pipe:1.
-    generating a real sine wave (not silence from a pre-built wav) gives
-    mutagen enough structure to parse duration, which matches what a real
-    browser MediaRecorder produces much more closely than a minimal
-    silent file would. mp4 (m4a) can't write to a pipe because the
-    container needs seekable output, so it's not supported here.
-    """
-    codec_by_fmt = {
-        "webm": (["-c:a", "libopus"], "webm"),
-        "ogg": (["-c:a", "libopus"], "ogg"),
-    }
-    if target_fmt not in codec_by_fmt:
-        raise ValueError(f"no ffmpeg pipeline for format: {target_fmt}")
-    codec_args, fmt_flag = codec_by_fmt[target_fmt]
-    try:
-        result = subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-f",
-                "lavfi",
-                "-i",
-                f"sine=frequency=440:duration={duration}",
-                *codec_args,
-                "-f",
-                fmt_flag,
-                "pipe:1",
-            ],
-            capture_output=True,
-            check=False,
-        )
-    except FileNotFoundError:
-        pytest.skip(
-            f"ffmpeg not installed — required to generate test audio for {target_fmt}"
-        )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"ffmpeg generation of {target_fmt} failed: "
-            f"{result.stderr.decode(errors='replace')[:500]}"
-        )
-    return result.stdout
-
-
-def _generate_audio(fmt: str) -> bytes:
-    """generate a short test audio file in the requested format."""
-    if fmt == "wav":
-        return generate_wav_file(duration_seconds=1.0)
-    return _ffmpeg_generate_tone(fmt)
-
-
-@pytest.fixture(params=list(AUDIO_FORMATS.keys()))
-def test_audio_file(
-    request: pytest.FixtureRequest,
-) -> Generator[tuple[Path, str, str], None, None]:
-    """create a temporary test audio file in each supported format."""
-    fmt = request.param
-    mime = AUDIO_FORMATS[fmt]
-    audio_bytes = _generate_audio(fmt)
-
-    with tempfile.NamedTemporaryFile(suffix=f".{fmt}", delete=False) as f:
-        f.write(audio_bytes)
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        f.write(wav_data)
         path = Path(f.name)
 
-    yield path, fmt, mime
+    yield path
 
     # cleanup
     path.unlink(missing_ok=True)
 
 
 @pytest.mark.integration
-async def test_upload_and_delete_track(test_audio_file: tuple[Path, str, str]):
-    """integration test: upload a track, wait for processing, then delete it.
-
-    parameterized across wav / webm / ogg — webm and ogg exercise the
-    transcoder path that the /record page depends on.
-    """
-    audio_path, fmt, mime = test_audio_file
+async def test_upload_and_delete_track(test_audio_file: Path):
+    """integration test: upload a track, wait for processing, then delete it."""
     if not TOKEN:
         pytest.skip("PLYR_TOKEN or PLYRFM_API_TOKEN not set")
 
@@ -165,9 +87,9 @@ async def test_upload_and_delete_track(test_audio_file: tuple[Path, str, str]):
         print(f"authenticated as: {user['handle']}")
 
         # 2. upload track
-        with open(audio_path, "rb") as f:
-            files = {"file": (f"test_integration.{fmt}", f, mime)}
-            data = {"title": f"Integration Test Track [{fmt}] (DELETE ME)"}
+        with open(test_audio_file, "rb") as f:
+            files = {"file": ("test_integration.wav", f, "audio/wav")}
+            data = {"title": "Integration Test Track (DELETE ME)"}
 
             upload_response = await client.post(
                 f"{API_URL}/tracks/",
