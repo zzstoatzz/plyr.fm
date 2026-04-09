@@ -78,7 +78,7 @@ returns tracks, artists, and albums with just IDs/slugs and timestamps.
 the frontend renders this into XML at /sitemap.xml.
 
 
-### `proxy_browser_telemetry` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/meta.py#L154)
+### `proxy_browser_telemetry` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/meta.py#L158)
 
 ```python
 proxy_browser_telemetry(request: Request)
