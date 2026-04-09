@@ -97,6 +97,37 @@ co-engagers are filtered to those who engaged with the seed *before* we did (+24
 
 ---
 
+#### multi-track album upload (PRs #1237-1239, Apr 4)
+
+**why**: uploading an album meant uploading each track one-by-one, setting metadata individually, and manually assigning each to an album. no batch workflow, no shared cover art, no title normalization from filenames.
+
+**what shipped**:
+- **album mode on `/upload`** (#1237): pill-style toggle between "track" and "album" modes. album mode renders a shared album title field (with conflict detection for existing albums), a shared cover art picker, and a list of collapsible `TrackEntryCard` components — one per file. files added via individual file inputs or a bulk multi-file picker. filename-to-title normalization strips leading track numbers (`01 - `, `01.`, etc.), replaces underscores/hyphens with spaces, title-cases
+- **zero backend changes** — reuses the existing `POST /tracks/` endpoint N times with the same `album_title` string. backend's `get_or_create_album()` handles idempotent creation on first write and lookups on subsequent ones
+- **concurrent uploads** (#1238): follow-up replaced the initial sequential `for/await` loop with `Promise.allSettled`. cover art sent on every request (first-write-wins on the backend, so idempotent). progress text changed from `"uploading track N of M"` to `"N of M completed, K uploading"`
+- **per-track toast messages** (#1238): `uploader.upload()` gained an optional `label` parameter so each track shows its title in toast notifications instead of generic "uploading track..."
+
+**decisions**:
+- entirely frontend work (+1410 lines across `AlbumUploadForm.svelte` and `TrackEntryCard.svelte`) — the backend contract was already correct
+- accordion UX: one track expanded at a time, collapsed headers show status badges (spinner, checkmark, X)
+- `canSubmit` gate requires: album title, every track has file + title, rights attested, no unresolved featured-artist inputs
+
+---
+
+#### fixes & housekeeping (PRs #1233-1236, #1240-1247, Apr 3-6)
+
+**deferred imports experiment** (#1241 → #1242 → #1243): production relay-api sat at 440MB RSS idle. attempted to defer boto3/botocore (~30-40MB) and psycopg[binary] (~6.6MB + 15 native .so files) behind lazy proxies. immediately broke staging deploy — Alembic's `engine_from_config` needs psycopg at migration time (#1242 restored it). after deploying to production, measured RSS was ~460MB — essentially unchanged. reverted everything in #1243. the complexity (beartype `Any` workarounds, changed patch targets) wasn't worth zero measurable benefit.
+
+**playlist 500→404 fix** (#1240): `brenthueth.bsky.social` created a playlist that showed in the activity feed but returned 500 on click. root cause: their `artist.pds_url` was `null` (DID resolution failed at signup). playlist reads fell back to the relay, which hadn't indexed the record yet → relay returned 404 → app surfaced as 500. fix: typed `RecordNotFound` exception with proper 404 propagation, and `get_record_public_resilient()` now resolves the DID to find the actual PDS when `pds_url` is null.
+
+**top tracks carousel** (#1244-1246): three rapid fixes. (1) `GET /tracks/?limit=5` returned 50 tracks because the Redis `is_cacheable` check didn't account for explicit `limit` params — added `and limit is None` to cacheability. (2) when a period had no liked tracks, the entire section including the toggle vanished, trapping the user — added fallback state. (3) carousel now auto-advances to the next period with results on load and on toggle click.
+
+**tangled sheep og:image bug** (#1257): tracks without artwork shared to Bluesky rendered with tangled.sh's sheep mascot. the chain: `image_url: null` → `og:image` tag omitted entirely → Bluesky's card extractor (`cardyb`) falls back to first `<img>` in page HTML → the only `<img>` was the Header's "view source on tangled" social link icon pointing at tangled.sh's Bluesky avatar. fix: four-level fallback chain (track → album → artist avatar → brand logo) with unconditional `og:image` emission.
+
+**smaller changes**: PDS audio uploads toggle moved from settings/experimental to portal/your data (#1234). delete account "learn more" link fixed twice (#1235-1236). docs folders consolidated under `docs/` (#1247). model upgrades and CI hygiene (#1233).
+
+---
+
 #### top tracks time-range toggle + like count fix (PRs #1228-1230, Apr 3)
 
 **why**: the homepage "top tracks" section showed all-time most-liked tracks with no way to see recent trends. separately, the artist leaderboard rank feature (play-count-based) rewarded volume uploaders and self-listeners over genuine community engagement — shipped and pulled in the same session.
@@ -238,7 +269,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-Two unlisted surfaces shipped this week: `/for-you` (#1249-1250), a collaborative-filtering personalized feed ported from grain.social with plyr-specific diversity caps and stronger engagement signals; and `/record` (#1251-1257), an in-browser audio capture page with a reusable `Waveform` component designed for propagation to track detail, playlist, and player surfaces. ooo.audio cross-app lexicon conversation is in-flight (meeting notes on #705) — room included **comet.sh** (Elixir-first, pre-MVP, foundational libs shipped, fair-use/remix-culture framing that aligns closely with plyr.fm's stance), **tracklist.diy** (DMT, Inc., closed signup list, staking out the centralized-catalogue-server / "stripe for simplicity" counterweight), and **whereditgo.diamonds** (Bazaar — a shipped, white-labeled IMS + storefront + licensing hub that sells exclusive stream licenses to atproto streaming platforms with purchase receipts written to the buyer's PDS; a parallel license-as-record pattern worth tracking). next: waveform rollout to other surfaces as a follow-up to #1251; watch `/for-you` engagement to decide whether to promote it or rerank with CLAP embeddings; define what "top artist" means on a platform with diverse content types; add a staging environment for the moderation service (#1165).
+April 3-9 shipped three major features: multi-track album upload (#1237-1239) with concurrent uploads and zero backend changes; unlisted `/for-you` personalized feed (#1249-1250) ported from grain.social's collaborative filtering with plyr-specific diversity caps; and unlisted `/record` (#1251-1257) for in-browser audio capture with a reusable `Waveform` component. a deferred-imports memory experiment (#1241-1243) was tried and fully reverted after measuring no benefit. the tangled sheep og:image bug (#1257) was traced and fixed with a four-level fallback chain. ooo.audio cross-app lexicon conversation continues (meeting notes on #705). next: waveform rollout to other surfaces; watch `/for-you` engagement to decide whether to promote it or rerank with CLAP embeddings; define what "top artist" means on a platform with diverse content types; add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -374,5 +405,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-09 (unlisted /record + reusable Waveform; unlisted /for-you personalized feed).
+this is a living document. last updated 2026-04-09 (multi-track album upload; unlisted /for-you personalized feed; unlisted /record + reusable Waveform; deferred imports experiment reverted; tangled sheep og:image fix).
 
