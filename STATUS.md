@@ -47,6 +47,56 @@ plyr.fm should become:
 
 ### April 2026
 
+#### unlisted /record page + reusable Waveform component (PRs #1251-1257, Apr 8-9)
+
+**why**: uploading short audio (voice memos, field recordings, ideas) via the existing upload flow meant finding a desktop recorder, saving a file, then navigating to `/upload` and picking it — a disproportionate round-trip for a 30-second capture. inspired by Jared's Leaflet in-browser recorder: open the tab, press record, stop, preview, upload, done. separately, plyr.fm has needed a reusable waveform visualization for months — track detail, player, playlist rows all want one — so this PR ships the primitive alongside its first caller instead of duplicating the work later.
+
+**what shipped**:
+- **`/record` page** — unlisted (`noindex,nofollow`, not linked from nav), auth-gated. four-state machine: idle → recording → preview → uploading. `MediaRecorder` with a mime fallback chain (`audio/webm;codecs=opus` → `webm` → `mp4` for Safari → `ogg`). 10-minute hard cap with a 9:00 warning toast. default title `recording YYYY-MM-DD HH:MM`, default tag `voice-memo`. `autoTag: false` so the ML genre tagger doesn't clobber the voice-memo default. reuses the existing `$lib/uploader.svelte` singleton so progress/SSE/toast plumbing isn't duplicated; redirects to `/u/{handle}` so the user lands on their profile while the uploader toast tracks progress
+- **backend audio format support** — `WEBM` and `OGG` added to the `AudioFormat` enum in `backend/_internal/audio.py`, both marked `is_web_playable = False` so they route through the existing transcoder. **zero Rust transcoder changes needed** — ffmpeg already decodes webm/opus/ogg natively. stored audio normalizes to mp3 for embeds and downstream tools
+- **`$lib/components/Waveform.svelte`** — reusable inline-SVG waveform with dual-layer rendering (base bars + clipPath-masked progress overlay, wavesurfer-style single animatable rect instead of recoloring individual bars). mirrored/center-aligned bars, 2px minimum height so silent sections still show a hairline. accepts **either** pre-computed `peaks: number[]` **or** `source: Blob | string` (auto-decodes). click-to-seek + ArrowLeft/Right keyboard nudges, slider ARIA, per-instance random clipPath id so multiple waveforms on one page don't collide. themed via `--wf-base` and `--wf-progress` CSS custom props
+- **`$lib/audio/peaks.ts`** — pure helper extracting normalized peaks from a `Blob` or `ArrayBuffer` via `AudioContext.decodeAudioData`. channels reduced by per-bucket **max** (not average) so stereo transients still show up. pure and cacheable — easy to memoize later when rendering waveforms for many tracks at once
+- **follow-up polish** (#1252): aesthetics pass and link-preview metadata. #1255-1256 fix duration showing `Infinity/NaN` until first seek and ensure the duration upper bound is never 0 in the preview state. #1257 fixes a track-page `og:image` that could be left empty
+
+**decisions**:
+- waveform API designed for reuse from day one (accepts peaks OR source, optional `onSeek`, CSS-variable theming) — this is why the record page is its first caller, not an excuse to inline the rendering
+- iframe embed, Claude-powered metadata autofill from audio content, file picker support for `.webm`/`.ogg` on `/upload`, and rendering waveforms across track detail / playlist / player surfaces are all deliberately deferred
+
+---
+
+#### unlisted /for-you personalized feed (PRs #1249-1250, Apr 8)
+
+**why**: the homepage surfaces "latest" and "top tracks" but has nothing personalized — there was no "based on what you like, try this" surface. @spacecowboy17.bsky.social's collaborative-filtering For You algorithm in grain.social is well-tuned and documented; porting it gives us a working baseline without reinventing the scoring. ships unlisted (not linked from nav, `noindex,nofollow`) because the ranking is v1 and benefits from testing with intentional users before being promoted.
+
+**what shipped**:
+- new `GET /for-you/?cursor=<int>&limit=<int>` endpoint in `backend/src/backend/api/for_you.py`
+- new `/for-you` route with infinite scroll, queue-all, and a cold-start "warming up" state for users with zero engagement history
+- auth required; unauth visitors redirect to `/`
+
+**scoring recipe** (from grain, unchanged):
+```
+score = sum(1 / total_edges(coengager) ** 1.0)  # picky co-engagers
+      * paths ** 0.5                            # multi-path smoothing
+      * 0.5 ** (age_hours / 48)                 # 48h half-life
+      / popularity ** 0.3                       # dampen globally popular
+```
+co-engagers are filtered to those who engaged with the seed *before* we did (+24h grace window) — grain's key insight that rewards taste-makers over bandwagoners. cold start falls back to most-engaged tracks in the last 30 days.
+
+**what's different from grain**:
+- **engagement edges are likes OR playlist-adds.** grain only has favorites; we have a unified activity stream in `activity.py`, and `track_added_to_playlist` is a particularly strong curation signal ("this belongs next to these other tracks"). both edges get uniform weight 1.0 in v1
+- **48h half-life instead of 6h** — audio ages slower than photo galleries; a two-week-old track is still meaningfully new
+- **per-artist diversity cap (hard 2 per page)** — without this, one prolific archiver dominates the ranking, the same failure mode that killed the artist leaderboard in #1229
+- **self-uploads excluded from seeds AND candidates** — your likes on your own tracks aren't a taste signal; your own uploads shouldn't be recommended back to you
+- hidden-tag preferences are respected
+
+**decisions**:
+- pure collaborative filtering in v1; CLAP-embedding rerank deferred (obvious follow-up: take top ~200 grain-scored candidates, rerank by distance to centroid of user's seed embeddings — helps long-tail and cold-start)
+- per-request score recomputation, no Redis cache — means pagination may drift slightly under heavy engagement churn, acceptable for v1
+- differential edge weights (e.g. playlist-add = 2.0, comment = 1.5, like = 1.0) deferred until there's something to A/B against
+- play signals as edges deferred — likes are sparse, plays are dense, needs its own experiment
+
+---
+
 #### top tracks time-range toggle + like count fix (PRs #1228-1230, Apr 3)
 
 **why**: the homepage "top tracks" section showed all-time most-liked tracks with no way to see recent trends. separately, the artist leaderboard rank feature (play-count-based) rewarded volume uploaders and self-listeners over genuine community engagement — shipped and pulled in the same session.
@@ -188,7 +238,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-Top tracks time-range toggle shipped (#1228-1230) — homepage "top tracks" now cycles through all-time/month/week/day filters. artist leaderboard rank shipped and pulled in the same session (#1228-1229) — play count rewards volume, not engagement. backend rank infrastructure kept for re-enabling with likes-based criteria. next: define what "top artist" means on a platform with diverse content types; monitor browser telemetry volume (add sampling if needed); add a staging environment for the moderation service (#1165).
+Two unlisted surfaces shipped this week: `/for-you` (#1249-1250), a collaborative-filtering personalized feed ported from grain.social with plyr-specific diversity caps and stronger engagement signals; and `/record` (#1251-1257), an in-browser audio capture page with a reusable `Waveform` component designed for propagation to track detail, playlist, and player surfaces. ooo.audio cross-app lexicon conversation is in-flight (meeting notes on #705) — room included **comet.sh** (Elixir-first, pre-MVP, foundational libs shipped, fair-use/remix-culture framing that aligns closely with plyr.fm's stance), **tracklist.diy** (DMT, Inc., closed signup list, staking out the centralized-catalogue-server / "stripe for simplicity" counterweight), and **whereditgo.diamonds** (Bazaar — a shipped, white-labeled IMS + storefront + licensing hub that sells exclusive stream licenses to atproto streaming platforms with purchase receipts written to the buyer's PDS; a parallel license-as-record pattern worth tracking). next: waveform rollout to other surfaces as a follow-up to #1251; watch `/for-you` engagement to decide whether to promote it or rerank with CLAP embeddings; define what "top artist" means on a platform with diverse content types; add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -324,5 +374,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-03 (top tracks period toggle, artist rank pulled).
+this is a living document. last updated 2026-04-09 (unlisted /record + reusable Waveform; unlisted /for-you personalized feed).
 
