@@ -1192,6 +1192,14 @@ async def upload_progress(upload_id: str) -> StreamingResponse:
                     payload["track_id"] = job.result["track_id"]
                 if job.result and "warnings" in job.result:
                     payload["warnings"] = job.result["warnings"]
+                # surface the PDS strongRef so album upload callers can build
+                # items[] arrays without a follow-up DB query (see #1260).
+                # background writes these to job.result in _process_upload_background;
+                # without this whitelist entry they never reach the SSE stream.
+                if job.result and "atproto_uri" in job.result:
+                    payload["atproto_uri"] = job.result["atproto_uri"]
+                if job.result and "atproto_cid" in job.result:
+                    payload["atproto_cid"] = job.result["atproto_cid"]
 
                 yield f"data: {json.dumps(payload)}\n\n"
 
