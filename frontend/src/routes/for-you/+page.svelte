@@ -105,13 +105,15 @@
 		<div class="header-top">
 			<div class="header-text">
 				<h1>for you</h1>
-				<p class="subtitle">
-					{#if coldStart}
-						warming up — showing what's popular while we learn what you like
-					{:else}
-						personalized from your likes and playlist picks
-					{/if}
-				</p>
+				{#if tracks.length > 0}
+					<p class="subtitle">
+						{#if coldStart}
+							warming up — showing what's popular while we learn what you like
+						{:else}
+							personalized from your likes and playlist picks
+						{/if}
+					</p>
+				{/if}
 			</div>
 			{#if tracks.length > 0}
 				<button class="btn-queue-all" onclick={queueAll} title="queue all tracks">
@@ -140,10 +142,19 @@
 
 	{#if tracks.length === 0 && !loadingMore}
 		<div class="empty-state">
-			<p>
-				no recommendations yet — try liking a few tracks or adding them to playlists to teach the
-				feed.
-			</p>
+			{#if coldStart}
+				<p>nothing to recommend yet.</p>
+				<p class="empty-hint">
+					the feed picks up once there's enough activity to learn from — like a few tracks or add
+					them to playlists to get things going.
+				</p>
+			{:else}
+				<p>no picks for you right now.</p>
+				<p class="empty-hint">
+					we've seen your taste but nothing new matches it yet — check back later, or like a few
+					more tracks to broaden the signal.
+				</p>
+			{/if}
 		</div>
 	{:else}
 		<div class="tracks-list">
@@ -244,6 +255,15 @@
 	.empty-state p {
 		margin: 0;
 		line-height: 1.5;
+	}
+
+	.empty-state p + p {
+		margin-top: 0.5rem;
+	}
+
+	.empty-hint {
+		color: var(--text-tertiary);
+		font-size: var(--text-xs);
 	}
 
 	.tracks-list {
