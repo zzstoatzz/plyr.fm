@@ -40,6 +40,27 @@
 
 	let track = $state<Track>(data.track);
 
+	// og:image cascade — pick the best available preview image and always
+	// emit *something* so scrapers don't fall back to their own heuristics
+	// (favicon, first visible image, stale client cache). order: track art →
+	// album art → artist avatar → brand logo.
+	const OG_FALLBACK_IMAGE = `${APP_CANONICAL_URL}/icons/icon-512.png`;
+	const previewImage = $derived.by(() => {
+		if (track.image_url && !moderation.isSensitive(track.image_url)) {
+			return track.image_url;
+		}
+		if (track.album?.image_url && !moderation.isSensitive(track.album.image_url)) {
+			return track.album.image_url;
+		}
+		if (track.artist_avatar_url && !moderation.isSensitive(track.artist_avatar_url)) {
+			return track.artist_avatar_url;
+		}
+		return OG_FALLBACK_IMAGE;
+	});
+	const previewIsTrackArt = $derived(
+		!!(track.image_url && !moderation.isSensitive(track.image_url))
+	);
+
 	// comments state - assume enabled until we know otherwise
 	let comments = $state<Comment[]>([]);
 	let commentsEnabled = $state<boolean | null>(null); // null = unknown, true/false = known
@@ -461,13 +482,19 @@ $effect(() => {
 	{#if track.album}
 		<meta property="music:album" content="{track.album.title}" />
 	{/if}
-	{#if track.image_url && !moderation.isSensitive(track.image_url)}
-		<meta property="og:image" content="{track.image_url}" />
-		<meta property="og:image:secure_url" content="{track.image_url}" />
+	<!--
+		og:image cascade — track art → album art → artist avatar → brand logo.
+		always emit SOMETHING so scrapers don't fall back to their own heuristics
+		(favicon, first visible image, or whatever the posting client had cached).
+		see: https://github.com/zzstoatzz/plyr.fm/pull/1257
+	-->
+	<meta property="og:image" content={previewImage} />
+	<meta property="og:image:secure_url" content={previewImage} />
+	{#if previewIsTrackArt}
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="1200" />
-		<meta property="og:image:alt" content="{track.title} by {track.artist}" />
 	{/if}
+	<meta property="og:image:alt" content="{track.title} by {track.artist}" />
 	{#if track.r2_url}
 		<meta property="og:audio" content="{track.r2_url}" />
 		<meta property="og:audio:type" content="audio/{track.file_type}" />
@@ -480,9 +507,7 @@ $effect(() => {
 		name="twitter:description"
 		content="{track.artist}{track.album ? ` • ${track.album.title}` : ''}"
 	/>
-	{#if track.image_url && !moderation.isSensitive(track.image_url)}
-		<meta name="twitter:image" content="{track.image_url}" />
-	{/if}
+	<meta name="twitter:image" content={previewImage} />
 
 	<!-- oEmbed discovery for embed services like iframely -->
 	<link
