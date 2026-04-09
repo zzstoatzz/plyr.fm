@@ -253,3 +253,7 @@ max_lines = 743
 [[rules]]
 path = "frontend/src/lib/components/TrackEntryCard.svelte"
 max_lines = 571
+
+[[rules]]
+path = "frontend/src/routes/record/+page.svelte"
+max_lines = 509

@@ -12,6 +12,10 @@ class AudioFormat(str, Enum):
     M4A = "m4a"
     AIFF = "aiff"
     FLAC = "flac"
+    # browser MediaRecorder output formats — accepted so /record can post
+    # whatever the browser produces, transcoder normalizes to mp3
+    WEBM = "webm"
+    OGG = "ogg"
 
     @property
     def extension(self) -> str:
@@ -27,12 +31,19 @@ class AudioFormat(str, Enum):
             AudioFormat.M4A: "audio/mp4",
             AudioFormat.AIFF: "audio/aiff",
             AudioFormat.FLAC: "audio/flac",
+            AudioFormat.WEBM: "audio/webm",
+            AudioFormat.OGG: "audio/ogg",
         }
         return media_types[self]
 
     @property
     def is_web_playable(self) -> bool:
-        """browsers can play this format natively (no transcoding needed)."""
+        """browsers can play this format natively (no transcoding needed).
+
+        note: webm/ogg are *technically* browser-playable but we route them
+        through the transcoder so the stored audio is normalized (mp3) for
+        embeds, scrubbing, and downstream tools that expect mp3/wav/m4a.
+        """
         return self in {
             AudioFormat.MP3,
             AudioFormat.WAV,

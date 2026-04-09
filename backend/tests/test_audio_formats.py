@@ -34,6 +34,14 @@ class TestAudioFormat:
             (".flac", AudioFormat.FLAC),
             ("flac", AudioFormat.FLAC),
             (".FLAC", AudioFormat.FLAC),
+            # webm — browser MediaRecorder output (Chromium default)
+            (".webm", AudioFormat.WEBM),
+            ("webm", AudioFormat.WEBM),
+            (".WEBM", AudioFormat.WEBM),
+            # ogg — browser MediaRecorder output (Firefox default)
+            (".ogg", AudioFormat.OGG),
+            ("ogg", AudioFormat.OGG),
+            (".OGG", AudioFormat.OGG),
         ],
     )
     def test_from_extension_supported(
@@ -45,7 +53,6 @@ class TestAudioFormat:
     @pytest.mark.parametrize(
         "extension",
         [
-            ".ogg",
             ".aac",
             ".wma",
             "",
@@ -63,6 +70,8 @@ class TestAudioFormat:
         assert AudioFormat.M4A.media_type == "audio/mp4"
         assert AudioFormat.AIFF.media_type == "audio/aiff"
         assert AudioFormat.FLAC.media_type == "audio/flac"
+        assert AudioFormat.WEBM.media_type == "audio/webm"
+        assert AudioFormat.OGG.media_type == "audio/ogg"
 
     def test_extensions_with_dots(self):
         """test extension property includes dots."""
@@ -71,6 +80,8 @@ class TestAudioFormat:
         assert AudioFormat.M4A.extension == ".m4a"
         assert AudioFormat.AIFF.extension == ".aiff"
         assert AudioFormat.FLAC.extension == ".flac"
+        assert AudioFormat.WEBM.extension == ".webm"
+        assert AudioFormat.OGG.extension == ".ogg"
 
     def test_all_extensions(self):
         """test all_extensions returns complete list."""
@@ -80,7 +91,9 @@ class TestAudioFormat:
         assert ".m4a" in extensions
         assert ".aiff" in extensions
         assert ".flac" in extensions
-        assert len(extensions) == 5
+        assert ".webm" in extensions
+        assert ".ogg" in extensions
+        assert len(extensions) == 7
 
     def test_supported_extensions_str(self):
         """test formatted string of supported extensions."""
@@ -100,3 +113,7 @@ class TestAudioFormat:
         assert AudioFormat.FLAC.is_web_playable is True
         # AIFF requires transcoding (only Safari supports it)
         assert AudioFormat.AIFF.is_web_playable is False
+        # webm/ogg are intentionally routed through the transcoder so stored
+        # audio is normalized (mp3) for embeds and downstream tools
+        assert AudioFormat.WEBM.is_web_playable is False
+        assert AudioFormat.OGG.is_web_playable is False
