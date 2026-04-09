@@ -7,7 +7,8 @@
 	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { uploader } from '$lib/uploader.svelte';
-	import { APP_NAME } from '$lib/branding';
+	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
+	import logo from '$lib/assets/logo.png';
 
 	type RecordState = 'idle' | 'recording' | 'preview' | 'uploading';
 
@@ -23,12 +24,20 @@
 	let audioEl = $state<HTMLAudioElement | null>(null);
 	let currentTime = $state(0);
 	let duration = $state(0);
+	let isPlaying = $state(false);
 	const playbackProgress = $derived(duration > 0 ? currentTime / duration : 0);
+	const timeDisplay = $derived(`${formatTime(currentTime)} / ${formatTime(duration)}`);
 
 	function handleSeek(ratio: number) {
 		if (audioEl && duration > 0) {
 			audioEl.currentTime = ratio * duration;
 		}
+	}
+
+	function togglePlay() {
+		if (!audioEl) return;
+		if (isPlaying) audioEl.pause();
+		else audioEl.play().catch((e) => console.error('playback failed:', e));
 	}
 
 	let mediaRecorder: MediaRecorder | null = null;
@@ -203,6 +212,30 @@
 <svelte:head>
 	<title>record • {APP_NAME}</title>
 	<meta name="robots" content="noindex, nofollow" />
+	<meta
+		name="description"
+		content="capture audio from your mic and upload to {APP_NAME} in one step"
+	/>
+
+	<!-- Open Graph / Facebook -->
+	<meta property="og:type" content="website" />
+	<meta property="og:title" content="record • {APP_NAME}" />
+	<meta
+		property="og:description"
+		content="capture audio from your mic and upload to {APP_NAME} in one step"
+	/>
+	<meta property="og:url" content="{APP_CANONICAL_URL}/record" />
+	<meta property="og:site_name" content={APP_NAME} />
+	<meta property="og:image" content={logo} />
+
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content="record • {APP_NAME}" />
+	<meta
+		name="twitter:description"
+		content="capture audio from your mic and upload to {APP_NAME} in one step"
+	/>
+	<meta name="twitter:image" content={logo} />
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
@@ -215,45 +248,73 @@
 
 	{#if uiState === 'idle'}
 		<div class="stage">
-			<button type="button" class="record-btn" onclick={startRecording} aria-label="start recording">
-				<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-					<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-					<path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-					<line x1="12" y1="19" x2="12" y2="23" />
-					<line x1="8" y1="23" x2="16" y2="23" />
-				</svg>
-			</button>
+			<div class="mic-aura">
+				<button type="button" class="record-btn" onclick={startRecording} aria-label="start recording">
+					<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+						<path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+						<line x1="12" y1="19" x2="12" y2="23" />
+						<line x1="8" y1="23" x2="16" y2="23" />
+					</svg>
+				</button>
+			</div>
 			<p class="hint">tap the mic to start</p>
 		</div>
 	{:else if uiState === 'recording'}
 		<div class="stage">
 			<div class="timer" aria-live="polite">{elapsedDisplay}</div>
-			<button type="button" class="record-btn recording" onclick={stopRecording} aria-label="stop recording">
-				<svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-					<rect x="6" y="6" width="12" height="12" rx="2" />
-				</svg>
-			</button>
+			<div class="mic-aura recording">
+				<button type="button" class="record-btn recording" onclick={stopRecording} aria-label="stop recording">
+					<svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+						<rect x="6" y="6" width="12" height="12" rx="2" />
+					</svg>
+				</button>
+			</div>
 			<p class="hint">tap to stop · auto-stop at 10:00</p>
 		</div>
 	{:else if uiState === 'preview'}
 		<div class="preview-card">
 			{#if previewBlob}
-				<Waveform
-					source={previewBlob}
-					progress={playbackProgress}
-					onSeek={handleSeek}
-					height={96}
-				/>
+				<div class="wf-wrap">
+					<Waveform
+						source={previewBlob}
+						progress={playbackProgress}
+						onSeek={handleSeek}
+						height={96}
+					/>
+				</div>
 			{/if}
 			{#if previewUrl}
+				<!-- hidden native element — custom controls below drive it -->
 				<audio
 					bind:this={audioEl}
 					bind:currentTime
 					bind:duration
-					class="preview-audio"
-					controls
 					src={previewUrl}
+					onplay={() => (isPlaying = true)}
+					onpause={() => (isPlaying = false)}
+					onended={() => (isPlaying = false)}
 				></audio>
+				<div class="playback-row">
+					<button
+						type="button"
+						class="play-btn"
+						onclick={togglePlay}
+						aria-label={isPlaying ? 'pause' : 'play'}
+					>
+						{#if isPlaying}
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+								<rect x="6" y="5" width="4" height="14" rx="1" />
+								<rect x="14" y="5" width="4" height="14" rx="1" />
+							</svg>
+						{:else}
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+								<path d="M8 5v14l11-7z" />
+							</svg>
+						{/if}
+					</button>
+					<span class="time-display" aria-live="off">{timeDisplay}</span>
+				</div>
 			{/if}
 
 			<div class="form-group">
@@ -336,11 +397,45 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 1.25rem;
+		gap: 1.5rem;
 		padding: 3rem 1rem;
 	}
 
+	/* ambient radial glow behind the mic — subtle in idle, stronger when recording */
+	.mic-aura {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem;
+	}
+
+	.mic-aura::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: 50%;
+		background: radial-gradient(
+			circle at center,
+			color-mix(in srgb, var(--accent) 22%, transparent),
+			transparent 65%
+		);
+		pointer-events: none;
+		z-index: 0;
+		transition: background 0.4s ease;
+	}
+
+	.mic-aura.recording::before {
+		background: radial-gradient(
+			circle at center,
+			color-mix(in srgb, var(--accent) 38%, transparent),
+			transparent 68%
+		);
+	}
+
 	.record-btn {
+		position: relative;
+		z-index: 1;
 		width: 140px;
 		height: 140px;
 		border-radius: 50%;
@@ -351,7 +446,9 @@
 		align-items: center;
 		justify-content: center;
 		cursor: pointer;
-		box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent);
+		box-shadow:
+			0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent),
+			inset 0 1px 0 color-mix(in srgb, #fff 15%, transparent);
 		transition:
 			transform 0.15s ease,
 			box-shadow 0.2s ease,
@@ -397,18 +494,60 @@
 
 	.preview-card {
 		background: color-mix(in srgb, var(--track-bg, var(--bg-primary)) 70%, transparent);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
+		backdrop-filter: blur(14px);
+		-webkit-backdrop-filter: blur(14px);
 		border: 1px solid var(--glass-border, var(--border-subtle));
 		border-radius: var(--radius-md);
-		padding: 1.5rem;
+		padding: 1.75rem;
 		display: flex;
 		flex-direction: column;
 		gap: 1.25rem;
+		box-shadow: 0 8px 32px color-mix(in srgb, #000 30%, transparent);
 	}
 
-	.preview-audio {
-		width: 100%;
+	.wf-wrap {
+		padding: 0.5rem 0;
+	}
+
+	.playback-row {
+		display: flex;
+		align-items: center;
+		gap: 0.875rem;
+		margin-top: -0.25rem;
+	}
+
+	.play-btn {
+		width: 42px;
+		height: 42px;
+		border-radius: 50%;
+		background: var(--accent);
+		color: var(--text-primary);
+		border: none;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		flex-shrink: 0;
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 28%, transparent);
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.2s ease;
+	}
+
+	.play-btn:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 38%, transparent);
+	}
+
+	.play-btn:active {
+		transform: translateY(0);
+	}
+
+	.time-display {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.02em;
 	}
 
 	.form-group {

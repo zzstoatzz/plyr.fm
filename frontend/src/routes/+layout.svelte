@@ -33,6 +33,7 @@
 	let hasPageMetadata = $derived(
 		$page.url.pathname === '/' || // homepage
 		$page.url.pathname === '/activity' || // activity feed
+		$page.url.pathname === '/record' || // in-browser recording
 		$page.url.pathname.startsWith('/track/') || // track detail
 		$page.url.pathname.startsWith('/playlist/') || // playlist detail
 		$page.url.pathname.startsWith('/tag/') || // tag detail
