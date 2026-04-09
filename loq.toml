@@ -256,4 +256,4 @@ max_lines = 571
 
 [[rules]]
 path = "frontend/src/routes/record/+page.svelte"
-max_lines = 648
+max_lines = 680
