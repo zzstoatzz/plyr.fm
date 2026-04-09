@@ -30,10 +30,11 @@ the fix does **not** add a DB ordering column. that would fork the source of tru
 ### `POST /albums/` (`backend.api.albums.create_album`)
 
 - creates an `Album` row with `title`, `slug` (derived via `slugify(title)` if not provided), `description`
-- emits an `album_release` `CollectionEvent`
+- **does not** emit `album_release` — that's deferred to `finalize_album` so a total upload failure doesn't leave a fake release in the activity feed
 - **does not** create any ATProto record — the list record is deferred to `finalize`
-- idempotent on `(artist_did, slug)`: if an album with the same slug already exists, returns the existing row (matches `get_or_create_album` semantics)
+- idempotent on `(artist_did, slug)`: if an album with the same slug already exists, returns the existing row (matches `get_or_create_album` semantics and supports the "type an existing album name to append tracks" UX)
 - returns `AlbumMetadata`; `list_uri` is `null` until finalize runs
+- the resulting album is invisible to public listings (`GET /albums/`, `GET /albums/{handle}`, search, sitemap) until it has at least one track — so abandoned album shells don't leak onto artist profiles
 
 ### `POST /tracks/` with `album_id` (`backend.api.tracks.uploads.upload_track`)
 
@@ -49,19 +50,29 @@ the fix does **not** add a DB ordering column. that would fork the source of tru
 
 ### `POST /albums/{id}/finalize` (`backend.api.albums.finalize_album`)
 
-- body: `{"track_ids": [int, ...]}` — the user-intended order
+- body: `{"track_ids": [int, ...]}` — the current upload session's tracks in user-intended order
 - validates:
   - album exists and belongs to the authenticated artist
   - every requested `track_id` exists (400 with the missing ids otherwise)
   - every track's `album_id` matches the target album (400 with the wrong-album ids otherwise)
   - every track has both `atproto_record_uri` and `atproto_record_cid` set (400 with the pending ids otherwise — this guards against finalize firing before a track's PDS write has committed)
-- builds `track_refs: list[{uri, cid}]` in the exact order requested
+- fetches **all** PDS-ref'd tracks currently on the album and partitions them:
+  - **preserved** = tracks already on the album but not in `track_ids` (i.e. prior upload sessions)
+  - **new** = tracks in `track_ids` (the current session)
+- for preserved tracks, fetches the existing PDS list record (if any) to read its `items[]` order, so any manual reorderings the owner made from the album edit page are honored. falls back to `created_at` order for tracks not in the existing list, or if the PDS fetch fails
+- final list = `preserved (existing order) + new (in requested order)` — so appending new tracks to an existing album keeps the prior tracks in their current position instead of truncating the list record
+- builds `track_refs: list[{uri, cid}]` in final order
 - calls `upsert_album_list_record(auth_session, album_id, album.title, track_refs, existing_uri=album.atproto_record_uri, existing_created_at=album.created_at)` — idempotent, handles both first-create and updates
 - persists the returned `uri` and `cid` onto the `Album` row
+- emits an `album_release` `CollectionEvent` **only on the first successful finalize** (deduped by checking for any existing event for this album_id) — so re-finalizing doesn't duplicate the activity feed event, and a total upload failure never publishes one
 - invalidates the album cache
 - returns `AlbumMetadata`
 
-finalize is safe to call multiple times — calling it again with a different `track_ids` order just rewrites the list record. this is effectively the same operation as the album-edit-page reorder endpoint (`PUT /lists/{rkey}/reorder`) but addressed by album id instead of list rkey.
+finalize is safe to call multiple times. semantics for repeated calls:
+- **fresh album + full set**: writes list with `track_ids` in order. first call.
+- **fresh album + re-finalize with same set**: all tracks become "new" (none in preserved, since the album has no list record yet? no — the album DOES have a list record after the first call). wait — after the first call, the tracks exist in the list record and are now "preserved" unless they're in `track_ids`. so if you re-finalize with the same set, `track_ids` still names them as "new" and they get placed after empty preserved → same order. idempotent ✅
+- **append** (type an existing album name, upload 3 more tracks): `track_ids` carries only the 3 new tracks. preserved = the existing tracks (order honored from the existing list record). final = existing + 3 new at end.
+- **partial re-finalize** (rare): naming a subset treats those as "new" and positions them at the end; unnamed tracks stay put at their current positions. this is a defensible but slightly weird semantic — the album edit page's explicit reorder endpoint is the canonical way to shuffle full ordering.
 
 ## frontend wiring
 
@@ -112,7 +123,7 @@ if some tracks fail during upload:
 - finalize writes a list record containing only the successful tracks in their relative original order
 - gaps in the user's intended sequence are fine — the list record just has the tracks that landed
 
-if **all** tracks fail: the album row still exists (empty). the frontend shows an error toast. GC of empty albums is not implemented — followup work.
+if **all** tracks fail: the album row still exists (empty), **but** it's invisible to public listings because `list_albums` / `list_artist_albums` / search / sitemap all filter to albums with at least one track. no `album_release` `CollectionEvent` is emitted either, since that only fires on successful finalize — so the activity feed doesn't surface the failed upload. the frontend shows an error toast. GC of empty album shells is not implemented — followup work.
 
 if the `POST /albums/` call itself fails: the flow bails with an error toast before any track uploads start.
 

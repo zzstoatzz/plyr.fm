@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import (
@@ -235,7 +236,12 @@ async def _album_metadata(
 async def list_albums(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, list[AlbumListItem]]:
-    """list all albums with basic metadata."""
+    """list all albums with basic metadata.
+
+    albums with zero tracks are hidden — they're either unfinalized drafts
+    from the multi-track upload flow or legacy albums awaiting sync. only
+    albums that have at least one track appear in public listings.
+    """
     stmt = (
         select(
             Album,
@@ -246,6 +252,7 @@ async def list_albums(
         .join(Artist, Album.artist_did == Artist.did)
         .outerjoin(Track, Track.album_id == Album.id)
         .group_by(Album.id, Artist.did)
+        .having(func.count(Track.id) > 0)
         .order_by(func.lower(Album.title))
     )
 
@@ -283,6 +290,7 @@ async def list_artist_albums(
         .outerjoin(Track, Track.album_id == Album.id)
         .where(Album.artist_did == artist.did)
         .group_by(Album.id)
+        .having(func.count(Track.id) > 0)
         .order_by(func.lower(Album.title))
     )
     result = await db.execute(stmt)
@@ -453,18 +461,20 @@ async def create_album(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: Annotated[AuthSession, Depends(require_artist_profile)],
 ) -> AlbumMetadata:
-    """create a new empty album shell.
+    """create an empty album shell for the multi-track upload flow.
 
-    the ATProto list record is not written here — it is deferred to
-    `POST /albums/{id}/finalize`, which is called after all tracks have
-    been uploaded so the list can be written once in user-intended order.
+    the ATProto list record is NOT written here — it is deferred to
+    `POST /albums/{id}/finalize`, which runs after tracks have actually
+    been published so a total upload failure doesn't leave a fake release
+    behind. for the same reason, the `album_release` CollectionEvent is
+    also deferred to finalize (first successful call only, deduped).
 
     idempotent on (artist_did, slug): if an album with the same slug
     already exists, the existing row is returned instead of failing.
+    this preserves the "type an existing album name to add tracks to it"
+    UX — see finalize_album for the append semantics.
     """
     from sqlalchemy.exc import IntegrityError
-
-    from backend.models import CollectionEvent
 
     title = body.title.strip()
     if not title:
@@ -509,13 +519,6 @@ async def create_album(
         track_count, total_plays = await _album_stats(db, album.id)
         return await _album_metadata(album, artist, track_count, total_plays)
 
-    db.add(
-        CollectionEvent(
-            event_type="album_release",
-            actor_did=artist.did,
-            album_id=album.id,
-        )
-    )
     await db.commit()
     await db.refresh(album)
 
@@ -581,14 +584,27 @@ async def finalize_album(
 ) -> AlbumMetadata:
     """write the album's ATProto list record using an explicit track order.
 
-    called by the frontend after all per-track uploads have settled. this is
-    the single place the list record is created/updated for albums built via
-    `POST /albums/` + `POST /tracks/?album_id=...`. idempotent — calling
-    again with a different track_ids order rewrites the list record.
+    called by the frontend after per-track uploads have settled. this is
+    the single place the list record is created/updated for albums built
+    via `POST /albums/` + `POST /tracks/?album_id=...`.
+
+    append semantics: `track_ids` carries only the tracks from the current
+    upload session. any tracks already on the album that are NOT in
+    `track_ids` are preserved in the list record at their current positions
+    (fetched from the existing list record if present, falling back to
+    created_at order). new tracks are appended at the end in the order
+    requested. this matches the "type an existing album name to add tracks
+    to it" UX without truncating prior track history.
+
+    also emits an `album_release` CollectionEvent on the first successful
+    finalize for the album — so total upload failures don't leave a fake
+    release event in the activity feed.
     """
+    from backend._internal.atproto.records import get_record_public_resilient
     from backend._internal.atproto.records.fm_plyr.list import (
         upsert_album_list_record,
     )
+    from backend.models import CollectionEvent
 
     if not body.track_ids:
         raise HTTPException(status_code=400, detail="track_ids must not be empty")
@@ -603,19 +619,21 @@ async def finalize_album(
             status_code=403, detail="you can only finalize your own albums"
         )
 
-    # fetch all referenced tracks in a single query
-    tracks_result = await db.execute(select(Track).where(Track.id.in_(body.track_ids)))
-    tracks_by_id = {t.id: t for t in tracks_result.scalars().all()}
+    # fetch the requested tracks for validation
+    requested_result = await db.execute(
+        select(Track).where(Track.id.in_(body.track_ids))
+    )
+    requested_by_id = {t.id: t for t in requested_result.scalars().all()}
 
     # validate: every requested id exists, belongs to this album, and has a
     # completed PDS write. surface specific errors so the frontend can retry
     # or message the user precisely.
-    missing = [tid for tid in body.track_ids if tid not in tracks_by_id]
+    missing = [tid for tid in body.track_ids if tid not in requested_by_id]
     if missing:
         raise HTTPException(status_code=400, detail=f"track(s) not found: {missing}")
 
     wrong_album = [
-        tid for tid in body.track_ids if tracks_by_id[tid].album_id != album_id
+        tid for tid in body.track_ids if requested_by_id[tid].album_id != album_id
     ]
     if wrong_album:
         raise HTTPException(
@@ -626,8 +644,8 @@ async def finalize_album(
     missing_pds = [
         tid
         for tid in body.track_ids
-        if not tracks_by_id[tid].atproto_record_uri
-        or not tracks_by_id[tid].atproto_record_cid
+        if not requested_by_id[tid].atproto_record_uri
+        or not requested_by_id[tid].atproto_record_cid
     ]
     if missing_pds:
         raise HTTPException(
@@ -638,11 +656,71 @@ async def finalize_album(
             ),
         )
 
-    # build strongRefs in the exact order requested (missing_pds check above
-    # guarantees these are non-None, but narrow explicitly for the type checker)
+    # fetch ALL PDS-ref'd tracks already on this album — these may include
+    # tracks from prior upload sessions that the current request doesn't
+    # mention and must be preserved in the list record.
+    existing_result = await db.execute(
+        select(Track).where(
+            Track.album_id == album_id,
+            Track.atproto_record_uri.isnot(None),
+            Track.atproto_record_cid.isnot(None),
+        )
+    )
+    all_album_tracks = {t.id: t for t in existing_result.scalars().all()}
+
+    # partition: preserved (existing, not in this request) vs new (in this request).
+    # a track id that appears in both sets is treated as "new" so a repeat finalize
+    # with the same ids rewrites the order deterministically.
+    requested_set = set(body.track_ids)
+    preserved_tracks = [
+        t for tid, t in all_album_tracks.items() if tid not in requested_set
+    ]
+
+    # determine preserved order: if the album already has a list record, honor
+    # its current item order (which captures any manual reorderings the owner
+    # made from the album edit page). fall back to created_at for tracks not
+    # in the existing list, or if the PDS fetch fails entirely.
+    preserved_position_by_uri: dict[str, int] = {}
+    if album.atproto_record_uri and preserved_tracks:
+        try:
+            artist_lookup = await db.execute(
+                select(Artist).where(Artist.did == album.artist_did)
+            )
+            artist_for_pds = artist_lookup.scalar_one()
+            record_data, _ = await get_record_public_resilient(
+                record_uri=album.atproto_record_uri,
+                pds_url=artist_for_pds.pds_url,
+            )
+            items = record_data.get("value", {}).get("items", [])
+            for i, item in enumerate(items):
+                uri = item.get("subject", {}).get("uri")
+                if uri:
+                    preserved_position_by_uri[uri] = i
+        except Exception as e:
+            logger.debug(
+                f"finalize_album: failed to fetch existing list for preserved "
+                f"track order on {album_id}: {e}"
+            )
+
+    def _preserved_sort_key(t: Track) -> tuple[int, datetime]:
+        # tracks already in the existing list: keep their position
+        # tracks not in the existing list (or if fetch failed): sort by created_at
+        # after all positioned items
+        pos = preserved_position_by_uri.get(t.atproto_record_uri or "", 10_000_000)
+        return (pos, t.created_at)
+
+    preserved_tracks.sort(key=_preserved_sort_key)
+
+    # build the final list: preserved (existing, at front) + new (in requested order)
+    final_order: list[Track] = list(preserved_tracks) + [
+        requested_by_id[tid] for tid in body.track_ids
+    ]
+
+    # strongRefs in final order (the validation above guarantees these are
+    # non-None for the requested tracks; preserved tracks were filtered at
+    # fetch time, but narrow for the type checker)
     track_refs: list[dict[str, str]] = []
-    for tid in body.track_ids:
-        t = tracks_by_id[tid]
+    for t in final_order:
         assert t.atproto_record_uri is not None
         assert t.atproto_record_cid is not None
         track_refs.append({"uri": t.atproto_record_uri, "cid": t.atproto_record_cid})
@@ -665,7 +743,26 @@ async def finalize_album(
     if result:
         album.atproto_record_uri = result[0]
         album.atproto_record_cid = result[1]
-        await db.commit()
+
+    # emit album_release CollectionEvent on the first successful finalize only.
+    # deferred from create_album so a total upload failure doesn't publish a
+    # fake release event. deduped by checking for any existing event.
+    existing_event = await db.execute(
+        select(CollectionEvent).where(
+            CollectionEvent.album_id == album_id,
+            CollectionEvent.event_type == "album_release",
+        )
+    )
+    if not existing_event.scalar_one_or_none():
+        db.add(
+            CollectionEvent(
+                event_type="album_release",
+                actor_did=auth_session.did,
+                album_id=album_id,
+            )
+        )
+
+    await db.commit()
 
     await invalidate_album_cache(auth_session.handle, album.slug)
 

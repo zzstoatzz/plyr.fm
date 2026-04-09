@@ -236,10 +236,12 @@ async def _search_albums(
     similarity = func.similarity(Album.title, query)
     substring_match = Album.title.ilike(f"%{query}%")
 
+    # filter out empty albums (unfinalized drafts or legacy rows awaiting sync)
+    has_tracks = select(Track.id).where(Track.album_id == Album.id).limit(1).exists()
     stmt = (
         select(Album, Artist, similarity.label("relevance"))
         .join(Artist, Album.artist_did == Artist.did)
-        .where(or_(similarity > 0.1, substring_match))
+        .where(or_(similarity > 0.1, substring_match), has_tracks)
         .order_by(similarity.desc())
         .limit(limit)
     )

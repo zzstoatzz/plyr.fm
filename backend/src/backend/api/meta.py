@@ -132,10 +132,14 @@ async def sitemap_data(
         for row in artists_result.all()
     ]
 
-    # fetch all albums (artist handle, slug, updated_at)
+    # fetch all albums that have at least one track — empty albums are either
+    # unfinalized drafts or legacy rows awaiting sync and don't belong in the
+    # sitemap
     albums_result = await db.execute(
         select(Album.slug, Artist.handle, Album.updated_at)
         .join(Artist, Album.artist_did == Artist.did)
+        .join(Track, Track.album_id == Album.id)
+        .distinct()
         .order_by(Album.updated_at.desc())
     )
     albums = [
