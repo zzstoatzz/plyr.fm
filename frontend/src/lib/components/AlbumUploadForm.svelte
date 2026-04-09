@@ -35,8 +35,6 @@
 			albums.some((a) => a.title.toLowerCase() === albumTitle.trim().toLowerCase()),
 	);
 
-	let completedCount = $derived(tracks.filter((t) => t.status === 'completed').length);
-	let activeUploadCount = $derived(tracks.filter((t) => t.status === 'uploading' || t.status === 'processing').length);
 	let hasUnresolvedFeatures = $derived(tracks.some((t) => t.hasUnresolvedFeaturesInput));
 
 	let canSubmit = $derived(
@@ -483,26 +481,6 @@
 		/>
 	</div>
 
-	{#if uploading}
-		<div class="upload-progress">
-			{#if activeUploadCount > 0}
-				<p class="progress-text">
-					{completedCount} of {tracks.length} completed, {activeUploadCount} uploading...
-				</p>
-			{:else}
-				<p class="progress-text">
-					{completedCount} of {tracks.length} track{tracks.length > 1 ? 's' : ''} completed
-				</p>
-			{/if}
-			<div class="progress-bar-bg">
-				<div
-					class="progress-bar-fill"
-					style="width: {(completedCount / tracks.length) * 100}%"
-				></div>
-			</div>
-		</div>
-	{/if}
-
 	<div class="form-group attestation">
 		<label class="checkbox-label">
 			<input
@@ -691,35 +669,6 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
-	}
-
-	.upload-progress {
-		margin-bottom: 1.5rem;
-		padding: 1rem;
-		background: var(--bg-primary);
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border-default);
-	}
-
-	.progress-text {
-		font-size: var(--text-sm);
-		color: var(--text-secondary);
-		margin-bottom: 0.5rem;
-	}
-
-	.progress-bar-bg {
-		width: 100%;
-		height: 4px;
-		background: var(--border-subtle);
-		border-radius: 2px;
-		overflow: hidden;
-	}
-
-	.progress-bar-fill {
-		height: 100%;
-		background: var(--accent);
-		border-radius: 2px;
-		transition: width 0.3s ease;
 	}
 
 	.attestation {
