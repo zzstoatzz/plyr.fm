@@ -10,7 +10,7 @@ lists api endpoints for ATProto list records.
 
 ## Functions
 
-### `reorder_liked_list` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L125)
+### `reorder_liked_list` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L127)
 
 ```python
 reorder_liked_list(body: ReorderRequest, session: AuthSession = Depends(require_auth), db: AsyncSession = Depends(get_db)) -> ReorderResponse
@@ -23,7 +23,7 @@ the items array order becomes the new display order.
 only the list owner can reorder their own list.
 
 
-### `reorder_list` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L164)
+### `reorder_list` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L166)
 
 ```python
 reorder_list(rkey: str, body: ReorderRequest, session: AuthSession = Depends(require_auth), db: AsyncSession = Depends(get_db)) -> ReorderResponse
@@ -33,7 +33,17 @@ reorder_list(rkey: str, body: ReorderRequest, session: AuthSession = Depends(req
 reorder items in a list by rkey. items array order = new display order.
 
 
-### `create_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L203)
+### `resolve_list_by_uri` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L214)
+
+```python
+resolve_list_by_uri(uri: Annotated[str, Query(description='AT-URI of a list record')], db: AsyncSession = Depends(get_db)) -> ListByUriResponse
+```
+
+
+resolve a list AT-URI to its type (album or playlist) with routing info.
+
+
+### `create_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L245)
 
 ```python
 create_playlist(body: CreatePlaylistRequest, session: AuthSession = Depends(require_auth), db: AsyncSession = Depends(get_db)) -> PlaylistResponse
@@ -46,7 +56,7 @@ creates an ATProto list record with listType="playlist" and caches
 metadata in the database for fast indexing.
 
 
-### `list_playlists` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L257)
+### `list_playlists` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L312)
 
 ```python
 list_playlists(session: AuthSession = Depends(require_auth), db: AsyncSession = Depends(get_db)) -> list[PlaylistResponse]
@@ -56,7 +66,7 @@ list_playlists(session: AuthSession = Depends(require_auth), db: AsyncSession = 
 list all playlists owned by the current user.
 
 
-### `list_artist_public_playlists` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L287)
+### `list_artist_public_playlists` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L342)
 
 ```python
 list_artist_public_playlists(artist_did: str, db: AsyncSession = Depends(get_db)) -> list[PlaylistResponse]
@@ -66,7 +76,17 @@ list_artist_public_playlists(artist_did: str, db: AsyncSession = Depends(get_db)
 list public playlists for an artist (no auth required).
 
 
-### `get_playlist_meta` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L318)
+### `get_playlist_by_uri` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L373)
+
+```python
+get_playlist_by_uri(uri: Annotated[str, Query(description='AT-URI of the playlist list record')], db: AsyncSession = Depends(get_db), session: AuthSession | None = Depends(get_optional_session)) -> PlaylistWithTracksResponse
+```
+
+
+get a playlist by its ATProto record URI (public, auth optional for liked state).
+
+
+### `get_playlist_meta` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L469)
 
 ```python
 get_playlist_meta(playlist_id: str, db: AsyncSession = Depends(get_db)) -> PlaylistResponse
@@ -76,7 +96,7 @@ get_playlist_meta(playlist_id: str, db: AsyncSession = Depends(get_db)) -> Playl
 get playlist metadata (public, no auth required). used for link previews.
 
 
-### `get_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L349)
+### `get_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L500)
 
 ```python
 get_playlist(playlist_id: str, db: AsyncSession = Depends(get_db), session: AuthSession | None = Depends(get_optional_session)) -> PlaylistWithTracksResponse
@@ -89,7 +109,7 @@ fetches the ATProto list record to get track ordering, then hydrates
 track metadata from the database. if authenticated, includes liked state.
 
 
-### `add_track_to_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L451)
+### `add_track_to_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L606)
 
 ```python
 add_track_to_playlist(playlist_id: str, body: AddTrackRequest, session: AuthSession = Depends(require_auth), db: AsyncSession = Depends(get_db)) -> PlaylistResponse
@@ -102,7 +122,7 @@ appends the track to the end of the playlist's ATProto list record
 and updates the cached track count.
 
 
-### `remove_track_from_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L551)
+### `remove_track_from_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L722)
 
 ```python
 remove_track_from_playlist(playlist_id: str, track_uri: str, session: AuthSession = Depends(require_auth), db: AsyncSession = Depends(get_db)) -> PlaylistResponse
@@ -112,7 +132,7 @@ remove_track_from_playlist(playlist_id: str, track_uri: str, session: AuthSessio
 remove a track from a playlist.
 
 
-### `delete_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L645)
+### `delete_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L815)
 
 ```python
 delete_playlist(playlist_id: str, session: AuthSession = Depends(require_auth), db: AsyncSession = Depends(get_db)) -> DeletedResponse
@@ -124,7 +144,7 @@ delete a playlist.
 deletes both the ATProto list record and the database cache.
 
 
-### `upload_playlist_cover` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L681)
+### `upload_playlist_cover` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L851)
 
 ```python
 upload_playlist_cover(playlist_id: str, session: AuthSession = Depends(require_auth), db: AsyncSession = Depends(get_db), image: UploadFile = File(...)) -> dict[str, str | None]
@@ -136,7 +156,7 @@ upload cover art for a playlist (requires authentication).
 accepts jpg, jpeg, png, webp images up to 20MB.
 
 
-### `update_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L742)
+### `update_playlist` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L912)
 
 ```python
 update_playlist(playlist_id: str, name: Annotated[str | None, Form()] = None, show_on_profile: Annotated[bool | None, Form()] = None, session: AuthSession = Depends(require_auth), db: AsyncSession = Depends(get_db)) -> PlaylistResponse
@@ -148,7 +168,7 @@ update playlist metadata (name, show_on_profile).
 use POST /playlists/{id}/cover to update cover art separately.
 
 
-### `get_playlist_recommendations_endpoint` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L840)
+### `get_playlist_recommendations_endpoint` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L1009)
 
 ```python
 get_playlist_recommendations_endpoint(playlist_id: str, session: AuthSession = Depends(require_auth), db: AsyncSession = Depends(get_db), limit: int = Query(3, ge=1, le=10, description='max recommendations')) -> PlaylistRecommendationsResponse
@@ -164,50 +184,56 @@ results are cached per playlist CID (auto-invalidates on track changes).
 
 ## Classes
 
-### `CreatePlaylistRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L53)
+### `CreatePlaylistRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L55)
 
 
 request body for creating a playlist.
 
 
-### `PlaylistResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L60)
+### `PlaylistResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L62)
 
 
 playlist metadata response.
 
 
-### `PlaylistWithTracksResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L74)
+### `PlaylistWithTracksResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L76)
 
 
 playlist with full track details.
 
 
-### `AddTrackRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L81)
+### `AddTrackRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L83)
 
 
 request body for adding a track to a playlist.
 
 
-### `ReorderRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L93)
+### `ReorderRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L95)
 
 
 request body for reordering list items.
 
 
-### `ReorderResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L100)
+### `ReorderResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L102)
 
 
 response from reorder operation.
 
 
-### `RecommendedTrack` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L107)
+### `RecommendedTrack` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L109)
 
 
 a recommended track for a playlist.
 
 
-### `PlaylistRecommendationsResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L117)
+### `PlaylistRecommendationsResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L119)
 
 
 response for playlist recommendations.
+
+
+### `ListByUriResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/lists.py#L204)
+
+
+resolved list type and routing info for an AT-URI.
 

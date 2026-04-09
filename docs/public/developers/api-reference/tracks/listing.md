@@ -13,7 +13,7 @@ Read-only track listing endpoints.
 ### `list_tracks` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L69)
 
 ```python
-list_tracks(db: Annotated[AsyncSession, Depends(get_db)], artist_did: str | None = None, filter_hidden_tags: bool | None = None, cursor: str | None = None, limit: int | None = None, session: AuthSession | None = Depends(get_optional_session)) -> TracksListResponse
+list_tracks(db: Annotated[AsyncSession, Depends(get_db)], artist_did: str | None = None, filter_hidden_tags: bool | None = None, tags: Annotated[list[str] | None, Query()] = None, cursor: str | None = None, limit: int | None = None, session: AuthSession | None = Depends(get_optional_session)) -> TracksListResponse
 ```
 
 
@@ -31,17 +31,17 @@ Pass this to get the next page of results.
 - `limit`: Maximum number of tracks to return (default from settings, max 100).
 
 
-### `list_top_tracks` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L322)
+### `list_top_tracks` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L344)
 
 ```python
-list_top_tracks(db: Annotated[AsyncSession, Depends(get_db)], limit: int = 10, session: AuthSession | None = Depends(get_optional_session)) -> list[TrackResponse]
+list_top_tracks(db: Annotated[AsyncSession, Depends(get_db)], limit: int = 10, period: Literal['all_time', 'month', 'week', 'day'] = 'all_time', session: AuthSession | None = Depends(get_optional_session)) -> list[TrackResponse]
 ```
 
 
 get top tracks by like count (most liked first, at least one like).
 
 
-### `list_my_tracks` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L403)
+### `list_my_tracks` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L431)
 
 ```python
 list_my_tracks(db: Annotated[AsyncSession, Depends(get_db)], auth_session: AuthSession = Depends(require_auth), limit: int = Query(10, ge=1, le=100), offset: int = Query(0, ge=0)) -> MyTracksResponse
@@ -51,7 +51,7 @@ list_my_tracks(db: Annotated[AsyncSession, Depends(get_db)], auth_session: AuthS
 List tracks uploaded by authenticated user.
 
 
-### `list_broken_tracks` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L461)
+### `list_broken_tracks` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L489)
 
 ```python
 list_broken_tracks(db: Annotated[AsyncSession, Depends(get_db)], auth_session: AuthSession = Depends(require_auth)) -> BrokenTracksResponse
@@ -65,7 +65,7 @@ recovery. Such tracks cannot be liked and may require migration or
 recreation.
 
 
-### `get_my_file_sizes` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L507)
+### `get_my_file_sizes` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L535)
 
 ```python
 get_my_file_sizes(db: Annotated[AsyncSession, Depends(get_db)], auth_session: AuthSession = Depends(require_auth)) -> FileSizesResponse
@@ -89,10 +89,10 @@ Response for paginated track listing.
 Response for listing authenticated user's tracks.
 
 
-### `BrokenTracksResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L453)
+### `BrokenTracksResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L481)
 
 
 Response for broken tracks endpoint.
 
 
-### `FileSizesResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L502)
+### `FileSizesResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/listing.py#L530)

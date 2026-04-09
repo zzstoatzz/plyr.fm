@@ -10,7 +10,17 @@ Track detail and playback endpoints.
 
 ## Functions
 
-### `get_track` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/playback.py#L41)
+### `get_track_by_uri` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/playback.py#L68)
+
+```python
+get_track_by_uri(uri: Annotated[str, Query(description='AT-URI of the track record')], db: Annotated[AsyncSession, Depends(get_db)], session: Session | None = Depends(get_optional_session)) -> TrackResponse
+```
+
+
+Get a track by its ATProto record URI.
+
+
+### `get_track` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/playback.py#L87)
 
 ```python
 get_track(track_id: int, db: Annotated[AsyncSession, Depends(get_db)], session: Session | None = Depends(get_optional_session)) -> TrackResponse
@@ -20,7 +30,7 @@ get_track(track_id: int, db: Annotated[AsyncSession, Depends(get_db)], session: 
 Get a specific track.
 
 
-### `increment_play_count` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/playback.py#L78)
+### `increment_play_count` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/playback.py#L106)
 
 ```python
 increment_play_count(track_id: int, db: Annotated[AsyncSession, Depends(get_db)], session: Session | None = Depends(get_optional_session), body: PlayRequest | None = Body(default=None)) -> PlayCountResponse

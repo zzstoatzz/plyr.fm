@@ -10,7 +10,7 @@ activity feed — platform-wide chronological event stream.
 
 ## Functions
 
-### `get_activity_feed` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L190)
+### `get_activity_feed` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L256)
 
 ```python
 get_activity_feed(db: Annotated[AsyncSession, Depends(get_db)], cursor: str | None = Query(None), limit: int = Query(20)) -> ActivityFeedResponse
@@ -20,7 +20,7 @@ get_activity_feed(db: Annotated[AsyncSession, Depends(get_db)], cursor: str | No
 get the platform-wide activity feed.
 
 
-### `get_activity_histogram` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L271)
+### `get_activity_histogram` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L352)
 
 ```python
 get_activity_histogram(db: Annotated[AsyncSession, Depends(get_db)], days: int = Query(7, ge=1, le=30)) -> ActivityHistogramResponse
@@ -60,25 +60,31 @@ track referenced in an activity event.
 normalize_avatar(cls, v: str | None) -> str | None
 ```
 
-### `ActivityEvent` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L50)
+### `ActivityCollection` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L50)
+
+
+collection referenced in an activity event.
+
+
+### `ActivityEvent` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L61)
 
 
 single activity event.
 
 
-### `ActivityFeedResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L60)
+### `ActivityFeedResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L80)
 
 
 paginated activity feed.
 
 
-### `ActivityHistogramBucket` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L68)
+### `ActivityHistogramBucket` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L88)
 
 
 single day in the activity histogram.
 
 
-### `ActivityHistogramResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L75)
+### `ActivityHistogramResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/activity.py#L95)
 
 
 activity counts per day over a time window.

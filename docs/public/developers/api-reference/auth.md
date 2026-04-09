@@ -58,7 +58,7 @@ handles four flow types based on pending state:
 4. regular login flow - creates session, redirects to portal or profile setup
 
 
-### `exchange_token` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L319)
+### `exchange_token` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L327)
 
 ```python
 exchange_token(request: Request, exchange_request: ExchangeTokenRequest, response: Response) -> ExchangeTokenResponse
@@ -75,7 +75,7 @@ for SDK/CLI clients: only returns session_id in response (no cookie)
 for dev token exchanges: returns session_id but does NOT set cookie
 
 
-### `logout` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L370)
+### `logout` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L381)
 
 ```python
 logout(session: Session = Depends(require_auth), switch_to: Annotated[str | None, Query(description='DID to switch to after logout')] = None, db = Depends(get_db)) -> JSONResponse
@@ -88,7 +88,7 @@ if switch_to is provided and valid, deletes current session and switches
 to the specified account. otherwise, fully logs out.
 
 
-### `get_current_user` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L436)
+### `get_current_user` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L447)
 
 ```python
 get_current_user(session: Session = Depends(require_auth), db = Depends(get_db)) -> CurrentUserResponse
@@ -98,7 +98,7 @@ get_current_user(session: Session = Depends(require_auth), db = Depends(get_db))
 get current authenticated user with linked accounts.
 
 
-### `get_developer_tokens` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L471)
+### `get_developer_tokens` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L482)
 
 ```python
 get_developer_tokens(session: Session = Depends(require_auth)) -> DeveloperTokenListResponse
@@ -108,7 +108,7 @@ get_developer_tokens(session: Session = Depends(require_auth)) -> DeveloperToken
 list all developer tokens for the current user.
 
 
-### `delete_developer_token` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L491)
+### `delete_developer_token` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L502)
 
 ```python
 delete_developer_token(token_prefix: str, session: Session = Depends(require_auth)) -> JSONResponse
@@ -118,7 +118,7 @@ delete_developer_token(token_prefix: str, session: Session = Depends(require_aut
 revoke a developer token by its prefix (first 8 chars of session_id).
 
 
-### `start_developer_token_flow` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L531)
+### `start_developer_token_flow` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L542)
 
 ```python
 start_developer_token_flow(request: Request, body: DevTokenStartRequest, session: Session = Depends(require_auth)) -> DevTokenStartResponse
@@ -135,7 +135,7 @@ sessions refresh their tokens.
 returns the authorization URL that the frontend should redirect to.
 
 
-### `start_scope_upgrade_flow` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L592)
+### `start_scope_upgrade_flow` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L603)
 
 ```python
 start_scope_upgrade_flow(request: Request, body: ScopeUpgradeStartRequest, session: Session = Depends(require_auth)) -> ScopeUpgradeStartResponse
@@ -154,7 +154,7 @@ use this when a user enables a feature that requires additional OAuth scopes
 returns the authorization URL that the frontend should redirect to.
 
 
-### `start_add_account_flow` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L644)
+### `start_add_account_flow` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L655)
 
 ```python
 start_add_account_flow(request: Request, body: AddAccountStartRequest, session: Session = Depends(require_auth)) -> AddAccountStartResponse
@@ -171,7 +171,7 @@ group as the current account, enabling quick switching between accounts.
 returns the authorization URL that the frontend should redirect to.
 
 
-### `switch_account` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L694)
+### `switch_account` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L705)
 
 ```python
 switch_account(body: SwitchAccountRequest, response: Response, session: Session = Depends(require_auth), db = Depends(get_db)) -> SwitchAccountResponse
@@ -186,7 +186,7 @@ to point to the new session, and the old session is marked inactive.
 returns the new active account's info.
 
 
-### `logout_all` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L756)
+### `logout_all` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L767)
 
 ```python
 logout_all(session: Session = Depends(require_auth), db = Depends(get_db)) -> JSONResponse
@@ -247,61 +247,61 @@ a PDS option for account creation.
 response model for PDS options endpoint.
 
 
-### `ExchangeTokenRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L305)
+### `ExchangeTokenRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L313)
 
 
 request model for exchanging token for session_id.
 
 
-### `ExchangeTokenResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L311)
+### `ExchangeTokenResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L319)
 
 
 response model for exchange token endpoint.
 
 
-### `DevTokenStartRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L516)
+### `DevTokenStartRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L527)
 
 
 request model for starting developer token OAuth flow.
 
 
-### `DevTokenStartResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L523)
+### `DevTokenStartResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L534)
 
 
 response model with OAuth authorization URL.
 
 
-### `ScopeUpgradeStartRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L577)
+### `ScopeUpgradeStartRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L588)
 
 
 request model for starting scope upgrade OAuth flow.
 
 
-### `ScopeUpgradeStartResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L584)
+### `ScopeUpgradeStartResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L595)
 
 
 response model with OAuth authorization URL.
 
 
-### `AddAccountStartRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L630)
+### `AddAccountStartRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L641)
 
 
 request model for starting add-account flow.
 
 
-### `AddAccountStartResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L636)
+### `AddAccountStartResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L647)
 
 
 response model with OAuth authorization URL for adding account.
 
 
-### `SwitchAccountRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L679)
+### `SwitchAccountRequest` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L690)
 
 
 request model for switching to a different account.
 
 
-### `SwitchAccountResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L685)
+### `SwitchAccountResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/auth.py#L696)
 
 
 response model after switching accounts.
