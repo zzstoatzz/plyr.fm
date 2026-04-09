@@ -16,6 +16,7 @@ organized knowledge base for plyr.fm development.
 - **[database/](./backend/database/)** - connection pooling, neon-specific patterns
 - **[feature-flags.md](./backend/feature-flags.md)** - per-user feature rollout system
 - **[streaming-uploads.md](./backend/streaming-uploads.md)** - SSE progress tracking
+- **[album-uploads.md](./backend/album-uploads.md)** - multi-track album upload flow (create → finalize) and why the ATProto list record is authoritative for track order
 - **[transcoder.md](./backend/transcoder.md)** - rust audio conversion service (lossless support)
 - **[mood-search.md](./backend/mood-search.md)** - semantic search with CLAP embeddings (Modal + turbopuffer)
 - **[genre-classification.md](./backend/genre-classification.md)** - ML genre tagging via effnet-discogs (Replicate)

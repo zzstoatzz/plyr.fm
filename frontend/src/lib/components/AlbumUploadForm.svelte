@@ -3,9 +3,9 @@
 	import type { TrackEntry } from '$lib/components/TrackEntryCard.svelte';
 	import TrackEntryCard from '$lib/components/TrackEntryCard.svelte';
 	import PdsTooltip from '$lib/components/PdsTooltip.svelte';
-	import { uploader } from '$lib/uploader.svelte';
+	import { uploader, type UploadResult } from '$lib/uploader.svelte';
 	import { toast } from '$lib/toast.svelte';
-	import { getServerConfig } from '$lib/config';
+	import { getServerConfig, API_URL } from '$lib/config';
 
 	const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aiff', '.aif', '.flac'];
 	const FILE_INPUT_ACCEPT =
@@ -238,6 +238,59 @@
 		let completed = 0;
 		let failed = 0;
 
+		// step 1: create the album shell up front. tracks will reference this
+		// album_id explicitly, which avoids the get_or_create_album race that
+		// scrambled track order under concurrent uploads.
+		let albumId: string | null = null;
+		let albumSlug: string | null = null;
+		try {
+			const createResponse = await fetch(`${API_URL}/albums/`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({
+					title: albumTitle.trim(),
+				}),
+			});
+			if (!createResponse.ok) {
+				const err = await createResponse.json().catch(() => ({ detail: 'unknown error' }));
+				throw new Error(err.detail || 'failed to create album');
+			}
+			const created = await createResponse.json();
+			albumId = created.id;
+			albumSlug = created.slug;
+		} catch (err) {
+			toast.error(
+				err instanceof Error ? `failed to create album: ${err.message}` : 'failed to create album',
+			);
+			uploading = false;
+			return;
+		}
+
+		// step 2: upload cover art once (if provided). failure is non-fatal —
+		// the album still exists, user can add cover later from the edit page.
+		if (coverArtFile && albumId) {
+			try {
+				const coverForm = new FormData();
+				coverForm.append('image', coverArtFile);
+				const coverResponse = await fetch(`${API_URL}/albums/${albumId}/cover`, {
+					method: 'POST',
+					credentials: 'include',
+					body: coverForm,
+				});
+				if (!coverResponse.ok) {
+					toast.warning('cover art failed to upload — you can add it later from the album page');
+				}
+			} catch {
+				toast.warning('cover art failed to upload — you can add it later from the album page');
+			}
+		}
+
+		// step 3: upload all tracks concurrently with the explicit album_id.
+		// indexedResults preserves the user-intended order across Promise.allSettled
+		// so finalize can pass track_ids in that exact order.
+		const indexedResults: Array<UploadResult | null> = tracks.map(() => null);
+
 		const promises = tracks.map((track, i) => {
 			tracks[i] = { ...tracks[i], status: 'uploading' };
 
@@ -261,18 +314,21 @@
 				uploader.upload(
 					track.file!,
 					track.title,
-					albumTitle.trim(),
+					'', // album name lives on the album row now, not on per-track form data
 					[...track.featuredArtists],
-					coverArtFile,
+					null, // no per-track cover — album cover was uploaded above
 					[...track.tags],
 					track.supportGated,
 					track.autoTag,
 					track.description,
-					() => {
+					(result) => {
 						// SSE completed
 						clearTimeout(timeout);
 						tracks[i] = { ...tracks[i], status: 'completed' };
 						completed++;
+						if (result) {
+							indexedResults[i] = result;
+						}
 						onAlbumsReload();
 						safeResolve();
 					},
@@ -289,19 +345,43 @@
 						},
 					},
 					track.title,
+					albumId ?? undefined,
 				);
 			});
 		});
 		await Promise.allSettled(promises);
 
-		// refresh albums so we can find the slug for the "view album" link
+		// step 4: finalize the album — writes the ATProto list record with the
+		// user-intended track order. skipped entries (failed uploads) are filtered
+		// out; relative order of successful tracks is preserved.
+		const orderedTrackIds = indexedResults
+			.filter((r): r is UploadResult => r !== null)
+			.map((r) => r.trackId);
+
+		if (albumId && orderedTrackIds.length > 0) {
+			try {
+				const finalizeResponse = await fetch(`${API_URL}/albums/${albumId}/finalize`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					credentials: 'include',
+					body: JSON.stringify({ track_ids: orderedTrackIds }),
+				});
+				if (!finalizeResponse.ok) {
+					toast.warning(
+						'tracks uploaded but failed to save order — you can reorder from the album page',
+					);
+				}
+			} catch {
+				toast.warning(
+					'tracks uploaded but failed to save order — you can reorder from the album page',
+				);
+			}
+		}
+
+		// refresh albums so the list view reflects the new album
 		await onAlbumsReload();
 
 		if (completed > 0) {
-			const albumSlug = albums.find(
-				(a) => a.title.toLowerCase() === albumTitle.trim().toLowerCase(),
-			)?.slug;
-
 			toast.success(
 				`${completed} of ${tracks.length} track${tracks.length > 1 ? 's' : ''} uploaded`,
 				5000,

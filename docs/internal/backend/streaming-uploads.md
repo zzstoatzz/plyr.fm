@@ -260,8 +260,8 @@ successfully maintained during implementation:
 
 ### API contract
 - endpoint: `POST /tracks/` (unchanged)
-- parameters: title, file, album, features, image (unchanged)
-- response: same structure (unchanged)
+- parameters: title, file, album, features, image (unchanged); `album_id` added as an optional form field for the multi-track album upload flow — see [album-uploads.md](./album-uploads.md)
+- response: same structure; SSE completion payload adds `atproto_uri` and `atproto_cid` for callers that need the PDS strongRef
 - result: no breaking changes for clients
 
 ## edge cases

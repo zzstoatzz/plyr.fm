@@ -23,7 +23,7 @@ uses pg_trgm for fuzzy matching with similarity scoring.
 results are sorted by relevance within each type.
 
 
-### `semantic_search` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/search.py#L362)
+### `semantic_search` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/search.py#L364)
 
 ```python
 semantic_search(db: Annotated[AsyncSession, Depends(get_db)], q: str = Query(..., min_length=3, max_length=200, description='text description of desired audio'), limit: int = Query(10, ge=1, le=50, description='max results')) -> SemanticSearchResponse
@@ -75,13 +75,13 @@ playlist search result.
 unified search response.
 
 
-### `SemanticTrackResult` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/search.py#L341)
+### `SemanticTrackResult` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/search.py#L343)
 
 
 a track result from semantic audio search.
 
 
-### `SemanticSearchResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/search.py#L353)
+### `SemanticSearchResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/search.py#L355)
 
 
 response from semantic search endpoint.

@@ -30,7 +30,7 @@ apply_album_update(db: AsyncSession, track: Track, album_value: str | None) -> b
 Apply album updates to the track, returning whether a change occurred.
 
 
-### `upload_track_image` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/metadata_service.py#L109)
+### `upload_track_image` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/tracks/metadata_service.py#L120)
 
 ```python
 upload_track_image(image: UploadFile) -> tuple[str, str | None, str | None]

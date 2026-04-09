@@ -10,16 +10,17 @@ now playing API endpoints for external scrobbler integrations.
 
 exposes real-time playback state for services like teal.fm/Piper.
 
-note: these endpoints are exempt from rate limiting because they're
-already throttled client-side (10-second intervals, 1-second debounce).
+note: POST/DELETE are rate-limited server-side as a safety net.
+the frontend also throttles client-side (10-second intervals).
+GET endpoints for Piper are exempt since they're read-only.
 
 
 ## Functions
 
-### `update_now_playing` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L68)
+### `update_now_playing` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L69)
 
 ```python
-update_now_playing(update: NowPlayingUpdate, session: Session = Depends(require_auth)) -> StatusResponse
+update_now_playing(request: Request, update: NowPlayingUpdate, session: Session = Depends(require_auth)) -> StatusResponse
 ```
 
 
@@ -29,10 +30,10 @@ called by frontend to report current playback state.
 state expires after 5 minutes of no updates.
 
 
-### `clear_now_playing` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L98)
+### `clear_now_playing` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L100)
 
 ```python
-clear_now_playing(session: Session = Depends(require_auth)) -> StatusResponse
+clear_now_playing(request: Request, session: Session = Depends(require_auth)) -> StatusResponse
 ```
 
 
@@ -41,7 +42,7 @@ clear now playing state (authenticated).
 called when user explicitly stops playback.
 
 
-### `get_now_playing_by_handle` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L111)
+### `get_now_playing_by_handle` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L114)
 
 ```python
 get_now_playing_by_handle(handle: str, response: Response, db: Annotated[AsyncSession, Depends(get_db)]) -> NowPlayingResponse
@@ -64,7 +65,7 @@ response format matches what Piper expects from music sources:
 - service_base_url: "plyr.fm" for Piper to identify the source
 
 
-### `get_now_playing_by_did` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L163)
+### `get_now_playing_by_did` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L166)
 
 ```python
 get_now_playing_by_did(did: str, response: Response) -> NowPlayingResponse
@@ -79,13 +80,13 @@ returns 204 No Content if nothing is playing.
 
 ## Classes
 
-### `NowPlayingUpdate` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L25)
+### `NowPlayingUpdate` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L26)
 
 
 request to update now playing state.
 
 
-### `NowPlayingResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L39)
+### `NowPlayingResponse` [source](https://github.com/zzstoatzz/plyr.fm/blob/main/backend/src/backend/api/now_playing.py#L40)
 
 
 now playing state response.
