@@ -28,9 +28,11 @@
 		label = 'waveform'
 	}: Props = $props();
 
-	const BAR_WIDTH = 2;
-	const BAR_GAP = 1;
+	const BAR_WIDTH = 3;
+	const BAR_GAP = 2;
 	const BAR_STEP = BAR_WIDTH + BAR_GAP;
+	const BAR_MIN_HEIGHT = 3;
+	const BAR_RADIUS = BAR_WIDTH / 2;
 
 	let decodedPeaks = $state<number[] | null>(null);
 	let loading = $state(false);
@@ -145,14 +147,14 @@
 		</defs>
 		<g class="wf-base">
 			{#each renderPeaks as peak, i (i)}
-				{@const h = Math.max(2, peak * height)}
-				<rect x={i * BAR_STEP} y={(height - h) / 2} width={BAR_WIDTH} height={h} rx="1" />
+				{@const h = Math.max(BAR_MIN_HEIGHT, peak * height)}
+				<rect x={i * BAR_STEP} y={(height - h) / 2} width={BAR_WIDTH} height={h} rx={BAR_RADIUS} />
 			{/each}
 		</g>
 		<g class="wf-progress" clip-path="url(#{clipId})">
 			{#each renderPeaks as peak, i (i)}
-				{@const h = Math.max(2, peak * height)}
-				<rect x={i * BAR_STEP} y={(height - h) / 2} width={BAR_WIDTH} height={h} rx="1" />
+				{@const h = Math.max(BAR_MIN_HEIGHT, peak * height)}
+				<rect x={i * BAR_STEP} y={(height - h) / 2} width={BAR_WIDTH} height={h} rx={BAR_RADIUS} />
 			{/each}
 		</g>
 	</svg>
@@ -173,14 +175,14 @@
 		</defs>
 		<g class="wf-base">
 			{#each renderPeaks as peak, i (i)}
-				{@const h = Math.max(2, peak * height)}
-				<rect x={i * BAR_STEP} y={(height - h) / 2} width={BAR_WIDTH} height={h} rx="1" />
+				{@const h = Math.max(BAR_MIN_HEIGHT, peak * height)}
+				<rect x={i * BAR_STEP} y={(height - h) / 2} width={BAR_WIDTH} height={h} rx={BAR_RADIUS} />
 			{/each}
 		</g>
 		<g class="wf-progress" clip-path="url(#{clipId})">
 			{#each renderPeaks as peak, i (i)}
-				{@const h = Math.max(2, peak * height)}
-				<rect x={i * BAR_STEP} y={(height - h) / 2} width={BAR_WIDTH} height={h} rx="1" />
+				{@const h = Math.max(BAR_MIN_HEIGHT, peak * height)}
+				<rect x={i * BAR_STEP} y={(height - h) / 2} width={BAR_WIDTH} height={h} rx={BAR_RADIUS} />
 			{/each}
 		</g>
 	</svg>
@@ -204,11 +206,21 @@
 	}
 
 	.wf-base rect {
-		fill: var(--wf-base, color-mix(in srgb, var(--text-muted) 50%, transparent));
+		fill: var(--wf-base, color-mix(in srgb, var(--text-muted) 40%, transparent));
+		transition: fill 0.2s ease;
+	}
+
+	.wf.interactive:hover .wf-base rect {
+		fill: var(--wf-base-hover, color-mix(in srgb, var(--text-muted) 65%, transparent));
 	}
 
 	.wf-progress rect {
 		fill: var(--wf-progress, var(--accent));
+	}
+
+	/* subtle glow on the played portion — one filter per group, not per rect */
+	.wf-progress {
+		filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
 	}
 
 	.wf.loading {
