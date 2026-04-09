@@ -25,14 +25,25 @@
 	let currentTime = $state(0);
 	let duration = $state(0);
 	let isPlaying = $state(false);
-	const playbackProgress = $derived(
-		Number.isFinite(duration) && duration > 0 ? currentTime / duration : 0
+	// captured at recording stop-time from the live-tick counter. gives us a
+	// correct (1s-resolution) display duration immediately, before the browser
+	// has finished scanning the blob for its real length. we prefer the audio
+	// element's duration once it becomes a positive finite number, but fall
+	// back to this so the UI never shows "0:00" for a valid recording.
+	let capturedDuration = $state(0);
+	const effectiveDuration = $derived(
+		Number.isFinite(duration) && duration > 0 ? duration : capturedDuration
 	);
-	const timeDisplay = $derived(`${formatTime(currentTime)} / ${formatTime(duration)}`);
+	const playbackProgress = $derived(
+		effectiveDuration > 0 ? currentTime / effectiveDuration : 0
+	);
+	const timeDisplay = $derived(
+		`${formatTime(currentTime)} / ${formatTime(effectiveDuration)}`
+	);
 
 	function handleSeek(ratio: number) {
-		if (audioEl && Number.isFinite(duration) && duration > 0) {
-			audioEl.currentTime = ratio * duration;
+		if (audioEl && effectiveDuration > 0) {
+			audioEl.currentTime = ratio * effectiveDuration;
 		}
 	}
 
@@ -42,24 +53,30 @@
 		else audioEl.play().catch((e) => console.error('playback failed:', e));
 	}
 
+	function isUsableDuration(d: number): boolean {
+		return Number.isFinite(d) && d > 0;
+	}
+
 	// MediaRecorder-produced webm/ogg blobs have no duration written into the
 	// container header — the recorder streams output without knowing the final
-	// length. the browser reports `audioEl.duration === Infinity` until you
-	// force a full seek to EOF, at which point it scans the file and emits a
-	// `durationchange` with the real value. this is the MDN-documented fix.
+	// length. different browsers surface this as Infinity (Firefox), 0 (some
+	// Chrome versions), or NaN until the file is scanned to EOF. the
+	// MDN-documented fix is to seek to a huge time value; the browser clamps
+	// to real EOF, scans the file, and emits a `durationchange` with the real
+	// duration, at which point we reset currentTime to 0.
 	function handleLoadedMetadata() {
 		if (!audioEl) return;
-		if (Number.isFinite(audioEl.duration)) return;
+		if (isUsableDuration(audioEl.duration)) return;
 
 		const el = audioEl;
 		const onDurationChange = () => {
-			if (Number.isFinite(el.duration)) {
+			if (isUsableDuration(el.duration)) {
 				el.currentTime = 0;
 				el.removeEventListener('durationchange', onDurationChange);
 			}
 		};
 		el.addEventListener('durationchange', onDurationChange);
-		// jump past any plausible duration — the browser will clamp to real EOF
+		// jump past any plausible duration — the browser clamps to real EOF
 		el.currentTime = 1e101;
 	}
 
@@ -171,6 +188,9 @@
 		previewBlob = blob;
 		if (previewUrl) URL.revokeObjectURL(previewUrl);
 		previewUrl = URL.createObjectURL(blob);
+		// capture the elapsed tick count as a fallback duration — shown until
+		// the audio element reports a real positive finite duration
+		capturedDuration = elapsedSeconds;
 		const now = new Date();
 		const pad = (n: number) => String(n).padStart(2, '0');
 		title = `recording ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -190,6 +210,7 @@
 		elapsedSeconds = 0;
 		currentTime = 0;
 		duration = 0;
+		capturedDuration = 0;
 		isPlaying = false;
 		uiState = 'idle';
 	}
