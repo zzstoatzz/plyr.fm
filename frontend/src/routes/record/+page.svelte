@@ -25,11 +25,13 @@
 	let currentTime = $state(0);
 	let duration = $state(0);
 	let isPlaying = $state(false);
-	const playbackProgress = $derived(duration > 0 ? currentTime / duration : 0);
+	const playbackProgress = $derived(
+		Number.isFinite(duration) && duration > 0 ? currentTime / duration : 0
+	);
 	const timeDisplay = $derived(`${formatTime(currentTime)} / ${formatTime(duration)}`);
 
 	function handleSeek(ratio: number) {
-		if (audioEl && duration > 0) {
+		if (audioEl && Number.isFinite(duration) && duration > 0) {
 			audioEl.currentTime = ratio * duration;
 		}
 	}
@@ -38,6 +40,27 @@
 		if (!audioEl) return;
 		if (isPlaying) audioEl.pause();
 		else audioEl.play().catch((e) => console.error('playback failed:', e));
+	}
+
+	// MediaRecorder-produced webm/ogg blobs have no duration written into the
+	// container header — the recorder streams output without knowing the final
+	// length. the browser reports `audioEl.duration === Infinity` until you
+	// force a full seek to EOF, at which point it scans the file and emits a
+	// `durationchange` with the real value. this is the MDN-documented fix.
+	function handleLoadedMetadata() {
+		if (!audioEl) return;
+		if (Number.isFinite(audioEl.duration)) return;
+
+		const el = audioEl;
+		const onDurationChange = () => {
+			if (Number.isFinite(el.duration)) {
+				el.currentTime = 0;
+				el.removeEventListener('durationchange', onDurationChange);
+			}
+		};
+		el.addEventListener('durationchange', onDurationChange);
+		// jump past any plausible duration — the browser will clamp to real EOF
+		el.currentTime = 1e101;
 	}
 
 	let mediaRecorder: MediaRecorder | null = null;
@@ -49,8 +72,13 @@
 	const elapsedDisplay = $derived(formatTime(elapsedSeconds));
 
 	function formatTime(seconds: number): string {
-		const mm = Math.floor(seconds / 60).toString().padStart(2, '0');
-		const ss = Math.floor(seconds % 60).toString().padStart(2, '0');
+		if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
+		const mm = Math.floor(seconds / 60)
+			.toString()
+			.padStart(2, '0');
+		const ss = Math.floor(seconds % 60)
+			.toString()
+			.padStart(2, '0');
 		return `${mm}:${ss}`;
 	}
 
@@ -160,6 +188,9 @@
 		title = '';
 		tags = [];
 		elapsedSeconds = 0;
+		currentTime = 0;
+		duration = 0;
+		isPlaying = false;
 		uiState = 'idle';
 	}
 
@@ -291,6 +322,7 @@
 					bind:currentTime
 					bind:duration
 					src={previewUrl}
+					onloadedmetadata={handleLoadedMetadata}
 					onplay={() => (isPlaying = true)}
 					onpause={() => (isPlaying = false)}
 					onended={() => (isPlaying = false)}
