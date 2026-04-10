@@ -93,6 +93,31 @@ async def jwks_endpoint() -> dict[str, Any]:
     return jwks
 
 
+@router.get("/.well-known/did.json")
+async def did_json() -> dict[str, Any]:
+    """serve DID document for did:web resolution.
+
+    enables ATProto apps to discover plyr.fm's XRPC services
+    (e.g. parts.page.mention.search for Leaflet embed integration).
+    """
+    client_uri = settings.atproto.client_id.replace("/oauth-client-metadata.json", "")
+    # did:web uses domain with colons for port in dev
+    domain = client_uri.replace("https://", "").replace("http://", "")
+    did = f"did:web:{domain}"
+
+    return {
+        "@context": ["https://www.w3.org/ns/did/v1"],
+        "id": did,
+        "service": [
+            {
+                "id": "#mention_search",
+                "type": "MentionSearchService",
+                "serviceEndpoint": client_uri,
+            },
+        ],
+    }
+
+
 @router.get("/robots.txt", include_in_schema=False)
 async def robots_txt():
     """serve robots.txt to tell crawlers this is an API, not a website."""
