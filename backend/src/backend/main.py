@@ -37,6 +37,7 @@ from backend.api import (
     stats_router,
     tracks_router,
     users_router,
+    xrpc_router,
 )
 from backend.api.albums import router as albums_router
 from backend.api.lists import router as lists_router
@@ -161,3 +162,4 @@ app.include_router(oembed_router)
 app.include_router(stats_router)
 app.include_router(users_router)
 app.include_router(meta_router)
+app.include_router(xrpc_router)
