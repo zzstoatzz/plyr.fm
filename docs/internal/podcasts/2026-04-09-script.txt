@@ -1,0 +1,21 @@
+Host: Welcome back. This is the player FM status update covering April 3rd through the 10th, 2026. Seven days, thirty-one PRs merged. The headline: albums got a proper upload pipeline, and a couple of unlisted experiments quietly shipped.
+
+Cohost: Right. So the album story is actually a three-act arc. Act one: multi-track album upload lands on April 4th. You pick a title, add tracks, hit upload. Straightforward. Act two, same day: someone switches the uploads to run concurrently — per-track toast notifications, feels snappier. Act three: the track order is now random.
+
+Host: Of course it is.
+
+Cohost: Yeah. The problem was that each track, when it finished uploading, spawned a background task that rebuilt the album's ATProto list record — that's the source of truth for track order — by sorting on the database created_at timestamp. But under concurrency, created_at reflects whichever database commit won the race, not the order the user dragged the tracks into.
+
+Host: So the fix wasn't "add a track number column to the database"?
+
+Cohost: No, and that's the interesting part. The list record on the user's personal data server was already authoritative everywhere else — the album page reads it directly, the drag-and-drop reorder writes it directly. Adding a database column would have forked the truth. Instead, they made albums first-class: a three-step flow. Step one, create an empty album shell. Step two, upload tracks concurrently — each track now references the album by ID instead of by name, and none of them try to sync the list record. Step three, a single finalize call writes the list record once, in the exact order the user chose. Two thousand lines changed, but the core insight is elegant — don't race to build the truth, build it once correctly.
+
+Host: Staging also caught that the SSE stream was silently dropping the ATProto strong-ref fields the finalize step needed. So that got patched the same day.
+
+Cohost: Moving on. Two unlisted pages shipped on April 8th and 9th. First, slash for-you — a personalized feed using collaborative filtering ported from grain dot social. The scoring favors what they call "picky co-engagers": users who like fewer tracks carry more weight as taste signals. There's a 48-hour half-life instead of grain's 6-hour one, because audio ages slower than photos. It's unlisted for now, no index, no nav link — just soaking.
+
+Host: Second unlisted page: slash record. In-browser audio capture — open tab, press record, stop, preview, upload. Four-state machine with a mime fallback chain for cross-browser support. But the real payload is the Waveform component it ships alongside. Dual-layer SVG with clip-path masking — instead of recoloring a hundred individual bars on playback, one animated rectangle clips the progress layer. Designed for reuse across track detail, playlists, and the player.
+
+Cohost: Quick hits. A memory optimization experiment — deferring heavy imports to save 50 to 70 megs — shipped on April 5th and got reverted on the same day. No measurable benefit in production. PDS audio uploads graduated from experimental settings to the main portal. The top tracks carousel got three fixes: it no longer vanishes when a time period has no results, auto-skips to the next period with data, and actually respects the limit parameter on cached responses. And the docs folders got consolidated from three directories into one.
+
+Host: That's the week. Albums have a real pipeline now, two experiments are quietly collecting data, and the deferred imports experiment proved that sometimes the optimization isn't worth it. Until next time.
