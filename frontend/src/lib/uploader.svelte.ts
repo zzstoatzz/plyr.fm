@@ -81,7 +81,8 @@ class UploaderState {
 		onSuccess?: (_result?: UploadResult) => void,
 		callbacks?: UploadProgressCallback,
 		label?: string,
-		albumId?: string
+		albumId?: string,
+		unlisted?: boolean
 	): void {
 		const taskId = crypto.randomUUID();
 		const fileSizeMB = file.size / 1024 / 1024;
@@ -129,6 +130,9 @@ class UploaderState {
 		}
 		if (description) {
 			formData.append('description', description);
+		}
+		if (unlisted) {
+			formData.append('unlisted', 'true');
 		}
 
 		const xhr = new XMLHttpRequest();

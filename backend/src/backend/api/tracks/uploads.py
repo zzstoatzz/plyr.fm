@@ -103,6 +103,9 @@ class UploadContext:
     # auto-apply recommended genre tags after classification
     auto_tag: bool = False
 
+    # visibility: unlisted tracks don't appear in discovery feeds
+    unlisted: bool = False
+
 
 @dataclass
 class AudioInfo:
@@ -719,6 +722,7 @@ async def _create_records(
             image_url=image_url,
             thumbnail_url=thumbnail_url,
             support_gate=ctx.support_gate,
+            unlisted=ctx.unlisted,
             audio_storage=audio_storage,
             pds_blob_cid=pds_result.cid if pds_result else None,
             pds_blob_size=pds_result.size if pds_result else None,
@@ -996,6 +1000,12 @@ async def upload_track(
         str | None,
         Form(description="auto-apply recommended genre tags after classification"),
     ] = None,
+    unlisted: Annotated[
+        str | None,
+        Form(
+            description="set to 'true' to exclude from discovery feeds (latest, top, for-you)"
+        ),
+    ] = None,
     file: UploadFile = File(...),
     image: UploadFile | None = File(None),
 ) -> UploadStartResponse:
@@ -1140,6 +1150,7 @@ async def upload_track(
             image_content_type=image_content_type,
             support_gate=parsed_support_gate,
             auto_tag=auto_tag == "true",
+            unlisted=unlisted == "true",
         )
         background_tasks.add_task(_process_upload_background, ctx)
     except Exception:

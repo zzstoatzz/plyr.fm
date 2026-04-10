@@ -137,6 +137,9 @@ async def list_tracks(
     # filter by artist if provided
     if artist_did:
         stmt = stmt.where(Track.artist_did == artist_did)
+    else:
+        # discovery feed: exclude unlisted tracks (artist pages show all)
+        stmt = stmt.where(Track.unlisted == False)  # noqa: E712
 
     # filter out tracks with hidden tags
     # when filter_hidden_tags is None (default), auto-decide:
@@ -361,17 +364,17 @@ async def list_top_tracks(
 
     top_track_ids = [tid for tid, _ in top_tracks_with_counts]
 
-    # fetch tracks with relationships
+    # fetch tracks with relationships, excluding unlisted
     stmt = (
         select(Track)
         .join(Artist)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
-        .where(Track.id.in_(top_track_ids))
+        .where(Track.id.in_(top_track_ids), Track.unlisted == False)  # noqa: E712
     )
     result = await db.execute(stmt)
     tracks_by_id = {track.id: track for track in result.scalars().all()}
 
-    # preserve order from top_track_ids
+    # preserve order from top_track_ids (unlisted tracks silently dropped)
     tracks = [tracks_by_id[tid] for tid in top_track_ids if tid in tracks_by_id]
 
     # get authenticated user's liked tracks (scoped to current track IDs only)

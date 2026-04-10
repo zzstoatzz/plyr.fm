@@ -40,7 +40,7 @@ max_lines = 1149
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 581
+max_lines = 584
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -48,7 +48,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1223
+max_lines = 1234
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -164,7 +164,7 @@ max_lines = 2446
 
 [[rules]]
 path = "frontend/src/routes/portal/+page.svelte"
-max_lines = 3470
+max_lines = 3489
 
 [[rules]]
 path = "frontend/src/routes/settings/+page.svelte"
@@ -184,7 +184,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 798
+max_lines = 819
 
 [[rules]]
 path = "services/moderation/src/admin.rs"

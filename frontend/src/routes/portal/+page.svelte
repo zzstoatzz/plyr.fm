@@ -35,6 +35,7 @@
 	let editImagePreviewUrl = $state<string | null>(null);
 	let editRemoveImage = $state(false);
 	let editSupportGate = $state(false);
+	let editUnlisted = $state(false);
 	let hasUnresolvedEditFeaturesInput = $state(false);
 	let recommendedTags = $state<{name: string; score: number}[]>([]);
 	let loadingRecommendedTags = $state(false);
@@ -405,6 +406,7 @@
 		editFeaturedArtists = track.features || [];
 		editTags = track.tags || [];
 		editSupportGate = track.support_gate !== null && track.support_gate !== undefined;
+		editUnlisted = track.unlisted ?? false;
 		fetchRecommendedTags(track.id);
 	}
 
@@ -443,6 +445,7 @@
 		editImagePreviewUrl = null;
 		editRemoveImage = false;
 		editSupportGate = false;
+		editUnlisted = false;
 		recommendedTags = [];
 		loadingRecommendedTags = false;
 		recommendedTagsTrackId = null;
@@ -469,6 +472,7 @@
 		} else {
 			formData.append('support_gate', 'null');
 		}
+		formData.append('unlisted', editUnlisted ? 'true' : 'false');
 		// handle artwork: remove, replace, or leave unchanged
 		if (editRemoveImage) {
 			formData.append('remove_image', 'true');
@@ -1017,6 +1021,21 @@
 												{/if}
 											</div>
 										{/if}
+										<div class="edit-field-group">
+											<span class="edit-label">visibility</span>
+											<label class="toggle-row">
+												<input
+													type="checkbox"
+													bind:checked={editUnlisted}
+												/>
+												<span>unlisted — won't appear in feeds</span>
+											</label>
+											{#if editUnlisted}
+												<p class="field-hint">
+													this track won't show up in the latest, top, or for-you feeds. it's still accessible via direct link, your profile, albums, playlists, and search.
+												</p>
+											{/if}
+										</div>
 									</div>
 									<div class="edit-actions">
 										<button

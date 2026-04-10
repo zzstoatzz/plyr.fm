@@ -101,6 +101,13 @@ class Track(Base):
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # visibility — unlisted tracks don't appear in discovery feeds (latest,
+    # top, for-you) but are still accessible via direct link, artist profile,
+    # album pages, playlists, and search
+    unlisted: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default="false"
+    )
+
     # notification tracking
     notification_sent: Mapped[bool] = mapped_column(
         nullable=False, default=False, server_default="false"

@@ -64,6 +64,7 @@ export interface Track {
 	description?: string | null; // track description (liner notes, show notes)
 	audio_storage?: 'r2' | 'pds' | 'both'; // where audio is stored
 	pds_blob_cid?: string | null; // CID if stored on user's PDS
+	unlisted?: boolean; // excluded from discovery feeds
 }
 
 export interface LinkedAccount {
