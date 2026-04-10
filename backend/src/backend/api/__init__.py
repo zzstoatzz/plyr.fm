@@ -20,6 +20,7 @@ from backend.api.search import router as search_router
 from backend.api.stats import router as stats_router
 from backend.api.tracks import router as tracks_router
 from backend.api.users import router as users_router
+from backend.api.xrpc import router as xrpc_router
 
 __all__ = [
     "account_router",
@@ -42,4 +43,5 @@ __all__ = [
     "stats_router",
     "tracks_router",
     "users_router",
+    "xrpc_router",
 ]
