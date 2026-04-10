@@ -174,6 +174,10 @@ async def update_track_metadata(
         str | None,
         Form(description="Set to 'true' to remove artwork"),
     ] = None,
+    unlisted: Annotated[
+        str | None,
+        Form(description="Set to 'true' to exclude from feeds, 'false' to include"),
+    ] = None,
 ) -> TrackResponse:
     """Update track metadata (only by owner)."""
     result = await db.execute(
@@ -235,6 +239,10 @@ async def update_track_metadata(
                 ) from e
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # handle unlisted toggle
+    if unlisted is not None:
+        track.unlisted = unlisted.lower() == "true"
 
     # track album changes for list sync
     old_album_id = track.album_id

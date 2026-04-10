@@ -308,7 +308,10 @@ async def get_for_you_feed(
         top_ids = [tid for tid, _ in top_slice]
         artist_rows = (
             await db.execute(
-                select(Track.id, Track.artist_did).where(Track.id.in_(top_ids))
+                select(Track.id, Track.artist_did).where(
+                    Track.id.in_(top_ids),
+                    Track.unlisted == False,  # noqa: E712
+                )
             )
         ).all()
         artist_by_track = {row.id: row.artist_did for row in artist_rows}

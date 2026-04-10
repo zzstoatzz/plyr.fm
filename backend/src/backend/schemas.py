@@ -122,6 +122,7 @@ class TrackResponse(BaseModel):
     description: str | None = None  # track description (liner notes, show notes)
     audio_storage: str = "r2"  # "r2" | "pds" | "both"
     pds_blob_cid: str | None = None  # CID if stored on user's PDS
+    unlisted: bool = False  # excluded from discovery feeds
 
     @classmethod
     async def from_track(
@@ -233,4 +234,5 @@ class TrackResponse(BaseModel):
             original_file_type=track.original_file_type,
             audio_storage=track.audio_storage,
             pds_blob_cid=track.pds_blob_cid,
+            unlisted=track.unlisted,
         )

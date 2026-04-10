@@ -61,6 +61,7 @@
 	let attestedRights = $state(false);
 	let supportGated = $state(false);
 	let autoTag = $state(false);
+	let trackUnlisted = $state(false);
 
 	// albums for selection
 	let albums = $state<AlbumSummary[]>([]);
@@ -125,6 +126,7 @@
 		const isGated = supportGated;
 		const shouldAutoTag = autoTag;
 		const uploadDescription = description;
+		const isUnlisted = trackUnlisted;
 
 		const clearForm = () => {
 			title = "";
@@ -137,6 +139,7 @@
 			attestedRights = false;
 			supportGated = false;
 			autoTag = false;
+			trackUnlisted = false;
 
 			const fileInput = document.getElementById(
 				"file-input",
@@ -167,6 +170,9 @@
 				},
 				onError: () => {},
 			},
+			undefined, // label
+			undefined, // albumId
+			isUnlisted,
 		);
 	}
 
@@ -407,6 +413,21 @@
 							want to offer exclusive tracks to supporters? <a href="https://atprotofans.com" target="_blank" rel="noopener">set up atprotofans</a>, then enable it in your <a href="/portal">portal</a>
 						</span>
 					</div>
+				{/if}
+			</div>
+
+			<div class="form-group">
+				<label class="checkbox-label">
+					<input
+						type="checkbox"
+						bind:checked={trackUnlisted}
+					/>
+					<span class="checkbox-text">unlisted — won't appear in feeds</span>
+				</label>
+				{#if trackUnlisted}
+					<p class="field-hint">
+						this track won't show up in the latest, top, or for-you feeds. it's still accessible via direct link, your profile, albums, playlists, and search.
+					</p>
 				{/if}
 			</div>
 
