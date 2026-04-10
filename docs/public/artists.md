@@ -6,14 +6,14 @@ description: "upload, manage, and distribute your audio"
 you make sound! let's get it out there!
 
 :::caution[🚦]
-you _don't_ have a handle? head to [plyr.fm/login](https://plyr.fm/login) to create an account.
+you _don't_ have an account? head to [plyr.fm/login](https://plyr.fm/login) to create one.
 :::
 
 on plyr.fm, you can share **music**, **podcasts**, **sound art**, **ASMR**, and anything else that makes noise — no distribution fees, no gatekeepers.
 
 when you upload a track:
 - it's stored in [a place you control](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io), tied to your identity
-- share your track with anyone, even if they don't have a handle
+- share your track with anyone, even if they don't have an account
 - you can [embed a player](#embeds) on your website or blog
 - you can [gate tracks](#supporter-gated-tracks) behind supporter status
 
