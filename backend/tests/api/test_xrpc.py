@@ -69,7 +69,8 @@ async def test_mention_search_returns_results(
     assert track_result["name"] == "banana mix"
     assert "embed" in track_result
     assert "/embed/track/" in track_result["embed"]["src"]
-    assert track_result["embed"]["aspectRatio"] == {"width": 16, "height": 9}
+    assert track_result["embed"]["width"] == 600
+    assert track_result["embed"]["height"] == 160
     assert track_result["href"].endswith(f"/track/{search_fixtures['track_id']}")
 
 
