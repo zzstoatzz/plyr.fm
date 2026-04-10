@@ -47,6 +47,26 @@ plyr.fm should become:
 
 ### April 2026
 
+#### first-class album uploads with preserved track ordering (PRs #1260-1262, Apr 9)
+
+**why**: album uploads via the album upload form lost the user's chosen track order after #1238 switched to concurrent uploads. the ATProto list record (the source of truth for album track order) was built by per-track sync tasks that sorted by `Track.created_at`, and `created_at` reflects the DB commit race under concurrency — not user intent. external review also caught two P1s: creating the album shell emitted an `album_release` CollectionEvent before any track succeeded (fake release in the activity feed), and appending tracks to an existing album truncated the list record to only the current session's tracks.
+
+**what shipped**:
+- **`POST /albums/`** (#1260) — first-class album creation endpoint. creates an empty album shell (title, description) without writing the ATProto list record. idempotent on `(artist_did, slug)` — matches the "type an existing album name to add tracks to it" UX. `album_release` CollectionEvent deferred to finalize so total upload failures don't publish a fake release
+- **`POST /tracks/` with `album_id`** (#1260) — optional form field that skips `get_or_create_album`, links the track to the existing album at row creation, and skips per-track `schedule_album_list_sync`. mutually exclusive with the legacy `album: str` field
+- **`POST /albums/{id}/finalize`** (#1260) — accepts `{track_ids: [int]}` in user-intended order. writes the ATProto list record **once** with strongRefs in the exact order requested. on append (when the album already has tracks from prior sessions), preserves existing tracks in their current list-record order and appends new tracks at the end. emits `album_release` on first successful finalize only (deduped)
+- **SSE strongRef surface** (#1262) — the upload-progress SSE endpoint now surfaces `atproto_uri` and `atproto_cid` in the completion payload. caught by staging integration tests after #1260 merged — the SSE handler whitelisted only `track_id` and `warnings`, silently dropping the strongRef fields the upload pipeline wrote to `job.result`
+- **dropped mid-page progress block** (#1261) — per-track toasts and per-card status pills from #1238 already provide richer feedback; the aggregate progress bar was a third view of the same data
+- **empty album filtering** — `GET /albums/`, `GET /albums/{handle}`, search, and sitemap now filter to albums with at least one track, so abandoned draft shells never appear on artist profiles or in search results
+
+**decisions**:
+- no DB schema change — the ATProto list record remains the single source of truth for track order, consistent with how the album edit page's drag-and-drop reorder already works (`PUT /lists/{rkey}/reorder` writes the PDS directly). adding a `track_number` column would have forked the truth and required ongoing DB↔PDS synchronization
+- the legacy `album: str` path (single-track `/upload` page) is untouched — its per-track sync is still racy in principle, but single-track uploads can't produce concurrent inserts by construction
+- the `album_release` dedup is application-level (`SELECT` + `INSERT`), not DB-enforced (no partial unique index on `CollectionEvent`). concurrent finalize calls have a TOCTOU window — acceptable because the frontend calls finalize exactly once and the album edit page doesn't use finalize at all. flagged as a follow-up hardening opportunity
+- internal docs: `docs/internal/backend/album-uploads.md` covers the full three-step flow, the atproto-native rationale, append semantics, and partial-failure behavior. plan doc at `docs/internal/plans/2026-04-09-album-upload-ordering.md`
+
+---
+
 #### unlisted /record page + reusable Waveform component (PRs #1251-1257, Apr 8-9)
 
 **why**: uploading short audio (voice memos, field recordings, ideas) via the existing upload flow meant finding a desktop recorder, saving a file, then navigating to `/upload` and picking it — a disproportionate round-trip for a 30-second capture. inspired by Jared's Leaflet in-browser recorder: open the tab, press record, stop, preview, upload, done. separately, plyr.fm has needed a reusable waveform visualization for months — track detail, player, playlist rows all want one — so this PR ships the primitive alongside its first caller instead of duplicating the work later.
@@ -238,7 +258,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-Two unlisted surfaces shipped this week: `/for-you` (#1249-1250), a collaborative-filtering personalized feed ported from grain.social with plyr-specific diversity caps and stronger engagement signals; and `/record` (#1251-1257), an in-browser audio capture page with a reusable `Waveform` component designed for propagation to track detail, playlist, and player surfaces. ooo.audio cross-app lexicon conversation is in-flight (meeting notes on #705) — room included **comet.sh** (Elixir-first, pre-MVP, foundational libs shipped, fair-use/remix-culture framing that aligns closely with plyr.fm's stance), **tracklist.diy** (DMT, Inc., closed signup list, staking out the centralized-catalogue-server / "stripe for simplicity" counterweight), and **whereditgo.diamonds** (Bazaar — a shipped, white-labeled IMS + storefront + licensing hub that sells exclusive stream licenses to atproto streaming platforms with purchase receipts written to the buyer's PDS; a parallel license-as-record pattern worth tracking). next: waveform rollout to other surfaces as a follow-up to #1251; watch `/for-you` engagement to decide whether to promote it or rerank with CLAP embeddings; define what "top artist" means on a platform with diverse content types; add a staging environment for the moderation service (#1165).
+Album upload ordering fix shipped (#1260-1262) — albums are now first-class objects (`POST /albums/` creates a shell, `POST /albums/{id}/finalize` writes the ATProto list record once with user-intended order). External review caught and fixed two P1s before production: fake album_release events on upload failure, and list-record truncation when appending tracks to existing albums. Also shipped this week: `/for-you` (#1249-1250), a collaborative-filtering personalized feed ported from grain.social; `/record` (#1251-1257), an in-browser audio capture page with a reusable `Waveform` component. ooo.audio cross-app lexicon conversation is in-flight (meeting notes on #705) — room included **comet.sh**, **tracklist.diy**, and **whereditgo.diamonds**. next: waveform rollout to other surfaces as a follow-up to #1251; watch `/for-you` engagement to decide whether to promote it or rerank with CLAP embeddings; define what "top artist" means on a platform with diverse content types; add a staging environment for the moderation service (#1165).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -374,5 +394,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-09 (unlisted /record + reusable Waveform; unlisted /for-you personalized feed).
+this is a living document. last updated 2026-04-09 (first-class album uploads with preserved track ordering).
 
