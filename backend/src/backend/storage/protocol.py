@@ -37,6 +37,8 @@ class StorageProtocol(Protocol):
 
     async def delete(self, file_id: str, file_type: str | None = None) -> bool: ...
 
+    async def delete_image(self, file_id: str, image_url: str) -> bool: ...
+
     async def save_gated(
         self,
         file: BinaryIO | BytesIO,

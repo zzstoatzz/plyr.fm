@@ -28,7 +28,7 @@ max_lines = 896
 
 [[rules]]
 path = "backend/src/backend/api/albums.py"
-max_lines = 989
+max_lines = 995
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
@@ -36,7 +36,7 @@ max_lines = 807
 
 [[rules]]
 path = "backend/src/backend/api/lists.py"
-max_lines = 1146
+max_lines = 1149
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
@@ -56,7 +56,7 @@ max_lines = 1000
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
-max_lines = 725
+max_lines = 766
 
 [[rules]]
 path = "backend/tests/api/test_audio.py"
@@ -232,7 +232,7 @@ max_lines = 580
 
 [[rules]]
 path = "backend/tests/api/test_track_deletion.py"
-max_lines = 505
+max_lines = 519
 
 [[rules]]
 path = "backend/tests/api/test_top_tracks.py"

@@ -312,10 +312,17 @@ async def test_track_deletion_preserves_shared_album_image(
     async def mock_delete(file_id: str, file_type: str | None = None):
         delete_calls.append(file_id)
 
+    async def mock_delete_image(file_id: str, image_url: str):
+        delete_calls.append(file_id)
+
     with (
         patch(
             "backend.api.tracks.mutations.storage.delete",
             side_effect=mock_delete,
+        ),
+        patch(
+            "backend.api.tracks.mutations.storage.delete_image",
+            side_effect=mock_delete_image,
         ),
         patch(
             "backend.api.tracks.mutations.schedule_album_list_sync",
@@ -370,10 +377,17 @@ async def test_track_deletion_deletes_unshared_image(
     async def mock_delete(file_id: str, file_type: str | None = None):
         delete_calls.append(file_id)
 
+    async def mock_delete_image(file_id: str, image_url: str):
+        delete_calls.append(file_id)
+
     with (
         patch(
             "backend.api.tracks.mutations.storage.delete",
             side_effect=mock_delete,
+        ),
+        patch(
+            "backend.api.tracks.mutations.storage.delete_image",
+            side_effect=mock_delete_image,
         ),
         patch(
             "backend.api.tracks.mutations.schedule_album_list_sync",

@@ -8,9 +8,7 @@ from pathlib import PurePosixPath
 from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
-from backend._internal.clients.moderation import get_moderation_client
 from backend._internal.image import ImageFormat
-from backend._internal.notifications import notification_service
 from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.storage import storage
@@ -98,21 +96,27 @@ async def process_image_upload(
     image_url = storage.build_image_url(image_id, ext)
     thumbnail_url = await generate_and_save(bytes(image_data), image_id, entity_type)
 
-    # moderation scanning (non-blocking — flags but doesn't reject)
+    # moderation scanning — dispatched as a docket background task so the
+    # HTTP response isn't blocked on the moderation service round trip
+    # (~3-6s for claude vision + possible cold-start penalty).  the scan
+    # only flags and notifies; it never gates the response.
     if scan_moderation and settings.moderation.image_moderation_enabled:
         try:
-            client = get_moderation_client()
+            from backend._internal.tasks.moderation import (
+                schedule_image_moderation_scan,
+            )
+
             content_type = image_format.media_type if image_format else "image/png"
-            result = await client.scan_image(bytes(image_data), image_id, content_type)
-            if not result.is_safe:
-                await notification_service.send_image_flag_notification(
-                    image_id=image_id,
-                    severity=result.severity,
-                    categories=result.violated_categories,
-                    context=f"{entity_type} cover",
-                )
+            await schedule_image_moderation_scan(
+                image_id=image_id,
+                image_url=image_url,
+                content_type=content_type,
+                entity_type=entity_type,
+            )
         except Exception as e:
-            logger.warning("image moderation failed for %s: %s", image_id, e)
+            logger.warning(
+                "failed to schedule image moderation for %s: %s", image_id, e
+            )
 
     return ImageUploadResult(
         image_id=image_id,
