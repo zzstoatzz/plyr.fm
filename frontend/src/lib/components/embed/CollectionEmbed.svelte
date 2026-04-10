@@ -2,16 +2,7 @@
 	import { page } from '$app/stores';
 	import { onMount, tick } from 'svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
-	import type { Track } from '$lib/types';
-
-	interface CollectionData {
-		title: string;
-		subtitle: string;
-		subtitleUrl: string;
-		collectionUrl: string;
-		imageUrl: string | null;
-		tracks: Track[];
-	}
+	import type { CollectionData } from '$lib/types';
 
 	let { collection }: { collection: CollectionData } = $props();
 

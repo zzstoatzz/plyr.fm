@@ -1,16 +1,7 @@
 import { API_URL } from '$lib/config';
-import type { AlbumResponse, Track } from '$lib/types';
+import type { AlbumResponse, CollectionData } from '$lib/types';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-
-export interface CollectionData {
-	title: string;
-	subtitle: string;
-	subtitleUrl: string;
-	collectionUrl: string;
-	imageUrl: string | null;
-	tracks: Track[];
-}
 
 export const load: PageServerLoad = async ({ params, fetch }) => {
 	try {

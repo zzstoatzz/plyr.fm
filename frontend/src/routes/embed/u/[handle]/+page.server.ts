@@ -1,8 +1,7 @@
 import { API_URL } from '$lib/config';
-import type { Artist, Track } from '$lib/types';
+import type { Artist, CollectionData, Track } from '$lib/types';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import type { CollectionData } from '../../album/[handle]/[slug]/+page.server';
 
 export const load: PageServerLoad = async ({ params, fetch }) => {
 	try {

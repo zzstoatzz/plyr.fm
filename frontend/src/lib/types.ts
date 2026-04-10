@@ -220,3 +220,12 @@ export interface JamPlaybackState {
 	output_mode?: 'one_speaker' | 'everyone';
 }
 
+export interface CollectionData {
+	title: string;
+	subtitle: string;
+	subtitleUrl: string;
+	collectionUrl: string;
+	imageUrl: string | null;
+	tracks: Track[];
+}
+
