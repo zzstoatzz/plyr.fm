@@ -177,6 +177,7 @@ async def _setup_template_database(template_url: str) -> None:
     engine = create_async_engine(template_url, echo=False)
     try:
         async with engine.begin() as conn:
+            await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
             await conn.run_sync(Base.metadata.create_all)
             await _truncate_tables(conn)
             await _create_clear_database_procedure(conn)
