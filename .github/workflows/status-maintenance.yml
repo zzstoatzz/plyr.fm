@@ -213,7 +213,7 @@ jobs:
             ### terminology
 
             plyr.fm is built on **ATProto** (the protocol), not Bluesky (the app).
-            say "ATProto identities" or just "identities" - never "Bluesky accounts".
+            say "atmosphere accounts" or just "accounts" - never "Bluesky accounts".
 
             ### identifying what actually shipped
 

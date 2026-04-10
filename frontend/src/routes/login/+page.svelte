@@ -121,7 +121,7 @@
 			{#if mode === 'signin'}
 				<div class="input-group">
 					<label for="handle">
-						<a href="https://internethandle.org" target="_blank" rel="noopener" class="handle-label-link">internet handle</a>
+						<a href="https://atproto.com/guides/glossary#handle" target="_blank" rel="noopener" class="handle-label-link">atmosphere account</a>
 					</label>
 					<HandleAutocomplete
 						bind:value={handle}

@@ -75,10 +75,10 @@ the project name is pronounced "player FM". in scripts, write:
 ### terminology
 
 plyr.fm operates at the ATProto protocol layer:
-- say "ATProto identities" or "identities"
+- say "atmosphere accounts" or just "accounts"
 - never "Bluesky accounts"
 
-Bluesky is one application on ATProto, like plyr.fm is another.
+Bluesky is one application on the Atmosphere, like plyr.fm is another.
 
 ### tone
 
@@ -135,7 +135,7 @@ if a reverted PR is polluting the results, add a temporary exclusion.
 ### audio has wrong terminology
 
 check the terminology section in the workflow prompt. common mistakes:
-- "Bluesky accounts" should be "ATProto identities"
+- "Bluesky accounts" should be "atmosphere accounts"
 - "plyr" should be "player FM" (phonetic)
 
 ### STATUS.md over 500 lines

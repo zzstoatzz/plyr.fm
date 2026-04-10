@@ -21,9 +21,13 @@ a named group of records in a user's data repo, identified by an [NSID](#nsid). 
 
 see: [atproto.com/specs/did](https://atproto.com/specs/did)
 
-### handle (atproto handle)
+### atmosphere account
 
-a human-readable identifier for an atproto account, formatted as a domain name (e.g. `artist.bsky.social` or `yourname.com`). sometimes called an [internet handle](https://internethandle.org). handles can change — DIDs are the stable identifier underneath.
+an account on the [Atmosphere](https://atproto.com) — the open network of apps and services built on the AT Protocol. your atmosphere account is portable: you can use it to sign in to plyr.fm, Bluesky, and any other atproto app. accounts are hosted by a [PDS](#pds) provider (like `bsky.social`).
+
+### handle
+
+a human-readable identifier for an atmosphere account, formatted as a domain name (e.g. `artist.bsky.social` or `yourname.com`). handles can change — [DIDs](#did) are the stable identifier underneath.
 
 ### Jetstream
 
