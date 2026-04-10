@@ -55,7 +55,8 @@ def _result_to_mention(result: SearchResult) -> dict[str, Any]:
                 "labels": [{"text": "track"}],
                 "embed": {
                     "src": f"{base_url}/embed/track/{result.id}",
-                    "aspectRatio": {"width": 16, "height": 9},
+                    "width": 600,
+                    "height": 160,
                 },
                 "subscope": {"scope": "tracks", "label": "Tracks"},
             }
@@ -72,7 +73,8 @@ def _result_to_mention(result: SearchResult) -> dict[str, Any]:
                 "labels": [{"text": "artist"}],
                 "embed": {
                     "src": f"{base_url}/embed/u/{result.handle}",
-                    "aspectRatio": {"width": 16, "height": 9},
+                    "width": 600,
+                    "height": 400,
                 },
                 "subscope": {"scope": "artists", "label": "Artists"},
             }
@@ -89,7 +91,8 @@ def _result_to_mention(result: SearchResult) -> dict[str, Any]:
                 "labels": [{"text": "album"}],
                 "embed": {
                     "src": f"{base_url}/embed/album/{result.artist_handle}/{result.slug}",
-                    "aspectRatio": {"width": 16, "height": 9},
+                    "width": 600,
+                    "height": 400,
                 },
                 "subscope": {"scope": "albums", "label": "Albums"},
             }
@@ -106,7 +109,8 @@ def _result_to_mention(result: SearchResult) -> dict[str, Any]:
                 "labels": [{"text": "playlist"}],
                 "embed": {
                     "src": f"{base_url}/embed/playlist/{result.id}",
-                    "aspectRatio": {"width": 16, "height": 9},
+                    "width": 600,
+                    "height": 400,
                 },
                 "subscope": {"scope": "playlists", "label": "Playlists"},
             }
