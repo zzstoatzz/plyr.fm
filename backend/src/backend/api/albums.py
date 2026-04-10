@@ -551,7 +551,10 @@ async def upload_album_cover(
         # delete old image if exists (prevent R2 object leaks)
         if album.image_id and album.image_id != uploaded.image_id:
             with contextlib.suppress(Exception):
-                await storage.delete(album.image_id)
+                if album.image_url:
+                    await storage.delete_image(album.image_id, album.image_url)
+                else:
+                    await storage.delete(album.image_id)
 
         # update album with new image
         album.image_id = uploaded.image_id
@@ -974,7 +977,10 @@ async def delete_album(
     # delete cover image from storage if exists
     if album.image_id:
         with contextlib.suppress(Exception):
-            await storage.delete(album.image_id)
+            if album.image_url:
+                await storage.delete_image(album.image_id, album.image_url)
+            else:
+                await storage.delete(album.image_id)
 
     # capture slug before deletion
     album_slug = album.slug

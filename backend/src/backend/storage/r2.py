@@ -490,6 +490,51 @@ class R2Storage:
             )
             return False
 
+    async def delete_image(self, file_id: str, image_url: str) -> bool:
+        """delete an image from R2 using its known URL to derive the exact key.
+
+        avoids the format-spray fallback in delete() which tries every audio
+        format then every image format via sequential HEAD requests (~1.3s of
+        wasted round trips). the image URL already encodes the correct
+        extension, so we can build the key directly.
+        """
+        from pathlib import PurePosixPath
+
+        # extract extension from URL: ".../images/abc123.png?..." → ".png"
+        ext = PurePosixPath(image_url.split("?")[0]).suffix.lower()
+        if not ext:
+            logfire.warning(
+                "delete_image: could not extract extension from URL, falling back",
+                file_id=file_id,
+                image_url=image_url,
+            )
+            return await self.delete(file_id)
+
+        key = f"images/{file_id}{ext}"
+        async with self.async_session.client(
+            "s3",
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.aws_access_key_id,
+            aws_secret_access_key=self.aws_secret_access_key,
+        ) as client:
+            try:
+                await client.delete_object(Bucket=self.image_bucket_name, Key=key)
+                logfire.info(
+                    "R2 image deleted (direct)",
+                    file_id=file_id,
+                    key=key,
+                    bucket=self.image_bucket_name,
+                )
+                return True
+            except client.exceptions.ClientError as e:
+                logfire.warning(
+                    "R2 delete_image failed, falling back to format scan",
+                    file_id=file_id,
+                    key=key,
+                    error=str(e),
+                )
+                return await self.delete(file_id)
+
     async def save_gated(
         self,
         file: BinaryIO | BytesIO,

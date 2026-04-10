@@ -114,7 +114,10 @@ async def delete_track(
         )
         if not album_shares_image:
             try:
-                await storage.delete(track.image_id)
+                if track.image_url:
+                    await storage.delete_image(track.image_id, track.image_url)
+                else:
+                    await storage.delete(track.image_id)
             except Exception as e:
                 logger.warning(
                     f"failed to delete image {track.image_id}: {e}", exc_info=True
@@ -255,7 +258,10 @@ async def update_track_metadata(
         )
         if not album_shares_image:
             with contextlib.suppress(Exception):
-                await storage.delete(track.image_id)
+                if track.image_url:
+                    await storage.delete_image(track.image_id, track.image_url)
+                else:
+                    await storage.delete(track.image_id)
         track.image_id = None
         track.image_url = None
         track.thumbnail_url = None
@@ -272,7 +278,10 @@ async def update_track_metadata(
             )
             if not album_shares_image:
                 with contextlib.suppress(Exception):
-                    await storage.delete(track.image_id)
+                    if track.image_url:
+                        await storage.delete_image(track.image_id, track.image_url)
+                    else:
+                        await storage.delete(track.image_id)
 
         track.image_id = image_id
         track.image_url = image_url

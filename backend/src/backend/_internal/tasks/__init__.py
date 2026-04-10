@@ -24,6 +24,10 @@ from backend._internal.tasks.hooks import (
     invalidate_tracks_discovery_cache,
     run_post_track_create_hooks,
 )
+from backend._internal.tasks.moderation import (
+    scan_image_moderation,
+    schedule_image_moderation_scan,
+)
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
     ingest_comment_create,
@@ -104,6 +108,7 @@ def _build_background_tasks() -> list:
         ingest_list_update,
         ingest_list_delete,
         ingest_profile_update,
+        scan_image_moderation,
     ]
 
 
@@ -151,6 +156,7 @@ __all__ = [
     "pds_update_comment",
     "run_post_track_create_hooks",
     "scan_copyright",
+    "scan_image_moderation",
     "schedule_album_list_sync",
     "schedule_atproto_sync",
     "schedule_copyright_resolution_sync",
@@ -158,6 +164,7 @@ __all__ = [
     "schedule_embedding_generation",
     "schedule_follow_graph_warm",
     "schedule_genre_classification",
+    "schedule_image_moderation_scan",
     "schedule_move_track_audio",
     "schedule_pds_create_comment",
     "schedule_pds_create_like",
