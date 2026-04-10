@@ -92,7 +92,7 @@ just dev-services-down
 - teal.fm scrobbling and now-playing reporting
 
 ### creating
-- OAuth authentication via ATProto (bluesky accounts), multi-account support
+- OAuth authentication via ATProto (atmosphere accounts), multi-account support
 - upload tracks with title, artwork, tags, and featured artists
 - lossless audio support (AIFF/FLAC) with automatic MP3 transcoding for universal playback
 - auto-tagging via ML genre classification

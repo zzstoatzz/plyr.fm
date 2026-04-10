@@ -21,9 +21,9 @@ your catalog isn't trapped here — other apps can access your tracks without pl
 
 ## your first upload
 
-1. **sign in** at [plyr.fm](https://plyr.fm) with your handle (e.g. `you.bsky.social`)
+1. **sign in** at [plyr.fm](https://plyr.fm) with your atmosphere account (e.g. `you.bsky.social`)
 
-   ![plyr.fm sign-in page — enter your handle to get started](/screenshots/login-page.png)
+   ![plyr.fm sign-in page — enter your atmosphere account to get started](/screenshots/login-page.png)
 
 2. **upload** — click the upload button and drop your audio file (MP3, WAV, or M4A)
 

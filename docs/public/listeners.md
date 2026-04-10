@@ -25,9 +25,9 @@ even today, other apps (like [aetheros.computer](https://aetheros.computer)) alr
 
 ## your first 5 minutes
 
-1. **sign in** — go to [plyr.fm](https://plyr.fm) and enter your handle (e.g. `you.bsky.social`)
+1. **sign in** — go to [plyr.fm](https://plyr.fm) and enter your atmosphere account (e.g. `you.bsky.social`)
 
-   ![plyr.fm sign-in page — enter your handle to get started](/screenshots/login-page.png)
+   ![plyr.fm sign-in — enter your atmosphere account to get started](/screenshots/login-page.png)
 
 2. **find a track** — browse the feed to see what's playing
 
