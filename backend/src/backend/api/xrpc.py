@@ -70,6 +70,10 @@ def _result_to_mention(result: SearchResult) -> dict[str, Any]:
                 "description": f"@{result.handle}",
                 "href": f"{base_url}/u/{result.handle}",
                 "labels": [{"text": "artist"}],
+                "embed": {
+                    "src": f"{base_url}/embed/u/{result.handle}",
+                    "aspectRatio": {"width": 16, "height": 9},
+                },
                 "subscope": {"scope": "artists", "label": "Artists"},
             }
             if result.avatar_url:

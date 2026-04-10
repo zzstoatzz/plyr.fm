@@ -1,5 +1,5 @@
 import { API_URL } from '$lib/config';
-import type { Track } from '$lib/types';
+import type { CollectionData, Track } from '$lib/types';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -8,15 +8,6 @@ interface PlaylistResponse {
 	name: string;
 	owner_handle: string;
 	image_url?: string;
-	tracks: Track[];
-}
-
-export interface CollectionData {
-	title: string;
-	subtitle: string;
-	subtitleUrl: string;
-	collectionUrl: string;
-	imageUrl: string | null;
 	tracks: Track[];
 }
 

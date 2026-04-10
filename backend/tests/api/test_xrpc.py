@@ -98,7 +98,7 @@ async def test_mention_search_scoped_to_tracks(
 async def test_mention_search_artist_results(
     test_app: FastAPI, search_fixtures: dict[str, int]
 ) -> None:
-    """test that artist results have correct format (no embed)."""
+    """test that artist results have correct format with embed."""
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as client:
@@ -118,7 +118,8 @@ async def test_mention_search_artist_results(
     artist_result = data["results"][0]
     assert artist_result["name"] == "Stellz"
     assert "@stellz.test" in artist_result["description"]
-    assert "embed" not in artist_result
+    assert "embed" in artist_result
+    assert "/embed/u/stellz.test" in artist_result["embed"]["src"]
 
 
 async def test_mention_search_short_query(test_app: FastAPI) -> None:
