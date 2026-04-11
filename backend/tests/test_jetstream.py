@@ -15,7 +15,7 @@ from backend._internal.tasks.ingest import (
     _write_tombstone,
     ingest_comment_create,
     ingest_comment_delete,
-    ingest_handle_update,
+    ingest_identity_update,
     ingest_like_create,
     ingest_like_delete,
     ingest_list_create,
@@ -1562,15 +1562,28 @@ class TestGhostTrackPrevention:
         assert result.scalar_one() is not None
 
 
-# --- handle update tests ---
+# --- identity update tests ---
 
 
-class TestIngestHandleUpdate:
+def _mock_did_resolver(pds_url: str = "https://pds.example.com") -> AsyncMock:
+    """create a mock AsyncDidResolver that returns the given PDS URL."""
+    mock_resolver = AsyncMock()
+    mock_data = MagicMock()
+    mock_data.pds = pds_url
+    mock_resolver.resolve_atproto_data = AsyncMock(return_value=mock_data)
+    return mock_resolver
+
+
+class TestIngestIdentityUpdate:
     async def test_updates_artist_handle(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
         new_handle = "updated.handle.example"
-        await ingest_handle_update(did=artist.did, handle=new_handle)
+        with patch(
+            "atproto_identity.did.resolver.AsyncDidResolver",
+            return_value=_mock_did_resolver(),
+        ):
+            await ingest_identity_update(did=artist.did, handle=new_handle)
 
         await db_session.refresh(artist)
         assert artist.handle == new_handle
@@ -1588,21 +1601,63 @@ class TestIngestHandleUpdate:
         await db_session.commit()
 
         new_handle = "updated.handle.example"
-        await ingest_handle_update(did=artist.did, handle=new_handle)
+        with patch(
+            "atproto_identity.did.resolver.AsyncDidResolver",
+            return_value=_mock_did_resolver(),
+        ):
+            await ingest_identity_update(did=artist.did, handle=new_handle)
 
         await db_session.refresh(session)
         assert session.handle == new_handle
 
-    async def test_noop_when_handle_unchanged(
+    async def test_updates_pds_url(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """no commit when handle already matches — idempotent."""
+        """PDS migration updates the cached pds_url via DID resolution."""
+        new_pds = "https://new-pds.example.com"
+        with patch(
+            "atproto_identity.did.resolver.AsyncDidResolver",
+            return_value=_mock_did_resolver(pds_url=new_pds),
+        ):
+            await ingest_identity_update(did=artist.did, handle=artist.handle)
+
+        await db_session.refresh(artist)
+        assert artist.pds_url == new_pds
+
+    async def test_noop_when_handle_and_pds_unchanged(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """no commit when nothing changed — idempotent."""
         original_handle = artist.handle
-        await ingest_handle_update(did=artist.did, handle=original_handle)
+        original_pds = artist.pds_url
+        with patch(
+            "atproto_identity.did.resolver.AsyncDidResolver",
+            return_value=_mock_did_resolver(pds_url=original_pds or ""),
+        ):
+            await ingest_identity_update(did=artist.did, handle=original_handle)
 
         await db_session.refresh(artist)
         assert artist.handle == original_handle
+        assert artist.pds_url == original_pds
 
     async def test_noop_for_unknown_did(self, db_session: AsyncSession) -> None:
-        """unknown DID is silently skipped."""
-        await ingest_handle_update(did="did:plc:nonexistent", handle="ghost.handle")
+        """unknown DID is silently skipped (no DID resolution attempted)."""
+        await ingest_identity_update(did="did:plc:nonexistent", handle="ghost.handle")
+
+    async def test_did_resolution_failure_still_updates_handle(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """if DID resolution fails, handle is still updated."""
+        new_handle = "updated.handle.example"
+        mock_resolver = AsyncMock()
+        mock_resolver.resolve_atproto_data = AsyncMock(
+            side_effect=Exception("resolution failed")
+        )
+        with patch(
+            "atproto_identity.did.resolver.AsyncDidResolver",
+            return_value=mock_resolver,
+        ):
+            await ingest_identity_update(did=artist.did, handle=new_handle)
+
+        await db_session.refresh(artist)
+        assert artist.handle == new_handle

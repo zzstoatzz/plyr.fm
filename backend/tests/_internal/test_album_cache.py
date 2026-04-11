@@ -130,7 +130,7 @@ async def test_album_cache_graceful_degradation(
     broken_redis.delete = AsyncMock(side_effect=ConnectionError("redis down"))
 
     with patch(
-        "backend.api.albums.get_async_redis_client",
+        "backend.api.albums.cache.get_async_redis_client",
         return_value=broken_redis,
     ):
         # should not raise

@@ -27,16 +27,8 @@ path = "backend/src/backend/_internal/jams.py"
 max_lines = 896
 
 [[rules]]
-path = "backend/src/backend/api/albums.py"
-max_lines = 995
-
-[[rules]]
 path = "backend/src/backend/api/auth.py"
 max_lines = 807
-
-[[rules]]
-path = "backend/src/backend/api/lists.py"
-max_lines = 1149
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
@@ -220,11 +212,11 @@ max_lines = 535
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 743
+max_lines = 765
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
-max_lines = 1608
+max_lines = 1663
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
@@ -253,3 +245,11 @@ max_lines = 571
 [[rules]]
 path = "frontend/src/routes/record/+page.svelte"
 max_lines = 701
+
+[[rules]]
+path = "backend/src/backend/api/albums/mutations.py"
+max_lines = 574
+
+[[rules]]
+path = "backend/src/backend/api/lists/playlists.py"
+max_lines = 952

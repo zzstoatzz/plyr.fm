@@ -1,458 +1,50 @@
-"""albums api endpoints."""
+"""write endpoints for albums (create, update, delete, cover upload, finalize)."""
 
-import asyncio
 import contextlib
 import logging
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    File,
-    HTTPException,
-    Query,
-    UploadFile,
-)
-from pydantic import BaseModel
-from sqlalchemy import func, select
+from fastapi import Depends, File, HTTPException, Query, UploadFile
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
-from backend._internal import get_optional_session, require_artist_profile
-from backend._internal.image_uploads import COVER_EXTENSIONS, process_image_upload
-from backend.models import Album, Artist, Track, TrackLike, get_db
-from backend.schemas import TrackResponse
-from backend.storage import storage
-from backend.utilities.aggregations import (
-    get_comment_counts,
-    get_like_counts,
-    get_track_tags,
+from backend._internal import require_artist_profile
+from backend._internal.atproto.records import (
+    delete_record_by_uri,
+    get_record_public_resilient,
 )
-from backend.utilities.redis import get_async_redis_client
+from backend._internal.atproto.records.fm_plyr.list import (
+    update_list_record,
+    upsert_album_list_record,
+)
+from backend._internal.atproto.records.fm_plyr.track import (
+    build_track_record,
+    update_record,
+)
+from backend._internal.image_uploads import COVER_EXTENSIONS, process_image_upload
+from backend.models import Album, Artist, CollectionEvent, Track, get_db
+from backend.storage import storage
 from backend.utilities.slugs import slugify
 
+from .cache import (
+    _album_metadata,
+    _album_stats,
+    invalidate_album_cache,
+)
+from .router import router
+from .schemas import (
+    AlbumCreatePayload,
+    AlbumFinalizePayload,
+    AlbumMetadata,
+    DeleteAlbumResponse,
+    RemoveTrackFromAlbumResponse,
+)
+
 logger = logging.getLogger(__name__)
-
-router = APIRouter(prefix="/albums", tags=["albums"])
-
-ALBUM_CACHE_PREFIX = "plyr:album:"
-ALBUM_CACHE_TTL_SECONDS = 300  # 5 minutes
-
-
-def _album_cache_key(handle: str, slug: str) -> str:
-    return f"{ALBUM_CACHE_PREFIX}{handle}/{slug}"
-
-
-async def invalidate_album_cache(handle: str, slug: str) -> None:
-    """delete cached album response. fails silently."""
-    try:
-        redis = get_async_redis_client()
-        await redis.delete(_album_cache_key(handle, slug))
-    except Exception:
-        logger.debug("failed to invalidate album cache for %s/%s", handle, slug)
-
-
-async def invalidate_album_cache_by_id(db: AsyncSession, album_id: str) -> None:
-    """look up album handle+slug and invalidate cache. fails silently."""
-    try:
-        result = await db.execute(
-            select(Album.slug, Artist.handle)
-            .join(Artist, Album.artist_did == Artist.did)
-            .where(Album.id == album_id)
-        )
-        if row := result.first():
-            slug, handle = row
-            await invalidate_album_cache(handle, slug)
-    except Exception:
-        logger.debug("failed to invalidate album cache by id %s", album_id)
-
-
-# Pydantic models defined first to avoid forward reference issues
-class AlbumMetadata(BaseModel):
-    """album metadata response."""
-
-    id: str
-    title: str
-    slug: str
-    description: str | None = None
-    artist: str
-    artist_handle: str
-    artist_did: str
-    track_count: int
-    total_plays: int
-    image_url: str | None
-    list_uri: str | None = None  # ATProto list record URI for reordering
-
-
-class AlbumResponse(BaseModel):
-    """album detail response with tracks."""
-
-    metadata: AlbumMetadata
-    tracks: list[dict]
-
-
-class AlbumListItem(BaseModel):
-    """minimal album info for listing."""
-
-    id: str
-    title: str
-    slug: str
-    artist: str
-    artist_handle: str
-    track_count: int
-
-
-class RemoveTrackFromAlbumResponse(BaseModel):
-    """response for removing a track from an album."""
-
-    removed: bool = True
-    track_id: int
-
-
-class DeleteAlbumResponse(BaseModel):
-    """response for deleting an album."""
-
-    deleted: bool = True
-    cascade: bool
-
-
-class ArtistAlbumListItem(BaseModel):
-    """album info for a specific artist (used on artist pages)."""
-
-    id: str
-    title: str
-    slug: str
-    track_count: int
-    total_plays: int
-    image_url: str | None
-
-
-class AlbumCreatePayload(BaseModel):
-    title: str
-    slug: str | None = None
-    description: str | None = None
-
-
-class AlbumUpdatePayload(BaseModel):
-    title: str | None = None
-    slug: str | None = None
-    description: str | None = None
-
-
-class AlbumFinalizePayload(BaseModel):
-    """request body for POST /albums/{id}/finalize.
-
-    track_ids is the authoritative user-intended order for the album's
-    ATProto list record. every id must belong to this album and have a
-    completed PDS write (atproto_record_uri + cid set).
-    """
-
-    track_ids: list[int]
-
-
-# Helper functions
-async def _album_stats(db: AsyncSession, album_id: str) -> tuple[int, int]:
-    result = await db.execute(
-        select(
-            func.count(Track.id),
-            func.coalesce(func.sum(Track.play_count), 0),
-        ).where(Track.album_id == album_id)
-    )
-    track_count, total_plays = result.one()
-    return int(track_count or 0), int(total_plays or 0)
-
-
-async def _album_image_url(album: Album, artist: Artist | None = None) -> str | None:
-    if album.image_url:
-        return album.image_url
-    if album.image_id:
-        return await album.get_image_url()
-    if artist and artist.avatar_url:
-        return artist.avatar_url
-    return None
-
-
-async def _album_list_item(
-    album: Album,
-    artist: Artist,
-    track_count: int,
-    total_plays: int,
-) -> AlbumListItem:
-    image_url = await _album_image_url(album, artist)
-    return AlbumListItem(
-        id=album.id,
-        title=album.title,
-        slug=album.slug,
-        artist=artist.display_name,
-        artist_handle=artist.handle,
-        track_count=track_count,
-        total_plays=total_plays,
-        image_url=image_url,
-    )
-
-
-async def _artist_album_summary(
-    album: Album,
-    artist: Artist,
-    track_count: int,
-    total_plays: int,
-) -> ArtistAlbumListItem:
-    image_url = await _album_image_url(album, artist)
-    return ArtistAlbumListItem(
-        id=album.id,
-        title=album.title,
-        slug=album.slug,
-        track_count=track_count,
-        total_plays=total_plays,
-        image_url=image_url,
-    )
-
-
-async def _album_metadata(
-    album: Album,
-    artist: Artist,
-    track_count: int,
-    total_plays: int,
-) -> AlbumMetadata:
-    image_url = await _album_image_url(album, artist)
-    return AlbumMetadata(
-        id=album.id,
-        title=album.title,
-        slug=album.slug,
-        description=album.description,
-        artist=artist.display_name,
-        artist_handle=artist.handle,
-        artist_did=artist.did,
-        track_count=track_count,
-        total_plays=total_plays,
-        image_url=image_url,
-        list_uri=album.atproto_record_uri,
-    )
-
-
-@router.get("/")
-async def list_albums(
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict[str, list[AlbumListItem]]:
-    """list all albums with basic metadata.
-
-    albums with zero tracks are hidden — they're either unfinalized drafts
-    from the multi-track upload flow or legacy albums awaiting sync. only
-    albums that have at least one track appear in public listings.
-    """
-    stmt = (
-        select(
-            Album,
-            Artist,
-            func.count(Track.id).label("track_count"),
-            func.coalesce(func.sum(Track.play_count), 0).label("total_plays"),
-        )
-        .join(Artist, Album.artist_did == Artist.did)
-        .outerjoin(Track, Track.album_id == Album.id)
-        .group_by(Album.id, Artist.did)
-        .having(func.count(Track.id) > 0)
-        .order_by(func.lower(Album.title))
-    )
-
-    result = await db.execute(stmt)
-    albums: list[AlbumListItem] = []
-    for album, artist, track_count, total_plays in result:
-        albums.append(
-            await _album_list_item(
-                album,
-                artist,
-                int(track_count or 0),
-                int(total_plays or 0),
-            )
-        )
-
-    return {"albums": albums}
-
-
-@router.get("/{handle}")
-async def list_artist_albums(
-    handle: str, db: Annotated[AsyncSession, Depends(get_db)]
-) -> dict[str, list[ArtistAlbumListItem]]:
-    """list albums for a specific artist."""
-    artist_result = await db.execute(select(Artist).where(Artist.handle == handle))
-    artist = artist_result.scalar_one_or_none()
-    if not artist:
-        raise HTTPException(status_code=404, detail="artist not found")
-
-    stmt = (
-        select(
-            Album,
-            func.count(Track.id).label("track_count"),
-            func.coalesce(func.sum(Track.play_count), 0).label("total_plays"),
-        )
-        .outerjoin(Track, Track.album_id == Album.id)
-        .where(Album.artist_did == artist.did)
-        .group_by(Album.id)
-        .having(func.count(Track.id) > 0)
-        .order_by(func.lower(Album.title))
-    )
-    result = await db.execute(stmt)
-
-    album_items: list[ArtistAlbumListItem] = []
-    for album, track_count, total_plays in result:
-        album_items.append(
-            await _artist_album_summary(
-                album,
-                artist,
-                int(track_count or 0),
-                int(total_plays or 0),
-            )
-        )
-
-    return {"albums": album_items}
-
-
-@router.get("/{handle}/{slug}")
-async def get_album(
-    handle: str,
-    slug: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    session: AuthSession | None = Depends(get_optional_session),
-) -> AlbumResponse:
-    """get album details with tracks (ordered by ATProto list record or created_at)."""
-    # check Redis cache first
-    cache_key = _album_cache_key(handle, slug)
-    try:
-        redis = get_async_redis_client()
-        if cached := await redis.get(cache_key):
-            return AlbumResponse.model_validate_json(cached)
-    except Exception:
-        logger.debug("album cache read failed for %s/%s", handle, slug)
-
-    from backend._internal.atproto.records import get_record_public_resilient
-
-    # look up artist + album
-    album_result = await db.execute(
-        select(Album, Artist)
-        .join(Artist, Album.artist_did == Artist.did)
-        .where(Artist.handle == handle, Album.slug == slug)
-    )
-    row = album_result.first()
-    if not row:
-        raise HTTPException(status_code=404, detail="album not found")
-
-    album, artist = row
-
-    pds_cache: dict[str, str | None] = {artist.did: artist.pds_url}
-
-    # fetch all tracks for this album
-    track_stmt = (
-        select(Track)
-        .options(selectinload(Track.artist), selectinload(Track.album_rel))
-        .where(Track.album_id == album.id)
-    )
-    track_result = await db.execute(track_stmt)
-    all_tracks = list(track_result.scalars().all())
-
-    # determine track order: use ATProto list record if available
-    ordered_tracks: list[Track] = []
-    if album.atproto_record_uri:
-        try:
-            record_data, resolved_pds_url = await get_record_public_resilient(
-                record_uri=album.atproto_record_uri,
-                pds_url=artist.pds_url,
-            )
-            if resolved_pds_url:
-                artist.pds_url = resolved_pds_url
-                pds_cache[artist.did] = resolved_pds_url
-                db.add(artist)
-                await db.commit()
-
-            items = record_data.get("value", {}).get("items", [])
-            track_uris = [item.get("subject", {}).get("uri") for item in items]
-            track_uris = [uri for uri in track_uris if uri]
-
-            # build uri -> track map
-            track_by_uri = {t.atproto_record_uri: t for t in all_tracks}
-
-            # order tracks by ATProto list, append any not in list at end
-            seen_ids = set()
-            for uri in track_uris:
-                if uri in track_by_uri:
-                    track = track_by_uri[uri]
-                    ordered_tracks.append(track)
-                    seen_ids.add(track.id)
-
-            # append any tracks not in the ATProto list (fallback)
-            for track in sorted(all_tracks, key=lambda t: t.created_at):
-                if track.id not in seen_ids:
-                    ordered_tracks.append(track)
-
-        except Exception as e:
-            logger.warning(f"failed to fetch ATProto list for album ordering: {e}")
-            # fallback to created_at order
-            ordered_tracks = sorted(all_tracks, key=lambda t: t.created_at)
-    else:
-        # no ATProto record - order by created_at
-        ordered_tracks = sorted(all_tracks, key=lambda t: t.created_at)
-
-    tracks = ordered_tracks
-    track_ids = [track.id for track in tracks]
-
-    # batch fetch aggregations
-    if track_ids:
-        like_counts, comment_counts, track_tags = await asyncio.gather(
-            get_like_counts(db, track_ids),
-            get_comment_counts(db, track_ids),
-            get_track_tags(db, track_ids),
-        )
-    else:
-        like_counts, comment_counts, track_tags = {}, {}, {}
-
-    # get authenticated user's likes for this album's tracks only
-    liked_track_ids: set[int] | None = None
-    if session:
-        if track_ids:
-            liked_result = await db.execute(
-                select(TrackLike.track_id).where(
-                    TrackLike.user_did == session.did,
-                    TrackLike.track_id.in_(track_ids),
-                )
-            )
-            liked_track_ids = set(liked_result.scalars().all())
-
-    # build track responses (maintaining order)
-    track_responses = await asyncio.gather(
-        *[
-            TrackResponse.from_track(
-                track,
-                pds_cache.get(track.artist_did),
-                liked_track_ids,
-                like_counts,
-                comment_counts,
-                track_tags=track_tags,
-            )
-            for track in tracks
-        ]
-    )
-
-    total_plays = sum(t.play_count for t in tracks)
-    metadata = await _album_metadata(album, artist, len(tracks), total_plays)
-
-    response = AlbumResponse(
-        metadata=metadata,
-        tracks=[t.model_dump(mode="json") for t in track_responses],
-    )
-
-    # cache a depersonalized copy (is_liked zeroed out)
-    try:
-        redis = get_async_redis_client()
-        cache_tracks = [{**t, "is_liked": False} for t in response.tracks]
-        cacheable = AlbumResponse(metadata=response.metadata, tracks=cache_tracks)
-        await redis.set(
-            cache_key, cacheable.model_dump_json(), ex=ALBUM_CACHE_TTL_SECONDS
-        )
-    except Exception:
-        logger.debug("album cache write failed for %s/%s", handle, slug)
-
-    return response
 
 
 @router.post("/")
@@ -474,8 +66,6 @@ async def create_album(
     this preserves the "type an existing album name to add tracks to it"
     UX — see finalize_album for the append semantics.
     """
-    from sqlalchemy.exc import IntegrityError
-
     title = body.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="title is required")
@@ -603,12 +193,6 @@ async def finalize_album(
     finalize for the album — so total upload failures don't leave a fake
     release event in the activity feed.
     """
-    from backend._internal.atproto.records import get_record_public_resilient
-    from backend._internal.atproto.records.fm_plyr.list import (
-        upsert_album_list_record,
-    )
-    from backend.models import CollectionEvent
-
     if not body.track_ids:
         raise HTTPException(status_code=400, detail="track_ids must not be empty")
 
@@ -788,12 +372,6 @@ async def update_album(
     ] = None,
 ) -> AlbumMetadata:
     """update album metadata (title, description). syncs ATProto records on title change."""
-    from backend._internal.atproto.records.fm_plyr.list import update_list_record
-    from backend._internal.atproto.records.fm_plyr.track import (
-        build_track_record,
-        update_record,
-    )
-
     result = await db.execute(
         select(Album)
         .where(Album.id == album_id)
@@ -932,8 +510,6 @@ async def delete_album(
     ] = False,
 ) -> DeleteAlbumResponse:
     """delete album. tracks are orphaned unless cascade=true. removes ATProto list record."""
-    from backend._internal.atproto.records import delete_record_by_uri
-
     # verify album exists and belongs to the authenticated artist
     result = await db.execute(select(Album).where(Album.id == album_id))
     album = result.scalar_one_or_none()
@@ -960,8 +536,6 @@ async def delete_album(
                 logger.warning(f"failed to delete track {track.id}: {e}")
     else:
         # orphan tracks - set album_id to null
-        from sqlalchemy import update
-
         await db.execute(
             update(Track).where(Track.album_id == album_id).values(album_id=None)
         )

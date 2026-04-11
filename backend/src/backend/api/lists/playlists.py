@@ -1,44 +1,35 @@
-"""lists api endpoints for ATProto list records."""
+"""playlist CRUD endpoints."""
 
 import contextlib
 import json
 import logging
-from typing import Annotated, Literal
+from typing import Annotated
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    File,
-    Form,
-    HTTPException,
-    Query,
-    UploadFile,
-)
-from pydantic import BaseModel
+from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
-from backend._internal import get_optional_session, require_auth
+from backend._internal import get_oauth_client, get_optional_session, require_auth
 from backend._internal.atproto.client import parse_at_uri
 from backend._internal.atproto.records import (
     RecordNotFound,
     _reconstruct_oauth_session,
     create_list_record,
+    delete_record_by_uri,
     get_record_public_resilient,
     update_list_record,
 )
 from backend._internal.image_uploads import COVER_EXTENSIONS, process_image_upload
 from backend._internal.recommendations import get_playlist_recommendations
-from backend.api.albums import invalidate_album_cache
 from backend.config import settings
 from backend.models import (
-    Album,
     Artist,
+    CollectionEvent,
     Playlist,
     Track,
     TrackLike,
-    UserPreferences,
     get_db,
 )
 from backend.schemas import DeletedResponse, TrackResponse
@@ -46,196 +37,17 @@ from backend.storage import storage
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
 from backend.utilities.redis import get_async_redis_client
 
+from .router import router
+from .schemas import (
+    AddTrackRequest,
+    CreatePlaylistRequest,
+    PlaylistRecommendationsResponse,
+    PlaylistResponse,
+    PlaylistWithTracksResponse,
+    RecommendedTrack,
+)
+
 logger = logging.getLogger(__name__)
-
-
-# --- playlist schemas ---
-
-
-class CreatePlaylistRequest(BaseModel):
-    """request body for creating a playlist."""
-
-    name: str
-    """display name for the playlist."""
-
-
-class PlaylistResponse(BaseModel):
-    """playlist metadata response."""
-
-    id: str
-    name: str
-    owner_did: str
-    owner_handle: str
-    track_count: int
-    image_url: str | None
-    show_on_profile: bool
-    atproto_record_uri: str
-    created_at: str
-
-
-class PlaylistWithTracksResponse(PlaylistResponse):
-    """playlist with full track details."""
-
-    tracks: list[TrackResponse]
-    """ordered list of track details."""
-
-
-class AddTrackRequest(BaseModel):
-    """request body for adding a track to a playlist."""
-
-    track_uri: str
-    """ATProto URI of the track to add."""
-    track_cid: str
-    """CID of the track to add."""
-
-
-router = APIRouter(prefix="/lists", tags=["lists"])
-
-
-class ReorderRequest(BaseModel):
-    """request body for reordering list items."""
-
-    items: list[dict[str, str]]
-    """ordered array of strongRefs (uri + cid). array order = display order."""
-
-
-class ReorderResponse(BaseModel):
-    """response from reorder operation."""
-
-    uri: str
-    cid: str
-
-
-class RecommendedTrack(BaseModel):
-    """a recommended track for a playlist."""
-
-    id: int
-    title: str
-    artist_handle: str
-    artist_display_name: str
-    image_url: str | None
-
-
-class PlaylistRecommendationsResponse(BaseModel):
-    """response for playlist recommendations."""
-
-    tracks: list[RecommendedTrack]
-    available: bool
-
-
-@router.put("/liked/reorder")
-async def reorder_liked_list(
-    body: ReorderRequest,
-    session: AuthSession = Depends(require_auth),
-    db: AsyncSession = Depends(get_db),
-) -> ReorderResponse:
-    """reorder items in the user's liked tracks list.
-
-    the items array order becomes the new display order.
-    only the list owner can reorder their own list.
-    """
-    # get the user's liked list URI from preferences
-    prefs_result = await db.execute(
-        select(UserPreferences).where(UserPreferences.did == session.did)
-    )
-    prefs = prefs_result.scalar_one_or_none()
-
-    if not prefs or not prefs.liked_list_uri:
-        raise HTTPException(
-            status_code=404,
-            detail="liked list not found - try liking a track first",
-        )
-
-    # update the list record with new item order
-    # (update_list_record → make_pds_request handles token refresh internally)
-    try:
-        uri, cid = await update_list_record(
-            auth_session=session,
-            list_uri=prefs.liked_list_uri,
-            items=body.items,
-            list_type="liked",
-        )
-        return ReorderResponse(uri=uri, cid=cid)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"failed to reorder list: {e}"
-        ) from e
-
-
-@router.put("/{rkey}/reorder")
-async def reorder_list(
-    rkey: str,
-    body: ReorderRequest,
-    session: AuthSession = Depends(require_auth),
-    db: AsyncSession = Depends(get_db),
-) -> ReorderResponse:
-    """reorder items in a list by rkey. items array order = new display order."""
-    from backend.config import settings
-
-    # construct the full AT URI
-    list_uri = f"at://{session.did}/{settings.atproto.list_collection}/{rkey}"
-
-    # update the list record with new item order
-    # (update_list_record → make_pds_request handles token refresh internally)
-    try:
-        uri, cid = await update_list_record(
-            auth_session=session,
-            list_uri=list_uri,
-            items=body.items,
-        )
-
-        # invalidate album cache if this list belongs to an album
-        result = await db.execute(
-            select(Album).where(Album.atproto_record_uri == list_uri)
-        )
-        if album := result.scalar_one_or_none():
-            await invalidate_album_cache(session.handle, album.slug)
-
-        return ReorderResponse(uri=uri, cid=cid)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"failed to reorder list: {e}"
-        ) from e
-
-
-# --- generic list resolver ---
-
-
-class ListByUriResponse(BaseModel):
-    """resolved list type and routing info for an AT-URI."""
-
-    type: Literal["album", "playlist"]
-    id: str
-    handle: str | None = None
-    slug: str | None = None
-
-
-@router.get("/by-uri", response_model=ListByUriResponse)
-async def resolve_list_by_uri(
-    uri: Annotated[str, Query(description="AT-URI of a list record")],
-    db: AsyncSession = Depends(get_db),
-) -> ListByUriResponse:
-    """resolve a list AT-URI to its type (album or playlist) with routing info."""
-    # check albums first
-    result = await db.execute(
-        select(Album, Artist)
-        .join(Artist, Album.artist_did == Artist.did)
-        .where(Album.atproto_record_uri == uri)
-    )
-    if row := result.first():
-        album, artist = row
-        return ListByUriResponse(
-            type="album", id=album.id, handle=artist.handle, slug=album.slug
-        )
-
-    # check playlists
-    result = await db.execute(
-        select(Playlist).where(Playlist.atproto_record_uri == uri)
-    )
-    if playlist := result.scalar_one_or_none():
-        return ListByUriResponse(type="playlist", id=playlist.id)
-
-    raise HTTPException(status_code=404, detail="list not found")
 
 
 # --- playlist CRUD endpoints ---
@@ -282,8 +94,6 @@ async def create_playlist(
     await db.flush()
 
     # emit collection event
-    from backend.models import CollectionEvent
-
     db.add(
         CollectionEvent(
             event_type="playlist_create",
@@ -390,14 +200,10 @@ async def get_playlist_by_uri(
 
     # fetch ATProto record (public - no auth needed)
     try:
-        record_data, resolved_pds_url = await get_record_public_resilient(
+        record_data, _ = await get_record_public_resilient(
             record_uri=playlist.atproto_record_uri,
             pds_url=artist.pds_url,
         )
-        if resolved_pds_url:
-            artist.pds_url = resolved_pds_url
-            db.add(artist)
-            await db.commit()
     except RecordNotFound:
         raise HTTPException(
             status_code=404, detail="playlist record not found on PDS"
@@ -416,8 +222,6 @@ async def get_playlist_by_uri(
     # hydrate track metadata from database
     tracks: list[TrackResponse] = []
     if track_uris:
-        from sqlalchemy.orm import selectinload
-
         track_result = await db.execute(
             select(Track)
             .options(selectinload(Track.artist), selectinload(Track.album_rel))
@@ -522,14 +326,10 @@ async def get_playlist(
 
     # fetch ATProto record (public - no auth needed)
     try:
-        record_data, resolved_pds_url = await get_record_public_resilient(
+        record_data, _ = await get_record_public_resilient(
             record_uri=playlist.atproto_record_uri,
             pds_url=artist.pds_url,
         )
-        if resolved_pds_url:
-            artist.pds_url = resolved_pds_url
-            db.add(artist)
-            await db.commit()
     except RecordNotFound:
         raise HTTPException(
             status_code=404, detail="playlist record not found on PDS"
@@ -548,8 +348,6 @@ async def get_playlist(
     # hydrate track metadata from database
     tracks: list[TrackResponse] = []
     if track_uris:
-        from sqlalchemy.orm import selectinload
-
         track_result = await db.execute(
             select(Track)
             .options(selectinload(Track.artist), selectinload(Track.album_rel))
@@ -636,7 +434,6 @@ async def add_track_to_playlist(
         raise HTTPException(status_code=401, detail="invalid session")
 
     oauth_session = _reconstruct_oauth_session(oauth_data)
-    from backend._internal import get_oauth_client
 
     repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
@@ -687,8 +484,6 @@ async def add_track_to_playlist(
     playlist.track_count = len(new_items)
 
     # emit collection event — resolve track_id from URI
-    from backend.models import CollectionEvent
-
     track_result = await db.execute(
         select(Track.id).where(Track.atproto_record_uri == body.track_uri)
     )
@@ -748,7 +543,6 @@ async def remove_track_from_playlist(
         raise HTTPException(status_code=401, detail="invalid session")
 
     oauth_session = _reconstruct_oauth_session(oauth_data)
-    from backend._internal import get_oauth_client
 
     repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
@@ -821,8 +615,6 @@ async def delete_playlist(
 
     deletes both the ATProto list record and the database cache.
     """
-    from backend._internal.atproto.records import delete_record_by_uri
-
     # get playlist and verify ownership
     result = await db.execute(select(Playlist).where(Playlist.id == playlist_id))
     playlist = result.scalar_one_or_none()
@@ -952,8 +744,6 @@ async def update_playlist(
             # fetch current list record to preserve items
             oauth_data = session.oauth_session
             if oauth_data and "access_token" in oauth_data:
-                from backend._internal import get_oauth_client
-
                 oauth_session = _reconstruct_oauth_session(oauth_data)
 
                 repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
@@ -1060,14 +850,10 @@ async def get_playlist_recommendations_endpoint(
 
     # get track IDs from the playlist's ATProto record
     try:
-        record_data, resolved_pds_url = await get_record_public_resilient(
+        record_data, _ = await get_record_public_resilient(
             record_uri=playlist.atproto_record_uri,
             pds_url=artist.pds_url,
         )
-        if resolved_pds_url:
-            artist.pds_url = resolved_pds_url
-            db.add(artist)
-            await db.commit()
     except Exception as e:
         logger.warning("failed to fetch playlist record for recommendations: %s", e)
         return unavailable

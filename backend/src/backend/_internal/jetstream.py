@@ -28,7 +28,7 @@ from backend._internal.tasks.ingest import (
     ingest_comment_create,
     ingest_comment_delete,
     ingest_comment_update,
-    ingest_handle_update,
+    ingest_identity_update,
     ingest_like_create,
     ingest_like_delete,
     ingest_list_create,
@@ -140,9 +140,9 @@ class JetstreamConsumer:
             handle = (event.get("identity") or {}).get("handle")
             if did and handle and did in self._known_dids:
                 docket = get_docket()
-                await docket.add(ingest_handle_update)(did=did, handle=handle)
+                await docket.add(ingest_identity_update)(did=did, handle=handle)
                 logfire.info(
-                    "jetstream dispatched handle update",
+                    "jetstream dispatched identity update",
                     did=did,
                     handle=handle,
                 )
