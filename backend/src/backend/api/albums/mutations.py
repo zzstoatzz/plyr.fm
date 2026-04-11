@@ -15,7 +15,7 @@ from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile
 from backend._internal.atproto.records import (
     delete_record_by_uri,
-    get_record_public_resilient,
+    fetch_list_item_uris,
 )
 from backend._internal.atproto.records.fm_plyr.list import (
     update_list_record,
@@ -274,15 +274,11 @@ async def finalize_album(
                 select(Artist).where(Artist.did == album.artist_did)
             )
             artist_for_pds = artist_lookup.scalar_one()
-            record_data, _ = await get_record_public_resilient(
-                record_uri=album.atproto_record_uri,
-                pds_url=artist_for_pds.pds_url,
+            existing_uris = await fetch_list_item_uris(
+                album.atproto_record_uri, artist_for_pds.pds_url
             )
-            items = record_data.get("value", {}).get("items", [])
-            for i, item in enumerate(items):
-                uri = item.get("subject", {}).get("uri")
-                if uri:
-                    preserved_position_by_uri[uri] = i
+            for i, uri in enumerate(existing_uris):
+                preserved_position_by_uri[uri] = i
         except Exception as e:
             logger.debug(
                 f"finalize_album: failed to fetch existing list for preserved "

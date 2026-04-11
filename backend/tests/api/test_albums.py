@@ -522,22 +522,18 @@ async def test_get_album_respects_atproto_track_order(
     db_session.add_all([track1, track2, track3])
     await db_session.commit()
 
-    # mock ATProto record fetch to return custom order: track2, track3, track1
+    # mock ATProto list fetch to return custom order: track2, track3, track1
     # (different from created_at order which would be track3, track2, track1)
-    mock_record = {
-        "value": {
-            "items": [
-                {"subject": {"uri": track2.atproto_record_uri, "cid": "cid2"}},
-                {"subject": {"uri": track3.atproto_record_uri, "cid": "cid3"}},
-                {"subject": {"uri": track1.atproto_record_uri, "cid": "cid1"}},
-            ]
-        }
-    }
+    mock_uris = [
+        track2.atproto_record_uri,
+        track3.atproto_record_uri,
+        track1.atproto_record_uri,
+    ]
 
     with patch(
-        "backend.api.albums.listing.get_record_public_resilient",
+        "backend.api.albums.listing.fetch_list_item_uris",
         new_callable=AsyncMock,
-        return_value=(mock_record, None),
+        return_value=mock_uris,
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
@@ -1447,14 +1443,7 @@ async def test_finalize_album_preserves_existing_tracks_on_append(
     new1_id = new1.id
 
     # simulate the current list record having old1, old2 in that order
-    existing_list_record = {
-        "value": {
-            "items": [
-                {"subject": {"uri": old1.atproto_record_uri, "cid": "cidOld1"}},
-                {"subject": {"uri": old2.atproto_record_uri, "cid": "cidOld2"}},
-            ]
-        }
-    }
+    existing_uris = [old1.atproto_record_uri, old2.atproto_record_uri]
 
     captured: dict[str, object] = {}
 
@@ -1472,9 +1461,9 @@ async def test_finalize_album_preserves_existing_tracks_on_append(
 
     with (
         patch(
-            "backend.api.albums.mutations.get_record_public_resilient",
+            "backend.api.albums.mutations.fetch_list_item_uris",
             new_callable=AsyncMock,
-            return_value=(existing_list_record, None),
+            return_value=existing_uris,
         ),
         patch(
             "backend.api.albums.mutations.upsert_album_list_record",

@@ -85,11 +85,10 @@ async def test_get_playlist_by_uri_success(
     test_app: FastAPI, db_session: AsyncSession, test_playlist: Playlist
 ) -> None:
     """lookup existing playlist by AT-URI returns 200."""
-    mock_record = {"value": {"items": []}}
     with patch(
-        "backend.api.lists.playlists.get_record_public_resilient",
+        "backend.api.lists.playlists.fetch_list_item_uris",
         new_callable=AsyncMock,
-        return_value=(mock_record, None),
+        return_value=[],
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app), base_url="http://test"
@@ -128,7 +127,7 @@ async def test_get_playlist_by_uri_pds_record_not_found(
 ) -> None:
     """playlist exists in DB but PDS record is gone — returns 404 not 500."""
     with patch(
-        "backend.api.lists.playlists.get_record_public_resilient",
+        "backend.api.lists.playlists.fetch_list_item_uris",
         new_callable=AsyncMock,
         side_effect=RecordNotFound("record not found"),
     ):
@@ -149,7 +148,7 @@ async def test_get_playlist_by_id_pds_record_not_found(
 ) -> None:
     """playlist exists in DB but PDS record is gone — returns 404 not 500."""
     with patch(
-        "backend.api.lists.playlists.get_record_public_resilient",
+        "backend.api.lists.playlists.fetch_list_item_uris",
         new_callable=AsyncMock,
         side_effect=RecordNotFound("record not found"),
     ):
