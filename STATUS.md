@@ -47,6 +47,25 @@ plyr.fm should become:
 
 ### April 2026
 
+#### CDN caching + backend decomposition (PRs #1275-1280, Apr 11)
+
+**why**: a tech debt audit revealed two systemic issues: (1) R2 public buckets were served via `r2.dev` managed subdomains, which bypass Cloudflare's CDN cache layer entirely — every audio and image request went straight to R2 origin, and the 30% "cache hit ratio" in CF analytics was entirely from the frontend (Cloudflare Pages), not media assets. (2) the backend API had accumulated monolithic files (`lists.py` at 1149 lines, `albums.py` at 995 lines) with duplicated patterns and deferred imports scattered throughout.
+
+**what shipped**:
+- **CDN custom domains** (#1278) — provisioned `audio.plyr.fm` and `images.plyr.fm` as R2 custom domains via the Cloudflare API. enabled Smart Tiered Cache and a "Cache Everything" cache rule with 1-year edge TTL. set `Cache-Control: public, max-age=31536000, immutable` on all R2 uploads (objects are content-hashed, so this is safe). backfilled all 2,262 DB URLs from `r2.dev` → custom domains. staging equivalents (`audio-stg.plyr.fm`, `images-stg.plyr.fm`) provisioned in parallel. cache hit ratio climbed from 30% to 46% within 10 minutes of activation
+- **`_s3_client()` consolidation** (#1278) — 9 identical 5-line S3 client connection blocks collapsed into one method. an S3/R2 swap is now a one-line change
+- **API decomposition** (#1276) — `lists.py` (1149 lines) and `albums.py` (995 lines) split into subpackages following the existing `api/tracks/` pattern: `{router,schemas,cache,listing,mutations}.py`. ~15 deferred imports hoisted to top-level
+- **PDS URL healing → jetstream** (#1276) — `ingest_handle_update` renamed to `ingest_identity_update`, now resolves DID to get current PDS URL on identity events (fires on both handle changes and PDS migrations). removed the lazy per-request PDS URL healing that was copy-pasted in 5 API endpoints
+- **`fetch_list_item_uris` + `hydrate_tracks_from_uris`** (#1277) — extracted shared ATProto list record fetch and track hydration patterns. `fetch_list_item_uris(record_uri, pds_url) -> list[str]` replaces 5 copy-pasted fetch-then-extract blocks. `hydrate_tracks_from_uris(db, uris, session_did) -> list[TrackResponse]` collapses identical ~35-line hydration blocks duplicated between `get_playlist` and `get_playlist_by_uri`
+- **scripts cleanup** (#1280) — removed 8 completed one-time migration scripts from Nov 2025 - Jan 2026 (-1,291 lines). added `migrate_cdn_urls.py` with dry-run, environment auto-detection
+
+**decisions**:
+- R2 custom domains were provisioned via the Cloudflare API MCP rather than the dashboard, but cache rules and tiered cache required dashboard configuration (the MCP OAuth scopes don't include zone-level rulesets)
+- the `r2.dev` managed subdomains are left enabled — ATProto records on users' PDSs have `audioUrl` and `imageUrl` fields baked in with old `r2.dev` URLs that we can't retroactively update. those URLs continue to resolve, they just don't get CDN caching. the lexicon already documents `audioBlob` as canonical and `audioUrl` as CDN fallback
+- HEAD requests to R2 custom domains always return `cf-cache-status: DYNAMIC` even when caching works correctly — only GET requests show real cache status. documented in `docs/internal/backend/configuration.md`
+
+---
+
 #### Leaflet mention service + embeds (PRs #1271-1273, Apr 10)
 
 **why**: [Jared from Leaflet](https://awarm.leaflet.pub/3mj662txrs22p) shipped a mention services system that lets ATProto apps register as searchable, embeddable services in the Leaflet editor. plyr.fm is one of the first real implementations (alongside Wikipedia and Pokemon). a Leaflet user types `@`, selects plyr.fm, searches for a track or artist, and either mentions it inline or embeds a playable iframe — all without leaving the editor.
@@ -318,7 +337,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-Leaflet mention service is live (#1271-1273) — plyr.fm is one of the first ATProto apps to implement Jared's `parts.page.mention.search` XRPC pattern. tracks, artists, albums, playlists, and tags are searchable and embeddable in Leaflet publications via iframe. self-hosted via `did:web:api.plyr.fm` with no dependency on Leaflet's feed service. next steps: contribute a `plyr.ts` handler upstream to Leaflet's feed service for wider discovery (Option A in #1271); explore `parts.page.connect` RPC channel for richer embed interactions; watch for auth-in-embeds patterns across the ecosystem. also this week: "atmosphere account" terminology adopted across login page and docs (#1268-1270); unlisted tracks for feed-excluded publishing (#1267); image moderation moved to background tasks for 8x faster track edits (#1266). ooo.audio cross-app lexicon conversation continues (#705). waveform rollout to other surfaces still pending as follow-up to #1251.
+CDN caching is live (#1275-1280) — audio and images served through `audio.plyr.fm` and `images.plyr.fm` custom domains with Cloudflare edge caching (1-year TTL, Smart Tiered Cache). cache hit ratio jumped from 30% to 46% within minutes. backend API decomposed: `lists.py` and `albums.py` split into subpackages, PDS URL healing moved from lazy per-request to proactive jetstream identity events, shared ATProto list helpers extracted. next: `config.py` decomposition (993 lines → split by concern), frontend state module grouping, portal/playlist page decomposition. Leaflet mention service (#1271-1273) and ooo.audio lexicon conversation (#705) continue. waveform rollout to other surfaces still pending as follow-up to #1251.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -342,7 +361,7 @@ Leaflet mention service is live (#1271-1273) — plyr.fm is one of the first ATP
 - language: Python 3.11+
 - framework: FastAPI with uvicorn
 - database: Neon PostgreSQL (serverless)
-- storage: Cloudflare R2 (S3-compatible)
+- storage: Cloudflare R2 (S3-compatible, CDN via custom domains)
 - background tasks: docket (Redis-backed)
 - hosting: Fly.io (2x shared-cpu VMs)
 - observability: Pydantic Logfire
@@ -372,7 +391,7 @@ Leaflet mention service is live (#1271-1273) — plyr.fm is one of the first ATP
 - ✅ timed comments with clickable timestamps
 - ✅ artist profiles synced with Bluesky
 - ✅ track upload with streaming
-- ✅ audio streaming via 307 redirects to R2 CDN
+- ✅ audio streaming via 307 redirects to CDN (audio.plyr.fm, edge-cached)
 - ✅ lossless audio (AIFF/FLAC) with automatic transcoding for browser compatibility
 - ✅ PDS blob storage for audio (user data ownership)
 - ✅ play count tracking, likes, queue management
@@ -454,5 +473,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-10 (Leaflet mention service + embeds, atmosphere account terminology, unlisted tracks).
+this is a living document. last updated 2026-04-11 (CDN caching via custom domains, backend API decomposition, PDS URL healing, scripts cleanup).
 
