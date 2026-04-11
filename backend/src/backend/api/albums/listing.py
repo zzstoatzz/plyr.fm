@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session
-from backend._internal.atproto.records import get_record_public_resilient
+from backend._internal.atproto.records import fetch_list_item_uris
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
@@ -155,14 +155,9 @@ async def get_album(
     ordered_tracks: list[Track] = []
     if album.atproto_record_uri:
         try:
-            record_data, _ = await get_record_public_resilient(
-                record_uri=album.atproto_record_uri,
-                pds_url=artist.pds_url,
+            track_uris = await fetch_list_item_uris(
+                album.atproto_record_uri, artist.pds_url
             )
-
-            items = record_data.get("value", {}).get("items", [])
-            track_uris = [item.get("subject", {}).get("uri") for item in items]
-            track_uris = [uri for uri in track_uris if uri]
 
             # build uri -> track map
             track_by_uri = {t.atproto_record_uri: t for t in all_tracks}

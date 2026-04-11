@@ -6,7 +6,10 @@ from typing import Any
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import make_pds_request
-from backend._internal.atproto.records.fm_plyr.track import update_record
+from backend._internal.atproto.records.fm_plyr.track import (
+    get_record_public_resilient,
+    update_record,
+)
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -210,3 +213,17 @@ async def upsert_liked_list_record(
         )
         logger.info(f"created liked list record for {auth_session.did}: {uri}")
         return uri, cid
+
+
+async def fetch_list_item_uris(
+    record_uri: str,
+    pds_url: str | None = None,
+) -> list[str]:
+    """fetch an ATProto list record and return its item URIs in order.
+
+    raises on PDS fetch failure — callers handle errors their own way
+    (playlists raise HTTPException, albums fall back to created_at order).
+    """
+    record_data, _ = await get_record_public_resilient(record_uri, pds_url)
+    items = record_data.get("value", {}).get("items", [])
+    return [uri for item in items if (uri := item.get("subject", {}).get("uri"))]

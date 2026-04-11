@@ -144,20 +144,8 @@ async def test_playlist_returns_liked_state_for_authenticated_user(
     this is a regression test for the bug where playlist tracks never showed
     the liked state even when the user had liked them.
     """
-    # mock the ATProto record fetch to return our test tracks
-    mock_record_data = {
-        "value": {
-            "items": [
-                {
-                    "subject": {
-                        "uri": track.atproto_record_uri,
-                        "cid": track.atproto_record_cid,
-                    }
-                }
-                for track in test_tracks
-            ]
-        }
-    }
+    # mock the ATProto list fetch to return our test track URIs
+    mock_track_uris = [track.atproto_record_uri for track in test_tracks]
 
     # override get_optional_session to return our test user session
     mock_session = MockSession()
@@ -168,9 +156,9 @@ async def test_playlist_returns_liked_state_for_authenticated_user(
     test_app.dependency_overrides[get_optional_session] = _override_session
 
     with patch(
-        "backend.api.lists.playlists.get_record_public_resilient",
+        "backend.api.lists.playlists.fetch_list_item_uris",
         new_callable=AsyncMock,
-        return_value=(mock_record_data, None),
+        return_value=mock_track_uris,
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app),
@@ -209,20 +197,8 @@ async def test_playlist_returns_no_liked_state_for_unauthenticated_user(
 
     even if tracks have likes, unauthenticated users should not see their own liked state.
     """
-    # mock the ATProto record fetch to return our test tracks
-    mock_record_data = {
-        "value": {
-            "items": [
-                {
-                    "subject": {
-                        "uri": track.atproto_record_uri,
-                        "cid": track.atproto_record_cid,
-                    }
-                }
-                for track in test_tracks
-            ]
-        }
-    }
+    # mock the ATProto list fetch to return our test track URIs
+    mock_track_uris = [track.atproto_record_uri for track in test_tracks]
 
     # override get_optional_session to return None (unauthenticated)
     async def _override_no_session() -> None:
@@ -231,9 +207,9 @@ async def test_playlist_returns_no_liked_state_for_unauthenticated_user(
     test_app.dependency_overrides[get_optional_session] = _override_no_session
 
     with patch(
-        "backend.api.lists.playlists.get_record_public_resilient",
+        "backend.api.lists.playlists.fetch_list_item_uris",
         new_callable=AsyncMock,
-        return_value=(mock_record_data, None),
+        return_value=mock_track_uris,
     ):
         async with AsyncClient(
             transport=ASGITransport(app=test_app),

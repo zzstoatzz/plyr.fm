@@ -8,7 +8,6 @@ from typing import Annotated
 from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_oauth_client, get_optional_session, require_auth
@@ -18,7 +17,7 @@ from backend._internal.atproto.records import (
     _reconstruct_oauth_session,
     create_list_record,
     delete_record_by_uri,
-    get_record_public_resilient,
+    fetch_list_item_uris,
     update_list_record,
 )
 from backend._internal.image_uploads import COVER_EXTENSIONS, process_image_upload
@@ -29,14 +28,13 @@ from backend.models import (
     CollectionEvent,
     Playlist,
     Track,
-    TrackLike,
     get_db,
 )
-from backend.schemas import DeletedResponse, TrackResponse
+from backend.schemas import DeletedResponse
 from backend.storage import storage
-from backend.utilities.aggregations import get_comment_counts, get_like_counts
 from backend.utilities.redis import get_async_redis_client
 
+from .hydration import hydrate_tracks_from_uris
 from .router import router
 from .schemas import (
     AddTrackRequest,
@@ -198,11 +196,10 @@ async def get_playlist_by_uri(
 
     playlist, artist = row
 
-    # fetch ATProto record (public - no auth needed)
+    # fetch track URIs from ATProto list record
     try:
-        record_data, _ = await get_record_public_resilient(
-            record_uri=playlist.atproto_record_uri,
-            pds_url=artist.pds_url,
+        track_uris = await fetch_list_item_uris(
+            playlist.atproto_record_uri, artist.pds_url
         )
     except RecordNotFound:
         raise HTTPException(
@@ -213,47 +210,9 @@ async def get_playlist_by_uri(
             status_code=500, detail=f"failed to fetch playlist record: {e}"
         ) from e
 
-    items = record_data.get("value", {}).get("items", [])
-
-    # extract track URIs in order
-    track_uris = [item.get("subject", {}).get("uri") for item in items]
-    track_uris = [u for u in track_uris if u]
-
-    # hydrate track metadata from database
-    tracks: list[TrackResponse] = []
-    if track_uris:
-        track_result = await db.execute(
-            select(Track)
-            .options(selectinload(Track.artist), selectinload(Track.album_rel))
-            .where(Track.atproto_record_uri.in_(track_uris))
-        )
-        all_tracks = track_result.scalars().all()
-        track_by_uri = {t.atproto_record_uri: t for t in all_tracks}
-
-        track_ids = [t.id for t in all_tracks]
-        like_counts = await get_like_counts(db, track_ids) if track_ids else {}
-        comment_counts = await get_comment_counts(db, track_ids) if track_ids else {}
-
-        liked_track_ids: set[int] = set()
-        if session and track_ids:
-            liked_result = await db.execute(
-                select(TrackLike.track_id).where(
-                    TrackLike.user_did == session.did,
-                    TrackLike.track_id.in_(track_ids),
-                )
-            )
-            liked_track_ids = set(liked_result.scalars().all())
-
-        for u in track_uris:
-            if u in track_by_uri:
-                track = track_by_uri[u]
-                track_response = await TrackResponse.from_track(
-                    track,
-                    liked_track_ids=liked_track_ids,
-                    like_counts=like_counts,
-                    comment_counts=comment_counts,
-                )
-                tracks.append(track_response)
+    tracks = await hydrate_tracks_from_uris(
+        db, track_uris, session_did=session.did if session else None
+    )
 
     return PlaylistWithTracksResponse(
         id=playlist.id,
@@ -324,11 +283,10 @@ async def get_playlist(
 
     playlist, artist = row
 
-    # fetch ATProto record (public - no auth needed)
+    # fetch track URIs from ATProto list record
     try:
-        record_data, _ = await get_record_public_resilient(
-            record_uri=playlist.atproto_record_uri,
-            pds_url=artist.pds_url,
+        track_uris = await fetch_list_item_uris(
+            playlist.atproto_record_uri, artist.pds_url
         )
     except RecordNotFound:
         raise HTTPException(
@@ -339,52 +297,9 @@ async def get_playlist(
             status_code=500, detail=f"failed to fetch playlist record: {e}"
         ) from e
 
-    items = record_data.get("value", {}).get("items", [])
-
-    # extract track URIs in order
-    track_uris = [item.get("subject", {}).get("uri") for item in items]
-    track_uris = [uri for uri in track_uris if uri]
-
-    # hydrate track metadata from database
-    tracks: list[TrackResponse] = []
-    if track_uris:
-        track_result = await db.execute(
-            select(Track)
-            .options(selectinload(Track.artist), selectinload(Track.album_rel))
-            .where(Track.atproto_record_uri.in_(track_uris))
-        )
-        all_tracks = track_result.scalars().all()
-        track_by_uri = {t.atproto_record_uri: t for t in all_tracks}
-
-        # get track IDs for aggregation queries
-        track_ids = [t.id for t in all_tracks]
-        like_counts = await get_like_counts(db, track_ids) if track_ids else {}
-        comment_counts = await get_comment_counts(db, track_ids) if track_ids else {}
-
-        # get authenticated user's likes if session available
-        liked_track_ids: set[int] = set()
-        if session:
-            if track_ids:
-                liked_result = await db.execute(
-                    select(TrackLike.track_id).where(
-                        TrackLike.user_did == session.did,
-                        TrackLike.track_id.in_(track_ids),
-                    )
-                )
-                liked_track_ids = set(liked_result.scalars().all())
-
-        # maintain ATProto ordering, skip unavailable tracks
-        for uri in track_uris:
-            if uri in track_by_uri:
-                track = track_by_uri[uri]
-                track_response = await TrackResponse.from_track(
-                    track,
-                    liked_track_ids=liked_track_ids,
-                    like_counts=like_counts,
-                    comment_counts=comment_counts,
-                )
-                tracks.append(track_response)
-            # else: track exists in PDS list but not in our database - skip it
+    tracks = await hydrate_tracks_from_uris(
+        db, track_uris, session_did=session.did if session else None
+    )
 
     return PlaylistWithTracksResponse(
         id=playlist.id,
@@ -848,21 +763,14 @@ async def get_playlist_recommendations_endpoint(
     except Exception as e:
         logger.debug("redis cache miss/error for recommendations: %s", e)
 
-    # get track IDs from the playlist's ATProto record
+    # get track URIs from the playlist's ATProto list record
     try:
-        record_data, _ = await get_record_public_resilient(
-            record_uri=playlist.atproto_record_uri,
-            pds_url=artist.pds_url,
+        track_uris = await fetch_list_item_uris(
+            playlist.atproto_record_uri, artist.pds_url
         )
     except Exception as e:
         logger.warning("failed to fetch playlist record for recommendations: %s", e)
         return unavailable
-
-    items = record_data.get("value", {}).get("items", [])
-    track_uris = [
-        item.get("subject", {}).get("uri") for item in items if item.get("subject")
-    ]
-    track_uris = [uri for uri in track_uris if uri]
 
     if not track_uris:
         return unavailable

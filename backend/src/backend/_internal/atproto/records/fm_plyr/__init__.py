@@ -8,6 +8,7 @@ from backend._internal.atproto.records.fm_plyr.like import create_like_record
 from backend._internal.atproto.records.fm_plyr.list import (
     build_list_record,
     create_list_record,
+    fetch_list_item_uris,
     update_list_record,
     upsert_album_list_record,
     upsert_liked_list_record,
@@ -32,6 +33,7 @@ __all__ = [
     "create_list_record",
     "create_track_record",
     "delete_record_by_uri",
+    "fetch_list_item_uris",
     "get_record_public",
     "get_record_public_resilient",
     "update_comment_record",
