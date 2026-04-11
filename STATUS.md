@@ -47,6 +47,66 @@ plyr.fm should become:
 
 ### April 2026
 
+#### Leaflet mention service + embeds (PRs #1271-1273, Apr 10)
+
+**why**: [Jared from Leaflet](https://awarm.leaflet.pub/3mj662txrs22p) shipped a mention services system that lets ATProto apps register as searchable, embeddable services in the Leaflet editor. plyr.fm is one of the first real implementations (alongside Wikipedia and Pokemon). a Leaflet user types `@`, selects plyr.fm, searches for a track or artist, and either mentions it inline or embeds a playable iframe — all without leaving the editor.
+
+**what shipped**:
+- **`GET /xrpc/parts.page.mention.search`** (#1271) — XRPC query endpoint per the `parts.page.mention.search` lexicon. wraps our existing pg_trgm fuzzy search across tracks, artists, albums, playlists, and tags. returns results with embed info (iframe `src` pointing to existing `/embed/*` pages), labels, descriptions, and subscope support for drilling into specific content types
+- **`GET /.well-known/did.json`** (#1271) — DID document serving `did:web:api.plyr.fm` with a `#mention_search` service declaration. enables ATProto apps to proxy XRPC calls to plyr.fm without depending on a third-party feed service — the user's PDS resolves the DID and forwards the request directly
+- **`/embed/u/[handle]`** (#1272) — new artist embed page showing recent tracks, reusing `CollectionEmbed` (same component as album/playlist embeds). all content types now have embeddable surfaces
+- **`CollectionData` dedup** (#1272) — the interface was defined in 4 places; consolidated into `$lib/types.ts`
+- **embed sizing** (#1273) — switched from `aspectRatio` (16:9 made collection embeds too tall) to fixed pixel dimensions: 600×160 for single tracks (compact player bar), 600×400 for collections (room for track list). these are defaults — Leaflet renders a draggable resize handle
+
+**how it works in production**:
+1. `parts.page.mention.service` record published to `plyr.fm`'s PDS repo, declaring `did:web:api.plyr.fm` as the service
+2. `parts.page.mention.config/self` record enables the service for the `plyr.fm` account (per-user opt-in, like Bluesky feed generators)
+3. Leaflet's appview indexes both records from the firehose
+4. when a user searches: Leaflet → user's PDS → `did:web:api.plyr.fm` → our XRPC endpoint → results with embed URLs
+
+**decisions**:
+- plyr.fm serves its own XRPC endpoint via `did:web` — no dependency on Leaflet's feed service. any ATProto app implementing mention services can discover and use plyr.fm directly
+- auth in embeds is deferred — Jared flagged the StorageAccess API as a possibility but it's unresolved across the ecosystem. our embeds are public-only for now
+- the `parts.page.connect` MessageChannel RPC (host ↔ embed communication) is not implemented yet — would enable richer interactions like opening full track pages from within the embed
+
+---
+
+#### "atmosphere account" terminology (PRs #1268-1270, Apr 10)
+
+**why**: [Sri's article](https://sri.leaflet.pub/3maltcnnbqs2n) makes the case for "atmosphere account" as the shared term for ATProto identities across apps. the login page previously said "internet handle" — time to align with the emerging ecosystem terminology. key insight: these are **accounts**, not handles. handles are something you get once you have an account.
+
+**what shipped**:
+- login page label: "internet handle" → "atmosphere account", link now points to [atproto.com/guides/glossary#handle](https://atproto.com/guides/glossary#handle)
+- docs (listeners, artists): "enter your handle" → "enter your atmosphere account"
+- glossary: split "handle (atproto handle)" into separate "atmosphere account" and "handle" definitions
+- status-maintenance workflow: "ATProto identities" → "atmosphere accounts"
+- README: "bluesky accounts" → "atmosphere accounts"
+- updated login page screenshot to match
+
+---
+
+#### unlisted tracks (PR #1267, Apr 10)
+
+**why**: artists need to publish tracks that are accessible by direct link or on their profile but don't appear in discovery feeds (latest, top, for-you). use case: drafts shared with collaborators, tracks that belong in an album context but shouldn't float independently in feeds.
+
+**what shipped**:
+- `unlisted` boolean on Track (default false)
+- filtered from `GET /tracks/` (latest feed, when not scoped to artist), `GET /tracks/top`, and `GET /for-you/`
+- **not** filtered from: artist profile, direct links, album/playlist context, search, portal, or `GET /tracks/?artist_did=...`
+
+---
+
+#### image moderation perf + analytics fix (PRs #1265-1266, Apr 10)
+
+**why**: a real user session (annamist.com editing track 862) showed PATCH taking 8.9 seconds. Logfire traces revealed two bottlenecks: inline `await` on the moderation service (Claude Vision, ~6s) and R2 delete spraying every file extension (~1.3s of sequential HEAD requests).
+
+**what shipped**:
+- **image moderation → docket background task** (#1266) — the scan only flags and notifies, never gates the response. moved to async `scan_image_moderation` task, matching how copyright audio scans already work. ~6s saved
+- **R2 delete → direct key lookup** (#1266) — parse extension from the image URL and hit the correct R2 key on first try instead of trying 12+ extensions. ~1.3s saved. combined: 8.9s → ~1s
+- **analytics title clamping** (#1265) — long track titles overflowed "most played"/"most liked" cards on artist profiles. clamped to 2 lines with ellipsis
+
+---
+
 #### first-class album uploads with preserved track ordering (PRs #1260-1262, Apr 9)
 
 **why**: album uploads via the album upload form lost the user's chosen track order after #1238 switched to concurrent uploads. the ATProto list record (the source of truth for album track order) was built by per-track sync tasks that sorted by `Track.created_at`, and `created_at` reflects the DB commit race under concurrency — not user intent. external review also caught two P1s: creating the album shell emitted an `album_release` CollectionEvent before any track succeeded (fake release in the activity feed), and appending tracks to an existing album truncated the list record to only the current session's tracks.
@@ -258,7 +318,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-Album upload ordering fix shipped (#1260-1262) — albums are now first-class objects (`POST /albums/` creates a shell, `POST /albums/{id}/finalize` writes the ATProto list record once with user-intended order). External review caught and fixed two P1s before production: fake album_release events on upload failure, and list-record truncation when appending tracks to existing albums. Also shipped this week: `/for-you` (#1249-1250), a collaborative-filtering personalized feed ported from grain.social; `/record` (#1251-1257), an in-browser audio capture page with a reusable `Waveform` component. ooo.audio cross-app lexicon conversation is in-flight (meeting notes on #705) — room included **comet.sh**, **tracklist.diy**, and **whereditgo.diamonds**. next: waveform rollout to other surfaces as a follow-up to #1251; watch `/for-you` engagement to decide whether to promote it or rerank with CLAP embeddings; define what "top artist" means on a platform with diverse content types; add a staging environment for the moderation service (#1165).
+Leaflet mention service is live (#1271-1273) — plyr.fm is one of the first ATProto apps to implement Jared's `parts.page.mention.search` XRPC pattern. tracks, artists, albums, playlists, and tags are searchable and embeddable in Leaflet publications via iframe. self-hosted via `did:web:api.plyr.fm` with no dependency on Leaflet's feed service. next steps: contribute a `plyr.ts` handler upstream to Leaflet's feed service for wider discovery (Option A in #1271); explore `parts.page.connect` RPC channel for richer embed interactions; watch for auth-in-embeds patterns across the ecosystem. also this week: "atmosphere account" terminology adopted across login page and docs (#1268-1270); unlisted tracks for feed-excluded publishing (#1267); image moderation moved to background tasks for 8x faster track edits (#1266). ooo.audio cross-app lexicon conversation continues (#705). waveform rollout to other surfaces still pending as follow-up to #1251.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -394,5 +454,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-09 (first-class album uploads with preserved track ordering).
+this is a living document. last updated 2026-04-10 (Leaflet mention service + embeds, atmosphere account terminology, unlisted tracks).
 
