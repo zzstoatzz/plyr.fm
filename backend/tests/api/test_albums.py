@@ -535,7 +535,7 @@ async def test_get_album_respects_atproto_track_order(
     }
 
     with patch(
-        "backend._internal.atproto.records.get_record_public_resilient",
+        "backend.api.albums.listing.get_record_public_resilient",
         new_callable=AsyncMock,
         return_value=(mock_record, None),
     ):
@@ -674,12 +674,12 @@ async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
     # mock ATProto update_record for tracks and list
     with (
         patch(
-            "backend._internal.atproto.records.fm_plyr.track.update_record",
+            "backend.api.albums.mutations.update_record",
             new_callable=AsyncMock,
             return_value=("at://did:test:user123/fm.plyr.track/track123", "new_cid"),
         ) as mock_track_update,
         patch(
-            "backend._internal.atproto.records.fm_plyr.list.update_list_record",
+            "backend.api.albums.mutations.update_list_record",
             new_callable=AsyncMock,
             return_value=(
                 "at://did:test:user123/fm.plyr.dev.list/album123",
@@ -1074,7 +1074,7 @@ async def test_finalize_album_writes_list_in_requested_order(
         )
 
     with patch(
-        "backend._internal.atproto.records.fm_plyr.list.upsert_album_list_record",
+        "backend.api.albums.mutations.upsert_album_list_record",
         side_effect=fake_upsert,
     ):
         async with AsyncClient(
@@ -1273,7 +1273,7 @@ async def test_finalize_album_emits_release_event_first_time_only(
         return (f"at://did:test:user123/fm.plyr.list/{album_id}", "cid-finalize")
 
     with patch(
-        "backend._internal.atproto.records.fm_plyr.list.upsert_album_list_record",
+        "backend.api.albums.mutations.upsert_album_list_record",
         side_effect=fake_upsert,
     ):
         async with AsyncClient(
@@ -1472,12 +1472,12 @@ async def test_finalize_album_preserves_existing_tracks_on_append(
 
     with (
         patch(
-            "backend._internal.atproto.records.get_record_public_resilient",
+            "backend.api.albums.mutations.get_record_public_resilient",
             new_callable=AsyncMock,
             return_value=(existing_list_record, None),
         ),
         patch(
-            "backend._internal.atproto.records.fm_plyr.list.upsert_album_list_record",
+            "backend.api.albums.mutations.upsert_album_list_record",
             side_effect=fake_upsert,
         ),
     ):
