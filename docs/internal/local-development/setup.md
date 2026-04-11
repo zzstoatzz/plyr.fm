@@ -58,8 +58,8 @@ R2_BUCKET=audio-dev
 R2_PRIVATE_BUCKET=audio-private-dev  # for supporter-gated content
 R2_IMAGE_BUCKET=images-dev
 R2_ENDPOINT_URL=<your-r2-endpoint>
-R2_PUBLIC_BUCKET_URL=<your-r2-public-url>
-R2_PUBLIC_IMAGE_BUCKET_URL=<your-r2-image-public-url>
+R2_PUBLIC_BUCKET_URL=<your-r2-public-url>  # local dev can use r2.dev URLs; production uses audio.plyr.fm
+R2_PUBLIC_IMAGE_BUCKET_URL=<your-r2-image-public-url>  # local dev can use r2.dev URLs; production uses images.plyr.fm
 AWS_ACCESS_KEY_ID=<your-r2-access-key>
 AWS_SECRET_ACCESS_KEY=<your-r2-secret>
 

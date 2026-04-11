@@ -3,7 +3,7 @@
 import time
 from collections.abc import Callable
 from io import BytesIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 
 import aioboto3
@@ -18,6 +18,9 @@ from backend._internal.image import ImageFormat
 from backend.config import settings
 from backend.utilities.database import db_session
 from backend.utilities.hashing import hash_file_chunked
+
+# content-hashed files never change — cache forever
+IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
 
 class UploadProgressTracker:
@@ -115,9 +118,18 @@ class R2Storage:
 
         # async session for read operations
         self.async_session = aioboto3.Session()
-        self.endpoint_url = settings.storage.r2_endpoint_url
-        self.aws_access_key_id = settings.storage.aws_access_key_id
-        self.aws_secret_access_key = settings.storage.aws_secret_access_key
+        self._s3_kwargs = {
+            "endpoint_url": settings.storage.r2_endpoint_url,
+            "aws_access_key_id": settings.storage.aws_access_key_id,
+            "aws_secret_access_key": settings.storage.aws_secret_access_key,
+        }
+
+    def _s3_client(self, **extra_kwargs):
+        """create an async S3 client context manager.
+
+        centralizes connection config so an S3/R2 swap is one-line.
+        """
+        return self.async_session.client("s3", **self._s3_kwargs, **extra_kwargs)
 
     async def save(
         self,
@@ -169,18 +181,16 @@ class R2Storage:
             )
 
             try:
-                async with self.async_session.client(
-                    "s3",
-                    endpoint_url=self.endpoint_url,
-                    aws_access_key_id=self.aws_access_key_id,
-                    aws_secret_access_key=self.aws_secret_access_key,
-                ) as client:
+                async with self._s3_client() as client:
                     # prepare upload arguments
                     upload_kwargs = {
                         "Fileobj": file,
                         "Bucket": bucket,
                         "Key": key,
-                        "ExtraArgs": {"ContentType": media_type},
+                        "ExtraArgs": {
+                            "ContentType": media_type,
+                            "CacheControl": IMMUTABLE_CACHE_CONTROL,
+                        },
                     }
 
                     # add progress callback if provided
@@ -224,12 +234,7 @@ class R2Storage:
         with logfire.span(
             "R2 get_url", file_id=file_id, file_type=file_type, extension=extension
         ):
-            async with self.async_session.client(
-                "s3",
-                endpoint_url=self.endpoint_url,
-                aws_access_key_id=self.aws_access_key_id,
-                aws_secret_access_key=self.aws_secret_access_key,
-            ) as client:
+            async with self._s3_client() as client:
                 # if file_type is "image", skip audio checks
                 if file_type != "image":
                     # if extension is provided, try single format
@@ -306,12 +311,7 @@ class R2Storage:
             file bytes if found, None otherwise
         """
         with logfire.span("R2 get_file_data", file_id=file_id, file_type=file_type):
-            async with self.async_session.client(
-                "s3",
-                endpoint_url=self.endpoint_url,
-                aws_access_key_id=self.aws_access_key_id,
-                aws_secret_access_key=self.aws_secret_access_key,
-            ) as client:
+            async with self._s3_client() as client:
                 # build key from file_id and file_type
                 audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
                 if not audio_format:
@@ -393,12 +393,7 @@ class R2Storage:
             file_type=file_type,
         )
 
-        async with self.async_session.client(
-            "s3",
-            endpoint_url=self.endpoint_url,
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-        ) as client:
+        async with self._s3_client() as client:
             # if file_type is provided, delete the exact key
             if file_type:
                 audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
@@ -455,8 +450,6 @@ class R2Storage:
                     continue
 
             # try image formats
-            from backend._internal.image import ImageFormat
-
             for image_format in ImageFormat:
                 key = f"images/{file_id}.{image_format.value}"
 
@@ -498,8 +491,6 @@ class R2Storage:
         wasted round trips). the image URL already encodes the correct
         extension, so we can build the key directly.
         """
-        from pathlib import PurePosixPath
-
         # extract extension from URL: ".../images/abc123.png?..." → ".png"
         ext = PurePosixPath(image_url.split("?")[0]).suffix.lower()
         if not ext:
@@ -511,12 +502,7 @@ class R2Storage:
             return await self.delete(file_id)
 
         key = f"images/{file_id}{ext}"
-        async with self.async_session.client(
-            "s3",
-            endpoint_url=self.endpoint_url,
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-        ) as client:
+        async with self._s3_client() as client:
             try:
                 await client.delete_object(Bucket=self.image_bucket_name, Key=key)
                 logfire.info(
@@ -575,17 +561,15 @@ class R2Storage:
             )
 
             try:
-                async with self.async_session.client(
-                    "s3",
-                    endpoint_url=self.endpoint_url,
-                    aws_access_key_id=self.aws_access_key_id,
-                    aws_secret_access_key=self.aws_secret_access_key,
-                ) as client:
+                async with self._s3_client() as client:
                     upload_kwargs = {
                         "Fileobj": file,
                         "Bucket": self.private_audio_bucket_name,
                         "Key": key,
-                        "ExtraArgs": {"ContentType": media_type},
+                        "ExtraArgs": {
+                            "ContentType": media_type,
+                            "CacheControl": IMMUTABLE_CACHE_CONTROL,
+                        },
                     }
 
                     if progress_callback and file_size > 0:
@@ -642,11 +626,7 @@ class R2Storage:
             key=key,
             expires_in=expiry,
         ):
-            async with self.async_session.client(
-                "s3",
-                endpoint_url=self.endpoint_url,
-                aws_access_key_id=self.aws_access_key_id,
-                aws_secret_access_key=self.aws_secret_access_key,
+            async with self._s3_client(
                 config=Config(signature_version="s3v4"),
             ) as client:
                 url = await client.generate_presigned_url(
@@ -672,17 +652,15 @@ class R2Storage:
         """save a WebP thumbnail alongside the original image in R2."""
         key = f"images/{image_id}_thumb.webp"
         with logfire.span("R2 save_thumbnail", image_id=image_id, key=key):
-            async with self.async_session.client(
-                "s3",
-                endpoint_url=self.endpoint_url,
-                aws_access_key_id=self.aws_access_key_id,
-                aws_secret_access_key=self.aws_secret_access_key,
-            ) as client:
+            async with self._s3_client() as client:
                 await client.upload_fileobj(
                     BytesIO(thumbnail_data),
                     self.image_bucket_name,
                     key,
-                    ExtraArgs={"ContentType": "image/webp"},
+                    ExtraArgs={
+                        "ContentType": "image/webp",
+                        "CacheControl": IMMUTABLE_CACHE_CONTROL,
+                    },
                 )
             return f"{self.public_image_bucket_url}/{key}"
 
@@ -728,12 +706,7 @@ class R2Storage:
             to_private=to_private,
         ):
             try:
-                async with self.async_session.client(
-                    "s3",
-                    endpoint_url=self.endpoint_url,
-                    aws_access_key_id=self.aws_access_key_id,
-                    aws_secret_access_key=self.aws_secret_access_key,
-                ) as client:
+                async with self._s3_client() as client:
                     # copy to destination
                     await client.copy_object(
                         CopySource={"Bucket": src_bucket, "Key": key},

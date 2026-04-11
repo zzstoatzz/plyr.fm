@@ -46,7 +46,7 @@ example record from the network:
   "title": "plyr.fm update - February 27, 2026",
   "artist": "plyr.fm",
   "album": "2026",
-  "audioUrl": "https://pub-d4ed8a1e39d44dac85263d86ad5676fd.r2.dev/audio/ada9cadc63efd822.wav",
+  "audioUrl": "https://audio.plyr.fm/audio/ada9cadc63efd822.wav",
   "audioBlob": {
     "$type": "blob",
     "ref": { "$link": "bafkreifnvhfnyy7p3ara2gdyv6krztsd26luv2mi45j7hw3sreq7xjpd24" },

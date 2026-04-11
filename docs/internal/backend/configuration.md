@@ -90,8 +90,8 @@ R2_BUCKET=your-audio-bucket
 R2_PRIVATE_BUCKET=your-private-audio-bucket  # for supporter-gated content
 R2_IMAGE_BUCKET=your-image-bucket
 R2_ENDPOINT_URL=https://xxx.r2.cloudflarestorage.com
-R2_PUBLIC_BUCKET_URL=https://pub-xxx.r2.dev  # for audio files
-R2_PUBLIC_IMAGE_BUCKET_URL=https://pub-xxx.r2.dev  # for image files
+R2_PUBLIC_BUCKET_URL=https://audio.plyr.fm  # audio files (custom domain for CDN caching)
+R2_PUBLIC_IMAGE_BUCKET_URL=https://images.plyr.fm  # image files (custom domain for CDN caching)
 AWS_ACCESS_KEY_ID=your-r2-access-key
 AWS_SECRET_ACCESS_KEY=your-r2-secret
 ```

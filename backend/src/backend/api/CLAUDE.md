@@ -12,7 +12,7 @@ resources:
 - **albums**: CRUD with cover art, track ordering, ATProto list records
 - **playlists**: CRUD with drag-and-drop reordering, ATProto list records
 - **artists**: profiles synced from ATProto identities, support links
-- **audio**: streaming via 307 redirects to R2 CDN
+- **audio**: streaming via 307 redirects to CDN
 - **queue**: server-authoritative with optimistic client updates
 - **preferences**: user settings (accent color, auto-play, teal scrobbling, sensitive artwork)
 - **exports**: media export with SSE progress tracking, concurrent downloads
