@@ -1580,7 +1580,7 @@ class TestIngestIdentityUpdate:
     ) -> None:
         new_handle = "updated.handle.example"
         with patch(
-            "backend._internal.tasks.ingest.AsyncDidResolver",
+            "atproto_identity.did.resolver.AsyncDidResolver",
             return_value=_mock_did_resolver(),
         ):
             await ingest_identity_update(did=artist.did, handle=new_handle)
@@ -1602,7 +1602,7 @@ class TestIngestIdentityUpdate:
 
         new_handle = "updated.handle.example"
         with patch(
-            "backend._internal.tasks.ingest.AsyncDidResolver",
+            "atproto_identity.did.resolver.AsyncDidResolver",
             return_value=_mock_did_resolver(),
         ):
             await ingest_identity_update(did=artist.did, handle=new_handle)
@@ -1616,7 +1616,7 @@ class TestIngestIdentityUpdate:
         """PDS migration updates the cached pds_url via DID resolution."""
         new_pds = "https://new-pds.example.com"
         with patch(
-            "backend._internal.tasks.ingest.AsyncDidResolver",
+            "atproto_identity.did.resolver.AsyncDidResolver",
             return_value=_mock_did_resolver(pds_url=new_pds),
         ):
             await ingest_identity_update(did=artist.did, handle=artist.handle)
@@ -1631,7 +1631,7 @@ class TestIngestIdentityUpdate:
         original_handle = artist.handle
         original_pds = artist.pds_url
         with patch(
-            "backend._internal.tasks.ingest.AsyncDidResolver",
+            "atproto_identity.did.resolver.AsyncDidResolver",
             return_value=_mock_did_resolver(pds_url=original_pds or ""),
         ):
             await ingest_identity_update(did=artist.did, handle=original_handle)
@@ -1654,7 +1654,7 @@ class TestIngestIdentityUpdate:
             side_effect=Exception("resolution failed")
         )
         with patch(
-            "backend._internal.tasks.ingest.AsyncDidResolver",
+            "atproto_identity.did.resolver.AsyncDidResolver",
             return_value=mock_resolver,
         ):
             await ingest_identity_update(did=artist.did, handle=new_handle)
