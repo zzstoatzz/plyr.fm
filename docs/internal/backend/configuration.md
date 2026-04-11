@@ -96,6 +96,8 @@ AWS_ACCESS_KEY_ID=your-r2-access-key
 AWS_SECRET_ACCESS_KEY=your-r2-secret
 ```
 
+> **verifying CDN cache**: HEAD requests (`curl -sI`) to R2 custom domains always return `cf-cache-status: DYNAMIC` — this is expected. use GET requests to check real cache status: `curl -s -o /dev/null -D - <url> | grep cf-cache-status`
+
 ### optional
 
 ```bash
