@@ -168,7 +168,7 @@ async def test_playlist_returns_liked_state_for_authenticated_user(
     test_app.dependency_overrides[get_optional_session] = _override_session
 
     with patch(
-        "backend.api.lists.get_record_public_resilient",
+        "backend.api.lists.playlists.get_record_public_resilient",
         new_callable=AsyncMock,
         return_value=(mock_record_data, None),
     ):
@@ -231,7 +231,7 @@ async def test_playlist_returns_no_liked_state_for_unauthenticated_user(
     test_app.dependency_overrides[get_optional_session] = _override_no_session
 
     with patch(
-        "backend.api.lists.get_record_public_resilient",
+        "backend.api.lists.playlists.get_record_public_resilient",
         new_callable=AsyncMock,
         return_value=(mock_record_data, None),
     ):

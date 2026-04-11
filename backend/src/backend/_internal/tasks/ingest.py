@@ -712,32 +712,54 @@ async def ingest_profile_update(
 # --- handle update task ---
 
 
-async def ingest_handle_update(
+async def ingest_identity_update(
     did: str,
     handle: str,
 ) -> None:
-    """update artist and session handles when an identity event arrives."""
+    """update artist handle and PDS URL when an identity event arrives.
+
+    identity events fire on both handle changes and PDS migrations.
+    resolving the DID gives us the current PDS URL, so we update both
+    in one pass rather than lazily healing stale pds_url in every API
+    endpoint that fetches ATProto records.
+    """
+    from atproto_identity.did.resolver import AsyncDidResolver
+
     async with db_session() as db:
         artist = await db.get(Artist, did)
         if not artist:
-            logger.debug("ingest_handle_update: unknown artist %s", did)
+            logger.debug("ingest_identity_update: unknown artist %s", did)
             return
 
-        if artist.handle == handle:
+        changes: dict[str, tuple[str | None, str | None]] = {}
+
+        if artist.handle != handle:
+            changes["handle"] = (artist.handle, handle)
+            artist.handle = handle
+
+            # update active sessions so session handles stay current
+            await db.execute(
+                update(UserSession).where(UserSession.did == did).values(handle=handle)
+            )
+
+        # resolve DID to get current PDS URL
+        try:
+            atproto_data = await AsyncDidResolver().resolve_atproto_data(did)
+            resolved_pds = atproto_data.pds
+            if resolved_pds and resolved_pds != artist.pds_url:
+                changes["pds_url"] = (artist.pds_url, resolved_pds)
+                artist.pds_url = resolved_pds
+        except Exception as e:
+            logger.warning(
+                "ingest_identity_update: DID resolution failed for %s: %s", did, e
+            )
+
+        if not changes:
             return
-
-        old_handle = artist.handle
-        artist.handle = handle
-
-        # update active sessions so session handles stay current
-        await db.execute(
-            update(UserSession).where(UserSession.did == did).values(handle=handle)
-        )
 
         await db.commit()
         logfire.info(
-            "ingest: handle updated",
+            "ingest: identity updated",
             did=did,
-            old_handle=old_handle,
-            new_handle=handle,
+            changes={k: {"old": v[0], "new": v[1]} for k, v in changes.items()},
         )
