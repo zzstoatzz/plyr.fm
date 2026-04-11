@@ -8,6 +8,7 @@ from backend._internal import Session as AuthSession
 from backend._internal import require_auth
 from backend._internal.atproto.records import update_list_record
 from backend.api.albums import invalidate_album_cache
+from backend.config import settings
 from backend.models import Album, UserPreferences, get_db
 
 from .router import router
@@ -61,8 +62,6 @@ async def reorder_list(
     db: AsyncSession = Depends(get_db),
 ) -> ReorderResponse:
     """reorder items in a list by rkey. items array order = new display order."""
-    from backend.config import settings
-
     # construct the full AT URI
     list_uri = f"at://{session.did}/{settings.atproto.list_collection}/{rkey}"
 

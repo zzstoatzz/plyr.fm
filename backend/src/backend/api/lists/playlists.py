@@ -8,21 +8,30 @@ from typing import Annotated
 from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
-from backend._internal import get_optional_session, require_auth
+from backend._internal import get_oauth_client, get_optional_session, require_auth
 from backend._internal.atproto.client import parse_at_uri
 from backend._internal.atproto.records import (
     RecordNotFound,
     _reconstruct_oauth_session,
     create_list_record,
+    delete_record_by_uri,
     get_record_public_resilient,
     update_list_record,
 )
 from backend._internal.image_uploads import COVER_EXTENSIONS, process_image_upload
 from backend._internal.recommendations import get_playlist_recommendations
 from backend.config import settings
-from backend.models import Artist, Playlist, Track, TrackLike, get_db
+from backend.models import (
+    Artist,
+    CollectionEvent,
+    Playlist,
+    Track,
+    TrackLike,
+    get_db,
+)
 from backend.schemas import DeletedResponse, TrackResponse
 from backend.storage import storage
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
@@ -85,8 +94,6 @@ async def create_playlist(
     await db.flush()
 
     # emit collection event
-    from backend.models import CollectionEvent
-
     db.add(
         CollectionEvent(
             event_type="playlist_create",
@@ -215,8 +222,6 @@ async def get_playlist_by_uri(
     # hydrate track metadata from database
     tracks: list[TrackResponse] = []
     if track_uris:
-        from sqlalchemy.orm import selectinload
-
         track_result = await db.execute(
             select(Track)
             .options(selectinload(Track.artist), selectinload(Track.album_rel))
@@ -343,8 +348,6 @@ async def get_playlist(
     # hydrate track metadata from database
     tracks: list[TrackResponse] = []
     if track_uris:
-        from sqlalchemy.orm import selectinload
-
         track_result = await db.execute(
             select(Track)
             .options(selectinload(Track.artist), selectinload(Track.album_rel))
@@ -431,7 +434,6 @@ async def add_track_to_playlist(
         raise HTTPException(status_code=401, detail="invalid session")
 
     oauth_session = _reconstruct_oauth_session(oauth_data)
-    from backend._internal import get_oauth_client
 
     repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
@@ -482,8 +484,6 @@ async def add_track_to_playlist(
     playlist.track_count = len(new_items)
 
     # emit collection event — resolve track_id from URI
-    from backend.models import CollectionEvent
-
     track_result = await db.execute(
         select(Track.id).where(Track.atproto_record_uri == body.track_uri)
     )
@@ -543,7 +543,6 @@ async def remove_track_from_playlist(
         raise HTTPException(status_code=401, detail="invalid session")
 
     oauth_session = _reconstruct_oauth_session(oauth_data)
-    from backend._internal import get_oauth_client
 
     repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
@@ -616,8 +615,6 @@ async def delete_playlist(
 
     deletes both the ATProto list record and the database cache.
     """
-    from backend._internal.atproto.records import delete_record_by_uri
-
     # get playlist and verify ownership
     result = await db.execute(select(Playlist).where(Playlist.id == playlist_id))
     playlist = result.scalar_one_or_none()
@@ -747,8 +744,6 @@ async def update_playlist(
             # fetch current list record to preserve items
             oauth_data = session.oauth_session
             if oauth_data and "access_token" in oauth_data:
-                from backend._internal import get_oauth_client
-
                 oauth_session = _reconstruct_oauth_session(oauth_data)
 
                 repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)

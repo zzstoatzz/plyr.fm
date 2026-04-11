@@ -6,14 +6,27 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import Depends, File, HTTPException, Query, UploadFile
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_artist_profile
+from backend._internal.atproto.records import (
+    delete_record_by_uri,
+    get_record_public_resilient,
+)
+from backend._internal.atproto.records.fm_plyr.list import (
+    update_list_record,
+    upsert_album_list_record,
+)
+from backend._internal.atproto.records.fm_plyr.track import (
+    build_track_record,
+    update_record,
+)
 from backend._internal.image_uploads import COVER_EXTENSIONS, process_image_upload
-from backend.models import Album, Artist, Track, get_db
+from backend.models import Album, Artist, CollectionEvent, Track, get_db
 from backend.storage import storage
 from backend.utilities.slugs import slugify
 
@@ -53,8 +66,6 @@ async def create_album(
     this preserves the "type an existing album name to add tracks to it"
     UX — see finalize_album for the append semantics.
     """
-    from sqlalchemy.exc import IntegrityError
-
     title = body.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="title is required")
@@ -182,12 +193,6 @@ async def finalize_album(
     finalize for the album — so total upload failures don't leave a fake
     release event in the activity feed.
     """
-    from backend._internal.atproto.records import get_record_public_resilient
-    from backend._internal.atproto.records.fm_plyr.list import (
-        upsert_album_list_record,
-    )
-    from backend.models import CollectionEvent
-
     if not body.track_ids:
         raise HTTPException(status_code=400, detail="track_ids must not be empty")
 
@@ -367,12 +372,6 @@ async def update_album(
     ] = None,
 ) -> AlbumMetadata:
     """update album metadata (title, description). syncs ATProto records on title change."""
-    from backend._internal.atproto.records.fm_plyr.list import update_list_record
-    from backend._internal.atproto.records.fm_plyr.track import (
-        build_track_record,
-        update_record,
-    )
-
     result = await db.execute(
         select(Album)
         .where(Album.id == album_id)
@@ -511,8 +510,6 @@ async def delete_album(
     ] = False,
 ) -> DeleteAlbumResponse:
     """delete album. tracks are orphaned unless cascade=true. removes ATProto list record."""
-    from backend._internal.atproto.records import delete_record_by_uri
-
     # verify album exists and belongs to the authenticated artist
     result = await db.execute(select(Album).where(Album.id == album_id))
     album = result.scalar_one_or_none()
@@ -539,8 +536,6 @@ async def delete_album(
                 logger.warning(f"failed to delete track {track.id}: {e}")
     else:
         # orphan tracks - set album_id to null
-        from sqlalchemy import update
-
         await db.execute(
             update(Track).where(Track.album_id == album_id).values(album_id=None)
         )

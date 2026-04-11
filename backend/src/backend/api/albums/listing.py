@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session
+from backend._internal.atproto.records import get_record_public_resilient
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
@@ -126,8 +127,6 @@ async def get_album(
             return AlbumResponse.model_validate_json(cached)
     except Exception:
         logger.debug("album cache read failed for %s/%s", handle, slug)
-
-    from backend._internal.atproto.records import get_record_public_resilient
 
     # look up artist + album
     album_result = await db.execute(
