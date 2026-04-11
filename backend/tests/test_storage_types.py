@@ -18,9 +18,11 @@ def _mock_r2_storage() -> tuple[R2Storage, AsyncMock]:
         s.public_audio_bucket_url = "https://audio.test.dev"
         s.public_image_bucket_url = "https://images.test.dev"
         s.presigned_url_expiry = 3600
-        s.endpoint_url = "https://test.r2.dev"
-        s.aws_access_key_id = "test"
-        s.aws_secret_access_key = "test"
+        s._s3_kwargs = {
+            "endpoint_url": "https://test.r2.dev",
+            "aws_access_key_id": "test",
+            "aws_secret_access_key": "test",
+        }
 
         mock_client = AsyncMock()
         mock_client.upload_fileobj = AsyncMock()

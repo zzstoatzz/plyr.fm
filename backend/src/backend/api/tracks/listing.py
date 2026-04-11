@@ -561,12 +561,7 @@ async def get_my_file_sizes(
         r2 = cast("R2Storage", storage)
         async with semaphore:
             try:
-                async with r2.async_session.client(
-                    "s3",
-                    endpoint_url=r2.endpoint_url,
-                    aws_access_key_id=r2.aws_access_key_id,
-                    aws_secret_access_key=r2.aws_secret_access_key,
-                ) as client:
+                async with r2._s3_client() as client:
                     response = await client.head_object(
                         Bucket=storage.audio_bucket_name, Key=key
                     )
