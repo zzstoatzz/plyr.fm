@@ -329,7 +329,7 @@ Leaflet mention service is live (#1271-1273) — plyr.fm is one of the first ATP
 - Jetstream audit trail / activity feed integration — persistent log of firehose events, toggle for visibility
 - share to bluesky (#334)
 - lyrics and annotations (#373)
-- configurable rules engine for moderation (Osprey rules engine PR #958 — on hold pending infrastructure consolidation, see #907)
+- configurable rules engine for moderation (#958)
 - infrastructure consolidation — audit and migrate from Fly.io sprawl to Helm/K8s pattern (#907, reference: `../relay`)
 - time-release gating (#642)
 - social activity feed (#971)
