@@ -67,7 +67,7 @@ presigned URLs are time-limited (5 minutes) and grant direct R2 access. security
 ### ATProto Record Behavior
 
 when a track is gated, the ATProto `fm.plyr.track` record's `audioUrl` changes:
-- **public**: points to R2 CDN URL (e.g., `https://cdn.plyr.fm/audio/abc123.mp3`)
+- **public**: points to CDN URL (e.g., `https://audio.plyr.fm/audio/abc123.mp3`)
 - **gated**: points to API endpoint (e.g., `https://api.plyr.fm/audio/abc123`)
 
 this means ATProto clients cannot stream gated content without authentication through plyr.fm's API.

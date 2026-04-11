@@ -158,7 +158,7 @@ future work might include:
 ### example: flagging an R2 image
 
 ```sql
--- image URL: https://pub-xxx.r2.dev/images/abc123.jpg
+-- image URL: https://images.plyr.fm/images/abc123.jpg
 INSERT INTO sensitive_images (image_id, reason, flagged_by)
 VALUES ('abc123', 'nudity', 'admin');
 ```
