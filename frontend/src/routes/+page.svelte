@@ -346,15 +346,19 @@
 				</div>
 			{/if}
 		</div>
-		{#if feedMode === 'latest'}
-			<div class="filter-row">
-				<TagFilter
-					onTagsChange={(tags) => tracksCache.setTags(tags)}
-					hiddenTags={preferences.hiddenTags}
-				/>
-				<HiddenTagsFilter />
-			</div>
-		{/if}
+		<div class="filter-row">
+			<TagFilter
+				onTagsChange={(tags) => {
+					if (feedMode === 'for-you') {
+						forYouCache.setTags(tags);
+					} else {
+						tracksCache.setTags(tags);
+					}
+				}}
+				hiddenTags={preferences.hiddenTags}
+			/>
+			<HiddenTagsFilter />
+		</div>
 		{#if showLoading}
 			<div class="loading-container">
 				<WaveLoading size="lg" message="loading tracks..." />
@@ -427,17 +431,17 @@
 	.feed-switcher {
 		display: flex;
 		gap: 0.25rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-xl);
+		background: var(--track-bg, var(--bg-secondary));
+		border: 1px solid var(--track-border, var(--border-subtle));
+		border-radius: var(--radius-md);
 		padding: 0.2rem;
 	}
 
 	.feed-tab {
 		background: transparent;
 		border: 1px solid transparent;
-		border-radius: var(--radius-xl);
-		padding: 0.35rem 0.85rem;
+		border-radius: var(--radius-sm);
+		padding: 0.3rem 0.75rem;
 		font: inherit;
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
@@ -449,11 +453,12 @@
 
 	.feed-tab:hover:not(.active) {
 		color: var(--text-secondary);
+		background: var(--track-border, rgba(255, 255, 255, 0.06));
 	}
 
 	.feed-tab.active {
-		background: color-mix(in srgb, var(--accent) 15%, transparent);
-		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 12%, var(--track-bg, transparent));
+		border-color: color-mix(in srgb, var(--accent) 20%, var(--track-border, transparent));
 		color: var(--accent);
 		font-weight: 600;
 	}

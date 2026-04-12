@@ -15,13 +15,22 @@ class ForYouCache {
 	nextCursor = $state<string | null>(null);
 	hasMore = $state(false);
 	coldStart = $state(false);
+	activeTags = $state<string[]>([]);
+
+	private buildUrl(): URL {
+		const url = new URL(`${API_URL}/for-you/`);
+		for (const tag of this.activeTags) {
+			url.searchParams.append('tags', tag);
+		}
+		return url;
+	}
 
 	async fetch(force = false): Promise<void> {
 		if (!force && this.loading) return;
 
 		this.loading = true;
 		try {
-			const response = await fetch(`${API_URL}/for-you/`, {
+			const response = await fetch(this.buildUrl().toString(), {
 				credentials: 'include'
 			});
 			if (!response.ok) {
@@ -48,7 +57,7 @@ class ForYouCache {
 
 		this.loadingMore = true;
 		try {
-			const url = new URL(`${API_URL}/for-you/`);
+			const url = this.buildUrl();
 			url.searchParams.set('cursor', this.nextCursor);
 
 			const response = await fetch(url.toString(), {
@@ -72,6 +81,13 @@ class ForYouCache {
 		this.nextCursor = null;
 		this.hasMore = false;
 		this.coldStart = false;
+	}
+
+	setTags(tags: string[]): void {
+		this.activeTags = tags;
+		this.nextCursor = null;
+		this.hasMore = false;
+		this.fetch(true);
 	}
 }
 
