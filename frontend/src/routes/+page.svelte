@@ -12,6 +12,7 @@
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache, fetchTopTracks } from '$lib/tracks.svelte';
 	import { forYouCache } from '$lib/for-you.svelte';
+	import { API_URL } from '$lib/config';
 	import { networkArtistsCache } from '$lib/network-artists.svelte';
 	import type { Track } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
@@ -38,6 +39,9 @@
 	let loadingMore = $derived(feedMode === 'for-you' ? forYouCache.loadingMore : tracksCache.loadingMore);
 	let hasMore = $derived(feedMode === 'for-you' ? forYouCache.hasMore : tracksCache.hasMore);
 	let hasTracks = $derived(tracks.length > 0);
+	let hasActiveTags = $derived(
+		feedMode === 'for-you' ? forYouCache.activeTags.length > 0 : tracksCache.activeTags.length > 0
+	);
 	let initialLoad = $state(true);
 
 	// top tracks (most liked)
@@ -140,26 +144,31 @@
 		}
 	});
 
-	// probe for-you feed availability when authenticated
+	// probe for-you availability — lightweight fetch decoupled from cache
+	// so tag filtering and cache state changes don't re-trigger this
 	$effect(() => {
 		if (auth.isAuthenticated) {
-			forYouCache.fetch().then(() => {
-				forYouAvailable = forYouCache.tracks.length > 0;
-				// if user had for-you selected but it's now empty, fall back to latest
-				if (feedMode === 'for-you' && !forYouAvailable) {
-					feedMode = 'latest';
-					if (typeof window !== 'undefined') {
+			fetch(`${API_URL}/for-you/?limit=1`, { credentials: 'include' })
+				.then((r) => (r.ok ? r.json() : null))
+				.then((data) => {
+					forYouAvailable = (data?.tracks?.length ?? 0) > 0;
+					if (!forYouAvailable && feedMode === 'for-you') {
+						feedMode = 'latest';
 						localStorage.setItem('feedMode', 'latest');
 					}
-				}
-			});
+					// if starting in for-you mode, populate the cache
+					if (forYouAvailable && feedMode === 'for-you') {
+						forYouCache.fetch();
+					}
+				})
+				.catch(() => {
+					forYouAvailable = false;
+				});
 		} else {
 			forYouAvailable = false;
 			if (feedMode === 'for-you') {
 				feedMode = 'latest';
-				if (typeof window !== 'undefined') {
-					localStorage.setItem('feedMode', 'latest');
-				}
+				localStorage.setItem('feedMode', 'latest');
 			}
 		}
 	});
@@ -210,16 +219,18 @@
 	}
 
 	function toggleFeed() {
+		// sync tags from the cache we're leaving to the one we're entering
+		const currentTags =
+			feedMode === 'latest' ? [...tracksCache.activeTags] : [...forYouCache.activeTags];
 		const next: FeedMode = feedMode === 'latest' ? 'for-you' : 'latest';
 		feedMode = next;
-		if (typeof window !== 'undefined') {
-			localStorage.setItem('feedMode', next);
-		}
-		// fetch if the target cache is empty
-		if (next === 'for-you' && forYouCache.tracks.length === 0) {
-			forYouCache.fetch();
-		} else if (next === 'latest' && tracksCache.tracks.length === 0) {
-			tracksCache.fetch();
+		localStorage.setItem('feedMode', next);
+
+		// setTags resets pagination and fetches with the synced tags
+		if (next === 'for-you') {
+			forYouCache.setTags(currentTags);
+		} else {
+			tracksCache.setTags(currentTags);
 		}
 	}
 
@@ -354,6 +365,12 @@
 					} else {
 						tracksCache.setTags(tags);
 					}
+					// persist tag selection regardless of feed mode
+					if (tags.length > 0) {
+						localStorage.setItem('active_tags', JSON.stringify(tags));
+					} else {
+						localStorage.removeItem('active_tags');
+					}
 				}}
 				hiddenTags={preferences.hiddenTags}
 			/>
@@ -364,7 +381,7 @@
 				<WaveLoading size="lg" message="loading tracks..." />
 			</div>
 		{:else if !hasTracks}
-			<p class="empty">no tracks yet</p>
+			<p class="empty">{hasActiveTags ? 'no tracks match these tags' : 'no tracks yet'}</p>
 		{:else}
 			<div class="track-list">
 				{#each tracks as track, i (track.id)}

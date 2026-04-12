@@ -8,6 +8,16 @@ interface ForYouApiResponse {
 	cold_start: boolean;
 }
 
+function loadSavedTags(): string[] {
+	if (typeof window === 'undefined') return [];
+	try {
+		const saved = localStorage.getItem('active_tags');
+		return saved ? JSON.parse(saved) : [];
+	} catch {
+		return [];
+	}
+}
+
 class ForYouCache {
 	tracks = $state<Track[]>([]);
 	loading = $state(false);
@@ -15,7 +25,7 @@ class ForYouCache {
 	nextCursor = $state<string | null>(null);
 	hasMore = $state(false);
 	coldStart = $state(false);
-	activeTags = $state<string[]>([]);
+	activeTags = $state<string[]>(loadSavedTags());
 
 	private buildUrl(): URL {
 		const url = new URL(`${API_URL}/for-you/`);
