@@ -145,7 +145,10 @@
 	});
 
 	// probe for-you availability — lightweight fetch decoupled from cache
-	// so tag filtering and cache state changes don't re-trigger this
+	// so tag filtering and cache state changes don't re-trigger this.
+	// auth.loading starts true and flips false after /auth/me resolves —
+	// we must wait for that before reacting to isAuthenticated === false,
+	// otherwise the initial false state resets feedMode on every hard refresh.
 	$effect(() => {
 		if (auth.isAuthenticated) {
 			fetch(`${API_URL}/for-you/?limit=1`, { credentials: 'include' })
@@ -164,7 +167,8 @@
 				.catch(() => {
 					forYouAvailable = false;
 				});
-		} else {
+		} else if (!auth.loading) {
+			// auth finished loading and user is not authenticated
 			forYouAvailable = false;
 			if (feedMode === 'for-you') {
 				feedMode = 'latest';

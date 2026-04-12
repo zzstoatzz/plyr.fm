@@ -232,7 +232,7 @@ max_lines = 524
 
 [[rules]]
 path = "frontend/src/routes/+page.svelte"
-max_lines = 652
+max_lines = 656
 
 [[rules]]
 path = "frontend/src/lib/components/AlbumUploadForm.svelte"
