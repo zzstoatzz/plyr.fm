@@ -274,6 +274,7 @@ async def get_for_you_feed(
     auth_session: AuthSession = Depends(require_auth),
     cursor: str | None = Query(None),
     limit: int = Query(30, ge=1, le=50),
+    tags: list[str] | None = Query(None),
 ) -> ForYouResponse:
     """Personalized feed for the authenticated user.
 
@@ -341,6 +342,19 @@ async def get_for_you_feed(
         hidden_set = {r.track_id for r in hidden_rows}
         if hidden_set:
             track_ids = [tid for tid in track_ids if tid not in hidden_set]
+
+    # apply active tag filter (inclusive — keep only tracks with at least one matching tag)
+    if tags and track_ids:
+        tagged_rows = (
+            await db.execute(
+                select(TrackTag.track_id)
+                .join(Tag, TrackTag.tag_id == Tag.id)
+                .where(Tag.name.in_(tags))
+                .where(TrackTag.track_id.in_(track_ids))
+            )
+        ).all()
+        tagged_set = {r.track_id for r in tagged_rows}
+        track_ids = [tid for tid in track_ids if tid in tagged_set]
 
     # page window
     page_ids = track_ids[offset : offset + limit]
