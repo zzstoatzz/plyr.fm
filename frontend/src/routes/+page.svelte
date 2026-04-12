@@ -11,6 +11,7 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 	import { tracksCache, fetchTopTracks } from '$lib/tracks.svelte';
+	import { forYouCache } from '$lib/for-you.svelte';
 	import { networkArtistsCache } from '$lib/network-artists.svelte';
 	import type { Track } from '$lib/types';
 	import { auth } from '$lib/auth.svelte';
@@ -24,11 +25,18 @@
 		hasAttemptedRefresh
 	} from '$lib/avatar-refresh.svelte';
 
-	// use cached tracks
-	let tracks = $derived(tracksCache.tracks);
-	let loadingTracks = $derived(tracksCache.loading);
-	let loadingMore = $derived(tracksCache.loadingMore);
-	let hasMore = $derived(tracksCache.hasMore);
+	// feed mode state
+	type FeedMode = 'latest' | 'for-you';
+	let feedMode = $state<FeedMode>(
+		(typeof window !== 'undefined' && localStorage.getItem('feedMode') as FeedMode) || 'latest'
+	);
+	let forYouAvailable = $state(false);
+
+	// use active feed cache based on mode
+	let tracks = $derived(feedMode === 'for-you' ? forYouCache.tracks : tracksCache.tracks);
+	let loadingTracks = $derived(feedMode === 'for-you' ? forYouCache.loading : tracksCache.loading);
+	let loadingMore = $derived(feedMode === 'for-you' ? forYouCache.loadingMore : tracksCache.loadingMore);
+	let hasMore = $derived(feedMode === 'for-you' ? forYouCache.hasMore : tracksCache.hasMore);
 	let hasTracks = $derived(tracks.length > 0);
 	let initialLoad = $state(true);
 
@@ -132,6 +140,30 @@
 		}
 	});
 
+	// probe for-you feed availability when authenticated
+	$effect(() => {
+		if (auth.isAuthenticated) {
+			forYouCache.fetch().then(() => {
+				forYouAvailable = forYouCache.tracks.length > 0;
+				// if user had for-you selected but it's now empty, fall back to latest
+				if (feedMode === 'for-you' && !forYouAvailable) {
+					feedMode = 'latest';
+					if (typeof window !== 'undefined') {
+						localStorage.setItem('feedMode', 'latest');
+					}
+				}
+			});
+		} else {
+			forYouAvailable = false;
+			if (feedMode === 'for-you') {
+				feedMode = 'latest';
+				if (typeof window !== 'undefined') {
+					localStorage.setItem('feedMode', 'latest');
+				}
+			}
+		}
+	});
+
 	// set up IntersectionObserver for infinite scroll
 	$effect(() => {
 		if (!sentinelElement) return;
@@ -140,7 +172,11 @@
 			(entries) => {
 				const entry = entries[0];
 				if (entry.isIntersecting && hasMore && !loadingMore && !loadingTracks) {
-					tracksCache.fetchMore();
+					if (feedMode === 'for-you') {
+						forYouCache.fetchMore();
+					} else {
+						tracksCache.fetchMore();
+					}
 				}
 			},
 			{
@@ -173,8 +209,26 @@
 		window.location.href = '/';
 	}
 
-	async function refreshTracks() {
-		await tracksCache.fetch(true); // force refresh
+	function toggleFeed() {
+		const next: FeedMode = feedMode === 'latest' ? 'for-you' : 'latest';
+		feedMode = next;
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('feedMode', next);
+		}
+		// fetch if the target cache is empty
+		if (next === 'for-you' && forYouCache.tracks.length === 0) {
+			forYouCache.fetch();
+		} else if (next === 'latest' && tracksCache.tracks.length === 0) {
+			tracksCache.fetch();
+		}
+	}
+
+	function refreshFeed() {
+		if (feedMode === 'for-you') {
+			forYouCache.fetch(true);
+		} else {
+			tracksCache.fetch(true);
+		}
 	}
 </script>
 
@@ -215,7 +269,7 @@
 					top tracks <button class="period-toggle" onclick={cyclePeriod}>{periodLabel}</button>
 				</h2>
 				<div class="top-tracks-grid">
-					{#each topTracks as track, i}
+					{#each topTracks as track, i (track.id)}
 						<TrackCard
 							{track}
 							index={i}
@@ -233,7 +287,7 @@
 		<section class="network-artists" transition:fade={{ duration: 200 }}>
 			<h2>artists you know</h2>
 			<div class="artist-grid">
-				{#each networkArtists as artist}
+				{#each networkArtists as artist (artist.did)}
 					{@const refreshedUrl = getRefreshedAvatar(artist.did)}
 					{@const displayUrl = refreshedUrl ?? artist.avatar_url}
 					<a href="/u/{artist.handle}" class="artist-card">
@@ -267,26 +321,33 @@
 				<button
 					type="button"
 					class="clickable-heading"
-					onclick={refreshTracks}
+					onclick={refreshFeed}
 					onkeydown={(event) => {
 						if (event.key === 'Enter' || event.key === ' ') {
 							event.preventDefault();
-							refreshTracks();
+							refreshFeed();
 						}
 					}}
 					title="click to refresh"
 				>
-					latest tracks
+					{feedMode === 'for-you' ? 'for you' : 'latest tracks'}
 				</button>
+				{#if auth.isAuthenticated && forYouAvailable}
+					<button class="feed-toggle" onclick={toggleFeed}>
+						{feedMode === 'for-you' ? 'latest' : 'for you'}
+					</button>
+				{/if}
 			</h2>
-			</div>
-		<div class="filter-row">
-			<TagFilter
-				onTagsChange={(tags) => tracksCache.setTags(tags)}
-				hiddenTags={preferences.hiddenTags}
-			/>
-			<HiddenTagsFilter />
 		</div>
+		{#if feedMode === 'latest'}
+			<div class="filter-row">
+				<TagFilter
+					onTagsChange={(tags) => tracksCache.setTags(tags)}
+					hiddenTags={preferences.hiddenTags}
+				/>
+				<HiddenTagsFilter />
+			</div>
+		{/if}
 		{#if showLoading}
 			<div class="loading-container">
 				<WaveLoading size="lg" message="loading tracks..." />
@@ -295,7 +356,7 @@
 			<p class="empty">no tracks yet</p>
 		{:else}
 			<div class="track-list">
-				{#each tracks as track, i}
+				{#each tracks as track, i (track.id)}
 					<TrackItem
 						{track}
 						index={i}
@@ -353,6 +414,23 @@
 	}
 
 	.period-toggle:hover {
+		opacity: 0.7;
+	}
+
+	.feed-toggle {
+		background: transparent;
+		border: none;
+		padding: 0;
+		font: inherit;
+		font-size: var(--text-base);
+		font-weight: 400;
+		color: var(--accent);
+		cursor: pointer;
+		transition: opacity 0.15s;
+		user-select: none;
+	}
+
+	.feed-toggle:hover {
 		opacity: 0.7;
 	}
 
