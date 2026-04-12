@@ -69,12 +69,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await queue_service.setup()
     await jam_service.setup()
 
-    # warm the database connection pool so the first request avoids cold connect
+    # warm the full database connection pool so deploy doesn't cause a
+    # connection storm — open pool_size connections concurrently, each
+    # executes SELECT 1 then returns to the pool ready for use.
     try:
         engine = get_engine()
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-        logger.info("database connection pool warmed")
+        pool_size = settings.database.pool_size
+
+        async def _warm_one() -> bool:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            return True
+
+        results = await asyncio.gather(
+            *[_warm_one() for _ in range(pool_size)],
+            return_exceptions=True,
+        )
+        warmed = sum(1 for r in results if r is True)
+        failed = pool_size - warmed
+        if failed:
+            logger.warning(
+                "warmed %d/%d pool connections (%d failed)", warmed, pool_size, failed
+            )
+        else:
+            logger.info("database connection pool warmed (%d connections)", warmed)
     except (OSError, SQLAlchemyError):
         logger.warning("failed to warm database connection pool")
 
