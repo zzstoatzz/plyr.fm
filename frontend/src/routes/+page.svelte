@@ -322,22 +322,29 @@
 					type="button"
 					class="clickable-heading"
 					onclick={refreshFeed}
-					onkeydown={(event) => {
-						if (event.key === 'Enter' || event.key === ' ') {
-							event.preventDefault();
-							refreshFeed();
-						}
-					}}
 					title="click to refresh"
 				>
-					{feedMode === 'for-you' ? 'for you' : 'latest tracks'}
+					tracks
 				</button>
-				{#if auth.isAuthenticated && forYouAvailable}
-					<button class="feed-toggle" onclick={toggleFeed}>
-						{feedMode === 'for-you' ? 'latest' : 'for you'}
-					</button>
-				{/if}
 			</h2>
+			{#if auth.isAuthenticated && forYouAvailable}
+				<div class="feed-switcher" role="tablist" aria-label="feed type">
+					<button
+						class="feed-tab"
+						class:active={feedMode === 'latest'}
+						role="tab"
+						aria-selected={feedMode === 'latest'}
+						onclick={() => { if (feedMode !== 'latest') toggleFeed(); }}
+					>latest</button>
+					<button
+						class="feed-tab"
+						class:active={feedMode === 'for-you'}
+						role="tab"
+						aria-selected={feedMode === 'for-you'}
+						onclick={() => { if (feedMode !== 'for-you') toggleFeed(); }}
+					>for you</button>
+				</div>
+			{/if}
 		</div>
 		{#if feedMode === 'latest'}
 			<div class="filter-row">
@@ -417,21 +424,38 @@
 		opacity: 0.7;
 	}
 
-	.feed-toggle {
-		background: transparent;
-		border: none;
-		padding: 0;
-		font: inherit;
-		font-size: var(--text-base);
-		font-weight: 400;
-		color: var(--accent);
-		cursor: pointer;
-		transition: opacity 0.15s;
-		user-select: none;
+	.feed-switcher {
+		display: flex;
+		gap: 0.25rem;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-xl);
+		padding: 0.2rem;
 	}
 
-	.feed-toggle:hover {
-		opacity: 0.7;
+	.feed-tab {
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius-xl);
+		padding: 0.35rem 0.85rem;
+		font: inherit;
+		font-size: var(--text-sm);
+		color: var(--text-tertiary);
+		cursor: pointer;
+		transition: all 0.15s;
+		user-select: none;
+		white-space: nowrap;
+	}
+
+	.feed-tab:hover:not(.active) {
+		color: var(--text-secondary);
+	}
+
+	.feed-tab.active {
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		border-color: var(--accent);
+		color: var(--accent);
+		font-weight: 600;
 	}
 
 	.top-tracks-grid {
