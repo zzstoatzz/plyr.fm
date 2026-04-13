@@ -32,18 +32,17 @@ from plyrfm import PlyrClient
 client = PlyrClient()
 
 # search for tracks
-results = client.search("ambient")
-for track in results:
-    print(f"{track.title} by {track.artist}")
-    print(f"  stream: {track.stream_url}")
+results = client.discover.search("ambient")
+for r in results.results:
+    print(f"{r.title} ({r.type})")
 
 # get top tracks
-for track in client.top_tracks(limit=5):
+for track in client.discover.top_tracks(limit=5):
     print(f"{track.title} — {track.play_count} plays")
 
 # authenticated: like a track (requires developer token)
 authed = PlyrClient(token="your_token_from_plyr.fm/portal")
-authed.like(track_id=42)
+authed.tracks.like(42)
 ```
 
 ## MCP server (for AI assistants)
@@ -52,7 +51,7 @@ authed.like(track_id=42)
 claude mcp add plyr-fm -- uvx plyrfm-mcp
 ```
 
-Tools: search, list_tracks, top_tracks, tracks_by_tag, get_track, liked_tracks, my_tracks.
+Tools: search, list_tracks, top_tracks, tracks_by_tag, get_track, liked_tracks, my_tracks, list_playlists, get_playlist, playlists_by_artist, playlist_recommendations.
 
 ---
 

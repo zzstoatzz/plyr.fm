@@ -42,7 +42,7 @@ jobs:
         if: inputs.delete_track_id != ''
         run: |
           echo "Deleting track ${{ inputs.delete_track_id }}..."
-          uv run --with plyrfm -- plyrfm delete "${{ inputs.delete_track_id }}" --yes
+          uv run --with plyrfm -- plyrfm tracks delete "${{ inputs.delete_track_id }}" --yes
         env:
           PLYR_TOKEN: ${{ secrets.PLYR_BOT_TOKEN }}
 
@@ -69,6 +69,6 @@ jobs:
           echo "Album: $ALBUM"
           echo "Tags: $TAGS"
 
-          eval uv run --with plyrfm -- plyrfm upload update.wav '"${{ inputs.title }}"' --album '"$ALBUM"' $TAG_ARGS
+          eval uv run --with plyrfm -- plyrfm tracks upload update.wav '"${{ inputs.title }}"' --album '"$ALBUM"' $TAG_ARGS
         env:
           PLYR_TOKEN: ${{ secrets.PLYR_BOT_TOKEN }}

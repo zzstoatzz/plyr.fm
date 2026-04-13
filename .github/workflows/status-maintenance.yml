@@ -280,7 +280,7 @@ jobs:
           fi
 
           # check existing tracks to determine episode number
-          EXISTING=$(uv run --with plyrfm -- plyrfm my-tracks --limit 50 2>/dev/null || echo "")
+          EXISTING=$(uv run --with plyrfm -- plyrfm tracks my --limit 50 2>/dev/null || echo "")
           TODAY=$(date +'%B %d, %Y')
           YEAR=$(date +%Y)
 
@@ -298,6 +298,6 @@ jobs:
           fi
 
           echo "Uploading as: $TITLE"
-          uv run --with plyrfm -- plyrfm upload update.wav "$TITLE" --album "$YEAR" -t "ai"
+          uv run --with plyrfm -- plyrfm tracks upload update.wav "$TITLE" --album "$YEAR" -t "ai"
         env:
           PLYR_TOKEN: ${{ secrets.PLYR_BOT_TOKEN }}
