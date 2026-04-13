@@ -30,6 +30,7 @@ from backend._internal.tasks.moderation import (
 )
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
+    ingest_account_status_change,
     ingest_comment_create,
     ingest_comment_delete,
     ingest_comment_update,
@@ -108,6 +109,7 @@ def _build_background_tasks() -> list:
         ingest_list_update,
         ingest_list_delete,
         ingest_profile_update,
+        ingest_account_status_change,
         scan_image_moderation,
     ]
 
@@ -135,6 +137,7 @@ __all__ = [
     "classify_genres",
     "consume_jetstream",
     "generate_embedding",
+    "ingest_account_status_change",
     "ingest_comment_create",
     "ingest_comment_delete",
     "ingest_comment_update",
