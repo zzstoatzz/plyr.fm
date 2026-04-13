@@ -47,6 +47,26 @@ plyr.fm should become:
 
 ### April 2026
 
+#### browser telemetry proxy incident + feed switcher (PRs #1282-1289, Apr 12)
+
+**why**: two unrelated streams of work converged. (1) the homepage needed a way to toggle between the latest feed and the personalized for-you feed. (2) the browser observability proxy (`POST /logfire-proxy/v1/traces`) — shipped to forward browser OpenTelemetry data through the backend (Logfire requires server-side auth) — was saturating the FastAPI threadpool under production load, causing `/tracks/top` to take 10-29 seconds.
+
+**what shipped**:
+- **homepage feed switcher** (#1282-1286) — authenticated users with engagement history see a segmented control toggling between "latest tracks" and "for you". new `ForYouCache` state module mirrors `TracksCache` interface. feed mode persists to localStorage. tag filters hidden in for-you mode (backend handles hidden tags server-side). if the for-you probe returns empty (no engagement history), the toggle doesn't appear. several follow-up fixes: glass styling (#1284), tag persistence across feeds (#1285), feed mode persisting across hard refresh (#1286)
+- **connection pool warmup** (#1287) — the existing pool warmup (#1025) only opened 1 connection at startup. with `pool_size=10`, the other 9 hit TCP+SSL setup on the first request burst after deploy, causing 1.5-5.5s connect spans. fix: warm all `pool_size` connections concurrently via `asyncio.gather`
+- **browser observability toggle** (#1288) — added `BROWSER_OBSERVABILITY` env var (default: `true`) exposed via `GET /config`. frontend gates `initObservability()` on this flag. the proxy uses `run_in_threadpool` for synchronous HTTP forwarding — under load, 694+ proxy requests in 10 minutes (vs ~50 real API requests) starved async DB handlers
+- **backend proxy guard** (#1289) — #1288's frontend-only toggle didn't stop stale cached clients (Cloudflare Pages) from continuing to hammer the proxy. 3,458 requests in 24 minutes post-deploy, averaging 1.9s each. fix: backend endpoint returns 204 immediately when `BROWSER_OBSERVABILITY=false`, regardless of client behavior. `/tracks/top` dropped from 10-18s to ~250ms
+
+**root cause analysis**:
+- `logfire.experimental.forwarding.logfire_proxy()` is synchronous — FastAPI wraps it in `run_in_threadpool`, consuming a thread per request. the default threadpool (40 threads) was overwhelmed by browser telemetry volume, blocking all async handlers waiting for threads
+- the frontend-only toggle had a cache gap: Cloudflare Pages serves cached JS bundles, so clients that loaded the page before the deploy kept calling `initObservability()` unconditionally. the backend guard closes this regardless of client cache state
+
+**decisions**:
+- `BROWSER_OBSERVABILITY` defaults to `true` so new environments get telemetry without configuration. production sets it to `false` until a non-blocking proxy implementation exists (e.g. background queue, or Logfire adds native browser token support)
+- the proxy endpoint is kept (not removed) — it's still the correct architecture when load is manageable. the fix is a gate, not a removal
+
+---
+
 #### CDN caching + backend decomposition (PRs #1275-1280, Apr 11)
 
 **why**: a tech debt audit revealed two systemic issues: (1) R2 public buckets were served via `r2.dev` managed subdomains, which bypass Cloudflare's CDN cache layer entirely — every audio and image request went straight to R2 origin, and the 30% "cache hit ratio" in CF analytics was entirely from the frontend (Cloudflare Pages), not media assets. (2) the backend API had accumulated monolithic files (`lists.py` at 1149 lines, `albums.py` at 995 lines) with duplicated patterns and deferred imports scattered throughout.
