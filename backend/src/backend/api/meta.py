@@ -188,4 +188,6 @@ async def proxy_browser_telemetry(request: Request):
     stays server-side. protected by CORS (allowed origins only) and
     global rate limiting.
     """
+    if not settings.app.browser_observability:
+        return PlainTextResponse("browser observability disabled", status_code=204)
     return await logfire_proxy(request)
