@@ -16,6 +16,7 @@ export function getAtprotofansSupportUrl(did: string): string {
 interface ServerConfig {
 	max_upload_size_mb: number;
 	max_image_size_mb: number;
+	browser_observability: boolean;
 	default_hidden_tags: string[];
 	bufo_exclude_patterns: string[];
 	bufo_include_patterns: string[];
