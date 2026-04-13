@@ -123,6 +123,11 @@ class AppSettings(AppSettingsSection):
         default=60,
         description="Interval for background tasks in seconds",
     )
+    browser_observability: bool = Field(
+        default=True,
+        validation_alias="BROWSER_OBSERVABILITY",
+        description="Enable browser telemetry proxy (logfire-proxy endpoint). Disable to reduce backend load from browser trace forwarding.",
+    )
     broadcast_channel_prefix: str = Field(
         default="plyr",
         description="Prefix used for browser BroadcastChannel identifiers",
