@@ -47,6 +47,26 @@ plyr.fm should become:
 
 ### April 2026
 
+#### SDK namespace restructure + playlist support (plyr-python-client v0.0.1a16, PR #1293, Apr 13)
+
+**why**: the [plyr-python-client](https://github.com/zzstoatzz/plyr-python-client) SDK, MCP server, and CLI had grown organically as flat methods/commands. the SDK had 17 flat methods on `PlyrClient` (`client.list_tracks()`, `client.like(42)`), the CLI had inconsistent naming (`delete` for tracks but `delete-playlist` for playlists, `tags electronic` returning tracks), and there was no playlist support at all despite the backend having 12 playlist endpoints. a gap analysis ([#24](https://github.com/zzstoatzz/plyr-python-client/issues/24)) identified albums, playlists, artists, discovery, and platform state as uncovered.
+
+**what shipped** ([plyr-python-client#30](https://github.com/zzstoatzz/plyr-python-client/pull/30)):
+- **SDK namespace restructure** — flat methods → namespace objects following the OpenAI/Stripe SDK pattern: `client.tracks.list()`, `client.playlists.create()`, `client.discover.search()`, `client.tags.tracks("ambient")`. both sync (`PlyrClient`) and async (`AsyncPlyrClient`) clients have identical namespace APIs, verified by parity tests
+- **proper identifier types** — `TrackRef = TrackId | TrackUri` using `Annotated[..., Field(description=...)]`. every track-targeting method accepts either a plyr.fm integer ID or an ATProto URI (`at://did/collection/rkey`), resolved internally. the SDK fetches the track via `/tracks/by-uri` when given a URI, then uses the integer ID for mutation endpoints that require it
+- **playlist CRUD** — 9 new SDK methods: `list`, `get`, `create`, `update`, `delete`, `add_track`, `remove_track`, `recommendations`, `by_artist`. `add_track` and `remove_track` accept `TrackRef` and resolve to the ATProto URI/CID needed by the backend's list record operations
+- **cyclopts CLI** — migrated from hand-rolled `sys.argv` parsing to [cyclopts](https://cyclopts.readthedocs.io/) with noun-first subcommands: `plyrfm tracks list`, `plyrfm playlists create`, `plyrfm discover search`, `plyrfm tags list`. cyclopts was chosen over click/typer for its `Annotated`-native parameter config, native `int | str` union support (needed for `TrackRef`), and docstring-based help generation
+- **MCP server** — updated to use namespace API internally; flat tool names preserved (appropriate for MCP protocol). 4 new read-only playlist tools: `list_playlists`, `get_playlist`, `playlists_by_artist`, `playlist_recommendations`
+
+**decisions**:
+- SDK namespaces over flat methods: the namespace pattern (`client.tracks.*`, `client.playlists.*`) groups related operations and prevents naming collisions as the API surface grows (e.g. `tracks.list()` vs `playlists.list()`). the alternative — prefixed flat methods (`list_tracks`, `list_playlists`, `list_albums`) — scales poorly
+- `TrackRef` accepts both ID and URI because the SDK serves two audiences: plyr.fm developers (who think in integer IDs) and ATProto ecosystem users (who think in AT-URIs from PDSLS). the SDK resolves internally so neither audience needs to convert
+- cyclopts over click: cyclopts uses `Annotated[type, Parameter(...)]` instead of decorators, so command functions remain callable in tests without the framework. it also handles `int | str` unions natively (tries each type left-to-right), which click cannot do
+- MCP tool names stayed flat: MCP tools are discovered by name in a flat list — noun-verb namespacing doesn't add value there
+- this is a breaking change (flat methods → namespaces, CLI restructure) but the SDK is at `v0.0.1-alpha` so this is expected. the plyr.fm repo's workflow scripts and `llms-full.txt` were updated in #1293
+
+---
+
 #### avatar restore on account reactivation (PR #1291, Apr 13)
 
 **why**: a user deactivated their ATProto account and then reactivated it. their avatar disappeared from plyr.fm during deactivation (the `cdn.bsky.app` URL went dead) and never came back — the jetstream consumer ignored `kind=account` events entirely, and `ingest_identity_update` only refreshed handle + PDS URL, not the avatar.
@@ -508,5 +528,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-11 (CDN caching via custom domains, backend API decomposition, PDS URL healing, scripts cleanup).
+this is a living document. last updated 2026-04-13 (SDK namespace restructure, playlist support, cyclopts CLI migration).
 
