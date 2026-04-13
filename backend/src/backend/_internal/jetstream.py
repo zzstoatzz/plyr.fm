@@ -25,6 +25,7 @@ from websockets.asyncio.client import ClientConnection
 
 from backend._internal.background import get_docket
 from backend._internal.tasks.ingest import (
+    ingest_account_status_change,
     ingest_comment_create,
     ingest_comment_delete,
     ingest_comment_update,
@@ -145,6 +146,23 @@ class JetstreamConsumer:
                     "jetstream dispatched identity update",
                     did=did,
                     handle=handle,
+                )
+            if time_us := event.get("time_us"):
+                self._cursor = time_us
+            return
+
+        if kind == "account":
+            did = event.get("did")
+            account = event.get("account") or {}
+            active = account.get("active", False)
+            if did and did in self._known_dids:
+                docket = get_docket()
+                await docket.add(ingest_account_status_change)(did=did, active=active)
+                logfire.info(
+                    "jetstream dispatched account status change",
+                    did=did,
+                    active=active,
+                    status=account.get("status"),
                 )
             if time_us := event.get("time_us"):
                 self._cursor = time_us

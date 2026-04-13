@@ -13,6 +13,7 @@ from backend._internal.jetstream import JetstreamConsumer, consume_jetstream
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
     _write_tombstone,
+    ingest_account_status_change,
     ingest_comment_create,
     ingest_comment_delete,
     ingest_identity_update,
@@ -156,14 +157,59 @@ class TestJetstreamConsumer:
         await consumer._process_event(event)
         consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
 
-    async def test_skips_non_commit_non_identity_events(self) -> None:
+    async def test_skips_non_commit_non_identity_non_account_events(self) -> None:
         consumer = JetstreamConsumer()
         consumer._known_dids = {"did:plc:jetstream_test"}
         consumer._dispatch = AsyncMock()  # type: ignore[method-assign]
 
-        event = {"kind": "account", "did": "did:plc:jetstream_test"}
+        event = {"kind": "info", "did": "did:plc:jetstream_test"}
         await consumer._process_event(event)
         consumer._dispatch.assert_not_called()  # type: ignore[union-attr]
+
+    async def test_dispatches_account_event(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:jetstream_test"}
+
+        mock_docket = MagicMock()
+        dispatched: list[dict] = []
+
+        async def capture(**kwargs: object) -> None:
+            dispatched.append(dict(kwargs))
+
+        mock_docket.add = MagicMock(return_value=capture)
+
+        event = {
+            "kind": "account",
+            "did": "did:plc:jetstream_test",
+            "time_us": 3000000,
+            "account": {"active": True, "status": "active"},
+        }
+
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(event)
+
+        assert len(dispatched) == 1
+        assert dispatched[0]["did"] == "did:plc:jetstream_test"
+        assert dispatched[0]["active"] is True
+        assert consumer._cursor == 3000000
+
+    async def test_account_event_skips_unknown_did(self) -> None:
+        consumer = JetstreamConsumer()
+        consumer._known_dids = {"did:plc:known"}
+
+        mock_docket = MagicMock()
+        mock_docket.add = MagicMock()
+
+        event = {
+            "kind": "account",
+            "did": "did:plc:unknown",
+            "account": {"active": False, "status": "deactivated"},
+        }
+
+        with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
+            await consumer._process_event(event)
+
+        mock_docket.add.assert_not_called()
 
     async def test_dispatches_identity_event(self) -> None:
         consumer = JetstreamConsumer()
@@ -1574,15 +1620,36 @@ def _mock_did_resolver(pds_url: str = "https://pds.example.com") -> AsyncMock:
     return mock_resolver
 
 
+def _patch_identity_update(
+    pds_url: str = "https://pds.example.com",
+    avatar_url: str | None = None,
+):
+    """context manager stack for patching DID resolution + avatar fetch."""
+    from contextlib import ExitStack
+
+    stack = ExitStack()
+    stack.enter_context(
+        patch(
+            "atproto_identity.did.resolver.AsyncDidResolver",
+            return_value=_mock_did_resolver(pds_url=pds_url),
+        )
+    )
+    stack.enter_context(
+        patch(
+            "backend._internal.atproto.profile.fetch_user_avatar",
+            new_callable=AsyncMock,
+            return_value=avatar_url,
+        )
+    )
+    return stack
+
+
 class TestIngestIdentityUpdate:
     async def test_updates_artist_handle(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
         new_handle = "updated.handle.example"
-        with patch(
-            "atproto_identity.did.resolver.AsyncDidResolver",
-            return_value=_mock_did_resolver(),
-        ):
+        with _patch_identity_update():
             await ingest_identity_update(did=artist.did, handle=new_handle)
 
         await db_session.refresh(artist)
@@ -1601,10 +1668,7 @@ class TestIngestIdentityUpdate:
         await db_session.commit()
 
         new_handle = "updated.handle.example"
-        with patch(
-            "atproto_identity.did.resolver.AsyncDidResolver",
-            return_value=_mock_did_resolver(),
-        ):
+        with _patch_identity_update():
             await ingest_identity_update(did=artist.did, handle=new_handle)
 
         await db_session.refresh(session)
@@ -1615,30 +1679,40 @@ class TestIngestIdentityUpdate:
     ) -> None:
         """PDS migration updates the cached pds_url via DID resolution."""
         new_pds = "https://new-pds.example.com"
-        with patch(
-            "atproto_identity.did.resolver.AsyncDidResolver",
-            return_value=_mock_did_resolver(pds_url=new_pds),
-        ):
+        with _patch_identity_update(pds_url=new_pds):
             await ingest_identity_update(did=artist.did, handle=artist.handle)
 
         await db_session.refresh(artist)
         assert artist.pds_url == new_pds
 
-    async def test_noop_when_handle_and_pds_unchanged(
+    async def test_updates_avatar(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """identity event refreshes avatar from Bluesky profile."""
+        new_avatar = "https://cdn.bsky.app/img/avatar/plain/did:plc:test/newcid@jpeg"
+        with _patch_identity_update(avatar_url=new_avatar):
+            await ingest_identity_update(did=artist.did, handle=artist.handle)
+
+        await db_session.refresh(artist)
+        assert artist.avatar_url == new_avatar
+
+    async def test_noop_when_handle_pds_and_avatar_unchanged(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
         """no commit when nothing changed — idempotent."""
         original_handle = artist.handle
         original_pds = artist.pds_url
-        with patch(
-            "atproto_identity.did.resolver.AsyncDidResolver",
-            return_value=_mock_did_resolver(pds_url=original_pds or ""),
+        original_avatar = artist.avatar_url
+        with _patch_identity_update(
+            pds_url=original_pds or "",
+            avatar_url=original_avatar,
         ):
             await ingest_identity_update(did=artist.did, handle=original_handle)
 
         await db_session.refresh(artist)
         assert artist.handle == original_handle
         assert artist.pds_url == original_pds
+        assert artist.avatar_url == original_avatar
 
     async def test_noop_for_unknown_did(self, db_session: AsyncSession) -> None:
         """unknown DID is silently skipped (no DID resolution attempted)."""
@@ -1647,17 +1721,91 @@ class TestIngestIdentityUpdate:
     async def test_did_resolution_failure_still_updates_handle(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """if DID resolution fails, handle is still updated."""
+        """if DID resolution fails, handle and avatar are still updated."""
         new_handle = "updated.handle.example"
         mock_resolver = AsyncMock()
         mock_resolver.resolve_atproto_data = AsyncMock(
             side_effect=Exception("resolution failed")
         )
-        with patch(
-            "atproto_identity.did.resolver.AsyncDidResolver",
-            return_value=mock_resolver,
+        with (
+            patch(
+                "atproto_identity.did.resolver.AsyncDidResolver",
+                return_value=mock_resolver,
+            ),
+            patch(
+                "backend._internal.atproto.profile.fetch_user_avatar",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             await ingest_identity_update(did=artist.did, handle=new_handle)
 
         await db_session.refresh(artist)
         assert artist.handle == new_handle
+
+
+class TestIngestAccountStatusChange:
+    async def test_reactivation_restores_avatar(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """reactivation fetches fresh avatar from Bluesky."""
+        artist.avatar_url = None
+        await db_session.commit()
+
+        new_avatar = "https://cdn.bsky.app/img/avatar/plain/did:plc:test/cid123@jpeg"
+        with patch(
+            "backend._internal.atproto.profile.fetch_user_avatar",
+            new_callable=AsyncMock,
+            return_value=new_avatar,
+        ):
+            await ingest_account_status_change(did=artist.did, active=True)
+
+        await db_session.refresh(artist)
+        assert artist.avatar_url == new_avatar
+
+    async def test_deactivation_clears_avatar(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """deactivation clears avatar to avoid broken CDN URLs."""
+        artist.avatar_url = (
+            "https://cdn.bsky.app/img/avatar/plain/did:plc:test/old@jpeg"
+        )
+        await db_session.commit()
+
+        await ingest_account_status_change(did=artist.did, active=False)
+
+        await db_session.refresh(artist)
+        assert artist.avatar_url is None
+
+    async def test_deactivation_noop_when_no_avatar(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """deactivation is a noop if avatar is already None."""
+        artist.avatar_url = None
+        await db_session.commit()
+
+        await ingest_account_status_change(did=artist.did, active=False)
+
+        await db_session.refresh(artist)
+        assert artist.avatar_url is None
+
+    async def test_unknown_did_is_skipped(self, db_session: AsyncSession) -> None:
+        """unknown DID is silently skipped."""
+        await ingest_account_status_change(did="did:plc:nonexistent", active=True)
+
+    async def test_avatar_fetch_failure_on_reactivation(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        """avatar fetch failure on reactivation doesn't raise."""
+        artist.avatar_url = None
+        await db_session.commit()
+
+        with patch(
+            "backend._internal.atproto.profile.fetch_user_avatar",
+            new_callable=AsyncMock,
+            side_effect=Exception("network error"),
+        ):
+            await ingest_account_status_change(did=artist.did, active=True)
+
+        await db_session.refresh(artist)
+        assert artist.avatar_url is None

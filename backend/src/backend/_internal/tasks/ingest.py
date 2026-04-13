@@ -716,14 +716,16 @@ async def ingest_identity_update(
     did: str,
     handle: str,
 ) -> None:
-    """update artist handle and PDS URL when an identity event arrives.
+    """update artist handle, PDS URL, and avatar when an identity event arrives.
 
-    identity events fire on both handle changes and PDS migrations.
-    resolving the DID gives us the current PDS URL, so we update both
-    in one pass rather than lazily healing stale pds_url in every API
-    endpoint that fetches ATProto records.
+    identity events fire on handle changes, PDS migrations, and account
+    reactivation. resolving the DID gives us the current PDS URL, and
+    re-fetching the profile refreshes the avatar (which may have gone
+    stale during account deactivation).
     """
     from atproto_identity.did.resolver import AsyncDidResolver
+
+    from backend._internal.atproto.profile import fetch_user_avatar
 
     async with db_session() as db:
         artist = await db.get(Artist, did)
@@ -754,6 +756,17 @@ async def ingest_identity_update(
                 "ingest_identity_update: DID resolution failed for %s: %s", did, e
             )
 
+        # refresh avatar from Bluesky profile
+        try:
+            fresh_avatar = await fetch_user_avatar(did)
+            if fresh_avatar != artist.avatar_url:
+                changes["avatar_url"] = (artist.avatar_url, fresh_avatar)
+                artist.avatar_url = fresh_avatar
+        except Exception as e:
+            logger.warning(
+                "ingest_identity_update: avatar fetch failed for %s: %s", did, e
+            )
+
         if not changes:
             return
 
@@ -763,3 +776,49 @@ async def ingest_identity_update(
             did=did,
             changes={k: {"old": v[0], "new": v[1]} for k, v in changes.items()},
         )
+
+
+async def ingest_account_status_change(
+    did: str,
+    active: bool,
+) -> None:
+    """handle account activation/deactivation events.
+
+    on reactivation (active=True): re-fetch avatar from Bluesky since
+    the CDN URL goes dead during deactivation.
+
+    on deactivation (active=False): clear the avatar URL so the frontend
+    doesn't show a broken image pointing at a dead CDN URL.
+    """
+    from backend._internal.atproto.profile import fetch_user_avatar
+
+    async with db_session() as db:
+        artist = await db.get(Artist, did)
+        if not artist:
+            logger.debug("ingest_account_status_change: unknown artist %s", did)
+            return
+
+        if active:
+            # re-fetch avatar on reactivation
+            try:
+                fresh_avatar = await fetch_user_avatar(did)
+                if fresh_avatar != artist.avatar_url:
+                    artist.avatar_url = fresh_avatar
+                    await db.commit()
+                    logfire.info(
+                        "ingest: avatar restored on reactivation",
+                        did=did,
+                        avatar_url=fresh_avatar,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "ingest_account_status_change: avatar fetch failed for %s: %s",
+                    did,
+                    e,
+                )
+        else:
+            # clear stale avatar on deactivation
+            if artist.avatar_url:
+                artist.avatar_url = None
+                await db.commit()
+                logfire.info("ingest: avatar cleared on deactivation", did=did)
