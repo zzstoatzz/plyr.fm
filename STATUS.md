@@ -47,6 +47,21 @@ plyr.fm should become:
 
 ### April 2026
 
+#### avatar restore on account reactivation (PR #1291, Apr 13)
+
+**why**: a user deactivated their ATProto account and then reactivated it. their avatar disappeared from plyr.fm during deactivation (the `cdn.bsky.app` URL went dead) and never came back — the jetstream consumer ignored `kind=account` events entirely, and `ingest_identity_update` only refreshed handle + PDS URL, not the avatar.
+
+**what shipped**:
+- **`ingest_account_status_change` task** — new docket task dispatched on jetstream `account` events. on deactivation (`active=false`): clears `avatar_url` so the frontend doesn't render a broken image. on reactivation (`active=true`): fetches fresh avatar from the Bluesky public API
+- **avatar refresh in `ingest_identity_update`** — identity events (handle changes, PDS migrations) now also re-fetch the avatar from Bluesky. this is belt-and-suspenders with the existing `POST /{did}/refresh-avatar` endpoint (which the frontend calls reactively on 404s)
+- **jetstream `account` event handling** — `_process_event` now dispatches `account` events for known DIDs instead of silently skipping them
+
+**decisions**:
+- avatar is cleared on deactivation rather than left stale — a broken `cdn.bsky.app` image is worse than no image. the frontend already has fallback rendering for null avatars
+- the reactivation path fetches from Bluesky's public API (`app.bsky.actor.getProfile`), same as the existing `fetch_user_avatar()`. if the profile isn't available yet (PDS still syncing), the fetch returns None and the avatar stays cleared until the next identity event or a frontend-triggered refresh
+
+---
+
 #### browser telemetry proxy incident + feed switcher (PRs #1282-1289, Apr 12)
 
 **why**: two unrelated streams of work converged. (1) the homepage needed a way to toggle between the latest feed and the personalized for-you feed. (2) the browser observability proxy (`POST /logfire-proxy/v1/traces`) — shipped to forward browser OpenTelemetry data through the backend (Logfire requires server-side auth) — was saturating the FastAPI threadpool under production load, causing `/tracks/top` to take 10-29 seconds.
