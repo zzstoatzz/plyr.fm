@@ -341,25 +341,10 @@
 				>
 					tracks
 				</button>
+				{#if auth.isAuthenticated && forYouAvailable}
+					<button class="feed-toggle" onclick={toggleFeed}>{feedMode === 'latest' ? 'latest' : 'for you'}</button>
+				{/if}
 			</h2>
-			{#if auth.isAuthenticated && forYouAvailable}
-				<div class="feed-switcher" role="tablist" aria-label="feed type">
-					<button
-						class="feed-tab"
-						class:active={feedMode === 'latest'}
-						role="tab"
-						aria-selected={feedMode === 'latest'}
-						onclick={() => { if (feedMode !== 'latest') toggleFeed(); }}
-					>latest</button>
-					<button
-						class="feed-tab"
-						class:active={feedMode === 'for-you'}
-						role="tab"
-						aria-selected={feedMode === 'for-you'}
-						onclick={() => { if (feedMode !== 'for-you') toggleFeed(); }}
-					>for you</button>
-				</div>
-			{/if}
 		</div>
 		<div class="filter-row">
 			<TagFilter
@@ -449,39 +434,21 @@
 		opacity: 0.7;
 	}
 
-	.feed-switcher {
-		display: flex;
-		gap: 0.25rem;
-		background: var(--track-bg, var(--bg-secondary));
-		border: 1px solid var(--track-border, var(--border-subtle));
-		border-radius: var(--radius-md);
-		padding: 0.2rem;
-	}
-
-	.feed-tab {
+	.feed-toggle {
 		background: transparent;
-		border: 1px solid transparent;
-		border-radius: var(--radius-sm);
-		padding: 0.3rem 0.75rem;
+		border: none;
+		padding: 0;
 		font: inherit;
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
-		cursor: pointer;
-		transition: all 0.15s;
-		user-select: none;
-		white-space: nowrap;
-	}
-
-	.feed-tab:hover:not(.active) {
-		color: var(--text-secondary);
-		background: var(--track-border, rgba(255, 255, 255, 0.06));
-	}
-
-	.feed-tab.active {
-		background: color-mix(in srgb, var(--accent) 12%, var(--track-bg, transparent));
-		border-color: color-mix(in srgb, var(--accent) 20%, var(--track-border, transparent));
+		font-size: var(--text-base);
+		font-weight: 400;
 		color: var(--accent);
-		font-weight: 600;
+		cursor: pointer;
+		transition: opacity 0.15s;
+		user-select: none;
+	}
+
+	.feed-toggle:hover {
+		opacity: 0.7;
 	}
 
 	.top-tracks-grid {
@@ -586,12 +553,7 @@
 	}
 
 	.section-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 1rem;
 		margin-bottom: 0.75rem;
-		flex-wrap: wrap;
 	}
 
 	.section-header h2 {
