@@ -47,6 +47,16 @@ plyr.fm should become:
 
 ### April 2026
 
+#### feed toggle cleanup (PR #1296, Apr 14)
+
+**why**: the segmented pill control for latest/for-you feeds (#1282-1286) looked busy and visually inconsistent with the rest of the homepage. it was the only element using a two-button pill pattern — everything else (top tracks period, clickable headings) uses inline cycling buttons.
+
+**what shipped**:
+- replaced the pill with an inline cycling button matching the top tracks period toggle — tap to cycle between "latest" and "for you"
+- -50 lines of pill CSS/markup, consistent visual language across the page
+
+---
+
 #### SDK namespace restructure + playlist support (plyr-python-client v0.0.1a16, PR #1293, Apr 13)
 
 **why**: the [plyr-python-client](https://github.com/zzstoatzz/plyr-python-client) SDK, MCP server, and CLI had grown organically as flat methods/commands. the SDK had 17 flat methods on `PlyrClient` (`client.list_tracks()`, `client.like(42)`), the CLI had inconsistent naming (`delete` for tracks but `delete-playlist` for playlists, `tags electronic` returning tracks), and there was no playlist support at all despite the backend having 12 playlist endpoints. a gap analysis ([#24](https://github.com/zzstoatzz/plyr-python-client/issues/24)) identified albums, playlists, artists, discovery, and platform state as uncovered.
@@ -213,7 +223,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-SDK namespace restructure shipped for plyr-python-client v0.0.1a16 — flat methods → namespace objects (`client.tracks.list()`, `client.playlists.create()`), playlist CRUD (9 methods), cyclopts CLI, proper `TrackRef` identifier types. CDN caching live (#1275-1280) — `audio.plyr.fm` and `images.plyr.fm` custom domains with 1-year edge TTL. feed switcher on homepage (#1282-1286) toggles between latest and for-you. browser telemetry proxy incident resolved (#1288-1289) — synchronous Logfire proxy was saturating the threadpool, backend kill switch added. avatar restore on account reactivation (#1291). next: `config.py` decomposition, frontend state module grouping, waveform rollout to other surfaces, ooo.audio lexicon conversation (#705).
+SDK namespace restructure shipped for plyr-python-client v0.0.1a16 — flat methods → namespace objects (`client.tracks.list()`, `client.playlists.create()`), playlist CRUD (9 methods), cyclopts CLI, proper `TrackRef` identifier types. CDN caching live (#1275-1280) — `audio.plyr.fm` and `images.plyr.fm` custom domains with 1-year edge TTL. feed switcher on homepage refined (#1296) — replaced segmented pill with inline cycle toggle matching period toggle pattern. browser telemetry proxy incident resolved (#1288-1289) — synchronous Logfire proxy was saturating the threadpool, backend kill switch added. avatar restore on account reactivation (#1291). next: `config.py` decomposition, frontend state module grouping, waveform rollout to other surfaces, ooo.audio lexicon conversation (#705).
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -349,5 +359,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-13 (status maintenance — SDK namespace, CDN caching, feed switcher, telemetry incident).
+this is a living document. last updated 2026-04-14 (feed toggle cleanup).
 
