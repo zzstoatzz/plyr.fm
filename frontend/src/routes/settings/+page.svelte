@@ -7,7 +7,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { preferences, type Theme } from '$lib/preferences.svelte';
+	import { preferences, FONT_OPTIONS, type Theme, type FontFamily } from '$lib/preferences.svelte';
 	import { ambient } from '$lib/ambient.svelte';
 	import { queue } from '$lib/queue.svelte';
 
@@ -21,6 +21,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	let showLikedOnProfile = $derived(preferences.showLikedOnProfile);
 	let currentTheme = $derived(preferences.theme);
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
+	let currentFont = $derived(preferences.fontFamily);
 	let autoAdvance = $derived(preferences.autoAdvance);
 	let backgroundImageUrl = $derived(preferences.uiSettings.background_image_url ?? '');
 	let backgroundTile = $derived(preferences.uiSettings.background_tile ?? false);
@@ -153,6 +154,12 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 
 	function selectPreset(color: string) {
 		applyColor(color);
+	}
+
+	async function selectFont(font: FontFamily) {
+		preferences.applyFont(font);
+		localStorage.setItem('fontFamily', font);
+		await preferences.updateUiSettings({ font_family: font });
 	}
 
 	// background image state - initialize once, don't sync reactively
@@ -501,6 +508,25 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 								></button>
 							{/each}
 						</div>
+					</div>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>font</h3>
+						<p>choose a global font for the app</p>
+					</div>
+					<div class="font-controls">
+						{#each FONT_OPTIONS as option}
+							<button
+								class="font-btn"
+								class:active={currentFont === option.value}
+								style="font-family: {option.stack}"
+								onclick={() => selectFont(option.value)}
+							>
+								{option.label}
+							</button>
+						{/each}
 					</div>
 				</div>
 
@@ -1077,6 +1103,36 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	.preset-btn.active {
 		border-color: var(--text-primary);
 		box-shadow: 0 0 0 1px var(--bg-secondary);
+	}
+
+	/* font controls */
+	.font-controls {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		flex-shrink: 0;
+	}
+
+	.font-btn {
+		padding: 0.4rem 0.7rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.15s;
+		font-size: var(--text-sm);
+	}
+
+	.font-btn:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.font-btn.active {
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	/* background controls */

@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { queue } from '$lib/queue.svelte';
-	import { preferences, type Theme } from '$lib/preferences.svelte';
+	import { preferences, FONT_OPTIONS, type Theme, type FontFamily } from '$lib/preferences.svelte';
 	import { ambient } from '$lib/ambient.svelte';
 	import { API_URL } from '$lib/config';
 	import type { User, LinkedAccount } from '$lib/types';
@@ -44,6 +44,7 @@
 	];
 
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
+	let currentFont = $derived(preferences.fontFamily);
 	let autoAdvance = $derived(preferences.autoAdvance);
 	let currentTheme = $derived(preferences.theme);
 
@@ -119,6 +120,12 @@
 
 	function selectPreset(color: string) {
 		applyColor(color);
+	}
+
+	async function selectFont(font: FontFamily) {
+		preferences.applyFont(font);
+		localStorage.setItem('fontFamily', font);
+		await preferences.updateUiSettings({ font_family: font });
 	}
 
 	async function handleAutoAdvanceToggle(event: Event) {
@@ -418,6 +425,22 @@
 									></button>
 								{/each}
 							</div>
+						</div>
+					</section>
+
+					<section class="settings-section">
+						<h3>font</h3>
+						<div class="font-row">
+							{#each FONT_OPTIONS as option}
+								<button
+									class="font-btn"
+									class:active={currentFont === option.value}
+									style="font-family: {option.stack}"
+									onclick={() => selectFont(option.value)}
+								>
+									{option.label}
+								</button>
+							{/each}
 						</div>
 					</section>
 
@@ -968,6 +991,35 @@
 	.preset-btn.active {
 		border-color: var(--text-primary);
 		box-shadow: 0 0 0 1px var(--bg-secondary);
+	}
+
+	.font-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+
+	.font-btn {
+		padding: 0.3rem 0.55rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.15s;
+		font-size: var(--text-xs);
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.font-btn:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.font-btn.active {
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.toggle {

@@ -6,11 +6,25 @@ import { ambient } from '$lib/ambient.svelte';
 
 export type Theme = 'dark' | 'light' | 'system' | 'live';
 
+export type FontFamily = 'mono' | 'geist' | 'inter' | 'comic-sans' | 'georgia' | 'system-ui';
+
+export const FONT_OPTIONS: { value: FontFamily; label: string; stack: string }[] = [
+	{ value: 'mono', label: 'mono', stack: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace" },
+	{ value: 'geist', label: 'geist', stack: "'Geist', 'Inter', system-ui, sans-serif" },
+	{ value: 'inter', label: 'inter', stack: "'Inter', system-ui, sans-serif" },
+	{ value: 'system-ui', label: 'system', stack: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
+	{ value: 'georgia', label: 'georgia', stack: "'Georgia', 'Times New Roman', serif" },
+	{ value: 'comic-sans', label: 'comic sans', stack: "'Comic Sans MS', 'Comic Sans', cursive" },
+];
+
+export const DEFAULT_FONT: FontFamily = 'mono';
+
 export interface UiSettings {
 	background_image_url?: string;
 	background_tile?: boolean;
 	use_playing_artwork_as_background?: boolean;
 	pds_audio_uploads_enabled?: boolean;
+	font_family?: FontFamily;
 }
 
 export interface Preferences {
@@ -108,6 +122,18 @@ class PreferencesManager {
 
 	get uiSettings(): UiSettings {
 		return this.data?.ui_settings ?? DEFAULT_PREFERENCES.ui_settings;
+	}
+
+	get fontFamily(): FontFamily {
+		return this.data?.ui_settings?.font_family ?? DEFAULT_FONT;
+	}
+
+	applyFont(font: FontFamily): void {
+		if (!browser) return;
+		const option = FONT_OPTIONS.find((f) => f.value === font);
+		if (option) {
+			document.documentElement.style.setProperty('--font-family', option.stack);
+		}
 	}
 
 	get autoDownloadLiked(): boolean {
@@ -225,6 +251,9 @@ class PreferencesManager {
 					localStorage.setItem('accentColor', this.data.accent_color);
 					this.applyAccentColor(this.data.accent_color);
 				}
+				const font = this.data.ui_settings?.font_family ?? DEFAULT_FONT;
+				localStorage.setItem('fontFamily', font);
+				this.applyFont(font);
 				this.applyTheme(this.data.theme);
 				if (this.data.theme === 'live') {
 					ambient.activate();
