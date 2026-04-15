@@ -68,17 +68,17 @@ function computeWarmth(temperature: number, unit: TemperatureUnit): number {
 	return Math.min(1, Math.max(0, (temperature - cold) / (hot - cold)));
 }
 
-/** interpolate 3 color stops into 7 for smoother gradients (reduces banding) */
+/** interpolate 3 color stops into 16 for smoother gradients (reduces banding) */
 function smoothGradient(c1: RGB, c2: RGB, c3: RGB): string {
 	const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
 	const stops: string[] = [];
-	// 4 stops from c1→c2, 4 stops from c2→c3 (c2 shared = 7 total)
-	for (let i = 0; i <= 3; i++) {
-		const t = i / 3;
+	const HALF = 8; // 8 stops per segment, shared midpoint = 15 total
+	for (let i = 0; i <= HALF; i++) {
+		const t = i / HALF;
 		stops.push(`rgb(${lerp(c1.r, c2.r, t)}, ${lerp(c1.g, c2.g, t)}, ${lerp(c1.b, c2.b, t)})`);
 	}
-	for (let i = 1; i <= 3; i++) {
-		const t = i / 3;
+	for (let i = 1; i <= HALF - 1; i++) {
+		const t = i / (HALF - 1);
 		stops.push(`rgb(${lerp(c2.r, c3.r, t)}, ${lerp(c2.g, c3.g, t)}, ${lerp(c2.b, c3.b, t)})`);
 	}
 	return `linear-gradient(135deg, ${stops.join(', ')})`;
