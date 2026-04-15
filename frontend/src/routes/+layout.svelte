@@ -450,15 +450,6 @@
 	</script>
 </svelte:head>
 
-<!-- SVG noise filter for gradient dithering (eliminates color banding) -->
-<svg style="position:absolute;width:0;height:0" aria-hidden="true">
-	<filter id="ambient-noise">
-		<feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="4" stitchTiles="stitch" />
-		<feColorMatrix type="saturate" values="0" />
-		<feBlend in="SourceGraphic" mode="soft-light" />
-	</filter>
-</svg>
-
 <div class="app-layout">
 	<main class="main-content" class:with-queue={showQueue && !isEmbed}>
 		{@render children?.()}
@@ -635,7 +626,7 @@
 		-webkit-font-smoothing: antialiased;
 	}
 
-	/* ambient weather gradient layer + noise dither to eliminate color banding */
+	/* ambient weather gradient layer */
 	:global(body::after) {
 		content: '';
 		position: fixed;
@@ -650,12 +641,11 @@
 	:global(body.ambient-active::after) {
 		opacity: 0.4;
 		animation: ambient-drift 12s ease-in-out infinite;
-		filter: url(#ambient-noise);
 	}
 
 	@keyframes -global-ambient-drift {
-		0%, 100% { opacity: 0.35; }
-		50% { opacity: 0.45; }
+		0%, 100% { opacity: 0.35; filter: brightness(1); }
+		50% { opacity: 0.5; filter: brightness(1.08); }
 	}
 
 	/* background image with blur effect */
