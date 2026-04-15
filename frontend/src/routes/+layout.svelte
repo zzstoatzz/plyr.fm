@@ -387,6 +387,9 @@
 	<link rel="icon" href={logo} />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme-color" content="#0a0a0a" />
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+	<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..900&family=Inter:wght@300..900&display=swap" rel="stylesheet" />
 
 	{#if !hasPageMetadata}
 		<!-- default meta tags for pages without specific metadata -->
@@ -433,6 +436,20 @@
 					const b = parseInt(savedAccent.slice(5, 7), 16);
 					const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
 					root.style.setProperty('--accent-hover', hover);
+				}
+
+				// apply font
+				const savedFont = localStorage.getItem('fontFamily');
+				if (savedFont) {
+					const fonts = {
+						'mono': "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace",
+						'geist': "'Geist', 'Inter', system-ui, sans-serif",
+						'inter': "'Inter', system-ui, sans-serif",
+						'system-ui': "system-ui, -apple-system, 'Segoe UI', sans-serif",
+						'georgia': "'Georgia', 'Times New Roman', serif",
+						'comic-sans': "'Comic Sans MS', 'Comic Sans', cursive",
+					};
+					if (fonts[savedFont]) root.style.setProperty('--font-family', fonts[savedFont]);
 				}
 
 				// apply theme
@@ -620,7 +637,7 @@
 	:global(body) {
 		margin: 0;
 		padding: 0;
-		font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
+		font-family: var(--font-family, 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace);
 		background-color: var(--bg-primary);
 		color: var(--text-primary);
 		-webkit-font-smoothing: antialiased;
