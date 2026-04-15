@@ -644,8 +644,8 @@
 	}
 
 	@keyframes -global-ambient-drift {
-		0%, 100% { opacity: 0.35; filter: brightness(1); }
-		50% { opacity: 0.5; filter: brightness(1.08); }
+		0%, 100% { opacity: 0.35; }
+		50% { opacity: 0.45; }
 	}
 
 	/* background image with blur effect */
