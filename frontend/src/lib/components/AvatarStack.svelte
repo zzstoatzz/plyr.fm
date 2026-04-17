@@ -28,6 +28,13 @@
 		ariaLabel?: string;
 		/** extra class on the container, for site-specific tweaks. */
 		class?: string;
+		/** if true, the stack becomes horizontally scrollable within `maxScrollWidth`
+		 *  and the overlap is slightly reduced so individual avatars are easier
+		 *  to tap. use for the "expanded" state when the caller has loaded the
+		 *  full liker/supporter list. */
+		scrollable?: boolean;
+		/** max width of the stack container in scrollable mode. default `20rem`. */
+		maxScrollWidth?: string;
 	}
 
 	let {
@@ -42,7 +49,9 @@
 		avatarHref,
 		onAvatarClick,
 		ariaLabel,
-		class: klass = ''
+		class: klass = '',
+		scrollable = false,
+		maxScrollWidth = '20rem'
 	}: Props = $props();
 
 	let visible = $derived(users.slice(0, maxVisible));
@@ -64,9 +73,10 @@
 
 <span
 	class="avatar-stack {klass}"
+	class:scrollable
 	role={ariaLabel ? 'group' : undefined}
 	aria-label={ariaLabel}
-	style="--stack-size: {size}px; --stack-overlap: {overlap}px; --stack-border: {borderColor};"
+	style="--stack-size: {size}px; --stack-overlap: {overlap}px; --stack-border: {borderColor}; --stack-max-width: {maxScrollWidth};"
 >
 	{#each visible as user (user.did)}
 		{@const title = user.display_name || user.handle}
@@ -122,6 +132,37 @@
 		display: inline-flex;
 		align-items: center;
 		vertical-align: middle;
+	}
+
+	/* expanded mode: horizontal scroll so the full list is reachable without
+	   a separate popover. overlap is preserved so the stack keeps its
+	   visual identity — it doesn't morph into a different widget. */
+	.avatar-stack.scrollable {
+		max-width: var(--stack-max-width);
+		overflow-x: auto;
+		overflow-y: visible;
+		padding: 4px 0;
+		scrollbar-width: thin;
+		scrollbar-color: var(--border-default) transparent;
+		scroll-snap-type: x proximity;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.avatar-stack.scrollable::-webkit-scrollbar {
+		height: 4px;
+	}
+
+	.avatar-stack.scrollable::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.avatar-stack.scrollable::-webkit-scrollbar-thumb {
+		background: var(--border-default);
+		border-radius: 2px;
+	}
+
+	.avatar-stack.scrollable .avatar {
+		scroll-snap-align: center;
 	}
 
 	.avatar {

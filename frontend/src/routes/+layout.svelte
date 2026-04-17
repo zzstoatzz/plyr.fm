@@ -12,7 +12,6 @@
 	import LogoutModal from '$lib/components/LogoutModal.svelte';
 	import FeedbackModal from '$lib/components/FeedbackModal.svelte';
 	import TermsOverlay from '$lib/components/TermsOverlay.svelte';
-	import LikersSheet from '$lib/components/LikersSheet.svelte';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
@@ -500,7 +499,6 @@
 <SearchModal />
 <LogoutModal />
 <FeedbackModal />
-<LikersSheet />
 {#if showTermsOverlay}
 	<TermsOverlay />
 {/if}
