@@ -296,19 +296,25 @@ async def test_get_top_likers_empty_list(db_session: AsyncSession):
     assert result == {}
 
 
-async def test_get_top_likers_limits_to_three_by_default(
+async def test_get_top_likers_default_limit(
     db_session: AsyncSession, test_tracks_with_liker_artists: list[Track]
 ):
-    """default limit=3 returns at most 3 likers per track, most recent first."""
+    """default limit=5 returns at most 5 likers per track, most recent first.
+
+    the frontend displays 3 inline but the backend returns 5 so tracks with
+    4 or 5 total likes can render everyone without a dead-end "+1"/"+2" tile.
+    """
     tracks = test_tracks_with_liker_artists
     result = await get_top_likers(db_session, [t.id for t in tracks])
 
-    # track 0 has 5 likes → returns 3 most recent (liker5, liker4, liker3)
-    assert len(result[tracks[0].id]) == 3
+    # track 0 has exactly 5 likes → returns all 5 most recent
+    assert len(result[tracks[0].id]) == 5
     assert [liker.handle for liker in result[tracks[0].id]] == [
         "liker5.bsky.social",
         "liker4.bsky.social",
         "liker3.bsky.social",
+        "liker2.bsky.social",
+        "liker1.bsky.social",
     ]
 
     # track 1 has 2 likes → returns both (liker2, liker1)
