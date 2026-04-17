@@ -8,6 +8,7 @@
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import AvatarStack from '$lib/components/AvatarStack.svelte';
 	import SupporterBadge from '$lib/components/SupporterBadge.svelte';
 	import RichText from '$lib/components/RichText.svelte';
 	import { moderation } from '$lib/moderation.svelte';
@@ -36,6 +37,16 @@ let hasMoreTracks = $state(data.hasMoreTracks ?? false);
 let nextCursor = $state<string | null>(data.nextCursor ?? null);
 let loadingMoreTracks = $state(false);
 let shareUrl = $state('');
+let isMobile = $state(false);
+
+$effect(() => {
+	if (!browser) return;
+	const mq = window.matchMedia('(max-width: 768px)');
+	isMobile = mq.matches;
+	const handler = (e: MediaQueryListEvent) => (isMobile = e.matches);
+	mq.addEventListener('change', handler);
+	return () => mq.removeEventListener('change', handler);
+});
 
 // compute support URL - handle 'atprotofans' magic value
 const supportUrl = $derived(() => {
@@ -460,35 +471,22 @@ $effect(() => {
 		</section>
 
 		{#if artist.support_url === 'atprotofans' && supporters.length > 0}
+			{@const total = supporterCount ?? supporters.length}
 			<section class="supporters-section">
 				<div class="supporters-row">
-					<span class="supporters-label">{supporterCount ?? supporters.length} {(supporterCount ?? supporters.length) === 1 ? 'supporter' : 'supporters'}</span>
-					<div class="supporters-avatars">
-						{#each supporters.slice(0, 20) as supporter}
-							<a
-								href="/u/{supporter.handle}"
-								class="supporter-circle"
-								title={supporter.display_name || supporter.handle}
-							>
-								{#if supporter.avatar_url}
-									<img src={supporter.avatar_url} alt="" />
-								{:else}
-									<span>{(supporter.display_name || supporter.handle).charAt(0).toUpperCase()}</span>
-								{/if}
-							</a>
-						{/each}
-						{#if (supporterCount ?? supporters.length) > 20}
-							<a
-								href={supportUrl()}
-								target="_blank"
-								rel="noopener"
-								class="supporter-circle more"
-								title="view all supporters"
-							>
-								+{(supporterCount ?? supporters.length) - 20}
-							</a>
-						{/if}
-					</div>
+					<span class="supporters-label">{total} {total === 1 ? 'supporter' : 'supporters'}</span>
+					<AvatarStack
+						users={supporters}
+						{total}
+						maxVisible={20}
+						size={isMobile ? 28 : 32}
+						borderColor="var(--bg-primary)"
+						avatarHref={(s) => `/u/${s.handle}`}
+						moreHref={supportUrl() ?? undefined}
+						moreTarget="_blank"
+						ariaLabel="view all supporters"
+						class="supporters-avatars"
+					/>
 				</div>
 			</section>
 		{/if}
@@ -846,58 +844,8 @@ $effect(() => {
 		white-space: nowrap;
 	}
 
-	.supporters-avatars {
-		display: flex;
-		align-items: center;
-	}
-
-	.supporter-circle {
-		width: 32px;
-		height: 32px;
-		border-radius: var(--radius-full);
-		border: 2px solid var(--bg-primary);
-		background: var(--bg-tertiary);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		overflow: hidden;
-		margin-left: -8px;
-		transition: transform 0.15s ease, z-index 0.15s ease;
-		position: relative;
-		text-decoration: none;
-	}
-
-	.supporter-circle:first-child {
-		margin-left: 0;
-	}
-
-	.supporter-circle:hover {
-		transform: translateY(-2px) scale(1.1);
-		z-index: 10;
-	}
-
-	.supporter-circle img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.supporter-circle span {
-		font-size: var(--text-xs);
-		font-weight: 600;
-		color: var(--text-secondary);
-	}
-
-	.supporter-circle.more {
-		background: var(--bg-secondary);
-		font-size: var(--text-xs);
-		font-weight: 600;
-		color: var(--text-tertiary);
-	}
-
-	.supporter-circle.more:hover {
-		color: var(--accent);
-	}
+	/* overlapping avatar strip is rendered by <AvatarStack>. styles live in
+	   that component; this page just needs the row-level flex layout. */
 
 	.analytics {
 		margin-bottom: 3rem;
@@ -1326,12 +1274,6 @@ $effect(() => {
 
 		.album-card-meta p {
 			font-size: var(--text-sm);
-		}
-
-		.supporter-circle {
-			width: 28px;
-			height: 28px;
-			margin-left: -6px;
 		}
 	}
 

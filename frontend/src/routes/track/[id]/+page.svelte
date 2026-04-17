@@ -10,6 +10,7 @@
 	import AddToMenu from '$lib/components/AddToMenu.svelte';
 	import TagEffects from '$lib/components/TagEffects.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import AvatarStack from '$lib/components/AvatarStack.svelte';
 	import LikersTooltip from '$lib/components/LikersTooltip.svelte';
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import LosslessBadge from '$lib/components/LosslessBadge.svelte';
@@ -610,7 +611,17 @@ $effect(() => {
 								onblur={handleLikesMouseLeave}
 								onkeydown={handleLikesKeydown}
 							>
-								{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}
+								{#if track.top_likers && track.top_likers.length > 0}
+									<AvatarStack
+										users={track.top_likers}
+										total={track.like_count}
+										size={24}
+										borderColor="var(--bg-primary)"
+										ariaLabel={`${track.like_count} ${track.like_count === 1 ? 'like' : 'likes'}`}
+									/>
+								{:else}
+									{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}
+								{/if}
 								{#if showLikersTooltip && !isMobile}
 									<LikersTooltip
 										trackId={track.id}

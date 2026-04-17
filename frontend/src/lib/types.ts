@@ -32,6 +32,18 @@ export interface SupportGate {
 	type: 'any' | string;
 }
 
+/**
+ * Lightweight user preview used in overlapping avatar stacks (track like
+ * strips, supporter rows, etc). Matches backend `LikerPreview` and the
+ * atprotofans-sourced `Supporter` shape.
+ */
+export interface UserPreview {
+	did: string;
+	handle: string;
+	display_name?: string | null;
+	avatar_url?: string | null;
+}
+
 export interface Track {
 	id: number;
 	title: string;
@@ -48,6 +60,7 @@ export interface Track {
 	atproto_record_url?: string;
 	play_count: number;
 	like_count?: number;
+	top_likers?: UserPreview[]; // up to 3 most recent likers, for inline avatar stack
 	comment_count?: number;
 	features?: FeaturedArtist[];
 	tags?: string[];

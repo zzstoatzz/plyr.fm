@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import SensitiveImage from './SensitiveImage.svelte';
+	import AvatarStack from './AvatarStack.svelte';
 	import LikersTooltip from './LikersTooltip.svelte';
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import type { Track } from '$lib/types';
@@ -16,6 +17,7 @@
 
 	let imageLoading = $derived(index < 3 ? 'eager' as const : 'lazy' as const);
 	let likeCount = $derived(track.like_count || 0);
+	let topLikers = $derived(track.top_likers ?? []);
 
 	let isMobile = $state(false);
 
@@ -145,7 +147,17 @@
 					onfocus={handleLikesMouseEnter}
 					onblur={handleLikesMouseLeave}
 				>
-					{likeCount} {likeCount === 1 ? 'like' : 'likes'}
+					{#if topLikers.length > 0}
+						<AvatarStack
+							users={topLikers}
+							total={likeCount}
+							size={18}
+							borderColor="var(--track-bg, var(--bg-secondary))"
+							ariaLabel={`${likeCount} ${likeCount === 1 ? 'like' : 'likes'}`}
+						/>
+					{:else}
+						{likeCount} {likeCount === 1 ? 'like' : 'likes'}
+					{/if}
 					{#if showLikersTooltip && !isMobile}
 						<LikersTooltip
 							trackId={track.id}

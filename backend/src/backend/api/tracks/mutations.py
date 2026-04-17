@@ -37,6 +37,7 @@ from backend.config import settings
 from backend.models import Artist, Track, TrackTag, get_db
 from backend.schemas import MessageResponse, TrackResponse
 from backend.storage import storage
+from backend.utilities.aggregations import get_top_likers, get_track_tags
 from backend.utilities.tags import get_or_create_tag, parse_tags_json
 
 from .metadata_service import (
@@ -375,11 +376,13 @@ async def update_track_metadata(
     if tags is not None:
         track_tags_dict = {track.id: updated_tags}
     else:
-        from backend.utilities.aggregations import get_track_tags
-
         track_tags_dict = await get_track_tags(db, [track.id])
 
-    return await TrackResponse.from_track(track, track_tags=track_tags_dict)
+    top_likers = await get_top_likers(db, [track.id])
+
+    return await TrackResponse.from_track(
+        track, track_tags=track_tags_dict, top_likers=top_likers
+    )
 
 
 async def _update_atproto_record(
@@ -609,9 +612,10 @@ async def restore_track_record(
 
     logger.info(f"restored ATProto record for track {track_id}: {new_uri}")
 
+    top_likers = await get_top_likers(db, [track.id])
     return RestoreRecordResponse(
         success=True,
-        track=await TrackResponse.from_track(track),
+        track=await TrackResponse.from_track(track, top_likers=top_likers),
         restored_uri=new_uri,
     )
 
