@@ -10,9 +10,7 @@
 	import AddToMenu from '$lib/components/AddToMenu.svelte';
 	import TagEffects from '$lib/components/TagEffects.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
-	import AvatarStack from '$lib/components/AvatarStack.svelte';
-	import LikersTooltip from '$lib/components/LikersTooltip.svelte';
-	import { likersSheet } from '$lib/likers-sheet.svelte';
+	import LikersStrip from '$lib/components/LikersStrip.svelte';
 	import LosslessBadge from '$lib/components/LosslessBadge.svelte';
 	import RichText from '$lib/components/RichText.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
@@ -76,62 +74,8 @@
 		player.currentTrack?.id === track.id && !player.paused
 	);
 
-	// mobile detection
-	let isMobile = $state(false);
-
-	$effect(() => {
-		if (browser) {
-			const mq = window.matchMedia('(max-width: 768px)');
-			isMobile = mq.matches;
-			const handler = (e: MediaQueryListEvent) => (isMobile = e.matches);
-			mq.addEventListener('change', handler);
-			return () => mq.removeEventListener('change', handler);
-		}
-	});
-
 	// metadata disclosure panel
 	let metadataOpen = $state(false);
-
-	// likers tooltip state
-	let showLikersTooltip = $state(false);
-	let likersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
-
-	function handleLikesMouseEnter() {
-		if (isMobile) return;
-		if (likersTooltipTimeout) {
-			clearTimeout(likersTooltipTimeout);
-			likersTooltipTimeout = null;
-		}
-		showLikersTooltip = true;
-	}
-
-	function handleLikesMouseLeave() {
-		if (isMobile) return;
-		likersTooltipTimeout = setTimeout(() => {
-			showLikersTooltip = false;
-			likersTooltipTimeout = null;
-		}, 150);
-	}
-
-	function handleLikesClick() {
-		if (isMobile && track.like_count) {
-			likersSheet.open(track.id, track.like_count);
-		}
-	}
-
-	function handleLikesKeydown(event: KeyboardEvent) {
-		if (event.key === 'Enter' || event.key === ' ') {
-			event.preventDefault();
-			if (isMobile && track.like_count) {
-				likersSheet.open(track.id, track.like_count);
-			} else {
-				showLikersTooltip = true;
-			}
-		}
-		if (event.key === 'Escape') {
-			showLikersTooltip = false;
-		}
-	}
 
 
 	async function loadLikedState() {
@@ -598,37 +542,18 @@ $effect(() => {
 						<LosslessBadge originalFileType={track.original_file_type} fileType={track.file_type} withSeparator separatorClass="separator" />
 						{#if track.like_count && track.like_count > 0}
 							<span class="separator">•</span>
-							<span
-								class="likes"
-								role="button"
-								tabindex="0"
-								aria-label={`${track.like_count} ${track.like_count === 1 ? 'like' : 'likes'} (focus to view users)`}
-								aria-expanded={showLikersTooltip}
-								onclick={handleLikesClick}
-								onmouseenter={handleLikesMouseEnter}
-								onmouseleave={handleLikesMouseLeave}
-								onfocus={handleLikesMouseEnter}
-								onblur={handleLikesMouseLeave}
-								onkeydown={handleLikesKeydown}
-							>
+							<span class="likes">
 								{#if track.top_likers && track.top_likers.length > 0}
-									<AvatarStack
-										users={track.top_likers}
-										total={track.like_count}
+									<LikersStrip
+										trackId={track.id}
+										likeCount={track.like_count}
+										topLikers={track.top_likers}
 										size={24}
 										borderColor="var(--bg-primary)"
-										ariaLabel={`${track.like_count} ${track.like_count === 1 ? 'like' : 'likes'}`}
+										maxScrollWidth="22rem"
 									/>
 								{:else}
 									{track.like_count} {track.like_count === 1 ? 'like' : 'likes'}
-								{/if}
-								{#if showLikersTooltip && !isMobile}
-									<LikersTooltip
-										trackId={track.id}
-										likeCount={track.like_count}
-										onMouseEnter={handleLikesMouseEnter}
-										onMouseLeave={handleLikesMouseLeave}
-									/>
 								{/if}
 							</span>
 						{/if}
@@ -1025,19 +950,8 @@ $effect(() => {
 	}
 
 	.track-stats .likes {
-		position: relative;
-		cursor: pointer;
-		padding: 0.125rem 0.25rem;
-		margin: -0.125rem -0.25rem;
-		border-radius: var(--radius-sm);
-		transition: background 0.15s, color 0.15s;
-	}
-
-	.track-stats .likes:hover,
-	.track-stats .likes:focus {
-		background: color-mix(in srgb, var(--accent) 15%, transparent);
-		color: var(--accent);
-		outline: none;
+		display: inline-flex;
+		align-items: center;
 	}
 
 	.metadata-toggle {
