@@ -1,16 +1,25 @@
 """aggregation utilities for efficient batch counting."""
 
 import logging
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
-from backend.models import CopyrightScan, Tag, Track, TrackComment, TrackLike, TrackTag
+from backend.models import (
+    Artist,
+    CopyrightScan,
+    Tag,
+    Track,
+    TrackComment,
+    TrackLike,
+    TrackTag,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +30,23 @@ class CopyrightInfo:
 
     is_flagged: bool
     primary_match: str | None = None  # "Title by Artist" for most frequent match
+
+
+class LikerPreview(BaseModel):
+    """lightweight liker preview embedded in track responses.
+
+    used to render the overlapping avatar stack next to a track's like count
+    without a follow-up request. the full `LikerInfo` (with `liked_at`) is
+    still served by `GET /tracks/{id}/likes` for the detail tooltip/sheet.
+
+    defined here (alongside aggregation helpers) rather than in `schemas.py`
+    to avoid a circular import: `schemas.py` imports from `aggregations.py`.
+    """
+
+    did: str
+    handle: str
+    display_name: str | None
+    avatar_url: str | None
 
 
 async def get_like_counts(db: AsyncSession, track_ids: list[int]) -> dict[int, int]:
@@ -45,6 +71,80 @@ async def get_like_counts(db: AsyncSession, track_ids: list[int]) -> dict[int, i
 
     result = await db.execute(stmt)
     return dict(result.all())
+
+
+async def get_top_likers(
+    db: AsyncSession,
+    track_ids: list[int],
+    limit: int = 3,
+) -> dict[int, list[LikerPreview]]:
+    """get the N most recent likers per track in a single batched query.
+
+    uses ROW_NUMBER() OVER (PARTITION BY track_id ORDER BY created_at DESC) and
+    filters to rn <= limit. postgres 15+ pushes the limit condition into the
+    window aggregate (Run Condition), so work short-circuits once each track
+    has N rows. EXPLAIN ANALYZE on production (308 likes, 20-track page):
+    ~1ms execution, all in shared buffer cache.
+
+    args:
+        db: database session
+        track_ids: list of track IDs to get likers for
+        limit: max likers per track (default 3)
+
+    returns:
+        dict mapping track_id -> list of LikerPreview, most recent first.
+        tracks with zero likes are omitted from the dict.
+    """
+    if not track_ids:
+        return {}
+
+    rn = (
+        func.row_number()
+        .over(
+            partition_by=TrackLike.track_id,
+            order_by=TrackLike.created_at.desc(),
+        )
+        .label("rn")
+    )
+
+    ranked = (
+        select(
+            Artist.did.label("did"),
+            Artist.handle.label("handle"),
+            Artist.display_name.label("display_name"),
+            Artist.avatar_url.label("avatar_url"),
+            TrackLike.track_id.label("track_id"),
+            rn,
+        )
+        .join(Artist, Artist.did == TrackLike.user_did)
+        .where(TrackLike.track_id.in_(track_ids))
+        .subquery()
+    )
+
+    stmt = (
+        select(
+            ranked.c.did,
+            ranked.c.handle,
+            ranked.c.display_name,
+            ranked.c.avatar_url,
+            ranked.c.track_id,
+        )
+        .where(ranked.c.rn <= limit)
+        .order_by(ranked.c.track_id, ranked.c.rn)
+    )
+
+    result = await db.execute(stmt)
+    out: dict[int, list[LikerPreview]] = defaultdict(list)
+    for did, handle, display_name, avatar_url, track_id in result.all():
+        out[track_id].append(
+            LikerPreview(
+                did=did,
+                handle=handle,
+                display_name=display_name,
+                avatar_url=avatar_url,
+            )
+        )
+    return dict(out)
 
 
 async def get_comment_counts(db: AsyncSession, track_ids: list[int]) -> dict[int, int]:

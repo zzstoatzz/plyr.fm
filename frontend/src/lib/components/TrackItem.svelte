@@ -3,6 +3,7 @@
 	import ShareButton from './ShareButton.svelte';
 	import AddToMenu from './AddToMenu.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
+	import AvatarStack from './AvatarStack.svelte';
 	import LikersTooltip from './LikersTooltip.svelte';
 	import CommentersTooltip from './CommentersTooltip.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
@@ -62,6 +63,7 @@
 	let showCommentersTooltip = $state(false);
 	// use overridable $derived (Svelte 5.25+) - syncs with prop but can be overridden for optimistic UI
 	let likeCount = $derived(track.like_count || 0);
+	let topLikers = $derived(track.top_likers ?? []);
 	let commentCount = $derived(track.comment_count || 0);
 	// local UI state keyed by track.id - reset when track changes (component recycling)
 	let trackImageError = $state(false);
@@ -332,6 +334,7 @@
 				<span class="meta-separator">•</span>
 				<span
 					class="likes"
+					class:likes-with-stack={topLikers.length > 0}
 					role="button"
 					tabindex="0"
 					aria-label={`${likeCount} ${likeCount === 1 ? 'like' : 'likes'} (focus to view users)`}
@@ -343,7 +346,17 @@
 					onblur={handleLikesMouseLeave}
 					onkeydown={handleLikesKeydown}
 				>
-					{likeCount} {likeCount === 1 ? 'like' : 'likes'}
+					{#if topLikers.length > 0}
+						<AvatarStack
+							users={topLikers}
+							total={likeCount}
+							size={isMobile ? 20 : 22}
+							borderColor="var(--track-bg, var(--bg-secondary))"
+							ariaLabel={`${likeCount} ${likeCount === 1 ? 'like' : 'likes'}`}
+						/>
+					{:else}
+						{likeCount} {likeCount === 1 ? 'like' : 'likes'}
+					{/if}
 					{#if showLikersTooltip && !isMobile}
 							<LikersTooltip
 								trackId={track.id}

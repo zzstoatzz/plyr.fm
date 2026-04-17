@@ -1,12 +1,18 @@
 """shared track hydration for list-backed endpoints (playlists, liked lists)."""
 
+import asyncio
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.models import Track, TrackLike
 from backend.schemas import TrackResponse
-from backend.utilities.aggregations import get_comment_counts, get_like_counts
+from backend.utilities.aggregations import (
+    get_comment_counts,
+    get_like_counts,
+    get_top_likers,
+)
 
 
 async def hydrate_tracks_from_uris(
@@ -31,8 +37,14 @@ async def hydrate_tracks_from_uris(
     track_by_uri = {t.atproto_record_uri: t for t in all_tracks}
 
     track_ids = [t.id for t in all_tracks]
-    like_counts = await get_like_counts(db, track_ids) if track_ids else {}
-    comment_counts = await get_comment_counts(db, track_ids) if track_ids else {}
+    if track_ids:
+        like_counts, comment_counts, top_likers = await asyncio.gather(
+            get_like_counts(db, track_ids),
+            get_comment_counts(db, track_ids),
+            get_top_likers(db, track_ids),
+        )
+    else:
+        like_counts, comment_counts, top_likers = {}, {}, {}
 
     liked_track_ids: set[int] = set()
     if session_did and track_ids:
@@ -53,6 +65,7 @@ async def hydrate_tracks_from_uris(
                 liked_track_ids=liked_track_ids,
                 like_counts=like_counts,
                 comment_counts=comment_counts,
+                top_likers=top_likers,
             )
             tracks.append(track_response)
 

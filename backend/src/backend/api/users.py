@@ -12,7 +12,11 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session, get_optional_session
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
-from backend.utilities.aggregations import get_comment_counts, get_like_counts
+from backend.utilities.aggregations import (
+    get_comment_counts,
+    get_like_counts,
+    get_top_likers,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -73,9 +77,10 @@ async def get_user_liked_tracks(
         liked_track_ids = set(liked_result.scalars().all())
 
     track_ids = [track.id for track in tracks]
-    like_counts, comment_counts = await asyncio.gather(
+    like_counts, comment_counts, top_likers = await asyncio.gather(
         get_like_counts(db, track_ids),
         get_comment_counts(db, track_ids),
+        get_top_likers(db, track_ids),
     )
 
     track_responses = await asyncio.gather(
@@ -85,6 +90,7 @@ async def get_user_liked_tracks(
                 liked_track_ids=liked_track_ids,
                 like_counts=like_counts,
                 comment_counts=comment_counts,
+                top_likers=top_likers,
             )
             for track in tracks
         ]
