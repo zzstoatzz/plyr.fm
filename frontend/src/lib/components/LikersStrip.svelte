@@ -123,6 +123,7 @@
 	onclick={(e) => e.stopPropagation()}
 	onkeydown={(e) => e.stopPropagation()}
 >
+	<span class="label">liked by</span>
 	<AvatarStack
 		users={usersForStack}
 		total={likeCount}
@@ -160,13 +161,20 @@
 	.likers-strip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: 0.375rem;
 		vertical-align: middle;
 		transition: opacity 0.15s;
 	}
 
 	.likers-strip.loading {
 		opacity: 0.6;
+	}
+
+	.label {
+		color: var(--text-tertiary);
+		font-size: inherit;
+		font-family: inherit;
+		white-space: nowrap;
 	}
 
 	.collapse {
