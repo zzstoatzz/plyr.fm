@@ -33,7 +33,6 @@ from backend.utilities.aggregations import (
     get_comment_counts,
     get_copyright_info,
     get_like_counts,
-    get_top_likers,
     get_top_tracks_with_counts,
     get_track_tags,
 )
@@ -212,11 +211,10 @@ async def list_tracks(
     # to the moderation service and is only displayed in /tracks/me (artist portal)
     track_ids = [track.id for track in tracks]
     with logfire.span("batch aggregations", track_count=len(track_ids)):
-        like_counts, comment_counts, track_tags, top_likers = await asyncio.gather(
+        like_counts, comment_counts, track_tags = await asyncio.gather(
             get_like_counts(db, track_ids),
             get_comment_counts(db, track_ids),
             get_track_tags(db, track_ids),
-            get_top_likers(db, track_ids),
         )
 
     # use cached PDS URLs with fallback on failure
@@ -309,7 +307,6 @@ async def list_tracks(
                     like_counts,
                     comment_counts,
                     track_tags=track_tags,
-                    top_likers=top_likers,
                     viewer_did=viewer_did,
                     supported_artist_dids=supported_artist_dids,
                 )
@@ -394,11 +391,10 @@ async def list_top_tracks(
 
     # batch fetch aggregations — always use all-time like counts for display
     # (period filtering only affects which tracks appear and their ordering)
-    like_counts, comment_counts, track_tags, top_likers = await asyncio.gather(
+    like_counts, comment_counts, track_tags = await asyncio.gather(
         get_like_counts(db, track_ids),
         get_comment_counts(db, track_ids),
         get_track_tags(db, track_ids),
-        get_top_likers(db, track_ids),
     )
 
     # resolve supporter status for gated content
@@ -424,7 +420,6 @@ async def list_top_tracks(
                 like_counts=like_counts,
                 comment_counts=comment_counts,
                 track_tags=track_tags,
-                top_likers=top_likers,
                 viewer_did=viewer_did,
                 supported_artist_dids=supported_artist_dids,
             )
@@ -464,20 +459,16 @@ async def list_my_tracks(
 
     # batch fetch copyright info and tags
     track_ids = [track.id for track in tracks]
-    copyright_info, track_tags, top_likers = await asyncio.gather(
+    copyright_info, track_tags = await asyncio.gather(
         get_copyright_info(db, track_ids),
         get_track_tags(db, track_ids),
-        get_top_likers(db, track_ids),
     )
 
     # fetch all track responses concurrently
     track_responses = await asyncio.gather(
         *[
             TrackResponse.from_track(
-                track,
-                copyright_info=copyright_info,
-                track_tags=track_tags,
-                top_likers=top_likers,
+                track, copyright_info=copyright_info, track_tags=track_tags
             )
             for track in tracks
         ]
@@ -521,20 +512,16 @@ async def list_broken_tracks(
 
     # batch fetch copyright info and tags
     track_ids = [track.id for track in tracks]
-    copyright_info, track_tags, top_likers = await asyncio.gather(
+    copyright_info, track_tags = await asyncio.gather(
         get_copyright_info(db, track_ids),
         get_track_tags(db, track_ids),
-        get_top_likers(db, track_ids),
     )
 
     # fetch all track responses concurrently
     track_responses = await asyncio.gather(
         *[
             TrackResponse.from_track(
-                track,
-                copyright_info=copyright_info,
-                track_tags=track_tags,
-                top_likers=top_likers,
+                track, copyright_info=copyright_info, track_tags=track_tags
             )
             for track in tracks
         ]

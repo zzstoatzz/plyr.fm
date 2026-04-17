@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import SensitiveImage from './SensitiveImage.svelte';
-	import LikersStrip from './LikersStrip.svelte';
+	import LikersTooltip from './LikersTooltip.svelte';
+	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import type { Track } from '$lib/types';
 
 	interface Props {
@@ -14,12 +16,71 @@
 
 	let imageLoading = $derived(index < 3 ? 'eager' as const : 'lazy' as const);
 	let likeCount = $derived(track.like_count || 0);
-	let topLikers = $derived(track.top_likers ?? []);
+
+	let isMobile = $state(false);
+
+	$effect(() => {
+		if (browser) {
+			const mq = window.matchMedia('(max-width: 768px)');
+			isMobile = mq.matches;
+			const handler = (e: MediaQueryListEvent) => (isMobile = e.matches);
+			mq.addEventListener('change', handler);
+			return () => mq.removeEventListener('change', handler);
+		}
+	});
+
+	// desktop tooltip state
+	let showLikersTooltip = $state(false);
+	let likersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function openLikers() {
+		if (likersTooltipTimeout) {
+			clearTimeout(likersTooltipTimeout);
+			likersTooltipTimeout = null;
+		}
+		showLikersTooltip = true;
+	}
+
+	function closeLikers() {
+		likersTooltipTimeout = setTimeout(() => {
+			showLikersTooltip = false;
+			likersTooltipTimeout = null;
+		}, 150);
+	}
+
+	function handleLikesClick(e: Event) {
+		e.stopPropagation();
+		if (isMobile) {
+			likersSheet.open(track.id, likeCount);
+		}
+	}
+
+	function handleLikesKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.stopPropagation();
+			if (isMobile) {
+				likersSheet.open(track.id, likeCount);
+			}
+		}
+	}
+
+	function handleLikesMouseEnter(e: Event) {
+		if (isMobile) return;
+		e.stopPropagation();
+		openLikers();
+	}
+
+	function handleLikesMouseLeave(e: Event) {
+		if (isMobile) return;
+		e.stopPropagation();
+		closeLikers();
+	}
 </script>
 
 <button
 	class="track-card"
 	class:playing={isPlaying}
+	class:tooltip-open={showLikersTooltip}
 	onclick={(e) => {
 		if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) return;
 		onPlay(track);
@@ -71,18 +132,28 @@
 			<span>{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
 			{#if likeCount > 0}
 				<span class="meta-sep">&middot;</span>
-				<span class="likes" onclick={(e) => e.stopPropagation()} role="presentation">
-					{#if topLikers.length > 0}
-						<LikersStrip
+				<span
+					class="likes"
+					role="button"
+					tabindex="0"
+					aria-label="{likeCount} {likeCount === 1 ? 'like' : 'likes'}"
+					aria-expanded={showLikersTooltip}
+					onclick={handleLikesClick}
+					onkeydown={handleLikesKeydown}
+					onmouseenter={handleLikesMouseEnter}
+					onmouseleave={handleLikesMouseLeave}
+					onfocus={handleLikesMouseEnter}
+					onblur={handleLikesMouseLeave}
+				>
+					{likeCount} {likeCount === 1 ? 'like' : 'likes'}
+					{#if showLikersTooltip && !isMobile}
+						<LikersTooltip
 							trackId={track.id}
 							{likeCount}
-							{topLikers}
-							size={18}
-							borderColor="var(--track-bg, var(--bg-secondary))"
-							maxScrollWidth="16rem"
+							onMouseEnter={openLikers}
+							onMouseLeave={closeLikers}
+							forceBelow
 						/>
-					{:else}
-						{likeCount} {likeCount === 1 ? 'like' : 'likes'}
 					{/if}
 				</span>
 			{/if}
@@ -121,6 +192,10 @@
 	.track-card.playing {
 		background: color-mix(in srgb, var(--accent) 10%, var(--track-bg-playing, var(--bg-tertiary)));
 		border-color: color-mix(in srgb, var(--accent) 20%, var(--track-border, var(--border-subtle)));
+	}
+
+	.track-card.tooltip-open {
+		z-index: 60;
 	}
 
 	.artwork {
@@ -237,7 +312,18 @@
 	}
 
 	.likes {
-		display: inline-flex;
-		align-items: center;
+		position: relative;
+		cursor: help;
+		transition: color 0.15s;
+	}
+
+	.likes:hover {
+		color: var(--accent);
+	}
+
+	@media (max-width: 768px) {
+		.likes {
+			cursor: pointer;
+		}
 	}
 </style>

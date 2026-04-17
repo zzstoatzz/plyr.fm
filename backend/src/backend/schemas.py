@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from backend._internal.atproto.client import parse_at_uri
 from backend.models import Album, Track
-from backend.utilities.aggregations import CopyrightInfo, LikerPreview
+from backend.utilities.aggregations import CopyrightInfo
 
 # --- common simple response types ---
 
@@ -123,9 +123,6 @@ class TrackResponse(BaseModel):
     audio_storage: str = "r2"  # "r2" | "pds" | "both"
     pds_blob_cid: str | None = None  # CID if stored on user's PDS
     unlisted: bool = False  # excluded from discovery feeds
-    top_likers: list[LikerPreview] = Field(default_factory=list)
-    # ^ up to 3 most recent likers, for the inline avatar stack. empty when
-    #   the track has no likes OR the callsite didn't batch-load likers.
 
     @classmethod
     async def from_track(
@@ -137,7 +134,6 @@ class TrackResponse(BaseModel):
         comment_counts: dict[int, int] | None = None,
         copyright_info: dict[int, CopyrightInfo] | None = None,
         track_tags: dict[int, set[str]] | None = None,
-        top_likers: dict[int, list[LikerPreview]] | None = None,
         viewer_did: str | None = None,
         supported_artist_dids: set[str] | None = None,
     ) -> "TrackResponse":
@@ -151,8 +147,6 @@ class TrackResponse(BaseModel):
             comment_counts: optional dict of track_id -> comment_count
             copyright_info: optional dict of track_id -> CopyrightInfo
             track_tags: optional dict of track_id -> set of tag names
-            top_likers: optional dict of track_id -> list of LikerPreview
-                (most recent first, capped at 3)
             viewer_did: optional DID of the viewer (for gated content resolution)
             supported_artist_dids: optional set of artist DIDs the viewer supports
         """
@@ -161,9 +155,6 @@ class TrackResponse(BaseModel):
 
         # get like count
         like_count = like_counts.get(track.id, 0) if like_counts else 0
-
-        # get top likers (preview for the inline avatar stack)
-        track_top_likers = top_likers.get(track.id, []) if top_likers else []
 
         # get comment count
         comment_count = comment_counts.get(track.id, 0) if comment_counts else 0
@@ -231,7 +222,6 @@ class TrackResponse(BaseModel):
             thumbnail_url=track.thumbnail_url,
             is_liked=is_liked,
             like_count=like_count,
-            top_likers=track_top_likers,
             comment_count=comment_count,
             album=album_data,
             tags=tags,

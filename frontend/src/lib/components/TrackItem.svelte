@@ -3,10 +3,11 @@
 	import ShareButton from './ShareButton.svelte';
 	import AddToMenu from './AddToMenu.svelte';
 	import TrackActionsMenu from './TrackActionsMenu.svelte';
-	import LikersStrip from './LikersStrip.svelte';
+	import LikersTooltip from './LikersTooltip.svelte';
 	import CommentersTooltip from './CommentersTooltip.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
 	import { hasPlayableLossless, isLosslessFormat } from '$lib/audio-support';
+	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -57,10 +58,10 @@
 		}
 	});
 
+	let showLikersTooltip = $state(false);
 	let showCommentersTooltip = $state(false);
 	// use overridable $derived (Svelte 5.25+) - syncs with prop but can be overridden for optimistic UI
 	let likeCount = $derived(track.like_count || 0);
-	let topLikers = $derived(track.top_likers ?? []);
 	let commentCount = $derived(track.comment_count || 0);
 	// local UI state keyed by track.id - reset when track changes (component recycling)
 	let trackImageError = $state(false);
@@ -116,6 +117,49 @@
 		toast.success(`queued ${track.title}`, 1800);
 	}
 
+	let likersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function handleLikesMouseEnter() {
+		if (isMobile) return;
+		if (likersTooltipTimeout) {
+			clearTimeout(likersTooltipTimeout);
+			likersTooltipTimeout = null;
+		}
+		showLikersTooltip = true;
+	}
+
+	function handleLikesMouseLeave() {
+		if (isMobile) return;
+		likersTooltipTimeout = setTimeout(() => {
+			showLikersTooltip = false;
+			likersTooltipTimeout = null;
+		}, 150);
+	}
+
+	function handleLikesClick(e: Event) {
+		if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
+			return;
+		}
+		e.stopPropagation();
+		if (isMobile) {
+			likersSheet.open(track.id, likeCount);
+		}
+	}
+
+	function handleLikesKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			if (isMobile) {
+				likersSheet.open(track.id, likeCount);
+			} else {
+				showLikersTooltip = true;
+			}
+		}
+		if (event.key === 'Escape') {
+			showLikersTooltip = false;
+		}
+	}
+
 	let commentersTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	function handleCommentsMouseEnter() {
@@ -154,6 +198,7 @@
 	class="track-container"
 	class:playing={isPlaying}
 	class:lossless={hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type)}
+	class:likers-tooltip-open={showLikersTooltip}
 	title={hasPlayableLossless(track.original_file_type) || isLosslessFormat(track.file_type) ? 'lossless audio available' : undefined}
 >
 	{#if showIndex}
@@ -285,20 +330,30 @@
 				<span class="plays">{track.play_count} {track.play_count === 1 ? 'play' : 'plays'}</span>
 			{#if likeCount > 0}
 				<span class="meta-separator">•</span>
-				<span class="likes">
-					{#if topLikers.length > 0}
-						<LikersStrip
-							trackId={track.id}
-							{likeCount}
-							{topLikers}
-							size={isMobile ? 20 : 22}
-							borderColor="var(--track-bg, var(--bg-secondary))"
-						/>
-					{:else}
-						{likeCount} {likeCount === 1 ? 'like' : 'likes'}
-					{/if}
-				</span>
-			{/if}
+				<span
+					class="likes"
+					role="button"
+					tabindex="0"
+					aria-label={`${likeCount} ${likeCount === 1 ? 'like' : 'likes'} (focus to view users)`}
+					aria-expanded={showLikersTooltip}
+					onclick={handleLikesClick}
+					onmouseenter={handleLikesMouseEnter}
+					onmouseleave={handleLikesMouseLeave}
+					onfocus={handleLikesMouseEnter}
+					onblur={handleLikesMouseLeave}
+					onkeydown={handleLikesKeydown}
+				>
+					{likeCount} {likeCount === 1 ? 'like' : 'likes'}
+					{#if showLikersTooltip && !isMobile}
+							<LikersTooltip
+								trackId={track.id}
+								likeCount={likeCount}
+								onMouseEnter={handleLikesMouseEnter}
+								onMouseLeave={handleLikesMouseLeave}
+							/>
+						{/if}
+					</span>
+				{/if}
 				{#if commentCount > 0}
 					<span class="meta-separator">•</span>
 					<span
@@ -453,6 +508,13 @@
 			0 1px 3px rgba(0, 0, 0, 0.06),
 			0 0 8px color-mix(in srgb, var(--accent) 8%, transparent),
 			inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	/* elevate entire track container when likers tooltip is open
+	   z-index: 60 is above header (50) and sibling tracks */
+	.track-container.likers-tooltip-open {
+		position: relative;
+		z-index: 60;
 	}
 
 	.track {
@@ -779,8 +841,13 @@
 	.likes {
 		color: var(--text-tertiary);
 		font-family: inherit;
-		display: inline-flex;
-		align-items: center;
+		position: relative;
+		cursor: help;
+		transition: color 0.2s;
+	}
+
+	.likes:hover {
+		color: var(--accent);
 	}
 
 	.comments-wrapper {
