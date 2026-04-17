@@ -50,7 +50,13 @@
 		return users;
 	}
 
-	async function handleMoreClick() {
+	async function handleMoreClick(e: MouseEvent | KeyboardEvent) {
+		// stop the click on +N from bubbling to an enclosing play button,
+		// but only on this non-anchor element — anchor clicks (individual
+		// avatars) must still reach document for SvelteKit's client-side
+		// nav to hijack them, otherwise the browser does a full page reload
+		// and tears down the audio element mid-playback.
+		e.stopPropagation();
 		if (loading) return;
 		if (allLikers) {
 			// already loaded — just toggle. second click collapses.
@@ -61,8 +67,8 @@
 		try {
 			allLikers = await fetchAllLikers();
 			expanded = true;
-		} catch (e) {
-			console.error('error expanding likers:', e);
+		} catch (err) {
+			console.error('error expanding likers:', err);
 		} finally {
 			loading = false;
 		}
@@ -110,18 +116,19 @@
 	}
 </script>
 
-<!-- stop clicks and keyboard activations from bubbling to an enclosing
-     interactive surface (e.g. the TrackItem play button). otherwise clicking
-     +N or × would also trigger track playback. -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- NOTE: we deliberately do NOT stopPropagation at this root. avatar clicks
+     are anchor links and must reach document so SvelteKit's client-side nav
+     can hijack them — otherwise the browser falls back to a full page
+     reload which tears down the audio element and stops playback.
+     The outer play button in TrackItem already has an anchor guard that
+     prevents playback when the click target is (or is inside) an <a>.
+     The non-anchor interactive bits (+N, ×) stop propagation individually. -->
 <span
 	class="likers-strip"
 	class:expanded
 	class:loading
 	bind:this={container}
 	aria-live="polite"
-	onclick={(e) => e.stopPropagation()}
-	onkeydown={(e) => e.stopPropagation()}
 >
 	<span class="label">liked by</span>
 	<AvatarStack
