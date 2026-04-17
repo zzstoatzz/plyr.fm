@@ -44,7 +44,6 @@ from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
     get_comment_counts,
     get_like_counts,
-    get_top_likers,
     get_track_tags,
 )
 from backend.utilities.tags import DEFAULT_HIDDEN_TAGS
@@ -386,11 +385,10 @@ async def get_for_you_feed(
     )
     liked_track_ids = set(liked_result.scalars().all())
 
-    like_counts, comment_counts, track_tags, top_likers = await asyncio.gather(
+    like_counts, comment_counts, track_tags = await asyncio.gather(
         get_like_counts(db, page_ids),
         get_comment_counts(db, page_ids),
         get_track_tags(db, page_ids),
-        get_top_likers(db, page_ids),
     )
 
     gated_artist_dids = {
@@ -410,7 +408,6 @@ async def get_for_you_feed(
                 like_counts=like_counts,
                 comment_counts=comment_counts,
                 track_tags=track_tags,
-                top_likers=top_likers,
                 viewer_did=actor_did,
                 supported_artist_dids=supported_artist_dids,
             )

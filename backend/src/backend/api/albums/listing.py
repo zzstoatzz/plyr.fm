@@ -17,7 +17,6 @@ from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
     get_comment_counts,
     get_like_counts,
-    get_top_likers,
     get_track_tags,
 )
 from backend.utilities.redis import get_async_redis_client
@@ -189,14 +188,13 @@ async def get_album(
 
     # batch fetch aggregations
     if track_ids:
-        like_counts, comment_counts, track_tags, top_likers = await asyncio.gather(
+        like_counts, comment_counts, track_tags = await asyncio.gather(
             get_like_counts(db, track_ids),
             get_comment_counts(db, track_ids),
             get_track_tags(db, track_ids),
-            get_top_likers(db, track_ids),
         )
     else:
-        like_counts, comment_counts, track_tags, top_likers = {}, {}, {}, {}
+        like_counts, comment_counts, track_tags = {}, {}, {}
 
     # get authenticated user's likes for this album's tracks only
     liked_track_ids: set[int] | None = None
@@ -220,7 +218,6 @@ async def get_album(
                 like_counts,
                 comment_counts,
                 track_tags=track_tags,
-                top_likers=top_likers,
             )
             for track in tracks
         ]

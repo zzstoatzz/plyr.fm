@@ -18,7 +18,6 @@ from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
     get_comment_counts,
     get_like_counts,
-    get_top_likers,
     get_track_tags,
 )
 
@@ -94,11 +93,10 @@ async def get_tracks_by_tag(
     # batch fetch like counts, comment counts, and tags
     # note: copyright_info excluded - only needed in artist portal (/tracks/me)
     track_ids = [track.id for track in tracks]
-    like_counts, comment_counts, track_tags_map, top_likers = await asyncio.gather(
+    like_counts, comment_counts, track_tags_map = await asyncio.gather(
         get_like_counts(db, track_ids),
         get_comment_counts(db, track_ids),
         get_track_tags(db, track_ids),
-        get_top_likers(db, track_ids),
     )
 
     # build track responses
@@ -110,7 +108,6 @@ async def get_tracks_by_tag(
                 like_counts=like_counts,
                 comment_counts=comment_counts,
                 track_tags=track_tags_map,
-                top_likers=top_likers,
             )
             for track in tracks
         ]

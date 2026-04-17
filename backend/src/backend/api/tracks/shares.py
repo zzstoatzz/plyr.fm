@@ -14,7 +14,6 @@ from backend._internal import get_optional_session, require_auth
 from backend.config import settings
 from backend.models import Artist, ShareLink, ShareLinkEvent, Track, get_db
 from backend.schemas import OkResponse, TrackResponse
-from backend.utilities.aggregations import get_top_likers
 
 from .router import router
 
@@ -235,9 +234,6 @@ async def list_my_shares(
 
         return users, anonymous_count or 0
 
-    # batch-preload top likers for every share's track in one query
-    top_likers = await get_top_likers(db, [sl.track_id for sl in share_links])
-
     shares = []
     for share_link in share_links:
         # get visitor stats (clicks)
@@ -251,9 +247,7 @@ async def list_my_shares(
         play_count = len(listeners) + anonymous_plays
 
         # build track response
-        track_response = await TrackResponse.from_track(
-            share_link.track, top_likers=top_likers
-        )
+        track_response = await TrackResponse.from_track(share_link.track)
 
         shares.append(
             ShareLinkStats(
