@@ -42,6 +42,9 @@ export interface UserPreview {
 	handle: string;
 	display_name?: string | null;
 	avatar_url?: string | null;
+	/** ISO timestamp — only set for likers (from backend LikerPreview).
+	 *  supporters from atprotofans don't carry a timestamp. */
+	liked_at?: string;
 }
 
 export interface Track {

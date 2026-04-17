@@ -36,8 +36,8 @@ class LikerPreview(BaseModel):
     """lightweight liker preview embedded in track responses.
 
     used to render the overlapping avatar stack next to a track's like count
-    without a follow-up request. the full `LikerInfo` (with `liked_at`) is
-    still served by `GET /tracks/{id}/likes` for the detail tooltip/sheet.
+    without a follow-up request. includes `liked_at` so the per-avatar hover
+    tooltip can show "display name · 2h ago" without a follow-up fetch.
 
     defined here (alongside aggregation helpers) rather than in `schemas.py`
     to avoid a circular import: `schemas.py` imports from `aggregations.py`.
@@ -47,6 +47,7 @@ class LikerPreview(BaseModel):
     handle: str
     display_name: str | None
     avatar_url: str | None
+    liked_at: str
 
 
 async def get_like_counts(db: AsyncSession, track_ids: list[int]) -> dict[int, int]:
@@ -114,6 +115,7 @@ async def get_top_likers(
             Artist.display_name.label("display_name"),
             Artist.avatar_url.label("avatar_url"),
             TrackLike.track_id.label("track_id"),
+            TrackLike.created_at.label("liked_at"),
             rn,
         )
         .join(Artist, Artist.did == TrackLike.user_did)
@@ -128,6 +130,7 @@ async def get_top_likers(
             ranked.c.display_name,
             ranked.c.avatar_url,
             ranked.c.track_id,
+            ranked.c.liked_at,
         )
         .where(ranked.c.rn <= limit)
         .order_by(ranked.c.track_id, ranked.c.rn)
@@ -135,13 +138,14 @@ async def get_top_likers(
 
     result = await db.execute(stmt)
     out: dict[int, list[LikerPreview]] = defaultdict(list)
-    for did, handle, display_name, avatar_url, track_id in result.all():
+    for did, handle, display_name, avatar_url, track_id, liked_at in result.all():
         out[track_id].append(
             LikerPreview(
                 did=did,
                 handle=handle,
                 display_name=display_name,
                 avatar_url=avatar_url,
+                liked_at=liked_at.isoformat(),
             )
         )
     return dict(out)

@@ -24,6 +24,10 @@
 		avatarHref?: (u: UserPreview) => string;
 		/** handler for clicks on individual avatars (e.g. stop propagation). */
 		onAvatarClick?: (u: UserPreview, e: MouseEvent) => void;
+		/** build the hover/focus title shown for each avatar. defaults to
+		 *  `display_name || handle`. likers surfaces pass a formatter that
+		 *  appends the relative `liked_at` timestamp. */
+		avatarTitle?: (u: UserPreview) => string;
 		/** accessible label for the strip (e.g. "21 likes"). */
 		ariaLabel?: string;
 		/** extra class on the container, for site-specific tweaks. */
@@ -48,11 +52,17 @@
 		onMoreClick,
 		avatarHref,
 		onAvatarClick,
+		avatarTitle,
 		ariaLabel,
 		class: klass = '',
 		scrollable = false,
 		maxScrollWidth = '20rem'
 	}: Props = $props();
+
+	function resolveTitle(u: UserPreview): string {
+		if (avatarTitle) return avatarTitle(u);
+		return u.display_name || u.handle;
+	}
 
 	let visible = $derived(users.slice(0, maxVisible));
 	let overflow = $derived(Math.max(0, total - visible.length));
@@ -79,7 +89,7 @@
 	style="--stack-size: {size}px; --stack-overlap: {overlap}px; --stack-border: {borderColor}; --stack-max-width: {maxScrollWidth};"
 >
 	{#each visible as user (user.did)}
-		{@const title = user.display_name || user.handle}
+		{@const title = resolveTitle(user)}
 		{#if avatarHref}
 			<a
 				class="avatar"

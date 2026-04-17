@@ -325,7 +325,7 @@ async def test_get_top_likers_limits_to_three_by_default(
 async def test_get_top_likers_preview_fields(
     db_session: AsyncSession, test_tracks_with_liker_artists: list[Track]
 ):
-    """LikerPreview has did, handle, display_name, avatar_url — and no liked_at."""
+    """LikerPreview has did, handle, display_name, avatar_url, liked_at."""
     tracks = test_tracks_with_liker_artists
     result = await get_top_likers(db_session, [tracks[0].id])
 
@@ -334,9 +334,10 @@ async def test_get_top_likers_preview_fields(
     assert liker.handle.endswith(".bsky.social")
     assert liker.display_name is not None
     assert liker.avatar_url is not None
-    # LikerPreview is deliberately lighter than the tooltip's LikerInfo — no
-    # liked_at field, since the inline stack doesn't render timestamps
-    assert not hasattr(liker, "liked_at")
+    # liked_at is included so the hover tooltip can show "name · 2h ago"
+    # without a follow-up fetch
+    assert liker.liked_at  # ISO-formatted timestamp string
+    assert "T" in liker.liked_at  # crude format check
 
 
 async def test_get_top_likers_respects_custom_limit(
