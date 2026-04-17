@@ -110,12 +110,18 @@
 	}
 </script>
 
+<!-- stop clicks and keyboard activations from bubbling to an enclosing
+     interactive surface (e.g. the TrackItem play button). otherwise clicking
+     +N or × would also trigger track playback. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <span
 	class="likers-strip"
 	class:expanded
 	class:loading
 	bind:this={container}
 	aria-live="polite"
+	onclick={(e) => e.stopPropagation()}
+	onkeydown={(e) => e.stopPropagation()}
 >
 	<AvatarStack
 		users={usersForStack}
