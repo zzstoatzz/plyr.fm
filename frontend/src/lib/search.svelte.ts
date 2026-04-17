@@ -177,21 +177,27 @@ class SearchState {
 		this.error = null;
 
 		// keyword search: 150ms debounce, min 2 chars
+		// set loading=true immediately so the body doesn't flash "no results for X"
+		// during the debounce window before the fetch actually fires
 		if (value.length >= 2) {
+			this.loading = true;
 			this.keywordTimeout = setTimeout(() => {
 				void this.search(value);
 			}, 150);
 		} else {
+			this.loading = false;
 			this.results = [];
 			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
 		}
 
 		// semantic search: 500ms debounce, min 3 chars, only if enabled
 		if (this.semanticEnabled && value.length >= 3) {
+			this.semanticLoading = true;
 			this.semanticTimeout = setTimeout(() => {
 				void this.searchSemantic(value);
 			}, 500);
 		} else {
+			this.semanticLoading = false;
 			this.semanticResults = [];
 		}
 	}

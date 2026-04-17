@@ -171,6 +171,7 @@
 			{/if}
 		</div>
 
+		<div class="search-body">
 		{#if search.activeResults.length > 0}
 			<div class="search-results">
 				{#each search.activeResults as result, index (result.type + '-' + ('did' in result ? result.did : result.id))}
@@ -260,7 +261,11 @@
 					</div>
 				{/if}
 			</div>
+		{:else}
+			<!-- typing in progress: reserve space so the body doesn't collapse -->
+			<div class="search-progress" aria-hidden="true"></div>
 		{/if}
+		</div>
 
 		{#if search.error}
 			<div class="search-error">{search.error}</div>
@@ -357,6 +362,24 @@
 		to {
 			transform: rotate(360deg);
 		}
+	}
+
+	/* stable body wrapper: prevents modal from jolting as state changes.
+	   interpolate-size allows transitioning from/to height: auto smoothly
+	   (chrome/safari/edge 2024+). older browsers fall back to instant resize. */
+	.search-body {
+		min-height: 104px;
+		height: auto;
+		interpolate-size: allow-keywords;
+		transition: height 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+		overflow: hidden;
+	}
+
+	/* blank placeholder rendered while debouncing/loading — keeps the modal
+	   body from collapsing to zero between "start typing" hints and the
+	   first results arriving */
+	.search-progress {
+		min-height: 104px;
 	}
 
 	.search-results {
