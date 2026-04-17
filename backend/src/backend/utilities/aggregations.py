@@ -77,7 +77,7 @@ async def get_like_counts(db: AsyncSession, track_ids: list[int]) -> dict[int, i
 async def get_top_likers(
     db: AsyncSession,
     track_ids: list[int],
-    limit: int = 3,
+    limit: int = 5,
 ) -> dict[int, list[LikerPreview]]:
     """get the N most recent likers per track in a single batched query.
 
@@ -90,7 +90,11 @@ async def get_top_likers(
     args:
         db: database session
         track_ids: list of track IDs to get likers for
-        limit: max likers per track (default 3)
+        limit: max likers per track. default 5 — the frontend displays 3
+            inline but only shows a "+N" expand tile when the overflow is
+            meaningful (3+). returning 5 means tracks with 4 or 5 total
+            likes can render everyone inline without the dead-end "+1"/"+2"
+            affordance.
 
     returns:
         dict mapping track_id -> list of LikerPreview, most recent first.

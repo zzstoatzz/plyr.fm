@@ -8,6 +8,11 @@
 		total: number;
 		/** max avatars to render before overflowing to "+N". default 3. */
 		maxVisible?: number;
+		/** minimum overflow size that justifies a "+N" tile. if the overflow
+		 *  would be smaller than this, just render everyone inline — clicking
+		 *  "+1" to reveal a single extra avatar is ridiculous and expanding
+		 *  scrolls nowhere. default 3. */
+		minOverflow?: number;
 		/** avatar diameter in pixels. default 24. */
 		size?: number;
 		/** CSS color for the hairline ring separating stacked avatars.
@@ -45,6 +50,7 @@
 		users,
 		total,
 		maxVisible = 3,
+		minOverflow = 3,
 		size = 24,
 		borderColor = 'var(--bg-secondary)',
 		moreHref,
@@ -64,7 +70,19 @@
 		return u.display_name || u.handle;
 	}
 
-	let visible = $derived(users.slice(0, maxVisible));
+	// if the overflow would be tiny, show everyone — "+1" (or "+2") next to
+	// three avatars is a dead-end affordance: clicking it scrolls nowhere.
+	// only skip the +N tile when we actually have enough users loaded to
+	// fill in the overflow; otherwise we'd render 3 and pretend that's all.
+	let effectiveMaxVisible = $derived.by(() => {
+		const wouldOverflow = Math.max(0, total - maxVisible);
+		const haveEveryone = users.length >= total;
+		if (wouldOverflow > 0 && wouldOverflow < minOverflow && haveEveryone) {
+			return total;
+		}
+		return maxVisible;
+	});
+	let visible = $derived(users.slice(0, effectiveMaxVisible));
 	let overflow = $derived(Math.max(0, total - visible.length));
 	// overlap grows with size so the visual density stays consistent.
 	let overlap = $derived(Math.round(size / 4));
