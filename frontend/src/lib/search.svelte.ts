@@ -2,6 +2,7 @@
 import { API_URL } from '$lib/config';
 
 export type SearchResultType = 'track' | 'artist' | 'album' | 'tag' | 'playlist';
+export type SearchMode = 'keyword' | 'semantic';
 
 export interface TrackSearchResult {
 	type: 'track';
@@ -87,12 +88,19 @@ export interface SearchResponse {
 }
 
 const MAX_QUERY_LENGTH = 100;
+const EMPTY_COUNTS: SearchResponse['counts'] = {
+	tracks: 0,
+	artists: 0,
+	albums: 0,
+	tags: 0,
+	playlists: 0
+};
 
 class SearchState {
 	isOpen = $state(false);
 	query = $state('');
 	results = $state<SearchResult[]>([]);
-	counts = $state<SearchResponse['counts']>({ tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 });
+	counts = $state<SearchResponse['counts']>({ ...EMPTY_COUNTS });
 	loading = $state(false);
 	error = $state<string | null>(null);
 	selectedIndex = $state(0);
@@ -102,6 +110,9 @@ class SearchState {
 	semanticLoading = $state(false);
 	semanticAvailable = $state(true);
 	semanticResults = $state<SemanticSearchResult[]>([]);
+
+	// mode toggle — only exposed to users with the vibe-search flag
+	mode = $state<SearchMode>('keyword');
 
 	// reference to input element for direct focus (mobile keyboard workaround)
 	inputRef: HTMLInputElement | null = null;
@@ -124,7 +135,7 @@ class SearchState {
 		this.query = '';
 		this.results = [];
 		this.semanticResults = [];
-		this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
+		this.counts = { ...EMPTY_COUNTS };
 		this.error = null;
 		this.selectedIndex = 0;
 	}
@@ -135,6 +146,7 @@ class SearchState {
 		this.results = [];
 		this.semanticResults = [];
 		this.error = null;
+		this.mode = 'keyword';
 		if (this.keywordTimeout) {
 			clearTimeout(this.keywordTimeout);
 			this.keywordTimeout = null;
@@ -157,12 +169,14 @@ class SearchState {
 		this.query = value;
 		this.selectedIndex = 0;
 
-		// clear previous timeouts
+		// always clear both timers — we never want a stale fetch racing the active mode
 		if (this.keywordTimeout) {
 			clearTimeout(this.keywordTimeout);
+			this.keywordTimeout = null;
 		}
 		if (this.semanticTimeout) {
 			clearTimeout(this.semanticTimeout);
+			this.semanticTimeout = null;
 		}
 
 		// validate length
@@ -170,41 +184,59 @@ class SearchState {
 			this.error = `query too long (max ${MAX_QUERY_LENGTH} characters)`;
 			this.results = [];
 			this.semanticResults = [];
-			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
+			this.counts = { ...EMPTY_COUNTS };
 			return;
 		}
 
 		this.error = null;
 
-		// keyword search: 150ms debounce, min 2 chars
-		// set loading=true immediately so the body doesn't flash "no results for X"
-		// during the debounce window before the fetch actually fires
-		if (value.length >= 2) {
-			this.loading = true;
-			this.keywordTimeout = setTimeout(() => {
-				void this.search(value);
-			}, 150);
-		} else {
-			this.loading = false;
-			this.results = [];
-			this.counts = { tracks: 0, artists: 0, albums: 0, tags: 0, playlists: 0 };
-		}
-
-		// semantic search: 500ms debounce, min 3 chars, only if enabled
-		if (this.semanticEnabled && value.length >= 3) {
-			this.semanticLoading = true;
-			this.semanticTimeout = setTimeout(() => {
-				void this.searchSemantic(value);
-			}, 500);
-		} else {
-			this.semanticLoading = false;
+		if (this.mode === 'keyword') {
+			// fire keyword search only; clear any semantic state
 			this.semanticResults = [];
+			this.semanticLoading = false;
+			if (value.length >= 2) {
+				this.loading = true;
+				this.keywordTimeout = setTimeout(() => {
+					void this.search(value);
+				}, 150);
+			} else {
+				this.loading = false;
+				this.results = [];
+				this.counts = { ...EMPTY_COUNTS };
+			}
+		} else {
+			// fire semantic search only; clear any keyword state
+			this.results = [];
+			this.counts = { ...EMPTY_COUNTS };
+			this.loading = false;
+			if (value.length >= 3) {
+				this.semanticLoading = true;
+				this.semanticTimeout = setTimeout(() => {
+					void this.searchSemantic(value);
+				}, 500);
+			} else {
+				this.semanticLoading = false;
+				this.semanticResults = [];
+			}
+		}
+	}
+
+	setMode(next: SearchMode) {
+		if (next === this.mode) return;
+		this.mode = next;
+		this.results = [];
+		this.semanticResults = [];
+		this.counts = { ...EMPTY_COUNTS };
+		this.selectedIndex = 0;
+		if (this.query.length >= 2) {
+			this.setQuery(this.query);
 		}
 	}
 
 	async search(query: string): Promise<void> {
 		if (query.length < 2) return;
 
+		const modeAtStart = this.mode;
 		this.loading = true;
 		this.error = null;
 
@@ -219,25 +251,28 @@ class SearchState {
 
 			const data: SearchResponse = await response.json();
 
-			// stale query guard
-			if (this.query !== query) return;
+			// stale query or stale mode guard
+			if (this.query !== query || this.mode !== modeAtStart) return;
 
 			this.results = data.results;
 			this.counts = data.counts;
 			this.selectedIndex = 0;
 		} catch (e) {
-			if (this.query !== query) return;
+			if (this.query !== query || this.mode !== modeAtStart) return;
 			console.error('search error:', e);
 			this.error = e instanceof Error ? e.message : 'search failed';
 			this.results = [];
 		} finally {
-			this.loading = false;
+			if (this.mode === modeAtStart && this.query === query) {
+				this.loading = false;
+			}
 		}
 	}
 
 	async searchSemantic(query: string): Promise<void> {
 		if (query.length < 3) return;
 
+		const modeAtStart = this.mode;
 		this.semanticLoading = true;
 
 		try {
@@ -247,58 +282,34 @@ class SearchState {
 
 			if (!response.ok) {
 				// non-ok but not a structured response — silently degrade
-				this.semanticResults = [];
-				this.semanticAvailable = false;
+				if (this.query === query && this.mode === modeAtStart) {
+					this.semanticResults = [];
+					this.semanticAvailable = false;
+				}
 				return;
 			}
 
 			const data: SemanticSearchResponse = await response.json();
 
-			// stale query guard
-			if (this.query !== query) return;
+			// stale query or stale mode guard
+			if (this.query !== query || this.mode !== modeAtStart) return;
 
 			this.semanticAvailable = data.available;
 			this.semanticResults = data.available ? data.results : [];
 			this.selectedIndex = 0;
 		} catch (e) {
-			if (this.query !== query) return;
+			if (this.query !== query || this.mode !== modeAtStart) return;
 			console.error('semantic search error:', e);
 			this.semanticResults = [];
 		} finally {
-			this.semanticLoading = false;
+			if (this.mode === modeAtStart && this.query === query) {
+				this.semanticLoading = false;
+			}
 		}
 	}
 
-	/** semantic results with keyword track IDs filtered out */
-	get dedupedSemanticResults(): SemanticSearchResult[] {
-		const keywordTrackIds = new Set(
-			this.results.filter((r) => r.type === 'track').map((r) => (r as TrackSearchResult).id)
-		);
-		return this.semanticResults.filter((r) => !keywordTrackIds.has(r.id));
-	}
-
-	/** IDs of results that came from semantic search (for badge rendering) */
-	get semanticResultIds(): Set<number> {
-		return new Set(this.dedupedSemanticResults.map((r) => r.id));
-	}
-
-	/** similarity scores keyed by track ID for badge display */
-	get semanticSimilarityMap(): Map<number, number> {
-		return new Map(this.dedupedSemanticResults.map((r) => [r.id, r.similarity]));
-	}
-
 	get activeResults(): (SearchResult | SemanticSearchResult)[] {
-		const keyword = this.results;
-		const semantic = this.dedupedSemanticResults;
-
-		if (semantic.length === 0) return keyword;
-		if (keyword.length === 0) return semantic;
-
-		// merge by score — both relevance and similarity are 0-1
-		const score = (r: SearchResult | SemanticSearchResult): number =>
-			'similarity' in r ? r.similarity : r.relevance;
-
-		return [...keyword, ...semantic].sort((a, b) => score(b) - score(a));
+		return this.mode === 'keyword' ? this.results : this.semanticResults;
 	}
 
 	selectNext() {
