@@ -108,7 +108,7 @@ max_lines = 980
 
 [[rules]]
 path = "frontend/src/lib/components/SearchModal.svelte"
-max_lines = 596
+max_lines = 627
 
 [[rules]]
 path = "frontend/src/lib/components/TrackActionsMenu.svelte"

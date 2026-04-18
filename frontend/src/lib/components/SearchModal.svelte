@@ -12,7 +12,12 @@
 
 	// sync semantic search availability from user flags
 	$effect(() => {
-		search.semanticEnabled = auth.user?.enabled_flags?.includes(VIBE_SEARCH_FLAG) ?? false;
+		const enabled = auth.user?.enabled_flags?.includes(VIBE_SEARCH_FLAG) ?? false;
+		search.semanticEnabled = enabled;
+		// clamp mode back to keyword when the flag flips off
+		if (!enabled && search.mode === 'semantic') {
+			search.setMode('keyword');
+		}
 	});
 
 	// detect mobile on mount
@@ -155,7 +160,9 @@
 				bind:this={inputRef}
 				type="text"
 				class="search-input"
-				placeholder="search tracks, artists, albums, playlists..."
+				placeholder={search.semanticEnabled && search.mode === 'semantic'
+					? 'describe a mood or vibe...'
+					: 'search tracks, artists, albums, playlists...'}
 				value={search.query}
 				oninput={(e) => search.setQuery(e.currentTarget.value)}
 				maxlength="100"
@@ -170,6 +177,31 @@
 				<kbd class="search-shortcut">{getShortcutHint()}</kbd>
 			{/if}
 		</div>
+
+		{#if search.semanticEnabled}
+			<div class="search-mode-toggle" role="tablist" aria-label="search mode">
+				<button
+					type="button"
+					role="tab"
+					aria-selected={search.mode === 'keyword'}
+					class="mode-chip"
+					class:active={search.mode === 'keyword'}
+					onclick={() => search.setMode('keyword')}
+				>
+					keyword
+				</button>
+				<button
+					type="button"
+					role="tab"
+					aria-selected={search.mode === 'semantic'}
+					class="mode-chip"
+					class:active={search.mode === 'semantic'}
+					onclick={() => search.setMode('semantic')}
+				>
+					mood
+				</button>
+			</div>
+		{/if}
 
 		<div class="search-body">
 		{#if search.activeResults.length > 0}
@@ -223,28 +255,14 @@
 							<span class="result-title">{getResultTitle(result)}</span>
 							<span class="result-subtitle">{getResultSubtitle(result)}</span>
 						</div>
-						{#if result.type === 'track' && search.semanticResultIds.has(result.id)}
-							{@const pct = Math.round((search.semanticSimilarityMap.get(result.id) ?? 0) * 100)}
+						{#if search.mode === 'semantic' && result.type === 'track' && 'similarity' in result}
+							{@const pct = Math.round(result.similarity * 100)}
 							<span class="result-type mood">{pct}%</span>
 						{:else}
 							<span class="result-type">{result.type}</span>
 						{/if}
 					</button>
 				{/each}
-				{#if search.semanticLoading}
-					<div class="semantic-loading">
-						<div class="search-spinner-small"></div>
-						<span>searching by mood...</span>
-					</div>
-				{/if}
-			</div>
-		{:else if search.query.length >= 2 && !search.loading && search.semanticLoading}
-			<div class="search-results">
-				<div class="search-empty">no matches by name</div>
-				<div class="semantic-loading">
-					<div class="search-spinner-small"></div>
-					<span>searching by mood...</span>
-				</div>
 			</div>
 		{:else if search.query.length >= 2 && !search.loading && !search.semanticLoading && search.activeResults.length === 0}
 			<div class="search-empty">
@@ -356,6 +374,39 @@
 		border-top-color: var(--accent);
 		border-radius: var(--radius-full);
 		animation: spin 0.6s linear infinite;
+	}
+
+	.search-mode-toggle {
+		display: flex;
+		gap: 0.375rem;
+		padding: 0.5rem 1.25rem;
+		border-bottom: 1px solid var(--border-subtle);
+		background: color-mix(in srgb, var(--bg-tertiary) 30%, transparent);
+	}
+
+	.mode-chip {
+		font-family: inherit;
+		font-size: 11px;
+		text-transform: lowercase;
+		letter-spacing: 0.02em;
+		padding: 0.25rem 0.6rem;
+		background: var(--bg-tertiary);
+		color: var(--text-muted);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: background 0.1s, color 0.1s, border-color 0.1s;
+	}
+
+	.mode-chip:hover {
+		background: var(--bg-hover);
+		color: var(--text-secondary);
+	}
+
+	.mode-chip.active {
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+		border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 	}
 
 	@keyframes spin {
@@ -490,25 +541,6 @@
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
-	.semantic-loading {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		padding: 0.75rem;
-		color: var(--text-muted);
-		font-size: var(--text-xs);
-	}
-
-	.search-spinner-small {
-		width: 12px;
-		height: 12px;
-		border: 1.5px solid var(--border-default);
-		border-top-color: var(--accent);
-		border-radius: var(--radius-full);
-		animation: spin 0.6s linear infinite;
-	}
-
 	.search-empty {
 		padding: 2rem;
 		text-align: center;
@@ -588,8 +620,7 @@
 
 	/* respect reduced motion */
 	@media (prefers-reduced-motion: reduce) {
-		.search-spinner,
-		.search-spinner-small {
+		.search-spinner {
 			animation: none;
 		}
 	}
