@@ -13,6 +13,8 @@
 	import PdsBackfillControl from '$lib/components/PdsBackfillControl.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary, Playlist } from '$lib/types';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import AudioRevisionsSheet from '$lib/components/AudioRevisionsSheet.svelte';
 	import { API_URL, getServerConfig } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
@@ -41,8 +43,28 @@
 	let editRemoveImage = $state(false);
 	// audio replace state — separate flow from metadata edit because the
 	// upload + transcode + PDS write can take 30s+ and has its own SSE progress
-	// (surfaced via toast, not inline).
+	// (surfaced via toast, not inline). a confirm dialog gates the irreversible
+	// replace; previous audio is preserved in track_revisions for rollback.
 	let editAudioFile = $state<File | null>(null);
+	let replaceConfirm = $state<{ track: Track; file: File } | null>(null);
+
+	// version history sheet state
+	interface AudioRevision {
+		id: number;
+		track_id: number;
+		created_at: string;
+		file_type: string;
+		original_file_type: string | null;
+		audio_storage: string;
+		duration: number | null;
+		was_gated: boolean;
+	}
+	let revisionsSheetTrack = $state<Track | null>(null);
+	let revisionsList = $state<AudioRevision[]>([]);
+	let revisionsLoading = $state(false);
+	let revisionsError = $state<string | null>(null);
+	let restoreConfirm = $state<{ track: Track; revision: AudioRevision } | null>(null);
+	let restorePending = $state(false);
 	let editSupportGate = $state(false);
 	let editUnlisted = $state(false);
 	let hasUnresolvedEditFeaturesInput = $state(false);
@@ -477,41 +499,102 @@
 		editAudioFile = file;
 	}
 
-	function replaceAudio(track: typeof tracks[0]) {
+	function requestReplaceAudio(track: typeof tracks[0]) {
+		// stage the (track, file) pair; the confirm dialog will fire the
+		// actual replace. we don't run anything irreversible until confirmed.
 		if (!editAudioFile) return;
-		const file = editAudioFile;
+		replaceConfirm = { track, file: editAudioFile };
+	}
+
+	async function reloadCurrentPlayingTrack(trackId: number) {
+		if (player.currentTrack?.id !== trackId) return;
+		try {
+			const resp = await fetch(`${API_URL}/tracks/${trackId}`, {
+				credentials: 'include'
+			});
+			if (resp.ok) {
+				const fresh = await resp.json();
+				player.currentTrack = { ...player.currentTrack, ...fresh };
+			}
+		} catch {
+			// best effort — next track navigation will pick up the new src
+		}
+	}
+
+	function executeReplaceAudio() {
+		if (!replaceConfirm) return;
+		const { track, file } = replaceConfirm;
 		const trackId = track.id;
-		const trackTitle = track.title;
 
 		// kick off the background upload+SSE flow. progress and outcome are
 		// surfaced via toast — same pattern as the initial upload form.
-		uploader.replaceAudio(trackId, file, trackTitle, async () => {
+		uploader.replaceAudio(trackId, file, track.title, async () => {
 			// refresh local tracks so the row reflects the new file_id and r2_url
 			await loadMyTracks();
-
-			// if the user is currently playing this track, fetch the fresh row
-			// and assign it to player.currentTrack — Player.svelte's $effect now
-			// watches file_id, so a reassign with the new file_id reloads the
-			// <audio> element src in place.
-			if (player.currentTrack?.id === trackId) {
-				try {
-					const resp = await fetch(`${API_URL}/tracks/${trackId}`, {
-						credentials: 'include'
-					});
-					if (resp.ok) {
-						const fresh = await resp.json();
-						player.currentTrack = { ...player.currentTrack, ...fresh };
-					}
-				} catch {
-					// best effort — next track navigation will pick up the new src
-				}
-			}
+			await reloadCurrentPlayingTrack(trackId);
 		});
 
-		// clear the picker immediately; the SSE flow continues in the toast.
-		// keep the rest of the edit form open in case the user has other
-		// unsaved metadata changes.
+		// clear the staged file + dialog. SSE flow continues in the toast;
+		// the rest of the edit form stays open for other unsaved metadata.
 		editAudioFile = null;
+		replaceConfirm = null;
+	}
+
+	async function openVersionHistory(track: Track) {
+		revisionsSheetTrack = track;
+		revisionsList = [];
+		revisionsError = null;
+		revisionsLoading = true;
+		try {
+			const resp = await fetch(`${API_URL}/tracks/${track.id}/revisions`, {
+				credentials: 'include'
+			});
+			if (!resp.ok) {
+				revisionsError = 'failed to load version history';
+				return;
+			}
+			const body = await resp.json();
+			revisionsList = body.revisions ?? [];
+		} catch {
+			revisionsError = 'failed to load version history';
+		} finally {
+			revisionsLoading = false;
+		}
+	}
+
+	function requestRestoreRevision(revision: AudioRevision) {
+		if (!revisionsSheetTrack) return;
+		restoreConfirm = { track: revisionsSheetTrack, revision };
+	}
+
+	async function executeRestoreRevision() {
+		if (!restoreConfirm) return;
+		const { track, revision } = restoreConfirm;
+		restorePending = true;
+		try {
+			const resp = await fetch(
+				`${API_URL}/tracks/${track.id}/revisions/${revision.id}/restore`,
+				{ method: 'POST', credentials: 'include' }
+			);
+			if (!resp.ok) {
+				const detail = await resp.json().catch(() => ({}));
+				toast.error(detail.detail ?? 'failed to restore audio');
+				return;
+			}
+			toast.success('audio restored');
+			await loadMyTracks();
+			await reloadCurrentPlayingTrack(track.id);
+			// refresh the sheet's revision list — the chosen one is now gone,
+			// the displaced current is now in the list
+			if (revisionsSheetTrack?.id === track.id) {
+				await openVersionHistory(track);
+			}
+			restoreConfirm = null;
+		} catch {
+			toast.error('failed to restore audio');
+		} finally {
+			restorePending = false;
+		}
 	}
 
 
@@ -1093,7 +1176,7 @@
 													<button
 														type="button"
 														class="audio-replace-btn"
-														onclick={() => replaceAudio(track)}
+														onclick={() => requestReplaceAudio(track)}
 													>
 														replace audio
 													</button>
@@ -1123,9 +1206,22 @@
 														</svg>
 														choose new file
 													</label>
+													<button
+														type="button"
+														class="audio-history-btn"
+														onclick={() => openVersionHistory(track)}
+														title="view previous audio versions"
+													>
+														<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+															<path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+															<polyline points="3 3 3 8 8 8"></polyline>
+															<polyline points="12 7 12 12 15 14"></polyline>
+														</svg>
+														version history
+													</button>
 												{/if}
 												<p class="audio-replace-hint">
-													likes, comments, plays, and the track URL all stay the same. updates the audio file only.
+													choose a new file, then confirm. uploading runs in the background and the previous audio is kept in version history so you can roll back. likes, comments, plays, and the track URL stay the same.
 												</p>
 											</div>
 										</div>
@@ -1653,6 +1749,49 @@
 		</section>
 	</main>
 {/if}
+
+<!-- audio replace confirmation: gates the irreversible upload -->
+<ConfirmDialog
+	open={replaceConfirm !== null}
+	title="replace audio?"
+	body={replaceConfirm
+		? `this will swap the audio file for "${replaceConfirm.track.title}". the previous audio will be saved in version history so you can roll back. likes, comments, plays, and the track URL won't change.`
+		: ''}
+	confirmText="replace"
+	cancelText="cancel"
+	onConfirm={executeReplaceAudio}
+	onCancel={() => { replaceConfirm = null; }}
+/>
+
+<!-- version history sheet: lists previous audio versions with restore -->
+<AudioRevisionsSheet
+	open={revisionsSheetTrack !== null}
+	trackTitle={revisionsSheetTrack?.title ?? ''}
+	revisions={revisionsList}
+	loading={revisionsLoading}
+	error={revisionsError}
+	onClose={() => {
+		revisionsSheetTrack = null;
+		revisionsList = [];
+		revisionsError = null;
+	}}
+	onRestore={requestRestoreRevision}
+/>
+
+<!-- restore confirmation: gates the swap-back-to-old-audio -->
+<ConfirmDialog
+	open={restoreConfirm !== null}
+	title="restore this version?"
+	body={restoreConfirm
+		? `this will make the selected version the live audio for "${restoreConfirm.track.title}". the current audio will move into version history.`
+		: ''}
+	confirmText="restore"
+	cancelText="cancel"
+	pending={restorePending}
+	pendingText="restoring..."
+	onConfirm={executeRestoreRevision}
+	onCancel={() => { restoreConfirm = null; }}
+/>
 
 <style>
 	.loading,
@@ -2738,6 +2877,27 @@
 
 	.audio-replace-btn:hover {
 		filter: brightness(1.1);
+	}
+
+	.audio-history-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.4rem 0.7rem;
+		background: transparent;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-full);
+		color: var(--text-secondary);
+		font-size: var(--text-xs);
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.audio-history-btn:hover {
+		background: var(--bg-hover);
+		color: var(--text-primary);
+		border-color: var(--text-secondary);
 	}
 
 	.audio-replace-hint {

@@ -13,8 +13,11 @@ design notes:
   (URI-stable) track. operators must dismiss it manually if the new audio is
   clean. this is intentional — automatically dismissing copyright labels would
   be a moderation hole.
-- the old R2 object is deleted only after the PDS write succeeds; the old PDS
-  blob is left to PDS garbage collection.
+- the old audio is NOT deleted on replace. it's snapshotted into a
+  TrackRevision row inside the same transaction as the swap, so users can
+  roll back. blobs are only deleted when revisions are pruned past the
+  per-track retention cap (see `_internal/track_revisions.py`). PDS blobs
+  are left to PDS garbage collection regardless.
 """
 
 import contextlib
@@ -50,6 +53,7 @@ from backend._internal.tasks.hooks import (
     invalidate_tracks_discovery_cache,
     run_post_track_audio_replace_hooks,
 )
+from backend._internal.track_revisions import prune_revisions
 from backend.api.albums import invalidate_album_cache_by_id
 from backend.api.tracks.uploads import (
     AudioInfo,
@@ -63,7 +67,7 @@ from backend.api.tracks.uploads import (
     _validate_audio,
 )
 from backend.config import settings
-from backend.models import Track
+from backend.models import Track, TrackRevision
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.database import db_session
@@ -79,9 +83,10 @@ logger = logging.getLogger(__name__)
 class TrackAudioState:
     """snapshot of a track's audio fields, captured before replacement.
 
-    used for both rebuilding the track ATProto record (preserving non-audio
-    metadata like title/album/features/image) and for cleanup of the old R2
-    object after the new record publishes successfully.
+    used for rebuilding the track ATProto record (preserving non-audio
+    metadata like title/album/features/image) on top of the new audio.
+    the old audio is preserved separately as a TrackRevision row written
+    inside the swap transaction.
     """
 
     track_id: int
@@ -251,7 +256,13 @@ async def _commit_db_swap(
     pds_result: PdsBlobResult | None,
     new_record_cid: str,
 ) -> Track:
-    """phase 6: atomically swap track audio fields in a single transaction.
+    """phase 6: atomically swap track audio fields AND snapshot the displaced
+    audio into a new TrackRevision row, in a single transaction.
+
+    the snapshot has to share the transaction with the swap — otherwise a crash
+    between the two would either lose history (snapshot first, swap fails) or
+    corrupt the row pointed-at-but-no-longer-current (swap first, snapshot
+    fails, blob still in R2 but no row owns it).
 
     clears the auto_tag flag and stale genre prediction provenance so the
     post-replace hooks make a clean re-classification decision.
@@ -268,6 +279,25 @@ async def _commit_db_swap(
         if not track:
             # extremely unlikely race: track deleted between authorize and commit
             raise UploadPhaseError("track was deleted during replace")
+
+        # snapshot the about-to-be-displaced audio into a revision row BEFORE
+        # overwriting. this row now owns the old blob — the post-commit cleanup
+        # path no longer deletes it. pruning (post-commit, best-effort) handles
+        # long-term retention and blob deletion when revisions exceed the cap.
+        snapshot = TrackRevision(
+            track_id=track.id,
+            file_id=track.file_id,
+            file_type=track.file_type,
+            original_file_id=track.original_file_id,
+            original_file_type=track.original_file_type,
+            audio_storage=track.audio_storage,
+            audio_url=track.r2_url,
+            pds_blob_cid=track.pds_blob_cid,
+            pds_blob_size=track.pds_blob_size,
+            duration=track.duration,
+            was_gated=track.support_gate is not None,
+        )
+        db.add(snapshot)
 
         track.file_id = sr.file_id
         track.file_type = playable_file_type
@@ -291,34 +321,6 @@ async def _commit_db_swap(
         await db.commit()
         await db.refresh(track)
         return track
-
-
-async def _cleanup_old_files(state: TrackAudioState, sr: StorageResult) -> None:
-    """delete the old R2 audio object(s) after a successful swap.
-
-    routes to `delete_gated` when the track was supporter-gated (private bucket);
-    otherwise uses the public-bucket `delete`. skips deletion when the new
-    file_id matches the old one (identical bytes — nothing to clean up), and
-    silently swallows already-gone errors.
-
-    note: the gated/non-gated decision uses the OLD `support_gate` because the
-    file we're cleaning up is the OLD audio. if a future endpoint flips gating
-    *and* replaces audio in the same call, this needs to take the OLD vs NEW
-    bucket destination separately.
-    """
-    delete_fn = (
-        storage.delete_gated if state.support_gate is not None else storage.delete
-    )
-    if state.old_file_id != sr.file_id:
-        with contextlib.suppress(Exception):
-            await delete_fn(state.old_file_id, state.old_file_type)
-    # transcode originals always go to the public bucket regardless of gating
-    # (gated tracks can't be lossless yet — see _store_audio in uploads.py)
-    if state.old_original_file_id and state.old_original_file_id != sr.original_file_id:
-        with contextlib.suppress(Exception):
-            await storage.delete(
-                state.old_original_file_id, state.old_original_file_type
-            )
 
 
 async def _maybe_resync_album_list(track: Track, auth_session: AuthSession) -> None:
@@ -435,13 +437,10 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
         # ---- post-commit (NO rollback — the swap is committed) ----
         # each side effect is best-effort. if any fails we log and keep going;
         # the track is already pointing at the new audio.
-        try:
-            await _cleanup_old_files(state, sr)
-        except Exception:
-            logger.exception(
-                "audio replace: old-file cleanup failed (track is replaced; "
-                "old R2 object may be orphaned)",
-            )
+        # the OLD audio is NOT deleted here — it now belongs to the revision
+        # row inserted alongside the swap. pruning (below) handles long-term
+        # retention and blob cleanup when the per-track cap is exceeded.
+        await prune_revisions(state.track_id)
 
         try:
             await run_post_track_audio_replace_hooks(track.id, audio_url=sr.r2_url)
