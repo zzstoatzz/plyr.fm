@@ -46,6 +46,10 @@ class StorageProtocol(Protocol):
         progress_callback: Callable[[float], None] | None = None,
     ) -> str: ...
 
+    async def delete_gated(
+        self, file_id: str, file_type: str | None = None
+    ) -> bool: ...
+
     async def generate_presigned_url(
         self,
         file_id: str,

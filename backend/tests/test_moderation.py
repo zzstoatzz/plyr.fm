@@ -532,12 +532,19 @@ class MockReportSession(Session):
 
 @pytest.fixture
 def report_test_app() -> Generator[FastAPI, None, None]:
-    """create test app with mocked auth for report tests."""
+    """create test app with mocked auth for report tests.
+
+    also resets the slowapi rate-limiter so per-IP budgets from earlier tests
+    in the same session don't bleed into this one (causes spurious 429s under
+    parallel xdist runs).
+    """
+    from backend.utilities.rate_limit import limiter
 
     async def mock_require_auth() -> Session:
         return MockReportSession()
 
     app.dependency_overrides[require_auth] = mock_require_auth
+    limiter.reset()
 
     yield app
 

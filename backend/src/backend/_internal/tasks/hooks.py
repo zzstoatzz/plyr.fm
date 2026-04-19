@@ -8,7 +8,7 @@ import logging
 
 import logfire
 from redis.exceptions import RedisError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import joinedload
 
 from backend._internal.atproto.client import pds_blob_url
@@ -18,7 +18,7 @@ from backend._internal.tasks.ml import (
     schedule_genre_classification,
 )
 from backend.config import settings
-from backend.models import Artist, Track
+from backend.models import Artist, CopyrightScan, Track
 from backend.utilities.database import db_session
 from backend.utilities.redis import get_async_redis_client
 
@@ -107,6 +107,63 @@ async def run_post_track_create_hooks(
 
     logfire.info(
         "post-create hooks completed",
+        track_id=track_id,
+        has_audio_url=audio_url is not None,
+    )
+
+
+async def run_post_track_audio_replace_hooks(
+    track_id: int,
+    *,
+    audio_url: str | None = None,
+) -> None:
+    """post-replace side effects for tracks — fired when audio bytes change.
+
+    differences from `run_post_track_create_hooks`:
+    - never sends a creation notification (followers were notified at upload time)
+    - invalidates stale CopyrightScan rows before re-scheduling a fresh scan
+    - re-runs CLAP embedding (turbopuffer upsert overwrites by track_id)
+    - re-runs genre classification only when the upload originally opted in
+      via `extra.auto_tag` (we don't want to clobber manual tags)
+
+    note: a labeler label attached to the (stable) track URI from the OLD audio
+    is NOT auto-dismissed here. that's a moderation decision — left for manual
+    review via the admin tooling.
+    """
+    if audio_url is None:
+        audio_url = await resolve_audio_url(track_id)
+
+    # 1. invalidate stale copyright scan rows so the new scan replaces them
+    async with db_session() as db:
+        await db.execute(
+            delete(CopyrightScan).where(CopyrightScan.track_id == track_id)
+        )
+        await db.commit()
+
+    # 2. re-trigger copyright scan against the new audio bytes
+    if audio_url:
+        await schedule_copyright_scan(track_id, audio_url)
+
+    # 3. re-trigger CLAP embedding (turbopuffer upsert overwrites)
+    if audio_url and settings.modal.enabled and settings.turbopuffer.enabled:
+        await schedule_embedding_generation(track_id, audio_url)
+
+    # 4. re-trigger genre classification only if the original upload opted in.
+    # the classify_genres task tracks `extra.genre_predictions_file_id` so it
+    # already knows when a re-classification is needed, but we only want auto-tag
+    # to fire again if the user originally requested it.
+    if audio_url and settings.replicate.enabled:
+        async with db_session() as db:
+            track = await db.get(Track, track_id)
+            should_reclassify = bool(track and track.extra.get("auto_tag"))
+        if should_reclassify:
+            await schedule_genre_classification(track_id, audio_url)
+
+    # 5. discovery cache invalidation (in case "for-you" used stale embedding)
+    await invalidate_tracks_discovery_cache()
+
+    logfire.info(
+        "post-replace hooks completed",
         track_id=track_id,
         has_audio_url=audio_url is not None,
     )
