@@ -13,10 +13,15 @@
 	import PdsBackfillControl from '$lib/components/PdsBackfillControl.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary, Playlist } from '$lib/types';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
-	import { API_URL } from '$lib/config';
+	import { API_URL, getServerConfig } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { uploader } from '$lib/uploader.svelte';
+	import { player } from '$lib/player.svelte';
 	import { preferences } from '$lib/preferences.svelte'; import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
+
+	// supported audio formats — matches backend AudioFormat enum + AlbumUploadForm
+	const AUDIO_FILE_INPUT_ACCEPT = '.mp3,.wav,.m4a,.aiff,.aif,.flac,audio/mpeg,audio/wav,audio/mp4,audio/aiff,audio/x-aiff,audio/flac';
 	let loading = $state(true);
 	let error = $state('');
 	let tracks = $state<Track[]>([]);
@@ -34,6 +39,10 @@
 	let editImageFile = $state<File | null>(null);
 	let editImagePreviewUrl = $state<string | null>(null);
 	let editRemoveImage = $state(false);
+	// audio replace state — separate flow from metadata edit because the
+	// upload + transcode + PDS write can take 30s+ and has its own SSE progress
+	// (surfaced via toast, not inline).
+	let editAudioFile = $state<File | null>(null);
 	let editSupportGate = $state(false);
 	let editUnlisted = $state(false);
 	let hasUnresolvedEditFeaturesInput = $state(false);
@@ -446,9 +455,63 @@
 		editRemoveImage = false;
 		editSupportGate = false;
 		editUnlisted = false;
+		editAudioFile = null;
 		recommendedTags = [];
 		loadingRecommendedTags = false;
 		recommendedTagsTrackId = null;
+	}
+
+	async function selectAudioReplacement(file: File) {
+		// validate against the same upload-size limit as the upload form. fetch
+		// dynamically because the limit comes from server config.
+		try {
+			const config = await getServerConfig();
+			const sizeMB = file.size / (1024 * 1024);
+			if (sizeMB > config.max_upload_size_mb) {
+				toast.error(`audio file exceeds ${config.max_upload_size_mb}MB limit`);
+				return;
+			}
+		} catch {
+			// config fetch failed — fall back to letting the server enforce
+		}
+		editAudioFile = file;
+	}
+
+	function replaceAudio(track: typeof tracks[0]) {
+		if (!editAudioFile) return;
+		const file = editAudioFile;
+		const trackId = track.id;
+		const trackTitle = track.title;
+
+		// kick off the background upload+SSE flow. progress and outcome are
+		// surfaced via toast — same pattern as the initial upload form.
+		uploader.replaceAudio(trackId, file, trackTitle, async () => {
+			// refresh local tracks so the row reflects the new file_id and r2_url
+			await loadMyTracks();
+
+			// if the user is currently playing this track, fetch the fresh row
+			// and assign it to player.currentTrack — Player.svelte's $effect now
+			// watches file_id, so a reassign with the new file_id reloads the
+			// <audio> element src in place.
+			if (player.currentTrack?.id === trackId) {
+				try {
+					const resp = await fetch(`${API_URL}/tracks/${trackId}`, {
+						credentials: 'include'
+					});
+					if (resp.ok) {
+						const fresh = await resp.json();
+						player.currentTrack = { ...player.currentTrack, ...fresh };
+					}
+				} catch {
+					// best effort — next track navigation will pick up the new src
+				}
+			}
+		});
+
+		// clear the picker immediately; the SSE flow continues in the toast.
+		// keep the rest of the edit form open in case the user has other
+		// unsaved metadata changes.
+		editAudioFile = null;
 	}
 
 
@@ -1002,6 +1065,66 @@
 														{track.image_url || editImagePreviewUrl ? 'replace' : 'upload'}
 													</label>
 												{/if}
+											</div>
+										</div>
+										<div class="edit-field-group">
+											<span class="edit-label">audio file</span>
+											<div class="audio-replace-editor">
+												{#if editAudioFile}
+													<div class="audio-selected">
+														<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+															<path d="M9 18V5l12-2v13"></path>
+															<circle cx="6" cy="18" r="3"></circle>
+															<circle cx="18" cy="16" r="3"></circle>
+														</svg>
+														<span class="audio-filename">{editAudioFile.name}</span>
+														<button
+															type="button"
+															class="audio-clear-btn"
+															onclick={() => { editAudioFile = null; }}
+															title="discard selection"
+														>
+															<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+																<line x1="18" y1="6" x2="6" y2="18"></line>
+																<line x1="6" y1="6" x2="18" y2="18"></line>
+															</svg>
+														</button>
+													</div>
+													<button
+														type="button"
+														class="audio-replace-btn"
+														onclick={() => replaceAudio(track)}
+													>
+														replace audio
+													</button>
+												{:else}
+													<div class="audio-current">
+														<span class="audio-current-label">current: {track.file_type}</span>
+													</div>
+													<label class="audio-upload-btn">
+														<input
+															type="file"
+															accept={AUDIO_FILE_INPUT_ACCEPT}
+															onchange={(e) => {
+																const target = e.target as HTMLInputElement;
+																const file = target.files?.[0];
+																if (file) {
+																	void selectAudioReplacement(file);
+																}
+																target.value = '';
+															}}
+														/>
+														<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+															<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+															<polyline points="17 8 12 3 7 8"></polyline>
+															<line x1="12" y1="3" x2="12" y2="15"></line>
+														</svg>
+														choose new file
+													</label>
+												{/if}
+												<p class="audio-replace-hint">
+													likes, comments, plays, and the track URL all stay the same. updates the audio file only.
+												</p>
 											</div>
 										</div>
 										{#if atprotofansEligible || track.support_gate}
@@ -2516,6 +2639,110 @@
 
 	.artwork-upload-btn input {
 		display: none;
+	}
+
+	.audio-replace-editor {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem;
+	}
+
+	.audio-current {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	.audio-current-label {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+
+	.audio-selected {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.4rem 0.65rem;
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
+		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+		border-radius: var(--radius-md);
+		color: var(--accent);
+		font-size: var(--text-sm);
+		max-width: 100%;
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+
+	.audio-filename {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
+	}
+
+	.audio-clear-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.15rem;
+		background: transparent;
+		border: none;
+		color: var(--accent);
+		opacity: 0.7;
+		cursor: pointer;
+		transition: opacity 0.15s;
+		margin-left: auto;
+	}
+
+	.audio-clear-btn:hover {
+		opacity: 1;
+	}
+
+	.audio-upload-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.5rem 0.85rem;
+		background: transparent;
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-full);
+		color: var(--accent);
+		font-size: var(--text-sm);
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s;
+		margin-left: auto;
+	}
+
+	.audio-upload-btn:hover {
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+	}
+
+	.audio-upload-btn input {
+		display: none;
+	}
+
+	.audio-replace-btn {
+		padding: 0.5rem 0.95rem;
+		background: var(--accent);
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-full);
+		color: var(--bg);
+		font-size: var(--text-sm);
+		font-weight: 600;
+		cursor: pointer;
+		transition: filter 0.15s;
+	}
+
+	.audio-replace-btn:hover {
+		filter: brightness(1.1);
+	}
+
+	.audio-replace-hint {
+		flex-basis: 100%;
+		margin: 0.35rem 0 0;
+		font-size: var(--text-xs);
+		color: var(--text-muted);
 	}
 
 	.edit-input:focus {
