@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from backend._internal.audio import AudioFormat
 from backend._internal.image import ImageFormat
 from backend.config import settings
+from backend.models.track import Track
 from backend.utilities.database import db_session
 from backend.utilities.hashing import hash_file_chunked
 
@@ -362,8 +363,6 @@ class R2Storage:
                       if None, falls back to trying all formats (legacy/images).
         """
         # check refcount before deleting
-        from backend.models.track import Track
-
         async with db_session() as db:
             stmt = (
                 select(func.count()).select_from(Track).where(Track.file_id == file_id)
@@ -589,6 +588,94 @@ class R2Storage:
 
             logfire.info("R2 gated upload complete", file_id=file_id, key=key)
             return file_id
+
+    async def delete_gated(self, file_id: str, file_type: str | None = None) -> bool:
+        """delete a gated audio file from the private R2 bucket.
+
+        mirrors `delete()` (refcount check then key probe) but targets
+        `private_audio_bucket_name`. needed because gated audio lives in a
+        separate bucket and the public-bucket-only `delete()` would silently
+        no-op on it.
+        """
+        if not self.private_audio_bucket_name:
+            logfire.warning(
+                "delete_gated: R2_PRIVATE_BUCKET not configured, skipping",
+                file_id=file_id,
+            )
+            return False
+
+        # refcount check — same guard as `delete()` so a duplicate gated row
+        # doesn't pull the file out from under another track.
+        async with db_session() as db:
+            stmt = (
+                select(func.count()).select_from(Track).where(Track.file_id == file_id)
+            )
+            result = await db.execute(stmt)
+            refcount = result.scalar_one()
+
+            if refcount > 1:
+                logfire.info(
+                    "skipping R2 gated delete, file still referenced",
+                    file_id=file_id,
+                    refcount=refcount,
+                )
+                return False
+
+        async with self._s3_client() as client:
+            if file_type:
+                audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
+                if audio_format:
+                    key = f"audio/{file_id}{audio_format.extension}"
+                    try:
+                        await client.head_object(
+                            Bucket=self.private_audio_bucket_name, Key=key
+                        )
+                        await client.delete_object(
+                            Bucket=self.private_audio_bucket_name, Key=key
+                        )
+                        logfire.info(
+                            "R2 gated file deleted",
+                            file_id=file_id,
+                            key=key,
+                            bucket=self.private_audio_bucket_name,
+                        )
+                        return True
+                    except client.exceptions.ClientError as e:
+                        logfire.warning(
+                            "R2 gated delete failed for known file_type",
+                            file_id=file_id,
+                            key=key,
+                            file_type=file_type,
+                            error=str(e),
+                        )
+                        return False
+
+            # fallback: try every audio format
+            for audio_format in AudioFormat:
+                key = f"audio/{file_id}{audio_format.extension}"
+                try:
+                    await client.head_object(
+                        Bucket=self.private_audio_bucket_name, Key=key
+                    )
+                    await client.delete_object(
+                        Bucket=self.private_audio_bucket_name, Key=key
+                    )
+                    logfire.info(
+                        "R2 gated file deleted (fallback)",
+                        file_id=file_id,
+                        key=key,
+                        bucket=self.private_audio_bucket_name,
+                    )
+                    return True
+                except client.exceptions.ClientError:
+                    continue
+
+            logfire.warning(
+                "R2 gated delete: no matching file in private bucket",
+                file_id=file_id,
+                bucket=self.private_audio_bucket_name,
+            )
+            return False
 
     async def generate_presigned_url(
         self,

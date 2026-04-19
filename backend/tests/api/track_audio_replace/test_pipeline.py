@@ -6,13 +6,17 @@ verifying the swap is atomic, rollback works, and the right hooks fire.
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.tracks.audio_replace import (
     TrackAudioState,
     _process_replace_background,
 )
-from backend.models import Album, Artist
+from backend.models import Album, Artist, Track
+from backend.utilities.database import db_session as _db_session
 
 from ._helpers import (
     OWNER_DID,
@@ -272,6 +276,175 @@ class TestReplaceOrchestration:
             await _process_replace_background(replace_ctx(track_id=track_id))
 
         assert captured_session["token"] == "REFRESHED-TOKEN"
+
+
+class TestPostCommitFailureIsolation:
+    """regression for review feedback: post-commit failures must NOT roll back
+    the new audio. once `_commit_db_swap` returns, the track is replaced —
+    deleting the new R2 file at that point would leave production broken."""
+
+    async def test_post_replace_hooks_failure_does_not_rollback(
+        self, db_session: AsyncSession, owner: Artist
+    ) -> None:
+        track = make_track(file_id="OLD")
+        db_session.add(track)
+        await db_session.commit()
+        await db_session.refresh(track)
+        track_id = track.id
+
+        deleted_keys: list[str] = []
+
+        async def fake_delete(file_id: str, file_type: str | None = None) -> bool:
+            deleted_keys.append(file_id)
+            return True
+
+        with patched_replace_pipeline(
+            store=storage_result(file_id="NEW"),
+            storage_delete_side_effect=fake_delete,
+        ) as mocks:
+            # post-commit hook blows up
+            mocks["post_hooks"].side_effect = RuntimeError("docket exploded")
+            await _process_replace_background(replace_ctx(track_id=track_id))
+
+        # track row IS replaced — no rollback
+        await db_session.refresh(track)
+        assert track.file_id == "NEW"
+        assert track.atproto_record_cid == "bafyNEWREC"
+
+        # the NEW R2 file must NOT have been deleted
+        assert "NEW" not in deleted_keys
+        # the OLD R2 file should have been cleaned up before the hooks ran
+        assert "OLD" in deleted_keys
+
+    async def test_album_resync_failure_does_not_rollback(
+        self, db_session: AsyncSession, owner: Artist
+    ) -> None:
+        album = Album(artist_did=OWNER_DID, slug="my-album", title="My Album")
+        db_session.add(album)
+        await db_session.flush()
+        track = make_track(album_id=album.id, file_id="OLD")
+        db_session.add(track)
+        await db_session.commit()
+        await db_session.refresh(track)
+        track_id = track.id
+
+        with patched_replace_pipeline(
+            store=storage_result(file_id="NEW"),
+        ) as mocks:
+            mocks["schedule_album_sync"].side_effect = RuntimeError("docket down")
+            await _process_replace_background(replace_ctx(track_id=track_id))
+
+        # row is committed despite the schedule_album_list_sync failure
+        await db_session.refresh(track)
+        assert track.file_id == "NEW"
+        assert track.atproto_record_cid == "bafyNEWREC"
+
+
+class TestGatedAudioCleanup:
+    """regression for review feedback: gated tracks live in the private R2
+    bucket. cleanup and rollback must use `delete_gated`, not `delete`."""
+
+    async def test_old_gated_audio_uses_delete_gated_on_success(
+        self, db_session: AsyncSession, owner: Artist
+    ) -> None:
+        track = make_track(file_id="OLD", support_gate={"type": "any"})
+        db_session.add(track)
+        await db_session.commit()
+        await db_session.refresh(track)
+        track_id = track.id
+
+        with patched_replace_pipeline(
+            validate=audio_info(is_gated=True),
+            store=storage_result(file_id="NEW", r2_url=None),
+            pds=None,  # gated tracks skip PDS upload
+        ) as mocks:
+            await _process_replace_background(replace_ctx(track_id=track_id))
+
+        # the OLD gated file was deleted via delete_gated, NOT delete
+        mocks["storage_delete_gated"].assert_called_once()
+        assert mocks["storage_delete_gated"].call_args.args[0] == "OLD"
+        # delete (public bucket) must not have been used for the gated file_id
+        for call in mocks["storage_delete"].call_args_list:
+            assert call.args[0] != "OLD"
+
+    async def test_rollback_for_gated_track_uses_delete_gated(
+        self, db_session: AsyncSession, owner: Artist
+    ) -> None:
+        track = make_track(file_id="OLD", support_gate={"type": "any"})
+        db_session.add(track)
+        await db_session.commit()
+        await db_session.refresh(track)
+        track_id = track.id
+
+        with patched_replace_pipeline(
+            validate=audio_info(is_gated=True),
+            store=storage_result(file_id="NEW", r2_url=None),
+            pds=None,
+            update_record_side_effect=RuntimeError("PDS exploded"),
+        ) as mocks:
+            await _process_replace_background(replace_ctx(track_id=track_id))
+
+        # rollback deletes the NEW file from the PRIVATE bucket
+        mocks["storage_delete_gated"].assert_called_once()
+        assert mocks["storage_delete_gated"].call_args.args[0] == "NEW"
+
+        # track row is unchanged
+        await db_session.refresh(track)
+        assert track.file_id == "OLD"
+
+
+class TestConcurrentMetadataPatch:
+    """regression: minimize the window where a concurrent PATCH /tracks/{id}
+    title (or other metadata) gets clobbered by a stale snapshot taken at
+    `_load_and_authorize` time."""
+
+    async def test_publishes_freshly_loaded_title(
+        self, db_session: AsyncSession, owner: Artist
+    ) -> None:
+        track = make_track(file_id="OLD")
+        track.title = "Original Title"
+        db_session.add(track)
+        await db_session.commit()
+        await db_session.refresh(track)
+        track_id = track.id
+
+        captured_record: dict = {}
+
+        async def fake_update_record(
+            *, auth_session, record_uri: str, record: dict
+        ) -> tuple[str, str]:
+            captured_record.update(record)
+            return record_uri, "bafyNEWREC"
+
+        # simulate a concurrent PATCH that lands AFTER _load_and_authorize but
+        # BEFORE _publish_record_update by mutating the row mid-pipeline — the
+        # mutation runs in the side_effect of `_store_audio`, which fires
+        # between authorize and publish.
+        async def store_then_patch(*_args, **_kwargs):
+            async with _db_session() as session:
+                await session.execute(
+                    update(Track)
+                    .where(Track.id == track_id)
+                    .values(title="Patched Title")
+                )
+                await session.commit()
+            return storage_result(file_id="NEW")
+
+        with (
+            patched_replace_pipeline(
+                store=storage_result(file_id="NEW"),
+                update_record_side_effect=fake_update_record,
+            ),
+            patch(
+                "backend.api.tracks.audio_replace._store_audio",
+                AsyncMock(side_effect=store_then_patch),
+            ),
+        ):
+            await _process_replace_background(replace_ctx(track_id=track_id))
+
+        # the published record reflects the PATCH'd title because we re-fetched
+        # state right before publishing
+        assert captured_record["title"] == "Patched Title"
 
 
 def test_track_audio_state_dataclass() -> None:

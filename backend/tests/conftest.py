@@ -60,6 +60,19 @@ class MockStorage(R2Storage):
         """Mock delete."""
         return True
 
+    async def delete_gated(self, file_id: str, file_type: str | None = None) -> bool:
+        """Mock delete_gated."""
+        return True
+
+    async def save_gated(
+        self,
+        file: BinaryIO | BytesIO,
+        filename: str,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> str:
+        """Mock save_gated."""
+        return "mock_gated_file_id_456"
+
 
 def pytest_configure(config):
     """Set mock storage before any test modules are imported."""

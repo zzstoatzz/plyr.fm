@@ -178,6 +178,10 @@ def patched_replace_pipeline(
             AsyncMock(**storage_delete_kwargs),
         ) as mock_storage_delete,
         patch(
+            "backend.api.tracks.audio_replace.storage.delete_gated",
+            AsyncMock(return_value=True),
+        ) as mock_storage_delete_gated,
+        patch(
             "backend.api.tracks.audio_replace.run_post_track_audio_replace_hooks",
             new_callable=AsyncMock,
         ) as mock_hooks,
@@ -203,6 +207,7 @@ def patched_replace_pipeline(
         yield {
             "update_record": mock_update_record,
             "storage_delete": mock_storage_delete,
+            "storage_delete_gated": mock_storage_delete_gated,
             "post_hooks": mock_hooks,
             "schedule_album_sync": mock_album_sync,
         }

@@ -50,6 +50,7 @@ from backend._internal.tasks.hooks import (
     invalidate_tracks_discovery_cache,
     run_post_track_audio_replace_hooks,
 )
+from backend.api.albums import invalidate_album_cache_by_id
 from backend.api.tracks.uploads import (
     AudioInfo,
     PdsBlobResult,
@@ -295,12 +296,24 @@ async def _commit_db_swap(
 async def _cleanup_old_files(state: TrackAudioState, sr: StorageResult) -> None:
     """delete the old R2 audio object(s) after a successful swap.
 
-    skips deletion when the new file_id matches the old one (identical bytes —
-    nothing to clean up), and silently swallows already-gone errors.
+    routes to `delete_gated` when the track was supporter-gated (private bucket);
+    otherwise uses the public-bucket `delete`. skips deletion when the new
+    file_id matches the old one (identical bytes — nothing to clean up), and
+    silently swallows already-gone errors.
+
+    note: the gated/non-gated decision uses the OLD `support_gate` because the
+    file we're cleaning up is the OLD audio. if a future endpoint flips gating
+    *and* replaces audio in the same call, this needs to take the OLD vs NEW
+    bucket destination separately.
     """
+    delete_fn = (
+        storage.delete_gated if state.support_gate is not None else storage.delete
+    )
     if state.old_file_id != sr.file_id:
         with contextlib.suppress(Exception):
-            await storage.delete(state.old_file_id, state.old_file_type)
+            await delete_fn(state.old_file_id, state.old_file_type)
+    # transcode originals always go to the public bucket regardless of gating
+    # (gated tracks can't be lossless yet — see _store_audio in uploads.py)
     if state.old_original_file_id and state.old_original_file_id != sr.original_file_id:
         with contextlib.suppress(Exception):
             await storage.delete(
@@ -313,8 +326,6 @@ async def _maybe_resync_album_list(track: Track, auth_session: AuthSession) -> N
     embedded strongRef carries the new track CID."""
     if track.album_id:
         await schedule_album_list_sync(auth_session.session_id, track.album_id)
-        from backend.api.albums import invalidate_album_cache_by_id
-
         async with db_session() as db:
             await invalidate_album_cache_by_id(db, track.album_id)
 
@@ -322,20 +333,30 @@ async def _maybe_resync_album_list(track: Track, auth_session: AuthSession) -> N
 async def _process_replace_background(ctx: ReplaceContext) -> None:
     """orchestrate the audio replace pipeline.
 
-    ordering is critical for atomicity:
+    the pipeline is split into two halves around the DB swap:
+
+    pre-commit (rollback applies — failure deletes the new R2 file):
         1. load + authorize
         2. validate new bytes
         3. store new bytes (R2 + transcode if needed)
         4. upload to PDS (best-effort)
-        5. publish updated ATProto record   ← if this fails, rollback by deleting new R2 file
-        6. swap DB row in a single transaction
-        7. delete old R2 file (success-only side effect)
+        5. publish updated ATProto record (PUT)
+        6. atomically swap the DB row
+
+    post-commit (NO rollback — the track is replaced; failures are logged):
+        7. delete old R2 file
         8. fire post-replace hooks (rescan, re-embed, re-classify)
-        9. invalidate caches + maybe resync album list record
+        9. resync album list record
+        10. invalidate discovery cache
+
+    the split is critical: once `_commit_db_swap` returns, the track row points
+    at the new file and the ATProto record is published. tearing down the new
+    R2 object at that point would leave production looking at a broken track.
     """
     new_file_id_for_rollback: str | None = None
     new_original_file_id_for_rollback: str | None = None
     new_original_file_type_for_rollback: str | None = None
+    rollback_gated: bool = False
 
     with logfire.span(
         "process audio replace background",
@@ -343,12 +364,14 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
         track_id=ctx.track_id,
         filename=ctx.filename,
     ):
+        # ---- pre-commit (rollback applies) ----
         try:
             await job_service.update_progress(
                 ctx.job_id, JobStatus.PROCESSING, "preparing audio replace..."
             )
 
             state = await _load_and_authorize(ctx.track_id, ctx.auth_session)
+            rollback_gated = state.support_gate is not None
             phase_ctx = _build_upload_context_for_phases(ctx, state)
 
             audio_info = await _validate_audio(phase_ctx)
@@ -366,50 +389,36 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
             ):
                 ctx.auth_session = refreshed
 
+            # defensive re-load: a concurrent PATCH may have updated title /
+            # album / features / image / description / support_gate / unlisted
+            # while we were uploading. publish with the freshest non-audio
+            # metadata so we don't roll the user's edit back on PDS.
+            state = await _refresh_metadata_state(state)
+
             new_cid = await _publish_record_update(
                 ctx, state, audio_info, sr, pds_result
             )
 
             track = await _commit_db_swap(state, audio_info, sr, pds_result, new_cid)
 
-            # success — clean up the old R2 object(s)
-            await _cleanup_old_files(state, sr)
-
-            # fire post-replace hooks (rescan/re-embed/maybe re-classify)
-            await run_post_track_audio_replace_hooks(track.id, audio_url=sr.r2_url)
-
-            # if the track is part of an album, refresh the album list record
-            # so its strongRef points at the new CID
-            await _maybe_resync_album_list(track, ctx.auth_session)
-
-            await invalidate_tracks_discovery_cache()
-
-            await job_service.update_progress(
-                ctx.job_id,
-                JobStatus.COMPLETED,
-                "audio replaced",
-                result={
-                    "track_id": track.id,
-                    "atproto_uri": track.atproto_record_uri,
-                    "atproto_cid": track.atproto_record_cid,
-                },
-            )
-
         except UploadPhaseError as e:
-            # rollback: drop the just-written R2 file(s) so we don't strand orphans
             await _rollback_new_files(
                 new_file_id_for_rollback,
                 new_original_file_id_for_rollback,
                 new_original_file_type_for_rollback,
+                gated=rollback_gated,
             )
             await job_service.update_progress(
                 ctx.job_id, JobStatus.FAILED, "audio replace failed", error=e.error
             )
+            _unlink_temp(ctx.file_path)
+            return
         except Exception as e:
             await _rollback_new_files(
                 new_file_id_for_rollback,
                 new_original_file_id_for_rollback,
                 new_original_file_type_for_rollback,
+                gated=rollback_gated,
             )
             logger.exception(
                 "audio replace job %s failed with unexpected error", ctx.job_id
@@ -420,20 +429,112 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
                 "audio replace failed",
                 error=f"unexpected error: {e!s}",
             )
-        finally:
-            with contextlib.suppress(Exception):
-                Path(ctx.file_path).unlink(missing_ok=True)
+            _unlink_temp(ctx.file_path)
+            return
+
+        # ---- post-commit (NO rollback — the swap is committed) ----
+        # each side effect is best-effort. if any fails we log and keep going;
+        # the track is already pointing at the new audio.
+        try:
+            await _cleanup_old_files(state, sr)
+        except Exception:
+            logger.exception(
+                "audio replace: old-file cleanup failed (track is replaced; "
+                "old R2 object may be orphaned)",
+            )
+
+        try:
+            await run_post_track_audio_replace_hooks(track.id, audio_url=sr.r2_url)
+        except Exception:
+            logger.exception(
+                "audio replace: post-replace hooks failed (track is replaced; "
+                "copyright/embedding/genre re-runs may not have been scheduled)",
+            )
+
+        try:
+            await _maybe_resync_album_list(track, ctx.auth_session)
+        except Exception:
+            logger.exception(
+                "audio replace: album list resync failed (track is replaced; "
+                "album record's strongRef may carry a stale CID until next edit)",
+            )
+
+        with contextlib.suppress(Exception):
+            await invalidate_tracks_discovery_cache()
+
+        await job_service.update_progress(
+            ctx.job_id,
+            JobStatus.COMPLETED,
+            "audio replaced",
+            result={
+                "track_id": track.id,
+                "atproto_uri": track.atproto_record_uri,
+                "atproto_cid": track.atproto_record_cid,
+            },
+        )
+        _unlink_temp(ctx.file_path)
+
+
+def _unlink_temp(file_path: str) -> None:
+    """remove the temp upload file (suppress all errors)."""
+    with contextlib.suppress(Exception):
+        Path(file_path).unlink(missing_ok=True)
+
+
+async def _refresh_metadata_state(state: TrackAudioState) -> TrackAudioState:
+    """reload non-audio fields right before publishing the ATProto record.
+
+    minimizes the window in which a concurrent `PATCH /tracks/{id}` (title,
+    description, image, features, support_gate) gets clobbered by the stale
+    metadata we captured at `_load_and_authorize` time.
+    """
+    async with db_session() as db:
+        result = await db.execute(
+            select(Track)
+            .options(selectinload(Track.artist))
+            .where(Track.id == state.track_id)
+        )
+        track = result.scalar_one_or_none()
+        if not track:
+            # row vanished between authorize and publish; let the caller
+            # raise the same UploadPhaseError it would have on _commit_db_swap.
+            raise UploadPhaseError("track was deleted during replace")
+        return TrackAudioState(
+            track_id=track.id,
+            artist_did=track.artist_did,
+            artist_display_name=track.artist.display_name,
+            atproto_record_uri=track.atproto_record_uri or state.atproto_record_uri,
+            old_file_id=state.old_file_id,
+            old_file_type=state.old_file_type,
+            old_original_file_id=state.old_original_file_id,
+            old_original_file_type=state.old_original_file_type,
+            title=track.title,
+            album=track.album,
+            duration=track.duration,
+            features=list(track.features) if track.features else [],
+            image_url=await track.get_image_url(),
+            description=track.description,
+            support_gate=dict(track.support_gate) if track.support_gate else None,
+        )
 
 
 async def _rollback_new_files(
     new_file_id: str | None,
     new_original_file_id: str | None,
     new_original_file_type: str | None,
+    *,
+    gated: bool,
 ) -> None:
-    """delete any new R2 object we wrote before discovering the operation must abort."""
+    """delete any new R2 object we wrote before discovering the operation must abort.
+
+    `gated=True` routes the playable-file delete to the private bucket. transcode
+    originals always live in the public bucket (gated tracks can't be lossless),
+    so the original delete uses the public path unconditionally.
+    """
     if new_file_id:
+        delete_fn = storage.delete_gated if gated else storage.delete
         with contextlib.suppress(Exception):
-            await storage.delete(new_file_id)
+            await delete_fn(new_file_id)
     if new_original_file_id:
         with contextlib.suppress(Exception):
             await storage.delete(new_original_file_id, new_original_file_type)
