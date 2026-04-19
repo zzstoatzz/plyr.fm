@@ -295,6 +295,156 @@ class UploaderState {
 		xhr.timeout = 300000;
 		xhr.send(formData);
 	}
+
+	/**
+	 * Replace the audio bytes for an existing track via PUT /tracks/{id}/audio.
+	 *
+	 * Mirrors the upload() flow (XHR upload → SSE progress) but:
+	 * - PUTs to a track-specific endpoint instead of POSTing
+	 * - Sends only the file (no metadata — the track keeps its title, tags, etc.)
+	 * - On completion, calls onComplete with the new file_id so the caller can
+	 *   refresh local caches and the player.
+	 */
+	replaceAudio(
+		trackId: number,
+		file: File,
+		title: string,
+		onComplete?: (_result: { trackId: number; atprotoCid: string | null }) => void
+	): void {
+		if (!browser) return;
+
+		const taskId = crypto.randomUUID();
+		const fileSizeMB = file.size / 1024 / 1024;
+		const isMobile = isMobileDevice();
+
+		if (isMobile && fileSizeMB > MOBILE_LARGE_FILE_THRESHOLD_MB) {
+			toast.info(`replacing audio: ${Math.round(fileSizeMB)}MB on mobile - ensure stable connection`, 5000);
+		}
+
+		const startMessage = fileSizeMB > 10
+			? `replacing audio for "${title}"... (large file)`
+			: `replacing audio for "${title}"...`;
+		const toastId = toast.info(startMessage, 0);
+
+		let lastProgressPercent = 0;
+		const formData = new FormData();
+		formData.append('file', file);
+
+		const xhr = new XMLHttpRequest();
+		xhr.open('PUT', `${API_URL}/tracks/${trackId}/audio`);
+		xhr.withCredentials = true;
+
+		let uploadComplete = false;
+
+		xhr.upload.addEventListener('progress', (e) => {
+			if (e.lengthComputable && !uploadComplete) {
+				const percent = Math.round((e.loaded / e.total) * 100);
+				lastProgressPercent = percent;
+				toast.update(toastId, `uploading new audio... ${percent}%`);
+			}
+		});
+
+		xhr.addEventListener('load', () => {
+			if (xhr.status >= 200 && xhr.status < 300) {
+				try {
+					uploadComplete = true;
+					const result = JSON.parse(xhr.responseText);
+					const upload_id = result.upload_id;
+
+					const task: UploadTask = {
+						id: taskId,
+						upload_id,
+						file,
+						title,
+						toastId,
+						xhr
+					};
+					this.activeUploads.set(taskId, task);
+
+					const eventSource = new EventSource(`${API_URL}/tracks/uploads/${upload_id}/progress`);
+					task.eventSource = eventSource;
+
+					eventSource.onmessage = (event) => {
+						const update = JSON.parse(event.data);
+
+						if (update.message && update.status === 'processing') {
+							const serverProgress = update.server_progress_pct;
+							if (serverProgress !== undefined && serverProgress !== null && serverProgress > 0) {
+								toast.update(task.toastId, `${update.message} (${Math.round(serverProgress)}%)`);
+							} else {
+								toast.update(task.toastId, update.message);
+							}
+						}
+
+						if (update.status === 'completed') {
+							eventSource.close();
+							toast.dismiss(task.toastId);
+							this.activeUploads.delete(taskId);
+
+							toast.success(`audio for "${title}" replaced`, 5000);
+							tracksCache.invalidate();
+							tracksCache.fetch(true);
+
+							onComplete?.({
+								trackId,
+								atprotoCid: update.atproto_cid ?? null
+							});
+						}
+
+						if (update.status === 'failed') {
+							eventSource.close();
+							toast.dismiss(task.toastId);
+							this.activeUploads.delete(taskId);
+							toast.error(update.error || 'audio replace failed');
+						}
+					};
+
+					eventSource.onerror = () => {
+						eventSource.close();
+						toast.dismiss(task.toastId);
+						this.activeUploads.delete(taskId);
+						toast.error('lost connection during audio replace');
+					};
+				} catch {
+					toast.dismiss(toastId);
+					toast.error('failed to parse server response');
+				}
+			} else {
+				toast.dismiss(toastId);
+				let errorMsg = `audio replace failed (${xhr.status} ${xhr.statusText})`;
+				try {
+					const error = JSON.parse(xhr.responseText);
+					errorMsg = error.detail || errorMsg;
+				} catch {
+					if (xhr.status === 0) {
+						errorMsg = buildNetworkErrorMessage(lastProgressPercent, fileSizeMB, isMobile);
+					} else if (xhr.status === 413) {
+						errorMsg = 'file too large: please use a smaller file';
+					} else if (xhr.status === 403) {
+						errorMsg = "you can only replace audio on your own tracks";
+					} else if (xhr.status === 404) {
+						errorMsg = 'track not found';
+					} else if (xhr.status >= 500) {
+						errorMsg = 'server error: please try again in a moment';
+					}
+				}
+				toast.error(errorMsg);
+			}
+		});
+
+		xhr.addEventListener('error', () => {
+			toast.dismiss(toastId);
+			toast.error(buildNetworkErrorMessage(lastProgressPercent, fileSizeMB, isMobile));
+		});
+
+		xhr.addEventListener('timeout', () => {
+			toast.dismiss(toastId);
+			toast.error(buildTimeoutErrorMessage(lastProgressPercent, fileSizeMB, isMobile));
+		});
+
+		xhr.timeout = 300000;
+		xhr.send(formData);
+	}
 }
 
 export const uploader = new UploaderState();

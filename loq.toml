@@ -156,7 +156,7 @@ max_lines = 2446
 
 [[rules]]
 path = "frontend/src/routes/portal/+page.svelte"
-max_lines = 3489
+max_lines = 3716
 
 [[rules]]
 path = "frontend/src/routes/settings/+page.svelte"

@@ -313,17 +313,24 @@
 
 	// handle track changes - load new audio when track changes
 	let previousTrackId = $state<number | null>(null);
+	// also tracked so an in-place audio replace (same track id, new file_id)
+	// triggers a fresh load — see PUT /tracks/{id}/audio in the portal edit form.
+	let previousFileId = $state<string | null>(null);
 	let isLoadingTrack = $state(false);
 
 	$effect(() => {
 		if (!player.currentTrack || !player.audioElement) return;
 
-		// only load new track if it actually changed
-		if (player.currentTrack.id !== previousTrackId) {
+		// reload when either the track id changes (navigation/queue advance) or
+		// the file_id changes for the same track (audio replaced from edit form).
+		const trackChanged = player.currentTrack.id !== previousTrackId;
+		const fileChanged = player.currentTrack.file_id !== previousFileId;
+		if (trackChanged || fileChanged) {
 			const trackToLoad = player.currentTrack;
 
 			// update tracking state
 			previousTrackId = trackToLoad.id;
+			previousFileId = trackToLoad.file_id;
 			player.resetPlayCount();
 			isLoadingTrack = true;
 
