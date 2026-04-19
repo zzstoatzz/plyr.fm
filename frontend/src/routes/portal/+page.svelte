@@ -1099,7 +1099,9 @@
 													</button>
 												{:else}
 													<div class="audio-current">
-														<span class="audio-current-label">current: {track.file_type}</span>
+														<span class="audio-current-label">
+															current: {track.file_type}{track.original_file_type && track.original_file_type !== track.file_type ? ` (transcoded from ${track.original_file_type})` : ''}{track.audio_storage === 'both' || track.audio_storage === 'pds' ? ' · stored on your PDS' : ' · stored on plyr.fm'}
+														</span>
 													</div>
 													<label class="audio-upload-btn">
 														<input
