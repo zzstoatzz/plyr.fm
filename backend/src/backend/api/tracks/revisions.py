@@ -29,6 +29,7 @@ from sqlalchemy.orm import selectinload
 from backend._internal import Session as AuthSession
 from backend._internal import require_auth
 from backend._internal.atproto.records import build_track_record, update_record
+from backend._internal.audio import AudioFormat
 from backend._internal.track_revisions import prune_revisions
 from backend.api.albums import invalidate_album_cache_by_id
 from backend.config import settings
@@ -196,6 +197,23 @@ async def restore_track_revision(
 
     # build + publish the updated PDS record FIRST, mirroring the replace flow.
     # if this fails, we abort before touching the DB.
+    #
+    # if the revision carried a PDS blob ref, include it in the new record so
+    # the user's PDS keeps its canonical copy of the audio. the blob itself is
+    # NOT re-uploaded — we trust that PDS still has it (blobs are only GC'd
+    # after a grace period post-dereference). if the blob has already been
+    # GC'd by the user's PDS, this record is still valid; playback falls back
+    # to audio_url (R2).
+    audio_blob: dict | None = None
+    if revision.pds_blob_cid:
+        audio_format = AudioFormat.from_extension(f".{revision.file_type}")
+        audio_blob = {
+            "$type": "blob",
+            "ref": {"$link": revision.pds_blob_cid},
+            "mimeType": audio_format.media_type if audio_format else "audio/mpeg",
+            "size": revision.pds_blob_size or 0,
+        }
+
     new_record = build_track_record(
         title=track.title,
         artist=track.artist.display_name,
@@ -206,7 +224,7 @@ async def restore_track_revision(
         features=list(track.features) if track.features else None,
         image_url=await track.get_image_url(),
         support_gate=dict(track.support_gate) if track.support_gate else None,
-        audio_blob=None,  # PDS blob not re-uploaded on restore (see note below)
+        audio_blob=audio_blob,
         description=track.description,
     )
     try:

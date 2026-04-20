@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.track_revisions import prune_revisions
-from backend.models import MAX_REVISIONS_PER_TRACK, Artist, TrackRevision
+from backend.models import MAX_REVISIONS_PER_TRACK, Artist, Track, TrackRevision
 
 from ._helpers import OWNER_DID, TRACK_URI, make_track
 
@@ -324,6 +324,79 @@ class TestRestoreEndpoint:
         assert len(revisions_after) == 1
         assert revisions_after[0].file_id == "CURRENT"
         assert revisions_after[0].duration == 200
+
+    async def test_restore_preserves_pds_blob_on_live_track(
+        self,
+        test_app_owner: FastAPI,
+        db_session: AsyncSession,
+        owner: Artist,
+    ) -> None:
+        """regression for staging smoke: if the revision was audio_storage='both'
+        with a PDS blob cid, the restored live track must KEEP audio_storage='both'
+        and the pds_blob_cid, not silently drop back to 'r2' with null blob."""
+        track = make_track(file_id="CURRENT-NEW", duration=200)
+        # simulate the post-replace state: track has 'both' storage with a new blob
+        track.audio_storage = "both"
+        track.pds_blob_cid = "bafkreiNEWBLOB"
+        track.pds_blob_size = 9999
+        db_session.add(track)
+        await db_session.commit()
+        await db_session.refresh(track)
+
+        # revision row captures the pre-replace 'both' state with the ORIGINAL blob
+        revision = TrackRevision(
+            track_id=track.id,
+            file_id="ORIGINAL",
+            file_type="wav",
+            original_file_id=None,
+            original_file_type=None,
+            audio_storage="both",
+            audio_url="https://audio.example/ORIGINAL.wav",
+            pds_blob_cid="bafkreiORIGINALBLOB",
+            pds_blob_size=4096,
+            duration=120,
+            was_gated=False,
+        )
+        db_session.add(revision)
+        await db_session.commit()
+        await db_session.refresh(revision)
+        original_revision_id = revision.id
+        track_id = track.id
+
+        with patch(
+            "backend.api.tracks.revisions.update_record",
+            AsyncMock(return_value=(TRACK_URI, "bafyRESTORED")),
+        ) as mock_update:
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app_owner), base_url="http://test"
+            ) as client:
+                resp = await client.post(
+                    f"/tracks/{track_id}/revisions/{original_revision_id}/restore"
+                )
+
+        assert resp.status_code == 200
+
+        # the PDS record MUST have been rebuilt with the original blob ref —
+        # dropping it silently would desync PDS from DB and lose the user's
+        # PDS-hosted copy of the audio.
+        assert mock_update.call_count == 1
+        published_record = mock_update.call_args.kwargs["record"]
+        assert published_record.get("audioBlob") is not None, (
+            "restore built a record without audioBlob, losing the user's PDS blob ref"
+        )
+        assert published_record["audioBlob"]["ref"]["$link"] == "bafkreiORIGINALBLOB"
+
+        # the DB track row must reflect the revision's storage state
+        db_session.expire_all()
+        refreshed = await db_session.get(Track, track_id)
+        assert refreshed is not None
+        assert refreshed.file_id == "ORIGINAL"
+        assert refreshed.audio_storage == "both", (
+            f"expected audio_storage='both' after restoring a 'both' revision, "
+            f"got {refreshed.audio_storage!r}"
+        )
+        assert refreshed.pds_blob_cid == "bafkreiORIGINALBLOB"
+        assert refreshed.pds_blob_size == 4096
 
     async def test_409_when_gating_mismatches(
         self,
