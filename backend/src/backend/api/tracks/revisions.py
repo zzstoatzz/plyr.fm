@@ -227,6 +227,11 @@ async def restore_track_revision(
         audio_blob=audio_blob,
         description=track.description,
     )
+    # `pds_blob_lost` tracks whether we had to drop the blob ref because the
+    # user's PDS no longer has it. when True, we downgrade the restored track
+    # to audio_storage="r2" with null pds_blob_cid on commit — R2 playback
+    # still works, but the PDS-hosted copy is genuinely gone.
+    pds_blob_lost = False
     try:
         _, new_cid = await update_record(
             auth_session=auth_session,
@@ -234,15 +239,47 @@ async def restore_track_revision(
             record=new_record,
         )
     except Exception as exc:
-        logfire.exception(
-            "restore: failed to update ATProto record",
-            track_id=track_id,
-            revision_id=revision_id,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail=f"failed to publish restored record: {exc}",
-        ) from exc
+        # PDSes GC unreferenced blobs after a short grace period. when a user
+        # replaces audio and then later restores, the old blob may already be
+        # gone. retry without the blob ref so the restore still succeeds —
+        # the audio remains available via R2 (audio_url).
+        if audio_blob is not None and "BlobNotFound" in str(exc):
+            logfire.info(
+                "restore: PDS lost the old blob; publishing without audioBlob",
+                track_id=track_id,
+                revision_id=revision_id,
+                blob_cid=revision.pds_blob_cid,
+            )
+            # build a fresh dict for the retry — never mutate `new_record`
+            # in place so callers / tests can inspect the original payload
+            retry_record = {k: v for k, v in new_record.items() if k != "audioBlob"}
+            pds_blob_lost = True
+            try:
+                _, new_cid = await update_record(
+                    auth_session=auth_session,
+                    record_uri=track.atproto_record_uri,
+                    record=retry_record,
+                )
+            except Exception as exc2:
+                logfire.exception(
+                    "restore: failed to update ATProto record (retry without blob)",
+                    track_id=track_id,
+                    revision_id=revision_id,
+                )
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"failed to publish restored record: {exc2}",
+                ) from exc2
+        else:
+            logfire.exception(
+                "restore: failed to update ATProto record",
+                track_id=track_id,
+                revision_id=revision_id,
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=f"failed to publish restored record: {exc}",
+            ) from exc
 
     # commit: snapshot current → update track → delete chosen revision.
     # all in one transaction so we never end up with a track pointing at a
@@ -271,11 +308,20 @@ async def restore_track_revision(
         live_track.file_type = revision.file_type
         live_track.original_file_id = revision.original_file_id
         live_track.original_file_type = revision.original_file_type
-        live_track.audio_storage = revision.audio_storage
         live_track.r2_url = revision.audio_url
-        live_track.pds_blob_cid = revision.pds_blob_cid
-        live_track.pds_blob_size = revision.pds_blob_size
         live_track.atproto_record_cid = new_cid
+
+        # if the PDS lost the blob between replace and restore, downgrade the
+        # track's recorded storage state so it matches the published record
+        # (no audioBlob). otherwise copy through the revision's state.
+        if pds_blob_lost:
+            live_track.audio_storage = "r2"
+            live_track.pds_blob_cid = None
+            live_track.pds_blob_size = None
+        else:
+            live_track.audio_storage = revision.audio_storage
+            live_track.pds_blob_cid = revision.pds_blob_cid
+            live_track.pds_blob_size = revision.pds_blob_size
 
         # update duration in extra; clear stale genre-prediction provenance so
         # a future re-classification doesn't get short-circuited.

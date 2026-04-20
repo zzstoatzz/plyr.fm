@@ -398,6 +398,81 @@ class TestRestoreEndpoint:
         assert refreshed.pds_blob_cid == "bafkreiORIGINALBLOB"
         assert refreshed.pds_blob_size == 4096
 
+    async def test_restore_falls_back_when_pds_blob_gc(
+        self,
+        test_app_owner: FastAPI,
+        db_session: AsyncSession,
+        owner: Artist,
+    ) -> None:
+        """if the user's PDS has already GC'd the old blob, restore must not
+        fail. it should retry publishing WITHOUT audioBlob and downgrade the
+        track to audio_storage='r2' so DB + PDS stay consistent. R2 playback
+        still works — only the PDS-hosted copy is lost, which is expected
+        after GC."""
+        track = make_track(file_id="CURRENT-NEW", duration=200)
+        track.audio_storage = "both"
+        track.pds_blob_cid = "bafkreiNEWBLOB"
+        track.pds_blob_size = 9999
+        db_session.add(track)
+        await db_session.commit()
+        await db_session.refresh(track)
+
+        # revision with a PDS blob ref that PDS no longer has
+        revision = TrackRevision(
+            track_id=track.id,
+            file_id="ORIGINAL",
+            file_type="wav",
+            original_file_id=None,
+            original_file_type=None,
+            audio_storage="both",
+            audio_url="https://audio.example/ORIGINAL.wav",
+            pds_blob_cid="bafkreiGCdBLOB",
+            pds_blob_size=4096,
+            duration=120,
+            was_gated=False,
+        )
+        db_session.add(revision)
+        await db_session.commit()
+        await db_session.refresh(revision)
+        revision_id = revision.id
+        track_id = track.id
+
+        # first call raises BlobNotFound (real PDS error shape), second succeeds
+        update_record_mock = AsyncMock(
+            side_effect=[
+                RuntimeError(
+                    'PDS request failed: 400 {"error":"BlobNotFound","message":"Could not find blob: bafkreiGCdBLOB"}'
+                ),
+                (TRACK_URI, "bafyRESTOREDNOBBLOB"),
+            ]
+        )
+        with patch("backend.api.tracks.revisions.update_record", update_record_mock):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app_owner), base_url="http://test"
+            ) as client:
+                resp = await client.post(
+                    f"/tracks/{track_id}/revisions/{revision_id}/restore"
+                )
+
+        assert resp.status_code == 200
+        # first attempt included audioBlob; retry dropped it
+        assert update_record_mock.call_count == 2
+        first_record = update_record_mock.call_args_list[0].kwargs["record"]
+        second_record = update_record_mock.call_args_list[1].kwargs["record"]
+        assert first_record.get("audioBlob") is not None
+        assert second_record.get("audioBlob") is None
+
+        # DB now reflects the downgraded state — track's published record has
+        # no audioBlob, so audio_storage must be 'r2' and pds_blob_cid null
+        db_session.expire_all()
+        refreshed = await db_session.get(Track, track_id)
+        assert refreshed is not None
+        assert refreshed.file_id == "ORIGINAL"
+        assert refreshed.audio_storage == "r2"
+        assert refreshed.pds_blob_cid is None
+        assert refreshed.pds_blob_size is None
+        assert refreshed.atproto_record_cid == "bafyRESTOREDNOBBLOB"
+
     async def test_409_when_gating_mismatches(
         self,
         test_app_owner: FastAPI,

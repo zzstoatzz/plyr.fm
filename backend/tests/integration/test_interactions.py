@@ -59,10 +59,21 @@ async def test_cross_user_like(
         track = await client1.get_track(track_id)
         assert track.like_count == initial_likes
 
-        # verify track no longer in user2's liked tracks
-        liked = await client2.liked_tracks(limit=100)
-        liked_ids = [t.id for t in liked]
-        assert track_id not in liked_ids
+        # verify track no longer in user2's liked tracks. the liked list can
+        # lag a beat after unlike (cache / read-replica propagation), so
+        # retry-poll before asserting — matches test_upload_searchable's
+        # pattern for eventually-consistent reads.
+        import asyncio
+
+        for _ in range(5):
+            liked = await client2.liked_tracks(limit=100)
+            liked_ids = [t.id for t in liked]
+            if track_id not in liked_ids:
+                break
+            await asyncio.sleep(1)
+        assert track_id not in liked_ids, (
+            f"track {track_id} still in user2's liked after unlike + 5s poll"
+        )
 
     finally:
         await client1.delete(track_id)

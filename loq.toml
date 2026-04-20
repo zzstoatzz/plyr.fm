@@ -265,3 +265,7 @@ max_lines = 515
 [[rules]]
 path = "backend/tests/api/track_audio_replace/test_pipeline.py"
 max_lines = 512
+
+[[rules]]
+path = "backend/tests/api/track_audio_replace/test_revisions.py"
+max_lines = 561
