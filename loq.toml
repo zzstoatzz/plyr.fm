@@ -156,7 +156,7 @@ max_lines = 2446
 
 [[rules]]
 path = "frontend/src/routes/portal/+page.svelte"
-max_lines = 3718
+max_lines = 3878
 
 [[rules]]
 path = "frontend/src/routes/settings/+page.svelte"
@@ -261,3 +261,7 @@ max_lines = 651
 [[rules]]
 path = "backend/tests/conftest.py"
 max_lines = 515
+
+[[rules]]
+path = "backend/tests/api/track_audio_replace/test_pipeline.py"
+max_lines = 512

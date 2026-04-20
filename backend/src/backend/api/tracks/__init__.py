@@ -15,6 +15,7 @@ from . import uploads as _uploads  # /, /uploads/{upload_id}/progress
 from . import comments as _comments  # /{track_id}/comments, /comments/{comment_id}
 from . import mutations as _mutations  # /{track_id}, /{track_id}/restore-record
 from . import audio_replace as _audio_replace  # /{track_id}/audio
+from . import revisions as _revisions  # /{track_id}/revisions(/{revision_id}/restore)
 from . import playback as _playback  # /{track_id}, /{track_id}/play
 
 __all__ = ["router"]

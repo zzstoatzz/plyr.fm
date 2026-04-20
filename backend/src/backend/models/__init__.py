@@ -23,9 +23,11 @@ from backend.models.tag import Tag, TrackTag
 from backend.models.track import Track
 from backend.models.track_comment import TrackComment
 from backend.models.track_like import TrackLike
+from backend.models.track_revision import MAX_REVISIONS_PER_TRACK, TrackRevision
 from backend.utilities.database import db_session, get_db
 
 __all__ = [
+    "MAX_REVISIONS_PER_TRACK",
     "Album",
     "Artist",
     "Base",
@@ -49,6 +51,7 @@ __all__ = [
     "Track",
     "TrackComment",
     "TrackLike",
+    "TrackRevision",
     "TrackTag",
     "UserPreferences",
     "UserSession",

@@ -38,7 +38,12 @@ class TestReplaceOrchestration:
         self, db_session: AsyncSession, owner: Artist
     ) -> None:
         """on success: file_id/r2_url/atproto_record_cid/duration update,
-        old R2 file is deleted, post-replace hooks fire, no notification fires."""
+        old audio is preserved as a TrackRevision row (NOT deleted), post-
+        replace hooks fire, no notification fires."""
+        from sqlalchemy import select
+
+        from backend.models import TrackRevision
+
         track = make_track(file_id="OLD", duration=120)
         db_session.add(track)
         await db_session.commit()
@@ -68,8 +73,26 @@ class TestReplaceOrchestration:
         assert track.pds_blob_cid == "bafyNEWBLOB"
         assert track.notification_sent is True  # never re-fires
 
-        # old R2 file was deleted
-        assert "OLD" in deleted_keys
+        # the OLD audio is preserved as a revision row (not deleted from R2);
+        # the user can roll back to it.
+        revisions = (
+            (
+                await db_session.execute(
+                    select(TrackRevision).where(TrackRevision.track_id == track_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(revisions) == 1
+        assert revisions[0].file_id == "OLD"
+        assert revisions[0].audio_storage == "r2"
+        assert revisions[0].duration == 120
+        assert revisions[0].was_gated is False
+
+        # the OLD R2 file was NOT immediately deleted — it belongs to the
+        # revision row now. pruning handles long-term cleanup.
+        assert "OLD" not in deleted_keys
 
         # post-replace hooks were scheduled with the new audio URL
         mocks["post_hooks"].assert_called_once()
@@ -313,8 +336,8 @@ class TestPostCommitFailureIsolation:
 
         # the NEW R2 file must NOT have been deleted
         assert "NEW" not in deleted_keys
-        # the OLD R2 file should have been cleaned up before the hooks ran
-        assert "OLD" in deleted_keys
+        # the OLD R2 file is preserved as a revision (not deleted on replace)
+        assert "OLD" not in deleted_keys
 
     async def test_album_resync_failure_does_not_rollback(
         self, db_session: AsyncSession, owner: Artist
@@ -344,9 +367,16 @@ class TestGatedAudioCleanup:
     """regression for review feedback: gated tracks live in the private R2
     bucket. cleanup and rollback must use `delete_gated`, not `delete`."""
 
-    async def test_old_gated_audio_uses_delete_gated_on_success(
+    async def test_old_gated_audio_preserved_as_gated_revision(
         self, db_session: AsyncSession, owner: Artist
     ) -> None:
+        """gated tracks: the old audio is snapshotted with was_gated=True so
+        future pruning routes the blob delete to the private bucket. it is
+        NOT deleted on replace itself."""
+        from sqlalchemy import select
+
+        from backend.models import TrackRevision
+
         track = make_track(file_id="OLD", support_gate={"type": "any"})
         db_session.add(track)
         await db_session.commit()
@@ -360,10 +390,22 @@ class TestGatedAudioCleanup:
         ) as mocks:
             await _process_replace_background(replace_ctx(track_id=track_id))
 
-        # the OLD gated file was deleted via delete_gated, NOT delete
-        mocks["storage_delete_gated"].assert_called_once()
-        assert mocks["storage_delete_gated"].call_args.args[0] == "OLD"
-        # delete (public bucket) must not have been used for the gated file_id
+        # the OLD gated file was preserved as a revision with was_gated=True
+        revision = (
+            (
+                await db_session.execute(
+                    select(TrackRevision).where(TrackRevision.track_id == track_id)
+                )
+            )
+            .scalars()
+            .one()
+        )
+        assert revision.file_id == "OLD"
+        assert revision.was_gated is True
+
+        # neither delete nor delete_gated was called on replace — the old
+        # gated blob lives on as a revision until pruning kicks in
+        assert mocks["storage_delete_gated"].call_count == 0
         for call in mocks["storage_delete"].call_args_list:
             assert call.args[0] != "OLD"
 
