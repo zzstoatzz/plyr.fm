@@ -1,0 +1,42 @@
+name: deploy frontend prod
+
+# manual-dispatch fallback for the Cloudflare Pages GitHub integration.
+# CF Pages' git webhook has silently dropped pushes before (Apr 2026 —
+# production-fe advanced through #1311/#1312/#1313 without CF rebuilding).
+# this gives us a CI-side lever to force a production deploy.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "ref to build & deploy (default: production-fe tip)"
+        required: false
+        default: production-fe
+
+jobs:
+  deploy:
+    name: deploy frontend prod
+    runs-on: ubuntu-latest
+    concurrency: deploy-frontend-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: install deps
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      - name: build
+        working-directory: frontend
+        run: bun run build
+
+      - name: deploy to cloudflare pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: frontend
+          command: pages deploy .svelte-kit/cloudflare --project-name=plyr-fm --branch=production-fe --commit-dirty=true

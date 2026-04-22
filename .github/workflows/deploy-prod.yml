@@ -3,6 +3,7 @@ name: deploy prod
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   deploy:

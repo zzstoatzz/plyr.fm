@@ -1,0 +1,41 @@
+name: deploy frontend staging
+
+# manual-dispatch fallback for the Cloudflare Pages GitHub integration on
+# the staging project (plyr-fm-stg). primary path is still CF's git webhook
+# on pushes to main — this is here for parity with prod and for recovery.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "ref to build & deploy (default: main tip)"
+        required: false
+        default: main
+
+jobs:
+  deploy:
+    name: deploy frontend staging
+    runs-on: ubuntu-latest
+    concurrency: deploy-frontend-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: install deps
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      - name: build
+        working-directory: frontend
+        run: bun run build
+
+      - name: deploy to cloudflare pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: frontend
+          command: pages deploy .svelte-kit/cloudflare --project-name=plyr-fm-stg --branch=main --commit-dirty=true
