@@ -2848,6 +2848,7 @@
 		border: 1px solid var(--accent);
 		border-radius: var(--radius-full);
 		color: var(--accent);
+		font-family: inherit;
 		font-size: var(--text-sm);
 		font-weight: 500;
 		cursor: pointer;
@@ -2869,6 +2870,7 @@
 		border: 1px solid var(--accent);
 		border-radius: var(--radius-full);
 		color: var(--bg);
+		font-family: inherit;
 		font-size: var(--text-sm);
 		font-weight: 600;
 		cursor: pointer;
@@ -2888,6 +2890,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-full);
 		color: var(--text-secondary);
+		font-family: inherit;
 		font-size: var(--text-xs);
 		font-weight: 500;
 		cursor: pointer;
