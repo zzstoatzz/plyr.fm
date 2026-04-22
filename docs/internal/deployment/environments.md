@@ -97,18 +97,18 @@ this will:
 
 **plyr-fm** (production):
 - framework: sveltekit
-- build command: `cd frontend && bun run build`
-- build output: `frontend/build`
+- build command: `cd frontend && bun install && bun run build`
+- build output: `frontend/.svelte-kit/cloudflare`
 - production branch: `production-fe`
-- production environment: `PUBLIC_API_URL=https://api.plyr.fm`
-- custom domain: `plyr.fm`
+- production environment: `PUBLIC_API_URL=https://api.plyr.fm`, `SKIP_DEPENDENCY_INSTALL=1`
+- custom domain: `plyr.fm` (also `www.plyr.fm`)
 
 **plyr-fm-stg** (staging):
 - framework: sveltekit
-- build command: `cd frontend && bun run build`
-- build output: `frontend/build`
+- build command: `cd frontend && bun install && bun run build`
+- build output: `frontend/.svelte-kit/cloudflare`
 - production branch: `main`
-- production environment: `PUBLIC_API_URL=https://api-stg.plyr.fm`
+- production environment: `PUBLIC_API_URL=https://api-stg.plyr.fm`, `SKIP_DEPENDENCY_INSTALL=1`
 - custom domain: `stg.plyr.fm`
 
 ### docs
