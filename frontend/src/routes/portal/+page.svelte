@@ -2829,6 +2829,7 @@
 		background: transparent;
 		border: none;
 		color: var(--accent);
+		font-family: inherit;
 		opacity: 0.7;
 		cursor: pointer;
 		transition: opacity 0.15s;
