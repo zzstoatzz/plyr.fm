@@ -398,17 +398,17 @@ class TestRestoreEndpoint:
         assert refreshed.pds_blob_cid == "bafkreiORIGINALBLOB"
         assert refreshed.pds_blob_size == 4096
 
-    async def test_restore_falls_back_when_pds_blob_gc(
+    async def test_restore_reuploads_blob_when_pds_gc(
         self,
         test_app_owner: FastAPI,
         db_session: AsyncSession,
         owner: Artist,
     ) -> None:
-        """if the user's PDS has already GC'd the old blob, restore must not
-        fail. it should retry publishing WITHOUT audioBlob and downgrade the
-        track to audio_storage='r2' so DB + PDS stay consistent. R2 playback
-        still works — only the PDS-hosted copy is lost, which is expected
-        after GC."""
+        """if the user's PDS has GC'd the old blob, restore re-uploads the
+        R2 bytes to PDS to mint a fresh CID and republishes the record with
+        the new ref. the core plyr.fm promise is that users own their audio
+        on their PDS — dropping the ref silently would break that.
+        """
         track = make_track(file_id="CURRENT-NEW", duration=200)
         track.audio_storage = "both"
         track.pds_blob_cid = "bafkreiNEWBLOB"
@@ -443,10 +443,27 @@ class TestRestoreEndpoint:
                 RuntimeError(
                     'PDS request failed: 400 {"error":"BlobNotFound","message":"Could not find blob: bafkreiGCdBLOB"}'
                 ),
-                (TRACK_URI, "bafyRESTOREDNOBBLOB"),
+                (TRACK_URI, "bafyRESTOREDWITHFRESHBLOB"),
             ]
         )
-        with patch("backend.api.tracks.revisions.update_record", update_record_mock):
+        # storage returns the R2 bytes, upload_blob mints a fresh CID
+        reupload_ref = {
+            "$type": "blob",
+            "ref": {"$link": "bafkreiFRESH"},
+            "mimeType": "audio/wav",
+            "size": 4096,
+        }
+        get_file_data_mock = AsyncMock(return_value=b"fake-audio-bytes")
+        upload_blob_mock = AsyncMock(return_value=reupload_ref)
+
+        with (
+            patch("backend.api.tracks.revisions.update_record", update_record_mock),
+            patch(
+                "backend.api.tracks.revisions.storage.get_file_data",
+                get_file_data_mock,
+            ),
+            patch("backend.api.tracks.revisions.upload_blob", upload_blob_mock),
+        ):
             async with AsyncClient(
                 transport=ASGITransport(app=test_app_owner), base_url="http://test"
             ) as client:
@@ -455,15 +472,105 @@ class TestRestoreEndpoint:
                 )
 
         assert resp.status_code == 200
-        # first attempt included audioBlob; retry dropped it
+        # first attempt used the revision's original (GC'd) CID; retry used
+        # the freshly re-uploaded blob ref — NOT a record with audioBlob dropped
         assert update_record_mock.call_count == 2
         first_record = update_record_mock.call_args_list[0].kwargs["record"]
         second_record = update_record_mock.call_args_list[1].kwargs["record"]
-        assert first_record.get("audioBlob") is not None
-        assert second_record.get("audioBlob") is None
+        assert first_record["audioBlob"]["ref"]["$link"] == "bafkreiGCdBLOB"
+        assert second_record["audioBlob"]["ref"]["$link"] == "bafkreiFRESH"
 
-        # DB now reflects the downgraded state — track's published record has
-        # no audioBlob, so audio_storage must be 'r2' and pds_blob_cid null
+        # re-upload happened with the R2 bytes
+        get_file_data_mock.assert_awaited_once_with("ORIGINAL", "wav")
+        upload_blob_mock.assert_awaited_once()
+        assert upload_blob_mock.call_args.args[1] == b"fake-audio-bytes"
+        assert upload_blob_mock.call_args.args[2] == "audio/wav"
+
+        # DB reflects the fresh blob — audio_storage stays "both", pds_blob_cid
+        # is the re-uploaded CID (not the original GC'd one, not null)
+        db_session.expire_all()
+        refreshed = await db_session.get(Track, track_id)
+        assert refreshed is not None
+        assert refreshed.file_id == "ORIGINAL"
+        assert refreshed.audio_storage == "both"
+        assert refreshed.pds_blob_cid == "bafkreiFRESH"
+        assert refreshed.pds_blob_size == 4096
+        assert refreshed.atproto_record_cid == "bafyRESTOREDWITHFRESHBLOB"
+
+    async def test_restore_falls_back_to_r2_when_reupload_also_fails(
+        self,
+        test_app_owner: FastAPI,
+        db_session: AsyncSession,
+        owner: Artist,
+    ) -> None:
+        """if the PDS GC'd the blob AND re-upload also fails (R2 miss,
+        PDS oversize, transient error), restore still completes by
+        dropping the blob ref and downgrading the track to r2-only.
+        playback keeps working via audio_url; only the PDS-hosted copy
+        is genuinely gone."""
+        track = make_track(file_id="CURRENT-NEW", duration=200)
+        track.audio_storage = "both"
+        track.pds_blob_cid = "bafkreiNEWBLOB"
+        track.pds_blob_size = 9999
+        db_session.add(track)
+        await db_session.commit()
+        await db_session.refresh(track)
+
+        revision = TrackRevision(
+            track_id=track.id,
+            file_id="ORIGINAL",
+            file_type="wav",
+            original_file_id=None,
+            original_file_type=None,
+            audio_storage="both",
+            audio_url="https://audio.example/ORIGINAL.wav",
+            pds_blob_cid="bafkreiGCdBLOB",
+            pds_blob_size=4096,
+            duration=120,
+            was_gated=False,
+        )
+        db_session.add(revision)
+        await db_session.commit()
+        await db_session.refresh(revision)
+        revision_id = revision.id
+        track_id = track.id
+
+        update_record_mock = AsyncMock(
+            side_effect=[
+                RuntimeError(
+                    'PDS request failed: 400 {"error":"BlobNotFound","message":"Could not find blob: bafkreiGCdBLOB"}'
+                ),
+                (TRACK_URI, "bafyRESTOREDNOBBLOB"),
+            ]
+        )
+        # R2 returns None (bytes genuinely unrecoverable), so re-upload
+        # is impossible and we fall back to publishing without audioBlob
+        get_file_data_mock = AsyncMock(return_value=None)
+        upload_blob_mock = AsyncMock()
+
+        with (
+            patch("backend.api.tracks.revisions.update_record", update_record_mock),
+            patch(
+                "backend.api.tracks.revisions.storage.get_file_data",
+                get_file_data_mock,
+            ),
+            patch("backend.api.tracks.revisions.upload_blob", upload_blob_mock),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app_owner), base_url="http://test"
+            ) as client:
+                resp = await client.post(
+                    f"/tracks/{track_id}/revisions/{revision_id}/restore"
+                )
+
+        assert resp.status_code == 200
+        # upload_blob was not called because there were no bytes
+        upload_blob_mock.assert_not_awaited()
+        # retry record has audioBlob dropped (fallback path)
+        second_record = update_record_mock.call_args_list[1].kwargs["record"]
+        assert "audioBlob" not in second_record
+
+        # DB downgraded to r2-only
         db_session.expire_all()
         refreshed = await db_session.get(Track, track_id)
         assert refreshed is not None

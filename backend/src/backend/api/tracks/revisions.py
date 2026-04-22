@@ -28,12 +28,14 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import require_auth
+from backend._internal.atproto import PayloadTooLargeError, upload_blob
 from backend._internal.atproto.records import build_track_record, update_record
 from backend._internal.audio import AudioFormat
 from backend._internal.track_revisions import prune_revisions
 from backend.api.albums import invalidate_album_cache_by_id
 from backend.config import settings
 from backend.models import Track, TrackRevision
+from backend.storage import storage
 from backend.utilities.database import db_session
 
 from .router import router
@@ -199,18 +201,20 @@ async def restore_track_revision(
     # if this fails, we abort before touching the DB.
     #
     # if the revision carried a PDS blob ref, include it in the new record so
-    # the user's PDS keeps its canonical copy of the audio. the blob itself is
-    # NOT re-uploaded — we trust that PDS still has it (blobs are only GC'd
-    # after a grace period post-dereference). if the blob has already been
-    # GC'd by the user's PDS, this record is still valid; playback falls back
-    # to audio_url (R2).
+    # the user's PDS keeps its canonical copy of the audio. we first try the
+    # revision's original CID — if PDS still has it, zero extra cost. if PDS
+    # has GC'd the blob (normal after audio was replaced), we re-upload the
+    # bytes from R2 to mint a fresh CID. the core promise of plyr.fm is that
+    # users own their audio on their PDS; losing the blob ref on restore
+    # would silently break that promise.
+    audio_format = AudioFormat.from_extension(f".{revision.file_type}")
+    content_type = audio_format.media_type if audio_format else "audio/mpeg"
     audio_blob: dict | None = None
     if revision.pds_blob_cid:
-        audio_format = AudioFormat.from_extension(f".{revision.file_type}")
         audio_blob = {
             "$type": "blob",
             "ref": {"$link": revision.pds_blob_cid},
-            "mimeType": audio_format.media_type if audio_format else "audio/mpeg",
+            "mimeType": content_type,
             "size": revision.pds_blob_size or 0,
         }
 
@@ -227,10 +231,12 @@ async def restore_track_revision(
         audio_blob=audio_blob,
         description=track.description,
     )
-    # `pds_blob_lost` tracks whether we had to drop the blob ref because the
-    # user's PDS no longer has it. when True, we downgrade the restored track
-    # to audio_storage="r2" with null pds_blob_cid on commit — R2 playback
-    # still works, but the PDS-hosted copy is genuinely gone.
+    # track the effective PDS blob state that will land on the DB row:
+    # - if the initial update_record succeeds: revision's own ref (no change)
+    # - if we had to re-upload: the newly-minted ref from the retry
+    # - if re-upload also fails: None → downgrade track to audio_storage="r2"
+    effective_blob_cid: str | None = revision.pds_blob_cid
+    effective_blob_size: int | None = revision.pds_blob_size
     pds_blob_lost = False
     try:
         _, new_cid = await update_record(
@@ -241,19 +247,54 @@ async def restore_track_revision(
     except Exception as exc:
         # PDSes GC unreferenced blobs after a short grace period. when a user
         # replaces audio and then later restores, the old blob may already be
-        # gone. retry without the blob ref so the restore still succeeds —
-        # the audio remains available via R2 (audio_url).
+        # gone. re-upload the R2 bytes to PDS to mint a fresh CID so the
+        # restored record still references a first-class PDS blob.
         if audio_blob is not None and "BlobNotFound" in str(exc):
             logfire.info(
-                "restore: PDS lost the old blob; publishing without audioBlob",
+                "restore: PDS lost the old blob; re-uploading bytes from R2",
                 track_id=track_id,
                 revision_id=revision_id,
-                blob_cid=revision.pds_blob_cid,
+                old_blob_cid=revision.pds_blob_cid,
             )
-            # build a fresh dict for the retry — never mutate `new_record`
-            # in place so callers / tests can inspect the original payload
-            retry_record = {k: v for k, v in new_record.items() if k != "audioBlob"}
-            pds_blob_lost = True
+            reupload_blob_ref: dict | None = None
+            try:
+                audio_data = await storage.get_file_data(
+                    revision.file_id, revision.file_type
+                )
+                if audio_data:
+                    reupload_blob_ref = await upload_blob(
+                        auth_session, audio_data, content_type
+                    )
+            except PayloadTooLargeError:
+                logfire.info(
+                    "restore: re-upload skipped (PDS payload too large)",
+                    track_id=track_id,
+                    revision_id=revision_id,
+                )
+            except Exception:
+                logfire.exception(
+                    "restore: re-upload failed; falling back to r2-only",
+                    track_id=track_id,
+                    revision_id=revision_id,
+                )
+
+            if reupload_blob_ref is not None:
+                # success path: replace the audioBlob in the record with the
+                # fresh ref and retry publishing. build a fresh dict rather
+                # than mutating the original new_record.
+                retry_record = dict(new_record)
+                retry_record["audioBlob"] = reupload_blob_ref
+                effective_blob_cid = reupload_blob_ref.get("ref", {}).get("$link")
+                effective_blob_size = reupload_blob_ref.get("size")
+            else:
+                # could not re-upload (R2 miss / oversize / transient failure)
+                # — fall back to the old drop-the-ref behavior so the restore
+                # still completes, and mark the track r2-only on commit.
+                retry_record = {k: v for k, v in new_record.items() if k != "audioBlob"}
+                effective_blob_cid = None
+                effective_blob_size = None
+                pds_blob_lost = True
+
             try:
                 _, new_cid = await update_record(
                     auth_session=auth_session,
@@ -262,7 +303,7 @@ async def restore_track_revision(
                 )
             except Exception as exc2:
                 logfire.exception(
-                    "restore: failed to update ATProto record (retry without blob)",
+                    "restore: failed to update ATProto record (retry)",
                     track_id=track_id,
                     revision_id=revision_id,
                 )
@@ -311,17 +352,25 @@ async def restore_track_revision(
         live_track.r2_url = revision.audio_url
         live_track.atproto_record_cid = new_cid
 
-        # if the PDS lost the blob between replace and restore, downgrade the
-        # track's recorded storage state so it matches the published record
-        # (no audioBlob). otherwise copy through the revision's state.
+        # if the PDS lost the blob AND we couldn't re-upload it, downgrade the
+        # track's recorded storage state to match the published record (no
+        # audioBlob). otherwise record the effective blob ref on the track —
+        # this is the revision's original CID if PDS still had it, or a fresh
+        # CID minted by the re-upload path.
         if pds_blob_lost:
             live_track.audio_storage = "r2"
             live_track.pds_blob_cid = None
             live_track.pds_blob_size = None
         else:
-            live_track.audio_storage = revision.audio_storage
-            live_track.pds_blob_cid = revision.pds_blob_cid
-            live_track.pds_blob_size = revision.pds_blob_size
+            # if the original had no PDS blob (audio_storage="r2"), preserve
+            # that; otherwise we successfully have a blob on PDS (either the
+            # original one or a re-uploaded one) so ensure storage reflects it.
+            if effective_blob_cid is not None:
+                live_track.audio_storage = "both"
+            else:
+                live_track.audio_storage = revision.audio_storage
+            live_track.pds_blob_cid = effective_blob_cid
+            live_track.pds_blob_size = effective_blob_size
 
         # update duration in extra; clear stale genre-prediction provenance so
         # a future re-classification doesn't get short-circuited.
