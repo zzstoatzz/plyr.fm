@@ -27,24 +27,42 @@
 
 	const titleId = `confirm-dialog-title-${Math.random().toString(36).slice(2, 10)}`;
 
-	function close() {
-		if (pending) return;
-		if (onCancel) {
-			onCancel();
-		} else {
-			open = false;
+	// ref to the native <dialog> so we can call showModal() / close().
+	// using native <dialog>+showModal() puts this in the browser's top layer,
+	// which stacks above every other element on the page regardless of z-index.
+	// that's what makes nested modals work correctly (e.g. confirming a restore
+	// from inside the version-history sheet).
+	let dialogEl = $state<HTMLDialogElement>();
+
+	// sync the `open` prop ↔ the dialog's modal state
+	$effect(() => {
+		if (!dialogEl) return;
+		if (open && !dialogEl.open) {
+			dialogEl.showModal();
+		} else if (!open && dialogEl.open) {
+			dialogEl.close();
 		}
+	});
+
+	function requestClose() {
+		if (pending) return;
+		if (!open) return;
+		if (onCancel) onCancel();
+		else open = false;
 	}
 
 	function handleBackdropClick(event: MouseEvent) {
-		if (event.target === event.currentTarget) close();
+		// <dialog>.showModal() renders a ::backdrop pseudo-element; clicking it
+		// dispatches a click whose target === the <dialog> itself (not a child).
+		// use that to close on backdrop click. keep inner clicks scoped.
+		if (event.target === dialogEl) requestClose();
 	}
 
-	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			close();
-		}
+	function handleCancel(event: Event) {
+		// the native `cancel` event fires when the user presses ESC, before the
+		// dialog actually closes. block it while an async confirm is in flight
+		// so the user can't dismiss a pending operation mid-run.
+		if (pending) event.preventDefault();
 	}
 
 	async function handleConfirm() {
@@ -52,65 +70,50 @@
 	}
 </script>
 
-{#if open}
-	<div
-		class="modal-overlay"
-		role="presentation"
-		onclick={handleBackdropClick}
-		onkeydown={handleKeydown}
-	>
-		<div
-			class="modal"
-			role="alertdialog"
-			aria-modal="true"
-			aria-labelledby={titleId}
-			tabindex="-1"
-		>
-			<div class="modal-header">
-				<h3 id={titleId}>{title}</h3>
-			</div>
-			<div class="modal-body">
-				<p>{body}</p>
-			</div>
-			<div class="modal-footer">
-				<button class="cancel-btn" onclick={close} disabled={pending}>
-					{cancelText}
-				</button>
-				<button
-					class="confirm-btn"
-					class:danger={variant === 'danger'}
-					onclick={handleConfirm}
-					disabled={pending}
-				>
-					{pending && pendingText ? pendingText : confirmText}
-				</button>
-			</div>
-		</div>
+<dialog
+	bind:this={dialogEl}
+	class="confirm-dialog"
+	role="alertdialog"
+	aria-labelledby={titleId}
+	oncancel={handleCancel}
+	onclose={requestClose}
+	onclick={handleBackdropClick}
+>
+	<div class="modal-header">
+		<h3 id={titleId}>{title}</h3>
 	</div>
-{/if}
+	<div class="modal-body">
+		<p>{body}</p>
+	</div>
+	<div class="modal-footer">
+		<button class="cancel-btn" onclick={requestClose} disabled={pending}>
+			{cancelText}
+		</button>
+		<button
+			class="confirm-btn"
+			class:danger={variant === 'danger'}
+			onclick={handleConfirm}
+			disabled={pending}
+		>
+			{pending && pendingText ? pendingText : confirmText}
+		</button>
+	</div>
+</dialog>
 
 <style>
-	.modal-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-		padding: 1rem;
-	}
-
-	.modal {
+	.confirm-dialog {
 		background: var(--bg-primary);
+		color: inherit;
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-xl);
+		padding: 0;
 		width: 100%;
 		max-width: 400px;
 		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+	}
+
+	.confirm-dialog::backdrop {
+		background: rgba(0, 0, 0, 0.5);
 	}
 
 	.modal-header {
