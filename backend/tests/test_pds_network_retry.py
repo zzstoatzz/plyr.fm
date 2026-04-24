@@ -77,9 +77,14 @@ class TestMakePdsRequestNetworkRetry:
         assert result == {"uri": "at://did:plc:testgoose/fm.plyr.track/abc"}
         assert mock_client.make_authenticated_request.call_count == 2
 
-    async def test_raises_after_two_read_errors(
+    async def test_raises_after_all_attempts_exhausted(
         self, mock_auth_session: AuthSession
     ) -> None:
+        # with exponential-backoff retries the client now makes
+        # _PDS_MAX_ATTEMPTS attempts before giving up. supply enough
+        # ReadErrors to exhaust them all. backoffs are real sleeps
+        # (1s + 2s + 4s = 7s between attempts) — unavoidable for
+        # this test, but only one test pays the cost.
         mock_client = AsyncMock()
         mock_client.make_authenticated_request = AsyncMock(
             side_effect=httpx.ReadError("")
@@ -90,7 +95,7 @@ class TestMakePdsRequestNetworkRetry:
                 "backend._internal.atproto.client.get_oauth_client",
                 return_value=mock_client,
             ),
-            pytest.raises(Exception, match="PDS request failed after retry"),
+            pytest.raises(Exception, match=r"PDS request failed after \d+ attempts"),
         ):
             await make_pds_request(
                 mock_auth_session,
@@ -147,7 +152,7 @@ class TestUploadBlobNetworkRetry:
         assert result == blob_ref
         assert mock_client.make_authenticated_request.call_count == 2
 
-    async def test_raises_after_two_read_errors(
+    async def test_raises_after_all_attempts_exhausted(
         self, mock_auth_session: AuthSession
     ) -> None:
         mock_client = AsyncMock()
@@ -160,7 +165,7 @@ class TestUploadBlobNetworkRetry:
                 "backend._internal.atproto.client.get_oauth_client",
                 return_value=mock_client,
             ),
-            pytest.raises(Exception, match="blob upload failed after retry"),
+            pytest.raises(Exception, match=r"blob upload failed after \d+ attempts"),
         ):
             await upload_blob(mock_auth_session, b"fake-audio", "audio/mpeg")
 

@@ -12,6 +12,7 @@ from typing import Annotated, Any
 
 import aiofiles
 import logfire
+from docket import ConcurrencyLimit
 from fastapi import (
     Depends,
     File,
@@ -995,6 +996,7 @@ async def run_track_upload(
     support_gate: dict | None,
     auto_tag: bool,
     unlisted: bool,
+    concurrency: ConcurrencyLimit = ConcurrencyLimit("artist_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for track uploads.
 
@@ -1007,6 +1009,15 @@ async def run_track_upload(
     rehydrating the session at task start rather than passing the cached
     AuthSession over the wire means we pick up any token refresh that
     happened between the HTTP request and the worker picking up the task.
+
+    the `ConcurrencyLimit("artist_did", max_concurrent=3)` caps concurrent
+    uploads per user's DID at 3. a 12-track album upload does not produce
+    12 parallel `createRecord` calls against the user's PDS (which would
+    exceed the typical PDS's connection-limit + rate-limit tolerance and
+    cause ConnectTimeouts). instead the task queue trickles uploads
+    through 3 at a time. user-visible latency for the slowest track in a
+    large album goes up, but every track publishes successfully rather
+    than 1-2 silently failing on upstream PDS throttling.
     """
     auth_session = await get_session(session_id)
     if auth_session is None:

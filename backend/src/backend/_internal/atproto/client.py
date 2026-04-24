@@ -41,8 +41,8 @@ def _describe_exc(e: BaseException) -> str:
     return f"{type(e).__name__}: {e!r}" if repr(e) else type(e).__name__
 
 
-# httpx / httpcore exception classes we treat as transient and retry once
-# on before giving up. covers connection drops, read-half failures,
+# httpx / httpcore exception classes we treat as transient and retry on
+# before giving up. covers connection drops, read-half failures,
 # protocol-level errors (remote closed before fully responding),
 # timeouts, and pool exhaustion.
 _TRANSIENT_HTTP_ERRORS: tuple[type[BaseException], ...] = (
@@ -55,6 +55,19 @@ _TRANSIENT_HTTP_ERRORS: tuple[type[BaseException], ...] = (
     httpcore.ConnectError,
     httpcore.RemoteProtocolError,
 )
+
+# max attempts for a single PDS request (including the initial try).
+# backoff schedule between attempts: element N is the sleep BEFORE
+# attempt N+1 runs. 4 attempts with 1s/2s/4s gives exponential-ish
+# backoff that totals ~7s of deliberate sleep across all retries,
+# on top of whatever time the underlying connect/read took.
+_PDS_MAX_ATTEMPTS = 4
+_PDS_BACKOFF_SCHEDULE: tuple[float, ...] = (1.0, 2.0, 4.0)
+
+
+def _backoff_for_attempt(attempt: int) -> float:
+    """seconds to sleep AFTER a failed attempt of index `attempt`."""
+    return _PDS_BACKOFF_SCHEDULE[min(attempt, len(_PDS_BACKOFF_SCHEDULE) - 1)]
 
 
 class PayloadTooLargeError(Exception):
@@ -249,8 +262,9 @@ async def make_pds_request(
     oauth_session = reconstruct_oauth_session(oauth_data)
     url = f"{oauth_data['pds_url']}/xrpc/{endpoint}"
     response = None  # defensive: bind before the loop so error paths can read it
+    has_refreshed = False
 
-    for attempt in range(2):
+    for attempt in range(_PDS_MAX_ATTEMPTS):
         kwargs: dict[str, Any] = {}
         if payload:
             kwargs["json"] = payload
@@ -265,14 +279,17 @@ async def make_pds_request(
                 **kwargs,
             )
         except _TRANSIENT_HTTP_ERRORS as e:
-            if attempt == 0:
+            if attempt < _PDS_MAX_ATTEMPTS - 1:
+                backoff = _backoff_for_attempt(attempt)
                 logger.warning(
-                    f"PDS network error for {auth_session.did}, retrying: {_describe_exc(e)}"
+                    f"PDS network error for {auth_session.did} on attempt "
+                    f"{attempt + 1}/{_PDS_MAX_ATTEMPTS}, backing off {backoff}s: "
+                    f"{_describe_exc(e)}"
                 )
-                await asyncio.sleep(1)
+                await asyncio.sleep(backoff)
                 continue
             raise Exception(
-                f"PDS request failed after retry: {_describe_exc(e)}"
+                f"PDS request failed after {_PDS_MAX_ATTEMPTS} attempts: {_describe_exc(e)}"
             ) from e
 
         if response.status_code in success_codes:
@@ -280,14 +297,13 @@ async def make_pds_request(
                 return {}
             return response.json()
 
-        # token expired - refresh and retry. previously gated on the response
-        # body containing "exp" in its message, but under concurrent load the
-        # PDS can return 401 with an empty body, a body that can't be parsed,
-        # or a body whose message differs across PDS implementations — in
-        # which case we'd silently skip the refresh and raise a useless error.
-        # always attempt refresh on a first-attempt 401; if the refresh itself
-        # is transient-flaky, retry the refresh once before giving up.
-        if response.status_code == 401 and attempt == 0:
+        # 401: token expired or rejected. always attempt refresh on the first
+        # 401 we see (under concurrent load PDSes return 401 bodies with
+        # varying shapes, including empty — gating on "exp" in the message
+        # silently skipped refresh before). if the refresh itself is flaky,
+        # retry it once before giving up.
+        if response.status_code == 401 and not has_refreshed:
+            has_refreshed = True
             logger.info(
                 f"access token expired or rejected for {auth_session.did}; refreshing"
             )
@@ -305,8 +321,20 @@ async def make_pds_request(
                 )
             continue
 
-    # response should always be bound here (attempt==1 branch), but defensive
-    # check keeps the error path sane if the loop structure changes.
+        # 5xx: upstream is failing, worth a backoff + retry
+        if 500 <= response.status_code < 600 and attempt < _PDS_MAX_ATTEMPTS - 1:
+            backoff = _backoff_for_attempt(attempt)
+            logger.warning(
+                f"PDS {response.status_code} for {auth_session.did} on attempt "
+                f"{attempt + 1}/{_PDS_MAX_ATTEMPTS}, backing off {backoff}s"
+            )
+            await asyncio.sleep(backoff)
+            continue
+
+        # 4xx other than 401, or 5xx on the last attempt, or a repeat 401
+        # post-refresh: stop retrying and surface the error.
+        break
+
     if response is None:
         raise Exception("PDS request failed: no response received")
     raise Exception(
@@ -347,8 +375,9 @@ async def upload_blob(
     blob_data = data if isinstance(data, bytes) else data.read()
 
     response = None  # defensive: bind before the loop
+    has_refreshed = False
 
-    for attempt in range(2):
+    for attempt in range(_PDS_MAX_ATTEMPTS):
         try:
             response = await get_oauth_client().make_authenticated_request(
                 session=oauth_session,
@@ -358,14 +387,17 @@ async def upload_blob(
                 headers={"Content-Type": content_type},
             )
         except _TRANSIENT_HTTP_ERRORS as e:
-            if attempt == 0:
+            if attempt < _PDS_MAX_ATTEMPTS - 1:
+                backoff = _backoff_for_attempt(attempt)
                 logger.warning(
-                    f"PDS blob upload network error for {auth_session.did}, retrying: {_describe_exc(e)}"
+                    f"PDS blob upload network error for {auth_session.did} on "
+                    f"attempt {attempt + 1}/{_PDS_MAX_ATTEMPTS}, backing off "
+                    f"{backoff}s: {_describe_exc(e)}"
                 )
-                await asyncio.sleep(1)
+                await asyncio.sleep(backoff)
                 continue
             raise Exception(
-                f"blob upload failed after retry: {_describe_exc(e)}"
+                f"blob upload failed after {_PDS_MAX_ATTEMPTS} attempts: {_describe_exc(e)}"
             ) from e
 
         if response.status_code == 200:
@@ -377,9 +409,9 @@ async def upload_blob(
                 f"blob too large for PDS (limit exceeded): {response.text or '<empty body>'}"
             )
 
-        # token expired - refresh and retry. unconditional on first-attempt
-        # 401 (see rationale in make_pds_request).
-        if response.status_code == 401 and attempt == 0:
+        # 401: refresh once, then retry (same rationale as make_pds_request).
+        if response.status_code == 401 and not has_refreshed:
+            has_refreshed = True
             logger.info(
                 f"access token expired or rejected for {auth_session.did}; refreshing"
             )
@@ -396,6 +428,18 @@ async def upload_blob(
                     auth_session, oauth_session
                 )
             continue
+
+        # 5xx: backoff and retry
+        if 500 <= response.status_code < 600 and attempt < _PDS_MAX_ATTEMPTS - 1:
+            backoff = _backoff_for_attempt(attempt)
+            logger.warning(
+                f"PDS blob upload {response.status_code} for {auth_session.did} "
+                f"on attempt {attempt + 1}/{_PDS_MAX_ATTEMPTS}, backing off {backoff}s"
+            )
+            await asyncio.sleep(backoff)
+            continue
+
+        break
 
     if response is None:
         raise Exception("blob upload failed: no response received")
