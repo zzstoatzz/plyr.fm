@@ -29,6 +29,7 @@ from typing import Annotated
 from urllib.parse import urljoin
 
 import logfire
+from docket import ConcurrencyLimit
 from fastapi import (
     Depends,
     File,
@@ -545,9 +546,11 @@ async def _rollback_new_files(
 async def run_track_audio_replace(
     job_id: str,
     session_id: str,
+    user_did: str,
     track_id: int,
     file_path: str,
     filename: str,
+    concurrency: ConcurrencyLimit = ConcurrencyLimit("user_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for audio replace.
 
@@ -556,6 +559,11 @@ async def run_track_audio_replace(
     ReplaceContext, and delegates to the phase orchestrator
     (`_process_replace_background`). this is the function registered with
     docket; the HTTP handler enqueues it via `schedule_track_audio_replace`.
+
+    `ConcurrencyLimit("user_did", max_concurrent=3)` caps concurrent
+    replaces per user's DID at 3 — same as the upload task. prevents a
+    user kicking off many replaces at once from overwhelming their PDS's
+    connection-limit tolerance.
     """
     auth_session = await get_session(session_id)
     if auth_session is None:
@@ -589,6 +597,7 @@ async def schedule_track_audio_replace(ctx: ReplaceContext) -> None:
     await docket.add(run_track_audio_replace)(
         job_id=ctx.job_id,
         session_id=ctx.auth_session.session_id,
+        user_did=ctx.auth_session.did,
         track_id=ctx.track_id,
         file_path=ctx.file_path,
         filename=ctx.filename,
