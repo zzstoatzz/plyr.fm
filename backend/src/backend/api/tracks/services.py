@@ -1,7 +1,7 @@
 """shared helpers for track routes."""
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models import Album, Artist
@@ -18,36 +18,36 @@ async def get_or_create_album(
     """Fetch or create an album for an artist.
 
     Returns (album, created) where created is True if a new album was made.
+
+    Uses INSERT ... ON CONFLICT DO NOTHING RETURNING so a race between
+    concurrent uploads to the same (artist_did, slug) does not have to
+    rollback a shared session. The old SELECT-then-INSERT-then-catch pattern
+    left the caller's AsyncSession in a fragile state under concurrent load
+    and caused pool-level MissingGreenlet errors mid-upload.
     """
     slug = slugify(title)
-    result = await db.execute(
+    stmt = (
+        pg_insert(Album)
+        .values(
+            artist_did=artist.did,
+            slug=slug,
+            title=title,
+            description=None,
+            image_id=image_id,
+            image_url=image_url,
+        )
+        .on_conflict_do_nothing(index_elements=["artist_did", "slug"])
+        .returning(Album)
+    )
+    result = await db.execute(stmt)
+    if album := result.scalar_one_or_none():
+        return album, True
+
+    # conflict — a concurrent task won the race. fetch the existing row.
+    existing = await db.execute(
         select(Album).where(Album.artist_did == artist.did, Album.slug == slug)
     )
-    if album := result.scalar_one_or_none():
-        return album, False
-
-    album = Album(
-        artist_did=artist.did,
-        slug=slug,
-        title=title,
-        description=None,
-        image_id=image_id,
-        image_url=image_url,
-    )
-    db.add(album)
-    try:
-        await db.flush()
-        return album, True
-    except IntegrityError:
-        # another request created this album concurrently
-        await db.rollback()
-        result = await db.execute(
-            select(Album).where(Album.artist_did == artist.did, Album.slug == slug)
-        )
-        album = result.scalar_one_or_none()
-        if not album:
-            raise
-        return album, False
+    return existing.scalar_one(), False
 
 
 __all__ = ["get_or_create_album"]
