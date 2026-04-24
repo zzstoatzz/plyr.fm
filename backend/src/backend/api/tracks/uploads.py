@@ -771,7 +771,12 @@ async def _create_records(
             raise ValueError("PDS returned no record data")
         _, atproto_cid = atproto_result
     except Exception as e:
-        logger.error("ATProto sync failed for upload %s: %s", ctx.upload_id, e)
+        # always include the exception type in the surfaced message — some
+        # exception classes (notably httpx.RemoteProtocolError with an empty
+        # h11 reason) stringify to "", which makes downstream error logs and
+        # the failed-job error field useless.
+        err_detail = f"{type(e).__name__}: {e!s}" if str(e) else type(e).__name__
+        logger.error("ATProto sync failed for upload %s: %s", ctx.upload_id, err_detail)
         # only delete the row if it's still pending — on ambiguous failures
         # (timeouts, connection drops) Jetstream may have already finalized it
         deleted_pending = False
@@ -797,7 +802,7 @@ async def _create_records(
                     await storage.delete(image_id)
         # else: Jetstream finalized the row — media belongs to the published track
 
-        raise UploadPhaseError(f"failed to sync track to ATProto: {e}") from e
+        raise UploadPhaseError(f"failed to sync track to ATProto: {err_detail}") from e
 
     # step 3: atomic CAS update pending → published + deferred album linkage
     async with db_session() as db:

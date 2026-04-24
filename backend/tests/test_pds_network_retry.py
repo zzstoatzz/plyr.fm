@@ -182,3 +182,115 @@ class TestUploadBlobNetworkRetry:
             await upload_blob(mock_auth_session, b"huge-audio", "audio/mpeg")
 
         assert mock_client.make_authenticated_request.call_count == 1
+
+
+class TestMakePdsRequestAuthRefresh:
+    """make_pds_request refreshes and retries on 401 regardless of body shape.
+
+    regression for the 2026-04-24 concurrent-upload flake: under load the PDS
+    can return 401 with an empty body or a body whose message doesn't contain
+    'exp'. the previous implementation silently skipped refresh in those
+    cases, raising an error with an empty/cryptic message. the refresh path
+    is now unconditional on first-attempt 401s.
+    """
+
+    async def test_refreshes_on_401_with_empty_body(
+        self, mock_auth_session: AuthSession
+    ) -> None:
+        unauthorized_empty_body = _mock_response(401, json_data={})
+        unauthorized_empty_body.text = ""
+        ok_response = _mock_response(200, {"uri": "at://test"})
+        mock_client = AsyncMock()
+        mock_client.make_authenticated_request = AsyncMock(
+            side_effect=[unauthorized_empty_body, ok_response]
+        )
+
+        with (
+            patch(
+                "backend._internal.atproto.client.get_oauth_client",
+                return_value=mock_client,
+            ),
+            patch(
+                "backend._internal.atproto.client._refresh_session_tokens",
+                new_callable=AsyncMock,
+                return_value=mock_auth_session.oauth_session,
+            ) as mock_refresh,
+        ):
+            # _refresh_session_tokens returns the oauth_session-equivalent,
+            # so spoof it with something reconstruct_oauth_session-compatible
+            mock_refresh.return_value = MagicMock()
+            result = await make_pds_request(
+                mock_auth_session,
+                "POST",
+                "com.atproto.repo.createRecord",
+            )
+
+        assert result == {"uri": "at://test"}
+        assert mock_client.make_authenticated_request.call_count == 2
+        mock_refresh.assert_awaited_once()
+
+    async def test_refreshes_on_401_with_non_exp_message(
+        self, mock_auth_session: AuthSession
+    ) -> None:
+        # PDSes vary on their 401 body — some return "invalid_token", some
+        # omit the message, some say "unauthorized". refresh must fire for
+        # all of them, not just when 'exp' happens to be in the string.
+        unauthorized = _mock_response(
+            401, json_data={"error": "InvalidToken", "message": "unauthorized"}
+        )
+        ok_response = _mock_response(200, {"uri": "at://test"})
+        mock_client = AsyncMock()
+        mock_client.make_authenticated_request = AsyncMock(
+            side_effect=[unauthorized, ok_response]
+        )
+
+        with (
+            patch(
+                "backend._internal.atproto.client.get_oauth_client",
+                return_value=mock_client,
+            ),
+            patch(
+                "backend._internal.atproto.client._refresh_session_tokens",
+                new_callable=AsyncMock,
+            ) as mock_refresh,
+        ):
+            mock_refresh.return_value = MagicMock()
+            result = await make_pds_request(
+                mock_auth_session,
+                "POST",
+                "com.atproto.repo.createRecord",
+            )
+
+        assert result == {"uri": "at://test"}
+        mock_refresh.assert_awaited_once()
+
+
+class TestMakePdsRequestTransientErrors:
+    """make_pds_request retries the newly-covered transient httpx errors."""
+
+    async def test_retries_on_remote_protocol_error(
+        self, mock_auth_session: AuthSession
+    ) -> None:
+        # httpx.RemoteProtocolError stringifies to "" when the h11 reason is
+        # blank — the exact class that surfaced the silent failure today.
+        ok_response = _mock_response(200, {"uri": "at://test"})
+        mock_client = AsyncMock()
+        mock_client.make_authenticated_request = AsyncMock(
+            side_effect=[
+                httpx.RemoteProtocolError(""),
+                ok_response,
+            ]
+        )
+
+        with patch(
+            "backend._internal.atproto.client.get_oauth_client",
+            return_value=mock_client,
+        ):
+            result = await make_pds_request(
+                mock_auth_session,
+                "POST",
+                "com.atproto.repo.createRecord",
+            )
+
+        assert result == {"uri": "at://test"}
+        assert mock_client.make_authenticated_request.call_count == 2

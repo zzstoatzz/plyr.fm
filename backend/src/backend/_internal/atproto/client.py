@@ -1,7 +1,6 @@
 """low-level ATProto PDS client with OAuth and token refresh."""
 
 import asyncio
-import json
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, BinaryIO
@@ -25,6 +24,37 @@ logger = logging.getLogger(__name__)
 def pds_blob_url(pds_url: str, did: str, cid: str) -> str:
     """construct a public URL to fetch a blob from a PDS."""
     return f"{pds_url}/xrpc/com.atproto.sync.getBlob?did={did}&cid={cid}"
+
+
+def _describe_exc(e: BaseException) -> str:
+    """produce a non-empty, type-qualified description of an exception.
+
+    some exception types (notably httpx.RemoteProtocolError with an empty
+    h11 reason, asyncio.CancelledError, and bare HTTPError subclasses)
+    stringify to "", which makes downstream error logs and user-visible
+    messages useless. always surface the exception type; fall back to the
+    repr if str is empty.
+    """
+    msg = str(e)
+    if msg:
+        return f"{type(e).__name__}: {msg}"
+    return f"{type(e).__name__}: {e!r}" if repr(e) else type(e).__name__
+
+
+# httpx / httpcore exception classes we treat as transient and retry once
+# on before giving up. covers connection drops, read-half failures,
+# protocol-level errors (remote closed before fully responding),
+# timeouts, and pool exhaustion.
+_TRANSIENT_HTTP_ERRORS: tuple[type[BaseException], ...] = (
+    httpx.ReadError,
+    httpx.ConnectError,
+    httpx.RemoteProtocolError,
+    httpx.TimeoutException,
+    httpx.PoolTimeout,
+    httpcore.ReadError,
+    httpcore.ConnectError,
+    httpcore.RemoteProtocolError,
+)
 
 
 class PayloadTooLargeError(Exception):
@@ -218,6 +248,7 @@ async def make_pds_request(
 
     oauth_session = reconstruct_oauth_session(oauth_data)
     url = f"{oauth_data['pds_url']}/xrpc/{endpoint}"
+    response = None  # defensive: bind before the loop so error paths can read it
 
     for attempt in range(2):
         kwargs: dict[str, Any] = {}
@@ -233,20 +264,15 @@ async def make_pds_request(
                 url=url,
                 **kwargs,
             )
-        except (
-            httpx.ReadError,
-            httpx.ConnectError,
-            httpcore.ReadError,
-            httpcore.ConnectError,
-        ) as e:
+        except _TRANSIENT_HTTP_ERRORS as e:
             if attempt == 0:
                 logger.warning(
-                    f"PDS network error for {auth_session.did}, retrying: {type(e).__name__}: {e}"
+                    f"PDS network error for {auth_session.did}, retrying: {_describe_exc(e)}"
                 )
                 await asyncio.sleep(1)
                 continue
             raise Exception(
-                f"PDS request failed after retry: {type(e).__name__}: {e}"
+                f"PDS request failed after retry: {_describe_exc(e)}"
             ) from e
 
         if response.status_code in success_codes:
@@ -254,22 +280,38 @@ async def make_pds_request(
                 return {}
             return response.json()
 
-        # token expired - refresh and retry
+        # token expired - refresh and retry. previously gated on the response
+        # body containing "exp" in its message, but under concurrent load the
+        # PDS can return 401 with an empty body, a body that can't be parsed,
+        # or a body whose message differs across PDS implementations — in
+        # which case we'd silently skip the refresh and raise a useless error.
+        # always attempt refresh on a first-attempt 401; if the refresh itself
+        # is transient-flaky, retry the refresh once before giving up.
         if response.status_code == 401 and attempt == 0:
+            logger.info(
+                f"access token expired or rejected for {auth_session.did}; refreshing"
+            )
             try:
-                error_data = response.json()
-                if "exp" in error_data.get("message", ""):
-                    logger.info(
-                        f"access token expired for {auth_session.did}, attempting refresh"
-                    )
-                    oauth_session = await _refresh_session_tokens(
-                        auth_session, oauth_session
-                    )
-                    continue
-            except (json.JSONDecodeError, KeyError):
-                pass
+                oauth_session = await _refresh_session_tokens(
+                    auth_session, oauth_session
+                )
+            except _TRANSIENT_HTTP_ERRORS as refresh_exc:
+                logger.warning(
+                    f"token refresh hit transient error, retrying once: {_describe_exc(refresh_exc)}"
+                )
+                await asyncio.sleep(1)
+                oauth_session = await _refresh_session_tokens(
+                    auth_session, oauth_session
+                )
+            continue
 
-    raise Exception(f"PDS request failed: {response.status_code} {response.text}")
+    # response should always be bound here (attempt==1 branch), but defensive
+    # check keeps the error path sane if the loop structure changes.
+    if response is None:
+        raise Exception("PDS request failed: no response received")
+    raise Exception(
+        f"PDS request failed: {response.status_code} {response.text or '<empty body>'}"
+    )
 
 
 async def upload_blob(
@@ -304,6 +346,8 @@ async def upload_blob(
     # read data if it's a file-like object
     blob_data = data if isinstance(data, bytes) else data.read()
 
+    response = None  # defensive: bind before the loop
+
     for attempt in range(2):
         try:
             response = await get_oauth_client().make_authenticated_request(
@@ -313,20 +357,15 @@ async def upload_blob(
                 content=blob_data,
                 headers={"Content-Type": content_type},
             )
-        except (
-            httpx.ReadError,
-            httpx.ConnectError,
-            httpcore.ReadError,
-            httpcore.ConnectError,
-        ) as e:
+        except _TRANSIENT_HTTP_ERRORS as e:
             if attempt == 0:
                 logger.warning(
-                    f"PDS blob upload network error for {auth_session.did}, retrying: {type(e).__name__}: {e}"
+                    f"PDS blob upload network error for {auth_session.did}, retrying: {_describe_exc(e)}"
                 )
                 await asyncio.sleep(1)
                 continue
             raise Exception(
-                f"blob upload failed after retry: {type(e).__name__}: {e}"
+                f"blob upload failed after retry: {_describe_exc(e)}"
             ) from e
 
         if response.status_code == 200:
@@ -335,25 +374,34 @@ async def upload_blob(
         # payload too large - PDS rejects due to size limit
         if response.status_code == 413:
             raise PayloadTooLargeError(
-                f"blob too large for PDS (limit exceeded): {response.text}"
+                f"blob too large for PDS (limit exceeded): {response.text or '<empty body>'}"
             )
 
-        # token expired - refresh and retry
+        # token expired - refresh and retry. unconditional on first-attempt
+        # 401 (see rationale in make_pds_request).
         if response.status_code == 401 and attempt == 0:
+            logger.info(
+                f"access token expired or rejected for {auth_session.did}; refreshing"
+            )
             try:
-                error_data = response.json()
-                if "exp" in error_data.get("message", ""):
-                    logger.info(
-                        f"access token expired for {auth_session.did}, attempting refresh"
-                    )
-                    oauth_session = await _refresh_session_tokens(
-                        auth_session, oauth_session
-                    )
-                    continue
-            except (json.JSONDecodeError, KeyError):
-                pass
+                oauth_session = await _refresh_session_tokens(
+                    auth_session, oauth_session
+                )
+            except _TRANSIENT_HTTP_ERRORS as refresh_exc:
+                logger.warning(
+                    f"token refresh hit transient error, retrying once: {_describe_exc(refresh_exc)}"
+                )
+                await asyncio.sleep(1)
+                oauth_session = await _refresh_session_tokens(
+                    auth_session, oauth_session
+                )
+            continue
 
-    raise Exception(f"blob upload failed: {response.status_code} {response.text}")
+    if response is None:
+        raise Exception("blob upload failed: no response received")
+    raise Exception(
+        f"blob upload failed: {response.status_code} {response.text or '<empty body>'}"
+    )
 
 
 def parse_at_uri(uri: str) -> tuple[str, str, str]:
