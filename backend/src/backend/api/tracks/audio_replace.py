@@ -30,7 +30,6 @@ from urllib.parse import urljoin
 
 import logfire
 from fastapi import (
-    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -47,6 +46,7 @@ from backend._internal.atproto.records import (
     update_record,
 )
 from backend._internal.audio import AudioFormat
+from backend._internal.background import get_docket
 from backend._internal.jobs import job_service
 from backend._internal.tasks import schedule_album_list_sync
 from backend._internal.tasks.hooks import (
@@ -539,6 +539,62 @@ async def _rollback_new_files(
             await storage.delete(new_original_file_id, new_original_file_type)
 
 
+# -- background task registration -----------------------------------------------
+
+
+async def run_track_audio_replace(
+    job_id: str,
+    session_id: str,
+    track_id: int,
+    file_path: str,
+    filename: str,
+) -> None:
+    """docket task entry point for audio replace.
+
+    takes primitive args (everything that survives Redis serialization),
+    rehydrates the auth session from the stored session_id, constructs a
+    ReplaceContext, and delegates to the phase orchestrator
+    (`_process_replace_background`). this is the function registered with
+    docket; the HTTP handler enqueues it via `schedule_track_audio_replace`.
+    """
+    auth_session = await get_session(session_id)
+    if auth_session is None:
+        await job_service.update_progress(
+            job_id,
+            JobStatus.FAILED,
+            "audio replace failed",
+            error="authentication session expired before processing could begin",
+        )
+        _unlink_temp(file_path)
+        return
+
+    ctx = ReplaceContext(
+        job_id=job_id,
+        auth_session=auth_session,
+        track_id=track_id,
+        file_path=file_path,
+        filename=filename,
+    )
+    await _process_replace_background(ctx)
+
+
+async def schedule_track_audio_replace(ctx: ReplaceContext) -> None:
+    """enqueue an audio replace as a docket task.
+
+    the HTTP handler should return to the client as soon as this call
+    resolves; the actual R2/PDS/ATProto work runs on a docket worker with
+    bounded concurrency so concurrent replaces can't saturate the DB pool.
+    """
+    docket = get_docket()
+    await docket.add(run_track_audio_replace)(
+        job_id=ctx.job_id,
+        session_id=ctx.auth_session.session_id,
+        track_id=ctx.track_id,
+        file_path=ctx.file_path,
+        filename=ctx.filename,
+    )
+
+
 # -- HTTP surface ----------------------------------------------------------------
 
 
@@ -547,7 +603,6 @@ async def _rollback_new_files(
 async def replace_track_audio(
     request: Request,
     track_id: int,
-    background_tasks: BackgroundTasks,
     auth_session: Annotated[AuthSession, Depends(require_auth)],
     file: UploadFile = File(...),
 ) -> UploadStartResponse:
@@ -627,8 +682,7 @@ async def replace_track_audio(
             "audio replace queued for processing",
         )
 
-        background_tasks.add_task(
-            _process_replace_background,
+        await schedule_track_audio_replace(
             ReplaceContext(
                 job_id=job_id,
                 auth_session=auth_session,

@@ -76,8 +76,15 @@ def _build_background_tasks() -> list:
     """build the task list, deferring jetstream import to break circular dep.
 
     cycle: jetstream.py → tasks.ingest → tasks/__init__.py → jetstream.py
+
+    the upload / audio-replace tasks are also imported lazily because their
+    modules (`api.tracks.uploads`, `api.tracks.audio_replace`) pull in the
+    FastAPI router infrastructure, which we don't want to touch at task-module
+    import time.
     """
     from backend._internal.jetstream import consume_jetstream
+    from backend.api.tracks.audio_replace import run_track_audio_replace
+    from backend.api.tracks.uploads import run_track_upload
 
     return [
         consume_jetstream,
@@ -111,6 +118,8 @@ def _build_background_tasks() -> list:
         ingest_profile_update,
         ingest_account_status_change,
         scan_image_moderation,
+        run_track_upload,
+        run_track_audio_replace,
     ]
 
 
