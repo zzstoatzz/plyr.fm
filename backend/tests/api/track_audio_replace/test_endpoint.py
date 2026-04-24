@@ -105,9 +105,9 @@ class TestEndpointAuthAndValidation:
         await db_session.commit()
         await db_session.refresh(track)
 
-        # patch the background hook so the queued task is a no-op
+        # patch the docket scheduler so the queued task is a no-op
         with patch(
-            "backend.api.tracks.audio_replace._process_replace_background",
+            "backend.api.tracks.audio_replace.schedule_track_audio_replace",
             new_callable=AsyncMock,
         ):
             async with AsyncClient(

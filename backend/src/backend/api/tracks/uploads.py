@@ -13,7 +13,6 @@ from typing import Annotated, Any
 import aiofiles
 import logfire
 from fastapi import (
-    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -28,7 +27,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
-from backend._internal import require_artist_profile
+from backend._internal import get_session, require_artist_profile
 from backend._internal.atproto import (
     BlobRef,
     PayloadTooLargeError,
@@ -37,6 +36,7 @@ from backend._internal.atproto import (
 )
 from backend._internal.atproto.handles import resolve_featured_artists
 from backend._internal.audio import AudioFormat
+from backend._internal.background import get_docket
 from backend._internal.clients.transcoder import get_transcoder_client
 from backend._internal.image import ImageFormat
 from backend._internal.jobs import job_service
@@ -972,12 +972,112 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                     Path(ctx.image_path).unlink(missing_ok=True)
 
 
+async def run_track_upload(
+    upload_id: str,
+    session_id: str,
+    file_path: str,
+    filename: str,
+    title: str,
+    artist_did: str,
+    album: str | None,
+    album_id: str | None,
+    features_json: str | None,
+    tags: list[str],
+    description: str | None,
+    image_path: str | None,
+    image_filename: str | None,
+    image_content_type: str | None,
+    support_gate: dict | None,
+    auto_tag: bool,
+    unlisted: bool,
+) -> None:
+    """docket task entry point for track uploads.
+
+    takes primitive args (everything that survives Redis serialization),
+    rehydrates the auth session from the stored session_id, constructs an
+    UploadContext, and delegates to the phase orchestrator
+    (`_process_upload_background`). this is the function registered with
+    docket; the HTTP handler enqueues it via `schedule_track_upload`.
+
+    rehydrating the session at task start rather than passing the cached
+    AuthSession over the wire means we pick up any token refresh that
+    happened between the HTTP request and the worker picking up the task.
+    """
+    auth_session = await get_session(session_id)
+    if auth_session is None:
+        # session expired or was revoked between HTTP request and task start.
+        # no way to publish to the user's PDS without it — fail the job and
+        # clean up the temp files we staged.
+        await job_service.update_progress(
+            upload_id,
+            JobStatus.FAILED,
+            "upload failed",
+            error="authentication session expired before processing could begin",
+        )
+        with contextlib.suppress(Exception):
+            Path(file_path).unlink(missing_ok=True)
+        if image_path:
+            with contextlib.suppress(Exception):
+                Path(image_path).unlink(missing_ok=True)
+        return
+
+    ctx = UploadContext(
+        upload_id=upload_id,
+        auth_session=auth_session,
+        file_path=file_path,
+        filename=filename,
+        title=title,
+        artist_did=artist_did,
+        album=album,
+        album_id=album_id,
+        features_json=features_json,
+        tags=tags,
+        description=description,
+        image_path=image_path,
+        image_filename=image_filename,
+        image_content_type=image_content_type,
+        support_gate=support_gate,
+        auto_tag=auto_tag,
+        unlisted=unlisted,
+    )
+    await _process_upload_background(ctx)
+
+
+async def schedule_track_upload(ctx: UploadContext) -> None:
+    """enqueue a track upload as a docket task.
+
+    the HTTP handler should return to the client as soon as this call
+    resolves; the actual R2/PDS/ATProto work runs on a docket worker with
+    bounded concurrency (`settings.docket.worker_concurrency`), which
+    prevents a burst of simultaneous uploads from saturating the DB pool.
+    """
+    docket = get_docket()
+    await docket.add(run_track_upload)(
+        upload_id=ctx.upload_id,
+        session_id=ctx.auth_session.session_id,
+        file_path=ctx.file_path,
+        filename=ctx.filename,
+        title=ctx.title,
+        artist_did=ctx.artist_did,
+        album=ctx.album,
+        album_id=ctx.album_id,
+        features_json=ctx.features_json,
+        tags=ctx.tags,
+        description=ctx.description,
+        image_path=ctx.image_path,
+        image_filename=ctx.image_filename,
+        image_content_type=ctx.image_content_type,
+        support_gate=ctx.support_gate,
+        auto_tag=ctx.auto_tag,
+        unlisted=ctx.unlisted,
+    )
+
+
 @router.post("/")
 @limiter.limit(settings.rate_limit.upload_limit)
 async def upload_track(
     request: Request,
     title: Annotated[str, Form()],
-    background_tasks: BackgroundTasks,
     auth_session: AuthSession = Depends(require_artist_profile),
     album: Annotated[str | None, Form()] = None,
     album_id: Annotated[
@@ -1021,7 +1121,6 @@ async def upload_track(
             Example: {"type": "any"} - requires any atprotofans support.
         file: Audio file to upload (required).
         image: Optional image file for track artwork.
-        background_tasks: FastAPI background-task runner.
         auth_session: Authenticated artist session (dependency-injected).
 
     Returns:
@@ -1152,7 +1251,7 @@ async def upload_track(
             auto_tag=auto_tag == "true",
             unlisted=unlisted == "true",
         )
-        background_tasks.add_task(_process_upload_background, ctx)
+        await schedule_track_upload(ctx)
     except Exception:
         if file_path:
             with contextlib.suppress(Exception):

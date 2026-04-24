@@ -11,16 +11,19 @@ or the atproto_uri/atproto_cid SSE completion fields.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from .utils.audio import save_drone
+
 if TYPE_CHECKING:
     from plyrfm import AsyncPlyrClient
 
-pytestmark = [pytest.mark.integration, pytest.mark.timeout(180)]
+pytestmark = [pytest.mark.integration, pytest.mark.timeout(300)]
 
 
 async def _create_album(
@@ -302,6 +305,101 @@ async def test_album_finalize_preserves_existing_tracks_on_append(
         assert returned_ids.index(track_a) < returned_ids.index(track_c), (
             f"preserved tracks must appear before newly-appended tracks, "
             f"got {returned_ids}"
+        )
+    finally:
+        if album_id:
+            await _delete_album_cascade(client, album_id=album_id)
+
+
+async def test_album_upload_10_tracks_concurrently(
+    user1_client: AsyncPlyrClient,
+    tmp_path: Path,
+) -> None:
+    """upload 10 tracks to an album concurrently and verify every one completes.
+
+    regression for the 2026-04-24 pool-pressure incident. the upload pipeline
+    used to run on `fastapi.BackgroundTasks`, which tied the HTTP request
+    lifecycle to the entire upload duration and held a request-scoped DB
+    connection the whole time. 6 concurrent uploads from a single album
+    create saturated the pool and starved unrelated routes.
+
+    this test exercises 10 concurrent uploads against the real backend. for
+    it to pass on the docket-based flow:
+      1. every HTTP POST /tracks/ must return promptly (the handler just
+         enqueues a docket task, so response time is bounded by validation +
+         streaming-to-disk, not by R2 + PDS + ATProto record creation)
+      2. every queued task must complete (no worker starvation, no task lost)
+      3. the album's list record must contain all 10 track IDs
+      4. all 10 SSE streams must report a `completed` event with a real
+         track_id + atproto_uri + atproto_cid
+    """
+    client = user1_client
+    album_id: str | None = None
+    n_tracks = 10
+    # pick 10 distinct pitches so each generated audio file has a different
+    # hash; the upload path rejects duplicate file_ids with 409.
+    notes = ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4", "D4", "E4"]
+    assert len(notes) == n_tracks
+
+    try:
+        # step 1: create album shell
+        album = await _create_album(
+            client,
+            title="Integration Test Album (10 Concurrent Uploads)",
+            description=(
+                "regression for upload-on-docket migration; verifies 10 "
+                "concurrent uploads all complete"
+            ),
+        )
+        album_id = album["id"]
+        assert album_id is not None
+
+        # step 2: generate 10 unique audio files up front (file-hash-distinct
+        # so duplicate detection doesn't short-circuit)
+        files: list[Path] = []
+        for i, note in enumerate(notes):
+            path = tmp_path / f"concurrent_{i:02d}_{note}.wav"
+            # slightly different durations as extra hash entropy
+            save_drone(path, note, duration_sec=2.0 + (i * 0.1))
+            files.append(path)
+
+        # step 3: fire all 10 uploads concurrently and collect track_ids
+        uploads = [
+            _upload_track_with_album_id(
+                client,
+                file=path,
+                title=f"Concurrent Upload {i:02d} - {notes[i]}",
+                album_id=album_id,
+                tags={"integration-test", "concurrent-upload"},
+            )
+            for i, path in enumerate(files)
+        ]
+        track_ids = await asyncio.gather(*uploads)
+        assert len(track_ids) == n_tracks
+        assert len(set(track_ids)) == n_tracks, (
+            f"expected {n_tracks} distinct track ids, got duplicates: {track_ids}"
+        )
+
+        # step 4: finalize in upload order and verify the list record has all N
+        finalized = await _finalize_album(
+            client, album_id=album_id, track_ids=list(track_ids)
+        )
+        assert finalized["list_uri"] is not None
+        assert finalized["track_count"] == n_tracks
+
+        artist_handle = finalized["artist_handle"]
+        slug = finalized["slug"]
+        detail_response = await client._client.get(
+            client._url(f"/albums/{artist_handle}/{slug}"),
+            headers=client._auth_headers,
+        )
+        detail_response.raise_for_status()
+        detail = detail_response.json()
+
+        returned_ids = [t["id"] for t in detail["tracks"]]
+        assert sorted(returned_ids) == sorted(track_ids), (
+            f"album must contain all {n_tracks} uploaded tracks; "
+            f"expected {sorted(track_ids)}, got {sorted(returned_ids)}"
         )
     finally:
         if album_id:
