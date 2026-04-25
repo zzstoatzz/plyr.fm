@@ -3,6 +3,7 @@
 	import SensitiveImage from './SensitiveImage.svelte';
 	import LikersTooltip from './LikersTooltip.svelte';
 	import { likersSheet } from '$lib/likers-sheet.svelte';
+	import { trackCoverUrl, trackThumbnailUrl } from '$lib/track-cover';
 	import type { Track } from '$lib/types';
 
 	interface Props {
@@ -16,6 +17,10 @@
 
 	let imageLoading = $derived(index < 3 ? 'eager' as const : 'lazy' as const);
 	let likeCount = $derived(track.like_count || 0);
+
+	// cover art with album fallback (matches the player bar's rule)
+	let coverFullUrl = $derived(trackCoverUrl(track));
+	let coverThumbUrl = $derived(trackThumbnailUrl(track));
 
 	let isMobile = $state(false);
 
@@ -86,11 +91,11 @@
 		onPlay(track);
 	}}
 >
-	<div class="artwork" class:gated={track.gated} class:avatar-fallback={!track.image_url && track.artist_avatar_url}>
-		{#if track.image_url}
-			<SensitiveImage src={track.thumbnail_url ?? track.image_url}>
+	<div class="artwork" class:gated={track.gated} class:avatar-fallback={!coverFullUrl && track.artist_avatar_url}>
+		{#if coverFullUrl || coverThumbUrl}
+			<SensitiveImage src={coverThumbUrl ?? coverFullUrl}>
 				<img
-					src={track.thumbnail_url ?? track.image_url}
+					src={coverThumbUrl ?? coverFullUrl}
 					alt="{track.title} artwork"
 					loading={imageLoading}
 				/>
