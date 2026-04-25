@@ -113,7 +113,7 @@ class TestSessionReloadAfterPdsUpload:
                 return_value=None,
             ),
             patch(
-                "backend._internal.get_session",
+                "backend.api.tracks.uploads.get_session",
                 return_value=refreshed_session,
             ),
         ):
@@ -187,7 +187,7 @@ class TestSessionReloadAfterPdsUpload:
                 "backend.api.tracks.uploads._schedule_post_upload",
                 return_value=None,
             ),
-            patch("backend._internal.get_session", get_session_mock),
+            patch("backend.api.tracks.uploads.get_session", get_session_mock),
         ):
             await _process_upload_background(ctx)
 

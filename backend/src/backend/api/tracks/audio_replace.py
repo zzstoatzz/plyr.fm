@@ -63,6 +63,7 @@ from backend.api.tracks.uploads import (
     UploadContext,
     UploadPhaseError,
     UploadStartResponse,
+    _delete_staged_audio,
     _store_audio,
     _upload_to_pds,
     _validate_audio,
@@ -605,10 +606,11 @@ async def run_track_audio_replace(
     if auth_session is None:
         # session is gone and the replace can't proceed; clean up the
         # staged bytes rather than leaving a durable orphan in storage.
-        delete_fn = storage.delete_gated if is_gated else storage.delete
-        new_file_type = Path(filename).suffix.lower().lstrip(".") or None
-        with contextlib.suppress(Exception):
-            await delete_fn(audio_file_id, new_file_type)
+        await _delete_staged_audio(
+            audio_file_id,
+            Path(filename).suffix.lower().lstrip(".") or None,
+            gated=is_gated,
+        )
         await job_service.update_progress(
             job_id,
             JobStatus.FAILED,
@@ -771,11 +773,11 @@ async def replace_track_audio(
         )
         enqueued = True
     except Exception:
-        if not enqueued and audio_file_id:
-            delete_fn = storage.delete_gated if is_gated else storage.delete
-            with contextlib.suppress(Exception):
-                await delete_fn(audio_file_id, audio_extension)
         if not enqueued:
+            if audio_file_id:
+                await _delete_staged_audio(
+                    audio_file_id, audio_extension, gated=is_gated
+                )
             with contextlib.suppress(Exception):
                 await job_service.update_progress(
                     job_id,
