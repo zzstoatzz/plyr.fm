@@ -21,6 +21,7 @@ from backend._internal.tasks.origin_trust import (
     is_trusted_audio_origin,
     is_trusted_image_origin,
 )
+from backend._internal.tasks.pds import is_like_uri_cancelled
 from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.models.session import UserSession
@@ -415,6 +416,20 @@ async def ingest_like_create(
     """create a like from a Jetstream event."""
     if errors := validate_record("fm.plyr.like", record):
         logfire.warn("ingest: invalid like record, skipping", uri=uri, errors=errors)
+        return
+
+    # `pds_create_like` tombstones URIs whose owning row was unliked while
+    # the PDS create was still in flight. Jetstream may emit the create
+    # event for that URI before our orphan-cleanup PDS delete propagates;
+    # without this guard, we'd insert a row the user already cancelled
+    # (the "like resurrects after unlike" race surfaced by
+    # `test_cross_user_like` in integration tests).
+    if await is_like_uri_cancelled(uri):
+        logfire.info(
+            "ingest: skipping cancelled like create event",
+            uri=uri,
+            user_did=did,
+        )
         return
 
     subject = record.get("subject", {})
