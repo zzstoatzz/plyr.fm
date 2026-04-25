@@ -14,10 +14,7 @@
 		type GatedError,
 		type ResolvedSource
 	} from '$lib/audio-source';
-	import {
-		recordPlaybackRejection,
-		type PlaybackRejectionContext
-	} from '$lib/observability';
+	import { recordPlaybackRejection } from '$lib/observability';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import TrackInfo from './TrackInfo.svelte';
@@ -393,10 +390,7 @@
 		audio.load();
 	}
 
-	function handleGatedDenial(
-		err: GatedError,
-		fromAutoAdvance: boolean
-	): void {
+	function handleGatedDenial(err: GatedError): void {
 		if (err.requiresAuth) {
 			toast.info('sign in to play supporter-only tracks');
 		} else {
@@ -409,7 +403,10 @@
 			});
 		}
 
-		// skip to next playable (non-gated) track in queue
+		// skip to next playable (non-gated) track in queue. always intend to
+		// auto-play the skipped-to track: whether the user clicked a gated
+		// track or natural auto-advance landed on one, the user wants the
+		// next playable track to start. matches pre-fast-path behavior.
 		let nextPlayable = -1;
 		for (let i = queue.currentIndex + 1; i < queue.tracks.length; i++) {
 			if (!queue.tracks[i].gated) {
@@ -418,7 +415,7 @@
 			}
 		}
 		if (nextPlayable >= 0) {
-			shouldAutoPlay = fromAutoAdvance;
+			shouldAutoPlay = true;
 			queue.goTo(nextPlayable);
 		} else {
 			player.paused = true;
@@ -470,7 +467,7 @@
 			}
 			if (cached.kind === 'gated-denied') {
 				isLoadingTrack = false;
-				handleGatedDenial(gatedErrorFromResolution(cached), false);
+				handleGatedDenial(gatedErrorFromResolution(cached));
 				return;
 			}
 			// stale fileId or `failed` → fall through to fresh fetch below
@@ -493,7 +490,7 @@
 
 			isLoadingTrack = false;
 			if (resolved.kind === 'gated-denied') {
-				handleGatedDenial(gatedErrorFromResolution(resolved), false);
+				handleGatedDenial(gatedErrorFromResolution(resolved));
 				return;
 			}
 			console.error('failed to load audio:', resolved.error);
@@ -513,8 +510,25 @@
 		if (player.paused) {
 			player.audioElement.pause();
 		} else {
-			player.audioElement.play().catch((err) => {
-				console.error('[player] playback failed:', err.name, err.message);
+			const audio = player.audioElement;
+			audio.play().catch((err: unknown) => {
+				const e = err as { name?: string; message?: string };
+				console.error('[player] playback failed:', e?.name, e?.message);
+				// instrument slow-path rejections with the same shape as the
+				// fast path so dashboards can compare rejection rates between
+				// the two by filtering on `playback.fast_path`. without this,
+				// the slow path was logging only to the console and skewing
+				// the comparison toward "fast path is the only one rejecting".
+				recordPlaybackRejection({
+					errorName: e?.name ?? 'Unknown',
+					errorMessage: e?.message ?? '',
+					visibilityState:
+						typeof document !== 'undefined' ? document.visibilityState : 'visible',
+					audioReadyState: audio.readyState,
+					fastPath: false,
+					preloaded: 'absent',
+					reason: 'auto-advance'
+				});
 				player.paused = true;
 			});
 		}
@@ -671,9 +685,12 @@
 		// Slow path: either no preload, jam active, or some race made the
 		// preload stale. Defer to the reactive chain — it works on
 		// foregrounded tabs and on most desktop browsers; the lock-screen
-		// case is the one that needs the fast path above.
+		// case is the one that needs the fast path above. If the eventual
+		// `audio.play()` from the slow path rejects (e.g. on locked Android
+		// when this fast-path-skip happened because the preload was stale),
+		// the paused-sync effect's `play().catch(...)` will record the
+		// rejection with `fastPath: false` so dashboards can compare paths.
 		shouldAutoPlay = true;
-		recordAutoAdvanceFallback(audio, cached);
 		queue.next();
 	}
 
@@ -743,31 +760,6 @@
 		// statements will reintroduce that race.
 		player.currentTrack = next;
 		queue.next();
-	}
-
-	function recordAutoAdvanceFallback(
-		audio: HTMLAudioElement | null | undefined,
-		cached: ResolvedSource | null
-	): void {
-		// Diagnostic-only: emit a marker on the slow path so we can compare
-		// fast-vs-slow rates per browser/visibility bucket. Never throws —
-		// observability must not break recovery.
-		if (!audio) return;
-		const preloaded: PlaybackRejectionContext['preloaded'] = !cached
-			? 'absent'
-			: cached.kind === 'ready'
-				? 'ready'
-				: cached.kind;
-		recordPlaybackRejection({
-			errorName: 'AutoAdvanceFallback',
-			errorMessage: 'fast path skipped — preload not ready or jam active',
-			visibilityState:
-				typeof document !== 'undefined' ? document.visibilityState : 'visible',
-			audioReadyState: audio.readyState,
-			fastPath: false,
-			preloaded,
-			reason: 'auto-advance'
-		});
 	}
 
 </script>
