@@ -53,6 +53,27 @@ class Queue {
 		return this.currentIndex < this.tracks.length - 1;
 	}
 
+	/**
+	 * The track that natural end-of-track continuation should attempt next.
+	 *
+	 * Today: the next item in the hard queue, if any. Player.svelte uses
+	 * this both to prefetch the upcoming source while the current track
+	 * is still playing AND as the synchronous decision in the audio
+	 * `ended` handler — the locked-screen autoplay grace requires that
+	 * the swap to the next source happens in the same tick as the
+	 * `ended` event, with no `await` in the path.
+	 *
+	 * Future: this is the seam where the Player asks "what should
+	 * play next" without caring whether the answer comes from the
+	 * hard queue, an album/playlist tail, a feed continuation, or a
+	 * recommendation. Keep callers reading this getter, not poking
+	 * `tracks[currentIndex + 1]` directly.
+	 */
+	get autoAdvanceTrack(): Track | null {
+		if (this.currentIndex < 0) return null;
+		return this.tracks[this.currentIndex + 1] ?? null;
+	}
+
 	get hasPrevious(): boolean {
 		return this.currentIndex > 0;
 	}
