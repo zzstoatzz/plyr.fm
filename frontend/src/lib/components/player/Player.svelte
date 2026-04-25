@@ -7,9 +7,13 @@
 	import { moderation } from '$lib/moderation.svelte';
 	import { preferences } from '$lib/preferences.svelte';
 	import { toast } from '$lib/toast.svelte';
-	import { API_URL } from '$lib/config';
-	import { getCachedAudioUrl } from '$lib/storage';
-	import { hasPlayableLossless } from '$lib/audio-support';
+	import {
+		gatedErrorFromResolution,
+		pickFileIdForTrack,
+		resolveAudioSource,
+		type GatedError,
+		type ResolvedSource
+	} from '$lib/audio-source';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import TrackInfo from './TrackInfo.svelte';
@@ -249,55 +253,6 @@
 		);
 	});
 
-	// gated content error types
-	interface GatedError {
-		type: 'gated';
-		artistDid: string;
-		artistHandle: string;
-		requiresAuth: boolean;
-	}
-
-	// get audio source URL - checks local cache first, falls back to network
-	// throws GatedError if the track requires supporter access
-	async function getAudioSource(file_id: string, track: Track): Promise<string> {
-		try {
-			const cachedUrl = await getCachedAudioUrl(file_id);
-			if (cachedUrl) {
-				return cachedUrl;
-			}
-		} catch (err) {
-			console.error('failed to check audio cache:', err);
-		}
-
-		// for gated tracks, check authorization first
-		if (track.gated) {
-			const response = await fetch(`${API_URL}/audio/${file_id}`, {
-				method: 'HEAD',
-				credentials: 'include'
-			});
-
-			if (response.status === 401) {
-				throw {
-					type: 'gated',
-					artistDid: track.artist_did,
-					artistHandle: track.artist_handle,
-					requiresAuth: true
-				} as GatedError;
-			}
-
-			if (response.status === 402) {
-				throw {
-					type: 'gated',
-					artistDid: track.artist_did,
-					artistHandle: track.artist_handle,
-					requiresAuth: false
-				} as GatedError;
-			}
-		}
-
-		return `${API_URL}/audio/${file_id}`;
-	}
-
 	// track whether we've restored saved position on initial hydration
 	let positionRestored = false;
 
@@ -318,6 +273,154 @@
 	let previousFileId = $state<string | null>(null);
 	let isLoadingTrack = $state(false);
 
+	// Source-of-truth for what's actually wired to the audio element.
+	// Distinct from `previousTrackId` (used by the loader's
+	// trackChanged/fileChanged check) because the synchronous fast path
+	// needs the loader to recognize "audio is already attached, don't
+	// reload" without going through the full reactivity dance first.
+	let attachedTrackId: number | null = null;
+	let attachedFileId: string | null = null;
+
+	// Pre-resolved source for the next track that natural end-of-track
+	// continuation will attempt. The locked-screen autoplay grace
+	// requires that `audio.src = …; audio.play()` happens in the same
+	// tick as the `ended` event — we cannot afford an `await` inside
+	// `handleTrackEnded`. So we do the resolution opportunistically
+	// while the current track is still playing.
+	let preloadedNext = $state<ResolvedSource | null>(null);
+
+	function discardPreload() {
+		const cached = preloadedNext;
+		if (cached && cached.kind === 'ready' && cached.ownsBlob) {
+			URL.revokeObjectURL(cached.src);
+		}
+		preloadedNext = null;
+	}
+
+	function preloadIsFreshFor(track: Track): boolean {
+		const cached = preloadedNext;
+		if (!cached) return false;
+		if (cached.trackId !== track.id) return false;
+		if (cached.kind === 'ready' && cached.fileIdUsed !== pickFileIdForTrack(track)) {
+			return false;
+		}
+		return true;
+	}
+
+	// kick off resolution for the upcoming continuation track. tracked
+	// reads (queue.autoAdvanceTrack, jam.active) wake this up; the
+	// preloadedNext write goes through `untrack` so we don't self-trigger.
+	$effect(() => {
+		const next = queue.autoAdvanceTrack;
+		const jamActive = jam.active;
+
+		untrack(() => {
+			if (!next || jamActive) {
+				discardPreload();
+				return;
+			}
+			if (preloadIsFreshFor(next)) return;
+
+			// the existing entry is for a different track or stale file —
+			// drop it before fetching the new one.
+			discardPreload();
+
+			const fileIdUsed = pickFileIdForTrack(next);
+			void resolveAudioSource(next, fileIdUsed).then((resolved) => {
+				// the queue may have advanced or jam toggled while we awaited.
+				// if so, this resolution is for a track we no longer care
+				// about; throw away any blob it owns rather than caching it.
+				const stillWanted =
+					queue.autoAdvanceTrack?.id === next.id && !jam.active;
+				if (!stillWanted) {
+					if (resolved.kind === 'ready' && resolved.ownsBlob) {
+						URL.revokeObjectURL(resolved.src);
+					}
+					return;
+				}
+				preloadedNext = resolved;
+			});
+		});
+	});
+
+	// Wire `resolved` (cached or freshly fetched) to the audio element.
+	// Shared between the reactive loader (slow path) and `handleTrackEnded`
+	// (fast path) so the loadeddata wiring, blob ownership, and play-count
+	// unlock all live in exactly one place.
+	function attachResolvedSource(
+		audio: HTMLAudioElement,
+		resolved: Extract<ResolvedSource, { kind: 'ready' }>
+	): void {
+		// the new src may be the same blob we already own, or a new one.
+		// only revoke when we'd be replacing it with something else.
+		if (currentBlobUrl && currentBlobUrl !== resolved.src) {
+			URL.revokeObjectURL(currentBlobUrl);
+			currentBlobUrl = null;
+		}
+		if (resolved.ownsBlob) {
+			currentBlobUrl = resolved.src;
+		}
+
+		attachedTrackId = resolved.trackId;
+		attachedFileId = resolved.fileIdUsed;
+
+		// attach listener BEFORE load() to avoid race with cached audio.
+		audio.addEventListener(
+			'loadeddata',
+			() => {
+				// restore position on initial hydration only
+				if (!positionRestored && queue.progressMs > 0 && player.audioElement) {
+					const positionSec = queue.progressMs / 1000;
+					// don't restore if near the end (within 5s of duration)
+					if (player.duration === 0 || positionSec < player.duration - 5) {
+						player.audioElement.currentTime = positionSec;
+					}
+					positionRestored = true;
+				}
+				isLoadingTrack = false;
+				// unlock play counting now that new audio is ready
+				// (prevents spurious fires from stale currentTime during transitions)
+				player.unlockPlayCount();
+			},
+			{ once: true }
+		);
+
+		audio.src = resolved.src;
+		audio.load();
+	}
+
+	function handleGatedDenial(err: GatedError): void {
+		if (err.requiresAuth) {
+			toast.info('sign in to play supporter-only tracks');
+		} else {
+			const supportUrl = err.artistDid
+				? `${ATPROTOFANS_URL}/${err.artistDid}`
+				: `${ATPROTOFANS_URL}/${err.artistHandle}`;
+			toast.info('this track is for supporters only', 5000, {
+				label: 'become a supporter',
+				href: supportUrl
+			});
+		}
+
+		// skip to next playable (non-gated) track in queue. always intend to
+		// auto-play the skipped-to track: whether the user clicked a gated
+		// track or natural auto-advance landed on one, the user wants the
+		// next playable track to start. matches pre-fast-path behavior.
+		let nextPlayable = -1;
+		for (let i = queue.currentIndex + 1; i < queue.tracks.length; i++) {
+			if (!queue.tracks[i].gated) {
+				nextPlayable = i;
+				break;
+			}
+		}
+		if (nextPlayable >= 0) {
+			shouldAutoPlay = true;
+			queue.goTo(nextPlayable);
+		} else {
+			player.paused = true;
+		}
+	}
+
 	$effect(() => {
 		if (!player.currentTrack || !player.audioElement) return;
 
@@ -325,103 +428,72 @@
 		// the file_id changes for the same track (audio replaced from edit form).
 		const trackChanged = player.currentTrack.id !== previousTrackId;
 		const fileChanged = player.currentTrack.file_id !== previousFileId;
-		if (trackChanged || fileChanged) {
-			const trackToLoad = player.currentTrack;
+		if (!trackChanged && !fileChanged) return;
 
-			// update tracking state
+		const trackToLoad = player.currentTrack;
+
+		// the synchronous fast path may have already attached this exact
+		// track+file to the audio element. when it has, the loader's job
+		// is just to rebase its bookkeeping — re-running the async fetch
+		// would trample the in-flight playback.
+		if (
+			attachedTrackId === trackToLoad.id &&
+			attachedFileId === trackToLoad.file_id
+		) {
 			previousTrackId = trackToLoad.id;
 			previousFileId = trackToLoad.file_id;
-			player.resetPlayCount();
-			isLoadingTrack = true;
-
-			// cleanup previous blob URL before loading new track
-			cleanupBlobUrl();
-
-			// use lossless original if browser supports it, otherwise transcoded
-			const fileId = (trackToLoad.original_file_id && hasPlayableLossless(trackToLoad.original_file_type)) ? trackToLoad.original_file_id : trackToLoad.file_id;
-			getAudioSource(fileId, trackToLoad)
-				.then((src) => {
-					// check if track is still current (user may have changed tracks during await)
-					if (player.currentTrack?.id !== trackToLoad.id || !player.audioElement) {
-						// track changed, cleanup if we created a blob URL
-						if (src.startsWith('blob:')) {
-							URL.revokeObjectURL(src);
-						}
-						return;
-					}
-
-					// track if this is a blob URL so we can revoke it later
-					if (src.startsWith('blob:')) {
-						currentBlobUrl = src;
-					}
-
-					// attach listener BEFORE load() to avoid race with cached audio
-					player.audioElement.addEventListener(
-						'loadeddata',
-						() => {
-							// restore position on initial hydration only
-							if (!positionRestored && queue.progressMs > 0 && player.audioElement) {
-								const positionSec = queue.progressMs / 1000;
-								// don't restore if near the end (within 5s of duration)
-								if (player.duration === 0 || positionSec < player.duration - 5) {
-									player.audioElement.currentTime = positionSec;
-								}
-								positionRestored = true;
-							}
-							isLoadingTrack = false;
-							// unlock play counting now that new audio is ready
-							// (prevents spurious fires from stale currentTime during transitions)
-							player.unlockPlayCount();
-						},
-						{ once: true }
-					);
-
-					player.audioElement.src = src;
-					player.audioElement.load();
-				})
-				.catch((err) => {
-					isLoadingTrack = false;
-
-					// handle gated content errors with supporter CTA
-					if (err && err.type === 'gated') {
-						const gatedErr = err as GatedError;
-
-						if (gatedErr.requiresAuth) {
-							toast.info('sign in to play supporter-only tracks');
-						} else {
-							// show toast with supporter CTA
-							const supportUrl = gatedErr.artistDid
-								? `${ATPROTOFANS_URL}/${gatedErr.artistDid}`
-								: `${ATPROTOFANS_URL}/${gatedErr.artistHandle}`;
-
-							toast.info('this track is for supporters only', 5000, {
-								label: 'become a supporter',
-								href: supportUrl
-							});
-						}
-
-						// skip to next playable (non-gated) track in queue
-						let nextPlayable = -1;
-						for (let i = queue.currentIndex + 1; i < queue.tracks.length; i++) {
-							if (!queue.tracks[i].gated) {
-								nextPlayable = i;
-								break;
-							}
-						}
-
-						if (nextPlayable >= 0) {
-							shouldAutoPlay = true;
-							queue.goTo(nextPlayable);
-						} else {
-							// no playable tracks remaining — just pause
-							player.paused = true;
-						}
-						return;
-					}
-
-					console.error('failed to load audio:', err);
-				});
+			return;
 		}
+
+		// update tracking state
+		previousTrackId = trackToLoad.id;
+		previousFileId = trackToLoad.file_id;
+		player.resetPlayCount();
+		isLoadingTrack = true;
+
+		const fileIdUsed = pickFileIdForTrack(trackToLoad);
+
+		// if the prefetcher already resolved this exact track, reuse it
+		// — the resolution result came from `resolveAudioSource`, the
+		// same function the slow path would call, so reusing is safe.
+		const cached = preloadedNext;
+		if (cached && cached.trackId === trackToLoad.id) {
+			preloadedNext = null;
+			if (cached.kind === 'ready' && cached.fileIdUsed === fileIdUsed) {
+				cleanupBlobUrl();
+				attachResolvedSource(player.audioElement, cached);
+				return;
+			}
+			if (cached.kind === 'gated-denied') {
+				isLoadingTrack = false;
+				handleGatedDenial(gatedErrorFromResolution(cached));
+				return;
+			}
+			// stale fileId or `failed` → fall through to fresh fetch below
+		}
+
+		cleanupBlobUrl();
+		void resolveAudioSource(trackToLoad, fileIdUsed).then((resolved) => {
+			// check if track is still current (user may have changed tracks during await)
+			if (player.currentTrack?.id !== trackToLoad.id || !player.audioElement) {
+				if (resolved.kind === 'ready' && resolved.ownsBlob) {
+					URL.revokeObjectURL(resolved.src);
+				}
+				return;
+			}
+
+			if (resolved.kind === 'ready') {
+				attachResolvedSource(player.audioElement, resolved);
+				return;
+			}
+
+			isLoadingTrack = false;
+			if (resolved.kind === 'gated-denied') {
+				handleGatedDenial(gatedErrorFromResolution(resolved));
+				return;
+			}
+			console.error('failed to load audio:', resolved.error);
+		});
 	});
 
 	// sync paused state with audio element (output device only — non-output stays silent)
@@ -437,8 +509,9 @@
 		if (player.paused) {
 			player.audioElement.pause();
 		} else {
-			player.audioElement.play().catch((err) => {
-				console.error('[player] playback failed:', err.name, err.message);
+			player.audioElement.play().catch((err: unknown) => {
+				const e = err as { name?: string; message?: string };
+				console.error('[player] playback failed:', e?.name, e?.message);
 				player.paused = true;
 			});
 		}
@@ -559,13 +632,108 @@
 			return;
 		}
 
-		if (queue.hasNext) {
-			shouldAutoPlay = true;
-			queue.next();
-		} else {
+		const next = queue.autoAdvanceTrack;
+		if (!next) {
 			player.reset();
 			nowPlaying.clear();
+			return;
 		}
+
+		// Fast path: if the prefetcher already has a ready source for the
+		// track we want to advance to, swap `audio.src` and call `play()`
+		// synchronously here — same tick as the `ended` event. The locked-
+		// screen autoplay grace on Android requires zero `await`s between
+		// the natural-end signal and the next play() call; the reactive
+		// chain (queue.next() → effect → effect → fetch → load → effect →
+		// play) takes too many ticks and the browser drops the implicit
+		// playback permission, blocking the next play() with NotAllowed.
+		const audio = player.audioElement;
+		const cached = preloadedNext;
+		const canFastPath =
+			!jam.active &&
+			audio !== null &&
+			cached !== null &&
+			cached.kind === 'ready' &&
+			cached.trackId === next.id;
+
+		if (canFastPath) {
+			// We've already set canFastPath using a discriminant on cached.kind,
+			// but TypeScript narrowing through `&&` in a const doesn't reach the
+			// access below — re-narrow explicitly.
+			if (cached?.kind !== 'ready' || !audio) return;
+			advanceToPreloadedSynchronously(audio, cached, next);
+			return;
+		}
+
+		// Slow path: either no preload, jam active, or some race made the
+		// preload stale. Defer to the reactive chain — it works on
+		// foregrounded tabs and on most desktop browsers; the lock-screen
+		// case is the one that needs the fast path above. If the eventual
+		// `audio.play()` from the slow path rejects (e.g. on locked Android
+		// when this fast-path-skip happened because the preload was stale),
+		// the paused-sync effect's `play().catch(...)` will record the
+		// rejection with `fastPath: false` so dashboards can compare paths.
+		shouldAutoPlay = true;
+		queue.next();
+	}
+
+	function advanceToPreloadedSynchronously(
+		audio: HTMLAudioElement,
+		preloaded: Extract<ResolvedSource, { kind: 'ready' }>,
+		next: Track
+	): void {
+		// Reset play counting BEFORE the swap so a stale (currentTime
+		// near duration) reading from the just-ended track can't fire a
+		// spurious increment between here and `loadeddata` unlocking.
+		player.resetPlayCount();
+		isLoadingTrack = true;
+
+		// Sync ALL bookkeeping that downstream effects key off so they
+		// recognize "no work to do" once they wake. Without this,
+		// `queue.next()` below would trigger the queue→player sync
+		// effect's `indexChanged` branch, which would slam
+		// `player.currentTime = 0` and seek the just-started audio
+		// back to the start.
+		previousTrackId = next.id;
+		previousFileId = next.file_id;
+		previousQueueIndex = queue.currentIndex + 1;
+		preloadedNext = null;
+
+		// Wire the new src to the audio element. `attachResolvedSource`
+		// also takes ownership of any blob URL on the resolved object,
+		// revoking the previous blob if this isn't the same one.
+		attachResolvedSource(audio, preloaded);
+
+		// THE critical call: synchronous, same-tick play() to preserve
+		// the implicit-playback grace from the `ended` event. Anything
+		// that yields between here and play() costs us the autoplay
+		// permission on locked Android.
+		const playPromise = audio.play();
+		if (playPromise && typeof playPromise.catch === 'function') {
+			playPromise.catch((err: unknown) => {
+				const e = err as { name?: string; message?: string };
+				console.error('[player] fast-path play failed:', e?.name, e?.message);
+				player.paused = true;
+			});
+		}
+
+		// Now let reactivity catch up. Setting player.currentTrack first
+		// (and pre-incrementing previousQueueIndex above) keeps every
+		// downstream effect a no-op except for media-session metadata
+		// + now-playing reporting, which we DO want to refresh.
+		//
+		// THESE TWO LINES MUST STAY ADJACENT in the same synchronous
+		// tick. Between `player.currentTrack = next` and `queue.next()`,
+		// the queue→player sync effect would observe a stale
+		// queue.currentTrack !== player.currentTrack and try to roll
+		// player.currentTrack back to the old track. Svelte batches
+		// effect flushes until the synchronous frame ends, so as long
+		// as nothing here yields (no await, no setTimeout) the effect
+		// only runs after both writes land and sees a consistent state.
+		// A future refactor that introduces any yield between these two
+		// statements will reintroduce that race.
+		player.currentTrack = next;
+		queue.next();
 	}
 
 </script>
