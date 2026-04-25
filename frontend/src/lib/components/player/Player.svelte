@@ -14,7 +14,6 @@
 		type GatedError,
 		type ResolvedSource
 	} from '$lib/audio-source';
-	import { recordPlaybackRejection } from '$lib/observability';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import TrackInfo from './TrackInfo.svelte';
@@ -510,25 +509,9 @@
 		if (player.paused) {
 			player.audioElement.pause();
 		} else {
-			const audio = player.audioElement;
-			audio.play().catch((err: unknown) => {
+			player.audioElement.play().catch((err: unknown) => {
 				const e = err as { name?: string; message?: string };
 				console.error('[player] playback failed:', e?.name, e?.message);
-				// instrument slow-path rejections with the same shape as the
-				// fast path so dashboards can compare rejection rates between
-				// the two by filtering on `playback.fast_path`. without this,
-				// the slow path was logging only to the console and skewing
-				// the comparison toward "fast path is the only one rejecting".
-				recordPlaybackRejection({
-					errorName: e?.name ?? 'Unknown',
-					errorMessage: e?.message ?? '',
-					visibilityState:
-						typeof document !== 'undefined' ? document.visibilityState : 'visible',
-					audioReadyState: audio.readyState,
-					fastPath: false,
-					preloaded: 'absent',
-					reason: 'auto-advance'
-				});
 				player.paused = true;
 			});
 		}
@@ -729,16 +712,7 @@
 		if (playPromise && typeof playPromise.catch === 'function') {
 			playPromise.catch((err: unknown) => {
 				const e = err as { name?: string; message?: string };
-				recordPlaybackRejection({
-					errorName: e?.name ?? 'Unknown',
-					errorMessage: e?.message ?? '',
-					visibilityState:
-						typeof document !== 'undefined' ? document.visibilityState : 'visible',
-					audioReadyState: audio.readyState,
-					fastPath: true,
-					preloaded: 'ready',
-					reason: 'auto-advance'
-				});
+				console.error('[player] fast-path play failed:', e?.name, e?.message);
 				player.paused = true;
 			});
 		}
