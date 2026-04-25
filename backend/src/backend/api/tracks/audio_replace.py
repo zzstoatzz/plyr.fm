@@ -66,11 +66,13 @@ from backend.api.tracks.uploads import (
     _store_audio,
     _upload_to_pds,
     _validate_audio,
+    stage_audio_to_storage,
 )
 from backend.config import settings
 from backend.models import Track, TrackRevision
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
+from backend.utilities.audio import extract_duration
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE
 from backend.utilities.rate_limit import limiter
@@ -113,13 +115,20 @@ class TrackAudioState:
 
 @dataclass
 class ReplaceContext:
-    """all data needed to process an audio replace in the background."""
+    """all data needed to process an audio replace in the background.
+
+    new audio bytes are staged to shared object storage by the HTTP
+    handler BEFORE this context is enqueued — the worker only ever
+    sees stable storage identifiers. see `UploadContext` for the same
+    invariant on the upload side.
+    """
 
     job_id: str
     auth_session: AuthSession
     track_id: int
-    file_path: str
+    audio_file_id: str
     filename: str
+    duration: int | None
 
 
 async def _load_and_authorize(
@@ -174,8 +183,9 @@ def _build_upload_context_for_phases(
     return UploadContext(
         upload_id=ctx.job_id,
         auth_session=ctx.auth_session,
-        file_path=ctx.file_path,
+        audio_file_id=ctx.audio_file_id,
         filename=ctx.filename,
+        duration=ctx.duration,
         title=state.title,
         artist_did=state.artist_did,
         album=state.album,
@@ -190,7 +200,7 @@ def _audio_url_for_record(state: TrackAudioState, sr: StorageResult) -> str:
     """compute the audioUrl field for the new ATProto record.
 
     gated tracks point at the auth-protected backend endpoint; public tracks
-    point at the R2 custom domain URL.
+    point at the public storage URL.
     """
     if state.support_gate is not None:
         backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
@@ -338,23 +348,24 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
 
     the pipeline is split into two halves around the DB swap:
 
-    pre-commit (rollback applies — failure deletes the new R2 file):
+    pre-commit (rollback applies — failure deletes the new playable file):
         1. load + authorize
         2. validate new bytes
-        3. store new bytes (R2 + transcode if needed)
+        3. store new bytes (transcode if needed; the staged file_id is the
+           lossless original when transcoding, the playable file otherwise)
         4. upload to PDS (best-effort)
         5. publish updated ATProto record (PUT)
         6. atomically swap the DB row
 
     post-commit (NO rollback — the track is replaced; failures are logged):
-        7. delete old R2 file
-        8. fire post-replace hooks (rescan, re-embed, re-classify)
-        9. resync album list record
-        10. invalidate discovery cache
+        7. fire post-replace hooks (rescan, re-embed, re-classify)
+        8. resync album list record
+        9. invalidate discovery cache
 
     the split is critical: once `_commit_db_swap` returns, the track row points
     at the new file and the ATProto record is published. tearing down the new
-    R2 object at that point would leave production looking at a broken track.
+    storage object at that point would leave production looking at a broken
+    track.
     """
     new_file_id_for_rollback: str | None = None
     new_original_file_id_for_rollback: str | None = None
@@ -414,7 +425,6 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
             await job_service.update_progress(
                 ctx.job_id, JobStatus.FAILED, "audio replace failed", error=e.error
             )
-            _unlink_temp(ctx.file_path)
             return
         except Exception as e:
             await _rollback_new_files(
@@ -432,7 +442,6 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
                 "audio replace failed",
                 error=f"unexpected error: {e!s}",
             )
-            _unlink_temp(ctx.file_path)
             return
 
         # ---- post-commit (NO rollback — the swap is committed) ----
@@ -472,13 +481,6 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
                 "atproto_cid": track.atproto_record_cid,
             },
         )
-        _unlink_temp(ctx.file_path)
-
-
-def _unlink_temp(file_path: str) -> None:
-    """remove the temp upload file (suppress all errors)."""
-    with contextlib.suppress(Exception):
-        Path(file_path).unlink(missing_ok=True)
 
 
 async def _refresh_metadata_state(state: TrackAudioState) -> TrackAudioState:
@@ -548,17 +550,22 @@ async def run_track_audio_replace(
     session_id: str,
     user_did: str,
     track_id: int,
-    file_path: str,
+    audio_file_id: str,
     filename: str,
+    duration: int | None,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("user_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for audio replace.
 
-    takes primitive args (everything that survives Redis serialization),
-    rehydrates the auth session from the stored session_id, constructs a
-    ReplaceContext, and delegates to the phase orchestrator
-    (`_process_replace_background`). this is the function registered with
-    docket; the HTTP handler enqueues it via `schedule_track_audio_replace`.
+    takes primitive args + a shared-storage `audio_file_id` (the new
+    bytes are staged to storage by the HTTP handler before this task is
+    enqueued). rehydrates the auth session from the stored session_id,
+    constructs a ReplaceContext, and delegates to the phase orchestrator
+    (`_process_replace_background`).
+
+    **never accept filesystem paths here** — see the matching note on
+    `run_track_upload`. workers may run on a different fly machine than
+    the request handler.
 
     `ConcurrencyLimit("user_did", max_concurrent=3)` caps concurrent
     replaces per user's DID at 3 — same as the upload task. prevents a
@@ -573,15 +580,15 @@ async def run_track_audio_replace(
             "audio replace failed",
             error="authentication session expired before processing could begin",
         )
-        _unlink_temp(file_path)
         return
 
     ctx = ReplaceContext(
         job_id=job_id,
         auth_session=auth_session,
         track_id=track_id,
-        file_path=file_path,
+        audio_file_id=audio_file_id,
         filename=filename,
+        duration=duration,
     )
     await _process_replace_background(ctx)
 
@@ -589,9 +596,11 @@ async def run_track_audio_replace(
 async def schedule_track_audio_replace(ctx: ReplaceContext) -> None:
     """enqueue an audio replace as a docket task.
 
-    the HTTP handler should return to the client as soon as this call
-    resolves; the actual R2/PDS/ATProto work runs on a docket worker with
-    bounded concurrency so concurrent replaces can't saturate the DB pool.
+    by contract this function only forwards small primitives + storage
+    identifiers — never local filesystem paths. the HTTP handler should
+    return to the client as soon as this call resolves; transcode / PDS /
+    ATProto work runs on a docket worker with bounded concurrency so
+    concurrent replaces can't saturate the DB pool.
     """
     docket = get_docket()
     await docket.add(run_track_audio_replace)(
@@ -599,8 +608,9 @@ async def schedule_track_audio_replace(ctx: ReplaceContext) -> None:
         session_id=ctx.auth_session.session_id,
         user_did=ctx.auth_session.did,
         track_id=ctx.track_id,
-        file_path=ctx.file_path,
+        audio_file_id=ctx.audio_file_id,
         filename=ctx.filename,
+        duration=ctx.duration,
     )
 
 
@@ -639,17 +649,19 @@ async def replace_track_audio(
         )
     del audio_format  # validated; the background pipeline re-derives it
 
-    # cheap pre-check so we 404/403 before streaming a multi-MB body to disk
+    # cheap pre-check so we 404/403 before streaming a multi-MB body to disk.
+    # also captures the track's gating state — needed up here so the staged
+    # bytes land in the right bucket (private for gated, public otherwise).
     async with db_session() as db:
         result = await db.execute(
-            select(Track.artist_did, Track.atproto_record_uri).where(
-                Track.id == track_id
-            )
+            select(
+                Track.artist_did, Track.atproto_record_uri, Track.support_gate
+            ).where(Track.id == track_id)
         )
         row = result.first()
         if not row:
             raise HTTPException(status_code=404, detail="track not found")
-        artist_did, atproto_uri = row
+        artist_did, atproto_uri, support_gate = row
         if artist_did != auth_session.did:
             raise HTTPException(
                 status_code=403,
@@ -663,8 +675,18 @@ async def replace_track_audio(
                     "replacing audio"
                 ),
             )
+        is_gated = support_gate is not None
 
-    # stream the body to a temp file (constant memory, enforce max size)
+    # stage the new audio bytes to shared object storage BEFORE enqueueing
+    # the docket task. workers may pick up the task on a different fly
+    # machine than this handler — only stable storage identifiers should
+    # cross that boundary.
+    job_id = await job_service.create_job(
+        JobType.UPLOAD,
+        auth_session.did,
+        "audio replace queued for processing",
+    )
+
     file_path: str | None = None
     try:
         max_size = settings.storage.max_upload_size_mb * 1024 * 1024
@@ -674,8 +696,6 @@ async def replace_track_audio(
             while chunk := await file.read(CHUNK_SIZE):
                 bytes_read += len(chunk)
                 if bytes_read > max_size:
-                    tmp.close()
-                    Path(file_path).unlink(missing_ok=True)
                     raise HTTPException(
                         status_code=413,
                         detail=(
@@ -685,26 +705,28 @@ async def replace_track_audio(
                     )
                 tmp.write(chunk)
 
-        job_id = await job_service.create_job(
-            JobType.UPLOAD,
-            auth_session.did,
-            "audio replace queued for processing",
-        )
+        with open(file_path, "rb") as f:
+            duration = extract_duration(f)
+
+        with open(file_path, "rb") as f:
+            audio_file_id = await stage_audio_to_storage(
+                job_id, f, file.filename, gated=is_gated
+            )
 
         await schedule_track_audio_replace(
             ReplaceContext(
                 job_id=job_id,
                 auth_session=auth_session,
                 track_id=track_id,
-                file_path=file_path,
+                audio_file_id=audio_file_id,
                 filename=file.filename,
+                duration=duration,
             ),
         )
-    except Exception:
+    finally:
         if file_path:
             with contextlib.suppress(Exception):
                 Path(file_path).unlink(missing_ok=True)
-        raise
 
     return UploadStartResponse(
         upload_id=job_id,

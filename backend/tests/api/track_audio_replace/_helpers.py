@@ -89,8 +89,9 @@ def replace_ctx(track_id: int = 1) -> ReplaceContext:
         job_id="job-1",
         auth_session=MockSession(OWNER_DID),
         track_id=track_id,
-        file_path="/tmp/fake-replacement.mp3",
+        audio_file_id="staged-replacement-file-id",
         filename="replacement.mp3",
+        duration=200,
     )
 
 

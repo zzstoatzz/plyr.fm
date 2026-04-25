@@ -44,8 +44,9 @@ class TestSessionReloadAfterPdsUpload:
         ctx = UploadContext(
             upload_id="upload-1",
             auth_session=old_session,
-            file_path="/tmp/fake.mp3",
+            audio_file_id="audio-file-1",
             filename="fake.mp3",
+            duration=60,
             title="test track",
             artist_did="did:plc:test",
             album=None,
@@ -131,8 +132,9 @@ class TestSessionReloadAfterPdsUpload:
         ctx = UploadContext(
             upload_id="upload-2",
             auth_session=old_session,
-            file_path="/tmp/fake.mp3",
+            audio_file_id="audio-file-2",
             filename="fake.mp3",
+            duration=60,
             title="test track",
             artist_did="did:plc:test",
             album=None,
