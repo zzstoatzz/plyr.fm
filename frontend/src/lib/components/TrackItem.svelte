@@ -8,6 +8,7 @@
 	import SensitiveImage from './SensitiveImage.svelte';
 	import { hasPlayableLossless, isLosslessFormat } from '$lib/audio-support';
 	import { likersSheet } from '$lib/likers-sheet.svelte';
+	import { trackCoverUrl, trackThumbnailUrl } from '$lib/track-cover';
 	import type { Track } from '$lib/types';
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
@@ -72,6 +73,11 @@
 	// get refreshed avatar URL if available
 	let refreshedAvatarUrl = $derived(getRefreshedAvatar(track.artist_did));
 	let artistAvatarUrl = $derived(refreshedAvatarUrl ?? track.artist_avatar_url);
+
+	// cover art with album fallback — keeps track listings in sync with
+	// the player bar's existing inheritance rule.
+	let coverFullUrl = $derived(trackCoverUrl(track));
+	let coverThumbUrl = $derived(trackThumbnailUrl(track));
 
 	// reset local UI state when track changes (component may be recycled)
 	// using $effect.pre so state is ready before render
@@ -220,11 +226,11 @@
 		}}
 	>
 		<div class="track-image-wrapper" class:gated={track.gated}>
-			{#if track.image_url && !trackImageError}
-				<SensitiveImage src={track.thumbnail_url ?? track.image_url}>
+			{#if (coverFullUrl || coverThumbUrl) && !trackImageError}
+				<SensitiveImage src={coverThumbUrl ?? coverFullUrl}>
 					<div class="track-image">
 						<img
-							src={track.thumbnail_url ?? track.image_url}
+							src={coverThumbUrl ?? coverFullUrl}
 							alt="{track.title} artwork"
 							width="48"
 							height="48"

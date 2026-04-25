@@ -21,6 +21,7 @@
 	import { playTrack, guardGatedTrack } from '$lib/playback.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
+	import { trackCoverUrl } from '$lib/track-cover';
 	import type { Track } from '$lib/types';
 
 	interface Comment {
@@ -40,26 +41,24 @@
 
 	let track = $state<Track>(data.track);
 
-	// og:image cascade — pick the best available preview image and always
-	// emit *something* so scrapers don't fall back to their own heuristics
-	// (favicon, first visible image, stale client cache). order: track art →
-	// album art → artist avatar → brand logo.
+	// the visible cover and the og:image cascade share the same root rule
+	// (track art → album art); the og:image then fans out to the artist
+	// avatar and brand logo so social scrapers always get *something* and
+	// don't fall back to their own heuristics (favicon, first visible
+	// image, stale client cache).
 	const OG_FALLBACK_IMAGE = `${APP_CANONICAL_URL}/icons/icon-512.png`;
+	const coverUrl = $derived.by(() => {
+		const url = trackCoverUrl(track);
+		return url && !moderation.isSensitive(url) ? url : undefined;
+	});
 	const previewImage = $derived.by(() => {
-		if (track.image_url && !moderation.isSensitive(track.image_url)) {
-			return track.image_url;
-		}
-		if (track.album?.image_url && !moderation.isSensitive(track.album.image_url)) {
-			return track.album.image_url;
-		}
+		if (coverUrl) return coverUrl;
 		if (track.artist_avatar_url && !moderation.isSensitive(track.artist_avatar_url)) {
 			return track.artist_avatar_url;
 		}
 		return OG_FALLBACK_IMAGE;
 	});
-	const previewIsTrackArt = $derived(
-		!!(track.image_url && !moderation.isSensitive(track.image_url))
-	);
+	const previewIsTrackArt = $derived(coverUrl !== undefined);
 
 	// comments state - assume enabled until we know otherwise
 	let comments = $state<Comment[]>([]);
@@ -526,11 +525,11 @@ $effect(() => {
 
 	<main>
 		<div class="track-detail">
-			<!-- cover art -->
-			<SensitiveImage src={track.image_url} tooltipPosition="center">
+			<!-- cover art (inherits from album when no per-track image is set) -->
+			<SensitiveImage src={coverUrl} tooltipPosition="center">
 				<div class="cover-art-container">
-					{#if track.image_url}
-						<img src={track.image_url} alt="{track.title} artwork" class="cover-art" />
+					{#if coverUrl}
+						<img src={coverUrl} alt="{track.title} artwork" class="cover-art" />
 					{:else}
 						<div class="cover-art-placeholder">
 							<svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">

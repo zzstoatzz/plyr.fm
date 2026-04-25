@@ -2,10 +2,12 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import { trackCoverUrl } from '$lib/track-cover';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let track = $derived(data.track);
+	let coverUrl = $derived(trackCoverUrl(track));
 
 	let audio: HTMLAudioElement;
 	let paused = $state(true);
@@ -56,18 +58,18 @@
 
 <div class="embed-container" class:is-playing={!paused}>
 	<!-- background image for mobile layout -->
-	{#if track.image_url}
-		<SensitiveImage src={track.image_url}>
-			<div class="bg-image" style="background-image: url({track.image_url})"></div>
+	{#if coverUrl}
+		<SensitiveImage src={coverUrl}>
+			<div class="bg-image" style="background-image: url({coverUrl})"></div>
 		</SensitiveImage>
 	{/if}
 	<div class="bg-overlay"></div>
 
 	<!-- desktop: side art -->
 	<div class="art-container">
-		{#if track.image_url}
-			<SensitiveImage src={track.image_url}>
-				<img src={track.image_url} alt={track.title} class="art" />
+		{#if coverUrl}
+			<SensitiveImage src={coverUrl}>
+				<img src={coverUrl} alt={track.title} class="art" />
 			</SensitiveImage>
 		{:else}
 			<div class="art-placeholder">♪</div>
@@ -76,9 +78,9 @@
 
 	<div class="content">
 		<div class="art-card">
-			{#if track.image_url}
-				<SensitiveImage src={track.image_url}>
-					<img src={track.image_url} alt={track.title} class="art-card-img" />
+			{#if coverUrl}
+				<SensitiveImage src={coverUrl}>
+					<img src={coverUrl} alt={track.title} class="art-card-img" />
 				</SensitiveImage>
 			{:else}
 				<div class="art-card-placeholder">♪</div>
