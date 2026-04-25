@@ -1100,6 +1100,62 @@ class TestIngestLikeCreate:
                 uri="at://did:plc:jetstream_test/fm.plyr.like/like2",
             )
 
+    async def test_skips_create_for_cancelled_uri(
+        self, db_session: AsyncSession, artist: Artist, track: Track
+    ) -> None:
+        """regression for the like-resurrection race surfaced by
+        `test_cross_user_like` in the staging integration suite.
+
+        sequence: user clicks like (DB INSERT, atproto_like_uri=NULL),
+        then unlikes before `pds_create_like` finishes writing to PDS
+        (DB row deleted, no PDS URI to schedule a delete for). then
+        `pds_create_like` completes — PDS record IS written, but the
+        local row is gone, so it tombstones the URI and schedules an
+        orphan PDS delete. before that delete propagates through
+        Jetstream, the matching `app.bsky.feed.like` create event
+        arrives. without the tombstone check this re-inserts the row
+        the user already cancelled; with it, the event is dropped.
+        """
+        from backend._internal.tasks.pds import LIKE_CANCELLED_TOMBSTONE_PREFIX
+
+        cancelled_uri = "at://did:plc:jetstream_test/fm.plyr.like/cancelled"
+        store: dict[str, str] = {
+            f"{LIKE_CANCELLED_TOMBSTONE_PREFIX}{cancelled_uri}": "1"
+        }
+
+        async def fake_exists(key: str) -> int:
+            return 1 if key in store else 0
+
+        mock_redis = AsyncMock()
+        mock_redis.exists = AsyncMock(side_effect=fake_exists)
+
+        record = {
+            "subject": {
+                "uri": track.atproto_record_uri,
+                "cid": track.atproto_record_cid,
+            },
+            "createdAt": _recent_ts(),
+        }
+        with patch(
+            "backend._internal.tasks.pds.get_async_redis_client",
+            return_value=mock_redis,
+        ):
+            await ingest_like_create(
+                did=artist.did,
+                rkey="cancelled",
+                record=record,
+                uri=cancelled_uri,
+            )
+
+        result = await db_session.execute(
+            select(TrackLike).where(TrackLike.atproto_like_uri == cancelled_uri)
+        )
+        assert result.scalar_one_or_none() is None, (
+            "ingest_like_create must drop the create event when the URI is "
+            "tombstoned by pds_create_like's orphan-cleanup path; otherwise "
+            "the unlike-while-pending race resurrects the row."
+        )
+
 
 class TestIngestLikeDelete:
     async def test_deletes_by_uri(
