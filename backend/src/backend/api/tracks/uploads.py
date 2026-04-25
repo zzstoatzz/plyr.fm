@@ -91,11 +91,6 @@ class UploadContext:
     filename: str
     duration: int | None
 
-    @property
-    def audio_extension(self) -> str:
-        """source-format extension, normalized (lowercase, no leading dot)."""
-        return Path(self.filename).suffix.lower().lstrip(".")
-
     # track metadata
     title: str
     artist_did: str
@@ -120,6 +115,11 @@ class UploadContext:
 
     # visibility: unlisted tracks don't appear in discovery feeds
     unlisted: bool = False
+
+    @property
+    def audio_extension(self) -> str:
+        """source-format extension, normalized (lowercase, no leading dot)."""
+        return Path(self.filename).suffix.lower().lstrip(".")
 
 
 @dataclass
@@ -938,8 +938,66 @@ async def _schedule_post_upload(
     )
 
 
+async def _delete_staged_audio(
+    file_id: str, file_type: str | None, *, gated: bool
+) -> None:
+    """suppressed delete for audio bytes the user uploaded to a bucket
+    chosen at handler-staging time. `gated` selects the bucket so we
+    don't no-op-delete from public when the file actually lives in
+    private (or vice versa).
+    """
+    delete_fn = storage.delete_gated if gated else storage.delete
+    with contextlib.suppress(Exception):
+        await delete_fn(file_id, file_type)
+
+
+async def _cleanup_staged_media_pre_db(
+    ctx: UploadContext, sr: StorageResult | None
+) -> None:
+    """delete storage objects staged for an upload that aborts BEFORE
+    `_create_records` reserves a DB row. once a row exists the row owns
+    the media — `_create_records` has its own pending/finalized
+    cleanup logic; the orchestrator must not run this past that
+    boundary or it'll yank media out from under a committed row.
+    """
+    is_gated = ctx.support_gate is not None
+
+    if sr is not None and sr.transcode_info is not None:
+        # transcode produced a new sibling. the playable sibling lives
+        # in the public bucket (gated lossless is rejected upstream),
+        # and the staged source is now `original_file_id` (also public).
+        playable_ext = sr.playable_format.value if sr.playable_format else None
+        with contextlib.suppress(Exception):
+            await storage.delete(sr.file_id, playable_ext)
+        if sr.original_file_id:
+            with contextlib.suppress(Exception):
+                await storage.delete(sr.original_file_id, sr.original_file_type)
+    else:
+        # `_store_audio` either didn't run, or returned the staged file
+        # as-is (web-playable). either way, only ctx.audio_file_id is
+        # in storage, in the bucket the handler chose.
+        await _delete_staged_audio(
+            ctx.audio_file_id, ctx.audio_extension, gated=is_gated
+        )
+
+    if ctx.image_id:
+        with contextlib.suppress(Exception):
+            await storage.delete(ctx.image_id)
+
+
 async def _process_upload_background(ctx: UploadContext) -> None:
-    """orchestrate the upload pipeline through named phases."""
+    """orchestrate the upload pipeline through named phases.
+
+    cleanup discipline: the HTTP handler stages audio + image to shared
+    storage before enqueueing this task, so by the time we get here
+    those objects are durable and orphan-able. failures in phases 1-5
+    delete the staged objects (no DB row exists yet); failures from
+    phase 6 onward defer to `_create_records`'s reserve-then-publish
+    cleanup, since once the row is committed the row owns the media.
+    """
+    sr: StorageResult | None = None
+    db_row_owns_media = False
+
     with logfire.span(
         "process upload background", upload_id=ctx.upload_id, filename=ctx.filename
     ):
@@ -970,7 +1028,13 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             # phase 5: store image (optional)
             image_id, image_url, thumbnail_url = await _store_image(ctx)
 
-            # phase 6: reserve DB row, create ATProto record, finalize
+            # phase 6: reserve DB row, create ATProto record, finalize.
+            # past this boundary, _create_records owns the media via the
+            # reserve-then-publish flow (it deletes staged objects on
+            # ATProto failure when the pending row was still ours, and
+            # leaves them when Jetstream finalized). the orchestrator
+            # must not re-delete from here on.
+            db_row_owns_media = True
             track, published_by_us = await _create_records(
                 ctx, audio_info, sr, pds_result, image_id, image_url, thumbnail_url
             )
@@ -994,11 +1058,15 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             )
 
         except UploadPhaseError as e:
+            if not db_row_owns_media:
+                await _cleanup_staged_media_pre_db(ctx, sr)
             await job_service.update_progress(
                 ctx.upload_id, JobStatus.FAILED, "upload failed", error=e.error
             )
         except Exception as e:
             logger.exception(f"upload {ctx.upload_id} failed with unexpected error")
+            if not db_row_owns_media:
+                await _cleanup_staged_media_pre_db(ctx, sr)
             await job_service.update_progress(
                 ctx.upload_id,
                 JobStatus.FAILED,
@@ -1065,9 +1133,18 @@ async def run_track_upload(
     auth_session = await get_session(session_id)
     if auth_session is None:
         # session expired or was revoked between HTTP request and task start.
-        # no way to publish to the user's PDS without it. the staged audio +
-        # image bytes remain in storage; an admin / retry script could
-        # reuse them, and they're harmless if not.
+        # the upload can't proceed (no PDS to publish to) and won't recover
+        # without a fresh sign-in, so clean up the staged storage objects
+        # rather than leaving them as durable orphans.
+        is_gated = support_gate is not None
+        await _delete_staged_audio(
+            audio_file_id,
+            Path(filename).suffix.lower().lstrip(".") or None,
+            gated=is_gated,
+        )
+        if image_id:
+            with contextlib.suppress(Exception):
+                await storage.delete(image_id)
         await job_service.update_progress(
             upload_id,
             JobStatus.FAILED,
@@ -1239,11 +1316,24 @@ async def upload_track(
     # docket task. only stable file_ids travel over Redis to the worker —
     # docket workers are not co-located with the request handler in
     # production, and a /tmp path on machine A is meaningless on machine B.
+    #
+    # the handler now creates durable storage objects before any worker
+    # has taken ownership, so any abort between staging and a successful
+    # enqueue must roll those objects back AND mark the job FAILED —
+    # otherwise we'd leak audio/image bytes and leave the user's job stuck
+    # in PROCESSING forever.
     upload_id = await job_service.create_job(
         JobType.UPLOAD, auth_session.did, "upload queued for processing"
     )
+    is_gated = parsed_support_gate is not None
+    audio_extension = ext.lstrip(".") or None
 
     file_path: str | None = None
+    audio_file_id: str | None = None
+    image_id: str | None = None
+    image_url: str | None = None
+    thumbnail_url: str | None = None
+    enqueued = False
     try:
         max_size = settings.storage.max_upload_size_mb * 1024 * 1024
         bytes_read = 0
@@ -1269,15 +1359,12 @@ async def upload_track(
         # stage audio bytes to shared storage
         with open(file_path, "rb") as f:
             audio_file_id = await stage_audio_to_storage(
-                upload_id, f, file.filename, gated=parsed_support_gate is not None
+                upload_id, f, file.filename, gated=is_gated
             )
 
         # stage image bytes to shared storage (best-effort; missing or
         # invalid images don't fail the whole upload — the orchestrator
         # treats `image_id is None` as "no track artwork").
-        image_id: str | None = None
-        image_url: str | None = None
-        thumbnail_url: str | None = None
         if image and image.filename:
             max_image_size = 20 * 1024 * 1024
             image_buffer = BytesIO()
@@ -1315,6 +1402,24 @@ async def upload_track(
             unlisted=unlisted == "true",
         )
         await schedule_track_upload(ctx)
+        enqueued = True
+    except Exception:
+        if not enqueued:
+            if audio_file_id:
+                await _delete_staged_audio(
+                    audio_file_id, audio_extension, gated=is_gated
+                )
+            if image_id:
+                with contextlib.suppress(Exception):
+                    await storage.delete(image_id)
+            with contextlib.suppress(Exception):
+                await job_service.update_progress(
+                    upload_id,
+                    JobStatus.FAILED,
+                    "upload failed",
+                    error="upload aborted before queueing",
+                )
+        raise
     finally:
         # the request-local temp file lives only inside this handler
         # invocation. cleaning it up here means there's never a path for

@@ -84,7 +84,7 @@ def make_track(
     )
 
 
-def replace_ctx(track_id: int = 1) -> ReplaceContext:
+def replace_ctx(track_id: int = 1, *, is_gated: bool = False) -> ReplaceContext:
     return ReplaceContext(
         job_id="job-1",
         auth_session=MockSession(OWNER_DID),
@@ -92,6 +92,7 @@ def replace_ctx(track_id: int = 1) -> ReplaceContext:
         audio_file_id="staged-replacement-file-id",
         filename="replacement.mp3",
         duration=200,
+        is_gated=is_gated,
     )
 
 

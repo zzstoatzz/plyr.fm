@@ -388,7 +388,9 @@ class TestGatedAudioCleanup:
             store=storage_result(file_id="NEW", r2_url=None),
             pds=None,  # gated tracks skip PDS upload
         ) as mocks:
-            await _process_replace_background(replace_ctx(track_id=track_id))
+            await _process_replace_background(
+                replace_ctx(track_id=track_id, is_gated=True)
+            )
 
         # the OLD gated file was preserved as a revision with was_gated=True
         revision = (
@@ -424,7 +426,9 @@ class TestGatedAudioCleanup:
             pds=None,
             update_record_side_effect=RuntimeError("PDS exploded"),
         ) as mocks:
-            await _process_replace_background(replace_ctx(track_id=track_id))
+            await _process_replace_background(
+                replace_ctx(track_id=track_id, is_gated=True)
+            )
 
         # rollback deletes the NEW file from the PRIVATE bucket
         mocks["storage_delete_gated"].assert_called_once()
@@ -433,6 +437,57 @@ class TestGatedAudioCleanup:
         # track row is unchanged
         await db_session.refresh(track)
         assert track.file_id == "OLD"
+
+    async def test_early_abort_rolls_back_handler_staged_file(
+        self, db_session: AsyncSession, owner: Artist
+    ) -> None:
+        """regression: handler stages new audio to storage BEFORE the
+        worker validates anything. an `UploadPhaseError` from
+        `_validate_audio` (or any other phase that raises before
+        `_store_audio` returns) used to leave the staged bytes orphaned
+        in storage. now rollback initializes from `ctx.audio_file_id`,
+        and `ctx.is_gated` selects the bucket.
+        """
+        track = make_track(file_id="OLD", support_gate={"type": "any"})
+        db_session.add(track)
+        await db_session.commit()
+        await db_session.refresh(track)
+        track_id = track.id
+
+        # _validate_audio raises before _store_audio is ever called
+        from backend.api.tracks.uploads import UploadPhaseError
+
+        with (
+            patch(
+                "backend.api.tracks.audio_replace._validate_audio",
+                AsyncMock(side_effect=UploadPhaseError("nope")),
+            ),
+            patch(
+                "backend.api.tracks.audio_replace.storage.delete_gated",
+                AsyncMock(return_value=True),
+            ) as mock_delete_gated,
+            patch(
+                "backend.api.tracks.audio_replace.storage.delete",
+                AsyncMock(return_value=True),
+            ) as mock_delete,
+            patch("backend.api.tracks.audio_replace.job_service", AsyncMock()),
+            patch(
+                "backend.api.tracks.audio_replace.invalidate_tracks_discovery_cache",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await _process_replace_background(
+                replace_ctx(track_id=track_id, is_gated=True)
+            )
+
+        # the handler-staged file (audio_file_id="staged-replacement-file-id"
+        # from the helper) MUST be deleted from the private bucket — that's
+        # where the handler put it for a gated track.
+        mock_delete_gated.assert_called_once()
+        assert mock_delete_gated.call_args.args[0] == "staged-replacement-file-id"
+        # and not from the public bucket
+        for call in mock_delete.call_args_list:
+            assert call.args[0] != "staged-replacement-file-id"
 
 
 class TestConcurrentMetadataPatch:

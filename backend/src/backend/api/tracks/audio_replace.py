@@ -121,6 +121,13 @@ class ReplaceContext:
     handler BEFORE this context is enqueued — the worker only ever
     sees stable storage identifiers. see `UploadContext` for the same
     invariant on the upload side.
+
+    `is_gated` records the bucket the handler chose at staging time
+    (private if the existing track is gated, public otherwise). the
+    worker uses this for rollback so we delete from the bucket the
+    bytes actually live in, not whichever the track row happens to
+    say at orchestrator time (a concurrent PATCH could have flipped
+    it between the request and the rollback).
     """
 
     job_id: str
@@ -129,6 +136,7 @@ class ReplaceContext:
     audio_file_id: str
     filename: str
     duration: int | None
+    is_gated: bool
 
 
 async def _load_and_authorize(
@@ -367,10 +375,20 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
     storage object at that point would leave production looking at a broken
     track.
     """
-    new_file_id_for_rollback: str | None = None
+    # rollback target starts at the handler-staged file. without this
+    # initializer, any abort before `_store_audio` returns (track gone,
+    # gated-lossless rejection, transcode failure) would leak the bytes
+    # the handler just wrote to storage. once `_store_audio` succeeds
+    # the rollback target is updated to the playable file (and the
+    # staged source becomes `original_file_id` for transcoded paths).
+    new_file_id_for_rollback: str | None = ctx.audio_file_id
+    new_file_type_for_rollback: str | None = (
+        Path(ctx.filename).suffix.lower().lstrip(".") or None
+    )
     new_original_file_id_for_rollback: str | None = None
     new_original_file_type_for_rollback: str | None = None
-    rollback_gated: bool = False
+    # bucket chosen by the handler at staging time — must match for rollback.
+    rollback_gated: bool = ctx.is_gated
 
     with logfire.span(
         "process audio replace background",
@@ -385,12 +403,14 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
             )
 
             state = await _load_and_authorize(ctx.track_id, ctx.auth_session)
-            rollback_gated = state.support_gate is not None
             phase_ctx = _build_upload_context_for_phases(ctx, state)
 
             audio_info = await _validate_audio(phase_ctx)
             sr = await _store_audio(phase_ctx, audio_info)
             new_file_id_for_rollback = sr.file_id
+            new_file_type_for_rollback = (
+                sr.playable_format.value if sr.playable_format else None
+            )
             new_original_file_id_for_rollback = sr.original_file_id
             new_original_file_type_for_rollback = sr.original_file_type
 
@@ -418,6 +438,7 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
         except UploadPhaseError as e:
             await _rollback_new_files(
                 new_file_id_for_rollback,
+                new_file_type_for_rollback,
                 new_original_file_id_for_rollback,
                 new_original_file_type_for_rollback,
                 gated=rollback_gated,
@@ -429,6 +450,7 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
         except Exception as e:
             await _rollback_new_files(
                 new_file_id_for_rollback,
+                new_file_type_for_rollback,
                 new_original_file_id_for_rollback,
                 new_original_file_type_for_rollback,
                 gated=rollback_gated,
@@ -522,21 +544,27 @@ async def _refresh_metadata_state(state: TrackAudioState) -> TrackAudioState:
 
 async def _rollback_new_files(
     new_file_id: str | None,
+    new_file_type: str | None,
     new_original_file_id: str | None,
     new_original_file_type: str | None,
     *,
     gated: bool,
 ) -> None:
-    """delete any new R2 object we wrote before discovering the operation must abort.
+    """delete any new storage object we wrote before discovering the operation must abort.
 
     `gated=True` routes the playable-file delete to the private bucket. transcode
     originals always live in the public bucket (gated tracks can't be lossless),
     so the original delete uses the public path unconditionally.
+
+    `new_file_type` is the playable extension used to derive the storage
+    key. it MUST be threaded through so the early-abort case (where the
+    handler has only staged the source bytes and `_store_audio` hasn't
+    yet established a playable format) deletes the right key.
     """
     if new_file_id:
         delete_fn = storage.delete_gated if gated else storage.delete
         with contextlib.suppress(Exception):
-            await delete_fn(new_file_id)
+            await delete_fn(new_file_id, new_file_type)
     if new_original_file_id:
         with contextlib.suppress(Exception):
             await storage.delete(new_original_file_id, new_original_file_type)
@@ -553,6 +581,7 @@ async def run_track_audio_replace(
     audio_file_id: str,
     filename: str,
     duration: int | None,
+    is_gated: bool,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("user_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for audio replace.
@@ -574,6 +603,12 @@ async def run_track_audio_replace(
     """
     auth_session = await get_session(session_id)
     if auth_session is None:
+        # session is gone and the replace can't proceed; clean up the
+        # staged bytes rather than leaving a durable orphan in storage.
+        delete_fn = storage.delete_gated if is_gated else storage.delete
+        new_file_type = Path(filename).suffix.lower().lstrip(".") or None
+        with contextlib.suppress(Exception):
+            await delete_fn(audio_file_id, new_file_type)
         await job_service.update_progress(
             job_id,
             JobStatus.FAILED,
@@ -589,6 +624,7 @@ async def run_track_audio_replace(
         audio_file_id=audio_file_id,
         filename=filename,
         duration=duration,
+        is_gated=is_gated,
     )
     await _process_replace_background(ctx)
 
@@ -611,6 +647,7 @@ async def schedule_track_audio_replace(ctx: ReplaceContext) -> None:
         audio_file_id=ctx.audio_file_id,
         filename=ctx.filename,
         duration=ctx.duration,
+        is_gated=ctx.is_gated,
     )
 
 
@@ -681,13 +718,21 @@ async def replace_track_audio(
     # the docket task. workers may pick up the task on a different fly
     # machine than this handler — only stable storage identifiers should
     # cross that boundary.
+    #
+    # the handler creates a durable storage object before the worker has
+    # taken ownership, so any abort between staging and a successful
+    # enqueue must roll the object back AND mark the job FAILED — otherwise
+    # we'd leak bytes and leave the job stuck in PROCESSING forever.
     job_id = await job_service.create_job(
         JobType.UPLOAD,
         auth_session.did,
         "audio replace queued for processing",
     )
+    audio_extension = ext.lstrip(".") or None
 
     file_path: str | None = None
+    audio_file_id: str | None = None
+    enqueued = False
     try:
         max_size = settings.storage.max_upload_size_mb * 1024 * 1024
         bytes_read = 0
@@ -721,8 +766,24 @@ async def replace_track_audio(
                 audio_file_id=audio_file_id,
                 filename=file.filename,
                 duration=duration,
+                is_gated=is_gated,
             ),
         )
+        enqueued = True
+    except Exception:
+        if not enqueued and audio_file_id:
+            delete_fn = storage.delete_gated if is_gated else storage.delete
+            with contextlib.suppress(Exception):
+                await delete_fn(audio_file_id, audio_extension)
+        if not enqueued:
+            with contextlib.suppress(Exception):
+                await job_service.update_progress(
+                    job_id,
+                    JobStatus.FAILED,
+                    "audio replace failed",
+                    error="audio replace aborted before queueing",
+                )
+        raise
     finally:
         if file_path:
             with contextlib.suppress(Exception):

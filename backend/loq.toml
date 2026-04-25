@@ -1,0 +1,15 @@
+default_max_lines = 500
+respect_gitignore = true
+exclude = []
+
+[[rules]]
+path = "src/backend/api/tracks/audio_replace.py"
+max_lines = 796
+
+[[rules]]
+path = "src/backend/api/tracks/uploads.py"
+max_lines = 1500
+
+[[rules]]
+path = "tests/api/track_audio_replace/test_pipeline.py"
+max_lines = 567
