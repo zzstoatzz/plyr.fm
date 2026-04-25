@@ -44,8 +44,9 @@ class TestSessionReloadAfterPdsUpload:
         ctx = UploadContext(
             upload_id="upload-1",
             auth_session=old_session,
-            file_path="/tmp/fake.mp3",
+            audio_file_id="audio-file-1",
             filename="fake.mp3",
+            duration=60,
             title="test track",
             artist_did="did:plc:test",
             album=None,
@@ -112,7 +113,7 @@ class TestSessionReloadAfterPdsUpload:
                 return_value=None,
             ),
             patch(
-                "backend._internal.get_session",
+                "backend.api.tracks.uploads.get_session",
                 return_value=refreshed_session,
             ),
         ):
@@ -131,8 +132,9 @@ class TestSessionReloadAfterPdsUpload:
         ctx = UploadContext(
             upload_id="upload-2",
             auth_session=old_session,
-            file_path="/tmp/fake.mp3",
+            audio_file_id="audio-file-2",
             filename="fake.mp3",
+            duration=60,
             title="test track",
             artist_did="did:plc:test",
             album=None,
@@ -185,7 +187,7 @@ class TestSessionReloadAfterPdsUpload:
                 "backend.api.tracks.uploads._schedule_post_upload",
                 return_value=None,
             ),
-            patch("backend._internal.get_session", get_session_mock),
+            patch("backend.api.tracks.uploads.get_session", get_session_mock),
         ):
             await _process_upload_background(ctx)
 

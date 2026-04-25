@@ -8,9 +8,8 @@ import tempfile
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, BinaryIO
 
-import aiofiles
 import logfire
 from docket import ConcurrencyLimit
 from fastapi import (
@@ -73,14 +72,24 @@ class UploadStartResponse(BaseModel):
 
 @dataclass
 class UploadContext:
-    """all data needed to process an upload in the background."""
+    """all data needed to process an upload in the background.
+
+    audio + image bytes are staged to shared object storage by the HTTP
+    handler BEFORE this context is enqueued. only stable shared-storage
+    identifiers (file_id / image_id / URLs) and small primitives travel
+    through the docket queue. no local filesystem paths cross the
+    request → worker boundary, because a docket worker may pick up the
+    task on a different fly machine than the one that handled the
+    request — that machine has its own /tmp.
+    """
 
     upload_id: str
     auth_session: AuthSession
 
-    # audio file
-    file_path: str
+    # audio (already in shared storage as `audio_file_id`; extension lives in `filename`)
+    audio_file_id: str
     filename: str
+    duration: int | None
 
     # track metadata
     title: str
@@ -90,10 +99,10 @@ class UploadContext:
     features_json: str | None
     tags: list[str]
 
-    # optional image
-    image_path: str | None = None
-    image_filename: str | None = None
-    image_content_type: str | None = None
+    # optional image (already in shared storage as `image_id`, plus computed URLs)
+    image_id: str | None = None
+    image_url: str | None = None
+    thumbnail_url: str | None = None
 
     # track description (liner notes, show notes, etc.)
     description: str | None = None
@@ -106,6 +115,11 @@ class UploadContext:
 
     # visibility: unlisted tracks don't appear in discovery feeds
     unlisted: bool = False
+
+    @property
+    def audio_extension(self) -> str:
+        """source-format extension, normalized (lowercase, no leading dot)."""
+        return Path(self.filename).suffix.lower().lstrip(".")
 
 
 @dataclass
@@ -137,19 +151,26 @@ class UploadPhaseError(Exception):
         super().__init__(error)
 
 
-async def _save_audio_to_storage(
+async def stage_audio_to_storage(
     upload_id: str,
-    file_path: str,
+    file: BinaryIO | BytesIO,
     filename: str,
     *,
     gated: bool = False,
-) -> str | None:
-    """save audio file to storage, returning file_id or None on failure.
+) -> str:
+    """save staged audio bytes to object storage and return the resulting file_id.
+
+    called from the HTTP handler BEFORE the docket task is enqueued. the
+    returned file_id is what travels over Redis to the worker — the local
+    temp file is discarded as soon as this function returns.
+
+    raises on failure; the handler catches and surfaces a 5xx to the
+    client, since the upload didn't durably land in storage.
 
     args:
         upload_id: job tracking ID
-        file_path: path to temp file
-        filename: original filename
+        file: binary stream positioned at the start of the audio bytes
+        filename: original filename (extension determines bucket + media_type)
         gated: if True, save to private bucket (no public URL)
     """
     message = "uploading to private storage..." if gated else "uploading to storage..."
@@ -160,53 +181,42 @@ async def _save_audio_to_storage(
         phase="upload",
         progress_pct=0.0,
     )
-    try:
-        async with R2ProgressTracker(
-            job_id=upload_id,
-            message=message,
-            phase="upload",
-        ) as tracker:
-            with open(file_path, "rb") as file_obj:
-                if gated:
-                    file_id = await storage.save_gated(
-                        file_obj, filename, progress_callback=tracker.on_progress
-                    )
-                else:
-                    file_id = await storage.save(
-                        file_obj, filename, progress_callback=tracker.on_progress
-                    )
+    async with R2ProgressTracker(
+        job_id=upload_id,
+        message=message,
+        phase="upload",
+    ) as tracker:
+        if gated:
+            file_id = await storage.save_gated(
+                file, filename, progress_callback=tracker.on_progress
+            )
+        else:
+            file_id = await storage.save(
+                file, filename, progress_callback=tracker.on_progress
+            )
 
-        await job_service.update_progress(
-            upload_id,
-            JobStatus.PROCESSING,
-            message,
-            phase="upload",
-            progress_pct=100.0,
-        )
-        logfire.info("storage.save completed", file_id=file_id, gated=gated)
-        return file_id
-
-    except Exception as e:
-        logfire.error("storage.save failed", error=str(e), exc_info=True)
-        await job_service.update_progress(
-            upload_id, JobStatus.FAILED, "upload failed", error=str(e)
-        )
-        return None
-
-
-async def _save_image_to_storage(
-    upload_id: str,
-    image_path: str,
-    image_filename: str,
-    image_content_type: str | None,
-) -> tuple[str | None, str | None, str | None]:
-    """save image to storage, returning (image_id, image_url, thumbnail_url) or (None, None, None)."""
     await job_service.update_progress(
         upload_id,
         JobStatus.PROCESSING,
-        "saving image...",
-        phase="image",
+        message,
+        phase="upload",
+        progress_pct=100.0,
     )
+    logfire.info("audio staged to storage", file_id=file_id, gated=gated)
+    return file_id
+
+
+async def stage_image_to_storage(
+    image_data: bytes,
+    image_filename: str,
+    image_content_type: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    """save image bytes + thumbnail to object storage and return (image_id, image_url, thumbnail_url).
+
+    called from the HTTP handler. returns (None, None, None) if the image
+    format is unsupported or the save fails — the upload itself still
+    proceeds without an image rather than failing the whole track.
+    """
     image_format, is_valid = ImageFormat.validate_and_extract(
         image_filename, image_content_type
     )
@@ -215,13 +225,9 @@ async def _save_image_to_storage(
         return None, None, None
 
     try:
-        with open(image_path, "rb") as image_obj:
-            image_data = image_obj.read()
-
         image_id = await storage.save(BytesIO(image_data), f"images/{image_filename}")
         image_url = await storage.get_url(image_id, file_type="image")
         thumbnail_url = await generate_and_save(image_data, image_id, "track")
-
         return image_id, image_url, thumbnail_url
     except Exception as e:
         logger.warning(f"failed to save image: {e}", exc_info=True)
@@ -336,19 +342,23 @@ async def _should_upload_pds_blob(db: AsyncSession, user_did: str) -> bool:
 
 async def _transcode_audio(
     upload_id: str,
-    file_path: str,
+    original_file_id: str,
     filename: str,
     source_format: str,
 ) -> TranscodeInfo | None:
-    """transcode audio file to web-playable format.
+    """transcode an already-staged audio file to a web-playable format.
 
-    saves original to storage first, then transcodes. returns None on failure
-    (job status already updated with error).
+    `original_file_id` points at the lossless source bytes already in
+    object storage (the HTTP handler put them there before enqueueing
+    the docket task). we download those bytes, hand them to the
+    transcoder service via a worker-local temp file, and save the
+    transcoded result back. returns None on failure (job status already
+    updated with error).
 
     args:
         upload_id: job tracking ID
-        file_path: path to temp file
-        filename: original filename
+        original_file_id: storage file_id for the lossless source bytes
+        filename: original filename (used to derive transcoded filename)
         source_format: source format (e.g., "aiff", "flac")
 
     returns:
@@ -364,35 +374,33 @@ async def _transcode_audio(
         )
         return None
 
-    # save original file first
-    await job_service.update_progress(
-        upload_id,
-        JobStatus.PROCESSING,
-        "saving original file...",
-        phase="upload_original",
-        progress_pct=0.0,
-    )
-
-    try:
-        async with R2ProgressTracker(
-            job_id=upload_id,
-            message="saving original file...",
-            phase="upload_original",
-        ) as tracker:
-            with open(file_path, "rb") as file_obj:
-                original_file_id = await storage.save(
-                    file_obj, filename, progress_callback=tracker.on_progress
-                )
-    except Exception as e:
-        logfire.error("failed to save original file", error=str(e), exc_info=True)
+    # fetch the lossless source bytes from storage
+    source_data = await storage.get_file_data(original_file_id, source_format)
+    if not source_data:
+        logfire.error(
+            "transcode aborted: source file missing from storage",
+            file_id=original_file_id,
+            format=source_format,
+        )
         await job_service.update_progress(
-            upload_id, JobStatus.FAILED, "upload failed", error=str(e)
+            upload_id,
+            JobStatus.FAILED,
+            "upload failed",
+            error="staged audio file missing from storage",
         )
         return None
 
-    logfire.info("original file saved", file_id=original_file_id, format=source_format)
+    logfire.info(
+        "loaded source bytes for transcode",
+        file_id=original_file_id,
+        format=source_format,
+        size_bytes=len(source_data),
+    )
 
-    # transcode to web-playable format (streams file to service, no memory load)
+    # transcode to web-playable format. the transcoder client streams from a
+    # file path; spool the bytes to a worker-local temp file. this temp file
+    # is created and deleted entirely on this worker — it never crosses the
+    # request → worker boundary, so the multi-machine fly setup is fine.
     await job_service.update_progress(
         upload_id,
         JobStatus.PROCESSING,
@@ -401,9 +409,16 @@ async def _transcode_audio(
         progress_pct=0.0,
     )
 
+    spool_path: str | None = None
     try:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=f".{source_format}"
+        ) as spool:
+            spool_path = spool.name
+            spool.write(source_data)
+
         client = get_transcoder_client()
-        result = await client.transcode_file(file_path, source_format)
+        result = await client.transcode_file(spool_path, source_format)
 
         if not result.success or not result.data:
             await job_service.update_progress(
@@ -412,9 +427,6 @@ async def _transcode_audio(
                 "upload failed",
                 error=f"transcoding failed: {result.error}",
             )
-            # cleanup original
-            with contextlib.suppress(Exception):
-                await storage.delete(original_file_id, source_format)
             return None
 
     except Exception as e:
@@ -425,25 +437,24 @@ async def _transcode_audio(
             "upload failed",
             error=f"transcoding error: {e}",
         )
-        # cleanup original
-        with contextlib.suppress(Exception):
-            await storage.delete(original_file_id, source_format)
         return None
+    finally:
+        if spool_path:
+            with contextlib.suppress(Exception):
+                Path(spool_path).unlink(missing_ok=True)
 
     # save transcoded file
     target_format = settings.transcoder.target_format
     transcoded_filename = Path(filename).stem + f".{target_format}"
 
     try:
-        import io
-
         async with R2ProgressTracker(
             job_id=upload_id,
             message="saving transcoded file...",
             phase="upload_transcoded",
         ) as tracker:
             transcoded_file_id = await storage.save(
-                io.BytesIO(result.data),
+                BytesIO(result.data),
                 transcoded_filename,
                 progress_callback=tracker.on_progress,
             )
@@ -452,9 +463,6 @@ async def _transcode_audio(
         await job_service.update_progress(
             upload_id, JobStatus.FAILED, "upload failed", error=str(e)
         )
-        # cleanup original
-        with contextlib.suppress(Exception):
-            await storage.delete(original_file_id, source_format)
         return None
 
     logfire.info(
@@ -473,14 +481,17 @@ async def _transcode_audio(
 
 
 async def _validate_audio(ctx: UploadContext) -> AudioInfo:
-    """phase 1: validate file type, extract duration, check gating requirements."""
-    ext = Path(ctx.filename).suffix.lower()
-    audio_format = AudioFormat.from_extension(ext)
-    if not audio_format:
-        raise UploadPhaseError(f"unsupported file type: {ext}")
+    """phase 1: validate file type, propagate handler-extracted duration, check gating.
 
-    with open(ctx.file_path, "rb") as f:
-        duration = extract_duration(f)
+    duration is extracted in the HTTP handler (where the bytes are already
+    in memory or on local /tmp), then carried through `ctx.duration`. the
+    worker doesn't need to re-fetch the audio bytes just to read length
+    metadata. format validation here is the cheap extension check; the
+    handler already rejected unknown extensions before staging.
+    """
+    audio_format = AudioFormat.from_extension(f".{ctx.audio_extension}")
+    if not audio_format:
+        raise UploadPhaseError(f"unsupported file type: .{ctx.audio_extension}")
 
     is_gated = ctx.support_gate is not None
     if is_gated:
@@ -494,11 +505,17 @@ async def _validate_audio(ctx: UploadContext) -> AudioInfo:
                     "supporter gating requires atprotofans to be enabled in settings"
                 )
 
-    return AudioInfo(format=audio_format, duration=duration, is_gated=is_gated)
+    return AudioInfo(format=audio_format, duration=ctx.duration, is_gated=is_gated)
 
 
 async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResult:
-    """phase 2: store audio (transcode if lossless)."""
+    """phase 2: settle on the playable file_id, transcoding if the staged audio is lossless.
+
+    the staged file_id (already in storage from the HTTP handler) is the
+    starting point. for web-playable formats we use it directly. for
+    lossless formats we keep the staged file as the `original_file_id`
+    and produce a transcoded sibling.
+    """
     transcode_info: TranscodeInfo | None = None
 
     if not audio_info.format.is_web_playable:
@@ -507,9 +524,11 @@ async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResu
                 "supporter-gated tracks cannot use lossless formats yet"
             )
 
-        original_ext = Path(ctx.filename).suffix.lower().lstrip(".")
+        # the handler-staged file_id IS the lossless original. transcoding
+        # downloads it from storage, produces the playable sibling, and
+        # registers the staged id as `original_file_id`.
         transcode_info = await _transcode_audio(
-            ctx.upload_id, ctx.file_path, ctx.filename, original_ext
+            ctx.upload_id, ctx.audio_file_id, ctx.filename, ctx.audio_extension
         )
         if not transcode_info:
             raise UploadPhaseError("transcoding failed")
@@ -521,19 +540,18 @@ async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResu
         if not playable_format:
             raise UploadPhaseError("unknown transcoded format")
     else:
-        file_id = await _save_audio_to_storage(
-            ctx.upload_id, ctx.file_path, ctx.filename, gated=audio_info.is_gated
-        )
-        if not file_id:
-            raise UploadPhaseError("failed to save audio to storage")
+        # web-playable: staged file_id is already the playable file. for
+        # gated tracks we still need it in the private bucket — gating
+        # is decided at the handler boundary, so the staged file already
+        # lives in the right place.
+        file_id = ctx.audio_file_id
         playable_format = audio_info.format
         transcode_info = None
 
-    # get R2 URL (only for public tracks)
+    # public-bucket URL (gated tracks proxy through the auth-protected backend)
     r2_url: str | None = None
     if not audio_info.is_gated:
-        ext = Path(ctx.filename).suffix.lower()
-        playable_ext = playable_format.value if playable_format else ext[1:]
+        playable_ext = playable_format.value if playable_format else ctx.audio_extension
         r2_url = await storage.get_url(
             file_id, file_type="audio", extension=playable_ext
         )
@@ -570,7 +588,13 @@ async def _check_duplicate(ctx: UploadContext, sr: StorageResult) -> None:
 async def _upload_to_pds(
     ctx: UploadContext, audio_info: AudioInfo, sr: StorageResult
 ) -> PdsBlobResult | None:
-    """phase 4: upload to PDS (best-effort). returns None if skipped."""
+    """phase 4: upload to PDS (best-effort). returns None if skipped.
+
+    when the source was transcoded, the playable bytes are already in
+    memory (`sr.transcode_info.transcoded_data`). otherwise we download
+    the playable bytes from storage — there's no machine-local temp file
+    to read from in the worker.
+    """
     if audio_info.is_gated:
         return None
 
@@ -583,8 +607,18 @@ async def _upload_to_pds(
     if sr.transcode_info:
         pds_file_data = sr.transcode_info.transcoded_data
     else:
-        async with aiofiles.open(ctx.file_path, "rb") as f:
-            pds_file_data = await f.read()
+        playable_ext = (
+            sr.playable_format.value if sr.playable_format else ctx.audio_extension
+        )
+        fetched = await storage.get_file_data(sr.file_id, playable_ext)
+        if fetched is None:
+            logfire.warning(
+                "pds blob upload skipped: file not found in storage",
+                file_id=sr.file_id,
+                file_type=playable_ext,
+            )
+            return None
+        pds_file_data = fetched
 
     return await _try_upload_to_pds(
         ctx.upload_id, ctx.auth_session, pds_file_data, content_type
@@ -594,12 +628,14 @@ async def _upload_to_pds(
 async def _store_image(
     ctx: UploadContext,
 ) -> tuple[str | None, str | None, str | None]:
-    """phase 5: store image (optional). returns (image_id, image_url, thumbnail_url)."""
-    if not ctx.image_path or not ctx.image_filename:
-        return None, None, None
-    return await _save_image_to_storage(
-        ctx.upload_id, ctx.image_path, ctx.image_filename, ctx.image_content_type
-    )
+    """phase 5: surface the staged image URLs (no I/O — bytes already in storage).
+
+    the HTTP handler stages the image to storage and computes both the
+    image URL and the thumbnail URL before enqueueing the docket task.
+    by the time the worker reaches this phase, there is nothing to do but
+    forward those identifiers into the ATProto record.
+    """
+    return ctx.image_id, ctx.image_url, ctx.thumbnail_url
 
 
 async def _create_records(
@@ -902,8 +938,66 @@ async def _schedule_post_upload(
     )
 
 
+async def _delete_staged_audio(
+    file_id: str, file_type: str | None, *, gated: bool
+) -> None:
+    """suppressed delete for audio bytes the user uploaded to a bucket
+    chosen at handler-staging time. `gated` selects the bucket so we
+    don't no-op-delete from public when the file actually lives in
+    private (or vice versa).
+    """
+    delete_fn = storage.delete_gated if gated else storage.delete
+    with contextlib.suppress(Exception):
+        await delete_fn(file_id, file_type)
+
+
+async def _cleanup_staged_media_pre_db(
+    ctx: UploadContext, sr: StorageResult | None
+) -> None:
+    """delete storage objects staged for an upload that aborts BEFORE
+    `_create_records` reserves a DB row. once a row exists the row owns
+    the media — `_create_records` has its own pending/finalized
+    cleanup logic; the orchestrator must not run this past that
+    boundary or it'll yank media out from under a committed row.
+    """
+    is_gated = ctx.support_gate is not None
+
+    if sr is not None and sr.transcode_info is not None:
+        # transcode produced a new sibling. the playable sibling lives
+        # in the public bucket (gated lossless is rejected upstream),
+        # and the staged source is now `original_file_id` (also public).
+        playable_ext = sr.playable_format.value if sr.playable_format else None
+        with contextlib.suppress(Exception):
+            await storage.delete(sr.file_id, playable_ext)
+        if sr.original_file_id:
+            with contextlib.suppress(Exception):
+                await storage.delete(sr.original_file_id, sr.original_file_type)
+    else:
+        # `_store_audio` either didn't run, or returned the staged file
+        # as-is (web-playable). either way, only ctx.audio_file_id is
+        # in storage, in the bucket the handler chose.
+        await _delete_staged_audio(
+            ctx.audio_file_id, ctx.audio_extension, gated=is_gated
+        )
+
+    if ctx.image_id:
+        with contextlib.suppress(Exception):
+            await storage.delete(ctx.image_id)
+
+
 async def _process_upload_background(ctx: UploadContext) -> None:
-    """orchestrate the upload pipeline through named phases."""
+    """orchestrate the upload pipeline through named phases.
+
+    cleanup discipline: the HTTP handler stages audio + image to shared
+    storage before enqueueing this task, so by the time we get here
+    those objects are durable and orphan-able. failures in phases 1-5
+    delete the staged objects (no DB row exists yet); failures from
+    phase 6 onward defer to `_create_records`'s reserve-then-publish
+    cleanup, since once the row is committed the row owns the media.
+    """
+    sr: StorageResult | None = None
+    db_row_owns_media = False
+
     with logfire.span(
         "process upload background", upload_id=ctx.upload_id, filename=ctx.filename
     ):
@@ -925,16 +1019,21 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             pds_result = await _upload_to_pds(ctx, audio_info, sr)
 
             # reload session in case PDS upload refreshed the token
-            if pds_result:
-                from backend._internal import get_session
-
-                if refreshed := await get_session(ctx.auth_session.session_id):
-                    ctx.auth_session = refreshed
+            if pds_result and (
+                refreshed := await get_session(ctx.auth_session.session_id)
+            ):
+                ctx.auth_session = refreshed
 
             # phase 5: store image (optional)
             image_id, image_url, thumbnail_url = await _store_image(ctx)
 
-            # phase 6: reserve DB row, create ATProto record, finalize
+            # phase 6: reserve DB row, create ATProto record, finalize.
+            # past this boundary, _create_records owns the media via the
+            # reserve-then-publish flow (it deletes staged objects on
+            # ATProto failure when the pending row was still ours, and
+            # leaves them when Jetstream finalized). the orchestrator
+            # must not re-delete from here on.
+            db_row_owns_media = True
             track, published_by_us = await _create_records(
                 ctx, audio_info, sr, pds_result, image_id, image_url, thumbnail_url
             )
@@ -958,31 +1057,35 @@ async def _process_upload_background(ctx: UploadContext) -> None:
             )
 
         except UploadPhaseError as e:
+            if not db_row_owns_media:
+                await _cleanup_staged_media_pre_db(ctx, sr)
             await job_service.update_progress(
                 ctx.upload_id, JobStatus.FAILED, "upload failed", error=e.error
             )
         except Exception as e:
             logger.exception(f"upload {ctx.upload_id} failed with unexpected error")
+            if not db_row_owns_media:
+                await _cleanup_staged_media_pre_db(ctx, sr)
             await job_service.update_progress(
                 ctx.upload_id,
                 JobStatus.FAILED,
                 "upload failed",
                 error=f"unexpected error: {e!s}",
             )
-        finally:
-            # cleanup temp files
-            with contextlib.suppress(Exception):
-                Path(ctx.file_path).unlink(missing_ok=True)
-            if ctx.image_path:
-                with contextlib.suppress(Exception):
-                    Path(ctx.image_path).unlink(missing_ok=True)
+
+        # NB: no temp-file cleanup here. the worker never receives a
+        # filesystem path — audio + image are staged to shared object
+        # storage by the HTTP handler, and identifiers are what travel
+        # over the docket queue. cleanup of the handler's request-local
+        # temp file lives in the handler's `try/finally` instead.
 
 
 async def run_track_upload(
     upload_id: str,
     session_id: str,
-    file_path: str,
+    audio_file_id: str,
     filename: str,
+    duration: int | None,
     title: str,
     artist_did: str,
     album: str | None,
@@ -990,9 +1093,9 @@ async def run_track_upload(
     features_json: str | None,
     tags: list[str],
     description: str | None,
-    image_path: str | None,
-    image_filename: str | None,
-    image_content_type: str | None,
+    image_id: str | None,
+    image_url: str | None,
+    thumbnail_url: str | None,
     support_gate: dict | None,
     auto_tag: bool,
     unlisted: bool,
@@ -1000,11 +1103,18 @@ async def run_track_upload(
 ) -> None:
     """docket task entry point for track uploads.
 
-    takes primitive args (everything that survives Redis serialization),
+    takes primitive args + shared-storage identifiers (file_id, image_id —
+    everything that survives Redis serialization and is reachable from
+    any worker, regardless of which fly machine the request landed on).
     rehydrates the auth session from the stored session_id, constructs an
     UploadContext, and delegates to the phase orchestrator
-    (`_process_upload_background`). this is the function registered with
-    docket; the HTTP handler enqueues it via `schedule_track_upload`.
+    (`_process_upload_background`).
+
+    **never accept filesystem paths here.** prior to 2026-04 we passed
+    `/tmp/...` paths through this signature; uploads silently failed
+    when the docket worker landed on a different machine than the request
+    handler (different /tmp). the handler now stages audio + image to
+    shared storage before enqueueing, and we work from those identifiers.
 
     rehydrating the session at task start rather than passing the cached
     AuthSession over the wire means we pick up any token refresh that
@@ -1022,26 +1132,32 @@ async def run_track_upload(
     auth_session = await get_session(session_id)
     if auth_session is None:
         # session expired or was revoked between HTTP request and task start.
-        # no way to publish to the user's PDS without it — fail the job and
-        # clean up the temp files we staged.
+        # the upload can't proceed (no PDS to publish to) and won't recover
+        # without a fresh sign-in, so clean up the staged storage objects
+        # rather than leaving them as durable orphans.
+        is_gated = support_gate is not None
+        await _delete_staged_audio(
+            audio_file_id,
+            Path(filename).suffix.lower().lstrip(".") or None,
+            gated=is_gated,
+        )
+        if image_id:
+            with contextlib.suppress(Exception):
+                await storage.delete(image_id)
         await job_service.update_progress(
             upload_id,
             JobStatus.FAILED,
             "upload failed",
             error="authentication session expired before processing could begin",
         )
-        with contextlib.suppress(Exception):
-            Path(file_path).unlink(missing_ok=True)
-        if image_path:
-            with contextlib.suppress(Exception):
-                Path(image_path).unlink(missing_ok=True)
         return
 
     ctx = UploadContext(
         upload_id=upload_id,
         auth_session=auth_session,
-        file_path=file_path,
+        audio_file_id=audio_file_id,
         filename=filename,
+        duration=duration,
         title=title,
         artist_did=artist_did,
         album=album,
@@ -1049,9 +1165,9 @@ async def run_track_upload(
         features_json=features_json,
         tags=tags,
         description=description,
-        image_path=image_path,
-        image_filename=image_filename,
-        image_content_type=image_content_type,
+        image_id=image_id,
+        image_url=image_url,
+        thumbnail_url=thumbnail_url,
         support_gate=support_gate,
         auto_tag=auto_tag,
         unlisted=unlisted,
@@ -1062,17 +1178,24 @@ async def run_track_upload(
 async def schedule_track_upload(ctx: UploadContext) -> None:
     """enqueue a track upload as a docket task.
 
+    by contract this function only forwards small primitives + storage
+    identifiers — never local filesystem paths. a worker may pick up
+    the task on a different fly machine than the one that handled the
+    request, and that machine has its own /tmp.
+
     the HTTP handler should return to the client as soon as this call
-    resolves; the actual R2/PDS/ATProto work runs on a docket worker with
-    bounded concurrency (`settings.docket.worker_concurrency`), which
-    prevents a burst of simultaneous uploads from saturating the DB pool.
+    resolves; the actual transcode/PDS/ATProto work runs on a docket
+    worker with bounded concurrency (`settings.docket.worker_concurrency`),
+    which prevents a burst of simultaneous uploads from saturating the
+    DB pool.
     """
     docket = get_docket()
     await docket.add(run_track_upload)(
         upload_id=ctx.upload_id,
         session_id=ctx.auth_session.session_id,
-        file_path=ctx.file_path,
+        audio_file_id=ctx.audio_file_id,
         filename=ctx.filename,
+        duration=ctx.duration,
         title=ctx.title,
         artist_did=ctx.artist_did,
         album=ctx.album,
@@ -1080,9 +1203,9 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         features_json=ctx.features_json,
         tags=ctx.tags,
         description=ctx.description,
-        image_path=ctx.image_path,
-        image_filename=ctx.image_filename,
-        image_content_type=ctx.image_content_type,
+        image_id=ctx.image_id,
+        image_url=ctx.image_url,
+        thumbnail_url=ctx.thumbnail_url,
         support_gate=ctx.support_gate,
         auto_tag=ctx.auto_tag,
         unlisted=ctx.unlisted,
@@ -1188,71 +1311,81 @@ async def upload_track(
             f"supported: {AudioFormat.supported_extensions_str()}",
         )
 
-    # stream file to temp file (constant memory)
-    file_path = None
-    image_path = None
+    # stage audio + image to shared object storage BEFORE enqueueing the
+    # docket task. only stable file_ids travel over Redis to the worker —
+    # docket workers are not co-located with the request handler in
+    # production, and a /tmp path on machine A is meaningless on machine B.
+    #
+    # the handler now creates durable storage objects before any worker
+    # has taken ownership, so any abort between staging and a successful
+    # enqueue must roll those objects back AND mark the job FAILED —
+    # otherwise we'd leak audio/image bytes and leave the user's job stuck
+    # in PROCESSING forever.
+    upload_id = await job_service.create_job(
+        JobType.UPLOAD, auth_session.did, "upload queued for processing"
+    )
+    is_gated = parsed_support_gate is not None
+    audio_extension = ext.lstrip(".") or None
+
+    file_path: str | None = None
+    audio_file_id: str | None = None
+    image_id: str | None = None
+    image_url: str | None = None
+    thumbnail_url: str | None = None
+    enqueued = False
     try:
-        # enforce max upload size
         max_size = settings.storage.max_upload_size_mb * 1024 * 1024
         bytes_read = 0
-
-        with tempfile.NamedTemporaryFile(
-            delete=False, suffix=Path(file.filename).suffix
-        ) as tmp_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
             file_path = tmp_file.name
-            # stream upload file to temp file in chunks
             while chunk := await file.read(CHUNK_SIZE):
                 bytes_read += len(chunk)
                 if bytes_read > max_size:
-                    # cleanup temp file before raising
-                    tmp_file.close()
-                    Path(file_path).unlink(missing_ok=True)
                     raise HTTPException(
                         status_code=413,
-                        detail=f"file too large (max {settings.storage.max_upload_size_mb}MB)",
+                        detail=(
+                            f"file too large (max "
+                            f"{settings.storage.max_upload_size_mb}MB)"
+                        ),
                     )
                 tmp_file.write(chunk)
 
-        # stream image to temp file if provided
-        image_filename = None
-        image_content_type = None
+        # extract duration once, while the bytes are still local — saves
+        # the worker an extra storage round-trip just to read length metadata.
+        with open(file_path, "rb") as f:
+            duration = extract_duration(f)
+
+        # stage audio bytes to shared storage
+        with open(file_path, "rb") as f:
+            audio_file_id = await stage_audio_to_storage(
+                upload_id, f, file.filename, gated=is_gated
+            )
+
+        # stage image bytes to shared storage (best-effort; missing or
+        # invalid images don't fail the whole upload — the orchestrator
+        # treats `image_id is None` as "no track artwork").
         if image and image.filename:
-            image_filename = image.filename
-            image_content_type = image.content_type
-            # images have much smaller limit (20MB is generous for cover art)
             max_image_size = 20 * 1024 * 1024
+            image_buffer = BytesIO()
             image_bytes_read = 0
+            while chunk := await image.read(CHUNK_SIZE):
+                image_bytes_read += len(chunk)
+                if image_bytes_read > max_image_size:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="image too large (max 20MB)",
+                    )
+                image_buffer.write(chunk)
+            image_id, image_url, thumbnail_url = await stage_image_to_storage(
+                image_buffer.getvalue(), image.filename, image.content_type
+            )
 
-            with tempfile.NamedTemporaryFile(
-                delete=False, suffix=Path(image.filename).suffix
-            ) as tmp_image:
-                image_path = tmp_image.name
-                # stream image file to temp file in chunks
-                while chunk := await image.read(CHUNK_SIZE):
-                    image_bytes_read += len(chunk)
-                    if image_bytes_read > max_image_size:
-                        # cleanup temp files before raising
-                        tmp_image.close()
-                        Path(image_path).unlink(missing_ok=True)
-                        if file_path:
-                            Path(file_path).unlink(missing_ok=True)
-                        raise HTTPException(
-                            status_code=413,
-                            detail="image too large (max 20MB)",
-                        )
-                    tmp_image.write(chunk)
-
-        # create upload tracking via JobService
-        upload_id = await job_service.create_job(
-            JobType.UPLOAD, auth_session.did, "upload queued for processing"
-        )
-
-        # schedule background processing once response is sent
         ctx = UploadContext(
             upload_id=upload_id,
             auth_session=auth_session,
-            file_path=file_path,
+            audio_file_id=audio_file_id,
             filename=file.filename,
+            duration=duration,
             title=title,
             artist_did=auth_session.did,
             album=album,
@@ -1260,22 +1393,39 @@ async def upload_track(
             features_json=features,
             tags=validated_tags,
             description=description,
-            image_path=image_path,
-            image_filename=image_filename,
-            image_content_type=image_content_type,
+            image_id=image_id,
+            image_url=image_url,
+            thumbnail_url=thumbnail_url,
             support_gate=parsed_support_gate,
             auto_tag=auto_tag == "true",
             unlisted=unlisted == "true",
         )
         await schedule_track_upload(ctx)
+        enqueued = True
     except Exception:
+        if not enqueued:
+            if audio_file_id:
+                await _delete_staged_audio(
+                    audio_file_id, audio_extension, gated=is_gated
+                )
+            if image_id:
+                with contextlib.suppress(Exception):
+                    await storage.delete(image_id)
+            with contextlib.suppress(Exception):
+                await job_service.update_progress(
+                    upload_id,
+                    JobStatus.FAILED,
+                    "upload failed",
+                    error="upload aborted before queueing",
+                )
+        raise
+    finally:
+        # the request-local temp file lives only inside this handler
+        # invocation. cleaning it up here means there's never a path for
+        # the worker to pick up — and never a /tmp leak if enqueue fails.
         if file_path:
             with contextlib.suppress(Exception):
                 Path(file_path).unlink(missing_ok=True)
-        if image_path:
-            with contextlib.suppress(Exception):
-                Path(image_path).unlink(missing_ok=True)
-        raise
 
     return UploadStartResponse(
         upload_id=upload_id,

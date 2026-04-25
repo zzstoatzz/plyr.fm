@@ -99,16 +99,29 @@ class TestEndpointAuthAndValidation:
     async def test_returns_upload_id_and_schedules_background(
         self, test_app_owner: FastAPI, db_session: AsyncSession, owner: Artist
     ) -> None:
-        """successful enqueue returns the SSE-pollable upload_id."""
+        """successful enqueue returns the SSE-pollable upload_id.
+
+        the handler now stages the new audio bytes to shared object storage
+        BEFORE enqueueing the docket task (so workers on other fly machines
+        can pick it up without needing the request handler's /tmp). this
+        test patches both stage_audio_to_storage and the docket scheduler
+        so neither runs for real.
+        """
         track = make_track()
         db_session.add(track)
         await db_session.commit()
         await db_session.refresh(track)
 
-        # patch the docket scheduler so the queued task is a no-op
-        with patch(
-            "backend.api.tracks.audio_replace.schedule_track_audio_replace",
-            new_callable=AsyncMock,
+        with (
+            patch(
+                "backend.api.tracks.audio_replace.stage_audio_to_storage",
+                new_callable=AsyncMock,
+                return_value="staged-file-id",
+            ),
+            patch(
+                "backend.api.tracks.audio_replace.schedule_track_audio_replace",
+                new_callable=AsyncMock,
+            ),
         ):
             async with AsyncClient(
                 transport=ASGITransport(app=test_app_owner), base_url="http://test"
