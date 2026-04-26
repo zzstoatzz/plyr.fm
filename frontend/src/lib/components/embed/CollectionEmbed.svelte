@@ -2,6 +2,14 @@
 	import { page } from '$app/stores';
 	import { onMount, tick } from 'svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import {
+		clearMediaSessionMetadata,
+		setMediaSessionActionHandlers,
+		setMediaSessionMetadata,
+		setMediaSessionPlaybackState,
+		setMediaSessionPositionState
+	} from '$lib/media-session';
+	import { trackCoverUrl } from '$lib/track-cover';
 	import type { CollectionData } from '$lib/types';
 
 	let { collection }: { collection: CollectionData } = $props();
@@ -91,6 +99,73 @@
 		if ($page.url.searchParams.get('autoplay') === '1' && isPlayable) {
 			audio.play().catch(() => { paused = true; });
 		}
+
+		// route OS-level lock-screen / system-media controls to the embed's
+		// own playback functions. without these, the lock-screen control
+		// only knew that an `<audio>` element was playing — no title, no
+		// artwork, and the next/previous buttons were ignored.
+		setMediaSessionActionHandlers({
+			play: () => { audio?.play().catch(() => {}); },
+			pause: () => { audio?.pause(); },
+			previoustrack: () => { void skipPrev(); },
+			nexttrack: () => { void skipNext(); },
+			seekto: (details) => {
+				if (audio && details.seekTime !== undefined) {
+					audio.currentTime = details.seekTime;
+				}
+			},
+			seekbackward: (details) => {
+				if (!audio) return;
+				audio.currentTime = Math.max(
+					0,
+					audio.currentTime - (details.seekOffset ?? 10)
+				);
+			},
+			seekforward: (details) => {
+				if (!audio) return;
+				audio.currentTime = Math.min(
+					duration,
+					audio.currentTime + (details.seekOffset ?? 10)
+				);
+			}
+		});
+
+		return () => {
+			// clear metadata when the component unmounts so a stale embed
+			// doesn't leave its title/cover hanging on the OS controls
+			// after navigation away.
+			clearMediaSessionMetadata();
+			setMediaSessionPlaybackState('none');
+			setMediaSessionActionHandlers({
+				play: null,
+				pause: null,
+				previoustrack: null,
+				nexttrack: null,
+				seekto: null,
+				seekbackward: null,
+				seekforward: null
+			});
+		};
+	});
+
+	// keep the OS-level lock-screen metadata in sync with the current track
+	$effect(() => {
+		if (!currentTrack) return;
+		setMediaSessionMetadata({
+			title: currentTrack.title,
+			artist: currentTrack.artist,
+			album: collection.title,
+			artworkUrl: trackCoverUrl(currentTrack),
+			artworkFallbackUrl: collection.imageUrl
+		});
+	});
+
+	$effect(() => {
+		setMediaSessionPlaybackState(paused ? 'paused' : 'playing');
+	});
+
+	$effect(() => {
+		setMediaSessionPositionState({ duration, position: currentTime });
 	});
 </script>
 
