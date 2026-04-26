@@ -2,6 +2,13 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import {
+		clearMediaSessionMetadata,
+		setMediaSessionActionHandlers,
+		setMediaSessionMetadata,
+		setMediaSessionPlaybackState,
+		setMediaSessionPositionState
+	} from '$lib/media-session';
 	import { trackCoverUrl } from '$lib/track-cover';
 	import type { PageData } from './$types';
 
@@ -53,6 +60,66 @@
 				paused = true;
 			});
 		}
+
+		// route OS-level lock-screen / system-media controls. single-track
+		// embed has no next/previous, so we explicitly null those handlers
+		// — that tells the OS to grey them out instead of inheriting a
+		// stale handler from a prior page.
+		setMediaSessionActionHandlers({
+			play: () => { audio?.play().catch(() => {}); },
+			pause: () => { audio?.pause(); },
+			previoustrack: null,
+			nexttrack: null,
+			seekto: (details) => {
+				if (audio && details.seekTime !== undefined) {
+					audio.currentTime = details.seekTime;
+				}
+			},
+			seekbackward: (details) => {
+				if (!audio) return;
+				audio.currentTime = Math.max(
+					0,
+					audio.currentTime - (details.seekOffset ?? 10)
+				);
+			},
+			seekforward: (details) => {
+				if (!audio) return;
+				audio.currentTime = Math.min(
+					duration,
+					audio.currentTime + (details.seekOffset ?? 10)
+				);
+			}
+		});
+
+		return () => {
+			clearMediaSessionMetadata();
+			setMediaSessionPlaybackState('none');
+			setMediaSessionActionHandlers({
+				play: null,
+				pause: null,
+				seekto: null,
+				seekbackward: null,
+				seekforward: null
+			});
+		};
+	});
+
+	$effect(() => {
+		if (!track) return;
+		setMediaSessionMetadata({
+			title: track.title,
+			artist: track.artist,
+			album: track.album?.title,
+			artworkUrl: coverUrl
+		});
+	});
+
+	$effect(() => {
+		setMediaSessionPlaybackState(paused ? 'paused' : 'playing');
+	});
+
+	$effect(() => {
+		setMediaSessionPositionState({ duration, position: currentTime });
 	});
 </script>
 
