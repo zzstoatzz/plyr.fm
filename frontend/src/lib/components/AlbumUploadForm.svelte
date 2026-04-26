@@ -380,13 +380,18 @@
 		await onAlbumsReload();
 
 		if (completed > 0) {
+			// only offer the "view album" action when we know the artist handle —
+			// the canonical album route is `/u/[handle]/album/[slug]`, so without
+			// a handle the link would 404. artistProfile is loaded on mount but
+			// may be null if the profile fetch failed.
+			const artistHandle = artistProfile?.handle;
 			toast.success(
 				`${completed} of ${tracks.length} track${tracks.length > 1 ? 's' : ''} uploaded`,
 				5000,
-				albumSlug
+				albumSlug && artistHandle
 					? {
 							label: 'view album',
-							href: `/album/${albumSlug}`,
+							href: `/u/${artistHandle}/album/${albumSlug}`,
 						}
 					: undefined,
 			);
