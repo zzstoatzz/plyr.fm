@@ -14,6 +14,13 @@
 	import { uploader } from "$lib/uploader.svelte";
 	import { toast } from "$lib/toast.svelte";
 	import { auth } from "$lib/auth.svelte";
+	import { setReturnUrl } from "$lib/utils/return-url";
+	import {
+		stashTrackForm,
+		restoreTrackForm,
+		clearTrackFormStash,
+		preflightAuth,
+	} from "$lib/upload-form-stash";
 
 	const AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a", ".aiff", ".aif", ".flac"];
 	const AUDIO_MIME_TYPES = [
@@ -80,6 +87,27 @@
 			return;
 		}
 
+		// restore a draft stashed when the user was bounced to /login by an
+		// expired-session pre-flight. files can't be serialized, so the user
+		// re-attaches the audio (and cover art) — everything else is restored.
+		const stashed = restoreTrackForm();
+		if (stashed) {
+			title = stashed.title;
+			albumTitle = stashed.albumTitle;
+			description = stashed.description;
+			featuredArtists = stashed.featuredArtists;
+			uploadTags = stashed.uploadTags;
+			attestedRights = stashed.attestedRights;
+			supportGated = stashed.supportGated;
+			autoTag = stashed.autoTag;
+			trackUnlisted = stashed.trackUnlisted;
+			clearTrackFormStash();
+			toast.info(
+				"your draft was restored — please reattach your audio file",
+				7000,
+			);
+		}
+
 		await Promise.all([loadMyAlbums(), loadArtistProfile()]);
 		loading = false;
 	});
@@ -113,9 +141,45 @@
 		}
 	}
 
-	function handleUpload(e: SubmitEvent) {
+	async function handleUpload(e: SubmitEvent) {
 		e.preventDefault();
 		if (!file) return;
+
+		// pre-flight auth revalidation. the destructive XHR/SSE upload pipeline
+		// surfaces an expired session as a generic "lost connection" error
+		// (see uploader.svelte.ts — eventSource.onerror), which is misleading
+		// at the worst possible moment. catch the auth state here, stash the
+		// draft, and redirect to /login so the user can recover without losing
+		// what they typed.
+		const authStatus = await preflightAuth();
+		if (authStatus === "expired") {
+			stashTrackForm({
+				title,
+				albumTitle,
+				description,
+				featuredArtists: [...featuredArtists],
+				uploadTags: [...uploadTags],
+				attestedRights,
+				supportGated,
+				autoTag,
+				trackUnlisted,
+			});
+			setReturnUrl("/upload");
+			toast.error(
+				"your session expired — sign in to continue your upload",
+			);
+			goto("/login");
+			return;
+		}
+		if (authStatus === "unverified") {
+			// couldn't reach /auth/me — session may be fine, but we can't tell.
+			// don't redirect (might be a transient network blip), don't proceed
+			// (the upload would fail anyway). user retries when they're back online.
+			toast.error(
+				"couldn't verify your session — check your connection and try again",
+			);
+			return;
+		}
 
 		const uploadFile = file;
 		const uploadTitle = title;

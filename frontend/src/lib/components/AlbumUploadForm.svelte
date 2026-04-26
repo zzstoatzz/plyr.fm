@@ -1,10 +1,13 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import type { AlbumSummary, Artist } from '$lib/types';
 	import type { TrackEntry } from '$lib/components/TrackEntryCard.svelte';
 	import TrackEntryCard from '$lib/components/TrackEntryCard.svelte';
 	import PdsTooltip from '$lib/components/PdsTooltip.svelte';
 	import { uploader, type UploadResult } from '$lib/uploader.svelte';
 	import { toast } from '$lib/toast.svelte';
+	import { setReturnUrl } from '$lib/utils/return-url';
+	import { preflightAuth } from '$lib/upload-form-stash';
 	import { getServerConfig, API_URL } from '$lib/config';
 
 	const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aiff', '.aif', '.flac'];
@@ -231,6 +234,25 @@
 		e.preventDefault();
 
 		if (!canSubmit) return;
+
+		// pre-flight auth revalidation. without this, an expired session
+		// produces a misleading "lost connection" error after the user has
+		// filled out the entire album form (cover art, tracks, metadata).
+		// catch it before the first destructive call so the user gets a
+		// clear, recoverable error instead of an ambiguous failure.
+		// (album-mode draft preservation is a follow-up — for now the album
+		// form is lost on redirect, but at least the error is honest.)
+		const authStatus = await preflightAuth();
+		if (authStatus === 'expired') {
+			setReturnUrl('/upload?mode=album');
+			toast.error('your session expired — sign in to continue your upload');
+			goto('/login');
+			return;
+		}
+		if (authStatus === 'unverified') {
+			toast.error("couldn't verify your session — check your connection and try again");
+			return;
+		}
 
 		uploading = true;
 		let completed = 0;
