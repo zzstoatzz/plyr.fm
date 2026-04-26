@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import { getRefreshedAvatar, triggerAvatarRefresh, hasAttemptedRefresh } from '$lib/avatar-refresh.svelte';
+	import { swipeToDismiss } from '$lib/swipe-to-dismiss';
 	import SensitiveImage from './SensitiveImage.svelte';
 	import type { LikerData } from '$lib/tooltip-cache.svelte';
 
@@ -40,8 +41,16 @@
 	role="presentation"
 	onclick={handleBackdropClick}
 >
-	<div class="sheet" role="dialog" aria-modal="true" aria-label="liked by">
-		<div class="sheet-handle"></div>
+	<div
+		class="sheet"
+		role="dialog"
+		aria-modal="true"
+		aria-label="liked by"
+		{@attach swipeToDismiss(() => likersSheet.close())}
+	>
+		<div class="sheet-handle-area" data-sheet-handle role="presentation">
+			<div class="sheet-handle"></div>
+		</div>
 		<div class="sheet-header">
 			<span class="sheet-title">
 				{likersSheet.likeCount} {likersSheet.likeCount === 1 ? 'like' : 'likes'}
@@ -138,12 +147,30 @@
 		transform: translateY(0);
 	}
 
+	.sheet-handle-area {
+		/* expanded hit target (>= 44px tall) so a thumb-flick anywhere along the
+		   top strip triggers swipe-to-dismiss. visible handle stays small. */
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		padding: 0.75rem 1rem 0.5rem;
+		flex-shrink: 0;
+		cursor: grab;
+		/* prevent ios from interpreting the vertical drag as scroll */
+		touch-action: none;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	.sheet-handle-area:active {
+		cursor: grabbing;
+	}
+
 	.sheet-handle {
-		width: 32px;
+		width: 36px;
 		height: 4px;
 		background: var(--border-default);
 		border-radius: 2px;
-		margin: 0.75rem auto 0;
 		flex-shrink: 0;
 	}
 
