@@ -7,6 +7,7 @@ operational procedures for production incidents.
 ## available runbooks
 
 - [connection pool exhaustion](/runbooks/connection-pool-exhaustion/) - 500s everywhere, queue listener down, stuck connections
+- [upload pipeline OOM cycle](/runbooks/upload-oom-cycle/) - 502s, uploads "fail at 100%", users logged out; backend OOM-cycling under upload load
 
 ## when to use
 
