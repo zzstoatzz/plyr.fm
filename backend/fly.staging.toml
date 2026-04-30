@@ -21,6 +21,14 @@ primary_region = 'iad'
   R2_PUBLIC_BUCKET_URL = 'https://pub-0a0a2e70496c461581c9fafb442b269d.r2.dev'
   STORAGE_BACKEND = 'r2'
 
+# two process groups so a runaway upload task in `worker` cannot OOM the
+# `app` process serving HTTP. mirrors backend/fly.toml — staging needs
+# the same structural split for smoke testing to exercise it. sizing is
+# smaller than prod since staging carries less load.
+[processes]
+  app = "uv run --no-sync uvicorn backend.main:app --host 0.0.0.0 --port 8000"
+  worker = "uv run --no-sync python -m backend.worker"
+
 [http_service]
   internal_port = 8000
   force_https = true
@@ -42,6 +50,13 @@ primary_region = 'iad'
     path = "/health"
 
 [[vm]]
+  processes = ['app']
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+[[vm]]
+  processes = ['worker']
   memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
