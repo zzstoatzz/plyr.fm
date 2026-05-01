@@ -1,14 +1,18 @@
 """background task infrastructure using pydocket.
 
-provides a docket instance for scheduling background tasks and a worker
-that runs alongside the FastAPI server. requires DOCKET_URL to be set
-to a Redis URL.
+provides two lifespans plus a `get_docket()` accessor:
 
-usage:
-    from backend._internal.background import get_docket
+- `docket_client_lifespan()`: opens a Docket connection and registers the
+  task collection. used by the FastAPI `app` process so request handlers
+  can enqueue background tasks via `get_docket().add(task)(...)` without
+  running the Worker run loop in the same process.
 
-    docket = get_docket()
-    await docket.add(my_task_function)(arg1, arg2)
+- `docket_worker_lifespan()`: opens the Docket connection AND runs a
+  Worker. used by the dedicated `worker` process (see `backend/worker.py`).
+
+splitting these means an upload-task OOM in the worker process can no
+longer kill the HTTP server. requires `DOCKET_URL` to be set to a Redis
+URL.
 """
 
 import asyncio
@@ -23,7 +27,7 @@ from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-# global docket instance - initialized in lifespan
+# global docket instance - initialized in either lifespan
 _docket: Docket | None = None
 
 
@@ -39,19 +43,47 @@ def get_docket() -> Docket:
 
 
 @asynccontextmanager
-async def background_worker_lifespan() -> AsyncGenerator[Docket, None]:
-    """lifespan context manager for docket and its worker.
+async def docket_client_lifespan() -> AsyncGenerator[Docket, None]:
+    """open a Docket client (no Worker).
 
-    initializes the docket connection and starts an in-process
-    worker that processes background tasks.
-
-    yields:
-        Docket: the initialized docket instance
+    used by the HTTP `app` process so request handlers can enqueue
+    background tasks. the Worker run loop runs in a separate process
+    (see `backend/worker.py`), so a runaway upload task can never OOM
+    the HTTP server.
     """
     global _docket
 
     logger.info(
-        "initializing docket",
+        "initializing docket client",
+        extra={"docket_name": settings.docket.name, "url": settings.docket.url},
+    )
+
+    # WARNING: do not modify Docket() constructor args without reading
+    # docs/backend/background-tasks.md - see 2025-12-30 incident
+    async with Docket(
+        name=settings.docket.name,
+        url=settings.docket.url,
+    ) as docket:
+        _docket = docket
+        _register_tasks(docket)
+        try:
+            yield docket
+        finally:
+            _docket = None
+            logger.info("docket client closed")
+
+
+@asynccontextmanager
+async def docket_worker_lifespan() -> AsyncGenerator[Docket, None]:
+    """open a Docket connection AND run a Worker.
+
+    used by the dedicated worker process. yields the Docket so the
+    entrypoint can hold the lifespan open until a shutdown signal arrives.
+    """
+    global _docket
+
+    logger.info(
+        "initializing docket worker",
         extra={"docket_name": settings.docket.name, "url": settings.docket.url},
     )
 
@@ -62,11 +94,8 @@ async def background_worker_lifespan() -> AsyncGenerator[Docket, None]:
         url=settings.docket.url,
     ) as docket:
         _docket = docket
-
-        # register all background task functions
         _register_tasks(docket)
 
-        # start worker as background task
         worker_task: asyncio.Task[None] | None = None
         try:
             async with Worker(

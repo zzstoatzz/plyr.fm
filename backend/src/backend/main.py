@@ -15,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend._internal import jam_service, notification_service, queue_service
-from backend._internal.background import background_worker_lifespan
+from backend._internal.background import docket_client_lifespan
 from backend.api import (
     account_router,
     activity_router,
@@ -96,8 +96,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except (OSError, SQLAlchemyError):
         logger.warning("failed to warm database connection pool")
 
-    # start background task worker (docket)
-    async with background_worker_lifespan() as docket:
+    # open docket client (no Worker — the worker run loop lives in the
+    # dedicated `worker` process group, see backend/worker.py + fly.toml).
+    # request handlers enqueue tasks via this client; nothing here actually
+    # consumes the queue.
+    async with docket_client_lifespan() as docket:
         # store docket on app state for access in routes if needed
         app.state.docket = docket
         yield
