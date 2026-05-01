@@ -142,7 +142,7 @@ async def test_upload_and_delete_track(test_audio_file: Path):
             f"track not found: {track_response.text}"
         )
         track = track_response.json()
-        print(f"track created: {track['title']} by {track['artist']['handle']}")
+        print(f"track created: {track['title']} by @{track['artist_handle']}")
 
         # 5. delete track
         delete_response = await client.delete(
