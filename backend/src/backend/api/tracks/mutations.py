@@ -406,7 +406,7 @@ async def _update_atproto_record(
         if not audio_url:
             return
 
-    updated_record = build_track_record(
+    updated_record = await build_track_record(
         title=track.title,
         artist=track.artist.display_name,
         audio_url=audio_url,
@@ -572,7 +572,7 @@ async def restore_track_record(
     # recreate record with TID from created_at
     rkey = datetime_to_tid(track.created_at)
 
-    track_record = build_track_record(
+    track_record = await build_track_record(
         title=track.title,
         artist=track.artist.display_name,
         audio_url=track.r2_url,
@@ -737,7 +737,7 @@ async def migrate_track_to_pds(
     if track.atproto_record_uri and track.r2_url:
         try:
             # build updated record with blob
-            track_record = build_track_record(
+            track_record = await build_track_record(
                 title=track.title,
                 artist=track.artist.display_name,
                 audio_url=track.r2_url,

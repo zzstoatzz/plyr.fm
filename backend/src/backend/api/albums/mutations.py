@@ -405,7 +405,7 @@ async def update_album(
 
             # update ATProto record if track has one
             if track.atproto_record_uri and track.r2_url and track.file_type:
-                updated_record = build_track_record(
+                updated_record = await build_track_record(
                     title=track.title,
                     artist=track.artist.display_name,
                     audio_url=track.r2_url,

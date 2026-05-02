@@ -218,7 +218,7 @@ async def restore_track_revision(
             "size": revision.pds_blob_size or 0,
         }
 
-    new_record = build_track_record(
+    new_record = await build_track_record(
         title=track.title,
         artist=track.artist.display_name,
         audio_url=_audio_url_for_record(revision),

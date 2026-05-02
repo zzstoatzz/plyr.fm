@@ -77,11 +77,49 @@ class AlbumSummary(BaseModel):
 
 
 class FeaturedArtist(BaseModel):
-    """featured artist metadata."""
+    """featured artist metadata, hydrated from the artist's DID at read time.
+
+    `track.features` in the DB stores only DIDs; this view shape is built by
+    `_internal.atproto.profiles.resolve_dids()` on every API response so
+    handle/display_name/avatar_url are always fresh.
+    """
 
     did: str
     handle: str
     display_name: str
+    avatar_url: str | None = None
+
+
+async def _hydrate_features(stored: list | None) -> list[FeaturedArtist]:
+    """build FeaturedArtist views from `track.features` (a list of `{did}` dicts).
+
+    tolerates legacy shapes (`[{did, handle, displayName}]` or
+    `[{did, handle, display_name}]`) by extracting only the DID — drift
+    in the snapshot fields is irrelevant because we resolve fresh below.
+    """
+    if not stored:
+        return []
+    dids: list[str] = []
+    for entry in stored:
+        if isinstance(entry, dict) and (did := entry.get("did")):
+            dids.append(did)
+        elif isinstance(entry, str):
+            dids.append(entry)
+    if not dids:
+        return []
+    # local import to avoid circular dep (profiles → models → schemas)
+    from backend._internal.atproto.profiles import resolve_dids
+
+    profiles = await resolve_dids(dids)
+    return [
+        FeaturedArtist(
+            did=p.did,
+            handle=p.handle,
+            display_name=p.display_name,
+            avatar_url=p.avatar_url,
+        )
+        for p in profiles
+    ]
 
 
 class TrackResponse(BaseModel):
@@ -95,7 +133,7 @@ class TrackResponse(BaseModel):
     artist_avatar_url: str | None
     file_id: str
     file_type: str
-    features: list[dict[str, Any]] = Field(default_factory=list)
+    features: list[FeaturedArtist] = Field(default_factory=list)
     r2_url: str | None
     atproto_record_uri: str | None
     atproto_record_cid: str | None
@@ -211,7 +249,7 @@ class TrackResponse(BaseModel):
             artist_avatar_url=track.artist.avatar_url,
             file_id=track.file_id,
             file_type=track.file_type,
-            features=track.features or [],
+            features=await _hydrate_features(track.features),
             r2_url=track.r2_url,
             atproto_record_uri=track.atproto_record_uri,
             atproto_record_cid=track.atproto_record_cid,

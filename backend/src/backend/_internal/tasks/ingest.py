@@ -36,6 +36,32 @@ class SubjectNotFoundError(Exception):
     """referenced subject (track) not yet indexed — triggers retry."""
 
 
+def _features_to_did_list(features: list | None) -> list[dict[str, str]]:
+    """extract canonical DIDs from any historical feature shape.
+
+    accepts:
+    - new shape: `[{"did": "did:plc:..."}]`
+    - legacy lexicon shape: `[{"did": "...", "handle": "...", "displayName": "..."}]`
+    - already-flat: `["did:plc:...", "did:plc:..."]`
+
+    returns the canonical DB shape: `[{"did": "did:plc:..."}]`. handle and
+    displayName fields from the PDS record are intentionally discarded —
+    they're stale snapshots that we resolve fresh at API-read time via
+    `_internal.atproto.profiles.resolve_dids`.
+    """
+    if not features:
+        return []
+    out: list[dict[str, str]] = []
+    for entry in features:
+        if isinstance(entry, dict):
+            did = entry.get("did")
+            if isinstance(did, str) and did:
+                out.append({"did": did})
+        elif isinstance(entry, str) and entry.startswith("did:"):
+            out.append({"did": entry})
+    return out
+
+
 _INGEST_RETRY = ExponentialRetry(
     attempts=4,
     minimum_delay=timedelta(seconds=1),
@@ -253,7 +279,7 @@ async def ingest_track_create(
             description=record.get("description"),
             image_url=image_url,
             support_gate=record.get("supportGate"),
-            features=record.get("features") or [],
+            features=_features_to_did_list(record.get("features")),
             created_at=_parse_datetime(record.get("createdAt")),
             extra=extra,
         )
@@ -354,9 +380,11 @@ async def ingest_track_update(
         if "supportGate" in record:
             track.support_gate = record["supportGate"]
 
-        # features
+        # features — store only the canonical DID. handle/displayName in the
+        # PDS record are denormalized snapshots that drift; we resolve them
+        # fresh at read time via _internal.atproto.profiles.
         if (features := record.get("features")) is not None:
-            track.features = features
+            track.features = _features_to_did_list(features)
 
         # extra fields (album, duration) — reassign to trigger change detection
         extra = dict(track.extra or {})

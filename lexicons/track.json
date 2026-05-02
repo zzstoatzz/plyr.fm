@@ -95,23 +95,23 @@
     },
     "featuredArtist": {
       "type": "object",
-      "description": "A featured artist on a track.",
-      "required": ["did", "handle"],
+      "description": "A featured artist on a track. Identified by DID — the canonical, immutable identifier. handle and displayName are legacy denormalized snapshots; readers should resolve fresh metadata from the DID rather than trusting these fields.",
+      "required": ["did"],
       "properties": {
         "did": {
           "type": "string",
           "format": "did",
-          "description": "The DID of the featured artist."
+          "description": "The DID of the featured artist. Canonical, stable identifier."
         },
         "handle": {
           "type": "string",
           "format": "handle",
-          "description": "The handle of the featured artist."
+          "description": "DEPRECATED snapshot — mutable, may be stale. Resolve from `did` instead. Older records include this; new records may omit it."
         },
         "displayName": {
           "type": "string",
-          "description": "Display name of the featured artist.",
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "DEPRECATED snapshot — mutable, may be stale. Resolve from `did` instead. Older records include this; new records may omit it."
         }
       }
     }

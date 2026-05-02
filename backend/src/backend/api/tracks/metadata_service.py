@@ -70,7 +70,11 @@ async def resolve_feature_handles(
             )
         if TYPE_CHECKING:
             assert isinstance(resolved, dict)
-        features.append(resolved)
+        # store only the canonical DID. handle/displayName are mutable
+        # snapshots that the API hydrates fresh per-request via
+        # `_internal.atproto.profiles.resolve_dids`. keeping them here
+        # would re-introduce the drift bug fixed by #1355.
+        features.append({"did": resolved["did"]})
 
     return features
 
