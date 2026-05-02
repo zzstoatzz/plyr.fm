@@ -134,6 +134,22 @@ bun run dev -- --host
 
 frontend: http://localhost:5173
 
+### docket worker (optional)
+
+local dev usually doesn't need a separate worker — when `DOCKET_URL` is unset, scheduled tasks fall back to in-process `asyncio.create_task()` (fire-and-forget, no retries). that's enough for most feature work.
+
+if you want to mirror production's worker tier (separate process consuming from Redis):
+
+```bash
+# terminal: start redis if not already running
+just dev-services
+
+# terminal: start the worker (no HTTP, just consumes docket tasks)
+DOCKET_URL=redis://localhost:6379 uv run python -m backend.worker
+```
+
+this is the same entrypoint deployed to fly's `worker` process group. see [background tasks](/backend/background-tasks/) for the architecture.
+
 ### transcoder (optional)
 
 ```bash

@@ -20,16 +20,28 @@ background tasks handle operations that shouldn't block the request/response cyc
 
 ## architecture
 
+in production and staging, the FastAPI process and the docket Worker run in **separate fly process groups** of the same `relay-api` app:
+
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   FastAPI   │────▶│    Redis    │◀────│   Worker    │
-│   (add task)│     │  (queue)    │     │  (process)  │
-└─────────────┘     └─────────────┘     └─────────────┘
+fly app: relay-api
+┌────────────────────────────┐     ┌─────────────┐     ┌─────────────────────────────┐
+│  process group: app        │────▶│    Redis    │◀────│  process group: worker      │
+│  uvicorn → docket *client* │     │  (queue)    │     │  python -m backend.worker   │
+│  (no Worker, just enqueue) │     └─────────────┘     │  → docket Worker (consume)  │
+└────────────────────────────┘                          └─────────────────────────────┘
 ```
 
-- **docket** schedules tasks to Redis
-- **worker** runs in-process alongside FastAPI, processing tasks from the queue
-- tasks are durable - if the worker crashes, tasks are retried on restart
+- **app** group: serves HTTP. opens a Docket client via `docket_client_lifespan()` so request handlers can call `get_docket().add(task)(...)` to enqueue. does NOT run a Worker. sized for HTTP fan-out (1GB).
+- **worker** group: runs `python -m backend.worker`, which boots `notification_service.setup()` then enters `docket_worker_lifespan()` → docket `Worker.run_forever()`. no HTTP listener. sized for in-memory upload work (2GB).
+- **docket** schedules tasks to Redis; the `worker` process consumes them.
+- tasks are durable — if a worker machine dies, in-flight tasks redeliver to a sibling on restart.
+
+the split landed in zzstoatzz/plyr.fm#1359 after the 2026-04-30 incident
+(see [upload-oom-cycle runbook](/runbooks/upload-oom-cycle/)) where a single
+user's album upload OOM-killed uvicorn because Worker + uvicorn shared one
+process. the boundary now ensures worker memory pressure can't take down HTTP.
+
+in local development, both run in one process by default — see [local development](#local-development) below.
 
 ## configuration
 
@@ -73,6 +85,21 @@ just dev
 docker compose up -d  # starts redis on localhost:6379
 DOCKET_URL=redis://localhost:6379 just backend run
 ```
+
+`just backend run` starts uvicorn only — it opens a Docket *client* but
+does not run a Worker. for local dev this is usually fine: the API can
+enqueue tasks but they sit in Redis until consumed. options:
+
+- skip Redis entirely (omit `DOCKET_URL`) → tasks fall back to
+  `asyncio.create_task()` and run in-process (fire-and-forget, no retries).
+  this is the default when no Redis is configured — sufficient for most
+  feature work.
+- run a worker locally to mirror production:
+  ```bash
+  DOCKET_URL=redis://localhost:6379 uv run python -m backend.worker
+  ```
+  in a second terminal. this is the same entrypoint deployed to the
+  fly `worker` process group.
 
 ### production/staging
 

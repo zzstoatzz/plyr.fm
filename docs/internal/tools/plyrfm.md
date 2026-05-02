@@ -29,17 +29,28 @@ for authenticated operations:
 
 ## CLI
 
+the CLI is namespaced (`plyrfm tracks ...`, `plyrfm playlists ...`, etc.) — run `plyrfm --help` to see the full tree.
+
 ```bash
 # public (no auth)
-plyrfm list                        # list all tracks
+plyrfm tracks list                                  # list all tracks
+plyrfm tracks get 42                                # get one by ID
 
 # authenticated
-plyrfm my-tracks                   # list your tracks
-plyrfm upload track.mp3 "My Song"  # upload
-plyrfm download 42 -o song.mp3     # download
-plyrfm delete 42 -y                # delete
-plyrfm me                          # check auth
+plyrfm me                                           # check auth
+plyrfm tracks my                                    # list your tracks
+plyrfm tracks upload track.mp3 "My Song"            # upload
+plyrfm tracks upload track.mp3 "My Song" \
+    --album "My Album" \
+    --image cover.png \
+    --description "liner notes" \
+    --tag electronic --tag ambient \
+    --unlisted                                      # full metadata
+plyrfm tracks download 42 --output song.mp3        # download
+plyrfm tracks delete 42 --yes                      # delete (skip confirm)
 ```
+
+the `--unlisted` flag excludes the track from public discovery feeds (latest, top, for-you) but keeps it accessible by direct URL.
 
 use staging API:
 ```bash
@@ -48,24 +59,34 @@ PLYR_API_URL=https://api-stg.plyr.fm plyrfm list
 
 ## SDK
 
+the SDK is namespaced to mirror the CLI (`client.tracks`, `client.playlists`, ...).
+
 ```python
 from plyrfm import PlyrClient, AsyncPlyrClient
 
 # public operations (no auth)
 client = PlyrClient()
-tracks = client.list_tracks()
-track = client.get_track(42)
+tracks = client.tracks.list()
+track = client.tracks.get(42)
 
 # authenticated operations
 client = PlyrClient(token="your_token")  # or set PLYR_TOKEN
-my_tracks = client.my_tracks()
-result = client.upload("song.mp3", "My Song")
-client.delete(result.track_id)
+my_tracks = client.tracks.my()
+result = client.tracks.upload(
+    "song.mp3",
+    "My Song",
+    album="My Album",
+    image="cover.png",
+    description="liner notes",
+    tags={"electronic", "ambient"},
+    unlisted=True,
+)
+client.tracks.delete(result.track_id)
 ```
 
 async:
 ```python
 async with AsyncPlyrClient(token="your_token") as client:
-    tracks = await client.list_tracks()
-    await client.upload("song.mp3", "My Song")
+    tracks = await client.tracks.list()
+    await client.tracks.upload("song.mp3", "My Song")
 ```
