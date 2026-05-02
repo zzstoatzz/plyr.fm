@@ -157,22 +157,30 @@ if a migration fails:
 ## monitoring
 
 **staging**:
-- logfire: environment filter `LOGFIRE_ENVIRONMENT=staging`
+- logfire: filter on `deployment_environment = 'staging'` (top-level column, not in attributes)
 - backend logs: `flyctl logs -a relay-api-staging`
+  - target a single process group: `flyctl logs -a relay-api-staging --process-group worker`
 
 **production**:
-- logfire: environment filter `LOGFIRE_ENVIRONMENT=production`
+- logfire: filter on `deployment_environment = 'production'`
 - backend logs: `flyctl logs -a relay-api`
+  - target a single process group: `flyctl logs -a relay-api --process-group worker`
+
+both environments split the backend into two fly process groups in the same app: `app` (uvicorn) and `worker` (docket consumer). see [background tasks](/backend/background-tasks/) for the architecture.
 
 ## costs
 
-**current**: ~$25-30/month
-- fly.io backend (production): ~$10/month (shared-cpu-1x, 256MB RAM)
-- fly.io backend (staging): ~$10/month (shared-cpu-1x, 256MB RAM)
-- fly.io transcoder: ~$0-5/month (auto-scales to zero when idle)
-- neon postgres: $5/month (starter plan)
+approximate monthly spend; check fly.io billing for current numbers.
+
+- fly.io backend (production): 2× `app` (shared-cpu-1x, 1GB) + 1× active `worker` (shared-cpu-1x, 2GB) + 1× standby `worker` (stopped, near-zero cost)
+- fly.io backend (staging): 1× `app` (shared-cpu-1x, 1GB) + 1× active `worker` (shared-cpu-1x, 1GB) + 1× standby
+- fly.io transcoder: auto-scales to zero when idle
+- fly.io self-hosted Redis: 1× shared-cpu-1x, 256MB per env
+- neon postgres: starter plan (3 environments)
 - cloudflare pages: free (frontend hosting)
 - cloudflare R2: ~$0.16/month (6 buckets across dev/staging/prod)
+
+note: prod's split sizing (`app=1GB`, `worker=2GB`) replaced the prior single 1GB process group after the 2026-04-30 OOM incident — see [upload-oom-cycle runbook](/runbooks/upload-oom-cycle/).
 
 ## workflow summary
 

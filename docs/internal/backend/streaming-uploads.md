@@ -7,7 +7,9 @@ title: "streaming uploads"
 
 ## overview
 
-plyr.fm uses streaming uploads for audio files to maintain constant memory usage regardless of file size. this prevents out-of-memory errors when handling large files on constrained environments (fly.io shared-cpu VMs with 256MB RAM).
+plyr.fm uses streaming uploads for audio files to maintain constant memory usage regardless of file size. this prevents out-of-memory errors when handling large files on constrained environments (fly.io shared-cpu VMs).
+
+note: this doc covers the **HTTP request → R2** path (handler-side, on the `app` process group). the **R2 → in-process consumer** path (worker-side, used during transcode + PDS upload) does *not* yet stream — `storage.get_file_data()` returns full bytes. that gap caused the 2026-04-30 OOM cycle and is tracked in zzstoatzz/plyr.fm#1357.
 
 ## problem (pre-implementation)
 
@@ -28,7 +30,7 @@ client.put_object(Body=content, ...)  # entire file in RAM
 ### memory profile
 - single 40MB upload: ~80-120MB peak memory
 - 3 concurrent uploads: ~240-360MB peak
-- fly.io shared-cpu VM: 256MB total RAM
+- fly.io shared-cpu VM at the time of writing: 256MB total RAM (since bumped — `app` is now 1GB, `worker` is 2GB; see [environments](/deployment/environments/))
 - **result**: OOM, worker restarts, service degradation
 
 ## solution: streaming approach (implemented)
@@ -277,7 +279,7 @@ successfully maintained during implementation:
 ### concurrent uploads
 - each upload uses independent chunk buffer
 - total memory = num_concurrent * CHUNK_SIZE
-- 5 concurrent @ 8MB chunks = 40MB total (well within 256MB limit)
+- 5 concurrent @ 8MB chunks = 40MB total (well within the `app` VM's 1GB)
 
 ## observability
 
