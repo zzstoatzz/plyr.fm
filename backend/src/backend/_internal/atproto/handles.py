@@ -115,5 +115,8 @@ async def resolve_featured_artists(
         return_exceptions=True,
     )
 
-    # filter out exceptions and None values
-    return [r for r in resolved if isinstance(r, dict) and r is not None]
+    # store only the canonical DID. handle/display_name are mutable
+    # snapshots that the API hydrates fresh per-request via
+    # `_internal.atproto.profiles.resolve_dids`. keeping them here would
+    # re-introduce the drift bug fixed by #1355.
+    return [{"did": r["did"]} for r in resolved if isinstance(r, dict) and r.get("did")]
