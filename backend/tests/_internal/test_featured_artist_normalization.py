@@ -166,3 +166,25 @@ async def test_hydrate_features_empty_list_skips_resolution() -> None:
     ):
         assert await _hydrate_features(None) == []
         assert await _hydrate_features([]) == []
+
+
+async def test_hydrate_features_drops_unresolvable_did() -> None:
+    """DIDs that bsky can't resolve are silently dropped — no placeholder.
+
+    rationale in `_internal.atproto.profiles` module docstring: a featured
+    artist whose profile we can't load is better not shown than shown as
+    a raw `did:plc:...` string.
+    """
+    from backend._internal.atproto import profiles as profiles_module
+    from backend.schemas import _hydrate_features
+
+    profiles_module._cache.clear()
+    with patch(
+        "backend._internal.atproto.profiles._fetch_from_bsky",
+        new=AsyncMock(return_value=None),
+    ):
+        hydrated = await _hydrate_features(
+            [{"did": "did:plc:gone1"}, {"did": "did:plc:gone2"}]
+        )
+
+    assert hydrated == []

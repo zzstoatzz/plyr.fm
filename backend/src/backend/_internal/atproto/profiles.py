@@ -11,9 +11,15 @@ resolution order, cheapest-first:
 2. in-process LRU cache — for DIDs we've seen recently but aren't plyr.fm users.
 3. live bsky `app.bsky.actor.getProfile` — fallback for cold cache misses.
 
-callers should prefer `resolve_dids()` (batched) over `resolve_did()`
-when hydrating a list. the batched path issues at most one SQL query and
-parallelizes any bsky fallbacks.
+use `resolve_dids()` for any number of DIDs — it issues at most one SQL
+query for the artists JOIN and parallelizes bsky fallbacks for cold
+cache misses.
+
+DIDs that cannot be resolved (network failure, bsky returns non-200, no
+profile exists) are simply omitted from the result. callers must not
+assume `len(out) == len(input)`. for the featured-artist render path
+this is the right shape: a featured artist whose profile we can't load
+is better not shown than shown as a placeholder DID string.
 """
 
 import asyncio
@@ -69,22 +75,14 @@ def _cache_set(did: str, profile: ResolvedProfile) -> None:
     _cache[did] = (time.monotonic() + _CACHE_TTL_SECONDS, profile)
 
 
-def _placeholder_profile(did: str) -> ResolvedProfile:
-    """fallback when bsky lookup fails — use the DID as the display string.
+async def _fetch_from_bsky(
+    client: httpx.AsyncClient, did: str
+) -> ResolvedProfile | None:
+    """fetch a single profile from bsky's public appview.
 
-    avoids returning None to callers; UI prefers to show *something* over
-    a missing entry. callers can detect this by checking handle == did.
+    returns None if the profile can't be resolved — caller should drop
+    the DID from the rendered list rather than display a placeholder.
     """
-    return ResolvedProfile(
-        did=did,
-        handle=did,
-        display_name=did,
-        avatar_url=None,
-    )
-
-
-async def _fetch_from_bsky(client: httpx.AsyncClient, did: str) -> ResolvedProfile:
-    """fetch a single profile from bsky's public appview."""
     try:
         response = await client.get(
             "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile",
@@ -95,17 +93,20 @@ async def _fetch_from_bsky(client: httpx.AsyncClient, did: str) -> ResolvedProfi
             logger.debug(
                 "bsky getProfile non-200 for %s: %d", did, response.status_code
             )
-            return _placeholder_profile(did)
+            return None
         data = response.json()
+        handle = data.get("handle")
+        if not handle:
+            return None
         return ResolvedProfile(
             did=did,
-            handle=data.get("handle") or did,
-            display_name=data.get("displayName") or data.get("handle") or did,
+            handle=handle,
+            display_name=data.get("displayName") or handle,
             avatar_url=data.get("avatar"),
         )
     except (httpx.HTTPError, ValueError) as exc:
         logger.debug("bsky getProfile failed for %s: %s", did, exc)
-        return _placeholder_profile(did)
+        return None
 
 
 async def _from_artist_row(artist: Artist) -> ResolvedProfile:
@@ -159,13 +160,9 @@ async def resolve_dids(dids: list[str]) -> list[ResolvedProfile]:
                 *[_fetch_from_bsky(client, did) for did in remaining]
             )
         for profile in fetched:
-            resolved[profile.did] = profile
-            _cache_set(profile.did, profile)
+            if profile is not None:
+                resolved[profile.did] = profile
+                _cache_set(profile.did, profile)
 
-    return [resolved[did] for did in dids]
-
-
-async def resolve_did(did: str) -> ResolvedProfile:
-    """resolve a single DID to a profile. shorthand over `resolve_dids`."""
-    [profile] = await resolve_dids([did])
-    return profile
+    # preserve input order; drop unresolvable DIDs (see module docstring)
+    return [resolved[did] for did in dids if did in resolved]

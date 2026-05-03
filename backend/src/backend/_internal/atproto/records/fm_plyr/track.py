@@ -8,6 +8,7 @@ from atproto_identity.did.resolver import AsyncDidResolver
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import BlobRef, make_pds_request, parse_at_uri
+from backend._internal.atproto.profiles import resolve_dids
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -76,9 +77,7 @@ async def build_track_record(
         # `featuredArtist.handle` and `displayName` are deprecated in the
         # lexicon (see lexicons/track.json) but still emitted for compat
         # with readers that haven't migrated to resolving from did.
-        from backend._internal.atproto.profiles import resolve_dids
-
-        dids = [f["did"] for f in features if isinstance(f, dict) and f.get("did")]
+        dids = [did for f in features if isinstance(f, dict) and (did := f.get("did"))]
         if dids:
             profiles = await resolve_dids(dids)
             record["features"] = [
