@@ -77,12 +77,7 @@ class AlbumSummary(BaseModel):
 
 
 class FeaturedArtist(BaseModel):
-    """featured artist metadata, hydrated from the artist's DID at read time.
-
-    `track.features` in the DB stores only DIDs; this view shape is built by
-    `_internal.atproto.profiles.resolve_dids()` on every API response so
-    handle/display_name/avatar_url are always fresh.
-    """
+    """featured artist view, hydrated from a DID."""
 
     did: str
     handle: str
@@ -91,12 +86,7 @@ class FeaturedArtist(BaseModel):
 
 
 async def _hydrate_features(stored: list | None) -> list[FeaturedArtist]:
-    """build FeaturedArtist views from `track.features` (a list of `{did}` dicts).
-
-    tolerates legacy shapes (`[{did, handle, displayName}]` or
-    `[{did, handle, display_name}]`) by extracting only the DID — drift
-    in the snapshot fields is irrelevant because we resolve fresh below.
-    """
+    """build FeaturedArtist views from `track.features`."""
     if not stored:
         return []
     dids: list[str] = []

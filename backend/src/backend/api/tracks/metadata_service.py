@@ -1,14 +1,4 @@
-"""Track metadata mutations that need DB-side bookkeeping.
-
-scope is deliberately narrow: anything that requires looking up or
-mutating related rows (e.g., create-or-attach an album, sync the
-`track.extra['album']` flag in lockstep with `track.album_id`).
-
-handle/profile resolution lives in `_internal/atproto/handles.py` —
-do not add a parallel resolver here. image upload lives in
-`_internal/image_uploads.py` — call `process_image_upload` directly
-rather than re-wrapping it.
-"""
+"""Track metadata mutations that need cross-table bookkeeping."""
 
 import logging
 

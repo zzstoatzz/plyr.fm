@@ -37,18 +37,7 @@ class SubjectNotFoundError(Exception):
 
 
 def _features_to_did_list(features: list | None) -> list[dict[str, str]]:
-    """extract canonical DIDs from any historical feature shape.
-
-    accepts:
-    - new shape: `[{"did": "did:plc:..."}]`
-    - legacy lexicon shape: `[{"did": "...", "handle": "...", "displayName": "..."}]`
-    - already-flat: `["did:plc:...", "did:plc:..."]`
-
-    returns the canonical DB shape: `[{"did": "did:plc:..."}]`. handle and
-    displayName fields from the PDS record are intentionally discarded —
-    they're stale snapshots that we resolve fresh at API-read time via
-    `_internal.atproto.profiles.resolve_dids`.
-    """
+    """extract DIDs from any feature shape into `[{"did": "..."}]`."""
     if not features:
         return []
     out: list[dict[str, str]] = []
@@ -380,9 +369,6 @@ async def ingest_track_update(
         if "supportGate" in record:
             track.support_gate = record["supportGate"]
 
-        # features — store only the canonical DID. handle/displayName in the
-        # PDS record are denormalized snapshots that drift; we resolve them
-        # fresh at read time via _internal.atproto.profiles.
         if (features := record.get("features")) is not None:
             track.features = _features_to_did_list(features)
 

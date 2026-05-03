@@ -1,17 +1,4 @@
-"""ATProto handle resolution.
-
-handle → DID lookup (via the configured PDS-aware resolver) plus parsing
-of the user-supplied features-as-handles JSON into the canonical DB
-shape (`[{"did": "..."}]`).
-
-callers wanting the OPPOSITE direction (DID → fresh handle/displayName/
-avatar for rendering) should use `_internal.atproto.profiles.resolve_dids`.
-
-these are deliberately separate modules: handles.py is upstream of an
-upload (parse user input, validate, get DIDs); profiles.py is downstream
-of a read (hydrate stored DIDs for display). they don't overlap and
-shouldn't grow into each other.
-"""
+"""ATProto handle → DID resolution and featured-artist input parsing."""
 
 import asyncio
 import json
@@ -32,12 +19,7 @@ MAX_FEATURES = 5
 
 
 class InvalidFeaturesError(ValueError):
-    """user-supplied featured-artists JSON is malformed or unresolvable.
-
-    callers translate to their context-appropriate error: HTTPException
-    in synchronous request handlers, UploadPhaseError in upload-pipeline
-    background tasks. the resolver itself stays HTTP-agnostic.
-    """
+    """user-supplied featured-artists JSON is malformed or unresolvable."""
 
 
 async def resolve_handle(handle: str) -> dict[str, Any] | None:
@@ -102,26 +84,19 @@ async def resolve_featured_artists(
     *,
     exclude_handle: str,
 ) -> list[dict[str, str]]:
-    """parse a user-supplied JSON handle list into the canonical DB shape.
+    """parse a JSON handle list and resolve each to a DID.
 
     args:
         features_json: JSON array of handle strings, e.g.,
-            `'["user.bsky.social", "@other.user"]'`. None or empty is
-            valid and returns `[]`.
-        exclude_handle: the uploading artist's handle. self-features
-            are silently dropped (they're not an error — just no-ops).
+            `'["user.bsky.social", "@other.user"]'`. empty or None → `[]`.
+        exclude_handle: handle to drop from the result (the uploading artist).
 
     returns:
-        canonical DB shape: `[{"did": "did:plc:..."}, ...]`. handle and
-        display_name are NOT stored; the API hydrates them per-request
-        via `_internal.atproto.profiles.resolve_dids` so they stay
-        current with the featured artist's profile (see #1355).
+        `[{"did": "did:plc:..."}, ...]`.
 
     raises:
-        InvalidFeaturesError: if the JSON is malformed, not a list, has
-            non-string entries, exceeds MAX_FEATURES, or any handle
-            fails to resolve. callers translate to their context-
-            appropriate error type.
+        InvalidFeaturesError: malformed JSON, non-list, non-string entries,
+            over MAX_FEATURES, or any handle fails to resolve.
     """
     if not features_json:
         return []
@@ -141,8 +116,6 @@ async def resolve_featured_artists(
     for handle in handles_list:
         if not isinstance(handle, str):
             raise InvalidFeaturesError("each feature must be a string handle")
-        # silently drop self-features — common when re-submitting an edit
-        # form that pre-populates the artist's own handle
         if handle.lstrip("@") == exclude_handle:
             continue
         valid_handles.append(handle)
