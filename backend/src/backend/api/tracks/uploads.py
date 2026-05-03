@@ -34,7 +34,10 @@ from backend._internal.atproto import (
     create_track_record,
     upload_blob,
 )
-from backend._internal.atproto.handles import resolve_featured_artists
+from backend._internal.atproto.handles import (
+    InvalidFeaturesError,
+    resolve_featured_artists,
+)
 from backend._internal.audio import AudioFormat
 from backend._internal.background import get_docket
 from backend._internal.clients.transcoder import get_transcoder_client
@@ -704,9 +707,12 @@ async def _create_records(
                 "resolving featured artists...",
                 phase="metadata",
             )
-            featured_artists = await resolve_featured_artists(
-                ctx.features_json, artist.handle
-            )
+            try:
+                featured_artists = await resolve_featured_artists(
+                    ctx.features_json, exclude_handle=artist.handle
+                )
+            except InvalidFeaturesError as exc:
+                raise UploadPhaseError(str(exc)) from exc
 
         # if an explicit album_id was passed, resolve the album up front so the
         # ATProto track record includes the correct album title and the row is

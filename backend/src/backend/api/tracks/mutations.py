@@ -21,12 +21,17 @@ from backend._internal.atproto import (
     upload_blob,
 )
 from backend._internal.atproto.client import make_pds_request
+from backend._internal.atproto.handles import (
+    InvalidFeaturesError,
+    resolve_featured_artists,
+)
 from backend._internal.atproto.records import (
     build_track_record,
     update_record,
 )
 from backend._internal.atproto.tid import datetime_to_tid
 from backend._internal.audio import AudioFormat
+from backend._internal.image_uploads import process_image_upload
 from backend._internal.tasks import (
     schedule_album_list_sync,
     schedule_move_track_audio,
@@ -39,11 +44,7 @@ from backend.schemas import MessageResponse, TrackResponse
 from backend.storage import storage
 from backend.utilities.tags import get_or_create_tag, parse_tags_json
 
-from .metadata_service import (
-    apply_album_update,
-    resolve_feature_handles,
-    upload_track_image,
-)
+from .metadata_service import apply_album_update
 from .router import router
 
 logger = logging.getLogger(__name__)
@@ -251,9 +252,12 @@ async def update_track_metadata(
     album_changed = old_album_id != new_album_id
 
     if features is not None:
-        track.features = await resolve_feature_handles(
-            features, artist_handle=track.artist.handle
-        )
+        try:
+            track.features = await resolve_featured_artists(
+                features, exclude_handle=track.artist.handle
+            )
+        except InvalidFeaturesError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     image_changed = False
     image_url = None
@@ -276,7 +280,12 @@ async def update_track_metadata(
         image_changed = True
     elif image and image.filename:
         # handle image upload/replacement
-        image_id, image_url, thumbnail_url = await upload_track_image(image)
+        uploaded = await process_image_upload(image, "track")
+        image_id, image_url, thumbnail_url = (
+            uploaded.image_id,
+            uploaded.image_url,
+            uploaded.thumbnail_url,
+        )
 
         if track.image_id and track.image_id != image_id:
             # only delete old image from R2 if album doesn't share it

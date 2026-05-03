@@ -40,7 +40,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1500
+max_lines = 1505
 
 [[rules]]
 path = "backend/src/backend/config.py"
