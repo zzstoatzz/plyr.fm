@@ -202,7 +202,7 @@ async def backfill_tracks_to_pds(
                             track_data["image_id"], file_type="image"
                         )
 
-                    track_record = build_track_record(
+                    track_record = await build_track_record(
                         title=track_data["title"],
                         artist=track_data["artist_name"],
                         audio_url=audio_url,

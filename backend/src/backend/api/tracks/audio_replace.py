@@ -238,7 +238,7 @@ async def _publish_record_update(
         else Path(ctx.filename).suffix.lower().lstrip(".")
     )
 
-    new_record = build_track_record(
+    new_record = await build_track_record(
         title=state.title,
         artist=state.artist_display_name,
         audio_url=_audio_url_for_record(state, sr),

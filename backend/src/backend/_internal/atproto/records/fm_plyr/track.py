@@ -8,6 +8,7 @@ from atproto_identity.did.resolver import AsyncDidResolver
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import BlobRef, make_pds_request, parse_at_uri
+from backend._internal.atproto.profiles import resolve_dids
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ class RecordNotFound(Exception):
     """raised when an ATProto record does not exist on the PDS."""
 
 
-def build_track_record(
+async def build_track_record(
     title: str,
     artist: str,
     file_type: str,
@@ -40,7 +41,11 @@ def build_track_record(
         audio_url: optional R2 URL for audio file (omit when audioBlob is present)
         album: optional album name
         duration: optional duration in seconds
-        features: optional list of featured artists [{did, handle, display_name, avatar_url}]
+        features: optional list of featured artists. each entry must contain
+            `did`; handle/displayName are resolved fresh at write time so the
+            published record's snapshot matches the artist's identity *as of
+            publish*. callers may pass `[{"did": "..."}]` (canonical DB shape)
+            or any legacy shape that includes `did` — extra fields are ignored.
         image_url: optional cover art image URL
         support_gate: optional gating config (e.g., {"type": "any"})
         audio_blob: optional blob reference from PDS upload (canonical source when present)
@@ -67,15 +72,22 @@ def build_track_record(
     if duration:
         record["duration"] = duration
     if features:
-        # only include essential fields for ATProto record
-        record["features"] = [
-            {
-                "did": f["did"],
-                "handle": f["handle"],
-                "displayName": f.get("display_name", f["handle"]),
-            }
-            for f in features
-        ]
+        # resolve DIDs to fresh handle/displayName so the published snapshot
+        # reflects the featured artist's identity at publish time.
+        # `featuredArtist.handle` and `displayName` are deprecated in the
+        # lexicon (see lexicons/track.json) but still emitted for compat
+        # with readers that haven't migrated to resolving from did.
+        dids = [did for f in features if isinstance(f, dict) and (did := f.get("did"))]
+        if dids:
+            profiles = await resolve_dids(dids)
+            record["features"] = [
+                {
+                    "did": p.did,
+                    "handle": p.handle,
+                    "displayName": p.display_name,
+                }
+                for p in profiles
+            ]
     if image_url:
         # validate image URL comes from allowed origin
         settings.storage.validate_image_url(image_url)
@@ -120,7 +132,10 @@ async def create_track_record(
         audio_url: optional R2 URL for audio file (omit when audioBlob is present)
         album: optional album name
         duration: optional duration in seconds
-        features: optional list of featured artists [{did, handle, display_name, avatar_url}]
+        features: optional list of featured artists; entries must contain
+            `did`. extra fields (handle, display_name, avatar_url) are
+            ignored — the lexicon snapshot is resolved fresh inside
+            `build_track_record`.
         image_url: optional cover art image URL
         support_gate: optional gating config (e.g., {"type": "any"})
         audio_blob: optional blob reference from PDS upload (canonical source when present)
@@ -135,7 +150,7 @@ async def create_track_record(
         ValueError: if session is invalid
         Exception: if record creation fails
     """
-    record = build_track_record(
+    record = await build_track_record(
         title=title,
         artist=artist,
         audio_url=audio_url,
