@@ -41,11 +41,8 @@ async def build_track_record(
         audio_url: optional R2 URL for audio file (omit when audioBlob is present)
         album: optional album name
         duration: optional duration in seconds
-        features: optional list of featured artists. each entry must contain
-            `did`; handle/displayName are resolved fresh at write time so the
-            published record's snapshot matches the artist's identity *as of
-            publish*. callers may pass `[{"did": "..."}]` (canonical DB shape)
-            or any legacy shape that includes `did` — extra fields are ignored.
+        features: list of `{"did": "..."}` entries. handle/displayName for
+            the lexicon snapshot are resolved fresh from the DID.
         image_url: optional cover art image URL
         support_gate: optional gating config (e.g., {"type": "any"})
         audio_blob: optional blob reference from PDS upload (canonical source when present)
@@ -72,11 +69,6 @@ async def build_track_record(
     if duration:
         record["duration"] = duration
     if features:
-        # resolve DIDs to fresh handle/displayName so the published snapshot
-        # reflects the featured artist's identity at publish time.
-        # `featuredArtist.handle` and `displayName` are deprecated in the
-        # lexicon (see lexicons/track.json) but still emitted for compat
-        # with readers that haven't migrated to resolving from did.
         dids = [did for f in features if isinstance(f, dict) and (did := f.get("did"))]
         if dids:
             profiles = await resolve_dids(dids)
@@ -132,9 +124,7 @@ async def create_track_record(
         audio_url: optional R2 URL for audio file (omit when audioBlob is present)
         album: optional album name
         duration: optional duration in seconds
-        features: optional list of featured artists; entries must contain
-            `did`. extra fields (handle, display_name, avatar_url) are
-            ignored — the lexicon snapshot is resolved fresh inside
+        features: list of `{"did": "..."}` entries; passed through to
             `build_track_record`.
         image_url: optional cover art image URL
         support_gate: optional gating config (e.g., {"type": "any"})

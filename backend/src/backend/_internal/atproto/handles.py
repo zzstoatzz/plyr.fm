@@ -1,5 +1,7 @@
-"""ATProto handle resolution for featured artists."""
+"""ATProto handle → DID resolution and featured-artist input parsing."""
 
+import asyncio
+import json
 import logging
 from typing import Any
 
@@ -10,6 +12,14 @@ logger = logging.getLogger(__name__)
 
 # shared resolver instance for DID/handle resolution
 _resolver = AsyncIdResolver()
+
+# upper bound on featured-artist count per track. the lexicon allows up
+# to 10 (`maxLength: 10`); we enforce a stricter app-level cap.
+MAX_FEATURES = 5
+
+
+class InvalidFeaturesError(ValueError):
+    """user-supplied featured-artists JSON is malformed or unresolvable."""
 
 
 async def resolve_handle(handle: str) -> dict[str, Any] | None:
@@ -71,49 +81,57 @@ async def resolve_handle(handle: str) -> dict[str, Any] | None:
 
 async def resolve_featured_artists(
     features_json: str | None,
+    *,
     exclude_handle: str,
-) -> list[dict]:
-    """resolve featured artist handles from JSON array.
+) -> list[dict[str, str]]:
+    """parse a JSON handle list and resolve each to a DID.
 
     args:
-        features_json: JSON array string of handles, e.g., '["user1.bsky.social"]'
-        exclude_handle: handle to exclude (typically the uploading artist)
+        features_json: JSON array of handle strings, e.g.,
+            `'["user.bsky.social", "@other.user"]'`. empty or None → `[]`.
+        exclude_handle: handle to drop from the result (the uploading artist).
 
     returns:
-        list of resolved artist dicts, excluding failures and the uploader
+        `[{"did": "did:plc:..."}, ...]`.
+
+    raises:
+        InvalidFeaturesError: malformed JSON, non-list, non-string entries,
+            over MAX_FEATURES, or any handle fails to resolve.
     """
     if not features_json:
         return []
 
-    import asyncio
-    import json
-
     try:
         handles_list = json.loads(features_json)
-    except json.JSONDecodeError:
-        logger.warning(
-            "malformed features JSON, ignoring", extra={"raw": features_json}
-        )
-        return []
+    except json.JSONDecodeError as exc:
+        raise InvalidFeaturesError(f"invalid JSON in features: {exc}") from exc
 
     if not isinstance(handles_list, list):
-        return []
+        raise InvalidFeaturesError("features must be a JSON array of handles")
 
-    # filter valid handles, excluding the uploading artist
-    valid_handles = [
-        handle
-        for handle in handles_list
-        if isinstance(handle, str) and handle.lstrip("@") != exclude_handle
-    ]
+    if len(handles_list) > MAX_FEATURES:
+        raise InvalidFeaturesError(f"maximum {MAX_FEATURES} featured artists allowed")
+
+    valid_handles: list[str] = []
+    for handle in handles_list:
+        if not isinstance(handle, str):
+            raise InvalidFeaturesError("each feature must be a string handle")
+        if handle.lstrip("@") == exclude_handle:
+            continue
+        valid_handles.append(handle)
 
     if not valid_handles:
         return []
 
-    # resolve concurrently
     resolved = await asyncio.gather(
         *[resolve_handle(h) for h in valid_handles],
         return_exceptions=True,
     )
 
-    # filter out exceptions and None values
-    return [r for r in resolved if isinstance(r, dict) and r is not None]
+    out: list[dict[str, str]] = []
+    for handle, r in zip(valid_handles, resolved, strict=False):
+        if isinstance(r, Exception) or not isinstance(r, dict) or not r.get("did"):
+            raise InvalidFeaturesError(f"failed to resolve handle: {handle}")
+        out.append({"did": r["did"]})
+
+    return out

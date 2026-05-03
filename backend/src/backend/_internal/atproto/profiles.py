@@ -1,25 +1,8 @@
-"""DID-keyed profile resolver with caching.
+"""DID → profile resolver.
 
-featured artists (and any other place that needs to render an identity)
-are stored as DIDs only — the canonical, immutable identifier. handle,
-display_name, and avatar_url are mutable properties of the profile that
-should be resolved fresh at read time rather than snapshotted into the
-record.
-
-resolution order, cheapest-first:
-1. local `artists` table — covers every plyr.fm user. one SQL hit, batched.
-2. in-process LRU cache — for DIDs we've seen recently but aren't plyr.fm users.
-3. live bsky `app.bsky.actor.getProfile` — fallback for cold cache misses.
-
-use `resolve_dids()` for any number of DIDs — it issues at most one SQL
-query for the artists JOIN and parallelizes bsky fallbacks for cold
-cache misses.
-
-DIDs that cannot be resolved (network failure, bsky returns non-200, no
-profile exists) are simply omitted from the result. callers must not
-assume `len(out) == len(input)`. for the featured-artist render path
-this is the right shape: a featured artist whose profile we can't load
-is better not shown than shown as a placeholder DID string.
+resolution order: local `artists` table, then in-process TTL cache,
+then `app.bsky.actor.getProfile`. unresolvable DIDs are dropped from
+the output (so `len(out) <= len(input)`).
 """
 
 import asyncio
@@ -39,18 +22,15 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class ResolvedProfile:
-    """current profile snapshot for a DID, hydrated at resolve time."""
-
     did: str
     handle: str
     display_name: str
     avatar_url: str | None
 
 
-# in-process cache for non-plyr.fm DIDs. plyr.fm users come from the
-# artists table on every call (cheap JOIN), so caching them risks
-# serving stale display_name/avatar after a profile update.
-_CACHE_TTL_SECONDS = 300  # 5 minutes
+# only caches non-artist-table DIDs; artist-table rows go through the
+# JOIN every call so they reflect any profile update immediately.
+_CACHE_TTL_SECONDS = 300
 _CACHE_MAX_SIZE = 2048
 
 _cache: dict[str, tuple[float, ResolvedProfile]] = {}

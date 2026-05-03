@@ -485,14 +485,16 @@ async def test_edit_same_image_does_not_delete(
         delete_calls.append(file_id)
         return True
 
+    from backend._internal.image_uploads import ImageUploadResult
+
     with (
         patch(
-            "backend.api.tracks.mutations.upload_track_image",
+            "backend.api.tracks.mutations.process_image_upload",
             new_callable=AsyncMock,
-            return_value=(
-                same_image_id,
-                f"https://example.com/images/{same_image_id}.png",
-                f"https://example.com/images/{same_image_id}_thumb.webp",
+            return_value=ImageUploadResult(
+                image_id=same_image_id,
+                image_url=f"https://example.com/images/{same_image_id}.png",
+                thumbnail_url=f"https://example.com/images/{same_image_id}_thumb.webp",
             ),
         ),
         patch(
