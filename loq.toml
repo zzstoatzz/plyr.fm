@@ -224,7 +224,7 @@ max_lines = 643
 
 [[rules]]
 path = "backend/tests/api/test_track_deletion.py"
-max_lines = 519
+max_lines = 521
 
 [[rules]]
 path = "backend/tests/api/test_top_tracks.py"
