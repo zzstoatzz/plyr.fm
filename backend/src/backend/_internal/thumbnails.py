@@ -3,7 +3,7 @@
 import logging
 from io import BytesIO
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ def generate_thumbnail(image_data: bytes, size: int = 96, quality: int = 80) -> 
         WebP-encoded thumbnail bytes
     """
     img = Image.open(BytesIO(image_data))
+    img = ImageOps.exif_transpose(img)
 
     # convert to RGB (handles RGBA, palette, etc.)
     if img.mode not in ("RGB", "L"):

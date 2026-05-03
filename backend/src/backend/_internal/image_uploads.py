@@ -8,7 +8,7 @@ from pathlib import PurePosixPath
 from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
-from backend._internal.image import ImageFormat
+from backend._internal.image import ImageFormat, normalize_orientation
 from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.storage import storage
@@ -89,6 +89,7 @@ async def process_image_upload(
             )
         image_data.extend(chunk)
 
+    image_data = bytearray(normalize_orientation(bytes(image_data)))
     image_obj = BytesIO(image_data)
     image_id = await storage.save(image_obj, image.filename)
     # use the actual filename extension — must match the key R2.save() stored

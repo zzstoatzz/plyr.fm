@@ -2,7 +2,57 @@
 
 from __future__ import annotations
 
+import logging
 from enum import Enum
+from io import BytesIO
+
+from PIL import Image, ImageOps
+
+logger = logging.getLogger(__name__)
+
+
+# Pillow save-format names indexed by ImageFormat.value
+_PIL_SAVE_FORMAT = {
+    "jpg": "JPEG",
+    "jpeg": "JPEG",
+    "png": "PNG",
+    "webp": "WEBP",
+    "gif": "GIF",
+}
+
+# EXIF tag id for Orientation
+_EXIF_ORIENTATION_TAG = 0x0112
+
+
+def has_exif_rotation(image_data: bytes) -> bool:
+    """true iff the image has a non-trivial EXIF Orientation tag."""
+    try:
+        return (
+            Image.open(BytesIO(image_data)).getexif().get(_EXIF_ORIENTATION_TAG, 1) != 1
+        )
+    except Exception:
+        return False
+
+
+def normalize_orientation(image_data: bytes) -> bytes:
+    """rotate `image_data` upright per its EXIF Orientation tag.
+
+    returns the input unchanged if there's no rotation needed or the
+    image format isn't recognized.
+    """
+    try:
+        img = Image.open(BytesIO(image_data))
+        save_format = _PIL_SAVE_FORMAT.get((img.format or "").lower())
+        if not save_format or not has_exif_rotation(image_data):
+            return image_data
+        rotated = ImageOps.exif_transpose(img)
+        buf = BytesIO()
+        save_kwargs = {"quality": 95} if save_format == "JPEG" else {}
+        rotated.save(buf, format=save_format, **save_kwargs)
+        return buf.getvalue()
+    except Exception as exc:
+        logger.warning("failed to normalize image orientation: %s", exc)
+        return image_data
 
 
 class ImageFormat(str, Enum):
