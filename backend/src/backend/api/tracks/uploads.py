@@ -41,11 +41,13 @@ from backend._internal.atproto.handles import (
 from backend._internal.audio import AudioFormat
 from backend._internal.background import get_docket
 from backend._internal.clients.transcoder import get_transcoder_client
-from backend._internal.image import ImageFormat
+from backend._internal.image_uploads import (
+    ImageUploadError,
+    save_image_with_thumbnail,
+)
 from backend._internal.jobs import job_service
 from backend._internal.tasks import schedule_album_list_sync
 from backend._internal.tasks.hooks import run_post_track_create_hooks
-from backend._internal.thumbnails import generate_and_save
 from backend.config import settings
 from backend.models import Album, Artist, Track, UserPreferences
 from backend.models.job import JobStatus, JobType
@@ -214,26 +216,26 @@ async def stage_image_to_storage(
     image_filename: str,
     image_content_type: str | None,
 ) -> tuple[str | None, str | None, str | None]:
-    """save image bytes + thumbnail to object storage and return (image_id, image_url, thumbnail_url).
+    """save image bytes + thumbnail for the upload pipeline.
 
-    called from the HTTP handler. returns (None, None, None) if the image
-    format is unsupported or the save fails — the upload itself still
-    proceeds without an image rather than failing the whole track.
+    returns (None, None, None) if the image format is unsupported or the
+    save fails — the upload itself proceeds without an image rather than
+    failing the whole track.
     """
-    image_format, is_valid = ImageFormat.validate_and_extract(
-        image_filename, image_content_type
-    )
-    if not is_valid or not image_format:
-        logger.warning(f"unsupported image format: {image_filename}")
-        return None, None, None
-
     try:
-        image_id = await storage.save(BytesIO(image_data), f"images/{image_filename}")
-        image_url = await storage.get_url(image_id, file_type="image")
-        thumbnail_url = await generate_and_save(image_data, image_id, "track")
-        return image_id, image_url, thumbnail_url
+        result = await save_image_with_thumbnail(
+            image_data,
+            image_filename,
+            entity_type="track",
+            content_type=image_content_type,
+            scan_moderation=False,
+        )
+        return result.image_id, result.image_url, result.thumbnail_url
+    except ImageUploadError as e:
+        logger.warning("unsupported image format %s: %s", image_filename, e)
+        return None, None, None
     except Exception as e:
-        logger.warning(f"failed to save image: {e}", exc_info=True)
+        logger.warning("failed to save image: %s", e, exc_info=True)
         return None, None, None
 
 
