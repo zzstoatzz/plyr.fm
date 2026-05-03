@@ -549,15 +549,27 @@ class TestIngestTrackCreate:
     async def test_track_create_sets_features(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """featured artists from record are stored on the track."""
-        features = [{"did": "did:plc:feat1", "handle": "feat.bsky.social"}]
+        """ingest stores ONLY the featured artists' DIDs.
+
+        per the canonical-DID redesign (#1355) the lexicon's denormalized
+        `handle`/`displayName` snapshot is intentionally discarded — those
+        fields drift over time and are hydrated fresh at API-read time
+        from the artist's profile via `_internal.atproto.profiles`.
+        """
+        record_features = [
+            {
+                "did": "did:plc:feat1",
+                "handle": "feat.bsky.social",
+                "displayName": "Featured One",
+            }
+        ]
         record = {
             "title": "Featured Track",
             "artist": "Test Artist",
             "fileId": "feat_001",
             "fileType": "mp3",
             "audioUrl": "https://r2.example.com/feat_001.mp3",
-            "features": features,
+            "features": record_features,
             "createdAt": _recent_ts(),
         }
         uri = "at://did:plc:jetstream_test/fm.plyr.track/feat1"
@@ -570,7 +582,7 @@ class TestIngestTrackCreate:
             select(Track).where(Track.atproto_record_uri == uri)
         )
         track = result.scalar_one()
-        assert track.features == features
+        assert track.features == [{"did": "did:plc:feat1"}]
 
     async def test_track_create_defaults_features_to_empty_list(
         self, db_session: AsyncSession, artist: Artist
@@ -914,14 +926,25 @@ class TestIngestTrackUpdate:
     async def test_updates_features(
         self, db_session: AsyncSession, artist: Artist, track: Track
     ) -> None:
-        """features array propagates to DB."""
+        """ingest_track_update stores ONLY the DIDs from updated features.
+
+        regression coverage for #1355 — the round-trip via PDS used to
+        overwrite snake_case DB rows with the lexicon's camelCase shape;
+        now we just keep the DID and resolve fresh at read time.
+        """
         assert track.atproto_record_uri is not None
         uri = track.atproto_record_uri
-        features = [{"did": "did:plc:feat1", "handle": "feat.bsky.social"}]
+        record_features = [
+            {
+                "did": "did:plc:feat1",
+                "handle": "feat.bsky.social",
+                "displayName": "Featured One",
+            }
+        ]
         await ingest_track_update(
             did=artist.did,
             rkey="existing",
-            record={"features": features},
+            record={"features": record_features},
             uri=uri,
             cid="bafyfeat",
         )
@@ -931,7 +954,7 @@ class TestIngestTrackUpdate:
             select(Track).where(Track.atproto_record_uri == uri)
         )
         updated = result.scalar_one()
-        assert updated.features == features
+        assert updated.features == [{"did": "did:plc:feat1"}]
 
     async def test_updates_extra_fields(
         self, db_session: AsyncSession, artist: Artist, track: Track
