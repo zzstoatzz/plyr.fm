@@ -57,6 +57,33 @@ def test_normalize_orientation_returns_unchanged_when_orientation_is_identity() 
     assert normalize_orientation(original) is original
 
 
+def test_normalize_orientation_handles_mpo_format_as_jpeg(monkeypatch) -> None:
+    """iPhone photos open as MPO (Multi-Picture Object); save them back as JPEG.
+
+    if MPO isn't in the format map, normalize is a silent no-op — that's
+    how the album cover from track 923 ('day and age') escaped #1364's
+    fix on first pass.
+    """
+    src = _jpeg_with_orientation(6)
+    real_open = Image.open
+
+    def fake_open(fp, *args, **kwargs):
+        img = real_open(fp, *args, **kwargs)
+        img.format = "MPO"  # force the iPhone format
+        return img
+
+    monkeypatch.setattr("backend._internal.image.Image.open", fake_open, raising=True)
+
+    out_bytes = normalize_orientation(src)
+
+    # undo the patch BEFORE re-opening so we read the real format
+    monkeypatch.undo()
+    assert out_bytes != src, "MPO should be re-encoded with rotation applied"
+    out = Image.open(BytesIO(out_bytes))
+    assert out.format == "JPEG"
+    assert out.size == (100, 200)
+
+
 def test_generate_thumbnail_applies_exif_rotation() -> None:
     """sideways-tagged JPEG should produce an upright (square) thumbnail."""
     sideways = _jpeg_with_orientation(6)

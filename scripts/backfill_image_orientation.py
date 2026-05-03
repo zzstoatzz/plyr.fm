@@ -20,8 +20,7 @@ from backend._internal.image import has_exif_rotation, normalize_orientation
 from backend._internal.thumbnails import generate_thumbnail
 from backend.models import Album, Track
 from backend.models.playlist import Playlist
-from backend.storage import storage
-from backend.storage.r2 import R2Storage
+from backend.storage import _get_storage
 from backend.utilities.database import db_session
 
 logging.basicConfig(
@@ -33,13 +32,9 @@ logger = logging.getLogger(__name__)
 
 async def _overwrite_object(image_id: str, image_url: str, data: bytes) -> None:
     """upload `data` to R2 at the existing image's key, preserving image_id."""
-    if not isinstance(storage, R2Storage):
-        raise RuntimeError(
-            f"backfill requires R2 storage backend; got {type(storage).__name__}"
-        )
+    r2 = _get_storage()  # unwrap the lazy module-level proxy
     ext = PurePosixPath(image_url.split("?")[0]).suffix.lower() or ".jpg"
     key = f"images/{image_id}{ext}"
-    # infer media type from extension
     media_type = {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",
@@ -47,9 +42,9 @@ async def _overwrite_object(image_id: str, image_url: str, data: bytes) -> None:
         ".webp": "image/webp",
         ".gif": "image/gif",
     }.get(ext, "application/octet-stream")
-    async with storage._s3_client() as client:
+    async with r2._s3_client() as client:
         await client.put_object(
-            Bucket=storage.image_bucket_name,
+            Bucket=r2.image_bucket_name,
             Key=key,
             Body=data,
             ContentType=media_type,
@@ -104,7 +99,7 @@ async def _process_one(
 
             await _overwrite_object(row["image_id"], row["image_url"], normalized)
             thumb_data = generate_thumbnail(normalized)
-            await storage.save_thumbnail(thumb_data, row["image_id"])
+            await _get_storage().save_thumbnail(thumb_data, row["image_id"])
             counter["fixed"] += 1
             logger.info(
                 "[%d/%d] %s: rewrote (%d → %d bytes) + regenerated thumbnail",
