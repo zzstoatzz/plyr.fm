@@ -11,13 +11,14 @@ from PIL import Image, ImageOps
 logger = logging.getLogger(__name__)
 
 
-# Pillow save-format names indexed by ImageFormat.value
+# Pillow save-format names indexed by Image.format. iPhone photos open as
+# "MPO" (Multi-Picture Object) but should be re-saved as plain JPEG.
 _PIL_SAVE_FORMAT = {
-    "jpg": "JPEG",
-    "jpeg": "JPEG",
-    "png": "PNG",
-    "webp": "WEBP",
-    "gif": "GIF",
+    "JPEG": "JPEG",
+    "MPO": "JPEG",
+    "PNG": "PNG",
+    "WEBP": "WEBP",
+    "GIF": "GIF",
 }
 
 # EXIF tag id for Orientation
@@ -42,8 +43,14 @@ def normalize_orientation(image_data: bytes) -> bytes:
     """
     try:
         img = Image.open(BytesIO(image_data))
-        save_format = _PIL_SAVE_FORMAT.get((img.format or "").lower())
-        if not save_format or not has_exif_rotation(image_data):
+        save_format = _PIL_SAVE_FORMAT.get(img.format or "")
+        if not save_format:
+            logger.warning(
+                "unrecognized image format %r — skipping orientation normalization",
+                img.format,
+            )
+            return image_data
+        if not has_exif_rotation(image_data):
             return image_data
         rotated = ImageOps.exif_transpose(img)
         buf = BytesIO()
