@@ -45,7 +45,151 @@ plyr.fm should become:
 
 ## recent work
 
+### May 2026
+
+#### image pipeline cleanup (PRs #1364-1366, May 3)
+
+**why**: phone JPEGs typically store the sensor in landscape with an EXIF `Orientation` tag asking viewers to rotate at display time. browsers honor it; PIL doesn't. cropped/resized WebP thumbnails came out sideways for any track whose source had a non-identity tag. surfaced as @incognitothief / @zzstoatzz.io's "day and age" cover rendering rotated everywhere except the detail page (which read the unrotated `image_url`).
+
+**what shipped**:
+- **EXIF orientation** (#1364) — `ImageOps.exif_transpose` on upload + thumbnail generation. backfill script (`scripts/backfill_image_orientation.py`) reprocessed historical assets
+- **two upload paths consolidated** (#1365) — `_internal/image_uploads.process_image_upload` (used by edit paths: tracks PATCH, albums, playlists) and `api/tracks/uploads.stage_image_to_storage` (used by the upload pipeline) were two parallel functions doing the same job with subtly different behavior. #1364's `normalize_orientation` only landed in the first one. consolidated, same anti-pattern as #1363's resolver dup
+- **iPhone MPO normalization + backfill fix** (#1366) — iPhone JPEGs are recognized by Pillow as `MPO` (Multi-Picture Object), not `JPEG`. the `_PIL_SAVE_FORMAT` mapping in #1364 was missing `'mpo'`, so `save_format` came back None and `normalize_orientation` silently skipped 13 of 20 affected prod images. also unwrapped storage proxy in the backfill script
+
+**decisions**:
+- backfill is opt-in via script rather than a one-time migration — tracks are content-hashed so re-upload would change keys and break `audioUrl` references in PDS records
+- followed up with two new issues filed today (#1367 auto-purge CF cache when R2 image overwritten, #1368 data integrity for orphan `image_id` refs) — kept as backlog rather than rolled into this cluster
+
+---
+
+#### canonical DID storage with read-time profile resolution (PRs #1362-1363, May 3)
+
+**why**: closes #1355. 3 prod tracks (918, 938, 88) rendered "feat." with no name because `track.features` rows had `displayName` (camelCase) but the frontend reads `display_name` (snake_case). root cause was deeper than case: identity metadata (handle, displayName, avatar) was denormalized into both the PDS record AND the DB row, so it drifted on every profile change.
+
+**what shipped**:
+- **lexicon relaxed** — `featuredArtist.required` from `["did","handle"]` → `["did"]`, marked handle/displayName deprecated. consumers should resolve from DID
+- **profile resolver** — new `_internal.atproto.profiles.resolve_dids()`: JOIN artists table → in-process LRU → bsky `getProfile` fallback. `TrackResponse.features` becomes typed `list[FeaturedArtist]`, populated by resolver, never returns raw JSONB
+- **resolver consolidation** (#1363) — found two parallel features-from-handles resolvers drifted apart in error semantics: `resolve_featured_artists` in `_internal/atproto/handles.py` (lenient, used by upload) vs `resolve_feature_handles` in `api/tracks/metadata_service.py` (strict, used by edit). consolidated into one with a configurable `strict` flag, killed ~80 lines of duplication
+
+**decisions**:
+- read-time resolution over write-time normalization — chose to take the resolver hit on every API read rather than rewrite all historical track records. profile changes propagate instantly without backfill
+- LRU + DB-first means most lookups never hit bsky getProfile, so the read-time cost is negligible after warmup
+- full design rationale in `docs/internal/plans/featured-artist-references.md`
+
+---
+
+#### docket worker on its own fly process group (#1359, May 1)
+
+**why**: 2026-04-30 incident — one user's album upload OOM'd uvicorn and produced 502s + silent logouts. before this PR, `relay-api` ran uvicorn AND a docket Worker in the same process; any background-task OOM took the HTTP server with it. structural fix from #1357.
+
+**what shipped**:
+- two fly process groups: **`app`** runs just uvicorn (opens a Docket *client*, no Worker, sized for HTTP fan-out only); **`worker`** runs just the Docket Worker via dedicated `backend.worker` entrypoint (no HTTP, sized at 2GB for the in-memory upload pipeline)
+- `_internal/background.py` split into `docket_client_lifespan()` and `docket_worker_lifespan()`. `main.py` switches to client lifespan (one-line change). new `backend/worker.py` mirrors observability setup
+- `fly.toml` declares both process groups, machines auto-distribute
+
+**decisions**:
+- a runaway upload task can now only OOM its own machine; HTTP stays up. the cost is one extra always-on worker machine — worth it for clean isolation
+
+---
+
 ### April 2026
+
+#### upload reliability hardening (PRs #1331, #1333, #1334, #1336, #1350, Apr 24-27)
+
+**why**: 2026-04-24 — `flo.by` uploaded 6 tracks in a single album fan-out. six concurrent uploads held six of the 10 connection-pool slots for over a minute and starved every other request (`/auth/me` p95 hit 9.7s, `/health` 3s). dug in and found a stack of latent bugs.
+
+**what shipped**:
+- **upload + audio replace migrated to docket** (#1331) — `POST /tracks/` and `PUT /tracks/{id}/audio` were on `fastapi.BackgroundTasks.add_task`, which runs the task inside the ASGI request lifecycle **after** the response is sent. consequence: any request-scoped DB session stayed checked out of the pool until the task finished (20–100s per upload). pattern dated to the first streaming-uploads commit (Nov 2025); docket landed in Dec but upload orchestration was never migrated. integration test covering 10 concurrent uploads locks the scenario in
+- **stage to shared storage** (#1336) — #1331 mechanically forwarded request-handler `/tmp/...` paths over Redis. on prod fly.io with multiple machines per process group, docket workers frequently land on a different machine than the request handler — different `/tmp`, silent `FileNotFoundError`. fix: HTTP handler streams upload to a request-local temp file (constant-memory size enforcement only), then stages bytes to shared R2 staging keys before enqueueing the docket task. evidence from prod: 7 jobs split 4 fail / 3 succeed by pure machine-routing luck before this fix
+- **PDS 401 retry resilience** (#1332) — always refresh on 401 + widen transient-error retry net. eliminates upload failures from short-lived OAuth refresh windows
+- **per-DID concurrency cap + exponential backoff** (#1333) — bound concurrent PDS calls per user, with backoff, so one user's burst can't saturate ATProto-side rate limits and cascade
+- **session-state race on concurrent album creation** (#1334) — fixed
+- **pre-flight auth check before destructive upload step** (#1350) — an expired session during upload was producing a misleading "lost connection to server" error from the SSE pipeline AFTER the user had filled out the entire form, attached files, and attested rights. now: ping `/auth/me` first; on `expired`, stash form metadata to sessionStorage + redirect to `/login` with return URL (audio file can't be serialized — prompt user to reattach on return); on `unverified`, surface a "couldn't verify your session" toast without proceeding
+
+**decisions**:
+- preflight uses a new `preflightAuth` helper rather than `auth.refresh()` because refresh treats network errors as session-invalid
+- ATProto sync is intentionally NOT rolled into preflight — it's a separate failure mode that surfaces well in the existing error path
+
+---
+
+#### audio revisions: replace audio on existing track (PRs #1311-1320, #1325, Apr 19-22)
+
+**why**: Logfire spans showed `darkhart.bsky.social` deleting + re-uploading the same track 3× in ~65 minutes (885 → 886 → 887 → 888). each cycle wasted an R2 upload, a PDS blob upload, an ATProto `createRecord` + `deleteRecord`, and silently nuked any likes / playlist refs / comments / play counts. needed a way to swap the audio file backing an existing track without losing track identity.
+
+**what shipped**:
+- **`PUT /tracks/{id}/audio`** (#1311) — atomic swap of `file_id`, `file_type`, `r2_url`, `pds_blob_*`, `audio_storage`, `atproto_record_cid`, `extra.duration`. track id, URI, likes, comments, plays, playlist refs all preserved. PDS audio blob re-uploaded (best-effort; falls back to r2-only on size limit). ATProto record PUT to existing rkey. stale `genre_predictions` cleared
+- **frontend replace flow** (#1312, #1313) — replace audio from track edit form with useful current-audio context label
+- **confirm-before-replace + revisions** (#1318) — Alex reported that hitting "cancel" after picking a file did not roll back the replace. added confirmation gate. every replace also snapshots displaced audio into a `track_revisions` row in the same DB transaction. owner-only `GET /tracks/{id}/revisions` lists history; `POST /tracks/{id}/revisions/{revision_id}/restore` does an instant pointer-swap back. retention cap: 10 per track
+- **restore preserves PDS blob ref** (#1319) — restore writes the original blob CID back to the track row
+- **graceful fallback when PDS GC'd the blob** (#1320, #1325) — PDSes GC unreferenced blobs after a short grace period. before #1320: `BlobNotFound` aborted restore with 502, leaving user stuck. fix in #1320: retry publishing without `audioBlob`, downgrade `audio_storage="r2"`. then #1325: that fix silently broke plyr.fm's core promise that users own their audio on their PDS — restore now re-uploads R2 bytes to the user's PDS to mint a fresh blob CID instead of publishing a record with no `audioBlob`
+
+**decisions**:
+- restore is an instant pointer swap, not a re-upload — existing R2 / PDS blobs reused when present
+- restore republishes the PDS record (non-negotiable) so the user's PDS stays in sync with the DB
+- schema is provider-neutral: `audio_url` not `r2_url`, no `r2_key` (parseable from URL). PDS-specific columns stay (PDS isn't a provider, it's the protocol)
+- followed up with three known-issue tickets (#1314 orphan R2 on concurrent replace, #1315 in-flight scan stale results, #1316 `createdAt` bumped on PDS) — backlog, not blocking
+
+---
+
+#### like resurrection race (PRs #1322, #1338, Apr 21-25)
+
+**why**: `test_cross_user_like` flaked intermittently in the staging integration suite (failed 2026-04-20, 2026-04-25). investigation confirmed real race, not flakiness:
+
+```
+1. user clicks LIKE → DB row R (atproto_like_uri=NULL), schedule pds_create_like
+2. user clicks UNLIKE before task runs → DELETE R (no PDS-delete, no URI yet)
+3. pds_create_like runs: PDS create returns URI X; SELECT R → gone → orphan-cleanup branch schedules delete_record_by_uri(X)
+4. Jetstream emits like-create for X BEFORE delete event propagates
+5. ingest_like_create finds no existing row → INSERTS fresh row with URI X. unlike just got undone
+6. eventually delete event arrives, ingest_like_delete clears the row — but in the gap, user sees their unlike reverted
+```
+
+**what shipped**:
+- **revert "flakiness" retry-poll** (#1322) — the test had been patched with a retry-poll under the assumption of flakiness; reverted to expose the actual bug (per house rule: retry-polls hide real bugs)
+- **Redis tombstone on cancelled URIs** (#1338) — at step (3c), tombstone the URI in Redis keyed `like_cancelled:<uri>` with 5-minute TTL. `ingest_like_create` checks the tombstone and drops the create event. closes #1321
+
+**decisions**:
+- tombstone over schema column: a `cancelled_at` column would be more "complete" but requires Alembic migration on prod, broader query changes, and TTL covers jetstream propagation just as well
+- comments likely have the same race shape (`pds_create_comment`) — not yet patched
+
+---
+
+#### copyright self-match suppression (#1341, Apr 26)
+
+**why**: `flo.by` uploaded his catalog. AuDD identified each track's dominant match as **Floby IV** (his stage name elsewhere). every scan returned `is_flagged=true`, which (a) showed a red "potential copyright violation" badge to the artist on his own `/portal` page, and (b) fired an admin DM per scan — admin received ~30 DMs in one session. `sync_copyright_resolutions` flipped `is_flagged=false` within 5 min, but only after the artist had already seen the flag and DMs had landed.
+
+**what shipped**:
+- in `_store_scan_result`, when AuDD returns matches whose artist matches the uploader's own profile/handle, demote the match to `is_flagged=false` before the row is written. flag never reaches UI or DM
+
+**decisions**:
+- handled at write-time (not after-the-fact via sync) so the badge and DM both stay quiet from the start
+- a separate unfixed bug in `sync_copyright_resolutions` silently flips `is_flagged=false` for URIs that were never labelled — tracked in project memory, not addressed here
+
+---
+
+#### player + sheets polish (PRs #1339, #1340, #1342, Apr 25-26)
+
+**Android lock-screen autoplay (#1339)** — closes the upstream issue. on Android with screen locked, album/playlist playback stopped at the end of each track. root cause: chain from `<audio onended>` to next `audio.play()` had ~5 microtask boundaries plus an `await getAudioSource(...)`. on a foregrounded tab, fine. on Android with screen locked, Chrome treats the page as non-audible the moment the previous track ends — by the time `audio.play()` finally runs the policy already changed. fix: synchronous fast path for auto-advance.
+
+**embed MediaSession (#1340)** — empirical iOS lock-screen finding: embed surfaces set NOTHING on `navigator.mediaSession`. lock-screen controls showed generic placeholders — no title, no cover art, next/previous greyed or stale-handlered. main app `Player.svelte` had correct setup; embeds never got it. new `lib/media-session.ts` helper wraps the four MediaSession APIs with no-op fallbacks; embeds wired up.
+
+**likers sheet swipe-to-dismiss (#1342)** — the handle on the likers sheet was decorative — visually a near-universal "drag-me-down to close" affordance, with no event handlers. only working dismiss paths were a small × and backdrop tap. new `swipeToDismiss` Svelte 5 attachment in `frontend/src/lib/swipe-to-dismiss.svelte.ts` — first step toward broader unification (#1348 tracks the rest).
+
+---
+
+#### album cover inheritance + album route fix (#1337, #1349, Apr 25-26)
+
+- **album cover inheritance** (#1337) — `TrackInfo.svelte` already fell back to `track.album?.image_url` when per-track image was unset. detail page, list items, grid cards, and embed surface did NOT — they rendered placeholders. the same track showed artwork in the player and a blank everywhere else. fixed as render-time fallback (the album HAS the art; the track INHERITS unless it sets its own) rather than DB backfill — backfill would be wrong if the album cover later changes
+- **album upload toast 404** (#1349) — toast linked to `/album/${slug}`, but the actual route is `/u/[handle]/album/[slug]`. tapping the action 404'd right after a successful publish
+
+---
+
+#### search mode split + global font selector (PRs #1300, #1310, Apr 15-18)
+
+- **search mode split** (#1310) — the Cmd+K modal had been through three iterations: vibe search MVP shipped with a toggle (#848), removed the toggle in favor of parallel fire + "sounds like" separator (#851), then merged both lists by score (#858). step 3 hurt: BM25 relevance and cosine similarity are both 0–1 but measure different things — sorting a mixed list by joint score produced jarring interleaves where mediocre semantic matches outranked solid keyword hits. since only the `vibe-search` flag holders saw it, blast radius was small, but it had to be nailed before any broader rollout. now: explicit mode chips, default keyword, flagged users get a chip toggle for mood
+- **global font selector** (#1300) — six options in settings + profile menu (mono default, geist, inter, system, georgia, comic sans). each button previews in its own font. stored in `ui_settings` JSONB, cached in localStorage to prevent flash. applied via `--font-family` CSS custom property
+
+---
 
 #### feed toggle cleanup (PR #1296, Apr 14)
 
@@ -223,7 +367,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-SDK namespace restructure shipped for plyr-python-client v0.0.1a16 — flat methods → namespace objects (`client.tracks.list()`, `client.playlists.create()`), playlist CRUD (9 methods), cyclopts CLI, proper `TrackRef` identifier types. CDN caching live (#1275-1280) — `audio.plyr.fm` and `images.plyr.fm` custom domains with 1-year edge TTL. feed switcher on homepage refined (#1296) — replaced segmented pill with inline cycle toggle matching period toggle pattern. browser telemetry proxy incident resolved (#1288-1289) — synchronous Logfire proxy was saturating the threadpool, backend kill switch added. avatar restore on account reactivation (#1291). next: `config.py` decomposition, frontend state module grouping, waveform rollout to other surfaces, ooo.audio lexicon conversation (#705).
+image pipeline cleanup landed end-to-end (#1364-1366) — EXIF orientation, iPhone MPO normalization, two parallel upload paths consolidated. canonical DID storage for featured artists (#1362-1363) — closes the `displayName`/`display_name` drift class entirely via read-time profile resolution. infra: docket worker now on its own fly process group (#1359) so a runaway upload task can only OOM its own machine. audio revisions feature shipped (#1311-1320, #1325) — replace audio without losing track identity, with confirm-before-replace + restore + PDS blob re-upload on GC. like resurrection race fixed via Redis tombstone (#1338, closes #1321). upload reliability hardened across the stack (#1331, #1333, #1336, #1350) — migrated to docket, per-DID concurrency, shared-storage staging, pre-flight auth. issue triage 2026-05-05: closed #1321 (fixed) and #1328 (likely fixed, awaiting reporter); narrowed #1316 to audio_replace.py only. next: ship #1316 (createdAt fix in audio_replace), #1314/#1315 (audio replace race follow-ups), audio replace metric backfill, sheets unification (#1348), `config.py` decomposition.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -359,5 +503,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-04-14 (feed toggle cleanup).
+this is a living document. last updated 2026-05-05 (image pipeline cleanup, canonical DID storage, docket worker process split, audio revisions, upload reliability, issue triage).
 
