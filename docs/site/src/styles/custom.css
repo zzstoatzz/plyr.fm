@@ -18,9 +18,8 @@
   --sl-color-gray-6: #141414;
   --sl-color-black: #0a0a0a;
 
-  /* monospace font stack from plyr.fm */
-  --sl-font: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas',
-    monospace;
+  /* body font stack from plyr.fm — code blocks keep monospace via --sl-font-system-mono */
+  --sl-font: 'Georgia', 'Times New Roman', serif;
   --sl-font-system-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code',
     'Consolas', monospace;
 }
