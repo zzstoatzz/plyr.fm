@@ -47,6 +47,27 @@ plyr.fm should become:
 
 ### May 2026
 
+#### georgia as default font + deploy-docs misconfig (PR #1371, May 5)
+
+**why**: informal poll favored georgia over the previous mono default. only changes the resolved default for users who never explicitly picked a font; explicit choices (including mono) are preserved by the `?? DEFAULT_FONT` fall-through, since `ui_settings.font_family` is absent from the JSONB until the user sets it.
+
+**what shipped**:
+- `DEFAULT_FONT: 'mono' → 'georgia'` (`preferences.svelte.ts`), `FONT_OPTIONS` reordered to lead with georgia
+- body CSS fallback in `+layout.svelte` updated to Georgia stack (covers the moment before JS sets `--font-family`)
+- docs site `--sl-font` switched to Georgia in `docs/site/src/styles/custom.css`. `--sl-font-system-mono` kept for code blocks
+- accepted: one-frame mono → georgia flash on first post-deploy load for users with stale `localStorage['fontFamily'] === 'mono'` (cache was written from the resolved default, not raw `font_family`)
+
+**incident surfaced during rollout**:
+- merging the PR shipped Georgia to the **app** (staging, then prod via `just release-frontend-only`) but `docs.plyr.fm` kept serving mono
+- diagnosis: `deploy-docs.yml` was succeeding to a Cloudflare Pages project on the **wrong account**. the `CLOUDFLARE_API_TOKEN` GitHub secret had been minted in the Prefect/work account (since 2026-03-06); the workflow was happily deploying into a black-hole project there while `docs.plyr.fm` is bound to the personal-account project (`plyr-fm-docs`, subdomain `plyr-fm-docs-9ac.pages.dev`)
+- the personal-account project had not received a CI deploy since 2026-04-19 (commit `a4977bc2`, the last manual `wrangler` push). luckily only one PR (this one) actually changed `docs/site/**` in that window, so no backlog of stale docs — only the font change was missing
+- fix: rotated `CLOUDFLARE_API_TOKEN` to a new token scoped to the personal account with Pages:Edit, updated `CLOUDFLARE_ACCOUNT_ID` to `3e9ba01cd687b3c4d29033908177072e`, re-ran the workflow. docs.plyr.fm now serves Georgia from a freshly-built bundle
+
+**lesson**:
+- a deploy that "succeeds" but never updates the user-facing surface is almost worse than a failure. consider: a sanity check at the end of `deploy-docs.yml` that GETs `https://docs.plyr.fm/_astro/<known-bundle>.css` (or the fresh hash from the build) and asserts the deploy actually moved the production alias
+
+---
+
 #### image pipeline cleanup (PRs #1364-1366, May 3)
 
 **why**: phone JPEGs typically store the sensor in landscape with an EXIF `Orientation` tag asking viewers to rotate at display time. browsers honor it; PIL doesn't. cropped/resized WebP thumbnails came out sideways for any track whose source had a non-identity tag. surfaced as @incognitothief / @zzstoatzz.io's "day and age" cover rendering rotated everywhere except the detail page (which read the unrotated `image_url`).
@@ -126,7 +147,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-image pipeline cleanup landed end-to-end (#1364-1366) — EXIF orientation, iPhone MPO normalization, two parallel upload paths consolidated. canonical DID storage for featured artists (#1362-1363) — closes the `displayName`/`display_name` drift class entirely via read-time profile resolution. infra: docket worker now on its own fly process group (#1359) so a runaway upload task can only OOM its own machine. audio revisions feature shipped (#1311-1320, #1325) — replace audio without losing track identity, with confirm-before-replace + restore + PDS blob re-upload on GC. like resurrection race fixed via Redis tombstone (#1338, closes #1321). upload reliability hardened across the stack (#1331, #1333, #1336, #1350) — migrated to docket, per-DID concurrency, shared-storage staging, pre-flight auth. issue triage 2026-05-05: closed #1321 (fixed) and #1328 (likely fixed, awaiting reporter); narrowed #1316 to audio_replace.py only. next: ship #1316 (createdAt fix in audio_replace), #1314/#1315 (audio replace race follow-ups), audio replace metric backfill, sheets unification (#1348), `config.py` decomposition.
+georgia is the new default font (#1371) — explicit choices preserved via the existing `?? DEFAULT_FONT` fall-through. shipped to app + docs; rollout surfaced a pre-existing deploy-docs misconfig where CI had been silently deploying to the wrong Cloudflare account since 2026-03-06 (token rotated, fixed). image pipeline cleanup landed end-to-end (#1364-1366) — EXIF orientation, iPhone MPO normalization, two parallel upload paths consolidated. canonical DID storage for featured artists (#1362-1363) — closes the `displayName`/`display_name` drift class entirely via read-time profile resolution. infra: docket worker now on its own fly process group (#1359) so a runaway upload task can only OOM its own machine. audio revisions feature shipped (#1311-1320, #1325) — replace audio without losing track identity, with confirm-before-replace + restore + PDS blob re-upload on GC. like resurrection race fixed via Redis tombstone (#1338, closes #1321). upload reliability hardened across the stack (#1331, #1333, #1336, #1350) — migrated to docket, per-DID concurrency, shared-storage staging, pre-flight auth. issue triage 2026-05-05: closed #1321 (fixed) and #1328 (likely fixed, awaiting reporter); narrowed #1316 to audio_replace.py only. next: deploy-docs sanity check (assert prod alias moved), ship #1316 (createdAt fix in audio_replace), #1314/#1315 (audio replace race follow-ups), sheets unification (#1348), `config.py` decomposition.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -262,5 +283,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-05 (image pipeline cleanup, canonical DID storage, docket worker process split, audio revisions, upload reliability, issue triage).
+this is a living document. last updated 2026-05-05 (georgia default font + deploy-docs incident, image pipeline cleanup, canonical DID storage, docket worker process split, audio revisions, upload reliability, issue triage).
 
