@@ -9,15 +9,15 @@ export type Theme = 'dark' | 'light' | 'system' | 'live';
 export type FontFamily = 'mono' | 'geist' | 'inter' | 'comic-sans' | 'georgia' | 'system-ui';
 
 export const FONT_OPTIONS: { value: FontFamily; label: string; stack: string }[] = [
+	{ value: 'georgia', label: 'georgia', stack: "'Georgia', 'Times New Roman', serif" },
 	{ value: 'mono', label: 'mono', stack: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace" },
 	{ value: 'geist', label: 'geist', stack: "'Geist', 'Inter', system-ui, sans-serif" },
 	{ value: 'inter', label: 'inter', stack: "'Inter', system-ui, sans-serif" },
 	{ value: 'system-ui', label: 'system', stack: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
-	{ value: 'georgia', label: 'georgia', stack: "'Georgia', 'Times New Roman', serif" },
 	{ value: 'comic-sans', label: 'comic sans', stack: "'Comic Sans MS', 'Comic Sans', cursive" },
 ];
 
-export const DEFAULT_FONT: FontFamily = 'mono';
+export const DEFAULT_FONT: FontFamily = 'georgia';
 
 export interface UiSettings {
 	background_image_url?: string;

@@ -637,7 +637,7 @@
 	:global(body) {
 		margin: 0;
 		padding: 0;
-		font-family: var(--font-family, 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace);
+		font-family: var(--font-family, 'Georgia', 'Times New Roman', serif);
 		background-color: var(--bg-primary);
 		color: var(--text-primary);
 		-webkit-font-smoothing: antialiased;
