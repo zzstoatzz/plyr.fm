@@ -23,6 +23,15 @@ interface AmbientLocation {
 	lon: number;
 }
 
+export interface CelestialState {
+	body: 'sun' | 'moon';
+	x: number;
+	y: number;
+	size: number;
+	opacity: number;
+	phase: number;
+}
+
 interface RGB {
 	r: number;
 	g: number;
@@ -52,6 +61,74 @@ const TINTED_VARS: [string, number][] = [
 	['--bg-tertiary', 0.07],
 	['--bg-hover', 0.08],
 ];
+
+const MS_PER_DAY = 86_400_000;
+const SYNODIC_MONTH_DAYS = 29.53058867;
+
+function toRadians(degrees: number): number {
+	return degrees * Math.PI / 180;
+}
+
+function toDegrees(radians: number): number {
+	return radians * 180 / Math.PI;
+}
+
+function clamp(min: number, max: number, value: number): number {
+	return Math.min(max, Math.max(min, value));
+}
+
+function getDayOfYear(date: Date): number {
+	const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+	return Math.floor((date.getTime() - start) / MS_PER_DAY);
+}
+
+function getSolarTimeHours(date: Date, lon: number): number {
+	const day = getDayOfYear(date);
+	const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+	const b = 2 * Math.PI * (day - 81) / 364;
+	const equationOfTimeMinutes = 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
+	const hours = utcHours + lon / 15 + equationOfTimeMinutes / 60;
+	return ((hours % 24) + 24) % 24;
+}
+
+function getSolarAltitudeDegrees(date: Date, lat: number, lon: number): number {
+	const day = getDayOfYear(date);
+	const declination = toRadians(23.44 * Math.sin(2 * Math.PI * (day - 81) / 365));
+	const latitude = toRadians(lat);
+	const hourAngle = toRadians((getSolarTimeHours(date, lon) - 12) * 15);
+	const altitude = Math.asin(
+		Math.sin(latitude) * Math.sin(declination) +
+		Math.cos(latitude) * Math.cos(declination) * Math.cos(hourAngle)
+	);
+	return toDegrees(altitude);
+}
+
+function getMoonPhase(date: Date): number {
+	const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
+	const daysSince = (date.getTime() - knownNewMoon) / MS_PER_DAY;
+	return ((daysSince / SYNODIC_MONTH_DAYS) % 1 + 1) % 1;
+}
+
+function computeCelestialState(location: AmbientLocation, weather: WeatherData, date: Date): CelestialState {
+	const solarHours = getSolarTimeHours(date, location.lon);
+	const solarAltitude = getSolarAltitudeDegrees(date, location.lat, location.lon);
+	const body = weather.is_day ? 'sun' : 'moon';
+	const phase = getMoonPhase(date);
+	const moonOffsetHours = phase * 24;
+	const bodyHours = body === 'sun' ? solarHours : (solarHours - moonOffsetHours + 24) % 24;
+	const hourAngle = ((bodyHours - 12) / 12);
+	const arcAltitude = body === 'sun'
+		? solarAltitude
+		: 56 * Math.cos(hourAngle * Math.PI) - 10;
+	const x = clamp(7, 93, 50 + hourAngle * 46);
+	const y = clamp(9, 46, 43 - ((arcAltitude + 8) / 82) * 34);
+	const size = clamp(74, 150, 86 + Math.max(0, arcAltitude) * 0.7);
+	const opacity = body === 'sun'
+		? clamp(0.22, 0.52, 0.26 + Math.max(0, solarAltitude) / 150)
+		: clamp(0.18, 0.38, 0.2 + Math.max(0, arcAltitude) / 260);
+
+	return { body, x, y, size, opacity, phase };
+}
 
 function getConditionLabel(code: number): string {
 	if (code <= 3) return 'clear';
@@ -218,9 +295,11 @@ class AmbientManager {
 	weather = $state<WeatherData | null>(null);
 	loading = $state(false);
 	error = $state<string | null>(null);
+	now = $state(new Date());
 	readonly temperatureUnit: TemperatureUnit = detectTemperatureUnit();
 
 	private fetchIntervalId: number | null = null;
+	private clockIntervalId: number | null = null;
 	private lastFetchTime = 0;
 	private readonly STALE_MS = 30 * 60 * 1000; // 30 minutes
 	private baseValues: Map<string, string> = new Map();
@@ -238,6 +317,11 @@ class AmbientManager {
 		const condition = getConditionLabel(w.weathercode);
 		const time = w.is_day ? 'day' : 'night';
 		return `${temp}°${unit} · ${condition} · ${time}`;
+	}
+
+	get celestial(): CelestialState | null {
+		if (!this.location || !this.weather) return null;
+		return computeCelestialState(this.location, this.weather, this.now);
 	}
 
 	/** activate ambient mode. returns false if geolocation denied or unavailable. */
@@ -317,6 +401,11 @@ class AmbientManager {
 			window.clearInterval(this.fetchIntervalId);
 			this.fetchIntervalId = null;
 		}
+		if (this.clockIntervalId !== null) {
+			window.clearInterval(this.clockIntervalId);
+			this.clockIntervalId = null;
+		}
+		document.removeEventListener('visibilitychange', this.handleVisibilityChange);
 
 		this.clearFromDOM();
 
@@ -434,6 +523,10 @@ class AmbientManager {
 
 		// re-fetch every 30 minutes
 		this.fetchIntervalId = window.setInterval(() => this.fetchWeather(), this.STALE_MS);
+		this.now = new Date();
+		this.clockIntervalId = window.setInterval(() => {
+			this.now = new Date();
+		}, 60 * 1000);
 
 		// also re-fetch on tab re-focus if stale
 		if (browser) {
