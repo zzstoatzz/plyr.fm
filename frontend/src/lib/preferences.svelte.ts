@@ -23,6 +23,7 @@ export interface UiSettings {
 	background_image_url?: string;
 	background_tile?: boolean;
 	use_playing_artwork_as_background?: boolean;
+	live_logo_celestial_enabled?: boolean;
 	pds_audio_uploads_enabled?: boolean;
 	font_family?: FontFamily;
 }

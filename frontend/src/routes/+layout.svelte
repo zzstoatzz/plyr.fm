@@ -1,5 +1,6 @@
 <script lang="ts">
 	import logo from '$lib/assets/logo.png';
+	import logoMark from '$lib/assets/logo.svg';
 	import {
 		APP_NAME,
 		APP_TAGLINE,
@@ -19,6 +20,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
 	import { ambient } from '$lib/ambient.svelte';
+	import type { CelestialState } from '$lib/ambient.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -45,6 +47,24 @@
 	);
 
 	let isEmbed = $derived($page.url.pathname.startsWith('/embed/'));
+	let celestial = $derived(ambient.celestial);
+	let showCelestialLogo = $derived(
+		!isEmbed &&
+		preferences.theme === 'live' &&
+		ambient.enabled &&
+		(preferences.uiSettings.live_logo_celestial_enabled ?? false) &&
+		celestial !== null
+	);
+
+	function getCelestialStyle(state: CelestialState): string {
+		return [
+			`--celestial-x: ${state.x}%`,
+			`--celestial-y: ${state.y}%`,
+			`--celestial-size: ${state.size}px`,
+			`--celestial-opacity: ${state.opacity}`,
+			`--moon-shade-x: ${18 + state.phase * 64}%`
+		].join('; ');
+	}
 
 	// show terms overlay if authenticated and either never accepted or accepted before latest update
 	// exclude legal pages so users can read full terms/privacy/cookies
@@ -467,6 +487,21 @@
 	</script>
 </svelte:head>
 
+{#if showCelestialLogo && celestial}
+	<div
+		class="celestial-logo"
+		class:sun={celestial.body === 'sun'}
+		class:moon={celestial.body === 'moon'}
+		style={getCelestialStyle(celestial)}
+		aria-hidden="true"
+	>
+		<img src={logoMark} alt="" />
+		{#if celestial.body === 'moon'}
+			<span class="moon-shade"></span>
+		{/if}
+	</div>
+{/if}
+
 <div class="app-layout">
 	<main class="main-content" class:with-queue={showQueue && !isEmbed}>
 		{@render children?.()}
@@ -685,6 +720,83 @@
 		min-height: 100vh; /* fallback for browsers without dvh support */
 		width: 100%;
 		overflow-x: clip; /* clip instead of hidden to preserve position: sticky on descendants */
+		position: relative;
+		z-index: 1;
+	}
+
+	.celestial-logo {
+		position: fixed;
+		left: var(--celestial-x);
+		top: var(--celestial-y);
+		width: var(--celestial-size);
+		height: var(--celestial-size);
+		transform: translate(-50%, -50%);
+		opacity: var(--celestial-opacity);
+		pointer-events: none;
+		z-index: 0;
+		transition:
+			left 18s linear,
+			top 18s linear,
+			width 1.8s ease,
+			height 1.8s ease,
+			opacity 1.8s ease;
+	}
+
+	.celestial-logo img,
+	.moon-shade {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		border-radius: var(--radius-full);
+	}
+
+	.celestial-logo img {
+		animation: celestial-breathe 10s ease-in-out infinite;
+	}
+
+	.celestial-logo.sun img {
+		filter:
+			sepia(1)
+			saturate(2.4)
+			hue-rotate(346deg)
+			brightness(1.4)
+			drop-shadow(0 0 18px rgba(255, 198, 82, 0.55))
+			drop-shadow(0 0 54px rgba(255, 145, 80, 0.28));
+	}
+
+	.celestial-logo.sun::before {
+		content: '';
+		position: absolute;
+		inset: -24%;
+		border-radius: var(--radius-full);
+		background: radial-gradient(circle, rgba(255, 202, 93, 0.22), transparent 66%);
+		animation: celestial-glow 12s ease-in-out infinite;
+	}
+
+	.celestial-logo.moon img {
+		filter:
+			grayscale(1)
+			brightness(1.85)
+			contrast(0.82)
+			drop-shadow(0 0 14px rgba(205, 222, 255, 0.38))
+			drop-shadow(0 0 42px rgba(138, 165, 220, 0.18));
+	}
+
+	.moon-shade {
+		background: radial-gradient(circle at var(--moon-shade-x) 48%, rgba(5, 8, 16, 0.78), rgba(5, 8, 16, 0.38) 43%, transparent 61%);
+		mix-blend-mode: multiply;
+		opacity: 0.62;
+	}
+
+	@keyframes celestial-breathe {
+		0%, 100% { transform: scale(1) rotate(0deg); }
+		50% { transform: scale(1.025) rotate(3deg); }
+	}
+
+	@keyframes celestial-glow {
+		0%, 100% { opacity: 0.65; transform: scale(1); }
+		50% { opacity: 1; transform: scale(1.08); }
 	}
 
 	@supports (min-height: 100dvh) {
@@ -762,6 +874,20 @@
 
 		.queue-toggle {
 			bottom: calc(var(--player-height, 0px) + 20px + env(safe-area-inset-bottom, 0px));
+		}
+
+		.celestial-logo {
+			width: min(var(--celestial-size), 108px);
+			height: min(var(--celestial-size), 108px);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.celestial-logo,
+		.celestial-logo img,
+		.celestial-logo.sun::before {
+			animation: none;
+			transition: opacity 0.2s ease;
 		}
 	}
 </style>
