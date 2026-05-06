@@ -408,7 +408,7 @@
 	<meta name="theme-color" content="#0a0a0a" />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..900&family=Inter:wght@300..900&display=swap" rel="stylesheet" />
+	<link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Geist:wght@300..900&family=Inter:wght@300..900&display=swap" rel="stylesheet" />
 
 	{#if !hasPageMetadata}
 		<!-- default meta tags for pages without specific metadata -->
@@ -466,7 +466,7 @@
 						'inter': "'Inter', system-ui, sans-serif",
 						'system-ui': "system-ui, -apple-system, 'Segoe UI', sans-serif",
 						'georgia': "'Georgia', 'Times New Roman', serif",
-						'comic-sans': "'Comic Sans MS', 'Comic Sans', cursive",
+						'comic-sans': "'Comic Sans MS', 'Comic Sans', 'Comic Neue', cursive",
 					};
 					if (fonts[savedFont]) root.style.setProperty('--font-family', fonts[savedFont]);
 				}

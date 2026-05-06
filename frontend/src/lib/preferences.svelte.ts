@@ -14,7 +14,7 @@ export const FONT_OPTIONS: { value: FontFamily; label: string; stack: string }[]
 	{ value: 'geist', label: 'geist', stack: "'Geist', 'Inter', system-ui, sans-serif" },
 	{ value: 'inter', label: 'inter', stack: "'Inter', system-ui, sans-serif" },
 	{ value: 'system-ui', label: 'system', stack: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
-	{ value: 'comic-sans', label: 'comic sans', stack: "'Comic Sans MS', 'Comic Sans', cursive" },
+	{ value: 'comic-sans', label: 'comic sans', stack: "'Comic Sans MS', 'Comic Sans', 'Comic Neue', cursive" },
 ];
 
 export const DEFAULT_FONT: FontFamily = 'georgia';
