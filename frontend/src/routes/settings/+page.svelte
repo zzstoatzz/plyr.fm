@@ -26,7 +26,6 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	let backgroundImageUrl = $derived(preferences.uiSettings.background_image_url ?? '');
 	let backgroundTile = $derived(preferences.uiSettings.background_tile ?? false);
 	let usePlayingArtwork = $derived(preferences.uiSettings.use_playing_artwork_as_background ?? false);
-	let liveLogoCelestialEnabled = $derived(preferences.uiSettings.live_logo_celestial_enabled ?? false);
 	let autoDownloadLiked = $derived(preferences.autoDownloadLiked);
 	// developer token state
 	let creatingToken = $state(false);
@@ -195,11 +194,6 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	async function saveUsePlayingArtwork(enabled: boolean) {
 		await preferences.updateUiSettings({ use_playing_artwork_as_background: enabled });
 		toast.success(enabled ? 'playing artwork background enabled' : 'playing artwork background disabled');
-	}
-
-	async function saveLiveLogoCelestial(enabled: boolean) {
-		await preferences.updateUiSettings({ live_logo_celestial_enabled: enabled });
-		toast.success(enabled ? 'live sky logo enabled' : 'live sky logo disabled');
 	}
 
 	function selectTheme(theme: Theme) {
@@ -495,21 +489,6 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 						<span>{ambientError}</span>
 					</div>
 				{/if}
-
-				<div class="setting-row">
-					<div class="setting-info">
-						<h3>live sky logo</h3>
-						<p>use the plyr.fm mark as a sun or moon while live theme is active</p>
-					</div>
-					<label class="toggle-switch" title={currentTheme === 'live' ? ambientCondition ?? 'live sky logo' : 'enable live theme to see it'}>
-						<input
-							type="checkbox"
-							checked={liveLogoCelestialEnabled}
-							onchange={(e) => saveLiveLogoCelestial((e.target as HTMLInputElement).checked)}
-						/>
-						<span class="toggle-slider"></span>
-					</label>
-				</div>
 
 				<div class="setting-row">
 					<div class="setting-info">

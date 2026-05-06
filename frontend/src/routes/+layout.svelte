@@ -52,7 +52,6 @@
 		!isEmbed &&
 		preferences.theme === 'live' &&
 		ambient.enabled &&
-		(preferences.uiSettings.live_logo_celestial_enabled ?? false) &&
 		celestial !== null
 	);
 
