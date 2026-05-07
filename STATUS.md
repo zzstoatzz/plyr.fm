@@ -47,6 +47,44 @@ plyr.fm should become:
 
 ### May 2026
 
+#### jam deep-link join toast (PR #1378, May 7)
+
+**why**: @hipstersmoothie.com reported that following Tynan's `plyr.fm/jam/0toyxh1w` share link, signing in, and ending up on the homepage looked like the join hadn't worked. logfire spans confirmed the #993 intent-preservation cookie landed him on `/jam/[code]` correctly and `jam.join()` returned 200 — he then re-tapped the share link twice over the next ~90s, each time re-joining, because the home landing gave no acknowledgement.
+
+**what shipped**:
+- `frontend/src/routes/jam/[code]/+page.svelte`: fire `toast.success(\`joined ${host_display_name}'s jam\`)` after a successful page-onMount join, before the existing `goto('/')` to home. falls back to `'joined jam'` if `data.preview` failed to load
+- two-line diff. layout's auto-rejoin path (queue/jam reconnect on every page mount) is unaffected — toast only fires when the user actually arrives at `/jam/[code]`
+
+**why a toast and not a routing change**:
+- there is no jam page UI for authed users — `/jam/[code]` only renders `<p>joining jam...</p>` before `goto('/')`. the actual jam UI is the global queue panel, which `+layout.svelte` already auto-opens on `jam.active` transition
+- so "stay on /jam/[code]" would be staying on an empty page. the gap was acknowledgement, not destination
+
+---
+
+#### comic sans actually renders on mobile (PR #1377, May 6)
+
+**why**: the comic sans font option's stack was `'Comic Sans MS', 'Comic Sans', cursive`. iOS and Android don't ship Comic Sans MS, so mobile fell through to the generic `cursive` family — Snell Roundhand on iOS, something else on Android. desktop (macOS/Windows) had Comic Sans MS preinstalled and masked the issue.
+
+**what shipped**:
+- added [Comic Neue](https://fonts.google.com/specimen/Comic+Neue) (free open-source clone) to the Google Fonts preload and to the stack as a pre-cursive fallback
+- desktop with local Comic Sans MS keeps using the local font (no extra fetch); mobile gets Comic Neue
+
+---
+
+#### live theme celestial logo — shipped, lived in prod for ~36h, then ripped out (PRs #1375, #1376, #1380, May 6–7)
+
+**arc**: #1375 (May 6, 00:04Z) added a `live_logo_celestial_enabled` opt-in setting that rendered the plyr.fm SVG mark as a location/time-aware sun or moon when live theme was active. #1376 (May 6, 13:43Z, ~13h later) removed the setting and made the celestial layer inherent to live theme — the logo sky belongs to the same product surface as the gradient, a second toggle was the wrong abstraction. both shipped to prod via `just release-frontend-only`. #1380 (May 7, 21:15Z) ripped the celestial layer out entirely — it was live in prod and the user didn't like how it looked once seen at scale on the actual site. rest of live theme (gradient + ambient color from location/weather) is unchanged.
+
+**lesson**: aesthetic calls don't always survive contact with prod. the experiment closed cleanly because the inherent version (#1376) made the revert a delete rather than a deprecation — no `live_logo_celestial_enabled` rows to migrate. fast forward / fast revert is the right shape for visual experiments where staging can't fully predict the live-app feel.
+
+---
+
+#### CONTRIBUTING.md (PR #1373, May 5)
+
+added a top-level `CONTRIBUTING.md` pointing at the public docs at `docs.plyr.fm/contributing` and the local `.claude/skills/contribute/SKILL.md` for AI coding assistants. surfaces the contribution path for drive-by visitors who don't otherwise crawl `docs/`.
+
+---
+
 #### georgia as default font + deploy-docs misconfig (PR #1371, May 5)
 
 **why**: informal poll favored georgia over the previous mono default. only changes the resolved default for users who never explicitly picked a font; explicit choices (including mono) are preserved by the `?? DEFAULT_FONT` fall-through, since `ui_settings.font_family` is absent from the JSONB until the user sets it.
@@ -147,7 +185,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-georgia is the new default font (#1371) — explicit choices preserved via the existing `?? DEFAULT_FONT` fall-through. shipped to app + docs; rollout surfaced a pre-existing deploy-docs misconfig where CI had been silently deploying to the wrong Cloudflare account since 2026-03-06 (token rotated, fixed). image pipeline cleanup landed end-to-end (#1364-1366) — EXIF orientation, iPhone MPO normalization, two parallel upload paths consolidated. canonical DID storage for featured artists (#1362-1363) — closes the `displayName`/`display_name` drift class entirely via read-time profile resolution. infra: docket worker now on its own fly process group (#1359) so a runaway upload task can only OOM its own machine. audio revisions feature shipped (#1311-1320, #1325) — replace audio without losing track identity, with confirm-before-replace + restore + PDS blob re-upload on GC. like resurrection race fixed via Redis tombstone (#1338, closes #1321). upload reliability hardened across the stack (#1331, #1333, #1336, #1350) — migrated to docket, per-DID concurrency, shared-storage staging, pre-flight auth. issue triage 2026-05-05: closed #1321 (fixed) and #1328 (likely fixed, awaiting reporter); narrowed #1316 to audio_replace.py only. next: deploy-docs sanity check (assert prod alias moved), ship #1316 (createdAt fix in audio_replace), #1314/#1315 (audio replace race follow-ups), sheets unification (#1348), `config.py` decomposition.
+jam deep-link join now toasts on success (#1378) — closes the silent-success gap in the post-#993 intent-preservation flow that @hipstersmoothie.com hit on May 7. polish week on top: comic sans fallback fixed for mobile (#1377), live theme's celestial logo experiment ran its full opt-in → inherent → removed arc (#1375 → #1376 → #1380) — shipped to prod, lived ~36h, ripped out because it didn't feel right in the live app, `CONTRIBUTING.md` added (#1373). georgia is the new default font (#1371) — explicit choices preserved via the existing `?? DEFAULT_FONT` fall-through; shipped to app + docs; rollout surfaced a pre-existing deploy-docs misconfig where CI had been silently deploying to the wrong Cloudflare account since 2026-03-06 (token rotated, fixed). image pipeline cleanup landed end-to-end (#1364-1366) — EXIF orientation, iPhone MPO normalization, two parallel upload paths consolidated. canonical DID storage for featured artists (#1362-1363) — closes the `displayName`/`display_name` drift class entirely via read-time profile resolution. infra: docket worker now on its own fly process group (#1359) so a runaway upload task can only OOM its own machine. audio revisions feature shipped (#1311-1320, #1325) — replace audio without losing track identity, with confirm-before-replace + restore + PDS blob re-upload on GC. like resurrection race fixed via Redis tombstone (#1338, closes #1321). upload reliability hardened across the stack (#1331, #1333, #1336, #1350) — migrated to docket, per-DID concurrency, shared-storage staging, pre-flight auth. issue triage 2026-05-05: closed #1321 (fixed) and #1328 (likely fixed, awaiting reporter); narrowed #1316 to audio_replace.py only. next: deploy-docs sanity check (assert prod alias moved), ship #1316 (createdAt fix in audio_replace), #1314/#1315 (audio replace race follow-ups), sheets unification (#1348), `config.py` decomposition.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -283,5 +321,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-05 (georgia default font + deploy-docs incident, image pipeline cleanup, canonical DID storage, docket worker process split, audio revisions, upload reliability, issue triage).
+this is a living document. last updated 2026-05-07 (jam deep-link join toast, comic sans mobile fallback, celestial logo tried + reverted, CONTRIBUTING.md, georgia default font + deploy-docs incident, image pipeline cleanup, canonical DID storage, docket worker process split).
 
