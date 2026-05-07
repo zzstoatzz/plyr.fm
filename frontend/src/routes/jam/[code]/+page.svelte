@@ -27,6 +27,8 @@
 		// authenticated — proceed with join
 		const result = await jam.join(data.code);
 		if (result === true) {
+			const hostName = data.preview?.host_display_name;
+			toast.success(hostName ? `joined ${hostName}'s jam` : 'joined jam');
 			goto('/');
 		} else {
 			error = result;
