@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # tags that are hidden by default for new users
-DEFAULT_HIDDEN_TAGS: list[str] = ["ai", "ai-slop"]
+DEFAULT_HIDDEN_TAGS: list[str] = ["ai", "ai-slop", "suno"]
 
 # tag validation constraints
 MAX_TAG_LENGTH = 50
