@@ -181,6 +181,18 @@
 			root.style.setProperty('--glass-btn-border', isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)');
 			// very subtle text outline for readability against background images
 			root.style.setProperty('--text-shadow', isLight ? '0 0 8px rgba(255, 255, 255, 0.6)' : '0 0 8px rgba(0, 0, 0, 0.6)');
+			// scrim layer painted over the cover art so foreground text/buttons keep
+			// the contrast floor they were designed for. only applied when the bg is
+			// auto-derived from the playing track — user-chosen custom images are an
+			// explicit aesthetic choice and rely on --text-shadow alone.
+			// alpha picked so a pure-white cover still yields >=4.5:1 contrast with
+			// --text-primary (white text in dark theme; near-black text in light).
+			root.style.setProperty(
+				'--bg-scrim',
+				isUsingPlayingArtwork
+					? (isLight ? 'rgba(250, 250, 250, 0.65)' : 'rgba(10, 10, 10, 0.65)')
+					: 'transparent',
+			);
 		} else {
 			root.style.removeProperty('--bg-image');
 			root.style.removeProperty('--bg-image-mode');
@@ -190,6 +202,7 @@
 			root.style.removeProperty('--glass-btn-bg-hover');
 			root.style.removeProperty('--glass-btn-border');
 			root.style.removeProperty('--text-shadow');
+			root.style.removeProperty('--bg-scrim');
 		}
 	});
 
@@ -665,15 +678,21 @@
 		50% { opacity: 0.5; filter: brightness(1.08); }
 	}
 
-	/* background image with blur effect */
+	/* background image with blur effect.
+	   the linear-gradient layer is a flat-color scrim composited on top of the
+	   cover art (and inside the same blur), so foreground text remains readable
+	   when the playing track's artwork is bright. scrim is transparent unless
+	   playing-artwork mode is active — see the $effect that sets --bg-scrim. */
 	:global(body::before) {
 		content: '';
 		position: fixed;
 		inset: 0;
-		background-image: var(--bg-image, none);
-		background-repeat: var(--bg-image-mode, no-repeat);
-		background-size: var(--bg-image-size, cover);
-		background-position: center;
+		background-image:
+			linear-gradient(var(--bg-scrim, transparent), var(--bg-scrim, transparent)),
+			var(--bg-image, none);
+		background-repeat: no-repeat, var(--bg-image-mode, no-repeat);
+		background-size: cover, var(--bg-image-size, cover);
+		background-position: center, center;
 		filter: blur(var(--bg-blur, 0px));
 		transform: scale(1.1); /* prevent blur edge artifacts */
 		z-index: -1;
