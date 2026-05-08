@@ -42,6 +42,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _avatar_cid(url: str | None) -> str | None:
+    """extract the bsky CDN CID from an avatar URL, ignoring the optional
+    `@jpeg` content-hint suffix.
+
+    bsky's API has flipped between returning `<cid>@jpeg` and bare `<cid>`
+    over time; both resolve to the same image. comparing CIDs avoids
+    flagging that suffix flip as a real change.
+    """
+    if not url or "cdn.bsky.app" not in url:
+        return url
+    tail = url.rsplit("/", 1)[-1]
+    return tail.split("@", 1)[0]
+
+
 def _compute_changes(
     artist: Artist, profile: dict
 ) -> dict[str, tuple[str | None, str | None]]:
@@ -50,6 +64,11 @@ def _compute_changes(
     returns a dict of {field: (old, new)} for fields that need to change.
     only updates display_name when it equals the stored handle (the
     ensure_artist_exists default marker) — preserves explicit user choices.
+
+    skips:
+    - handle updates when bsky returns `handle.invalid` (validation failure
+      on bsky's side; our stored handle is more useful)
+    - avatar updates when the only difference is the `@jpeg` suffix
     """
     changes: dict[str, tuple[str | None, str | None]] = {}
 
@@ -57,7 +76,11 @@ def _compute_changes(
     target_display_name: str | None = profile.get("displayName") or target_handle
     target_avatar = normalize_avatar_url(profile.get("avatar"))
 
-    if target_handle and artist.handle != target_handle:
+    if (
+        target_handle
+        and target_handle != "handle.invalid"
+        and artist.handle != target_handle
+    ):
         changes["handle"] = (artist.handle, target_handle)
 
     # only sync display_name when it's still the auto-default (== stored handle).
@@ -69,7 +92,7 @@ def _compute_changes(
     ):
         changes["display_name"] = (artist.display_name, target_display_name)
 
-    if target_avatar and artist.avatar_url != target_avatar:
+    if target_avatar and _avatar_cid(artist.avatar_url) != _avatar_cid(target_avatar):
         changes["avatar_url"] = (artist.avatar_url, target_avatar)
 
     return changes
