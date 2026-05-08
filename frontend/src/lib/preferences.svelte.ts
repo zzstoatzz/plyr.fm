@@ -47,7 +47,7 @@ const DEFAULT_PREFERENCES: Preferences = {
 	accent_color: null,
 	auto_advance: true,
 	allow_comments: true,
-	hidden_tags: ['ai', 'ai-slop'],
+	hidden_tags: ['ai', 'ai-slop', 'suno'],
 	theme: 'dark',
 	enable_teal_scrobbling: false,
 	teal_needs_reauth: false,
