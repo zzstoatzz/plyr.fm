@@ -144,7 +144,7 @@ max_lines = 555
 
 [[rules]]
 path = "frontend/src/routes/library/+page.svelte"
-max_lines = 720
+max_lines = 734
 
 [[rules]]
 path = "frontend/src/routes/liked/+page.svelte"

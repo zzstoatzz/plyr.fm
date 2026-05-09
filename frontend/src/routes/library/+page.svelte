@@ -242,20 +242,34 @@
 					autofocus
 				/>
 
-				<label class="privacy-toggle">
-					<input
-						type="checkbox"
-						bind:checked={newPlaylistPrivate}
+				<div class="visibility-picker" role="radiogroup" aria-label="visibility">
+					<button
+						type="button"
+						class="visibility-option"
+						class:selected={!newPlaylistPrivate}
+						role="radio"
+						aria-checked={!newPlaylistPrivate}
+						onclick={() => (newPlaylistPrivate = false)}
 						disabled={creating}
-					/>
-					<span class="privacy-label">private — only you can see it</span>
-				</label>
-				<p class="privacy-hint">
-					{#if newPlaylistPrivate}
-						stays in your plyr.fm library only — no public ATProto record. you can't change this after creating.
-					{:else}
-						published to your PDS as a public list record.
-					{/if}
+					>
+						<span class="visibility-label">public</span>
+						<span class="visibility-sublabel">anyone can see it</span>
+					</button>
+					<button
+						type="button"
+						class="visibility-option"
+						class:selected={newPlaylistPrivate}
+						role="radio"
+						aria-checked={newPlaylistPrivate}
+						onclick={() => (newPlaylistPrivate = true)}
+						disabled={creating}
+					>
+						<span class="visibility-label">private</span>
+						<span class="visibility-sublabel">only you can see it</span>
+					</button>
+				</div>
+				<p class="visibility-note">
+					can't be changed after creating.
 				</p>
 
 				{#if error}
@@ -572,25 +586,56 @@
 		color: #ef4444;
 	}
 
-	.privacy-toggle {
-		display: flex;
-		align-items: center;
+	.visibility-picker {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
 		gap: 0.5rem;
-		margin: 1rem 0 0.25rem 0;
-		font-size: var(--text-sm);
-		color: var(--text-secondary);
-		cursor: pointer;
-		user-select: none;
+		margin-top: 1rem;
 	}
 
-	.privacy-toggle input[type='checkbox'] {
-		width: auto;
-		margin: 0;
+	.visibility-option {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.25rem;
+		padding: 0.75rem 0.875rem;
+		background: var(--bg-secondary);
+		border: 1.5px solid var(--border-default);
+		border-radius: var(--radius-md);
+		font-family: inherit;
+		text-align: left;
 		cursor: pointer;
+		transition: border-color 0.15s, background 0.15s;
 	}
 
-	.privacy-hint {
-		margin: 0 0 0 1.5rem;
+	.visibility-option:hover:not(:disabled) {
+		border-color: var(--border-hover, var(--text-muted));
+	}
+
+	.visibility-option.selected {
+		border-color: var(--accent);
+		background: color-mix(in oklch, var(--accent) 8%, var(--bg-secondary));
+	}
+
+	.visibility-option:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.visibility-label {
+		font-size: var(--text-base);
+		font-weight: 600;
+		color: var(--text-primary);
+	}
+
+	.visibility-sublabel {
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+		line-height: 1.3;
+	}
+
+	.visibility-note {
+		margin: 0.5rem 0 0 0;
 		font-size: var(--text-xs);
 		color: var(--text-muted);
 		line-height: 1.4;
