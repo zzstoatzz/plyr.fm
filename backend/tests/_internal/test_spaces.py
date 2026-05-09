@@ -2,6 +2,7 @@
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.spaces import (
@@ -227,8 +228,6 @@ async def test_list_records_ordered_by_created_at(
 async def test_create_record_duplicate_rkey_raises(
     db_session: AsyncSession, owner: Artist
 ) -> None:
-    from sqlalchemy.exc import IntegrityError
-
     space = await get_or_create_personal_space(db_session, owner.did, "playlists")
     await create_record(
         db_session,
