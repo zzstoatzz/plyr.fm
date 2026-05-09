@@ -121,6 +121,26 @@ async def _read_playlist_items(
     return [{"uri": uri, "cid": ""} for uri in uris]
 
 
+async def _assert_can_mutate(
+    db: AsyncSession,
+    session: AuthSession,
+    playlist: Playlist,
+) -> None:
+    """raise the appropriate HTTPException if ``session`` can't mutate ``playlist``.
+
+    public playlists are visible to anyone, so a non-owner gets 403 ("you can't
+    edit this"). private playlists must not leak existence — non-members get
+    404, indistinguishable from a playlist that doesn't exist. mirrors the
+    permissioned-data spec's reader-side enforcement model.
+    """
+    if playlist.space_uri is not None:
+        if not await can_read(db, session.did, playlist.space_uri):
+            raise HTTPException(status_code=404, detail="playlist not found")
+        return
+    if playlist.owner_did != session.did:
+        raise HTTPException(status_code=403, detail="not playlist owner")
+
+
 async def _write_private_playlist_items(
     db: AsyncSession,
     playlist: Playlist,
@@ -215,15 +235,16 @@ async def create_playlist(
         db.add(playlist)
         await db.flush()
 
-    db.add(
-        CollectionEvent(
-            event_type=(
-                "playlist_create_private" if body.is_private else "playlist_create"
-            ),
-            actor_did=session.did,
-            playlist_id=playlist.id,
+    if not body.is_private:
+        # only public playlists go in the activity feed — private creations
+        # would leak existence to anyone hitting the platform-wide feed
+        db.add(
+            CollectionEvent(
+                event_type="playlist_create",
+                actor_did=session.did,
+                playlist_id=playlist.id,
+            )
         )
-    )
 
     await db.commit()
     await db.refresh(playlist)
@@ -424,8 +445,7 @@ async def add_track_to_playlist(
 
     playlist, artist = row
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
+    await _assert_can_mutate(db, session, playlist)
 
     if playlist.space_uri is not None:
         # private path
@@ -495,18 +515,21 @@ async def add_track_to_playlist(
         playlist.atproto_record_cid = cid
         playlist.track_count = len(new_items)
 
-    track_result = await db.execute(
-        select(Track.id).where(Track.atproto_record_uri == body.track_uri)
-    )
-    resolved_track_id = track_result.scalar_one_or_none()
-    db.add(
-        CollectionEvent(
-            event_type="track_added_to_playlist",
-            actor_did=session.did,
-            playlist_id=playlist.id,
-            track_id=resolved_track_id,
+    if playlist.space_uri is None:
+        # don't emit activity for private playlist additions — would leak
+        # existence to anyone hitting the platform-wide feed
+        track_result = await db.execute(
+            select(Track.id).where(Track.atproto_record_uri == body.track_uri)
         )
-    )
+        resolved_track_id = track_result.scalar_one_or_none()
+        db.add(
+            CollectionEvent(
+                event_type="track_added_to_playlist",
+                actor_did=session.did,
+                playlist_id=playlist.id,
+                track_id=resolved_track_id,
+            )
+        )
 
     await db.commit()
     await db.refresh(playlist)
@@ -534,8 +557,7 @@ async def remove_track_from_playlist(
 
     playlist, artist = row
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
+    await _assert_can_mutate(db, session, playlist)
 
     if playlist.space_uri is not None:
         # private path
@@ -631,8 +653,7 @@ async def reorder_playlist(
 
     playlist, artist = row
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
+    await _assert_can_mutate(db, session, playlist)
 
     if playlist.space_uri is not None:
         # private: rewrite the SpaceRecord's items array directly
@@ -687,8 +708,7 @@ async def delete_playlist(
     if not playlist:
         raise HTTPException(status_code=404, detail="playlist not found")
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
+    await _assert_can_mutate(db, session, playlist)
 
     if playlist.space_uri is not None:
         await delete_record(db, playlist.space_uri, PLAYLIST_COLLECTION, playlist.id)
@@ -729,11 +749,7 @@ async def upload_playlist_cover(
 
     playlist, _artist = row
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(
-            status_code=403,
-            detail="you can only upload cover art for your own playlists",
-        )
+    await _assert_can_mutate(db, session, playlist)
 
     try:
         uploaded = await process_image_upload(
@@ -794,8 +810,7 @@ async def update_playlist(
 
     playlist, artist = row
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
+    await _assert_can_mutate(db, session, playlist)
 
     # show_on_profile is meaningless for private playlists but harmless to set
     if show_on_profile is not None:
@@ -904,8 +919,7 @@ async def get_playlist_recommendations_endpoint(
 
     playlist, artist = row
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
+    await _assert_can_mutate(db, session, playlist)
 
     if playlist.track_count == 0:
         return unavailable

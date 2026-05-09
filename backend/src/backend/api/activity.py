@@ -216,6 +216,9 @@ _COLLECTION_QUERY = f"""
     LEFT JOIN artists ala ON ala.did = al.artist_did
     LEFT JOIN tracks t ON t.id = ce.track_id
     LEFT JOIN artists ta ON ta.did = t.artist_did
+    -- defense-in-depth: never surface events for permissioned-space-backed
+    -- playlists, even if a CollectionEvent for one accidentally exists
+    WHERE (ce.playlist_id IS NULL OR p.space_uri IS NULL)
     {{cursor_clause}}
     ORDER BY ce.created_at DESC LIMIT :limit)
 """
@@ -233,7 +236,7 @@ def _build_query(cursor: datetime | None) -> str:
         track_clause = "WHERE t.created_at < :cursor"
         comment_clause = "WHERE tc.created_at < :cursor"
         join_clause = "AND a.created_at < :cursor"
-        collection_clause = "WHERE ce.created_at < :cursor"
+        collection_clause = "AND ce.created_at < :cursor"
     else:
         like_clause = ""
         track_clause = ""

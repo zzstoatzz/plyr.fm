@@ -335,3 +335,148 @@ async def test_delete_private_playlist_removes_space_record(
         await db_session.execute(select(Space).where(Space.owner_did == owner.did))
     ).scalar_one()
     assert space is not None
+
+
+# ---------------------------------------------------------------------------
+# leak prevention — non-members can't even tell a private playlist exists
+# ---------------------------------------------------------------------------
+
+
+async def test_non_owner_mutation_returns_404_not_403_for_private(
+    db_session: AsyncSession, owner: Artist, viewer: Artist
+) -> None:
+    """non-members hitting a mutation endpoint on a private playlist must
+    get 404, not 403 — 403 leaks existence."""
+
+    async def auth_owner() -> Session:
+        return MockSession(did="did:plc:owner")
+
+    app.dependency_overrides[require_auth] = auth_owner
+    app.dependency_overrides[get_optional_session] = auth_owner
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            playlist = await _create_private_playlist(client, "secret")
+    finally:
+        app.dependency_overrides.clear()
+
+    async def auth_viewer() -> Session:
+        return MockSession(did="did:plc:viewer")
+
+    app.dependency_overrides[require_auth] = auth_viewer
+    app.dependency_overrides[get_optional_session] = auth_viewer
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            patch = await client.patch(
+                f"/lists/playlists/{playlist['id']}",
+                data={"name": "trying"},
+            )
+            add = await client.post(
+                f"/lists/playlists/{playlist['id']}/tracks",
+                json={"track_uri": "at://did:plc:x/c/r", "track_cid": "bafyx"},
+            )
+            remove = await client.delete(
+                f"/lists/playlists/{playlist['id']}/tracks/at://did:plc:x/c/r"
+            )
+            reorder = await client.put(
+                f"/lists/playlists/{playlist['id']}/reorder",
+                json={"items": []},
+            )
+            delete = await client.delete(f"/lists/playlists/{playlist['id']}")
+    finally:
+        app.dependency_overrides.clear()
+
+    for resp in (patch, add, remove, reorder, delete):
+        assert resp.status_code == 404, (
+            f"expected 404 (no existence leak) got {resp.status_code}"
+        )
+
+
+async def test_private_playlist_not_in_search(
+    db_session: AsyncSession, owner: Artist
+) -> None:
+    """search must not surface private playlist names."""
+
+    async def auth_owner() -> Session:
+        return MockSession(did="did:plc:owner")
+
+    app.dependency_overrides[require_auth] = auth_owner
+    app.dependency_overrides[get_optional_session] = auth_owner
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await _create_private_playlist(client, "uniquesecretname")
+            resp = await client.get("/search/", params={"q": "uniquesecretname"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert all(
+        "uniquesecretname" not in (p.get("name") or "")
+        for p in body.get("playlists", [])
+    )
+
+
+async def test_private_playlist_oembed_returns_404(
+    db_session: AsyncSession, owner: Artist
+) -> None:
+    """oembed has no auth path — must 404 for private playlists."""
+
+    async def auth_owner() -> Session:
+        return MockSession(did="did:plc:owner")
+
+    app.dependency_overrides[require_auth] = auth_owner
+    app.dependency_overrides[get_optional_session] = auth_owner
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            playlist = await _create_private_playlist(client, "secret")
+    finally:
+        app.dependency_overrides.clear()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        follow_redirects=True,
+    ) as client:
+        resp = await client.get(
+            "/oembed",
+            params={"url": f"http://localhost/playlist/{playlist['id']}"},
+        )
+
+    assert resp.status_code == 404
+
+
+async def test_private_playlist_not_in_activity_feed(
+    db_session: AsyncSession, owner: Artist
+) -> None:
+    """activity feed must not surface private playlist creation events."""
+
+    async def auth_owner() -> Session:
+        return MockSession(did="did:plc:owner")
+
+    app.dependency_overrides[require_auth] = auth_owner
+    app.dependency_overrides[get_optional_session] = auth_owner
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await _create_private_playlist(client, "secret")
+            resp = await client.get("/activity/")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    events = resp.json()["events"]
+    for event in events:
+        if event["type"] == "playlist_create":
+            collection = event.get("collection") or {}
+            assert collection.get("name") != "secret", (
+                "private playlist leaked into activity feed"
+            )

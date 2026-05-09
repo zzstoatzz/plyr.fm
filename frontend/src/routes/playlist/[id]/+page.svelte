@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { AtUri } from "@atproto/api";
 	import Header from "$lib/components/Header.svelte";
 	import ShareButton from "$lib/components/ShareButton.svelte";
 	import SensitiveImage from "$lib/components/SensitiveImage.svelte";
@@ -452,11 +451,6 @@
 	}
 
 	async function saveOrder() {
-		if (!playlist.atproto_record_uri) return;
-
-		const rkey = new AtUri(playlist.atproto_record_uri).rkey;
-		if (!rkey) return;
-
 		// build strongRefs from current track order
 		const items = tracks
 			.filter((t) => t.atproto_record_uri && t.atproto_record_cid)
@@ -469,12 +463,18 @@
 
 		isSavingOrder = true;
 		try {
-			const response = await fetch(`${API_URL}/lists/${rkey}/reorder`, {
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include",
-				body: JSON.stringify({ items }),
-			});
+			// /lists/playlists/{id}/reorder routes private + public; the older
+			// /lists/{rkey}/reorder is public-only and is left for backwards
+			// compatibility with non-playlist list types.
+			const response = await fetch(
+				`${API_URL}/lists/playlists/${playlist.id}/reorder`,
+				{
+					method: "PUT",
+					headers: { "Content-Type": "application/json" },
+					credentials: "include",
+					body: JSON.stringify({ items }),
+				},
+			);
 
 			if (!response.ok) {
 				const error = await response
@@ -811,7 +811,7 @@
 			{/if}
 			<div class="playlist-info-wrapper">
 				<div class="playlist-info">
-					<p class="playlist-type">playlist</p>
+					<p class="playlist-type">{playlist.is_private ? 'private playlist' : 'playlist'}</p>
 					{#if isEditMode && isOwner}
 						<input
 							type="text"
@@ -820,7 +820,17 @@
 							placeholder="playlist name"
 						/>
 					{:else}
-						<h1 class="playlist-title">{playlist.name}</h1>
+						<h1 class="playlist-title">
+							{#if playlist.is_private}
+								<span class="title-lock" title="private — only you can see this">
+									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+										<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+										<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+									</svg>
+								</span>
+							{/if}
+							{playlist.name}
+						</h1>
 					{/if}
 					<div class="playlist-meta">
 						<a href="/u/{playlist.owner_handle}" class="owner-link">
@@ -834,7 +844,7 @@
 								: "tracks"}</span
 						>
 					</div>
-					{#if isEditMode && isOwner}
+					{#if isEditMode && isOwner && !playlist.is_private}
 						<label class="show-on-profile-toggle">
 							<input
 								type="checkbox"
@@ -846,7 +856,9 @@
 				</div>
 
 				<div class="side-buttons">
-					<ShareButton url={$page.url.href} title="share playlist" />
+					{#if !playlist.is_private}
+						<ShareButton url={$page.url.href} title="share playlist" />
+					{/if}
 					{#if isOwner}
 						<button
 							class="icon-btn"
@@ -952,7 +964,9 @@
 				add to queue
 			</button>
 			<div class="mobile-buttons">
-				<ShareButton url={$page.url.href} title="share playlist" />
+				{#if !playlist.is_private}
+					<ShareButton url={$page.url.href} title="share playlist" />
+				{/if}
 				{#if isOwner}
 					<button
 						class="icon-btn"
@@ -1559,6 +1573,15 @@
 		word-wrap: break-word;
 		overflow-wrap: break-word;
 		hyphens: auto;
+	}
+
+	.title-lock {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-tertiary);
+		margin-right: 0.5rem;
+		vertical-align: -0.15em;
 	}
 
 	.playlist-title-input {

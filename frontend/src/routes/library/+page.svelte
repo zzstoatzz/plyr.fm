@@ -13,6 +13,7 @@
 	let playlists = $state<Playlist[]>(data.playlists);
 	let showCreateModal = $state(false);
 	let newPlaylistName = $state('');
+	let newPlaylistPrivate = $state(false);
 	let creating = $state(false);
 	let error = $state('');
 
@@ -71,7 +72,10 @@
 				method: 'POST',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: newPlaylistName.trim() })
+				body: JSON.stringify({
+					name: newPlaylistName.trim(),
+					is_private: newPlaylistPrivate
+				})
 			});
 
 			if (!response.ok) {
@@ -83,8 +87,13 @@
 			playlists = [playlist, ...playlists];
 			showCreateModal = false;
 			newPlaylistName = '';
+			newPlaylistPrivate = false;
 
-			toast.success(`created "${playlist.name}"`);
+			toast.success(
+				playlist.is_private
+					? `created "${playlist.name}" (private)`
+					: `created "${playlist.name}"`
+			);
 
 			// navigate to new playlist
 			goto(`/playlist/${playlist.id}`);
@@ -96,11 +105,16 @@
 		}
 	}
 
+	function resetCreateModal() {
+		showCreateModal = false;
+		newPlaylistName = '';
+		newPlaylistPrivate = false;
+		error = '';
+	}
+
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape') {
-			showCreateModal = false;
-			newPlaylistName = '';
-			error = '';
+			resetCreateModal();
 		} else if (event.key === 'Enter' && showCreateModal) {
 			createPlaylist();
 		}
@@ -186,8 +200,18 @@
 							</div>
 						{/if}
 						<div class="collection-info">
-							<h3>{playlist.name}</h3>
-							<p>{playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}</p>
+							<h3>
+								{#if playlist.is_private}
+									<span class="lock-badge" title="private — only you can see this">
+										<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+											<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+											<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+										</svg>
+									</span>
+								{/if}
+								{playlist.name}
+							</h3>
+							<p>{playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}{playlist.is_private ? ' • private' : ''}</p>
 						</div>
 						<div class="collection-arrow">
 							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -203,12 +227,12 @@
 
 {#if showCreateModal}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="modal-overlay" role="presentation" onclick={() => { showCreateModal = false; newPlaylistName = ''; error = ''; }}>
+	<div class="modal-overlay" role="presentation" onclick={resetCreateModal}>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 		<div class="modal" role="dialog" aria-modal="true" aria-labelledby="create-playlist-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
 				<h3 id="create-playlist-title">create playlist</h3>
-				<button class="close-btn" aria-label="close" onclick={() => { showCreateModal = false; newPlaylistName = ''; error = ''; }}>
+				<button class="close-btn" aria-label="close" onclick={resetCreateModal}>
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>
@@ -227,12 +251,35 @@
 					disabled={creating}
 					autofocus
 				/>
+
+				<label class="privacy-toggle">
+					<input
+						type="checkbox"
+						bind:checked={newPlaylistPrivate}
+						disabled={creating}
+					/>
+					<span class="privacy-label">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+							<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+						</svg>
+						private — only you can see it
+					</span>
+				</label>
+				<p class="privacy-hint">
+					{#if newPlaylistPrivate}
+						stays in your plyr.fm library only — no public ATProto record. you can't change this after creating.
+					{:else}
+						published to your PDS as a public list record.
+					{/if}
+				</p>
+
 				{#if error}
 					<p class="error">{error}</p>
 				{/if}
 			</div>
 			<div class="modal-footer">
-				<button class="cancel-btn" onclick={() => { showCreateModal = false; newPlaylistName = ''; error = ''; }} disabled={creating}>
+				<button class="cancel-btn" onclick={resetCreateModal} disabled={creating}>
 					cancel
 				</button>
 				<button class="confirm-btn" onclick={createPlaylist} disabled={creating || !newPlaylistName.trim()}>
@@ -539,6 +586,45 @@
 		margin: 0.5rem 0 0 0;
 		font-size: var(--text-sm);
 		color: #ef4444;
+	}
+
+	.privacy-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 1rem 0 0.25rem 0;
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
+		cursor: pointer;
+		user-select: none;
+	}
+
+	.privacy-toggle input[type='checkbox'] {
+		width: auto;
+		margin: 0;
+		cursor: pointer;
+	}
+
+	.privacy-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.privacy-hint {
+		margin: 0 0 0 1.5rem;
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+		line-height: 1.4;
+	}
+
+	.lock-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-tertiary);
+		margin-right: 0.25rem;
+		vertical-align: -0.1em;
 	}
 
 	.modal-footer {

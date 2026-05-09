@@ -314,6 +314,7 @@ async def _search_playlists(
         select(Playlist, Artist, similarity.label("relevance"))
         .join(Artist, Playlist.owner_did == Artist.did)
         .where(or_(similarity > 0.1, substring_match))
+        .where(Playlist.space_uri.is_(None))
         .order_by(similarity.desc())
         .limit(limit)
     )
