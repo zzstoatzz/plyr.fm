@@ -19,6 +19,7 @@ from backend.models.preferences import UserPreferences
 from backend.models.queue import QueueState
 from backend.models.session import UserSession
 from backend.models.share_link import ShareLink, ShareLinkEvent
+from backend.models.space import Space, SpaceMember, SpaceRecord
 from backend.models.tag import Tag, TrackTag
 from backend.models.track import Track
 from backend.models.track_comment import TrackComment
@@ -47,6 +48,9 @@ __all__ = [
     "SensitiveImage",
     "ShareLink",
     "ShareLinkEvent",
+    "Space",
+    "SpaceMember",
+    "SpaceRecord",
     "Tag",
     "Track",
     "TrackComment",

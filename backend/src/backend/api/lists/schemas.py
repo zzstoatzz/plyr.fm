@@ -13,6 +13,11 @@ class CreatePlaylistRequest(BaseModel):
     name: str
     """display name for the playlist."""
 
+    is_private: bool = False
+    """when true, the playlist lives in the user's personal space (only the
+    owner can see it) and no ATProto list record is written. cannot be
+    toggled after creation in v0."""
+
 
 class PlaylistResponse(BaseModel):
     """playlist metadata response."""
@@ -24,7 +29,9 @@ class PlaylistResponse(BaseModel):
     track_count: int
     image_url: str | None
     show_on_profile: bool
-    atproto_record_uri: str
+    atproto_record_uri: str | None
+    """null for private playlists (no public ATProto record)."""
+    is_private: bool
     created_at: str
 
 

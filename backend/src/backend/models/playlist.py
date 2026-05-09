@@ -12,10 +12,14 @@ from backend.models.database import Base
 
 
 class Playlist(Base):
-    """cached playlist metadata from ATProto list records.
+    """playlist metadata.
 
-    the source of truth is the ATProto list record on the user's PDS.
-    this table exists for fast indexing and querying.
+    public playlists cache an ATProto list record on the user's PDS;
+    ``atproto_record_uri`` is the source of truth for items.
+
+    private playlists live in a permissioned space (``space_uri`` set,
+    ``atproto_record_uri`` NULL); the corresponding ``SpaceRecord``
+    holds the items inline. see ``backend._internal.spaces``.
     """
 
     __tablename__ = "playlists"
@@ -35,13 +39,19 @@ class Playlist(Base):
     image_id: Mapped[str | None] = mapped_column(String, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    atproto_record_uri: Mapped[str] = mapped_column(
+    atproto_record_uri: Mapped[str | None] = mapped_column(
         String,
-        nullable=False,
+        nullable=True,
         unique=True,
         index=True,
     )
-    atproto_record_cid: Mapped[str] = mapped_column(String, nullable=False)
+    atproto_record_cid: Mapped[str | None] = mapped_column(String, nullable=True)
+    space_uri: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("spaces.uri", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     track_count: Mapped[int] = mapped_column(default=0)
     show_on_profile: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
