@@ -200,17 +200,7 @@
 							</div>
 						{/if}
 						<div class="collection-info">
-							<h3>
-								{#if playlist.is_private}
-									<span class="lock-badge" title="private — only you can see this">
-										<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-											<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-											<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-										</svg>
-									</span>
-								{/if}
-								{playlist.name}
-							</h3>
+							<h3>{playlist.name}</h3>
 							<p>{playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}{playlist.is_private ? ' • private' : ''}</p>
 						</div>
 						<div class="collection-arrow">
@@ -258,13 +248,7 @@
 						bind:checked={newPlaylistPrivate}
 						disabled={creating}
 					/>
-					<span class="privacy-label">
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-							<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-						</svg>
-						private — only you can see it
-					</span>
+					<span class="privacy-label">private — only you can see it</span>
 				</label>
 				<p class="privacy-hint">
 					{#if newPlaylistPrivate}
@@ -605,26 +589,11 @@
 		cursor: pointer;
 	}
 
-	.privacy-label {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
-
 	.privacy-hint {
 		margin: 0 0 0 1.5rem;
 		font-size: var(--text-xs);
 		color: var(--text-muted);
 		line-height: 1.4;
-	}
-
-	.lock-badge {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--text-tertiary);
-		margin-right: 0.25rem;
-		vertical-align: -0.1em;
 	}
 
 	.modal-footer {

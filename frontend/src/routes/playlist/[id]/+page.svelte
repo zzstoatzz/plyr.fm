@@ -820,17 +820,7 @@
 							placeholder="playlist name"
 						/>
 					{:else}
-						<h1 class="playlist-title">
-							{#if playlist.is_private}
-								<span class="title-lock" title="private — only you can see this">
-									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-										<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-										<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-									</svg>
-								</span>
-							{/if}
-							{playlist.name}
-						</h1>
+						<h1 class="playlist-title">{playlist.name}</h1>
 					{/if}
 					<div class="playlist-meta">
 						<a href="/u/{playlist.owner_handle}" class="owner-link">
@@ -1573,15 +1563,6 @@
 		word-wrap: break-word;
 		overflow-wrap: break-word;
 		hyphens: auto;
-	}
-
-	.title-lock {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--text-tertiary);
-		margin-right: 0.5rem;
-		vertical-align: -0.15em;
 	}
 
 	.playlist-title-input {
