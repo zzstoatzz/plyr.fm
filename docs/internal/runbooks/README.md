@@ -7,6 +7,7 @@ operational procedures for production incidents.
 ## available runbooks
 
 - [connection pool exhaustion](/runbooks/connection-pool-exhaustion/) - 500s everywhere, queue listener down, stuck connections
+- [worker silence alert](/runbooks/worker-silence-alert/) - docket worker has stopped processing tasks while the HTTP API is still accepting uploads
 
 ## when to use
 

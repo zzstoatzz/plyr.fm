@@ -53,6 +53,19 @@ primary_region = 'iad'
   cpu_kind = 'shared'
   cpus = 1
 
+# always restart the worker on exit, with no retry budget. fly's default
+# (`on-failure`, max_retries=10) gave up after 10 consecutive OOMs on
+# 2026-05-06 and left the machine `stopped` for ~4 days; see
+# docs/internal/retrospectives/2026-05-10-worker-oom-loop-streaming.md.
+# for a singleton worker that owns the only consumer of the upload queue,
+# there is no scenario where giving up is the correct outcome — a noisy
+# restart loop is loud (alerting catches it) and useful (occasional
+# successful runs drain the queue). `app` keeps fly's default because
+# it has health checks + multiple machines for HTTP redundancy.
+[[restart]]
+  policy = "always"
+  processes = ["worker"]
+
 [env]
   PORT = '8000'
   STORAGE_BACKEND = 'r2'
