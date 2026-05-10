@@ -402,6 +402,56 @@
 		}
 	}
 
+	let showVisibilityConfirm = $state(false);
+	let togglingVisibility = $state(false);
+
+	async function toggleVisibility() {
+		togglingVisibility = true;
+		const goingPrivate = !playlist.is_private;
+		try {
+			// flush any pending edit-mode changes (reorder, name edit) before
+			// the privacy transition so the publish/snapshot sees the latest
+			// state instead of silently dropping unsaved edits
+			if (isEditMode) {
+				await saveAllChanges();
+			}
+
+			const formData = new FormData();
+			formData.append("is_private", String(goingPrivate));
+			const response = await fetch(
+				`${API_URL}/lists/playlists/${playlist.id}`,
+				{
+					method: "PATCH",
+					credentials: "include",
+					body: formData,
+				},
+			);
+			if (!response.ok) {
+				const err = await response
+					.json()
+					.catch(() => ({ detail: "unknown error" }));
+				throw new Error(err.detail || "failed to change visibility");
+			}
+			const updated = await response.json();
+			playlist.is_private = updated.is_private;
+			playlist.atproto_record_uri = updated.atproto_record_uri;
+			playlist.show_on_profile = updated.show_on_profile;
+			editShowOnProfile = updated.show_on_profile;
+			toast.success(
+				goingPrivate
+					? "playlist is now private"
+					: "playlist is now public",
+			);
+			showVisibilityConfirm = false;
+		} catch (e) {
+			toast.error(
+				e instanceof Error ? e.message : "failed to change visibility",
+			);
+		} finally {
+			togglingVisibility = false;
+		}
+	}
+
 	function handleCoverSelect(event: Event) {
 		const input = event.target as HTMLInputElement;
 		const file = input.files?.[0];
@@ -841,6 +891,16 @@
 							/>
 							<span class="toggle-label">show on profile</span>
 						</label>
+					{/if}
+					{#if isEditMode && isOwner}
+						<button
+							type="button"
+							class="visibility-toggle-btn"
+							onclick={() => (showVisibilityConfirm = true)}
+							disabled={togglingVisibility}
+						>
+							{playlist.is_private ? "make public" : "make private"}
+						</button>
 					{/if}
 				</div>
 
@@ -1384,6 +1444,62 @@
 	</div>
 {/if}
 
+{#if showVisibilityConfirm}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div
+		class="modal-overlay"
+		role="presentation"
+		onclick={() => (showVisibilityConfirm = false)}
+	>
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div
+			class="modal"
+			role="alertdialog"
+			aria-modal="true"
+			aria-labelledby="visibility-confirm-title"
+			tabindex="-1"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<div class="modal-header">
+				<h3 id="visibility-confirm-title">
+					{playlist.is_private ? "make this playlist public?" : "make this playlist private?"}
+				</h3>
+			</div>
+			<div class="modal-body">
+				<p>
+					{#if playlist.is_private}
+						"{playlist.name}" will be published to your PDS as a public list record. anyone with the link will be able to see it.
+					{:else}
+						"{playlist.name}" will be removed from your PDS and only you will be able to see it. it won't appear in search, on your profile, or in the activity feed.
+					{/if}
+				</p>
+			</div>
+			<div class="modal-footer">
+				<button
+					class="cancel-btn"
+					onclick={() => (showVisibilityConfirm = false)}
+					disabled={togglingVisibility}
+				>
+					cancel
+				</button>
+				<button
+					class="confirm-btn"
+					onclick={toggleVisibility}
+					disabled={togglingVisibility}
+				>
+					{#if togglingVisibility}
+						working...
+					{:else if playlist.is_private}
+						make public
+					{:else}
+						make private
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
 {#if showDeleteConfirm}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div
@@ -1630,6 +1746,30 @@
 
 	.show-on-profile-toggle:hover .toggle-label {
 		color: var(--text-primary);
+	}
+
+	.visibility-toggle-btn {
+		display: inline-block;
+		margin-top: 0.75rem;
+		padding: 0.4rem 0.85rem;
+		background: transparent;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		font-family: inherit;
+		font-size: var(--text-sm);
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: border-color 0.15s, color 0.15s;
+	}
+
+	.visibility-toggle-btn:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--text-primary);
+	}
+
+	.visibility-toggle-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.icon-btn {

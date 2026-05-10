@@ -266,8 +266,6 @@
 						<span class="visibility-sublabel">only you can see it</span>
 					</button>
 				</div>
-				<p class="visibility-note">can't be changed after creating.</p>
-
 				{#if error}
 					<p class="error">{error}</p>
 				{/if}
@@ -628,13 +626,6 @@
 		font-size: var(--text-xs);
 		color: var(--text-tertiary);
 		line-height: 1.3;
-	}
-
-	.visibility-note {
-		margin: 0.5rem 0 0 0;
-		font-size: var(--text-xs);
-		color: var(--text-muted);
-		line-height: 1.4;
 	}
 
 	.modal-footer {
