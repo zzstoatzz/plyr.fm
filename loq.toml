@@ -252,7 +252,7 @@ max_lines = 574
 
 [[rules]]
 path = "backend/src/backend/api/lists/playlists.py"
-max_lines = 1040
+max_lines = 1050
 
 [[rules]]
 path = "backend/src/backend/api/tracks/audio_replace.py"
@@ -276,8 +276,8 @@ max_lines = 623
 
 [[rules]]
 path = "backend/tests/api/test_private_playlists.py"
-max_lines = 612
+max_lines = 652
 
 [[rules]]
 path = "frontend/src/routes/playlist/[[]id[]]/+page.svelte"
-max_lines = 2577
+max_lines = 2584

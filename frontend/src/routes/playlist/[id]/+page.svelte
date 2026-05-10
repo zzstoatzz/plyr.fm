@@ -409,6 +409,13 @@
 		togglingVisibility = true;
 		const goingPrivate = !playlist.is_private;
 		try {
+			// flush any pending edit-mode changes (reorder, name edit) before
+			// the privacy transition so the publish/snapshot sees the latest
+			// state instead of silently dropping unsaved edits
+			if (isEditMode) {
+				await saveAllChanges();
+			}
+
 			const formData = new FormData();
 			formData.append("is_private", String(goingPrivate));
 			const response = await fetch(

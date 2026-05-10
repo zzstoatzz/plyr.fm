@@ -588,6 +588,46 @@ async def test_make_public_playlist_private(
     mock_delete.assert_awaited_once()
 
 
+async def test_make_public_with_name_uses_new_name_in_one_pds_write(
+    app_as_owner: FastAPI, owner: Artist
+) -> None:
+    """when PATCH carries both name and is_private=false, the new PDS
+    record is created with the new name in a single write — no follow-up
+    rename round-trip."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app_as_owner), base_url="http://test"
+    ) as client:
+        playlist = await _create_private_playlist(client, "old name")
+
+        with (
+            patch(
+                "backend.api.lists.playlists.create_list_record",
+                new_callable=AsyncMock,
+                return_value=("at://did:plc:owner/fm.plyr.list/abc", "bafycid"),
+            ) as mock_create,
+            patch(
+                "backend.api.lists.playlists.update_list_record",
+                new_callable=AsyncMock,
+            ) as mock_update,
+        ):
+            resp = await client.patch(
+                f"/lists/playlists/{playlist['id']}",
+                data={"name": "new name", "is_private": "false"},
+            )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "new name"
+    assert body["is_private"] is False
+
+    # one write to publish, zero to rename
+    mock_create.assert_awaited_once()
+    create_args = mock_create.await_args
+    assert create_args is not None
+    assert create_args.kwargs["name"] == "new name"
+    mock_update.assert_not_awaited()
+
+
 async def test_visibility_unchanged_is_a_noop(
     app_as_owner: FastAPI, owner: Artist
 ) -> None:

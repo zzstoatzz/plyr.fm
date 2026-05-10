@@ -117,21 +117,19 @@ def _can_view(session_did: str | None, playlist: Playlist) -> bool:
 
 
 async def _snapshot_pds_items(
-    session: AuthSession, playlist: Playlist
+    session: AuthSession, atproto_record_uri: str
 ) -> list[dict[str, str]]:
-    """fetch the playlist's current items from the PDS list record as
-    `[{uri, cid}, ...]`. used when transitioning public → private to
-    preserve item ordering + cids in `items_json`.
-    """
-    if not playlist.atproto_record_uri:
-        return []
+    """fetch a list record's current items from the PDS as `[{uri, cid}, ...]`.
 
+    pure I/O — takes only what it needs. used when transitioning public →
+    private to preserve item ordering + cids before flipping local state.
+    """
     oauth_data = session.oauth_session
     if not oauth_data or "access_token" not in oauth_data:
         raise HTTPException(status_code=401, detail="invalid session")
 
     oauth_session = _reconstruct_oauth_session(oauth_data)
-    repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
+    repo, collection, rkey = parse_at_uri(atproto_record_uri)
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
     response = await get_oauth_client().make_authenticated_request(
         session=oauth_session,
@@ -817,15 +815,25 @@ async def update_playlist(
 
     _assert_can_mutate(session, playlist)
 
-    # privacy transition runs first — it can reset show_on_profile, which
-    # the explicit show_on_profile arg below should then override if given.
-    # state assignment is done inline so the full transition is readable in
-    # one place; the helpers do only the I/O.
+    # apply name first so a privacy transition that writes a PDS record
+    # uses the new name, avoiding a wasted second PDS write to rename
+    # immediately after publishing
+    name_changed = False
+    if name is not None and name.strip():
+        new_name = name.strip()
+        name_changed = new_name != playlist.name
+        playlist.name = new_name
+
+    # privacy transition — it can reset show_on_profile, which the explicit
+    # show_on_profile arg below should then override if given. state
+    # assignment is inline so the full transition is readable in one place;
+    # the helpers do only the I/O.
     if is_private is not None and is_private != playlist.is_private:
         if is_private:
             # public → private: snapshot PDS items, flip the row, then
             # best-effort delete the now-orphan PDS record
-            items = await _snapshot_pds_items(session, playlist)
+            assert playlist.atproto_record_uri is not None
+            items = await _snapshot_pds_items(session, playlist.atproto_record_uri)
             public_uri = playlist.atproto_record_uri
             playlist.items_json = items
             playlist.is_private = True
@@ -833,13 +841,13 @@ async def update_playlist(
             playlist.atproto_record_cid = None
             playlist.show_on_profile = False
             playlist.track_count = len(items)
-            if public_uri:
-                await _delete_pds_list_record_best_effort(
-                    session, public_uri, playlist.id
-                )
+            await _delete_pds_list_record_best_effort(session, public_uri, playlist.id)
+            # the name update path below would no-op anyway (private playlist
+            # has no PDS record to also rename), so nothing else to do
+            name_changed = False
         else:
-            # private → public: write the items to a new PDS list record,
-            # then point the row at it and clear the local item store
+            # private → public: write the items to a new PDS list record
+            # using the (possibly updated) name, then point the row at it
             items = list(playlist.items_json or [])
             uri, cid = await _publish_items_to_pds(session, items, playlist.name)
             playlist.atproto_record_uri = uri
@@ -848,14 +856,16 @@ async def update_playlist(
             playlist.is_private = False
             playlist.show_on_profile = False
             playlist.track_count = len(items)
+            # the name was baked into the PDS record we just created; no need
+            # for the rename path below to re-write it
+            name_changed = False
 
     if show_on_profile is not None:
         playlist.show_on_profile = show_on_profile
 
-    # update name if provided
-    if name is not None and name.strip():
-        playlist.name = name.strip()
-
+    # rename the PDS record only when the name changed AND we didn't just
+    # create/destroy the PDS record via a privacy transition
+    if name_changed:
         if not playlist.is_private and playlist.atproto_record_uri:
             # public playlists: also update the ATProto record's name field
             try:
