@@ -13,8 +13,16 @@
 	let playlists = $state<Playlist[]>(data.playlists);
 	let showCreateModal = $state(false);
 	let newPlaylistName = $state('');
+	let newPlaylistPrivate = $state(false);
 	let creating = $state(false);
 	let error = $state('');
+
+	function resetCreateModal() {
+		showCreateModal = false;
+		newPlaylistName = '';
+		newPlaylistPrivate = false;
+		error = '';
+	}
 
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
@@ -71,7 +79,10 @@
 				method: 'POST',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: newPlaylistName.trim() })
+				body: JSON.stringify({
+					name: newPlaylistName.trim(),
+					is_private: newPlaylistPrivate
+				})
 			});
 
 			if (!response.ok) {
@@ -81,10 +92,13 @@
 
 			const playlist = await response.json();
 			playlists = [playlist, ...playlists];
-			showCreateModal = false;
-			newPlaylistName = '';
+			resetCreateModal();
 
-			toast.success(`created "${playlist.name}"`);
+			toast.success(
+				playlist.is_private
+					? `created "${playlist.name}" (private)`
+					: `created "${playlist.name}"`
+			);
 
 			// navigate to new playlist
 			goto(`/playlist/${playlist.id}`);
@@ -98,9 +112,7 @@
 
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape') {
-			showCreateModal = false;
-			newPlaylistName = '';
-			error = '';
+			resetCreateModal();
 		} else if (event.key === 'Enter' && showCreateModal) {
 			createPlaylist();
 		}
@@ -187,7 +199,7 @@
 						{/if}
 						<div class="collection-info">
 							<h3>{playlist.name}</h3>
-							<p>{playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}</p>
+							<p>{playlist.track_count} {playlist.track_count === 1 ? 'track' : 'tracks'}{playlist.is_private ? ' • private' : ''}</p>
 						</div>
 						<div class="collection-arrow">
 							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -203,12 +215,12 @@
 
 {#if showCreateModal}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="modal-overlay" role="presentation" onclick={() => { showCreateModal = false; newPlaylistName = ''; error = ''; }}>
+	<div class="modal-overlay" role="presentation" onclick={resetCreateModal}>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 		<div class="modal" role="dialog" aria-modal="true" aria-labelledby="create-playlist-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
 				<h3 id="create-playlist-title">create playlist</h3>
-				<button class="close-btn" aria-label="close" onclick={() => { showCreateModal = false; newPlaylistName = ''; error = ''; }}>
+				<button class="close-btn" aria-label="close" onclick={resetCreateModal}>
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>
@@ -227,12 +239,41 @@
 					disabled={creating}
 					autofocus
 				/>
+
+				<div class="visibility-picker" role="radiogroup" aria-label="visibility">
+					<button
+						type="button"
+						class="visibility-option"
+						class:selected={!newPlaylistPrivate}
+						role="radio"
+						aria-checked={!newPlaylistPrivate}
+						onclick={() => (newPlaylistPrivate = false)}
+						disabled={creating}
+					>
+						<span class="visibility-label">public</span>
+						<span class="visibility-sublabel">anyone can see it</span>
+					</button>
+					<button
+						type="button"
+						class="visibility-option"
+						class:selected={newPlaylistPrivate}
+						role="radio"
+						aria-checked={newPlaylistPrivate}
+						onclick={() => (newPlaylistPrivate = true)}
+						disabled={creating}
+					>
+						<span class="visibility-label">private</span>
+						<span class="visibility-sublabel">only you can see it</span>
+					</button>
+				</div>
+				<p class="visibility-note">can't be changed after creating.</p>
+
 				{#if error}
 					<p class="error">{error}</p>
 				{/if}
 			</div>
 			<div class="modal-footer">
-				<button class="cancel-btn" onclick={() => { showCreateModal = false; newPlaylistName = ''; error = ''; }} disabled={creating}>
+				<button class="cancel-btn" onclick={resetCreateModal} disabled={creating}>
 					cancel
 				</button>
 				<button class="confirm-btn" onclick={createPlaylist} disabled={creating || !newPlaylistName.trim()}>
@@ -539,6 +580,61 @@
 		margin: 0.5rem 0 0 0;
 		font-size: var(--text-sm);
 		color: #ef4444;
+	}
+
+	.visibility-picker {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.5rem;
+		margin-top: 1rem;
+	}
+
+	.visibility-option {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.25rem;
+		padding: 0.75rem 0.875rem;
+		background: var(--bg-secondary);
+		border: 1.5px solid var(--border-default);
+		border-radius: var(--radius-md);
+		font-family: inherit;
+		text-align: left;
+		cursor: pointer;
+		transition: border-color 0.15s, background 0.15s;
+	}
+
+	.visibility-option:hover:not(:disabled) {
+		border-color: var(--border-hover, var(--text-muted));
+	}
+
+	.visibility-option.selected {
+		border-color: var(--accent);
+		background: color-mix(in oklch, var(--accent) 8%, var(--bg-secondary));
+	}
+
+	.visibility-option:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.visibility-label {
+		font-size: var(--text-base);
+		font-weight: 600;
+		color: var(--text-primary);
+	}
+
+	.visibility-sublabel {
+		font-size: var(--text-xs);
+		color: var(--text-tertiary);
+		line-height: 1.3;
+	}
+
+	.visibility-note {
+		margin: 0.5rem 0 0 0;
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+		line-height: 1.4;
 	}
 
 	.modal-footer {

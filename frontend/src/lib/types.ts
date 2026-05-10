@@ -139,7 +139,9 @@ export interface Playlist {
 	image_url?: string;
 	thumbnail_url?: string;
 	show_on_profile: boolean;
-	atproto_record_uri: string;
+	/** null for private playlists (no public ATProto list record) */
+	atproto_record_uri: string | null;
+	is_private: boolean;
 	created_at: string;
 }
 

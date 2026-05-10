@@ -1,4 +1,18 @@
-"""playlist CRUD endpoints."""
+"""playlist CRUD endpoints.
+
+playlists come in two flavors:
+
+* **public** — cached metadata for an ATProto list record on the user's PDS.
+  `atproto_record_uri` is the source of truth for items.
+* **private** — owner-only, not pushed to the PDS. items live inline in
+  `items_json` on the playlists row. app-layer privacy until atproto's
+  permissioned-data substrate ships (see #1384).
+
+every privacy gate must produce **404 (not 403)** for non-owners on a
+private playlist, so existence isn't leaked. consistent with how the
+permissioned-data spec describes reader-side enforcement, even though
+we're not on that substrate yet.
+"""
 
 import contextlib
 import json
@@ -43,9 +57,84 @@ from .schemas import (
     PlaylistResponse,
     PlaylistWithTracksResponse,
     RecommendedTrack,
+    ReorderRequest,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _build_playlist_response(playlist: Playlist, owner_handle: str) -> PlaylistResponse:
+    """common projection from Playlist row → API response.
+
+    `track_count` reflects the cached value on the row. for full-playlist
+    responses where we've actually hydrated tracks, use
+    `_build_playlist_with_tracks` so the count matches the rendered list
+    even if the cache is stale or some referenced tracks weren't hydratable.
+    """
+    return PlaylistResponse(
+        id=playlist.id,
+        name=playlist.name,
+        owner_did=playlist.owner_did,
+        owner_handle=owner_handle,
+        track_count=playlist.track_count,
+        image_url=playlist.image_url,
+        show_on_profile=playlist.show_on_profile,
+        atproto_record_uri=playlist.atproto_record_uri,
+        is_private=playlist.is_private,
+        created_at=playlist.created_at.isoformat(),
+    )
+
+
+def _build_playlist_with_tracks(
+    playlist: Playlist,
+    owner_handle: str,
+    tracks: list,
+) -> PlaylistWithTracksResponse:
+    """projection for full responses — overrides `track_count` to match
+    the actually-hydrated `tracks` list, since the cached count can lag
+    behind PDS state and may not match what the client renders."""
+    base = _build_playlist_response(playlist, owner_handle).model_dump()
+    base["track_count"] = len(tracks)
+    return PlaylistWithTracksResponse(**base, tracks=tracks)
+
+
+def _assert_can_mutate(session: AuthSession, playlist: Playlist) -> None:
+    """raise the right HTTPException if `session` can't mutate `playlist`.
+
+    public: non-owner gets 403 ("you can't edit this — it exists, but not yours").
+    private: non-owner gets 404 — must be indistinguishable from "doesn't exist"
+    so existence isn't leaked.
+    """
+    if playlist.owner_did != session.did:
+        if playlist.is_private:
+            raise HTTPException(status_code=404, detail="playlist not found")
+        raise HTTPException(status_code=403, detail="not playlist owner")
+
+
+def _can_view(session_did: str | None, playlist: Playlist) -> bool:
+    """can this viewer see this playlist? public: anyone. private: owner only."""
+    return not playlist.is_private or session_did == playlist.owner_did
+
+
+async def _read_playlist_items(
+    playlist: Playlist, artist: Artist
+) -> list[dict[str, str]]:
+    """fetch playlist items as `[{uri, cid}, ...]`.
+
+    private → items_json on the row; public → ATProto list record on the
+    owner's PDS. raises RecordNotFound if the public PDS record is missing.
+    """
+    if playlist.is_private:
+        return [
+            {"uri": item["uri"], "cid": item.get("cid", "")}
+            for item in (playlist.items_json or [])
+            if item.get("uri")
+        ]
+
+    if not playlist.atproto_record_uri:
+        return []
+    uris = await fetch_list_item_uris(playlist.atproto_record_uri, artist.pds_url)
+    return [{"uri": uri, "cid": ""} for uri in uris]
 
 
 # --- playlist CRUD endpoints ---
@@ -59,61 +148,64 @@ async def create_playlist(
 ) -> PlaylistResponse:
     """create a new playlist.
 
-    creates an ATProto list record with listType="playlist" and caches
-    metadata in the database for fast indexing.
-    """
-    # create ATProto list record
-    try:
-        uri, cid = await create_list_record(
-            auth_session=session,
-            items=[],
-            name=body.name,
-            list_type="playlist",
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"failed to create playlist: {e}"
-        ) from e
+    public: writes an ATProto list record to the user's PDS and caches
+    metadata locally.
 
-    # get owner handle for response
+    private: skips the PDS write; items live inline in `items_json`.
+    """
     artist_result = await db.execute(select(Artist).where(Artist.did == session.did))
     artist = artist_result.scalar_one_or_none()
     owner_handle = artist.handle if artist else session.handle
 
-    # cache playlist in database
-    playlist = Playlist(
-        owner_did=session.did,
-        name=body.name,
-        atproto_record_uri=uri,
-        atproto_record_cid=cid,
-        track_count=0,
-    )
-    db.add(playlist)
-    await db.flush()
-
-    # emit collection event
-    db.add(
-        CollectionEvent(
-            event_type="playlist_create",
-            actor_did=session.did,
-            playlist_id=playlist.id,
+    if body.is_private:
+        playlist = Playlist(
+            owner_did=session.did,
+            name=body.name,
+            atproto_record_uri=None,
+            atproto_record_cid=None,
+            is_private=True,
+            items_json=[],
+            track_count=0,
         )
-    )
+        db.add(playlist)
+        await db.flush()
+    else:
+        try:
+            uri, cid = await create_list_record(
+                auth_session=session,
+                items=[],
+                name=body.name,
+                list_type="playlist",
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"failed to create playlist: {e}"
+            ) from e
+
+        playlist = Playlist(
+            owner_did=session.did,
+            name=body.name,
+            atproto_record_uri=uri,
+            atproto_record_cid=cid,
+            is_private=False,
+            track_count=0,
+        )
+        db.add(playlist)
+        await db.flush()
+
+        # only public creations enter the platform-wide activity feed
+        db.add(
+            CollectionEvent(
+                event_type="playlist_create",
+                actor_did=session.did,
+                playlist_id=playlist.id,
+            )
+        )
 
     await db.commit()
     await db.refresh(playlist)
 
-    return PlaylistResponse(
-        id=playlist.id,
-        name=playlist.name,
-        owner_did=playlist.owner_did,
-        owner_handle=owner_handle,
-        track_count=playlist.track_count,
-        image_url=playlist.image_url,
-        show_on_profile=playlist.show_on_profile,
-        atproto_record_uri=playlist.atproto_record_uri,
-        created_at=playlist.created_at.isoformat(),
-    )
+    return _build_playlist_response(playlist, owner_handle)
 
 
 @router.get("/playlists", response_model=list[PlaylistResponse])
@@ -121,7 +213,7 @@ async def list_playlists(
     session: AuthSession = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ) -> list[PlaylistResponse]:
-    """list all playlists owned by the current user."""
+    """list all playlists (public + private) owned by the current user."""
     result = await db.execute(
         select(Playlist, Artist)
         .join(Artist, Playlist.owner_did == Artist.did)
@@ -129,20 +221,8 @@ async def list_playlists(
         .order_by(Playlist.created_at.desc())
     )
     rows = result.all()
-
     return [
-        PlaylistResponse(
-            id=playlist.id,
-            name=playlist.name,
-            owner_did=playlist.owner_did,
-            owner_handle=artist.handle,
-            track_count=playlist.track_count,
-            image_url=playlist.image_url,
-            show_on_profile=playlist.show_on_profile,
-            atproto_record_uri=playlist.atproto_record_uri,
-            created_at=playlist.created_at.isoformat(),
-        )
-        for playlist, artist in rows
+        _build_playlist_response(playlist, artist.handle) for playlist, artist in rows
     ]
 
 
@@ -151,29 +231,21 @@ async def list_artist_public_playlists(
     artist_did: str,
     db: AsyncSession = Depends(get_db),
 ) -> list[PlaylistResponse]:
-    """list public playlists for an artist (no auth required)."""
+    """list public playlists for an artist (no auth required).
+
+    private playlists are excluded regardless of `show_on_profile`.
+    """
     result = await db.execute(
         select(Playlist, Artist)
         .join(Artist, Playlist.owner_did == Artist.did)
         .where(Playlist.owner_did == artist_did)
         .where(Playlist.show_on_profile == True)  # noqa: E712
+        .where(Playlist.is_private == False)  # noqa: E712
         .order_by(Playlist.created_at.desc())
     )
     rows = result.all()
-
     return [
-        PlaylistResponse(
-            id=playlist.id,
-            name=playlist.name,
-            owner_did=playlist.owner_did,
-            owner_handle=artist.handle,
-            track_count=playlist.track_count,
-            image_url=playlist.image_url,
-            show_on_profile=playlist.show_on_profile,
-            atproto_record_uri=playlist.atproto_record_uri,
-            created_at=playlist.created_at.isoformat(),
-        )
-        for playlist, artist in rows
+        _build_playlist_response(playlist, artist.handle) for playlist, artist in rows
     ]
 
 
@@ -183,7 +255,10 @@ async def get_playlist_by_uri(
     db: AsyncSession = Depends(get_db),
     session: AuthSession | None = Depends(get_optional_session),
 ) -> PlaylistWithTracksResponse:
-    """get a playlist by its ATProto record URI (public, auth optional for liked state)."""
+    """get a playlist by its ATProto record URI (public only).
+
+    private playlists have no ATProto URI and cannot be looked up here.
+    """
     result = await db.execute(
         select(Playlist, Artist)
         .join(Artist, Playlist.owner_did == Artist.did)
@@ -196,11 +271,8 @@ async def get_playlist_by_uri(
 
     playlist, artist = row
 
-    # fetch track URIs from ATProto list record
     try:
-        track_uris = await fetch_list_item_uris(
-            playlist.atproto_record_uri, artist.pds_url
-        )
+        item_refs = await _read_playlist_items(playlist, artist)
     except RecordNotFound:
         raise HTTPException(
             status_code=404, detail="playlist record not found on PDS"
@@ -211,29 +283,24 @@ async def get_playlist_by_uri(
         ) from e
 
     tracks = await hydrate_tracks_from_uris(
-        db, track_uris, session_did=session.did if session else None
+        db,
+        [ref["uri"] for ref in item_refs],
+        session_did=session.did if session else None,
     )
 
-    return PlaylistWithTracksResponse(
-        id=playlist.id,
-        name=playlist.name,
-        owner_did=playlist.owner_did,
-        owner_handle=artist.handle,
-        track_count=len(tracks),
-        image_url=playlist.image_url,
-        show_on_profile=playlist.show_on_profile,
-        atproto_record_uri=playlist.atproto_record_uri,
-        created_at=playlist.created_at.isoformat(),
-        tracks=tracks,
-    )
+    return _build_playlist_with_tracks(playlist, artist.handle, tracks)
 
 
 @router.get("/playlists/{playlist_id}/meta", response_model=PlaylistResponse)
 async def get_playlist_meta(
     playlist_id: str,
     db: AsyncSession = Depends(get_db),
+    session: AuthSession | None = Depends(get_optional_session),
 ) -> PlaylistResponse:
-    """get playlist metadata (public, no auth required). used for link previews."""
+    """get playlist metadata. used for link previews.
+
+    private playlists are 404 for non-owners — must not leak existence.
+    """
     result = await db.execute(
         select(Playlist, Artist)
         .join(Artist, Playlist.owner_did == Artist.did)
@@ -246,17 +313,10 @@ async def get_playlist_meta(
 
     playlist, artist = row
 
-    return PlaylistResponse(
-        id=playlist.id,
-        name=playlist.name,
-        owner_did=playlist.owner_did,
-        owner_handle=artist.handle,
-        track_count=playlist.track_count,
-        image_url=playlist.image_url,
-        show_on_profile=playlist.show_on_profile,
-        atproto_record_uri=playlist.atproto_record_uri,
-        created_at=playlist.created_at.isoformat(),
-    )
+    if not _can_view(session.did if session else None, playlist):
+        raise HTTPException(status_code=404, detail="playlist not found")
+
+    return _build_playlist_response(playlist, artist.handle)
 
 
 @router.get("/playlists/{playlist_id}", response_model=PlaylistWithTracksResponse)
@@ -265,12 +325,10 @@ async def get_playlist(
     db: AsyncSession = Depends(get_db),
     session: AuthSession | None = Depends(get_optional_session),
 ) -> PlaylistWithTracksResponse:
-    """get a playlist with full track details (public, auth optional for liked state).
+    """get a playlist with full track details.
 
-    fetches the ATProto list record to get track ordering, then hydrates
-    track metadata from the database. if authenticated, includes liked state.
+    private playlists are 404 for non-owners — must not leak existence.
     """
-    # get playlist from database
     result = await db.execute(
         select(Playlist, Artist)
         .join(Artist, Playlist.owner_did == Artist.did)
@@ -283,11 +341,11 @@ async def get_playlist(
 
     playlist, artist = row
 
-    # fetch track URIs from ATProto list record
+    if not _can_view(session.did if session else None, playlist):
+        raise HTTPException(status_code=404, detail="playlist not found")
+
     try:
-        track_uris = await fetch_list_item_uris(
-            playlist.atproto_record_uri, artist.pds_url
-        )
+        item_refs = await _read_playlist_items(playlist, artist)
     except RecordNotFound:
         raise HTTPException(
             status_code=404, detail="playlist record not found on PDS"
@@ -298,21 +356,12 @@ async def get_playlist(
         ) from e
 
     tracks = await hydrate_tracks_from_uris(
-        db, track_uris, session_did=session.did if session else None
+        db,
+        [ref["uri"] for ref in item_refs],
+        session_did=session.did if session else None,
     )
 
-    return PlaylistWithTracksResponse(
-        id=playlist.id,
-        name=playlist.name,
-        owner_did=playlist.owner_did,
-        owner_handle=artist.handle,
-        track_count=len(tracks),
-        image_url=playlist.image_url,
-        show_on_profile=playlist.show_on_profile,
-        atproto_record_uri=playlist.atproto_record_uri,
-        created_at=playlist.created_at.isoformat(),
-        tracks=tracks,
-    )
+    return _build_playlist_with_tracks(playlist, artist.handle, tracks)
 
 
 @router.post("/playlists/{playlist_id}/tracks", response_model=PlaylistResponse)
@@ -322,12 +371,11 @@ async def add_track_to_playlist(
     session: AuthSession = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ) -> PlaylistResponse:
-    """add a track to a playlist.
+    """append a track to a playlist.
 
-    appends the track to the end of the playlist's ATProto list record
-    and updates the cached track count.
+    public: rewrites the ATProto list record on the user's PDS.
+    private: rewrites the inline `items_json` array.
     """
-    # get playlist and verify ownership
     result = await db.execute(
         select(Playlist, Artist)
         .join(Artist, Playlist.owner_did == Artist.did)
@@ -339,93 +387,87 @@ async def add_track_to_playlist(
         raise HTTPException(status_code=404, detail="playlist not found")
 
     playlist, artist = row
+    _assert_can_mutate(session, playlist)
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
-
-    # fetch current list record
-    oauth_data = session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise HTTPException(status_code=401, detail="invalid session")
-
-    oauth_session = _reconstruct_oauth_session(oauth_data)
-
-    repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
-
-    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
-    params = {"repo": repo, "collection": collection, "rkey": rkey}
-
-    response = await get_oauth_client().make_authenticated_request(
-        session=oauth_session,
-        method="GET",
-        url=url,
-        params=params,
-    )
-
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail="failed to fetch playlist record")
-
-    record_data = response.json()
-    current_items = record_data.get("value", {}).get("items", [])
-
-    # check if track already exists in playlist
-    for item in current_items:
-        if item.get("subject", {}).get("uri") == body.track_uri:
+    if playlist.is_private:
+        current_items = list(playlist.items_json or [])
+        if any(item.get("uri") == body.track_uri for item in current_items):
             raise HTTPException(status_code=400, detail="track already in playlist")
+        new_items = [*current_items, {"uri": body.track_uri, "cid": body.track_cid}]
+        playlist.items_json = new_items
+        playlist.track_count = len(new_items)
+    else:
+        oauth_data = session.oauth_session
+        if not oauth_data or "access_token" not in oauth_data:
+            raise HTTPException(status_code=401, detail="invalid session")
 
-    # append new track
-    new_items = [
-        {"uri": item["subject"]["uri"], "cid": item["subject"]["cid"]}
-        for item in current_items
-    ]
-    new_items.append({"uri": body.track_uri, "cid": body.track_cid})
+        oauth_session = _reconstruct_oauth_session(oauth_data)
 
-    # update ATProto record
-    try:
-        _, cid = await update_list_record(
-            auth_session=session,
-            list_uri=playlist.atproto_record_uri,
-            items=new_items,
-            name=playlist.name,
-            list_type="playlist",
+        repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
+
+        url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
+        params = {"repo": repo, "collection": collection, "rkey": rkey}
+
+        response = await get_oauth_client().make_authenticated_request(
+            session=oauth_session,
+            method="GET",
+            url=url,
+            params=params,
         )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"failed to update playlist: {e}"
-        ) from e
 
-    # update database cache
-    playlist.atproto_record_cid = cid
-    playlist.track_count = len(new_items)
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=500, detail="failed to fetch playlist record"
+            )
 
-    # emit collection event — resolve track_id from URI
-    track_result = await db.execute(
-        select(Track.id).where(Track.atproto_record_uri == body.track_uri)
-    )
-    resolved_track_id = track_result.scalar_one_or_none()
-    db.add(
-        CollectionEvent(
-            event_type="track_added_to_playlist",
-            actor_did=session.did,
-            playlist_id=playlist.id,
-            track_id=resolved_track_id,
+        record_data = response.json()
+        current_items = record_data.get("value", {}).get("items", [])
+
+        for item in current_items:
+            if item.get("subject", {}).get("uri") == body.track_uri:
+                raise HTTPException(status_code=400, detail="track already in playlist")
+
+        new_items = [
+            {"uri": item["subject"]["uri"], "cid": item["subject"]["cid"]}
+            for item in current_items
+        ]
+        new_items.append({"uri": body.track_uri, "cid": body.track_cid})
+
+        try:
+            _, cid = await update_list_record(
+                auth_session=session,
+                list_uri=playlist.atproto_record_uri,
+                items=new_items,
+                name=playlist.name,
+                list_type="playlist",
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"failed to update playlist: {e}"
+            ) from e
+
+        playlist.atproto_record_cid = cid
+        playlist.track_count = len(new_items)
+
+    if not playlist.is_private:
+        # private additions don't go in the platform-wide activity feed
+        track_result = await db.execute(
+            select(Track.id).where(Track.atproto_record_uri == body.track_uri)
         )
-    )
+        resolved_track_id = track_result.scalar_one_or_none()
+        db.add(
+            CollectionEvent(
+                event_type="track_added_to_playlist",
+                actor_did=session.did,
+                playlist_id=playlist.id,
+                track_id=resolved_track_id,
+            )
+        )
 
     await db.commit()
     await db.refresh(playlist)
 
-    return PlaylistResponse(
-        id=playlist.id,
-        name=playlist.name,
-        owner_did=playlist.owner_did,
-        owner_handle=artist.handle,
-        track_count=playlist.track_count,
-        image_url=playlist.image_url,
-        show_on_profile=playlist.show_on_profile,
-        atproto_record_uri=playlist.atproto_record_uri,
-        created_at=playlist.created_at.isoformat(),
-    )
+    return _build_playlist_response(playlist, artist.handle)
 
 
 @router.delete("/playlists/{playlist_id}/tracks/{track_uri:path}")
@@ -436,7 +478,6 @@ async def remove_track_from_playlist(
     db: AsyncSession = Depends(get_db),
 ) -> PlaylistResponse:
     """remove a track from a playlist."""
-    # get playlist and verify ownership
     result = await db.execute(
         select(Playlist, Artist)
         .join(Artist, Playlist.owner_did == Artist.did)
@@ -448,76 +489,130 @@ async def remove_track_from_playlist(
         raise HTTPException(status_code=404, detail="playlist not found")
 
     playlist, artist = row
+    _assert_can_mutate(session, playlist)
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
+    if playlist.is_private:
+        current_items = list(playlist.items_json or [])
+        new_items = [item for item in current_items if item.get("uri") != track_uri]
+        if len(new_items) == len(current_items):
+            raise HTTPException(status_code=404, detail="track not in playlist")
+        playlist.items_json = new_items
+        playlist.track_count = len(new_items)
+    else:
+        oauth_data = session.oauth_session
+        if not oauth_data or "access_token" not in oauth_data:
+            raise HTTPException(status_code=401, detail="invalid session")
 
-    # fetch current list record
-    oauth_data = session.oauth_session
-    if not oauth_data or "access_token" not in oauth_data:
-        raise HTTPException(status_code=401, detail="invalid session")
+        oauth_session = _reconstruct_oauth_session(oauth_data)
 
-    oauth_session = _reconstruct_oauth_session(oauth_data)
+        repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
-    repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
+        url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
+        params = {"repo": repo, "collection": collection, "rkey": rkey}
 
-    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
-    params = {"repo": repo, "collection": collection, "rkey": rkey}
-
-    response = await get_oauth_client().make_authenticated_request(
-        session=oauth_session,
-        method="GET",
-        url=url,
-        params=params,
-    )
-
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail="failed to fetch playlist record")
-
-    record_data = response.json()
-    current_items = record_data.get("value", {}).get("items", [])
-
-    # filter out the track to remove
-    new_items = [
-        {"uri": item["subject"]["uri"], "cid": item["subject"]["cid"]}
-        for item in current_items
-        if item.get("subject", {}).get("uri") != track_uri
-    ]
-
-    if len(new_items) == len(current_items):
-        raise HTTPException(status_code=404, detail="track not in playlist")
-
-    # update ATProto record
-    try:
-        _, cid = await update_list_record(
-            auth_session=session,
-            list_uri=playlist.atproto_record_uri,
-            items=new_items,
-            name=playlist.name,
-            list_type="playlist",
+        response = await get_oauth_client().make_authenticated_request(
+            session=oauth_session,
+            method="GET",
+            url=url,
+            params=params,
         )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"failed to update playlist: {e}"
-        ) from e
 
-    # update database cache
-    playlist.atproto_record_cid = cid
-    playlist.track_count = len(new_items)
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=500, detail="failed to fetch playlist record"
+            )
+
+        record_data = response.json()
+        current_items = record_data.get("value", {}).get("items", [])
+
+        new_items = [
+            {"uri": item["subject"]["uri"], "cid": item["subject"]["cid"]}
+            for item in current_items
+            if item.get("subject", {}).get("uri") != track_uri
+        ]
+
+        if len(new_items) == len(current_items):
+            raise HTTPException(status_code=404, detail="track not in playlist")
+
+        try:
+            _, cid = await update_list_record(
+                auth_session=session,
+                list_uri=playlist.atproto_record_uri,
+                items=new_items,
+                name=playlist.name,
+                list_type="playlist",
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"failed to update playlist: {e}"
+            ) from e
+
+        playlist.atproto_record_cid = cid
+        playlist.track_count = len(new_items)
+
     await db.commit()
     await db.refresh(playlist)
 
-    return PlaylistResponse(
-        id=playlist.id,
-        name=playlist.name,
-        owner_did=playlist.owner_did,
-        owner_handle=artist.handle,
-        track_count=playlist.track_count,
-        image_url=playlist.image_url,
-        show_on_profile=playlist.show_on_profile,
-        atproto_record_uri=playlist.atproto_record_uri,
-        created_at=playlist.created_at.isoformat(),
+    return _build_playlist_response(playlist, artist.handle)
+
+
+@router.put("/playlists/{playlist_id}/reorder", response_model=PlaylistResponse)
+async def reorder_playlist(
+    playlist_id: str,
+    body: ReorderRequest,
+    session: AuthSession = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+) -> PlaylistResponse:
+    """reorder items in a playlist. items array order = new display order.
+
+    routes to the ATProto list record (public) or `items_json` (private).
+    owner-only.
+    """
+    result = await db.execute(
+        select(Playlist, Artist)
+        .join(Artist, Playlist.owner_did == Artist.did)
+        .where(Playlist.id == playlist_id)
     )
+    row = result.first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="playlist not found")
+
+    playlist, artist = row
+    _assert_can_mutate(session, playlist)
+
+    if playlist.is_private:
+        new_items = [
+            {"uri": item["uri"], "cid": item.get("cid", "")}
+            for item in body.items
+            if item.get("uri")
+        ]
+        playlist.items_json = new_items
+        playlist.track_count = len(new_items)
+    else:
+        if not playlist.atproto_record_uri:
+            raise HTTPException(
+                status_code=500, detail="playlist has no backing record"
+            )
+        try:
+            _, cid = await update_list_record(
+                auth_session=session,
+                list_uri=playlist.atproto_record_uri,
+                items=body.items,
+                name=playlist.name,
+                list_type="playlist",
+            )
+            playlist.atproto_record_cid = cid
+            playlist.track_count = len(body.items)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"failed to reorder playlist: {e}"
+            ) from e
+
+    await db.commit()
+    await db.refresh(playlist)
+
+    return _build_playlist_response(playlist, artist.handle)
 
 
 @router.delete("/playlists/{playlist_id}")
@@ -528,26 +623,24 @@ async def delete_playlist(
 ) -> DeletedResponse:
     """delete a playlist.
 
-    deletes both the ATProto list record and the database cache.
+    public: removes the ATProto list record and the local row.
+    private: removes the local row only (no PDS record exists).
     """
-    # get playlist and verify ownership
     result = await db.execute(select(Playlist).where(Playlist.id == playlist_id))
     playlist = result.scalar_one_or_none()
 
     if not playlist:
         raise HTTPException(status_code=404, detail="playlist not found")
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
+    _assert_can_mutate(session, playlist)
 
-    # delete ATProto record
-    try:
-        await delete_record_by_uri(session, playlist.atproto_record_uri)
-    except Exception as e:
-        logger.warning(f"failed to delete ATProto record: {e}")
-        # continue with database cleanup even if ATProto delete fails
+    if not playlist.is_private and playlist.atproto_record_uri:
+        try:
+            await delete_record_by_uri(session, playlist.atproto_record_uri)
+        except Exception as e:
+            logger.warning(f"failed to delete ATProto record: {e}")
+            # continue with local cleanup even if ATProto delete fails
 
-    # delete from database
     await db.delete(playlist)
     await db.commit()
 
@@ -578,11 +671,7 @@ async def upload_playlist_cover(
 
     playlist, _artist = row
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(
-            status_code=403,
-            detail="you can only upload cover art for your own playlists",
-        )
+    _assert_can_mutate(session, playlist)
 
     try:
         uploaded = await process_image_upload(
@@ -643,8 +732,7 @@ async def update_playlist(
 
     playlist, artist = row
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
+    _assert_can_mutate(session, playlist)
 
     # update show_on_profile if provided
     if show_on_profile is not None:
@@ -654,60 +742,52 @@ async def update_playlist(
     if name is not None and name.strip():
         playlist.name = name.strip()
 
-        # also update the ATProto record with new name
-        try:
-            # fetch current list record to preserve items
-            oauth_data = session.oauth_session
-            if oauth_data and "access_token" in oauth_data:
-                oauth_session = _reconstruct_oauth_session(oauth_data)
+        if not playlist.is_private and playlist.atproto_record_uri:
+            # public playlists: also update the ATProto record's name field
+            try:
+                oauth_data = session.oauth_session
+                if oauth_data and "access_token" in oauth_data:
+                    oauth_session = _reconstruct_oauth_session(oauth_data)
 
-                repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
+                    repo, collection, rkey = parse_at_uri(playlist.atproto_record_uri)
 
-                url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
-                params = {"repo": repo, "collection": collection, "rkey": rkey}
+                    url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
+                    params = {"repo": repo, "collection": collection, "rkey": rkey}
 
-                response = await get_oauth_client().make_authenticated_request(
-                    session=oauth_session,
-                    method="GET",
-                    url=url,
-                    params=params,
-                )
-
-                if response.status_code == 200:
-                    record_data = response.json()
-                    current_items = record_data.get("value", {}).get("items", [])
-
-                    # update list record with new name
-                    items = [
-                        {"uri": item["subject"]["uri"], "cid": item["subject"]["cid"]}
-                        for item in current_items
-                    ]
-                    _, cid = await update_list_record(
-                        auth_session=session,
-                        list_uri=playlist.atproto_record_uri,
-                        items=items,
-                        name=playlist.name,
-                        list_type="playlist",
+                    response = await get_oauth_client().make_authenticated_request(
+                        session=oauth_session,
+                        method="GET",
+                        url=url,
+                        params=params,
                     )
-                    playlist.atproto_record_cid = cid
-        except Exception as e:
-            logger.warning(f"failed to update ATProto record name: {e}")
-            # continue - local update is still valid
+
+                    if response.status_code == 200:
+                        record_data = response.json()
+                        current_items = record_data.get("value", {}).get("items", [])
+
+                        items = [
+                            {
+                                "uri": item["subject"]["uri"],
+                                "cid": item["subject"]["cid"],
+                            }
+                            for item in current_items
+                        ]
+                        _, cid = await update_list_record(
+                            auth_session=session,
+                            list_uri=playlist.atproto_record_uri,
+                            items=items,
+                            name=playlist.name,
+                            list_type="playlist",
+                        )
+                        playlist.atproto_record_cid = cid
+            except Exception as e:
+                logger.warning(f"failed to update ATProto record name: {e}")
+                # continue — local update is still valid
 
     await db.commit()
     await db.refresh(playlist)
 
-    return PlaylistResponse(
-        id=playlist.id,
-        name=playlist.name,
-        owner_did=playlist.owner_did,
-        owner_handle=artist.handle,
-        track_count=playlist.track_count,
-        image_url=playlist.image_url,
-        show_on_profile=playlist.show_on_profile,
-        atproto_record_uri=playlist.atproto_record_uri,
-        created_at=playlist.created_at.isoformat(),
-    )
+    return _build_playlist_response(playlist, artist.handle)
 
 
 @router.get(
@@ -744,15 +824,18 @@ async def get_playlist_recommendations_endpoint(
 
     playlist, artist = row
 
-    if playlist.owner_did != session.did:
-        raise HTTPException(status_code=403, detail="not playlist owner")
+    _assert_can_mutate(session, playlist)
 
     if playlist.track_count == 0:
         return unavailable
 
-    # check Redis cache using playlist CID as cache key
-    cid = playlist.atproto_record_cid or ""
-    cache_key = f"plyr:recommendations:{playlist_id}:{cid}"
+    # cache token derived from CID for public, updated_at for private (no CID)
+    cache_token = (
+        playlist.atproto_record_cid
+        if playlist.atproto_record_cid
+        else playlist.updated_at.isoformat()
+    )
+    cache_key = f"plyr:recommendations:{playlist_id}:{cache_token}"
 
     try:
         redis = get_async_redis_client()
@@ -763,17 +846,17 @@ async def get_playlist_recommendations_endpoint(
     except Exception as e:
         logger.debug("redis cache miss/error for recommendations: %s", e)
 
-    # get track URIs from the playlist's ATProto list record
+    # get track URIs from whichever store backs this playlist
     try:
-        track_uris = await fetch_list_item_uris(
-            playlist.atproto_record_uri, artist.pds_url
-        )
+        item_refs = await _read_playlist_items(playlist, artist)
     except Exception as e:
         logger.warning("failed to fetch playlist record for recommendations: %s", e)
         return unavailable
 
-    if not track_uris:
+    if not item_refs:
         return unavailable
+
+    track_uris = [ref["uri"] for ref in item_refs]
 
     # resolve URIs to track IDs
     track_result = await db.execute(

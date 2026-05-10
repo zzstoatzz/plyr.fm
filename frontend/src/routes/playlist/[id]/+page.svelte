@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { AtUri } from "@atproto/api";
 	import Header from "$lib/components/Header.svelte";
 	import ShareButton from "$lib/components/ShareButton.svelte";
 	import SensitiveImage from "$lib/components/SensitiveImage.svelte";
@@ -452,12 +451,6 @@
 	}
 
 	async function saveOrder() {
-		if (!playlist.atproto_record_uri) return;
-
-		const rkey = new AtUri(playlist.atproto_record_uri).rkey;
-		if (!rkey) return;
-
-		// build strongRefs from current track order
 		const items = tracks
 			.filter((t) => t.atproto_record_uri && t.atproto_record_cid)
 			.map((t) => ({
@@ -469,12 +462,18 @@
 
 		isSavingOrder = true;
 		try {
-			const response = await fetch(`${API_URL}/lists/${rkey}/reorder`, {
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include",
-				body: JSON.stringify({ items }),
-			});
+			// /lists/playlists/{id}/reorder routes both private and public; the older
+			// /lists/{rkey}/reorder is public-only and is left for backwards
+			// compatibility with non-playlist list types.
+			const response = await fetch(
+				`${API_URL}/lists/playlists/${playlist.id}/reorder`,
+				{
+					method: "PUT",
+					headers: { "Content-Type": "application/json" },
+					credentials: "include",
+					body: JSON.stringify({ items }),
+				},
+			);
 
 			if (!response.ok) {
 				const error = await response
@@ -811,7 +810,7 @@
 			{/if}
 			<div class="playlist-info-wrapper">
 				<div class="playlist-info">
-					<p class="playlist-type">playlist</p>
+					<p class="playlist-type">{playlist.is_private ? 'private playlist' : 'playlist'}</p>
 					{#if isEditMode && isOwner}
 						<input
 							type="text"
@@ -834,7 +833,7 @@
 								: "tracks"}</span
 						>
 					</div>
-					{#if isEditMode && isOwner}
+					{#if isEditMode && isOwner && !playlist.is_private}
 						<label class="show-on-profile-toggle">
 							<input
 								type="checkbox"
@@ -846,7 +845,9 @@
 				</div>
 
 				<div class="side-buttons">
-					<ShareButton url={$page.url.href} title="share playlist" />
+					{#if !playlist.is_private}
+						<ShareButton url={$page.url.href} title="share playlist" />
+					{/if}
 					{#if isOwner}
 						<button
 							class="icon-btn"
@@ -952,7 +953,9 @@
 				add to queue
 			</button>
 			<div class="mobile-buttons">
-				<ShareButton url={$page.url.href} title="share playlist" />
+				{#if !playlist.is_private}
+					<ShareButton url={$page.url.href} title="share playlist" />
+				{/if}
 				{#if isOwner}
 					<button
 						class="icon-btn"
