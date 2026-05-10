@@ -461,3 +461,152 @@ async def test_private_playlist_not_in_activity_feed(
             assert collection.get("name") != "secret", (
                 "private playlist leaked into activity feed"
             )
+
+
+# ---------------------------------------------------------------------------
+# visibility toggle (private <-> public)
+# ---------------------------------------------------------------------------
+
+
+from unittest.mock import AsyncMock, patch  # noqa: E402
+
+
+async def test_make_private_playlist_public(
+    app_as_owner: FastAPI, db_session: AsyncSession, owner: Artist
+) -> None:
+    """private → public publishes a PDS list record and clears items_json."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app_as_owner), base_url="http://test"
+    ) as client:
+        playlist = await _create_private_playlist(client, "going public")
+        # seed an item so we exercise the items copy
+        await client.post(
+            f"/lists/playlists/{playlist['id']}/tracks",
+            json={"track_uri": "at://did:plc:x/c/r1", "track_cid": "bafy1"},
+        )
+
+        # also flip show_on_profile=true to verify the toggle resets it
+        await client.patch(
+            f"/lists/playlists/{playlist['id']}",
+            data={"show_on_profile": "true"},
+        )
+
+        with patch(
+            "backend.api.lists.playlists.create_list_record",
+            new_callable=AsyncMock,
+            return_value=("at://did:plc:owner/fm.plyr.list/abc123", "bafyrec"),
+        ) as mock_create:
+            resp = await client.patch(
+                f"/lists/playlists/{playlist['id']}",
+                data={"is_private": "false"},
+            )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_private"] is False
+    assert body["atproto_record_uri"] == "at://did:plc:owner/fm.plyr.list/abc123"
+    assert body["show_on_profile"] is False  # reset on transition
+
+    # the PDS write got the snapshotted items
+    mock_create.assert_awaited_once()
+    await_args = mock_create.await_args
+    assert await_args is not None
+    assert await_args.kwargs["items"] == [
+        {"uri": "at://did:plc:x/c/r1", "cid": "bafy1"}
+    ]
+    assert await_args.kwargs["name"] == "going public"
+
+    db_row = (
+        await db_session.execute(select(Playlist).where(Playlist.id == playlist["id"]))
+    ).scalar_one()
+    assert db_row.items_json is None
+    assert db_row.is_private is False
+
+
+async def test_make_public_playlist_private(
+    app_as_owner: FastAPI, db_session: AsyncSession, owner: Artist
+) -> None:
+    """public → private snapshots PDS items into items_json and best-effort
+    deletes the PDS record."""
+
+    # create a public playlist via direct DB insert (avoid mocking the
+    # public create path which involves the real OAuth client)
+    public = Playlist(
+        owner_did=owner.did,
+        name="going private",
+        atproto_record_uri="at://did:plc:owner/fm.plyr.list/pub1",
+        atproto_record_cid="bafypub1",
+        is_private=False,
+        show_on_profile=True,
+        track_count=2,
+    )
+    db_session.add(public)
+    await db_session.commit()
+    await db_session.refresh(public)
+
+    snapshot_items = [
+        {"uri": "at://did:plc:x/c/r1", "cid": "bafy1"},
+        {"uri": "at://did:plc:x/c/r2", "cid": "bafy2"},
+    ]
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_as_owner), base_url="http://test"
+    ) as client:
+        with (
+            patch(
+                "backend.api.lists.playlists._snapshot_pds_items",
+                new_callable=AsyncMock,
+                return_value=snapshot_items,
+            ),
+            patch(
+                "backend.api.lists.playlists.delete_record_by_uri",
+                new_callable=AsyncMock,
+            ) as mock_delete,
+        ):
+            resp = await client.patch(
+                f"/lists/playlists/{public.id}",
+                data={"is_private": "true"},
+            )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_private"] is True
+    assert body["atproto_record_uri"] is None
+    assert body["show_on_profile"] is False
+
+    await db_session.refresh(public)
+    db_row = public
+    assert db_row.is_private is True
+    assert db_row.atproto_record_uri is None
+    assert db_row.atproto_record_cid is None
+    assert db_row.items_json == [
+        {"uri": "at://did:plc:x/c/r1", "cid": "bafy1"},
+        {"uri": "at://did:plc:x/c/r2", "cid": "bafy2"},
+    ]
+    assert db_row.track_count == 2
+
+    mock_delete.assert_awaited_once()
+
+
+async def test_visibility_unchanged_is_a_noop(
+    app_as_owner: FastAPI, owner: Artist
+) -> None:
+    """passing is_private equal to the current value doesn't trigger the
+    transition (no PDS calls, no show_on_profile reset)."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app_as_owner), base_url="http://test"
+    ) as client:
+        playlist = await _create_private_playlist(client, "stay private")
+
+        with patch(
+            "backend.api.lists.playlists.create_list_record",
+            new_callable=AsyncMock,
+        ) as mock_create:
+            resp = await client.patch(
+                f"/lists/playlists/{playlist['id']}",
+                data={"is_private": "true"},
+            )
+
+    assert resp.status_code == 200
+    assert resp.json()["is_private"] is True
+    mock_create.assert_not_awaited()
