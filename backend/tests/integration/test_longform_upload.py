@@ -17,11 +17,13 @@ instead of on a user's tweet.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
+from .conftest import IntegrationSettings
 from .utils.audio import save_longform_drone
 
 if TYPE_CHECKING:
@@ -40,12 +42,23 @@ pytestmark = [pytest.mark.integration, pytest.mark.timeout(int(LONGFORM_TIMEOUT_
 
 
 @pytest.fixture(scope="session")
-def longform_wav(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def longform_wav(
+    tmp_path_factory: pytest.TempPathFactory,
+    integration_settings: IntegrationSettings,
+) -> Path:
     """generate a single 60-minute mono WAV for the test session.
 
-    session-scoped so we don't pay the 150 MB write cost more than once
-    if we add additional long-form tests later.
+    skips ahead of the ffmpeg shell-out when the integration env can't run:
+    the regular backend `test` workflow collects this file (no `-m
+    integration` filter) but doesn't have ffmpeg installed and doesn't have
+    `PLYR_TEST_TOKEN_1`, so eagerly invoking `ffmpeg` here would explode
+    the unrelated check. session-scoped so we don't pay the 150 MB write
+    cost more than once if we add additional long-form tests later.
     """
+    if not integration_settings.has_primary_token:
+        pytest.skip("PLYR_TEST_TOKEN_1 not set")
+    if not shutil.which("ffmpeg"):
+        pytest.skip("ffmpeg not available; long-form fixture cannot be generated")
     path = tmp_path_factory.mktemp("longform") / "drone_60min.wav"
     return save_longform_drone(path, duration_sec=LONGFORM_DURATION_SEC)
 

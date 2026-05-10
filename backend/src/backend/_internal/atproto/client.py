@@ -10,6 +10,7 @@ import httpcore
 import httpx
 from atproto import AtUri
 from atproto_oauth.models import OAuthSession
+from atproto_oauth.security import is_safe_url
 from cachetools import LRUCache
 
 from backend._internal import Session as AuthSession
@@ -363,7 +364,15 @@ async def _signed_streaming_post(
     retry submits an empty body. for streaming uploads we must call the
     factory anew per attempt, so this helper reimplements just the DPoP
     signing + nonce-retry shape.
+
+    `is_safe_url` is mirrored from `make_authenticated_request` so that
+    PDS URLs from session storage cannot be redirected to a private
+    address by a malicious or malformed session record before we stream
+    user audio bytes to them.
     """
+    if not is_safe_url(url):
+        raise ValueError(f"Unsafe URL: {url}")
+
     client_obj = get_oauth_client()
     # OAuthClient does not expose its DPoP helper on the public surface, but
     # the alternative is reimplementing DPoP proof creation here. an upstream

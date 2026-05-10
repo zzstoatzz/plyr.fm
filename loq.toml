@@ -284,4 +284,4 @@ max_lines = 2589
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/client.py"
-max_lines = 541
+max_lines = 550
