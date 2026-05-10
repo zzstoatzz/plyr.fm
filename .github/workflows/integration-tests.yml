@@ -28,7 +28,10 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    timeout-minutes: 15
+    # 30 min accommodates the long-form regression test (a ~150 MB 60 min
+    # WAV upload + transcode + PDS upload + scanners). short-form tests
+    # finish in seconds; the cap is sized for the worst case.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 

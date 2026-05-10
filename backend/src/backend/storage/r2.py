@@ -1,7 +1,7 @@
 """cloudflare R2 storage for audio files."""
 
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO
@@ -19,6 +19,11 @@ from backend.config import settings
 from backend.models.track import Track
 from backend.utilities.database import db_session
 from backend.utilities.hashing import hash_file_chunked
+
+# default chunk size for streaming reads. 1MB matches aiobotocore's default
+# part size and keeps per-chunk python overhead negligible against a multi-MB
+# file. callers that want different granularity can override.
+STREAM_CHUNK_SIZE = 1024 * 1024
 
 # content-hashed files never change — cache forever
 IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
@@ -349,6 +354,76 @@ class R2Storage:
                     if e.response.get("Error", {}).get("Code") == "404":
                         return None
                     raise
+
+    async def stream_file_data(
+        self,
+        file_id: str,
+        file_type: str,
+        *,
+        chunk_size: int = STREAM_CHUNK_SIZE,
+    ) -> AsyncIterator[bytes]:
+        """stream the audio body in fixed-size chunks.
+
+        the s3 client is held open for the lifetime of iteration via the
+        async generator's frame. callers must consume to completion or
+        cancel; partial iteration leaves the connection to be torn down by
+        gc, which is correct but noisier than explicit close.
+        """
+        audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
+        if not audio_format:
+            logfire.warning(
+                "unsupported file type for stream_file_data",
+                file_id=file_id,
+                file_type=file_type,
+            )
+            return
+        key = f"audio/{file_id}{audio_format.extension}"
+
+        with logfire.span(
+            "R2 stream_file_data",
+            file_id=file_id,
+            file_type=file_type,
+            chunk_size=chunk_size,
+        ):
+            async with self._s3_client() as client:
+                try:
+                    response = await client.get_object(
+                        Bucket=self.audio_bucket_name, Key=key
+                    )
+                except client.exceptions.NoSuchKey:
+                    logfire.warning("R2 file not found", file_id=file_id, key=key)
+                    return
+                except ClientError as e:
+                    if e.response.get("Error", {}).get("Code") == "404":
+                        return
+                    raise
+
+                async for chunk in response["Body"].iter_chunks(chunk_size=chunk_size):
+                    yield chunk
+
+    async def head_file(
+        self,
+        file_id: str,
+        file_type: str,
+    ) -> int | None:
+        """return the byte size of an audio object via HEAD, or None if missing."""
+        audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
+        if not audio_format:
+            return None
+        key = f"audio/{file_id}{audio_format.extension}"
+        async with self._s3_client() as client:
+            try:
+                response = await client.head_object(
+                    Bucket=self.audio_bucket_name, Key=key
+                )
+            except client.exceptions.NoSuchKey:
+                return None
+            except ClientError as e:
+                if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+                    return None
+                raise
+            size = response.get("ContentLength")
+            return int(size) if size is not None else None
 
     async def delete(self, file_id: str, file_type: str | None = None) -> bool:
         """delete media file from R2.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncIterable
 
 import logfire
 from sqlalchemy import select
@@ -180,16 +181,25 @@ async def backfill_tracks_to_pds(
                     failed_count += 1
                     return
 
-                audio_data = await storage.get_file_data(
+                content_length = await storage.head_file(
                     track_data["file_id"],
                     track_data["file_type"],
                 )
-                if not audio_data:
+                if content_length is None:
                     failed_count += 1
                     return
 
+                track_file_id = track_data["file_id"]
+                track_file_type = track_data["file_type"]
+
+                def body_factory() -> AsyncIterable[bytes]:
+                    return storage.stream_file_data(track_file_id, track_file_type)
+
                 blob_ref = await upload_blob(
-                    auth_session, audio_data, audio_format.media_type
+                    auth_session,
+                    body_factory=body_factory,
+                    content_length=content_length,
+                    content_type=audio_format.media_type,
                 )
                 blob_cid = blob_ref.get("ref", {}).get("$link")
                 blob_size = blob_ref.get("size")

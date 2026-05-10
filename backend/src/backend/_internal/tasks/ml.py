@@ -2,7 +2,6 @@
 
 import logging
 
-import httpx
 import logfire
 from sqlalchemy import select
 
@@ -50,15 +49,10 @@ async def generate_embedding(track_id: int, audio_url: str) -> None:
             )
             return
 
-    # download audio from R2
-    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
-        resp = await client.get(audio_url)
-        resp.raise_for_status()
-        audio_bytes = resp.content
-
-    # generate embedding via CLAP
+    # the Modal CLAP endpoint pulls a small Range slice of `audio_url`
+    # itself, so the worker never downloads or buffers the file.
     clap_client = get_clap_client()
-    embed_result = await clap_client.embed_audio(audio_bytes)
+    embed_result = await clap_client.embed_audio(audio_url)
 
     if not embed_result.success or not embed_result.embedding:
         logger.error(

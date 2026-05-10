@@ -446,21 +446,22 @@ class TestRestoreEndpoint:
                 (TRACK_URI, "bafyRESTOREDWITHFRESHBLOB"),
             ]
         )
-        # storage returns the R2 bytes, upload_blob mints a fresh CID
+        # storage HEAD reports the R2 size, upload_blob streams the bytes
+        # back to PDS as a fresh blob.
         reupload_ref = {
             "$type": "blob",
             "ref": {"$link": "bafkreiFRESH"},
             "mimeType": "audio/wav",
             "size": 4096,
         }
-        get_file_data_mock = AsyncMock(return_value=b"fake-audio-bytes")
+        head_file_mock = AsyncMock(return_value=4096)
         upload_blob_mock = AsyncMock(return_value=reupload_ref)
 
         with (
             patch("backend.api.tracks.revisions.update_record", update_record_mock),
             patch(
-                "backend.api.tracks.revisions.storage.get_file_data",
-                get_file_data_mock,
+                "backend.api.tracks.revisions.storage.head_file",
+                head_file_mock,
             ),
             patch("backend.api.tracks.revisions.upload_blob", upload_blob_mock),
         ):
@@ -480,11 +481,14 @@ class TestRestoreEndpoint:
         assert first_record["audioBlob"]["ref"]["$link"] == "bafkreiGCdBLOB"
         assert second_record["audioBlob"]["ref"]["$link"] == "bafkreiFRESH"
 
-        # re-upload happened with the R2 bytes
-        get_file_data_mock.assert_awaited_once_with("ORIGINAL", "wav")
+        # the streaming re-upload was driven by the revision's R2 file
+        head_file_mock.assert_awaited_once_with("ORIGINAL", "wav")
         upload_blob_mock.assert_awaited_once()
-        assert upload_blob_mock.call_args.args[1] == b"fake-audio-bytes"
-        assert upload_blob_mock.call_args.args[2] == "audio/wav"
+        upload_blob_kwargs = upload_blob_mock.await_args.kwargs
+        assert upload_blob_kwargs["content_length"] == 4096
+        assert upload_blob_kwargs["content_type"] == "audio/wav"
+        # streaming path: the body is a fresh-iterator factory, not bytes
+        assert callable(upload_blob_kwargs["body_factory"])
 
         # DB reflects the fresh blob — audio_storage stays "both", pds_blob_cid
         # is the re-uploaded CID (not the original GC'd one, not null)

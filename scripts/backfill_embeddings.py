@@ -36,7 +36,6 @@ import asyncio
 import logging
 import time
 
-import httpx
 from sqlalchemy import select
 
 from backend._internal.clients.clap import get_clap_client
@@ -55,7 +54,6 @@ logger = logging.getLogger(__name__)
 async def _embed_one(
     track: Track,
     artist: Artist,
-    http: httpx.AsyncClient,
     clap_client: object,
     sem: asyncio.Semaphore,
     counter: dict[str, int],
@@ -72,11 +70,7 @@ async def _embed_one(
                 "embedding [%d/%d] track %d: %s", idx, total, track.id, track.title
             )
 
-            resp = await http.get(r2_url)
-            resp.raise_for_status()
-            audio_bytes = resp.content
-
-            embed_result = await clap_client.embed_audio(audio_bytes)
+            embed_result = await clap_client.embed_audio(r2_url)
 
             if not embed_result.success or not embed_result.embedding:
                 logger.warning(
@@ -152,12 +146,11 @@ async def backfill_embeddings(
     counter: dict[str, int] = {"started": 0, "embedded": 0, "failed": 0}
     t0 = time.monotonic()
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as http:
-        tasks = [
-            _embed_one(track, artist, http, clap_client, sem, counter, len(rows))
-            for track, artist in rows
-        ]
-        await asyncio.gather(*tasks)
+    tasks = [
+        _embed_one(track, artist, clap_client, sem, counter, len(rows))
+        for track, artist in rows
+    ]
+    await asyncio.gather(*tasks)
 
     elapsed = time.monotonic() - t0
     logger.info(

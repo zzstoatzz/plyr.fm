@@ -1,6 +1,6 @@
 """storage protocol for type-safe dependency injection."""
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from io import BytesIO
 from typing import BinaryIO, Protocol, runtime_checkable
 
@@ -34,6 +34,33 @@ class StorageProtocol(Protocol):
         file_id: str,
         file_type: str,
     ) -> bytes | None: ...
+
+    def stream_file_data(
+        self,
+        file_id: str,
+        file_type: str,
+        *,
+        chunk_size: int = 1024 * 1024,
+    ) -> AsyncIterator[bytes]:
+        """async-iterate over the file body in `chunk_size` chunks.
+
+        the implementation must keep the underlying connection open for the
+        lifetime of iteration (the returned async iterator owns it). callers
+        must consume to completion or arrange for cancellation.
+        """
+        ...
+
+    async def head_file(
+        self,
+        file_id: str,
+        file_type: str,
+    ) -> int | None:
+        """return the byte size of the stored object, or None if missing.
+
+        used to set Content-Length on streaming uploads to consumers that
+        require it (e.g. PDS uploadBlob).
+        """
+        ...
 
     async def delete(self, file_id: str, file_type: str | None = None) -> bool: ...
 

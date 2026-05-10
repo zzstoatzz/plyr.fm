@@ -1,8 +1,11 @@
 """tests for transcoder client."""
 
 import tempfile
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from typing import Any
+from unittest.mock import Mock, patch
 
 import httpx
 import pytest
@@ -33,120 +36,169 @@ def temp_audio_file() -> Path:
         return Path(f.name)
 
 
+@pytest.fixture
+def temp_output_file() -> Path:
+    """destination path for transcoded output."""
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        return Path(f.name)
+
+
+def _make_streaming_response(
+    chunks: list[bytes], headers: dict[str, str] | None = None
+) -> tuple[Mock, Any]:
+    """build a mock that mimics httpx's streaming response context manager."""
+    response = Mock()
+    response.headers = headers or {"content-type": "audio/mpeg"}
+    response.raise_for_status.return_value = None
+
+    async def aiter_bytes() -> AsyncIterator[bytes]:
+        for chunk in chunks:
+            yield chunk
+
+    response.aiter_bytes = aiter_bytes
+
+    @asynccontextmanager
+    async def cm(*_args: Any, **_kwargs: Any) -> AsyncIterator[Mock]:
+        yield response
+
+    return response, cm
+
+
 async def test_transcoder_client_success(
-    transcoder_client: TranscoderClient, temp_audio_file: Path
+    transcoder_client: TranscoderClient,
+    temp_audio_file: Path,
+    temp_output_file: Path,
 ) -> None:
-    """test TranscoderClient.transcode_file() with successful response."""
-    mock_response = Mock()
-    mock_response.content = b"transcoded mp3 data"
-    mock_response.headers = {"content-type": "audio/mpeg"}
-    mock_response.raise_for_status.return_value = None
+    """successful transcode streams the response body to output_path."""
+    response, stream_cm = _make_streaming_response(
+        [b"transcoded ", b"mp3 data"], {"content-type": "audio/mpeg"}
+    )
 
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_response
-
-        result = await transcoder_client.transcode_file(temp_audio_file, "aiff")
+    with patch("httpx.AsyncClient.stream", side_effect=stream_cm):
+        result = await transcoder_client.transcode_file(
+            temp_audio_file, "aiff", output_path=temp_output_file
+        )
 
     assert result.success is True
-    assert result.data == b"transcoded mp3 data"
+    assert result.output_path == temp_output_file
+    assert result.output_size == len(b"transcoded mp3 data")
     assert result.content_type == "audio/mpeg"
     assert result.error is None
-    mock_post.assert_called_once()
+    assert temp_output_file.read_bytes() == b"transcoded mp3 data"
 
-    # verify the call included auth header
-    call_kwargs = mock_post.call_args.kwargs
-    assert call_kwargs["headers"] == {"X-Transcoder-Key": "test-token"}
-    assert call_kwargs["params"] == {"target": "mp3"}
-
-    # cleanup
     temp_audio_file.unlink(missing_ok=True)
+    temp_output_file.unlink(missing_ok=True)
 
 
 async def test_transcoder_client_timeout(
-    transcoder_client: TranscoderClient, temp_audio_file: Path
+    transcoder_client: TranscoderClient,
+    temp_audio_file: Path,
+    temp_output_file: Path,
 ) -> None:
-    """test TranscoderClient.transcode_file() timeout handling."""
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.side_effect = httpx.TimeoutException("timeout")
-
-        result = await transcoder_client.transcode_file(temp_audio_file, "aiff")
+    """timeout during transcode is surfaced as an error."""
+    with patch(
+        "httpx.AsyncClient.stream", side_effect=httpx.TimeoutException("timeout")
+    ):
+        result = await transcoder_client.transcode_file(
+            temp_audio_file, "aiff", output_path=temp_output_file
+        )
 
     assert result.success is False
-    assert result.data is None
+    assert result.output_path is None
     assert result.error is not None
     assert "timed out" in result.error
 
-    # cleanup
     temp_audio_file.unlink(missing_ok=True)
+    temp_output_file.unlink(missing_ok=True)
 
 
 async def test_transcoder_client_http_error(
-    transcoder_client: TranscoderClient, temp_audio_file: Path
+    transcoder_client: TranscoderClient,
+    temp_audio_file: Path,
+    temp_output_file: Path,
 ) -> None:
-    """test TranscoderClient.transcode_file() HTTP error handling."""
+    """HTTP error during transcode is surfaced as an error."""
     mock_response = Mock()
     mock_response.status_code = 500
     mock_response.text = "Internal Server Error"
 
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.side_effect = httpx.HTTPStatusError(
+    with patch(
+        "httpx.AsyncClient.stream",
+        side_effect=httpx.HTTPStatusError(
             "Server Error",
             request=Mock(),
             response=mock_response,
+        ),
+    ):
+        result = await transcoder_client.transcode_file(
+            temp_audio_file, "aiff", output_path=temp_output_file
         )
 
-        result = await transcoder_client.transcode_file(temp_audio_file, "aiff")
-
     assert result.success is False
-    assert result.data is None
+    assert result.output_path is None
     assert result.error is not None
     assert "500" in result.error
     assert "Internal Server Error" in result.error
 
-    # cleanup
     temp_audio_file.unlink(missing_ok=True)
+    temp_output_file.unlink(missing_ok=True)
 
 
 async def test_transcoder_client_unexpected_error(
-    transcoder_client: TranscoderClient, temp_audio_file: Path
+    transcoder_client: TranscoderClient,
+    temp_audio_file: Path,
+    temp_output_file: Path,
 ) -> None:
-    """test TranscoderClient.transcode_file() unexpected error handling."""
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.side_effect = RuntimeError("unexpected error")
-
-        result = await transcoder_client.transcode_file(temp_audio_file, "aiff")
+    """unexpected exceptions are caught and surfaced as errors."""
+    with patch(
+        "httpx.AsyncClient.stream", side_effect=RuntimeError("unexpected error")
+    ):
+        result = await transcoder_client.transcode_file(
+            temp_audio_file, "aiff", output_path=temp_output_file
+        )
 
     assert result.success is False
-    assert result.data is None
+    assert result.output_path is None
     assert result.error is not None
     assert "unexpected" in result.error.lower()
 
-    # cleanup
     temp_audio_file.unlink(missing_ok=True)
+    temp_output_file.unlink(missing_ok=True)
 
 
 async def test_transcoder_client_custom_target_format(
-    transcoder_client: TranscoderClient, temp_audio_file: Path
+    transcoder_client: TranscoderClient,
+    temp_audio_file: Path,
+    temp_output_file: Path,
 ) -> None:
-    """test TranscoderClient.transcode_file() with custom target format."""
-    mock_response = Mock()
-    mock_response.content = b"transcoded aac data"
-    mock_response.headers = {"content-type": "audio/aac"}
-    mock_response.raise_for_status.return_value = None
+    """custom target_format is passed through as a query param."""
+    captured: dict[str, Any] = {}
 
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_response
+    @asynccontextmanager
+    async def stream_cm(method: str, url: str, **kwargs: Any) -> AsyncIterator[Mock]:
+        captured["method"] = method
+        captured["url"] = url
+        captured.update(kwargs)
+        response = Mock()
+        response.headers = {"content-type": "audio/aac"}
+        response.raise_for_status.return_value = None
 
+        async def aiter_bytes() -> AsyncIterator[bytes]:
+            yield b"transcoded aac data"
+
+        response.aiter_bytes = aiter_bytes
+        yield response
+
+    with patch("httpx.AsyncClient.stream", side_effect=stream_cm):
         result = await transcoder_client.transcode_file(
-            temp_audio_file, "flac", target_format="aac"
+            temp_audio_file, "flac", output_path=temp_output_file, target_format="aac"
         )
 
     assert result.success is True
-    call_kwargs = mock_post.call_args.kwargs
-    assert call_kwargs["params"] == {"target": "aac"}
+    assert captured["params"] == {"target": "aac"}
 
-    # cleanup
     temp_audio_file.unlink(missing_ok=True)
+    temp_output_file.unlink(missing_ok=True)
 
 
 def test_transcoder_client_from_settings() -> None:

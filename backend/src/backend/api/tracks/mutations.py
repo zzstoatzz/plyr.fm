@@ -3,6 +3,7 @@
 import contextlib
 import json
 import logging
+from collections.abc import AsyncIterable
 from typing import Annotated
 from urllib.parse import urljoin
 
@@ -684,21 +685,6 @@ async def migrate_track_to_pds(
             detail="supporter-gated tracks cannot be migrated to PDS",
         )
 
-    # get the audio file from R2
-    try:
-        audio_data = await storage.get_file_data(track.file_id, track.file_type)
-        if not audio_data:
-            raise HTTPException(
-                status_code=404,
-                detail="audio file not found in storage",
-            )
-    except Exception as e:
-        logger.error(f"failed to fetch audio for track {track_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"failed to fetch audio file: {e}",
-        ) from e
-
     # determine content type from file type
     audio_format = AudioFormat.from_extension(track.file_type)
     if not audio_format:
@@ -708,9 +694,36 @@ async def migrate_track_to_pds(
         )
     content_type = audio_format.media_type
 
+    # confirm the audio object exists and capture its size for Content-Length;
+    # the body itself is streamed from R2 to the PDS, never buffered here.
+    try:
+        content_length = await storage.head_file(track.file_id, track.file_type)
+    except Exception as e:
+        logger.error(f"failed to head audio for track {track_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"failed to fetch audio file: {e}",
+        ) from e
+    if content_length is None:
+        raise HTTPException(
+            status_code=404,
+            detail="audio file not found in storage",
+        )
+
+    file_id = track.file_id
+    file_type = track.file_type
+
+    def body_factory() -> AsyncIterable[bytes]:
+        return storage.stream_file_data(file_id, file_type)
+
     # upload blob to PDS
     try:
-        blob_ref = await upload_blob(auth_session, audio_data, content_type)
+        blob_ref = await upload_blob(
+            auth_session,
+            body_factory=body_factory,
+            content_length=content_length,
+            content_type=content_type,
+        )
         blob_cid = blob_ref.get("ref", {}).get("$link")
         blob_size = blob_ref.get("size")
 

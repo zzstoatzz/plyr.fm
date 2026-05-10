@@ -4,7 +4,6 @@ client for generating audio and text embeddings via Modal-hosted CLAP model.
 used for semantic vibe search (text-to-audio matching).
 """
 
-import base64
 import logging
 from dataclasses import dataclass
 from typing import Self
@@ -35,7 +34,7 @@ class ClapClient:
 
     usage:
         client = ClapClient.from_settings()
-        result = await client.embed_audio(audio_bytes)
+        result = await client.embed_audio(audio_url)
         result = await client.embed_text("dark ambient techno")
     """
 
@@ -61,27 +60,26 @@ class ClapClient:
             text_timeout_seconds=settings.modal.text_timeout_seconds,
         )
 
-    async def embed_audio(self, audio_bytes: bytes) -> EmbeddingResult:
-        """generate an embedding from audio bytes.
+    async def embed_audio(self, audio_url: str) -> EmbeddingResult:
+        """generate an embedding from a publicly fetchable audio URL.
+
+        the Modal endpoint pulls a Range-limited slice of `audio_url`
+        itself (only the first ~30 s are needed for CLAP), so the worker
+        never has to download or buffer the audio.
 
         args:
-            audio_bytes: raw audio file bytes
+            audio_url: public URL of the audio file (e.g. R2 CDN URL)
 
         returns:
             EmbeddingResult with 512-dim embedding or error
         """
-        b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
-
-        logfire.info(
-            "requesting audio embedding",
-            audio_size_kb=len(audio_bytes) / 1024,
-        )
+        logfire.info("requesting audio embedding", audio_url=audio_url)
 
         try:
             async with httpx.AsyncClient(timeout=self.audio_timeout) as client:
                 response = await client.post(
                     self.embed_audio_url,
-                    json={"audio_b64": b64_audio},
+                    json={"audio_url": audio_url},
                 )
                 response.raise_for_status()
 

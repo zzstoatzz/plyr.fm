@@ -141,7 +141,6 @@ class TestPhase1To5FailureDeletesStagedMedia:
                 original_file_type="flac",
                 transcoded_file_id="transcoded-mp3-id",
                 transcoded_file_type="mp3",
-                transcoded_data=b"",
             ),
         )
         with (

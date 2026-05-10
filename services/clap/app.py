@@ -53,24 +53,51 @@ class ClapService:
 
     @modal.fastapi_endpoint(method="POST")
     def embed_audio(self, item: dict) -> dict:
-        """generate embedding from base64-encoded audio bytes.
+        """generate embedding from a presigned audio URL.
 
-        expects: {"audio_b64": "<base64 string>"}
+        expects one of:
+            {"audio_url": "https://..."}    — preferred: Modal pulls a Range
+                                              of bytes itself; the plyr.fm
+                                              worker never holds the file.
+            {"audio_b64": "<base64 string>"} — legacy buffered path, kept
+                                              for backwards compatibility
+                                              with old clients.
+
         returns: {"embedding": [float, ...], "dimensions": 512}
+
+        only the first ~30 seconds are needed for CLAP — see the chunking
+        below — so when given a URL we fetch a single Range request capped
+        at 12 MB. that's enough for >30 s at any reasonable bitrate
+        (e.g. 320 kbps mp3 ≈ 40 KB/s, 24 MB/min) and never runs away on a
+        90-minute upload.
         """
         import subprocess
         import tempfile
         import traceback
 
+        import httpx
         import soundfile as sf
         import torch
         import torch.nn.functional as F
 
-        if not (audio_b64 := item.get("audio_b64")):
-            return {"error": "missing audio_b64 field"}
+        # 12 MB caps fetch size for any input; soundfile + ffmpeg can
+        # decode well past 30 s of audio from this much data even at
+        # 320 kbps, and many short tracks fit entirely.
+        AUDIO_FETCH_LIMIT = 12 * 1024 * 1024
 
         try:
-            audio_bytes = base64.b64decode(audio_b64)
+            if audio_url := item.get("audio_url"):
+                with httpx.Client(timeout=httpx.Timeout(60.0)) as client:
+                    resp = client.get(
+                        audio_url,
+                        headers={"Range": f"bytes=0-{AUDIO_FETCH_LIMIT - 1}"},
+                    )
+                    resp.raise_for_status()
+                    audio_bytes = resp.content
+            elif audio_b64 := item.get("audio_b64"):
+                audio_bytes = base64.b64decode(audio_b64)
+            else:
+                return {"error": "missing audio_url or audio_b64 field"}
 
             # try soundfile first (handles wav, flac, ogg natively)
             try:

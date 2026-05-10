@@ -147,7 +147,9 @@ class TestUploadBlobNetworkRetry:
             "backend._internal.atproto.client.get_oauth_client",
             return_value=mock_client,
         ):
-            result = await upload_blob(mock_auth_session, b"fake-audio", "audio/mpeg")
+            result = await upload_blob(
+                mock_auth_session, data=b"fake-audio", content_type="audio/mpeg"
+            )
 
         assert result == blob_ref
         assert mock_client.make_authenticated_request.call_count == 2
@@ -167,7 +169,9 @@ class TestUploadBlobNetworkRetry:
             ),
             pytest.raises(Exception, match=r"blob upload failed after \d+ attempts"),
         ):
-            await upload_blob(mock_auth_session, b"fake-audio", "audio/mpeg")
+            await upload_blob(
+                mock_auth_session, data=b"fake-audio", content_type="audio/mpeg"
+            )
 
     async def test_does_not_retry_payload_too_large(
         self, mock_auth_session: AuthSession
@@ -184,7 +188,9 @@ class TestUploadBlobNetworkRetry:
             ),
             pytest.raises(Exception, match="blob too large"),
         ):
-            await upload_blob(mock_auth_session, b"huge-audio", "audio/mpeg")
+            await upload_blob(
+                mock_auth_session, data=b"huge-audio", content_type="audio/mpeg"
+            )
 
         assert mock_client.make_authenticated_request.call_count == 1
 

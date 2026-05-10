@@ -16,6 +16,7 @@ ungate, restore, then re-gate manually if needed.
 """
 
 import logging
+from collections.abc import AsyncIterable
 from datetime import datetime
 from typing import Annotated
 from urllib.parse import urljoin
@@ -258,12 +259,23 @@ async def restore_track_revision(
             )
             reupload_blob_ref: dict | None = None
             try:
-                audio_data = await storage.get_file_data(
+                content_length = await storage.head_file(
                     revision.file_id, revision.file_type
                 )
-                if audio_data:
+                if content_length is not None:
+                    revision_file_id = revision.file_id
+                    revision_file_type = revision.file_type
+
+                    def body_factory() -> AsyncIterable[bytes]:
+                        return storage.stream_file_data(
+                            revision_file_id, revision_file_type
+                        )
+
                     reupload_blob_ref = await upload_blob(
-                        auth_session, audio_data, content_type
+                        auth_session,
+                        body_factory=body_factory,
+                        content_length=content_length,
+                        content_type=content_type,
                     )
             except PayloadTooLargeError:
                 logfire.info(

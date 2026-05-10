@@ -5,11 +5,13 @@ import contextlib
 import json
 import logging
 import tempfile
+from collections.abc import AsyncIterable, Callable
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Any, BinaryIO
 
+import aiofiles
 import logfire
 from docket import ConcurrencyLimit
 from fastapi import (
@@ -241,13 +243,18 @@ async def stage_image_to_storage(
 
 @dataclass
 class TranscodeInfo:
-    """result of transcoding an audio file."""
+    """result of transcoding an audio file.
+
+    both `original_file_id` (lossless source) and `transcoded_file_id`
+    (web-playable result) point at R2 objects. callers that need the
+    bytes (PDS upload, scanners) read them by streaming from R2 — the
+    worker never holds the full audio in memory.
+    """
 
     original_file_id: str
     original_file_type: str
     transcoded_file_id: str
     transcoded_file_type: str
-    transcoded_data: bytes
 
 
 @dataclass
@@ -263,19 +270,21 @@ class PdsBlobResult:
 async def _try_upload_to_pds(
     upload_id: str,
     auth_session: AuthSession,
-    file_data: bytes,
+    body_factory: Callable[[], AsyncIterable[bytes]],
+    content_length: int,
     content_type: str,
 ) -> PdsBlobResult:
     """attempt to upload audio blob to user's PDS.
 
-    this is a best-effort operation - if it fails due to size limits or other
-    errors, we fall back to R2-only storage. the canonical audio data lives on
-    the PDS when possible (embracing ATProto's data ownership ideals).
+    best-effort: on size or transient errors we fall back to R2-only.
 
     args:
         upload_id: job tracking ID
         auth_session: authenticated user session
-        file_data: audio file bytes (should match content_type)
+        body_factory: zero-arg callable returning a fresh async iterator of
+            audio bytes; called once per request attempt so retries get a
+            fresh stream
+        content_length: total byte size for the Content-Length header
         content_type: MIME type (e.g., audio/mpeg)
 
     returns:
@@ -290,7 +299,12 @@ async def _try_upload_to_pds(
     )
 
     try:
-        blob_ref = await upload_blob(auth_session, file_data, content_type)
+        blob_ref = await upload_blob(
+            auth_session,
+            body_factory=body_factory,
+            content_length=content_length,
+            content_type=content_type,
+        )
 
         # extract CID from blob ref: {"ref": {"$link": "<CID>"}, ...}
         cid = blob_ref.get("ref", {}).get("$link")
@@ -379,53 +393,70 @@ async def _transcode_audio(
         )
         return None
 
-    # fetch the lossless source bytes from storage
-    source_data = await storage.get_file_data(original_file_id, source_format)
-    if not source_data:
-        logfire.error(
-            "transcode aborted: source file missing from storage",
-            file_id=original_file_id,
-            format=source_format,
-        )
-        await job_service.update_progress(
-            upload_id,
-            JobStatus.FAILED,
-            "upload failed",
-            error="staged audio file missing from storage",
-        )
-        return None
-
-    logfire.info(
-        "loaded source bytes for transcode",
-        file_id=original_file_id,
-        format=source_format,
-        size_bytes=len(source_data),
-    )
-
-    # transcode to web-playable format. the transcoder client streams from a
-    # file path; spool the bytes to a worker-local temp file. this temp file
-    # is created and deleted entirely on this worker — it never crosses the
-    # request → worker boundary, so the multi-machine fly setup is fine.
-    await job_service.update_progress(
-        upload_id,
-        JobStatus.PROCESSING,
-        "transcoding audio...",
-        phase="transcode",
-        progress_pct=0.0,
-    )
-
-    spool_path: str | None = None
+    # we work entirely against worker-local temp files: the lossless source
+    # is streamed from R2 to `source_path`, ffmpeg runs in the transcoder
+    # service against that file, and the response body is streamed to
+    # `output_path`. these temp files exist only on this worker and are
+    # unlinked in the `finally` below — they never cross the request →
+    # worker boundary, which is fine on a multi-machine fly setup.
+    target_format = settings.transcoder.target_format
+    source_path: str | None = None
+    output_path: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
             delete=False, suffix=f".{source_format}"
-        ) as spool:
-            spool_path = spool.name
-            spool.write(source_data)
+        ) as source_tmp:
+            source_path = source_tmp.name
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=f".{target_format}"
+        ) as output_tmp:
+            output_path = output_tmp.name
+
+        # stream the lossless source from R2 to local disk in chunks; nothing
+        # is held in memory beyond a single chunk at a time.
+        bytes_streamed = 0
+        async with aiofiles.open(source_path, "wb") as source_file:
+            async for chunk in storage.stream_file_data(
+                original_file_id, source_format
+            ):
+                await source_file.write(chunk)
+                bytes_streamed += len(chunk)
+
+        if bytes_streamed == 0:
+            logfire.error(
+                "transcode aborted: source file missing from storage",
+                file_id=original_file_id,
+                format=source_format,
+            )
+            await job_service.update_progress(
+                upload_id,
+                JobStatus.FAILED,
+                "upload failed",
+                error="staged audio file missing from storage",
+            )
+            return None
+
+        logfire.info(
+            "streamed source to local disk for transcode",
+            file_id=original_file_id,
+            format=source_format,
+            size_bytes=bytes_streamed,
+        )
+
+        await job_service.update_progress(
+            upload_id,
+            JobStatus.PROCESSING,
+            "transcoding audio...",
+            phase="transcode",
+            progress_pct=0.0,
+        )
 
         client = get_transcoder_client()
-        result = await client.transcode_file(spool_path, source_format)
+        result = await client.transcode_file(
+            source_path, source_format, output_path=output_path
+        )
 
-        if not result.success or not result.data:
+        if not result.success or not result.output_path:
             await job_service.update_progress(
                 upload_id,
                 JobStatus.FAILED,
@@ -434,6 +465,18 @@ async def _transcode_audio(
             )
             return None
 
+        transcoded_filename = Path(filename).stem + f".{target_format}"
+        async with R2ProgressTracker(
+            job_id=upload_id,
+            message="saving transcoded file...",
+            phase="upload_transcoded",
+        ) as tracker:
+            with open(result.output_path, "rb") as transcoded_file:
+                transcoded_file_id = await storage.save(
+                    transcoded_file,
+                    transcoded_filename,
+                    progress_callback=tracker.on_progress,
+                )
     except Exception as e:
         logfire.error("transcode failed", error=str(e), exc_info=True)
         await job_service.update_progress(
@@ -444,31 +487,10 @@ async def _transcode_audio(
         )
         return None
     finally:
-        if spool_path:
-            with contextlib.suppress(Exception):
-                Path(spool_path).unlink(missing_ok=True)
-
-    # save transcoded file
-    target_format = settings.transcoder.target_format
-    transcoded_filename = Path(filename).stem + f".{target_format}"
-
-    try:
-        async with R2ProgressTracker(
-            job_id=upload_id,
-            message="saving transcoded file...",
-            phase="upload_transcoded",
-        ) as tracker:
-            transcoded_file_id = await storage.save(
-                BytesIO(result.data),
-                transcoded_filename,
-                progress_callback=tracker.on_progress,
-            )
-    except Exception as e:
-        logfire.error("failed to save transcoded file", error=str(e), exc_info=True)
-        await job_service.update_progress(
-            upload_id, JobStatus.FAILED, "upload failed", error=str(e)
-        )
-        return None
+        for tmp in (source_path, output_path):
+            if tmp:
+                with contextlib.suppress(Exception):
+                    Path(tmp).unlink(missing_ok=True)
 
     logfire.info(
         "transcoded file saved",
@@ -481,7 +503,6 @@ async def _transcode_audio(
         original_file_type=source_format,
         transcoded_file_id=transcoded_file_id,
         transcoded_file_type=target_format,
-        transcoded_data=result.data,
     )
 
 
@@ -595,10 +616,9 @@ async def _upload_to_pds(
 ) -> PdsBlobResult | None:
     """phase 4: upload to PDS (best-effort). returns None if skipped.
 
-    when the source was transcoded, the playable bytes are already in
-    memory (`sr.transcode_info.transcoded_data`). otherwise we download
-    the playable bytes from storage — there's no machine-local temp file
-    to read from in the worker.
+    audio bytes are streamed directly from R2 to the PDS — the worker
+    never holds the full file in memory. content length is sourced from
+    a HEAD request so the PDS can validate up-front without buffering.
     """
     if audio_info.is_gated:
         return None
@@ -609,24 +629,27 @@ async def _upload_to_pds(
         return None
 
     content_type = sr.playable_format.media_type
-    if sr.transcode_info:
-        pds_file_data = sr.transcode_info.transcoded_data
-    else:
-        playable_ext = (
-            sr.playable_format.value if sr.playable_format else ctx.audio_extension
+    playable_ext = sr.playable_format.value
+    file_id = sr.file_id
+
+    content_length = await storage.head_file(file_id, playable_ext)
+    if content_length is None:
+        logfire.warning(
+            "pds blob upload skipped: file not found in storage",
+            file_id=file_id,
+            file_type=playable_ext,
         )
-        fetched = await storage.get_file_data(sr.file_id, playable_ext)
-        if fetched is None:
-            logfire.warning(
-                "pds blob upload skipped: file not found in storage",
-                file_id=sr.file_id,
-                file_type=playable_ext,
-            )
-            return None
-        pds_file_data = fetched
+        return None
+
+    def body_factory() -> AsyncIterable[bytes]:
+        return storage.stream_file_data(file_id, playable_ext)
 
     return await _try_upload_to_pds(
-        ctx.upload_id, ctx.auth_session, pds_file_data, content_type
+        ctx.upload_id,
+        ctx.auth_session,
+        body_factory,
+        content_length,
+        content_type,
     )
 
 

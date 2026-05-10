@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import AsyncIterable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any, BinaryIO
 
@@ -17,6 +18,12 @@ from backend._internal.auth import (
     get_client_auth_method,
     get_refresh_token_lifetime_days,
 )
+
+# factory that produces a fresh async iterator over the request body. used
+# for streaming uploads where the body must be re-emitted on retry (DPoP
+# nonce mismatch, transient network error). the factory is what the caller
+# hands us; we never store an iterator ourselves.
+StreamBodyFactory = Callable[[], AsyncIterable[bytes]]
 
 logger = logging.getLogger(__name__)
 
@@ -342,26 +349,87 @@ async def make_pds_request(
     )
 
 
+async def _signed_streaming_post(
+    oauth_session: OAuthSession,
+    url: str,
+    body_factory: StreamBodyFactory,
+    headers: dict[str, str],
+) -> httpx.Response:
+    """POST a streaming body to a DPoP-protected URL with nonce retry.
+
+    upstream `OAuthClient.make_authenticated_request` retries internally on
+    a DPoP nonce mismatch but reuses the same `kwargs` dict — which means
+    an async-iterator body gets exhausted on the first attempt and the
+    retry submits an empty body. for streaming uploads we must call the
+    factory anew per attempt, so this helper reimplements just the DPoP
+    signing + nonce-retry shape.
+    """
+    client_obj = get_oauth_client()
+    # OAuthClient does not expose its DPoP helper on the public surface, but
+    # the alternative is reimplementing DPoP proof creation here. an upstream
+    # contribution to make `make_authenticated_request` body-factory-aware
+    # is the right durable fix; until that lands, borrow `_dpop`.
+    dpop = client_obj._dpop
+    response: httpx.Response | None = None
+    for attempt in range(2):
+        proof = dpop.create_proof(
+            method="POST",
+            url=url,
+            private_key=oauth_session.dpop_private_key,
+            nonce=oauth_session.dpop_pds_nonce,
+            access_token=oauth_session.access_token,
+        )
+        request_headers = dict(headers)
+        request_headers["Authorization"] = f"DPoP {oauth_session.access_token}"
+        request_headers["DPoP"] = proof
+        async with httpx.AsyncClient(timeout=httpx.Timeout(None)) as http:
+            response = await http.post(
+                url, headers=request_headers, content=body_factory()
+            )
+        if dpop.is_dpop_nonce_error(response):
+            new_nonce = dpop.extract_nonce_from_response(response)
+            if new_nonce and attempt == 0:
+                oauth_session.dpop_pds_nonce = new_nonce
+                await client_obj.session_store.save_session(oauth_session)
+                continue
+        return response
+    assert response is not None
+    return response
+
+
 async def upload_blob(
     auth_session: AuthSession,
-    data: bytes | BinaryIO,
+    *,
+    data: bytes | BinaryIO | None = None,
+    body_factory: StreamBodyFactory | None = None,
+    content_length: int | None = None,
     content_type: str,
 ) -> BlobRef:
     """upload a blob to the user's PDS.
 
-    args:
-        auth_session: authenticated user session
-        data: binary data or file-like object to upload
-        content_type: MIME type (e.g., audio/mpeg, audio/wav)
+    callers must pick exactly one of two body shapes:
+
+    - `data`: in-memory bytes or a sync file-like object. correct for
+      small blobs (track artwork, profile avatars) where buffering is cheap.
+    - `body_factory` + `content_length`: a callable returning a fresh async
+      iterator of chunks plus the total byte length. correct for any audio
+      blob; never buffers the body in worker memory. the factory is invoked
+      per attempt so retries (DPoP nonce, transient network) get a fresh
+      stream.
 
     returns:
         blob reference dict: {"$type": "blob", "ref": {"$link": CID}, "mimeType": str, "size": int}
 
     raises:
         PayloadTooLargeError: if PDS rejects due to size limit (413)
-        ValueError: if session is invalid
+        ValueError: if session is invalid or args are inconsistent
         Exception: if upload fails after retry
     """
+    if (data is None) == (body_factory is None):
+        raise ValueError("upload_blob requires exactly one of data or body_factory")
+    if body_factory is not None and content_length is None:
+        raise ValueError("body_factory requires content_length")
+
     oauth_data = auth_session.oauth_session
     if not oauth_data or "access_token" not in oauth_data:
         raise ValueError(
@@ -371,21 +439,37 @@ async def upload_blob(
     oauth_session = reconstruct_oauth_session(oauth_data)
     url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.uploadBlob"
 
-    # read data if it's a file-like object
-    blob_data = data if isinstance(data, bytes) else data.read()
+    # buffered branch: existing small-blob callers pass `data`; we keep the
+    # bytes/file-like handling so artwork uploads continue to work unchanged.
+    blob_data: bytes | None = None
+    if body_factory is None:
+        assert data is not None
+        blob_data = data if isinstance(data, bytes) else data.read()
 
-    response = None  # defensive: bind before the loop
+    response: httpx.Response | None = None
     has_refreshed = False
 
     for attempt in range(_PDS_MAX_ATTEMPTS):
         try:
-            response = await get_oauth_client().make_authenticated_request(
-                session=oauth_session,
-                method="POST",
-                url=url,
-                content=blob_data,
-                headers={"Content-Type": content_type},
-            )
+            if body_factory is not None:
+                assert content_length is not None
+                response = await _signed_streaming_post(
+                    oauth_session,
+                    url,
+                    body_factory,
+                    headers={
+                        "Content-Type": content_type,
+                        "Content-Length": str(content_length),
+                    },
+                )
+            else:
+                response = await get_oauth_client().make_authenticated_request(
+                    session=oauth_session,
+                    method="POST",
+                    url=url,
+                    content=blob_data,
+                    headers={"Content-Type": content_type},
+                )
         except _TRANSIENT_HTTP_ERRORS as e:
             if attempt < _PDS_MAX_ATTEMPTS - 1:
                 backoff = _backoff_for_attempt(attempt)

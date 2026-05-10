@@ -214,6 +214,61 @@ def save_drone_as(
     return path
 
 
+def save_longform_drone(
+    path: Path,
+    duration_sec: float,
+    *,
+    sample_rate: int = 22050,
+    note: str = "A4",
+) -> Path:
+    """generate a long-form mono sine WAV via ffmpeg lavfi.
+
+    pure-python WAV synthesis (`save_drone`) is fine for short fixtures
+    but quadratic in duration on the python side; for tests that need
+    tens of minutes of audio we shell out to ffmpeg's `sine` source,
+    which produces the file in under a second regardless of length.
+
+    args:
+        path: destination .wav path
+        duration_sec: total duration in seconds (e.g. 3600 for 60 min)
+        sample_rate: samples per second; 22050 mono keeps a 60-min file
+            at ~150MB while still passing real audio decoders
+        note: musical note name for the sine frequency
+
+    returns:
+        the destination path (now a valid WAV file)
+    """
+    import shutil
+    import subprocess
+
+    if not shutil.which("ffmpeg"):
+        msg = "ffmpeg not found - required for long-form audio fixtures"
+        raise FileNotFoundError(msg)
+
+    freq = note_to_freq(note)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency={freq}:duration={duration_sec}",
+            "-ar",
+            str(sample_rate),
+            "-ac",
+            "1",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return path
+
+
 def save_drone_as_opus(
     path: Path,
     note: str = "A4",
