@@ -252,7 +252,7 @@ max_lines = 574
 
 [[rules]]
 path = "backend/src/backend/api/lists/playlists.py"
-max_lines = 1036
+max_lines = 1040
 
 [[rules]]
 path = "backend/src/backend/api/tracks/audio_replace.py"

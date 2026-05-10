@@ -152,22 +152,19 @@ async def _snapshot_pds_items(
     ]
 
 
-async def _make_playlist_public(session: AuthSession, playlist: Playlist) -> None:
-    """transition private → public.
+async def _publish_items_to_pds(
+    session: AuthSession, items: list[dict[str, str]], name: str
+) -> tuple[str, str]:
+    """write items as a new public ATProto list record on the user's PDS.
 
-    1. write items_json to a new ATProto list record on the user's PDS
-    2. update the row to reference the new record, clear items_json,
-       set is_private=false, and reset show_on_profile=false (visibility
-       changed; the user opts back in if they want it on their profile)
-
-    raises if the PDS write fails — the row stays private, no detritus.
+    returns ``(uri, cid)``. raises HTTPException(500) on PDS failure so
+    the caller can abort the transition without partial state.
     """
-    items = list(playlist.items_json or [])
     try:
-        uri, cid = await create_list_record(
+        return await create_list_record(
             auth_session=session,
             items=items,
-            name=playlist.name,
+            name=name,
             list_type="playlist",
         )
     except Exception as e:
@@ -175,42 +172,25 @@ async def _make_playlist_public(session: AuthSession, playlist: Playlist) -> Non
             status_code=500, detail=f"failed to publish playlist: {e}"
         ) from e
 
-    playlist.atproto_record_uri = uri
-    playlist.atproto_record_cid = cid
-    playlist.items_json = None
-    playlist.is_private = False
-    playlist.show_on_profile = False
-    playlist.track_count = len(items)
 
+async def _delete_pds_list_record_best_effort(
+    session: AuthSession, uri: str, playlist_id: str
+) -> None:
+    """log-and-continue delete of a public list record.
 
-async def _make_playlist_private(session: AuthSession, playlist: Playlist) -> None:
-    """transition public → private.
-
-    1. snapshot current PDS items into items_json (preserves ordering + cids)
-    2. flip the row to private and clear the PDS-record fields
-    3. best-effort delete the PDS record (logged-and-continue if it fails;
-       user-facing state is already correct, the public record is detritus)
+    used after flipping a playlist to private. the user-facing state is
+    already correct by the time we get here; the public record is
+    recoverable detritus, not a hard error.
     """
-    items = await _snapshot_pds_items(session, playlist)
-    public_uri = playlist.atproto_record_uri
-
-    playlist.items_json = items
-    playlist.is_private = True
-    playlist.atproto_record_uri = None
-    playlist.atproto_record_cid = None
-    playlist.show_on_profile = False
-    playlist.track_count = len(items)
-
-    if public_uri:
-        try:
-            await delete_record_by_uri(session, public_uri)
-        except Exception as e:
-            logger.warning(
-                "made playlist %s private but failed to delete PDS record %s: %s",
-                playlist.id,
-                public_uri,
-                e,
-            )
+    try:
+        await delete_record_by_uri(session, uri)
+    except Exception as e:
+        logger.warning(
+            "made playlist %s private but failed to delete PDS record %s: %s",
+            playlist_id,
+            uri,
+            e,
+        )
 
 
 async def _read_playlist_items(
@@ -838,12 +818,36 @@ async def update_playlist(
     _assert_can_mutate(session, playlist)
 
     # privacy transition runs first — it can reset show_on_profile, which
-    # the explicit show_on_profile arg below should then override if given
+    # the explicit show_on_profile arg below should then override if given.
+    # state assignment is done inline so the full transition is readable in
+    # one place; the helpers do only the I/O.
     if is_private is not None and is_private != playlist.is_private:
         if is_private:
-            await _make_playlist_private(session, playlist)
+            # public → private: snapshot PDS items, flip the row, then
+            # best-effort delete the now-orphan PDS record
+            items = await _snapshot_pds_items(session, playlist)
+            public_uri = playlist.atproto_record_uri
+            playlist.items_json = items
+            playlist.is_private = True
+            playlist.atproto_record_uri = None
+            playlist.atproto_record_cid = None
+            playlist.show_on_profile = False
+            playlist.track_count = len(items)
+            if public_uri:
+                await _delete_pds_list_record_best_effort(
+                    session, public_uri, playlist.id
+                )
         else:
-            await _make_playlist_public(session, playlist)
+            # private → public: write the items to a new PDS list record,
+            # then point the row at it and clear the local item store
+            items = list(playlist.items_json or [])
+            uri, cid = await _publish_items_to_pds(session, items, playlist.name)
+            playlist.atproto_record_uri = uri
+            playlist.atproto_record_cid = cid
+            playlist.items_json = None
+            playlist.is_private = False
+            playlist.show_on_profile = False
+            playlist.track_count = len(items)
 
     if show_on_profile is not None:
         playlist.show_on_profile = show_on_profile
