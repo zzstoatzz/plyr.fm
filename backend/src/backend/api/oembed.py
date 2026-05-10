@@ -104,8 +104,10 @@ async def _build_playlist_oembed(
         select(Playlist)
         .options(selectinload(Playlist.owner))
         .where(Playlist.id == playlist_id)
+        .where(Playlist.is_private == False)  # noqa: E712
     )
     if not (playlist := result.scalar_one_or_none()):
+        # private playlists return 404 — oEmbed has no auth path
         raise HTTPException(status_code=404, detail="playlist not found")
 
     return OEmbedResponse(
