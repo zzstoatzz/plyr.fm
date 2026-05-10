@@ -280,4 +280,4 @@ max_lines = 652
 
 [[rules]]
 path = "frontend/src/routes/playlist/[[]id[]]/+page.svelte"
-max_lines = 2584
+max_lines = 2589

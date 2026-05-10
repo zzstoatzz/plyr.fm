@@ -1749,22 +1749,27 @@
 	}
 
 	.visibility-toggle-btn {
-		display: inline-block;
-		margin-top: 0.75rem;
-		padding: 0.4rem 0.85rem;
-		background: transparent;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
+		/* align-self prevents the flex column from stretching this to full
+		   width like a text input. matches the visual register of the
+		   .queue-button pill but at a smaller, secondary scale. */
+		align-self: flex-start;
+		margin-top: 0.5rem;
+		padding: 0.4rem 1rem;
+		background: var(--glass-btn-bg, transparent);
+		border: 1px solid var(--glass-btn-border, var(--border-default));
+		border-radius: var(--radius-2xl);
 		font-family: inherit;
 		font-size: var(--text-sm);
+		font-weight: 500;
 		color: var(--text-secondary);
 		cursor: pointer;
-		transition: border-color 0.15s, color 0.15s;
+		transition: border-color 0.15s, color 0.15s, background 0.15s;
 	}
 
 	.visibility-toggle-btn:hover:not(:disabled) {
+		background: var(--glass-btn-bg-hover, transparent);
 		border-color: var(--accent);
-		color: var(--text-primary);
+		color: var(--accent);
 	}
 
 	.visibility-toggle-btn:disabled {
