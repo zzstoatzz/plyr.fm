@@ -56,7 +56,29 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
+    """Downgrade.
+
+    private playlists hold NULL in `atproto_record_uri` / `atproto_record_cid`,
+    so blindly restoring those columns to NOT NULL fails as soon as any
+    private playlist exists. running this downgrade after that point would
+    silently lose the private rows if we hard-deleted them, so make the
+    intent explicit instead: operator chooses how to handle the data.
+
+    to revert manually:
+        DELETE FROM playlists WHERE is_private = true;
+        -- then re-run `alembic downgrade` and the ALTER NOT NULL succeeds
+    """
+    bind = op.get_bind()
+    private_count = bind.execute(
+        sa.text("SELECT count(*) FROM playlists WHERE is_private = true")
+    ).scalar_one()
+    if private_count:
+        raise RuntimeError(
+            f"cannot downgrade: {private_count} private playlist(s) exist with "
+            "NULL atproto_record_uri. delete or convert them first: "
+            "DELETE FROM playlists WHERE is_private = true;"
+        )
+
     op.drop_index(op.f("ix_playlists_is_private"), table_name="playlists")
     op.alter_column(
         "playlists",

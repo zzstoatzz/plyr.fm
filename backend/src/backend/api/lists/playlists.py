@@ -64,7 +64,13 @@ logger = logging.getLogger(__name__)
 
 
 def _build_playlist_response(playlist: Playlist, owner_handle: str) -> PlaylistResponse:
-    """common projection from Playlist row → API response."""
+    """common projection from Playlist row → API response.
+
+    `track_count` reflects the cached value on the row. for full-playlist
+    responses where we've actually hydrated tracks, use
+    `_build_playlist_with_tracks` so the count matches the rendered list
+    even if the cache is stale or some referenced tracks weren't hydratable.
+    """
     return PlaylistResponse(
         id=playlist.id,
         name=playlist.name,
@@ -77,6 +83,19 @@ def _build_playlist_response(playlist: Playlist, owner_handle: str) -> PlaylistR
         is_private=playlist.is_private,
         created_at=playlist.created_at.isoformat(),
     )
+
+
+def _build_playlist_with_tracks(
+    playlist: Playlist,
+    owner_handle: str,
+    tracks: list,
+) -> PlaylistWithTracksResponse:
+    """projection for full responses — overrides `track_count` to match
+    the actually-hydrated `tracks` list, since the cached count can lag
+    behind PDS state and may not match what the client renders."""
+    base = _build_playlist_response(playlist, owner_handle).model_dump()
+    base["track_count"] = len(tracks)
+    return PlaylistWithTracksResponse(**base, tracks=tracks)
 
 
 def _assert_can_mutate(session: AuthSession, playlist: Playlist) -> None:
@@ -269,10 +288,7 @@ async def get_playlist_by_uri(
         session_did=session.did if session else None,
     )
 
-    return PlaylistWithTracksResponse(
-        **_build_playlist_response(playlist, artist.handle).model_dump(),
-        tracks=tracks,
-    )
+    return _build_playlist_with_tracks(playlist, artist.handle, tracks)
 
 
 @router.get("/playlists/{playlist_id}/meta", response_model=PlaylistResponse)
@@ -345,10 +361,7 @@ async def get_playlist(
         session_did=session.did if session else None,
     )
 
-    return PlaylistWithTracksResponse(
-        **_build_playlist_response(playlist, artist.handle).model_dump(),
-        tracks=tracks,
-    )
+    return _build_playlist_with_tracks(playlist, artist.handle, tracks)
 
 
 @router.post("/playlists/{playlist_id}/tracks", response_model=PlaylistResponse)

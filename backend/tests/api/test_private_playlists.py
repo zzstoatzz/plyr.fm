@@ -250,6 +250,33 @@ async def test_add_remove_track_to_private_playlist(
         assert remove.json()["track_count"] == 0
 
 
+async def test_full_response_track_count_matches_hydrated_tracks(
+    app_as_owner: FastAPI, db_session: AsyncSession, owner: Artist
+) -> None:
+    """get_playlist returns track_count == len(tracks), even when the
+    cached count and the actual hydratable tracks disagree."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app_as_owner), base_url="http://test"
+    ) as client:
+        playlist_resp = await _create_private_playlist(client, "stale-cache")
+        # add an item but desync the cached count to simulate stale cache
+        playlist = (
+            await db_session.execute(
+                select(Playlist).where(Playlist.id == playlist_resp["id"])
+            )
+        ).scalar_one()
+        playlist.items_json = [{"uri": "at://did:plc:x/c/r1", "cid": "bafy1"}]
+        playlist.track_count = 99  # cached count drifts
+        await db_session.commit()
+
+        full = await client.get(f"/lists/playlists/{playlist_resp['id']}")
+
+    assert full.status_code == 200
+    body = full.json()
+    # there are no tracks in the DB matching the URI, so hydration produces []
+    assert body["track_count"] == len(body["tracks"])
+
+
 async def test_reorder_private_playlist(app_as_owner: FastAPI, owner: Artist) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app_as_owner), base_url="http://test"
