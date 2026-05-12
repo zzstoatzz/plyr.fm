@@ -8,19 +8,28 @@ the user's frontend spinning on "uploading to storage… 100%" forever.
 see docs/internal/retrospectives/2026-05-10-worker-oom-loop-streaming.md
 for the incident that motivated this task.
 
-design (locked-in via PR conversation):
+design
 
-- threshold: 10 minutes. if `updated_at` hasn't ticked forward in 10 min,
-  the job is definitionally stuck — the worker calls `update_progress`
-  at each phase boundary, so a live task always has fresh `updated_at`.
-- action: mark failed (no retry). user re-uploads. retry would require
-  storing full upload kwargs on the `jobs` row; deferred to a follow-up.
-- staged R2 cleanup: yes. `jobs.file_id / file_type / is_gated` are
-  populated by the upload handler after staging, and the reaper uses them
-  to delete the right bucket's blob before marking failed.
-- notification: one bsky DM per reaper run summarizing affected users —
-  not one per stuck job, to avoid DM spam in a system-wide outage like
-  the May 6 incident (which would have produced 9 DMs).
+- **threshold 10 minutes**. heartbeats inside `_signed_streaming_post`
+  and the transcoder client tick `jobs.updated_at` every ~5s while a
+  task is alive, so 10 min of staleness genuinely means dead/wedged,
+  not "transcoding a big file." filtering on `updated_at` (not
+  `created_at`) is the safety against false-positives.
+- **atomic claim**: a single `UPDATE ... WHERE id IN (SELECT ... FOR
+  UPDATE SKIP LOCKED) RETURNING ...` performs the row lock + state
+  transition in one statement. concurrent reaper runs (which docket
+  shouldn't produce today, but could under future multi-worker setups
+  or split-brain edge cases) get empty RETURNING sets — no double-DM,
+  no double-cleanup.
+- **ownership-guarded R2 cleanup**: before deleting the staged blob,
+  the reaper queries `tracks` for any row referencing the same
+  `file_id` as `Track.file_id` OR `Track.original_file_id`. if a track
+  row owns the blob (worker hung AFTER `_create_records` committed,
+  e.g. during a slow `_schedule_post_upload`), we skip the delete.
+  this is the load-bearing protection against deleting live audio.
+- **notification**: one batched bsky DM per reaper run summarizing
+  affected users, not one per stuck job — avoids DM spam in a system-
+  wide outage like 2026-05-06 (which would have fired 9 separate DMs).
 """
 
 import logging
@@ -28,97 +37,128 @@ from datetime import UTC, datetime, timedelta
 
 import logfire
 from docket import Perpetual
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 
 from backend._internal.notifications import notification_service
-from backend.models import Artist
+from backend.models import Artist, Track
 from backend.models.job import Job, JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 
-# how long a job can sit in `processing` before we call it stuck. tracks
-# `updated_at`, not `created_at`, so a legitimately long upload that's
-# still emitting phase-progress updates is safe.
+# how long a job can sit in `processing` before we call it stuck. with the
+# heartbeat tickers inside `_signed_streaming_post` and the transcoder client,
+# a live task updates `updated_at` every ~5s — so 10 minutes of staleness
+# is a 120x signal-to-noise ratio over the heartbeat cadence.
 STUCK_UPLOAD_THRESHOLD = timedelta(minutes=10)
 
 
 async def reap_stuck_uploads(
     perpetual: Perpetual = Perpetual(every=timedelta(seconds=60), automatic=True),  # noqa: B008
 ) -> None:
-    """find upload jobs that have been stuck in `processing` and fail them.
+    """find upload jobs stuck in `processing` and fail them.
 
     runs automatically every 60 seconds via docket's Perpetual scheduler.
     """
     cutoff = datetime.now(UTC) - STUCK_UPLOAD_THRESHOLD
+    now = datetime.now(UTC)
+    error_message = (
+        f"upload timed out — task did not complete in "
+        f"{int(STUCK_UPLOAD_THRESHOLD.total_seconds() / 60)} minutes; "
+        f"please re-upload"
+    )
 
     async with db_session() as db:
-        result = await db.execute(
-            select(Job).where(
+        # atomic claim: single statement locks and transitions the rows so
+        # concurrent reaper runs cannot race. RETURNING gives us the rows
+        # this run actually claimed (others get empty sets).
+        stuck_ids = (
+            select(Job.id)
+            .where(
                 Job.type == JobType.UPLOAD.value,
                 Job.status == JobStatus.PROCESSING.value,
                 Job.updated_at < cutoff,
             )
+            .with_for_update(skip_locked=True)
         )
-        stuck_jobs = list(result.scalars().all())
+        result = await db.execute(
+            update(Job)
+            .where(Job.id.in_(stuck_ids))
+            .values(
+                status=JobStatus.FAILED.value,
+                message="upload failed",
+                error=error_message,
+                completed_at=now,
+                updated_at=now,
+            )
+            .returning(Job)
+        )
+        reaped = list(result.scalars().all())
+        await db.commit()
 
-        if not stuck_jobs:
+        if not reaped:
             return
 
         with logfire.span(
             "reap_stuck_uploads",
-            stuck_count=len(stuck_jobs),
+            stuck_count=len(reaped),
             threshold_minutes=int(STUCK_UPLOAD_THRESHOLD.total_seconds() / 60),
         ):
-            # delete staged R2 blobs first, then mark failed. order matters:
-            # if R2 delete throws on a single job we still want to mark the
-            # others failed; we wrap each cleanup in a try/log block.
-            owner_dids: set[str] = set()
-            reaped_job_ids: list[str] = []
-            for job in stuck_jobs:
-                owner_dids.add(job.owner_did)
-                reaped_job_ids.append(job.id)
-                await _cleanup_staged_blob(job)
-                job.status = JobStatus.FAILED.value
-                job.message = "upload failed"
-                job.error = (
-                    f"upload timed out — task did not complete in "
-                    f"{int(STUCK_UPLOAD_THRESHOLD.total_seconds() / 60)} minutes; "
-                    f"please re-upload"
-                )
-                job.completed_at = datetime.now(UTC)
-            await db.commit()
-
             logfire.warning(
-                "reaped {count} stuck upload jobs ({owners} affected users)",
-                count=len(stuck_jobs),
-                owners=len(owner_dids),
+                "reaped {count} stuck upload jobs",
+                count=len(reaped),
             )
 
-            # resolve affected DIDs to handles for the DM. best-effort —
-            # if a lookup misses we fall back to the DID so the message
-            # still ships.
-            handles = await _resolve_owner_handles(owner_dids)
+            for job in reaped:
+                await _maybe_cleanup_staged_blob(db, job)
+
+            owner_dids = {job.owner_did for job in reaped}
+            handles = await _resolve_owner_handles(db, owner_dids)
             await notification_service.send_reaper_notification(
-                reaped_count=len(stuck_jobs),
+                reaped_count=len(reaped),
                 affected_handles=handles,
                 threshold_minutes=int(STUCK_UPLOAD_THRESHOLD.total_seconds() / 60),
-                job_ids=reaped_job_ids,
+                job_ids=[j.id for j in reaped],
             )
 
 
-async def _cleanup_staged_blob(job: Job) -> None:
-    """delete the staged R2 audio blob for a stuck upload job.
+async def _maybe_cleanup_staged_blob(db, job: Job) -> None:
+    """delete the staged R2 blob ONLY if no track row references it.
 
-    skips silently when the job pre-dates the cleanup-hints migration
-    (file_id is NULL) — those rows simply don't get R2 cleanup, which is
-    the same behavior we had before this PR.
+    a job can stall in `processing` after `_create_records` has already
+    committed a `Track` row but before `_schedule_post_upload` finishes.
+    in that window, `job.file_id` is the live track audio (web-playable
+    uploads) or the lossless original (transcoded uploads, where it's
+    `Track.original_file_id`). deleting it would 404 playback for a
+    track that the user successfully published.
+
+    we check both columns because the staged blob can end up as either,
+    depending on whether the upload was web-playable or lossless.
     """
     if not job.file_id or not job.file_type:
         logfire.info(
             "skipping R2 cleanup for stuck job (no cleanup hints)",
             job_id=job.id,
+        )
+        return
+
+    # ownership check — is the staged blob now part of a live track?
+    owner = await db.execute(
+        select(Track.id)
+        .where(
+            or_(
+                Track.file_id == job.file_id,
+                Track.original_file_id == job.file_id,
+            )
+        )
+        .limit(1)
+    )
+    if owner.scalar_one_or_none() is not None:
+        logfire.info(
+            "skipping R2 cleanup for stuck job (blob is live track audio)",
+            job_id=job.id,
+            file_id=job.file_id,
         )
         return
 
@@ -129,22 +169,20 @@ async def _cleanup_staged_blob(job: Job) -> None:
             await storage.delete(job.file_id, job.file_type)
     except Exception as e:
         logfire.warning(
-            "R2 cleanup failed for stuck job (continuing to mark failed anyway)",
+            "R2 cleanup failed for stuck job (job already marked failed)",
             job_id=job.id,
             file_id=job.file_id,
             error=str(e),
         )
 
 
-async def _resolve_owner_handles(dids: set[str]) -> list[str]:
+async def _resolve_owner_handles(db, dids: set[str]) -> list[str]:
     """map owner DIDs to handles via the artists table. unresolved DIDs
-    pass through as `<did>` so the DM never silently drops a user.
-    """
+    pass through as the DID so the DM never silently drops a user."""
     if not dids:
         return []
-    async with db_session() as db:
-        rows = await db.execute(
-            select(Artist.did, Artist.handle).where(Artist.did.in_(list(dids)))
-        )
-        by_did = dict(rows.all())
+    rows = await db.execute(
+        select(Artist.did, Artist.handle).where(Artist.did.in_(list(dids)))
+    )
+    by_did = dict(rows.all())
     return [by_did.get(d, d) for d in dids]

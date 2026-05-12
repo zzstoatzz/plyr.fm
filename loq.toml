@@ -40,7 +40,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1543
+max_lines = 1560
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -284,4 +284,4 @@ max_lines = 2589
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/client.py"
-max_lines = 550
+max_lines = 617

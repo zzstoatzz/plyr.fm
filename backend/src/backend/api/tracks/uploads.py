@@ -298,12 +298,16 @@ async def _try_upload_to_pds(
         progress_pct=0.0,
     )
 
+    async def heartbeat() -> None:
+        await job_service.heartbeat(upload_id)
+
     try:
         blob_ref = await upload_blob(
             auth_session,
             body_factory=body_factory,
             content_length=content_length,
             content_type=content_type,
+            heartbeat=heartbeat,
         )
 
         # extract CID from blob ref: {"ref": {"$link": "<CID>"}, ...}
@@ -413,14 +417,21 @@ async def _transcode_audio(
             output_path = output_tmp.name
 
         # stream the lossless source from R2 to local disk in chunks; nothing
-        # is held in memory beyond a single chunk at a time.
+        # is held in memory beyond a single chunk at a time. heartbeat the
+        # job row every few seconds so the reaper trusts liveness even on
+        # a slow R2 fetch.
         bytes_streamed = 0
+        last_heartbeat = 0.0
         async with aiofiles.open(source_path, "wb") as source_file:
             async for chunk in storage.stream_file_data(
                 original_file_id, source_format
             ):
                 await source_file.write(chunk)
                 bytes_streamed += len(chunk)
+                now = asyncio.get_running_loop().time()
+                if now - last_heartbeat >= 5.0:
+                    await job_service.heartbeat(upload_id)
+                    last_heartbeat = now
 
         if bytes_streamed == 0:
             logfire.error(
@@ -451,9 +462,15 @@ async def _transcode_audio(
             progress_pct=0.0,
         )
 
+        async def transcode_heartbeat() -> None:
+            await job_service.heartbeat(upload_id)
+
         client = get_transcoder_client()
         result = await client.transcode_file(
-            source_path, source_format, output_path=output_path
+            source_path,
+            source_format,
+            output_path=output_path,
+            heartbeat=transcode_heartbeat,
         )
 
         if not result.success or not result.output_path:

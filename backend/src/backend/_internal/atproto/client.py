@@ -2,7 +2,8 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterable, Callable
+import time
+from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any, BinaryIO
 
@@ -25,6 +26,49 @@ from backend._internal.auth import (
 # nonce mismatch, transient network error). the factory is what the caller
 # hands us; we never store an iterator ourselves.
 StreamBodyFactory = Callable[[], AsyncIterable[bytes]]
+
+# async callable invoked periodically while a streaming body is being sent.
+# the streaming POST wrapper throttles calls so a slow uploader doesn't hammer
+# whatever the heartbeat writes to. used by the upload pipeline to tick
+# `jobs.updated_at` so the stuck-upload reaper trusts liveness signals.
+ProgressHeartbeat = Callable[[], Awaitable[None]]
+
+# how often to fire the progress heartbeat while a streaming body is being
+# POSTed. 5 seconds gives the reaper 100x headroom over its 10-minute
+# threshold; bytes-based fallback at 10 MB catches the case where time hasn't
+# elapsed but a lot of data has flowed.
+_HEARTBEAT_INTERVAL_SECONDS = 5.0
+_HEARTBEAT_INTERVAL_BYTES = 10 * 1024 * 1024
+
+
+async def _heartbeating_body(
+    body_factory: StreamBodyFactory,
+    heartbeat: ProgressHeartbeat,
+) -> AsyncIterable[bytes]:
+    """yield chunks from `body_factory()`, calling `heartbeat()` periodically.
+
+    a thin wrapper that turns a body iterator into a heartbeating iterator
+    without the body source needing to know anything about job state.
+    throttled by both wall-clock time and byte-count so neither a slow
+    trickle nor a fast burst can starve the heartbeat.
+    """
+    last_beat_time = time.monotonic()
+    bytes_since_beat = 0
+    async for chunk in body_factory():
+        yield chunk
+        bytes_since_beat += len(chunk)
+        now = time.monotonic()
+        if (
+            now - last_beat_time >= _HEARTBEAT_INTERVAL_SECONDS
+            or bytes_since_beat >= _HEARTBEAT_INTERVAL_BYTES
+        ):
+            try:
+                await heartbeat()
+            except Exception:
+                logger.exception("heartbeat raised; continuing stream")
+            last_beat_time = now
+            bytes_since_beat = 0
+
 
 logger = logging.getLogger(__name__)
 
@@ -355,6 +399,8 @@ async def _signed_streaming_post(
     url: str,
     body_factory: StreamBodyFactory,
     headers: dict[str, str],
+    *,
+    heartbeat: ProgressHeartbeat | None = None,
 ) -> httpx.Response:
     """POST a streaming body to a DPoP-protected URL with nonce retry.
 
@@ -369,6 +415,12 @@ async def _signed_streaming_post(
     PDS URLs from session storage cannot be redirected to a private
     address by a malicious or malformed session record before we stream
     user audio bytes to them.
+
+    when `heartbeat` is provided, it's invoked periodically as bytes flow
+    through the body iterator. used by the upload pipeline to tick
+    `jobs.updated_at` so the stuck-upload reaper can trust `updated_at` as
+    a real liveness signal even during a long PDS upload (which previously
+    had no internal heartbeat between phase-start and phase-end updates).
     """
     if not is_safe_url(url):
         raise ValueError(f"Unsafe URL: {url}")
@@ -391,9 +443,17 @@ async def _signed_streaming_post(
         request_headers = dict(headers)
         request_headers["Authorization"] = f"DPoP {oauth_session.access_token}"
         request_headers["DPoP"] = proof
+        # wrap the per-attempt factory so each retry gets a fresh iterator
+        # AND a fresh heartbeat throttle state.
+        if heartbeat is not None:
+
+            def attempt_body() -> AsyncIterable[bytes]:
+                return _heartbeating_body(body_factory, heartbeat)
+        else:
+            attempt_body = body_factory
         async with httpx.AsyncClient(timeout=httpx.Timeout(None)) as http:
             response = await http.post(
-                url, headers=request_headers, content=body_factory()
+                url, headers=request_headers, content=attempt_body()
             )
         if dpop.is_dpop_nonce_error(response):
             new_nonce = dpop.extract_nonce_from_response(response)
@@ -413,6 +473,7 @@ async def upload_blob(
     body_factory: StreamBodyFactory | None = None,
     content_length: int | None = None,
     content_type: str,
+    heartbeat: ProgressHeartbeat | None = None,
 ) -> BlobRef:
     """upload a blob to the user's PDS.
 
@@ -425,6 +486,11 @@ async def upload_blob(
       blob; never buffers the body in worker memory. the factory is invoked
       per attempt so retries (DPoP nonce, transient network) get a fresh
       stream.
+
+    when `heartbeat` is provided (only meaningful for the streaming branch),
+    it's called periodically while the body is being sent so the upload
+    pipeline can tick `jobs.updated_at` and keep the stuck-upload reaper
+    from racing a legitimately long PDS upload.
 
     returns:
         blob reference dict: {"$type": "blob", "ref": {"$link": CID}, "mimeType": str, "size": int}
@@ -470,6 +536,7 @@ async def upload_blob(
                         "Content-Type": content_type,
                         "Content-Length": str(content_length),
                     },
+                    heartbeat=heartbeat,
                 )
             else:
                 response = await get_oauth_client().make_authenticated_request(

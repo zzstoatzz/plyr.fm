@@ -5,6 +5,8 @@ client for converting non-web-playable audio formats (AIFF, FLAC) to MP3.
 
 import logging
 import os
+import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
@@ -18,6 +20,19 @@ from backend.config import settings
 logger = logging.getLogger(__name__)
 
 MB = 1024 * 1024  # bytes per megabyte
+
+# async callable invoked periodically while the transcoded response body
+# streams in. used by the upload pipeline to tick `jobs.updated_at` so the
+# stuck-upload reaper trusts liveness across the (potentially several-minute)
+# transcode phase.
+ProgressHeartbeat = Callable[[], Awaitable[None]]
+
+# heartbeat throttle: at most every 5 seconds or every 10 MB of streamed
+# output, whichever comes first. fires often enough to keep updated_at well
+# under any reasonable reaper threshold, infrequent enough to not hammer the
+# DB during a fast transcode.
+_HEARTBEAT_INTERVAL_SECONDS = 5.0
+_HEARTBEAT_INTERVAL_BYTES = 10 * 1024 * 1024
 
 
 @dataclass
@@ -79,6 +94,8 @@ class TranscoderClient:
         source_format: str,
         output_path: str | Path,
         target_format: str | None = None,
+        *,
+        heartbeat: ProgressHeartbeat | None = None,
     ) -> TranscodeResult:
         """transcode audio file to a web-playable format.
 
@@ -130,10 +147,27 @@ class TranscoderClient:
                     response.raise_for_status()
                     content_type = response.headers.get("content-type")
                     bytes_written = 0
+                    last_beat_time = time.monotonic()
+                    bytes_since_beat = 0
                     async with aiofiles.open(output_path, "wb") as out:
                         async for chunk in response.aiter_bytes():
                             await out.write(chunk)
                             bytes_written += len(chunk)
+                            bytes_since_beat += len(chunk)
+                            if heartbeat is not None:
+                                now = time.monotonic()
+                                if (
+                                    now - last_beat_time >= _HEARTBEAT_INTERVAL_SECONDS
+                                    or bytes_since_beat >= _HEARTBEAT_INTERVAL_BYTES
+                                ):
+                                    try:
+                                        await heartbeat()
+                                    except Exception:
+                                        logger.exception(
+                                            "heartbeat raised during transcode; continuing"
+                                        )
+                                    last_beat_time = now
+                                    bytes_since_beat = 0
 
                 logfire.info(
                     "transcode completed",

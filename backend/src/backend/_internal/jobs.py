@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import logfire
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from backend.models.job import Job, JobStatus, JobType
 from backend.utilities.database import db_session
@@ -123,6 +123,24 @@ class JobService:
             job.file_id = file_id
             job.file_type = file_type
             job.is_gated = is_gated
+            await db.commit()
+
+    async def heartbeat(self, job_id: str) -> None:
+        """tick `updated_at` on a still-active job without changing any other state.
+
+        called from inside long phases (PDS streaming, transcode chunk loop)
+        so the stuck-upload reaper can trust `updated_at` as a liveness signal:
+        an actively-running task always has a fresh `updated_at`, and only a
+        truly stalled task drifts past the reaper's threshold.
+
+        cheap on purpose — single `UPDATE ... WHERE id = ?` with no SELECT.
+        callers should already throttle (every N bytes or every T seconds);
+        unthrottled callsites would hammer postgres.
+        """
+        async with db_session() as db:
+            await db.execute(
+                update(Job).where(Job.id == job_id).values(updated_at=datetime.now(UTC))
+            )
             await db.commit()
 
     async def get_job(self, job_id: str) -> Job | None:
