@@ -43,7 +43,9 @@ cd frontend && bun install && cd ..
 
 # configure environment
 cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 # edit backend/.env — see the setup guide linked below for details
+# frontend/.env defaults to the local backend on :8001 and works as-is
 ```
 
 ### running the stack

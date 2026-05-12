@@ -22,9 +22,11 @@ uv sync
 # install frontend dependencies
 cd frontend && bun install && cd ..
 
-# copy environment template
-cp .env.example .env
-# edit .env with your credentials
+# copy environment templates
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+# edit backend/.env with your credentials
+# frontend/.env points at the local backend on :8001 by default
 
 # run backend
 uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8001
