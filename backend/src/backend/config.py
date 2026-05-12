@@ -822,7 +822,7 @@ class DocketSettings(AppSettingsSection):
         default="memory://",
         validation_alias="DOCKET_URL",
         description="Redis URL for docket. 'memory://' for local dev (in-memory, no Redis needed); "
-                    "'redis://host:port' for production.",
+        "'redis://host:port' for production.",
     )
     enabled: bool = Field(
         default=False,
