@@ -819,9 +819,10 @@ class DocketSettings(AppSettingsSection):
         description="Name of the docket instance (shared across workers)",
     )
     url: str = Field(
-        default="",
+        default="memory://",
         validation_alias="DOCKET_URL",
-        description="Redis URL for docket (required in production). Empty disables docket.",
+        description="Redis URL for docket. 'memory://' for local dev (in-memory, no Redis needed); "
+                    "'redis://host:port' for production.",
     )
     enabled: bool = Field(
         default=False,
