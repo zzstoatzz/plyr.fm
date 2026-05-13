@@ -48,7 +48,7 @@ a triage pass over open issues. you propose, the user decides. you never apply l
 
 ## the `good first issue` bar is STRICT
 
-see `feedback_good_first_issue_criteria.md` in memory. small scope and a good spec are NOT enough. **disqualifiers** (any one is fatal):
+small scope and a good spec are NOT enough — a new contributor (no prior context on the codebase, no creds) has to be able to pick it up and finish it without async help. **disqualifiers** (any one is fatal):
 
 - touches deep stateful subsystems — player, queue, BroadcastChannel, auth, OAuth, PDS sync
 - requires credentials a stranger doesn't have — prod DB, R2, CF API, Modal, Logfire write tokens
