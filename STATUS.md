@@ -47,6 +47,130 @@ plyr.fm should become:
 
 ### May 2026
 
+#### first external contribution + local-dev DX (PRs #1393, #1394, #1395, May 12)
+
+**why**: @ailawav.bsky.social (aila / @AilaScott on GitHub) forked the repo to contribute and hit two undocumented papercuts on first run — the frontend needed a `.env` nobody had told her about (sample audio wouldn't load without it), and the backend's `DOCKET_URL` defaulted to `""`, requiring a running Redis even for local dev where Redis is overkill.
+
+**what shipped**:
+- **#1393** (aila — first external PR merged): `DOCKET_URL` default flips from `""` to `"memory://"` so `just backend run` works against an in-process queue out of the box. production / staging override via env var, unchanged
+- **#1394**: new `frontend/.env.example` with `PUBLIC_API_URL=http://localhost:8001`; `docs/public/contributing.md` and `docs/internal/local-development/setup.md` now include `cp frontend/.env.example frontend/.env` in the quickstart
+- **#1395**: ruff-format pass on #1393 to keep the tree clean
+
+**why it matters**: the contribution path now works end-to-end without insider knowledge. every new contributor between #1394 landing and the next regression will find what aila had to discover by reading source. external PR #1393 also validated that #1373's `CONTRIBUTING.md` actually gets people to the right place.
+
+---
+
+#### upload outage cluster — streaming end-to-end + ops backstops (PRs #1389, #1390, #1391, May 10–12)
+
+**why**: production was silently broken from **2026-05-06 18:56 UTC → 2026-05-10 19:02 UTC** — almost 4 days. every track upload stranded at "uploading to storage… 100%" forever. `POST /tracks/` returned 200 and queued a `run_track_upload` task, but the docket worker process group was OOM-dead and nothing was draining the queue. discovered by @cameron.stream tweeting about it, **not** by any internal alerting. 9 stranded users. full postmortem at `docs/internal/retrospectives/2026-05-10-worker-oom-loop-streaming.md`.
+
+**root cause was structural**: the upload pipeline buffered the **entire audio file** in worker memory at four distinct points (R2 read, transcode result, PDS `uploadBlob`, CLAP embedding base64). with `concurrency=10` and post-upload fan-out, each in-flight upload held the bytes 3–5× simultaneously. on the cold-start backlog drain after a deploy, a long-form upload OOM-killed the 2 GB worker. fly's default `restart.policy = on-failure max_retries = 10` gave up after 10 consecutive OOMs and left the machine `stopped`.
+
+**what shipped** (three PRs, layered):
+
+1. **#1389 — structural fix: stream audio end-to-end**
+   - `StorageProtocol.stream_file_data()` (async iter of chunks) + `head_file()` (for Content-Length); new `_signed_streaming_post` helper that supports DPoP retries with body factories (upstream `make_authenticated_request` exhausts an async iterator on its inner retry)
+   - transcoder client streams response → `/tmp` via `httpx.AsyncClient.stream` + `aiofiles`; `_transcode_audio` and `_upload_to_pds` stream R2 → /tmp / PDS uniformly. `TranscodeInfo.transcoded_data: bytes` removed entirely
+   - Modal CLAP service now accepts `audio_url` and Range-fetches the first ~12 MB itself (model only uses the first 30 s); the worker no longer downloads or base64-encodes
+   - `migrate-to-PDS`, `restore-revision`, and PDS backfill task all moved off `get_file_data`
+   - **regression test**: 60-min mono WAV (~150 MB) generated via ffmpeg at fixture time, uploaded through the real API, polled to completion. future PRs that re-buffer fail CI instead of an angry user tweet. CI integration-tests timeout 15 → 30 min to accommodate it
+   - **also imports 19 historical retros** from local `sandbox/` into `docs/internal/retrospectives/` — convention has existed since 2025-11 but nothing was reviewable / cross-linkable until now
+   - **post-merge action**: redeploy Modal CLAP service (`uvx modal deploy services/clap/app.py`); `audio_b64` path kept for backwards-compat so redeploy can lag merge
+
+2. **#1390 — never-give-up worker restart + silence alert runbook**
+   - `backend/fly.toml`: scoped `[[restart]]` block for `processes = ["worker"]` with `policy = "always"` (was on-failure / max_retries=10). singleton consumer of the upload queue has no scenario where giving up is correct; worst case is a noisy restart loop, which is what the silence alert catches
+   - `app` keeps fly's default (it has HTTP health checks + redundancy)
+   - new runbook `docs/internal/runbooks/worker-silence-alert.md`: logfire saved query that fires when (1) the HTTP API accepted ≥1 `POST /tracks/` in a 5-min window AND (2) the worker emitted **zero** task-execution spans. condition (2) is the load-bearing part — "queue is being added to but nothing is being executed" is the exact shape of the May 6 failure. saved-query wiring is a manual one-time UI step; the runbook is reviewable
+
+3. **#1391 — stuck-job reaper (symptom-side detector)**
+   - direct user-symptom check: a `jobs` row in `status='processing'` whose `updated_at` is >10 min old is, by definition, a user staring at a stuck progress bar — regardless of why
+   - `jobs` schema gains `file_id` / `file_type` / `is_gated` (nullable) populated by both upload entry points after staging, so the reaper deletes the staged R2 blob from the **right bucket** before failing the row. composite index `idx_jobs_reaper_scan` on `(type, status, updated_at)`
+   - new docket Perpetual at `backend/_internal/tasks/reaper.py`, runs every 60 s. marks row failed → best-effort R2 cleanup → sends **one batched bsky DM per reap** (not per stuck job) summarizing affected users. batched DM is deliberate: a May-6-style outage would otherwise produce 9 separate DMs and risk bsky rate-limiting
+   - reuses the existing bsky DM client / recipient resolution; no new infra or secrets
+
+**decisions / trade-offs**:
+- streaming chunks vs. presigned-URL pulls: every stage either streams chunks or hands Modal a URL to range-fetch. **no `await body.read()` into bytes anywhere on the audio path.** encoded as a hard rule in agent memory so future PRs can't regress it
+- reaper threshold: 10 min. `updated_at` ticks forward at every phase boundary, so a legitimate slow upload still has fresh `updated_at`. if false-positives appear, either bump to 15/20 OR add a heartbeat ping inside `_signed_streaming_post` (5-line change)
+- reaper marks-failed-immediately, no retry. retry would require storing full upload kwargs on the job row — deferred until we observe a class of recoverable failures
+- one batched DM per reap rather than per stuck job
+
+**still open**: fly worker tcp health check (catches running-but-stuck, not in-scope for the May 6 OOM-kill specifically); upstream `atproto_oauth.OAuthClient` body-factory support (then `_signed_streaming_post` can be removed).
+
+---
+
+#### private playlists v2 + visibility toggle (PRs #1386, #1387, #1388 — superseding closed #1385, May 9–10)
+
+**why**: every other playlist app has a private mode. plyr.fm didn't — every playlist was published to the user's PDS and discoverable. needed a privacy story now, but atproto's permissioned-data substrate ("spaces") is in active development upstream and realistically ~end of summer 2026 ([dholms's spec](https://dholms.leaflet.pub/3mhj6bcqats2o), [PDS branch](https://github.com/bluesky-social/atproto/compare/permissioned-data), [tranquil-pds#72](https://tangled.org/tranquil.farm/tranquil-pds/issues/72)). question to answer: build a forward-looking abstraction that mirrors the substrate so storage swaps cleanly later, or take the simplest app-layer shape and decide migration per-feature when the substrate lands?
+
+**design evolution — v1 (#1385, closed) → v2 (#1386, merged)**:
+
+v1 (#1385) built a full backend `Space` abstraction: new `spaces` / `space_members` / `space_records` tables mirroring the protocol shape exactly (flat member list, no read/write distinction, no tier column), a `plyr-space://` URI scheme that one-line-swaps to `ats://` when the substrate lands, `get_or_create_personal_space` lazy-creating a single-member space on first private playlist, separate `_internal.spaces` module with `can_read` / membership ops mirroring `com.atproto.space.*` XRPC. ~26 tests across spaces + private-playlists. the bet: build the storage interface today so feature code doesn't change when the substrate ships.
+
+**closed in favor of v2** because the substrate timing is uncertain (the upstream PDS branch is ~30 commits but lexicons aren't stable) and the `Space` abstraction was speculative — no second consumer in this PR. drafts and members-only jams would have validated the abstraction but they aren't built yet, and v1's `Space` shape was pinned to today's reading of an upstream spec that's still being revised. shipping the abstraction now bets that the shape we coded against matches what lands later; getting it wrong is more expensive than a v2-to-substrate migration later when the spec is concrete.
+
+#1384 currently classifies private playlists as "may always stay app-layer; degenerate single-user case" against dholms's framing of permissioned data as a *shared social context* primitive. **that framing is too narrow.** the natural product trajectory for a private playlist is "private → selectively shared with a few people" — that's a multi-member permissioned context, exactly what the substrate is for. so the v2 shape isn't a permanent answer; it's the simplest thing that works for the single-user case today, and the substrate is the right home the moment collaborative-playlist UX shows up. #1384's classification table should be updated to reflect that.
+
+**v2 (#1386) — what shipped**:
+- migration `5c56f12bc84d`: `is_private boolean` + `items_json jsonb` on the existing `playlists` table, `atproto_record_uri` / `atproto_record_cid` nullable. that's the whole storage shape — no new tables
+- create-modal two-card visibility picker (public / private, accent-border selection). private creates skip the PDS round-trip entirely; items live inline in `items_json`
+- every playlist endpoint branches on `is_private`. new `/lists/playlists/{id}/reorder` handles both paths uniformly (replaces the legacy rkey-keyed reorder for playlists)
+- `Playlist.atproto_record_uri` becomes `string | null` end-to-end (TS types + frontend)
+
+**existence-leak hardening** (the part worth the most review — inherited verbatim from #1385's audit, this is the bit a hostile non-member must not be able to walk around):
+
+non-members shouldn't be able to distinguish "exists but I can't read" from "doesn't exist." anything subtler is a leak.
+
+| leak surface | fix | what it would have leaked |
+|---|---|---|
+| mutation endpoints | non-owners get **404, not 403** via `_assert_can_mutate` on all 5 paths (`add_track`, `remove_track`, `reorder`, `update`, `delete`, `upload_cover`) | "this playlist exists" via 403 vs 404 distinguishability |
+| `/search` | `WHERE is_private = false` on the trigram name match | playlist names |
+| `/oembed` | 404 for private (no auth path on this endpoint) | title + owner via twitter/leaflet/bluesky embed preview cards — would have surfaced anywhere the URL was pasted |
+| `/activity` | no `CollectionEvent` emitted for private creates or for adding tracks to private playlists; defense-in-depth `WHERE is_private = false` on the SQL feed query | private playlist existence + composition via the public activity feed |
+| `/playlists/by-uri` | only matches public URIs (private has `atproto_record_uri = NULL`) | resolution of leaked PDS URIs (defensive — private playlists don't write to PDS, so this is theoretically unreachable) |
+| `list_artist_public_playlists` | excludes private regardless of `show_on_profile` setting | profile-page enumeration |
+
+verified-safe paths (audited, no change required): `ingest.py` jetstream/PDS event handlers look up by `atproto_record_uri` which is NULL for private, so private playlists are **invisible to the firehose by construction** — events never match. `/activity/histogram` counts `collection_events` without joining `playlists`, but since we don't emit events for private writes the count isn't biased.
+
+13 e2e tests in `tests/api/test_private_playlists.py` cover the 5 mutation paths, the 6 leak surfaces, plus owner-can-read / non-owner-404 / anonymous-404 / list filters / add+remove+reorder+delete lifecycle.
+
+**#1387 — visibility toggle** (originally deferred in #1385 as "comes alongside artist drafts," landed standalone the same day): extends `PATCH /lists/playlists/{id}` with `is_private`. private→public writes `items_json` to a new PDS list record and clears the JSONB; public→private snapshots current PDS items into `items_json` (preserving order + cids) and best-effort deletes the PDS record. `show_on_profile` resets to false on either transition — visibility changed, the user opts back in if they want. ordering rule: **persist new state → update row → clean up old state**. failures during new-state abort the transition; cleanup failures are logged and tolerated.
+
+**#1388 — UI polish**: the new "make public" / "make private" button no longer stretches like a text input.
+
+**the trade-off we're owning**: app-layer privacy. plyr.fm's backend can read these records by definition — that's true of every "private" feature on every SaaS product, but worth saying explicitly since the rest of the platform is designed around user-owned PDS storage. anything that needs *cryptographic* guarantees against a hostile/compromised plyr backend must wait for the substrate; private playlists today are v0 listener-organization, not security-critical state.
+
+**collaborative playlists are the obvious next step**, and they're the trigger for substrate adoption: "private → selectively shared" is a multi-member permissioned context, exactly the shape dholms's spec serves. when that UX shows up, the migration path is to lift `items_json` onto a shared SpaceRecord and add a member list — which is what v1 (#1385) prefigured, minus the speculation about today's lexicon shape. #1384's substrate-time plan column should reflect "yes, when sharing lands" rather than "may always stay app-layer."
+
+---
+
+#### cover-art background scrim — readability fix (PR #1381, May 8, closes #1374)
+
+**why**: @incognitothief reported that on the track-detail page with *use currently playing track's artwork as background* enabled, title text and *add to queue* were invisible against a light cover. same root cause showed up on home, playlists, albums, embeds, activity, profile pages — every route with text directly on the body background.
+
+**what shipped**: a single layer change rather than patching ~15 transparent-on-body offenders. `body::before` now composites a theme-aware flat-color scrim on top of the cover image inside the same blur (`rgba(10,10,10,0.65)` dark / `rgba(250,250,250,0.65)` light, alpha picked so pure-white covers still hit ≥4.5:1 WCAG AA contrast with `--text-primary`). cover still tiles, blurs, and shows through at 35% transmittance — atmosphere instead of competing with content. user-chosen custom background images are deliberately untouched (explicit aesthetic choice).
+
+---
+
+#### artist identity backfill from bsky (PR #1382, May 8)
+
+**why**: artists whose bsky identity changed before #1200 (Jetstream identity-event sync, 2026-03-30) never got their plyr.fm row updated — the consumer didn't exist when those events fired. surfaced today: a user who changed their handle on 2026-03-04 still appears under their old handle two months later. additionally `ingest_identity_update` only syncs `handle` / `pds_url` / `avatar_url`, so an auto-default `display_name` (`== handle` from `ensure_artist_exists`) stays stuck until the user manually touches their profile.
+
+**what shipped**: new admin script `scripts/backfill_artist_identity.py` following the existing backfill shape (uv shebang, asyncio + semaphore, `--dry-run`, `--limit`, `--concurrency`, `--did` for spot fixes). per artist: fetch bsky profile → diff stored row vs profile → apply (or print). `display_name` is **only** updated when it currently equals the stored `handle` (the auto-default marker) so deliberately-set display names are preserved. when `Artist.handle` changes, `UserSession.handle` is updated in lockstep, matching what `ingest_identity_update` does for live events.
+
+---
+
+#### default-hide suno + voice memo tag (PR #1383, May 8)
+
+`suno` joins `ai` / `ai-slop` in `DEFAULT_HIDDEN_TAGS` (backend `utilities/tags.py` + frontend `preferences.svelte.ts`) so fresh accounts default to hiding it. existing users keep whatever they have — `DEFAULT_HIDDEN_TAGS` only applies to fresh preference rows; existing users add `suno` from the tag filter UI if they want. `/record` now tags voice captures with `voice memo` (space, matches the normalized form) instead of `voice-memo`.
+
+---
+
+#### backlog-maintenance skill (PR #1396, May 13)
+
+new `.claude/skills/backlog-maintenance/SKILL.md` codifying the triage rules that were previously living only in memory. propose-and-wait flow over labels and closes; the strict `good first issue` bar (small scope ≠ good-first — deep state / creds / unsettled product judgment / upstream blockers / "annoying state issues" all disqualify); stale-close heuristics (link dumps without acceptance criteria, superseded work, owner comments indicating a tool has shipped). explicit "if zero candidates exist, say so" — don't stretch the bar. born out of the triage pass that landed `good first issue` on #1348 and closed #494 (pmgfal supersedes it). skill files are repo-checked and shared across contributors; memory files are local-only — moving the rules out of memory makes them reviewable for the next contributor running the skill.
+
+---
+
 #### jam deep-link join toast (PR #1378, May 7)
 
 **why**: @hipstersmoothie.com reported that following Tynan's `plyr.fm/jam/0toyxh1w` share link, signing in, and ending up on the homepage looked like the join hadn't worked. logfire spans confirmed the #993 intent-preservation cookie landed him on `/jam/[code]` correctly and `jam.join()` returned 200 — he then re-tapped the share link twice over the next ~90s, each time re-joining, because the home landing gave no acknowledgement.
@@ -185,7 +309,17 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-jam deep-link join now toasts on success (#1378) — closes the silent-success gap in the post-#993 intent-preservation flow that @hipstersmoothie.com hit on May 7. polish week on top: comic sans fallback fixed for mobile (#1377), live theme's celestial logo experiment ran its full opt-in → inherent → removed arc (#1375 → #1376 → #1380) — shipped to prod, lived ~36h, ripped out because it didn't feel right in the live app, `CONTRIBUTING.md` added (#1373). georgia is the new default font (#1371) — explicit choices preserved via the existing `?? DEFAULT_FONT` fall-through; shipped to app + docs; rollout surfaced a pre-existing deploy-docs misconfig where CI had been silently deploying to the wrong Cloudflare account since 2026-03-06 (token rotated, fixed). image pipeline cleanup landed end-to-end (#1364-1366) — EXIF orientation, iPhone MPO normalization, two parallel upload paths consolidated. canonical DID storage for featured artists (#1362-1363) — closes the `displayName`/`display_name` drift class entirely via read-time profile resolution. infra: docket worker now on its own fly process group (#1359) so a runaway upload task can only OOM its own machine. audio revisions feature shipped (#1311-1320, #1325) — replace audio without losing track identity, with confirm-before-replace + restore + PDS blob re-upload on GC. like resurrection race fixed via Redis tombstone (#1338, closes #1321). upload reliability hardened across the stack (#1331, #1333, #1336, #1350) — migrated to docket, per-DID concurrency, shared-storage staging, pre-flight auth. issue triage 2026-05-05: closed #1321 (fixed) and #1328 (likely fixed, awaiting reporter); narrowed #1316 to audio_replace.py only. next: deploy-docs sanity check (assert prod alias moved), ship #1316 (createdAt fix in audio_replace), #1314/#1315 (audio replace race follow-ups), sheets unification (#1348), `config.py` decomposition.
+**first external contribution merged**: @ailawav.bsky.social (aila / @AilaScott on GitHub) shipped #1393 — a `DOCKET_URL=memory://` default so local dev doesn't require Redis. follow-ups #1394 (`frontend/.env.example` + setup-guide updates) and #1395 (ruff cleanup) closed the surrounding DX gaps she hit on first run, so the contribution path now works end-to-end without insider knowledge.
+
+**upload outage class fully closed**. the 2026-05-06 → 05-10 silent OOM-loop outage (4 days, 9 stranded users, discovered via @cameron.stream's tweet not internal alerting) is fixed end-to-end across three PRs: #1389 streams audio at every stage (R2 → worker → PDS, R2 → worker → Modal, transcode in/out via `/tmp` + `aiofiles`) with a 60-min long-form regression test guarding the buffer points; #1390 sets `restart.policy = always` on the worker process group + adds a logfire silence-alert runbook keyed on "queue is being added to but nothing is being executed"; #1391 adds a docket-Perpetual reaper that fails any upload job stuck in `processing` >10 min, cleans up its R2 blob (new `file_id` / `file_type` / `is_gated` cleanup-hint columns on `jobs`), and sends one batched bsky DM per reap. the "audio must stream end-to-end" rule is encoded in agent memory so future PRs can't regress it.
+
+**private playlists shipped — and the design collapsed from v1 to v2 mid-flight**: closed PR #1385 built a full backend `Space` abstraction (tables mirroring atproto's permissioned-data spec, `plyr-space://` URI scheme, one-line-swap migration story) — closed in favor of #1386, which is just `is_private boolean` + `items_json jsonb` on the existing `playlists` table. the lesson: don't pre-build abstractions against a spec that's still being revised upstream; ship the simplest shape that works and migrate when the substrate is concrete. v2 carries the same 6-surface existence-leak audit (mutations 404 not 403, `/search` / `/oembed` / `/activity` / `/by-uri` / `list_artist_public_playlists` all filter or refuse; ingest.py is firehose-invisible by construction). #1387 added the post-creation toggle (private→public publishes a PDS record; public→private snapshots into `items_json` and best-effort deletes); #1388 fixed the toggle button's text-input stretch. **collaborative playlists are the obvious substrate trigger**: "private → selectively shared with a few people" is a multi-member permissioned context, which is exactly what dholms's spec is for — #1384's classification of private playlists as "may always stay app-layer; degenerate single-user case" should be updated to reflect that.
+
+**polish + DX**: cover-art background scrim (#1381, closes #1374) — single-layer fix for ~15 sites where transparent foreground collapsed against light covers; artist identity backfill from bsky (#1382) for rows missed by the pre-#1200 identity-event window; suno hidden by default + voice memo tag normalization (#1383); backlog-maintenance skill (#1396) so the strict good-first-issue rules live in the repo not in memory.
+
+**carried forward from prior cycles**: jam deep-link join toast (#1378), mobile Comic Sans fallback (#1377), celestial logo experiment shipped + lived ~36h + ripped (#1375→#1376→#1380), `CONTRIBUTING.md` (#1373), georgia default font + deploy-docs misconfig fix (#1371), image pipeline cleanup (#1364-1366), canonical DID storage for featured artists (#1362-1363), docket worker on its own fly process group (#1359).
+
+**next**: fly worker tcp health check (running-but-stuck detector — symptom-side complement to the silence alert); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop the `_signed_streaming_post` helper); deploy-docs sanity check (assert prod alias moved); ship #1316 (createdAt fix in audio_replace), #1314/#1315 (audio replace race follow-ups), sheets unification (#1348, good-first-issue), `config.py` decomposition.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -321,5 +455,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-07 (jam deep-link join toast, comic sans mobile fallback, celestial logo tried + reverted, CONTRIBUTING.md, georgia default font + deploy-docs incident, image pipeline cleanup, canonical DID storage, docket worker process split).
+this is a living document. last updated 2026-05-13 (first external contribution from @ailawav.bsky.social — `DOCKET_URL=memory://` default + `frontend/.env.example` follow-ups; 4-day upload OOM outage closed end-to-end via streaming refactor + ops backstops + stuck-job reaper; private playlists app-layer v2 + visibility toggle; cover-art scrim; artist identity backfill; backlog-maintenance skill).
 
