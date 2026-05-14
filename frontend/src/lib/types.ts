@@ -65,6 +65,8 @@ export interface Track {
 	audio_storage?: 'r2' | 'pds' | 'both'; // where audio is stored
 	pds_blob_cid?: string | null; // CID if stored on user's PDS
 	unlisted?: boolean; // excluded from discovery feeds
+	copyright_song_uri?: string | null; // indiemusi song record (set if track has rights metadata)
+	copyright_recording_uri?: string | null; // indiemusi recording record
 }
 
 export interface LinkedAccount {

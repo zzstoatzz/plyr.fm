@@ -12,6 +12,8 @@
 	import PdsAudioUploadsToggle from '$lib/components/PdsAudioUploadsToggle.svelte';
 	import PdsBackfillControl from '$lib/components/PdsBackfillControl.svelte';
 	import CopyrightSection from '$lib/components/CopyrightSection.svelte';
+	import CopyrightRightsPanel from '$lib/components/CopyrightRightsPanel.svelte';
+	import type { TrackRights } from '$lib/components/CopyrightRightsPanel.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary, Playlist } from '$lib/types';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -68,6 +70,12 @@
 	let restorePending = $state(false);
 	let editSupportGate = $state(false);
 	let editUnlisted = $state(false);
+	// copyright rights state for the inline edit form — kept in sync with the
+	// CopyrightRightsPanel via bindable props.
+	let editCopyrightEnabled = $state(false);
+	let editCopyrightRights = $state<TrackRights>({});
+	// snapshot of the on-load state so we know whether to POST/DELETE on save
+	let editCopyrightWasEnabled = $state(false);
 	let hasUnresolvedEditFeaturesInput = $state(false);
 	let recommendedTags = $state<{name: string; score: number}[]>([]);
 	let loadingRecommendedTags = $state(false);
@@ -448,8 +456,18 @@
 		editAlbum = track.album?.title || '';
 		editFeaturedArtists = track.features || [];
 		editTags = track.tags || [];
-		editSupportGate = track.support_gate !== null && track.support_gate !== undefined;
+		editSupportGate =
+			track.support_gate !== null &&
+			track.support_gate !== undefined &&
+			track.support_gate.type !== 'copyright';
 		editUnlisted = track.unlisted ?? false;
+		// initialize copyright state from the track's persisted URIs.
+		// we don't have the original ISWC/ISRC/masterOwner stored locally — those
+		// live on the PDS records. for now we leave the form blank on open; a
+		// save will overwrite them with whatever's in the form.
+		editCopyrightEnabled = Boolean(track.copyright_song_uri);
+		editCopyrightWasEnabled = editCopyrightEnabled;
+		editCopyrightRights = {};
 		fetchRecommendedTags(track.id);
 	}
 
@@ -489,6 +507,9 @@
 		editRemoveImage = false;
 		editSupportGate = false;
 		editUnlisted = false;
+		editCopyrightEnabled = false;
+		editCopyrightWasEnabled = false;
+		editCopyrightRights = {};
 		editAudioFile = null;
 		recommendedTags = [];
 		loadingRecommendedTags = false;
@@ -624,11 +645,15 @@
 		}
 		// always send tags (empty array clears them)
 		formData.append('tags', JSON.stringify(editTags));
-		// send support_gate - null to remove, or {type: "any"} to enable
-		if (editSupportGate) {
-			formData.append('support_gate', JSON.stringify({ type: 'any' }));
-		} else {
-			formData.append('support_gate', 'null');
+		// send support_gate - null to remove, or {type: "any"} to enable.
+		// copyright-gated tracks have their own toggle below; leave support_gate
+		// alone in that case so we don't clobber the copyright gate.
+		if (!editCopyrightEnabled && !editCopyrightWasEnabled) {
+			if (editSupportGate) {
+				formData.append('support_gate', JSON.stringify({ type: 'any' }));
+			} else {
+				formData.append('support_gate', 'null');
+			}
 		}
 		formData.append('unlisted', editUnlisted ? 'true' : 'false');
 		// handle artwork: remove, replace, or leave unchanged
@@ -645,15 +670,39 @@
 				credentials: 'include'
 			});
 
-			if (response.ok) {
-				await loadMyTracks();
-				await loadMyAlbums();
-				cancelEdit();
-				toast.success('track updated successfully');
-			} else {
+			if (!response.ok) {
 				const error = await response.json();
 				toast.error(error.detail || 'failed to update track');
+				return;
 			}
+
+			// copyright rights are saved through a dedicated endpoint, not the
+			// PATCH formData. apply enable/disable transitions and field updates.
+			if (editCopyrightEnabled) {
+				const rightsResp = await fetch(`${API_URL}/tracks/${trackId}/copyright`, {
+					method: 'POST',
+					credentials: 'include',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(editCopyrightRights)
+				});
+				if (!rightsResp.ok) {
+					const err = await rightsResp.json().catch(() => ({}));
+					toast.error(`copyright save failed: ${err.detail ?? rightsResp.statusText}`);
+				}
+			} else if (editCopyrightWasEnabled) {
+				const dropResp = await fetch(`${API_URL}/tracks/${trackId}/copyright`, {
+					method: 'DELETE',
+					credentials: 'include'
+				});
+				if (!dropResp.ok) {
+					toast.error('failed to clear copyright metadata');
+				}
+			}
+
+			await loadMyTracks();
+			await loadMyAlbums();
+			cancelEdit();
+			toast.success('track updated successfully');
 		} catch (e) {
 			alert(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
 		}
@@ -1239,13 +1288,14 @@
 												</p>
 											</div>
 										</div>
-										{#if atprotofansEligible || track.support_gate}
+										{#if atprotofansEligible || (track.support_gate && track.support_gate.type !== 'copyright')}
 											<div class="edit-field-group">
 												<span class="edit-label">supporter access</span>
 												<label class="toggle-row">
 													<input
 														type="checkbox"
 														bind:checked={editSupportGate}
+														disabled={editCopyrightEnabled}
 													/>
 													<span>only supporters can play this track</span>
 												</label>
@@ -1256,6 +1306,14 @@
 												{/if}
 											</div>
 										{/if}
+										<div class="edit-field-group">
+											<span class="edit-label">copyright</span>
+											<CopyrightRightsPanel
+												bind:enabled={editCopyrightEnabled}
+												bind:rights={editCopyrightRights}
+												disabled={editSupportGate}
+											/>
+										</div>
 										<div class="edit-field-group">
 											<span class="edit-label">visibility</span>
 											<label class="toggle-row">

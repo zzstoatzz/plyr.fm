@@ -143,6 +143,9 @@ class TrackResponse(BaseModel):
     copyright_match: str | None = None  # "Title by Artist" of primary match
     support_gate: dict[str, Any] | None = None  # supporter gating config
     gated: bool = False  # true if track is gated AND viewer lacks access
+    # indiemusi rights record pointers (set when this track has copyright metadata)
+    copyright_song_uri: str | None = None
+    copyright_recording_uri: str | None = None
     original_file_id: str | None = None  # original file hash if transcoded
     original_file_type: str | None = (
         None  # original format if transcoded (e.g., aiff, flac)
@@ -224,11 +227,20 @@ class TrackResponse(BaseModel):
         # gated = true only if track has support_gate AND viewer lacks access
         gated = False
         if track.support_gate:
-            is_owner = viewer_did and viewer_did == track.artist_did
-            is_supporter = (
-                supported_artist_dids and track.artist_did in supported_artist_dids
+            gate_type = (
+                track.support_gate.get("type")
+                if isinstance(track.support_gate, dict)
+                else None
             )
-            gated = not (is_owner or is_supporter)
+            if gate_type == "copyright":
+                # copyright tracks just need any authenticated listener
+                gated = not viewer_did
+            else:
+                is_owner = viewer_did and viewer_did == track.artist_did
+                is_supporter = (
+                    supported_artist_dids and track.artist_did in supported_artist_dids
+                )
+                gated = not (is_owner or is_supporter)
 
         return cls(
             id=track.id,
@@ -263,4 +275,6 @@ class TrackResponse(BaseModel):
             audio_storage=track.audio_storage,
             pds_blob_cid=track.pds_blob_cid,
             unlisted=track.unlisted,
+            copyright_song_uri=track.copyright_song_uri,
+            copyright_recording_uri=track.copyright_recording_uri,
         )
