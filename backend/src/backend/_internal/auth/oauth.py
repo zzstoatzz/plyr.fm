@@ -23,6 +23,7 @@ from jose import jwk
 from sqlalchemy import select
 
 from backend._internal.auth.session import (
+    _check_copyright_paradigm,
     _check_teal_preference,
     _compute_refresh_token_expires_at,
     get_client_auth_method,
@@ -125,18 +126,20 @@ def get_public_jwks() -> dict | None:
         return None
 
 
-def get_oauth_client(include_teal: bool = False) -> OAuthClient:
+def get_oauth_client(
+    include_teal: bool = False, include_indiemusi: bool = False
+) -> OAuthClient:
     """create an OAuth client with the appropriate scopes.
 
     if OAUTH_JWK is configured, creates a confidential client with
     private_key_jwt authentication. otherwise creates a public client.
     """
-    scope = (
-        settings.atproto.resolved_scope_with_teal(
-            settings.teal.play_collection, settings.teal.status_collection
-        )
-        if include_teal
-        else settings.atproto.resolved_scope
+    scope = settings.atproto.resolved_scope_with_extras(
+        teal_play=settings.teal.play_collection if include_teal else None,
+        teal_status=settings.teal.status_collection if include_teal else None,
+        indiemusi_tokens=(
+            settings.indiemusi.scope_tokens() if include_indiemusi else None
+        ),
     )
 
     # load confidential client key if configured
@@ -162,7 +165,12 @@ def get_oauth_client_for_scope(scope: str) -> OAuthClient:
     include_teal = scopes.matches(
         "repo", collection=settings.teal.play_collection, action="create"
     )
-    return get_oauth_client(include_teal=include_teal)
+    include_indiemusi = scopes.matches(
+        "repo", collection=settings.indiemusi.song_collection, action="create"
+    )
+    return get_oauth_client(
+        include_teal=include_teal, include_indiemusi=include_indiemusi
+    )
 
 
 async def start_oauth_flow(
@@ -170,7 +178,8 @@ async def start_oauth_flow(
 ) -> tuple[str, str]:
     """start OAuth flow and return (auth_url, state).
 
-    uses extended scope if user has enabled teal.fm scrobbling.
+    uses extended scope if user has enabled teal.fm scrobbling or has opted
+    into a copyright paradigm.
     """
     from backend._internal.atproto.handles import resolve_handle
 
@@ -180,12 +189,18 @@ async def start_oauth_flow(
         if resolved:
             did = resolved["did"]
             wants_teal = await _check_teal_preference(did)
-            client = get_oauth_client(include_teal=wants_teal)
-            logger.info(f"starting OAuth for {handle} (did={did}, teal={wants_teal})")
+            wants_indiemusi = await _check_copyright_paradigm(did)
+            client = get_oauth_client(
+                include_teal=wants_teal, include_indiemusi=wants_indiemusi
+            )
+            logger.info(
+                f"starting OAuth for {handle} (did={did}, "
+                f"teal={wants_teal}, indiemusi={wants_indiemusi})"
+            )
         else:
             # fallback to base client if resolution fails
             # (OAuth flow will resolve handle again internally)
-            client = get_oauth_client(include_teal=False)
+            client = get_oauth_client()
             logger.info(f"starting OAuth for {handle} (resolution failed, using base)")
 
         auth_url, state = await client.start_authorization(handle, prompt=prompt)
@@ -198,12 +213,20 @@ async def start_oauth_flow(
 
 
 async def start_oauth_flow_with_scopes(
-    handle: str, include_teal: bool, prompt: PromptType | None = None
+    handle: str,
+    include_teal: bool = False,
+    include_indiemusi: bool = False,
+    prompt: PromptType | None = None,
 ) -> tuple[str, str]:
     """start OAuth flow with explicit scope selection (used for scope upgrades)."""
     try:
-        client = get_oauth_client(include_teal=include_teal)
-        logger.info(f"starting scope upgrade OAuth for {handle} (teal={include_teal})")
+        client = get_oauth_client(
+            include_teal=include_teal, include_indiemusi=include_indiemusi
+        )
+        logger.info(
+            f"starting scope upgrade OAuth for {handle} "
+            f"(teal={include_teal}, indiemusi={include_indiemusi})"
+        )
         auth_url, state = await client.start_authorization(handle, prompt=prompt)
         return auth_url, state
     except Exception as e:

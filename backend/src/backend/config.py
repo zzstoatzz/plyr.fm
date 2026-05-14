@@ -515,6 +515,29 @@ class AtprotoSettings(AppSettingsSection):
         teal_scopes = [f"repo:{teal_play}", f"repo:{teal_status}"]
         return f"{base} {' '.join(teal_scopes)}"
 
+    def resolved_scope_with_extras(
+        self,
+        *,
+        teal_play: str | None = None,
+        teal_status: str | None = None,
+        indiemusi_tokens: list[str] | None = None,
+    ) -> str:
+        """OAuth scope composed with optional integration extras.
+
+        args:
+            teal_play: teal.fm play collection NSID, present iff teal scopes wanted
+            teal_status: teal.fm status collection NSID, present iff teal scopes wanted
+            indiemusi_tokens: indiemusi paradigm scope tokens, present iff requested
+
+        either teal pair must both be set or both be None.
+        """
+        parts: list[str] = [self.resolved_scope]
+        if teal_play and teal_status:
+            parts.extend([f"repo:{teal_play}", f"repo:{teal_status}"])
+        if indiemusi_tokens:
+            parts.extend(indiemusi_tokens)
+        return " ".join(parts)
+
 
 class TealSettings(AppSettingsSection):
     """teal.fm integration settings for scrobbling.

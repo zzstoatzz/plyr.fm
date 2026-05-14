@@ -22,6 +22,7 @@ from backend.api import (
     artists_router,
     audio_router,
     auth_router,
+    copyright_router,
     discover_router,
     exports_router,
     for_you_router,
@@ -184,3 +185,4 @@ app.include_router(stats_router)
 app.include_router(users_router)
 app.include_router(meta_router)
 app.include_router(xrpc_router)
+app.include_router(copyright_router)

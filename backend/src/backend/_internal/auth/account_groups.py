@@ -262,6 +262,8 @@ class PendingScopeUpgradeData:
     did: str
     old_session_id: str
     requested_scopes: str
+    paradigm_data: dict | None = None
+    redirect_to: str | None = None
 
 
 async def save_pending_scope_upgrade(
@@ -269,6 +271,8 @@ async def save_pending_scope_upgrade(
     did: str,
     old_session_id: str,
     requested_scopes: str,
+    paradigm_data: dict | None = None,
+    redirect_to: str | None = None,
 ) -> None:
     """save pending scope upgrade metadata keyed by OAuth state."""
     from backend.models import PendingScopeUpgrade
@@ -279,6 +283,8 @@ async def save_pending_scope_upgrade(
             did=did,
             old_session_id=old_session_id,
             requested_scopes=requested_scopes,
+            paradigm_data=paradigm_data,
+            redirect_to=redirect_to,
         )
         db.add(pending)
         await db.commit()
@@ -308,6 +314,8 @@ async def get_pending_scope_upgrade(state: str) -> PendingScopeUpgradeData | Non
             did=pending.did,
             old_session_id=pending.old_session_id,
             requested_scopes=pending.requested_scopes,
+            paradigm_data=pending.paradigm_data,
+            redirect_to=pending.redirect_to,
         )
 
 
