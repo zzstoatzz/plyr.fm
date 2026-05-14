@@ -118,6 +118,13 @@ class Track(Base):
         JSONB(none_as_null=True), nullable=True, default=None
     )
 
+    # copyright paradigm record pointers — set when the user has opted into a
+    # copyright paradigm and filled out the rights form on upload/edit. AT-URIs
+    # of records on the user's PDS (e.g. ch.indiemusi.alpha.song). pure
+    # app-layer pointer; the PDS records themselves have no back-reference.
+    copyright_song_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+    copyright_recording_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+
     @property
     def is_gated(self) -> bool:
         """check if this track requires supporter access."""
