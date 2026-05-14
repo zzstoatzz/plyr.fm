@@ -141,6 +141,8 @@ verified-safe paths (audited, no change required): `ingest.py` jetstream/PDS eve
 
 **collaborative playlists are the obvious next step**, and they're the trigger for substrate adoption: "private → selectively shared" is a multi-member permissioned context, exactly the shape dholms's spec serves. when that UX shows up, the migration path is to lift `items_json` onto a shared SpaceRecord and add a member list — which is what v1 (#1385) prefigured, minus the speculation about today's lexicon shape. #1384's substrate-time plan column should reflect "yes, when sharing lands" rather than "may always stay app-layer."
 
+**docs**: `docs/public/listeners.md` now mentions private playlists in passing with the "why it's app-layer for now + substrate on the way" framing (one paragraph after the build-a-playlist step + parenthetical in the feature list).
+
 ---
 
 #### cover-art background scrim — readability fix (PR #1381, May 8, closes #1374)
@@ -455,5 +457,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-13 (first external contribution from @ailawav.bsky.social — `DOCKET_URL=memory://` default + `frontend/.env.example` follow-ups; 4-day upload OOM outage closed end-to-end via streaming refactor + ops backstops + stuck-job reaper; private playlists app-layer v2 + visibility toggle; cover-art scrim; artist identity backfill; backlog-maintenance skill).
+this is a living document. last updated 2026-05-13 (first external contribution from @ailawav.bsky.social — `DOCKET_URL=memory://` default + `frontend/.env.example` follow-ups; 4-day upload OOM outage closed end-to-end via streaming refactor + ops backstops + stuck-job reaper; private playlists app-layer v2 + visibility toggle, docs/public/listeners.md updated with brief mention; cover-art scrim; artist identity backfill; backlog-maintenance skill).
 
