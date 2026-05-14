@@ -3,9 +3,6 @@
 a recording captures performance/master-level metadata for a specific recording
 of a song: ISRC, artists, duration, master owner. recordings can inline the song
 they're a recording of.
-
-plyr.fm intentionally does not populate the `audioFile` blob field — copyright-
-flagged tracks live in private storage, not as a publicly-readable PDS blob.
 """
 
 from typing import Any
@@ -16,7 +13,7 @@ from backend._internal.atproto.client import (
     parse_at_uri,
 )
 from backend._internal.atproto.records.ch_indiemusi.models import RecordingInput
-from backend._internal.atproto.records.ch_indiemusi.song import build_song_value
+from backend._internal.atproto.records.ch_indiemusi.song import build_song_record
 from backend.config import settings
 
 
@@ -38,7 +35,7 @@ def build_recording_record(data: RecordingInput) -> dict[str, Any]:
             by_alias=True, exclude_none=True
         )
     if data.song is not None:
-        record["song"] = build_song_value(data.song)
+        record["song"] = build_song_record(data.song)
     return record
 
 
@@ -80,15 +77,3 @@ async def update_recording_record(
         auth_session, "POST", "com.atproto.repo.putRecord", payload
     )
     return result["uri"], result["cid"]
-
-
-async def delete_recording_record(auth_session: AuthSession, record_uri: str) -> None:
-    """delete a recording record from the user's PDS."""
-    repo, collection, rkey = parse_at_uri(record_uri)
-    await make_pds_request(
-        auth_session,
-        "POST",
-        "com.atproto.repo.deleteRecord",
-        {"repo": repo, "collection": collection, "rkey": rkey},
-        success_codes=(200, 201, 204),
-    )

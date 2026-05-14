@@ -1,10 +1,8 @@
 """user-selected copyright paradigm config.
 
-records which (if any) copyright paradigm a user has opted into and the AT-URI
-of their paradigm-specific actor record on their PDS (e.g., a publishingOwner
-record under ch.indiemusi.alpha for the indiemusi paradigm).
-
-a user has at most one row here. swapping paradigms means updating in place.
+one row per user (PK on user_did). stores the paradigm choice, the AT-URI of
+the paradigm-specific actor record on the user's PDS, and a JSONB cache of the
+record's field values for upload-form prefill.
 """
 
 from datetime import UTC, datetime
@@ -25,10 +23,8 @@ class UserCopyrightConfig(Base):
     # AT-URI of the user's primary paradigm actor record (publishingOwner for indiemusi).
     # null while setup is incomplete — user picked a paradigm but hasn't written the record yet.
     config_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    # paradigm-specific defaults used to prefill upload/edit forms without re-reading
-    # the actor record from PDS on every render. for indiemusi this is the
-    # publishingOwner field set (ipi, firstName/lastName/companyName, collectingSociety).
-    # the canonical copy lives on the user's PDS; this is a cache.
+    # paradigm-specific field cache for upload-form prefill (e.g., publishingOwner
+    # fields for indiemusi). canonical copy lives on the PDS at config_uri.
     paradigm_data: Mapped[dict | None] = mapped_column(
         JSONB(none_as_null=True), nullable=True, default=None
     )

@@ -1,10 +1,8 @@
-"""pydantic input models for the ch.indiemusi.alpha lexicon family.
+"""typed input shapes for the ch.indiemusi.alpha lexicon family.
 
-these are not the raw record dicts (those are built by the build_* helpers in
-sibling modules). these are the typed input shapes the API accepts from the
-frontend, validated up-front before any PDS write.
-
-royalty percentages are in basis points (10000 = 100%) per the lexicon.
+the API accepts these from the frontend; the build_* helpers in sibling modules
+turn validated inputs into the dicts sent to the PDS. royalty percentages are
+basis points per the lexicon (10000 = 100%).
 """
 
 from pydantic import BaseModel, ConfigDict, Field

@@ -12,7 +12,7 @@ from backend._internal.atproto.client import (
     parse_at_uri,
 )
 from backend._internal.atproto.records.ch_indiemusi.actor_publishing_owner import (
-    build_publishing_owner_value,
+    build_publishing_owner_record,
 )
 from backend._internal.atproto.records.ch_indiemusi.models import (
     InterestedPartyInput,
@@ -27,7 +27,7 @@ def _build_interested_party(party: InterestedPartyInput) -> dict[str, Any]:
         by_alias=True, exclude_none=True, exclude={"publishing_owner"}
     )
     if party.publishing_owner is not None:
-        entry["publishingOwner"] = build_publishing_owner_value(party.publishing_owner)
+        entry["publishingOwner"] = build_publishing_owner_record(party.publishing_owner)
     return entry
 
 
@@ -43,15 +43,6 @@ def build_song_record(data: SongInput) -> dict[str, Any]:
     if data.iswc:
         record["iswc"] = data.iswc
     return record
-
-
-def build_song_value(data: SongInput) -> dict[str, Any]:
-    """build the inline song sub-object used inside a recording record.
-
-    matches the standalone song body shape — the lexicon ref to song from
-    recording is satisfied by any object matching this shape with the right $type.
-    """
-    return build_song_record(data)
 
 
 async def create_song_record(
@@ -95,15 +86,3 @@ async def update_song_record(
         auth_session, "POST", "com.atproto.repo.putRecord", payload
     )
     return result["uri"], result["cid"]
-
-
-async def delete_song_record(auth_session: AuthSession, record_uri: str) -> None:
-    """delete a song record from the user's PDS."""
-    repo, collection, rkey = parse_at_uri(record_uri)
-    await make_pds_request(
-        auth_session,
-        "POST",
-        "com.atproto.repo.deleteRecord",
-        {"repo": repo, "collection": collection, "rkey": rkey},
-        success_codes=(200, 201, 204),
-    )

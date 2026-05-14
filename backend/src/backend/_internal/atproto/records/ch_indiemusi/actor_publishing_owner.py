@@ -1,9 +1,8 @@
 """ch.indiemusi.alpha.actor.publishingOwner record operations.
 
 a publishingOwner identifies a songwriter, composer, or music publisher who owns
-publishing rights to a song. for plyr.fm this is written once during portal
-setup to advertise the user's publishing identity, and the same field values are
-inlined into every song's interestedParties on upload.
+publishing rights to a song. the same field set is also inlined into each
+song record's interestedParties.
 """
 
 from typing import Any
@@ -15,27 +14,15 @@ from backend.config import settings
 
 
 def build_publishing_owner_record(data: PublishingOwnerInput) -> dict[str, Any]:
-    """build the record body for an actor.publishingOwner write.
+    """build the record body for an actor.publishingOwner write or inline use.
 
     fields are dumped under their camelCase lexicon aliases; null fields are
-    omitted so we don't write empty strings the lexicon allows but doesn't expect.
+    omitted.
     """
-    record: dict[str, Any] = {
+    return {
         "$type": settings.indiemusi.publishing_owner_collection,
+        **data.model_dump(by_alias=True, exclude_none=True),
     }
-    payload = data.model_dump(by_alias=True, exclude_none=True)
-    record.update(payload)
-    return record
-
-
-def build_publishing_owner_value(data: PublishingOwnerInput) -> dict[str, Any]:
-    """build the publishingOwner sub-object that gets inlined into an
-    interestedParty entry on a song record.
-
-    same shape as the standalone record body — the lexicon's ref to publishingOwner
-    is satisfied by any object matching that shape with the right $type.
-    """
-    return build_publishing_owner_record(data)
 
 
 async def create_publishing_owner_record(
@@ -45,9 +32,7 @@ async def create_publishing_owner_record(
 ) -> tuple[str, str]:
     """create or upsert a publishingOwner record on the user's PDS.
 
-    when rkey is provided, uses putRecord for idempotent upsert. otherwise
-    createRecord lets the PDS assign a TID.
-
+    when rkey is provided, uses putRecord for idempotent upsert.
     returns (record_uri, record_cid).
     """
     payload: dict[str, Any] = {

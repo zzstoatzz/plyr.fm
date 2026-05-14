@@ -550,14 +550,9 @@ class TealSettings(AppSettingsSection):
 class IndiemusiSettings(AppSettingsSection):
     """indiemusi.ch copyright paradigm settings.
 
-    indiemusi.ch (Hilke) publishes the `ch.indiemusi.alpha.*` lexicons covering
-    song / recording / actor.publishingOwner records. plyr.fm offers this as the
-    first opt-in "copyright paradigm" — users who configure it in the portal
-    grant additional OAuth scopes so plyr.fm can write rights metadata to their
-    PDS alongside the existing fm.plyr.track record.
-
-    namespace is configurable to support future versions (e.g. `ch.indiemusi.beta`)
-    without code changes.
+    indiemusi.ch publishes the `ch.indiemusi.alpha.*` lexicons covering song /
+    recording / actor.publishingOwner records. plyr.fm offers this as the first
+    opt-in "copyright paradigm".
     """
 
     model_config = SettingsConfigDict(
@@ -599,12 +594,7 @@ class IndiemusiSettings(AppSettingsSection):
         return f"{self.namespace}.actor.publishingOwner"
 
     def scope_tokens(self) -> list[str]:
-        """OAuth scope tokens required to write indiemusi records.
-
-        granular per-collection repo scopes (positional form) — matches the
-        pattern used for teal scopes. the indiemusi authority hasn't published
-        a permission-set record yet, so we can't use `include:` here.
-        """
+        """OAuth scope tokens granting write access to indiemusi collections."""
         return [
             f"repo:{self.song_collection}",
             f"repo:{self.recording_collection}",
