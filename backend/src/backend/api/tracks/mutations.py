@@ -5,7 +5,6 @@ import json
 import logging
 from collections.abc import AsyncIterable
 from typing import Annotated
-from urllib.parse import urljoin
 
 import logfire
 from fastapi import Depends, File, Form, HTTPException, UploadFile
@@ -28,6 +27,7 @@ from backend._internal.atproto.handles import (
 )
 from backend._internal.atproto.records import (
     build_track_record,
+    rebuild_track_pds_record,
     update_record,
 )
 from backend._internal.atproto.tid import datetime_to_tid
@@ -343,7 +343,7 @@ async def update_track_metadata(
     )
     if track.atproto_record_uri and metadata_changed:
         try:
-            await _update_atproto_record(track, auth_session, image_url)
+            await rebuild_track_pds_record(track, auth_session, image_url)
         except Exception as exc:
             logfire.exception(
                 "failed to update ATProto record",
@@ -390,54 +390,6 @@ async def update_track_metadata(
         track_tags_dict = await get_track_tags(db, [track.id])
 
     return await TrackResponse.from_track(track, track_tags=track_tags_dict)
-
-
-async def _update_atproto_record(
-    track: Track,
-    auth_session: AuthSession,
-    image_url_override: str | None = None,
-) -> None:
-    """Update the ATProto record for a track.
-
-    raises:
-        Exception: if ATProto record update fails
-    """
-    record_uri = track.atproto_record_uri
-    if not record_uri:
-        return
-
-    # for gated tracks, use the API endpoint URL instead of r2_url
-    # (r2_url is None for private bucket tracks)
-    if track.support_gate is not None:
-        backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
-        audio_url = urljoin(backend_url + "/", f"audio/{track.file_id}")
-    else:
-        audio_url = track.r2_url
-        if not audio_url:
-            return
-
-    updated_record = await build_track_record(
-        title=track.title,
-        artist=track.artist.display_name,
-        audio_url=audio_url,
-        file_type=track.file_type,
-        album=track.album,
-        duration=track.duration,
-        features=track.features if track.features else None,
-        image_url=image_url_override or await track.get_image_url(),
-        support_gate=track.support_gate,
-        description=track.description,
-    )
-
-    result = await update_record(
-        auth_session=auth_session,
-        record_uri=record_uri,
-        record=updated_record,
-    )
-
-    if result:
-        _, new_cid = result
-        track.atproto_record_cid = new_cid
 
 
 class RestoreRecordResponse(BaseModel):

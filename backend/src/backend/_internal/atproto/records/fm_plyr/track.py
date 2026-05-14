@@ -2,7 +2,8 @@
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urljoin
 
 from atproto_identity.did.resolver import AsyncDidResolver
 
@@ -10,6 +11,9 @@ from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import BlobRef, make_pds_request, parse_at_uri
 from backend._internal.atproto.profiles import resolve_dids
 from backend.config import settings
+
+if TYPE_CHECKING:
+    from backend.models import Track
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +291,60 @@ async def update_record(
         auth_session, "POST", "com.atproto.repo.putRecord", payload
     )
     return result["uri"], result["cid"]
+
+
+async def rebuild_track_pds_record(
+    track: "Track",
+    auth_session: AuthSession,
+    image_url_override: str | None = None,
+) -> None:
+    """rebuild the fm.plyr.track PDS record from the current track row.
+
+    used after any change that affects the record body — title, description,
+    album, features, image, support_gate. for gated tracks the recorded
+    audioUrl is the auth-proxied endpoint; for public tracks it's the cached
+    r2_url.
+
+    early-returns when the track has no PDS record yet or when the public
+    track's r2_url isn't available (e.g., mid-bucket-move). callers schedule
+    a follow-up if they need a definite update.
+
+    raises:
+        Exception: if the PDS update call fails.
+    """
+    record_uri = track.atproto_record_uri
+    if not record_uri:
+        return
+
+    if track.support_gate is not None:
+        backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
+        audio_url = urljoin(backend_url + "/", f"audio/{track.file_id}")
+    else:
+        audio_url = track.r2_url
+        if not audio_url:
+            return
+
+    updated_record = await build_track_record(
+        title=track.title,
+        artist=track.artist.display_name,
+        audio_url=audio_url,
+        file_type=track.file_type,
+        album=track.album,
+        duration=track.duration,
+        features=track.features if track.features else None,
+        image_url=image_url_override or await track.get_image_url(),
+        support_gate=track.support_gate,
+        description=track.description,
+    )
+
+    result = await update_record(
+        auth_session=auth_session,
+        record_uri=record_uri,
+        record=updated_record,
+    )
+    if result:
+        _, new_cid = result
+        track.atproto_record_cid = new_cid
 
 
 async def delete_record_by_uri(

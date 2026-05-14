@@ -391,8 +391,16 @@ async def get_for_you_feed(
         get_track_tags(db, page_ids),
     )
 
+    # copyright-typed gates only need any authenticated listener, not a supporter
     gated_artist_dids = {
-        t.artist_did for t in tracks if t.support_gate and t.artist_did != actor_did
+        t.artist_did
+        for t in tracks
+        if t.support_gate
+        and t.artist_did != actor_did
+        and (
+            not isinstance(t.support_gate, dict)
+            or t.support_gate.get("type") != "copyright"
+        )
     }
     supported_artist_dids: set[str] = set()
     if gated_artist_dids:

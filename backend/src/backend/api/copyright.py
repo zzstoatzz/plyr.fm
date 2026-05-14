@@ -10,6 +10,7 @@ import logging
 from atproto_oauth.scopes import ScopesSet
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from backend._internal import (
     Session,
@@ -27,6 +28,8 @@ from backend._internal.copyright import (
     get_user_copyright_config,
 )
 from backend.config import settings
+from backend.models import Track
+from backend.utilities.database import db_session
 
 logger = logging.getLogger(__name__)
 
@@ -136,14 +139,59 @@ async def setup(
     return CopyrightSetupResponse(auth_url=auth_url)
 
 
+class CopyrightTrackRef(BaseModel):
+    """summary of a track that's blocking copyright disconnect."""
+
+    id: int
+    title: str
+
+
+class CopyrightDisconnectBlockedDetail(BaseModel):
+    """409 body when disconnect is blocked by extant copyright-gated tracks."""
+
+    message: str
+    blocked_by_tracks: list[CopyrightTrackRef]
+
+
 @router.post("/disconnect")
 async def disconnect(
     session: Session = Depends(require_auth),
 ) -> dict[str, bool]:
-    """delete the user's copyright config and best-effort delete the PDS record."""
+    """delete the user's copyright config and best-effort delete the PDS record.
+
+    refuses with 409 when the user still has tracks carrying rights metadata —
+    those would be left orphaned (gated, with no paradigm config to update or
+    clear them through). users must clear each via DELETE /tracks/{id}/copyright
+    before disconnecting.
+    """
     cfg = await get_user_copyright_config(session.did)
     if not cfg:
         return {"deleted": False}
+
+    async with db_session() as db:
+        blocking = (
+            await db.execute(
+                select(Track.id, Track.title)
+                .where(Track.artist_did == session.did)
+                .where(Track.copyright_song_uri.is_not(None))
+                .order_by(Track.created_at.desc())
+                .limit(100)
+            )
+        ).all()
+
+    if blocking:
+        raise HTTPException(
+            status_code=409,
+            detail=CopyrightDisconnectBlockedDetail(
+                message=(
+                    f"{len(blocking)} track(s) still carry copyright metadata. "
+                    "clear them first via the edit form, then disconnect."
+                ),
+                blocked_by_tracks=[
+                    CopyrightTrackRef(id=t.id, title=t.title) for t in blocking
+                ],
+            ).model_dump(),
+        )
 
     if cfg.config_uri:
         try:

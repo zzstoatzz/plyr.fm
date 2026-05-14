@@ -152,6 +152,16 @@
 				method: 'POST',
 				credentials: 'include'
 			});
+			if (res.status === 409) {
+				// disconnect blocked: the user still has copyright-gated tracks.
+				// surface the count + a hint about clearing them in the edit form.
+				const body = await res.json().catch(() => null);
+				const message =
+					body?.detail?.message ??
+					'disconnect blocked: clear copyright metadata from your tracks first';
+				toast.error(message, 7000);
+				return;
+			}
 			if (!res.ok) throw new Error(`disconnect failed (${res.status})`);
 			toast.success('copyright paradigm disconnected');
 			config = null;

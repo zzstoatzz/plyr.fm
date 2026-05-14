@@ -9,9 +9,10 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.records.ch_indiemusi import (
@@ -27,7 +28,11 @@ from backend._internal.atproto.records.ch_indiemusi import (
     update_recording_record,
     update_song_record,
 )
-from backend._internal.atproto.records.fm_plyr.track import delete_record_by_uri
+from backend._internal.atproto.records.fm_plyr.track import (
+    delete_record_by_uri,
+    rebuild_track_pds_record,
+)
+from backend._internal.tasks.storage import schedule_move_track_audio
 from backend.config import settings
 from backend.models import Artist, Track, UserCopyrightConfig
 from backend.utilities.database import db_session
@@ -57,6 +62,36 @@ class TrackRightsInput(BaseModel):
         description="Co-writers, composers, or publishers beyond the user. The user "
         "is auto-included as the primary interestedParty.",
     )
+
+    @model_validator(mode="after")
+    def _splits_total_within_100_percent(self) -> "TrackRightsInput":
+        """additional parties' royalty splits must leave room for the primary party.
+
+        splits are basis points (10000 = 100%). the primary party (the user) is
+        added at write time with the remainder; sums above 10000 would either
+        clamp the primary to 0 or, worse, emit a record whose splits aggregate
+        to more than 100% — neither is a valid expression of the underlying
+        royalty math.
+        """
+        mech = sum(
+            p.mechanical_royalties_percentage or 0
+            for p in self.additional_interested_parties
+        )
+        perf = sum(
+            p.performance_royalties_percentage or 0
+            for p in self.additional_interested_parties
+        )
+        if mech > 10000:
+            raise ValueError(
+                f"mechanical royalty splits for additional parties total {mech} "
+                f"basis points; must not exceed 10000 (100%)"
+            )
+        if perf > 10000:
+            raise ValueError(
+                f"performance royalty splits for additional parties total {perf} "
+                f"basis points; must not exceed 10000 (100%)"
+            )
+        return self
 
 
 @dataclass
@@ -172,6 +207,11 @@ def _interested_party_for_user(
     )
 
 
+def _is_copyright_gate(gate: Any) -> bool:
+    """True iff `gate` is a copyright-typed support_gate dict."""
+    return isinstance(gate, dict) and gate.get("type") == "copyright"
+
+
 async def write_track_rights(
     auth_session: AuthSession,
     track: Track,
@@ -180,9 +220,16 @@ async def write_track_rights(
     """write (or update) indiemusi song + recording records for a track.
 
     creates a new pair on first call, idempotently updates the same rkeys on
-    subsequent calls. updates the track row with the resulting AT-URIs and
-    flips support_gate to {"type": "copyright"} so the audio endpoint requires
-    auth and the file lives in private storage going forward.
+    subsequent calls. when the track wasn't already copyright-gated, this also:
+    - flips support_gate to {"type": "copyright"}
+    - rebuilds the fm.plyr.track PDS record so its audioUrl points at the
+      auth-proxied /audio/{file_id} endpoint instead of the public R2 URL
+    - schedules a background move of the audio file into the private bucket
+    - clears r2_url on the row so other callers stop treating it as public
+
+    raises ValueError when the user hasn't completed indiemusi setup or when
+    the track already has a non-copyright support_gate (e.g., atprotofans
+    supporter gating). gate modes are mutually exclusive.
     """
     cfg = await get_user_copyright_config(auth_session.did)
     if not cfg or cfg.paradigm != settings.indiemusi.paradigm_id:
@@ -190,6 +237,13 @@ async def write_track_rights(
     if not cfg.paradigm_data:
         raise ValueError(
             "user copyright config is missing publishingOwner data; re-run portal setup"
+        )
+
+    existing_gate = track.support_gate
+    if existing_gate is not None and not _is_copyright_gate(existing_gate):
+        raise ValueError(
+            "track is already supporter-gated; copyright and supporter gating "
+            "are mutually exclusive — clear the supporter gate first"
         )
 
     async with db_session() as db:
@@ -235,20 +289,52 @@ async def write_track_rights(
     else:
         recording_uri, _ = await create_recording_record(auth_session, recording_input)
 
+    # apply the track-side state transitions in a single DB session so the
+    # rebuilt PDS record reads the post-transition row (audioUrl wants the
+    # auth-proxied endpoint, support_gate set, etc.)
+    transitioning_to_private = existing_gate is None and track.r2_url is not None
     async with db_session() as db:
-        result = await db.execute(select(Track).where(Track.id == track.id))
+        result = await db.execute(
+            select(Track)
+            .options(selectinload(Track.artist))
+            .where(Track.id == track.id)
+        )
         row = result.scalar_one()
         row.copyright_song_uri = song_uri
         row.copyright_recording_uri = recording_uri
         if row.support_gate is None:
             row.support_gate = {"type": "copyright"}
+        if transitioning_to_private:
+            # null the cached public URL so audio resolution stops handing it
+            # out; the move task will not repopulate it (private bucket has no
+            # public URL). the PDS record below now points at the auth-proxied
+            # endpoint, so third-party clients can't bypass the gate.
+            row.r2_url = None
+
+        if row.atproto_record_uri:
+            try:
+                await rebuild_track_pds_record(row, auth_session)
+            except Exception as e:
+                # don't roll the local DB write back — the PDS song/recording
+                # were already written and the row should reflect that. log
+                # and let the caller retry; rebuild is idempotent.
+                logger.warning(
+                    "failed to rebuild fm.plyr.track record for track %s: %s",
+                    track.id,
+                    e,
+                )
+
         await db.commit()
 
+    if transitioning_to_private:
+        await schedule_move_track_audio(track.id, to_private=True)
+
     logger.info(
-        "wrote indiemusi rights for track %s (song=%s recording=%s)",
+        "wrote indiemusi rights for track %s (song=%s recording=%s, moved=%s)",
         track.id,
         song_uri,
         recording_uri,
+        transitioning_to_private,
     )
     return TrackRightsResult(song_uri=song_uri, recording_uri=recording_uri)
 
@@ -259,10 +345,21 @@ async def clear_track_rights(
 ) -> None:
     """delete indiemusi rights records for a track and clear the URI columns.
 
-    best-effort PDS deletes — local state is cleared regardless. support_gate
-    is cleared only when it was set to {"type": "copyright"} (don't clobber
-    supporter-gating that was unrelated to rights).
+    best-effort PDS deletes — local state is cleared regardless. when the
+    track was actually copyright-gated (support_gate.type == "copyright"),
+    this also reverses the storage transition:
+    - clears support_gate
+    - rebuilds the fm.plyr.track PDS record (early-returns until the move
+      completes; the auth-proxied URL keeps working in the meantime via
+      redirect)
+    - schedules a move of the audio file back to the public bucket
+
+    if the track had a different support_gate (e.g., atprotofans supporter
+    gating that pre-dated the copyright write — shouldn't be reachable with
+    the mutex in write_track_rights, but defensive), that gate is left alone.
     """
+    was_copyright_gated = _is_copyright_gate(track.support_gate)
+
     for uri in (track.copyright_song_uri, track.copyright_recording_uri):
         if not uri:
             continue
@@ -272,13 +369,33 @@ async def clear_track_rights(
             logger.warning("failed to delete %s: %s", uri, e)
 
     async with db_session() as db:
-        result = await db.execute(select(Track).where(Track.id == track.id))
+        result = await db.execute(
+            select(Track)
+            .options(selectinload(Track.artist))
+            .where(Track.id == track.id)
+        )
         row = result.scalar_one()
         row.copyright_song_uri = None
         row.copyright_recording_uri = None
-        if (
-            isinstance(row.support_gate, dict)
-            and row.support_gate.get("type") == "copyright"
-        ):
+        if was_copyright_gated:
             row.support_gate = None
+
+        if was_copyright_gated and row.atproto_record_uri:
+            # rebuild is best-effort: r2_url is still None until the move task
+            # finishes, so this will likely early-return. that's fine — the
+            # auth-proxied /audio/{file_id} URL in the existing PDS record
+            # still resolves correctly after the gate is cleared (it redirects
+            # through the public path).
+            try:
+                await rebuild_track_pds_record(row, auth_session)
+            except Exception as e:
+                logger.warning(
+                    "failed to rebuild fm.plyr.track record on clear for %s: %s",
+                    track.id,
+                    e,
+                )
+
         await db.commit()
+
+    if was_copyright_gated:
+        await schedule_move_track_audio(track.id, to_private=False)

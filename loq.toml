@@ -32,7 +32,7 @@ max_lines = 826
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 584
+max_lines = 593
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -292,4 +292,4 @@ max_lines = 513
 
 [[rules]]
 path = "frontend/src/lib/components/CopyrightSection.svelte"
-max_lines = 611
+max_lines = 621

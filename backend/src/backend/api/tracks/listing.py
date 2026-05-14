@@ -196,10 +196,18 @@ async def list_tracks(
     viewer_did = session.did if session else None
     supporter_task: asyncio.Task[set[str]] | None = None
     if viewer_did:
+        # only the atprotofans-style gate ("any") needs a supporter probe.
+        # copyright-typed gates accept any authenticated listener, so probing
+        # supporter status for them just burns external HTTP latency.
         gated_artist_dids = {
             t.artist_did
             for t in tracks
-            if t.support_gate and t.artist_did != viewer_did
+            if t.support_gate
+            and t.artist_did != viewer_did
+            and (
+                not isinstance(t.support_gate, dict)
+                or t.support_gate.get("type") != "copyright"
+            )
         }
         if gated_artist_dids:
             supporter_task = asyncio.create_task(
@@ -397,14 +405,20 @@ async def list_top_tracks(
         get_track_tags(db, track_ids),
     )
 
-    # resolve supporter status for gated content
+    # resolve supporter status for gated content. copyright-typed gates skip
+    # this probe — they only need an authenticated listener, not a supporter.
     viewer_did = session.did if session else None
     supported_artist_dids: set[str] = set()
     if viewer_did:
         gated_artist_dids = {
             t.artist_did
             for t in tracks
-            if t.support_gate and t.artist_did != viewer_did
+            if t.support_gate
+            and t.artist_did != viewer_did
+            and (
+                not isinstance(t.support_gate, dict)
+                or t.support_gate.get("type") != "copyright"
+            )
         }
         if gated_artist_dids:
             supported_artist_dids = await get_supported_artists(
