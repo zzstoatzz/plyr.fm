@@ -82,7 +82,8 @@ class UploaderState {
 		callbacks?: UploadProgressCallback,
 		label?: string,
 		albumId?: string,
-		unlisted?: boolean
+		unlisted?: boolean,
+		copyright?: object | null
 	): void {
 		const taskId = crypto.randomUUID();
 		const fileSizeMB = file.size / 1024 / 1024;
@@ -124,6 +125,9 @@ class UploaderState {
 		}
 		if (supportGated) {
 			formData.append('support_gate', JSON.stringify({ type: 'any' }));
+		}
+		if (copyright) {
+			formData.append('copyright', JSON.stringify(copyright));
 		}
 		if (autoTag) {
 			formData.append('auto_tag', 'true');

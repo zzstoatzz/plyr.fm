@@ -98,6 +98,7 @@ async def stream_audio(
             file_type=serve_file_type,
             artist_did=artist_did,
             session=session,
+            support_gate=support_gate,
             is_head_request=is_head_request,
             audio_storage=audio_storage,
             pds_blob_cid=pds_blob_cid,
@@ -123,69 +124,77 @@ async def stream_audio(
     return RedirectResponse(url=url)
 
 
+async def _check_gate_access(
+    gate: dict, session: Session | None, artist_did: str
+) -> None:
+    """raise HTTPException if `session` may not stream a track with this gate.
+
+    gate shape: `{"type": "any" | "copyright"}`.
+    - "any" (atprotofans supporter-gated): artist or validated supporter
+    - "copyright" (indiemusi paradigm): any authenticated listener
+    """
+    if not session:
+        raise HTTPException(
+            status_code=401,
+            detail="authentication required to stream this track",
+        )
+
+    gate_type = gate.get("type")
+
+    if gate_type == "copyright":
+        # any authenticated listener is fine
+        return
+
+    # default: "any" / supporter-gated semantics
+    if session.did == artist_did:
+        return
+
+    validation = await validate_supporter(
+        supporter_did=session.did, artist_did=artist_did
+    )
+    if not validation.valid:
+        raise HTTPException(
+            status_code=402,
+            detail="this track requires supporter access",
+            headers={"X-Support-Required": "true"},
+        )
+
+
 async def _handle_gated_audio(
     file_id: str,
     file_type: str,
     artist_did: str,
     session: Session | None,
+    support_gate: dict,
     is_head_request: bool = False,
     audio_storage: str = "r2",
     pds_blob_cid: str | None = None,
 ) -> RedirectResponse | Response:
-    """handle streaming for supporter-gated content.
+    """handle streaming for access-gated content (supporter or copyright).
 
-    validates that the user is authenticated and either:
-    - is the artist who uploaded the track, OR
-    - supports the artist via atprotofans
-    before returning the appropriate URL (presigned R2 or PDS blob).
+    delegates the access check to `_check_gate_access`, then resolves the
+    audio URL from private storage (presigned R2 or PDS blob).
 
     for HEAD requests (used for pre-flight auth checks), returns 200 status
     without redirecting to avoid CORS issues with cross-origin redirects.
     """
-    # must be authenticated to access gated content
-    if not session:
-        raise HTTPException(
-            status_code=401,
-            detail="authentication required for supporter-gated content",
-        )
+    await _check_gate_access(support_gate, session, artist_did)
 
-    # artist can always play their own gated tracks
-    if session.did == artist_did:
-        logfire.info(
-            "serving gated content to owner",
-            file_id=file_id,
-            artist_did=artist_did,
-        )
-    else:
-        # validate supporter status via atprotofans
-        validation = await validate_supporter(
-            supporter_did=session.did,
-            artist_did=artist_did,
-        )
-
-        if not validation.valid:
-            raise HTTPException(
-                status_code=402,
-                detail="this track requires supporter access",
-                headers={"X-Support-Required": "true"},
-            )
-
-    # for HEAD requests, just return 200 to confirm access
-    # (avoids CORS issues with cross-origin redirects)
     if is_head_request:
         return Response(status_code=200)
 
-    # authorized — resolve URL based on storage type
-    if session.did != artist_did:
+    # artist always sees their own track; otherwise we already validated above
+    if session is not None and session.did != artist_did:
         logfire.info(
-            "serving gated content to supporter",
+            "serving gated content",
             file_id=file_id,
-            supporter_did=session.did,
+            gate_type=support_gate.get("type"),
+            listener_did=session.did,
             artist_did=artist_did,
         )
 
-    # PDS-backed gated tracks: redirect to PDS blob (unauthenticated endpoint,
-    # gating is enforced by plyr.fm, not the PDS)
+    # PDS-backed gated tracks: redirect to PDS blob (only applies to supporter
+    # gating; copyright tracks never get uploaded to PDS as a blob)
     if audio_storage == "pds" and pds_blob_cid:
         if artist_pds_url := await _resolve_pds_url(artist_did):
             return RedirectResponse(
@@ -250,27 +259,7 @@ async def get_audio_url(
 
     # check if track is gated
     if support_gate is not None:
-        # must be authenticated
-        if not session:
-            raise HTTPException(
-                status_code=401,
-                detail="authentication required for supporter-gated content",
-            )
-
-        # artist can always access their own gated tracks
-        if session.did != artist_did:
-            # validate supporter status
-            validation = await validate_supporter(
-                supporter_did=session.did,
-                artist_did=artist_did,
-            )
-
-            if not validation.valid:
-                raise HTTPException(
-                    status_code=402,
-                    detail="this track requires supporter access",
-                    headers={"X-Support-Required": "true"},
-                )
+        await _check_gate_access(support_gate, session, artist_did)
 
         # PDS-backed gated tracks: return PDS blob URL
         if audio_storage == "pds" and pds_blob_cid:

@@ -23,7 +23,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +43,7 @@ from backend._internal.atproto.handles import (
 from backend._internal.audio import AudioFormat
 from backend._internal.background import get_docket
 from backend._internal.clients.transcoder import get_transcoder_client
+from backend._internal.copyright import TrackRightsInput, write_track_rights
 from backend._internal.image_uploads import (
     ImageUploadError,
     save_image_with_thumbnail,
@@ -114,8 +115,15 @@ class UploadContext:
     # track description (liner notes, show notes, etc.)
     description: str | None = None
 
-    # supporter-gated content (e.g., {"type": "any"})
+    # supporter-gated content (e.g., {"type": "any"} or {"type": "copyright"})
     support_gate: dict | None = None
+
+    # indiemusi rights metadata, written as song + recording records after PDS
+    # publish. when set, the upload is treated as copyright-gated (audio lives
+    # in private storage; support_gate is forced to {"type": "copyright"}).
+    # stored as a dict for serializability across the docket boundary; the
+    # worker rehydrates via TrackRightsInput.model_validate.
+    copyright_rights: dict | None = None
 
     # auto-apply recommended genre tags after classification
     auto_tag: bool = False
@@ -1086,6 +1094,23 @@ async def _process_upload_background(ctx: UploadContext) -> None:
                 ctx, audio_info, sr, pds_result, image_id, image_url, thumbnail_url
             )
 
+            # phase 6b: write indiemusi rights records when the upload carried
+            # a copyright payload. failures here don't roll back the track —
+            # users can retry from the edit form via /tracks/{id}/copyright.
+            if published_by_us and ctx.copyright_rights:
+                try:
+                    await write_track_rights(
+                        ctx.auth_session,
+                        track,
+                        TrackRightsInput.model_validate(ctx.copyright_rights),
+                    )
+                except Exception as e:
+                    logger.exception(
+                        "indiemusi rights write failed for track %s: %s",
+                        track.id,
+                        e,
+                    )
+
             # phase 7: post-upload tasks (tags, album sync, shared hooks)
             await _schedule_post_upload(ctx, sr, track, run_hooks=published_by_us)
 
@@ -1147,6 +1172,7 @@ async def run_track_upload(
     support_gate: dict | None,
     auto_tag: bool,
     unlisted: bool,
+    copyright_rights: dict | None = None,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("artist_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for track uploads.
@@ -1217,6 +1243,7 @@ async def run_track_upload(
         image_url=image_url,
         thumbnail_url=thumbnail_url,
         support_gate=support_gate,
+        copyright_rights=copyright_rights,
         auto_tag=auto_tag,
         unlisted=unlisted,
     )
@@ -1255,6 +1282,7 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         image_url=ctx.image_url,
         thumbnail_url=ctx.thumbnail_url,
         support_gate=ctx.support_gate,
+        copyright_rights=ctx.copyright_rights,
         auto_tag=ctx.auto_tag,
         unlisted=ctx.unlisted,
     )
@@ -1278,6 +1306,14 @@ async def upload_track(
     support_gate: Annotated[
         str | None,
         Form(description='JSON object for supporter gating, e.g., {"type": "any"}'),
+    ] = None,
+    copyright: Annotated[
+        str | None,
+        Form(
+            description="JSON object with indiemusi rights metadata (iswc, isrc, "
+            "masterOwner, additionalInterestedParties). When present, the track "
+            "is copyright-gated and audio lives in private storage."
+        ),
     ] = None,
     description: Annotated[
         str | None,
@@ -1345,6 +1381,26 @@ async def upload_track(
             ) from e
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # parse and validate copyright payload if provided. mutually exclusive with
+    # support_gate; copyright forces support_gate to {"type": "copyright"} so
+    # the upload pipeline routes audio into private storage.
+    parsed_copyright: dict | None = None
+    if copyright:
+        if parsed_support_gate is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="support_gate and copyright are mutually exclusive",
+            )
+        try:
+            parsed_copyright = TrackRightsInput.model_validate_json(
+                copyright
+            ).model_dump(by_alias=True, exclude_none=True)
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=400, detail=f"invalid copyright payload: {e}"
+            ) from e
+        parsed_support_gate = {"type": "copyright"}
 
     # validate audio file type upfront
     if not file.filename:
@@ -1458,6 +1514,7 @@ async def upload_track(
             image_url=image_url,
             thumbnail_url=thumbnail_url,
             support_gate=parsed_support_gate,
+            copyright_rights=parsed_copyright,
             auto_tag=auto_tag == "true",
             unlisted=unlisted == "true",
         )

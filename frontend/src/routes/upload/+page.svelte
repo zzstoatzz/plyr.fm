@@ -9,6 +9,8 @@
 	import InfoTooltip from "$lib/components/InfoTooltip.svelte";
 	import WaveLoading from "$lib/components/WaveLoading.svelte";
 	import TagInput from "$lib/components/TagInput.svelte";
+	import CopyrightRightsPanel from "$lib/components/CopyrightRightsPanel.svelte";
+	import type { TrackRights } from "$lib/components/CopyrightRightsPanel.svelte";
 	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
 	import { API_URL, getServerConfig } from "$lib/config";
 	import { uploader } from "$lib/uploader.svelte";
@@ -69,6 +71,11 @@
 	let supportGated = $state(false);
 	let autoTag = $state(false);
 	let trackUnlisted = $state(false);
+	// copyright rights metadata — mutually exclusive with supporter gating.
+	// when enabled, audio is uploaded to private storage and the backend writes
+	// indiemusi song + recording records after the track is published.
+	let copyrightEnabled = $state(false);
+	let copyrightRights = $state<TrackRights>({});
 
 	// albums for selection
 	let albums = $state<AlbumSummary[]>([]);
@@ -204,6 +211,8 @@
 			supportGated = false;
 			autoTag = false;
 			trackUnlisted = false;
+			copyrightEnabled = false;
+			copyrightRights = {};
 
 			const fileInput = document.getElementById(
 				"file-input",
@@ -214,6 +223,10 @@
 			) as HTMLInputElement;
 			if (imageInput) imageInput.value = "";
 		};
+
+		const copyrightToSend: TrackRights | null = copyrightEnabled
+			? copyrightRights
+			: null;
 
 		uploader.upload(
 			uploadFile,
@@ -237,6 +250,7 @@
 			undefined, // label
 			undefined, // albumId
 			isUnlisted,
+			copyrightToSend,
 		);
 	}
 
@@ -449,12 +463,19 @@
 				{/if}
 			</div>
 
+			<CopyrightRightsPanel
+				bind:enabled={copyrightEnabled}
+				bind:rights={copyrightRights}
+				disabled={supportGated}
+			/>
+
 			<div class="form-group supporter-gating">
 				{#if artistProfile?.support_url}
 					<label class="checkbox-label">
 						<input
 							type="checkbox"
 							bind:checked={supportGated}
+							disabled={copyrightEnabled}
 						/>
 						<span class="checkbox-text">
 							<svg class="heart-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
