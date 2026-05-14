@@ -24,6 +24,7 @@ from backend._internal import (
     get_pending_add_account,
     get_pending_dev_token,
     get_pending_scope_upgrade,
+    get_session,
     get_session_group,
     get_user_flags,
     handle_oauth_callback,
@@ -39,6 +40,7 @@ from backend._internal import (
     switch_active_account,
 )
 from backend._internal.auth import get_refresh_token_lifetime_days
+from backend._internal.copyright import complete_indiemusi_setup
 from backend._internal.tasks import schedule_atproto_sync
 from backend.config import settings
 from backend.models import Artist, get_db
@@ -249,6 +251,22 @@ async def oauth_callback(
         # create new session with upgraded scopes
         session_id = await create_session(did, handle, oauth_session)
 
+        # paradigm-specific post-upgrade work (e.g., write a publishingOwner
+        # record to the user's PDS now that the scopes are in place)
+        if pending_scope_upgrade.paradigm_data and (
+            pending_scope_upgrade.requested_scopes == "indiemusi"
+        ):
+            try:
+                new_session = await get_session(session_id)
+                if new_session:
+                    await complete_indiemusi_setup(
+                        new_session, pending_scope_upgrade.paradigm_data
+                    )
+            except Exception as e:
+                logger.error("indiemusi setup completion failed for %s: %s", did, e)
+                # fall through — user still gets the upgraded session and can
+                # retry the setup from the portal
+
         # clean up pending record
         await delete_pending_scope_upgrade(state)
 
@@ -258,8 +276,9 @@ async def oauth_callback(
         # schedule ATProto sync (via docket if enabled, else asyncio)
         await schedule_atproto_sync(session_id, did)
 
+        redirect_path = pending_scope_upgrade.redirect_to or "/settings"
         return RedirectResponse(
-            url=f"{settings.frontend.url}/settings?exchange_token={exchange_token}&scope_upgraded=true",
+            url=f"{settings.frontend.url}{redirect_path}?exchange_token={exchange_token}&scope_upgraded=true",
             status_code=303,
         )
 

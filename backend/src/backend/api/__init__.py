@@ -7,6 +7,7 @@ from backend.api.discover import router as discover_router
 from backend.api.meta import router as meta_router
 from backend.api.audio import router as audio_router
 from backend.api.auth import router as auth_router
+from backend.api.copyright import router as copyright_router
 from backend.api.exports import router as exports_router
 from backend.api.for_you import router as for_you_router
 from backend.api.jams import router as jams_router
@@ -28,6 +29,7 @@ __all__ = [
     "artists_router",
     "audio_router",
     "auth_router",
+    "copyright_router",
     "discover_router",
     "exports_router",
     "for_you_router",

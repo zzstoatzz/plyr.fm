@@ -298,3 +298,17 @@ async def _check_teal_preference(did: str) -> bool:
         )
         pref = result.scalar_one_or_none()
         return pref is True
+
+
+async def _check_copyright_paradigm(did: str) -> bool:
+    """check if user has opted into the indiemusi copyright paradigm."""
+    from backend.models import UserCopyrightConfig
+
+    async with db_session() as db:
+        result = await db.execute(
+            select(UserCopyrightConfig.paradigm).where(
+                UserCopyrightConfig.user_did == did
+            )
+        )
+        paradigm = result.scalar_one_or_none()
+        return paradigm == settings.indiemusi.paradigm_id

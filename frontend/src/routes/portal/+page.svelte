@@ -11,6 +11,7 @@
 	import TagInput from '$lib/components/TagInput.svelte';
 	import PdsAudioUploadsToggle from '$lib/components/PdsAudioUploadsToggle.svelte';
 	import PdsBackfillControl from '$lib/components/PdsBackfillControl.svelte';
+	import CopyrightSection from '$lib/components/CopyrightSection.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary, Playlist } from '$lib/types';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -136,6 +137,7 @@
 		const params = new URLSearchParams(window.location.search);
 		const exchangeToken = params.get('exchange_token');
 		const isDevToken = params.get('dev_token') === 'true';
+		const isScopeUpgrade = params.get('scope_upgraded') === 'true';
 
 		// redirect dev token callbacks to settings page
 		if (exchangeToken && isDevToken) {
@@ -157,7 +159,17 @@
 					// invalidate all load functions so they rerun with the new session cookie
 					await invalidateAll();
 					await auth.refresh();
-					await preferences.fetch(); const r = getReturnUrl(); if (r) { clearReturnUrl(); window.location.href = r; return; }
+					await preferences.fetch();
+					if (isScopeUpgrade) {
+						toast.success('copyright paradigm configured');
+					} else {
+						const r = getReturnUrl();
+						if (r) {
+							clearReturnUrl();
+							window.location.href = r;
+							return;
+						}
+					}
 				}
 			} catch (_e) {
 				console.error('failed to exchange token:', _e);
@@ -935,6 +947,8 @@
 				</button>
 			</form>
 		</section>
+
+		<CopyrightSection />
 
 		<a href="/upload" class="upload-card">
 			<div class="upload-card-icon">

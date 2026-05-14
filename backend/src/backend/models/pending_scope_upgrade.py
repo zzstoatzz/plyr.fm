@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import DateTime, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.models.database import Base
@@ -26,6 +27,15 @@ class PendingScopeUpgrade(Base):
     old_session_id: Mapped[str] = mapped_column(String(64), nullable=False)
     # the additional scopes being requested
     requested_scopes: Mapped[str] = mapped_column(String(512), nullable=False)
+    # paradigm-specific payload carried through the OAuth round-trip — the
+    # callback uses this to finish setting up the feature once the new session
+    # has the right scopes (e.g., writing a publishingOwner record on PDS).
+    paradigm_data: Mapped[dict | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True, default=None
+    )
+    # frontend path the callback should redirect to (e.g., "/portal"). null
+    # falls back to /settings, which is where teal upgrades land.
+    redirect_to: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
