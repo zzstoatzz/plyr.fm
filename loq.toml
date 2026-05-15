@@ -292,8 +292,12 @@ max_lines = 513
 
 [[rules]]
 path = "frontend/src/lib/components/CopyrightSection.svelte"
-max_lines = 655
+max_lines = 800
 
 [[rules]]
 path = "backend/tests/api/test_copyright_followups.py"
 max_lines = 576
+
+[[rules]]
+path = "backend/src/backend/_internal/copyright.py"
+max_lines = 644

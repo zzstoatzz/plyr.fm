@@ -178,27 +178,40 @@ async def test_setup_without_scopes_kicks_off_oauth(
         "copyright-user.bsky.social", include_indiemusi=True
     )
 
-    # pending row was stashed with paradigm_data + portal redirect
+    # pending row was stashed with the discriminated-union paradigm_data
+    # shape (#1409): {"action": "create", "publishing_owner": {...}}
     pending = await get_pending_scope_upgrade("test_state_indiemusi")
     assert pending is not None
     assert pending.requested_scopes == "indiemusi"
     assert pending.redirect_to == "/portal"
     assert pending.paradigm_data == {
-        "firstName": "Hilke",
-        "lastName": "Ros",
-        "ipi": "01145982828",
-        "collectingSociety": "Suisa",
+        "action": "create",
+        "publishing_owner": {
+            "firstName": "Hilke",
+            "lastName": "Ros",
+            "ipi": "01145982828",
+            "collectingSociety": "Suisa",
+        },
     }
 
 
 async def test_setup_with_scopes_completes_in_place(
     app_with_scopes: FastAPI, db_session: AsyncSession
 ) -> None:
-    """when session already has the scopes, setup writes directly + returns complete=True."""
+    """when session already has the scopes, setup writes directly + returns complete=True.
+
+    after #1409, /copyright/setup is a deprecated alias for POST
+    /copyright/publishing-owners → create_owner_for_user. patch the create
+    helper at the api module's import site.
+    """
     with patch(
-        "backend.api.copyright.complete_indiemusi_setup",
+        "backend.api.copyright.create_owner_for_user",
         new_callable=AsyncMock,
-    ) as mock_complete:
+    ) as mock_create:
+        mock_create.return_value = (
+            "at://did:test:copyright-user/ch.indiemusi.alpha.actor.publishingOwner/new",
+            {"companyName": "Red Brick Records"},
+        )
         async with AsyncClient(
             transport=ASGITransport(app=app_with_scopes), base_url="http://test"
         ) as client:
@@ -214,9 +227,10 @@ async def test_setup_with_scopes_completes_in_place(
     body = response.json()
     assert body["auth_url"] is None
     assert body["complete"] is True
-    mock_complete.assert_awaited_once()
-    args = mock_complete.await_args
-    assert args.args[1] == {"companyName": "Red Brick Records"}
+    mock_create.assert_awaited_once()
+    args = mock_create.await_args
+    # 2nd positional arg is a PublishingOwnerInput model (alias=companyName)
+    assert args.args[1].company_name == "Red Brick Records"
 
 
 async def test_setup_rejects_unknown_paradigm(

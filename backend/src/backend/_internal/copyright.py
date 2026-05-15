@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
+from backend._internal.atproto.client import parse_at_uri
 from backend._internal.atproto.records.ch_indiemusi import (
     ISRC_PATTERN,
     ISWC_PATTERN,
@@ -27,6 +28,10 @@ from backend._internal.atproto.records.ch_indiemusi import (
     create_publishing_owner_record,
     create_recording_record,
     create_song_record,
+    delete_publishing_owner_record,
+    get_publishing_owner_record,
+    merge_publishing_owner_for_put,
+    put_publishing_owner_record,
     update_recording_record,
     update_song_record,
 )
@@ -154,29 +159,246 @@ async def delete_user_copyright_config(did: str) -> None:
             await db.commit()
 
 
+# --- publishingOwner operations --------------------------------------------
+#
+# four explicit ops: list, create, edit (merge-preserve), use (DB-only).
+# delete is a fifth but is straightforward — no merging, no local state churn.
+#
+# all writes go through the same flow at the API layer: if the session has
+# write scope, run inline; otherwise stash a discriminated action onto
+# `pending_scope_upgrades.paradigm_data` and let the OAuth callback finalize.
+
+
+async def _validate_owner_uri(auth_session: AuthSession, uri: str) -> None:
+    """raise if `uri` is not a publishingOwner on the session user's repo.
+
+    enforces three invariants before any DB or PDS write touches it:
+    - the URI's repo must equal the session user's DID (no cross-account links)
+    - the URI's collection must be the indiemusi publishingOwner NSID
+    - the record must actually exist on PDS (otherwise we'd cache a stale URI)
+
+    raises ValueError with a user-facing message. callers surface as 400.
+    """
+    try:
+        repo, collection, _rkey = parse_at_uri(uri)
+    except Exception as e:
+        raise ValueError(f"invalid AT-URI: {uri!r}") from e
+
+    if repo != auth_session.did:
+        raise ValueError("can only link records owned by this account")
+    if collection != settings.indiemusi.publishing_owner_collection:
+        raise ValueError(
+            f"expected collection {settings.indiemusi.publishing_owner_collection}, "
+            f"got {collection!r}"
+        )
+    # presence check — records get a `value` envelope back; we don't read it
+    # here, but if the record doesn't exist make_pds_request raises.
+    await get_publishing_owner_record(auth_session, uri)
+
+
+async def create_owner_for_user(
+    auth_session: AuthSession,
+    owner: PublishingOwnerInput,
+    *,
+    use_as_config: bool,
+) -> tuple[str, dict[str, Any]]:
+    """create a new publishingOwner record on the user's PDS.
+
+    when `use_as_config` is True (the typical first-time setup path), updates
+    the user_copyright_configs row to point at the new record. otherwise just
+    creates the PDS record — useful when the user already has a config and is
+    adding another record without switching `in_use`.
+
+    returns (uri, modeled_paradigm_data).
+    """
+    uri, _cid = await create_publishing_owner_record(auth_session, owner)
+    modeled = owner.model_dump(by_alias=True, exclude_none=True)
+
+    if use_as_config:
+        await upsert_user_copyright_config(
+            did=auth_session.did,
+            paradigm=settings.indiemusi.paradigm_id,
+            config_uri=uri,
+            paradigm_data=modeled,
+        )
+        logger.info(
+            "created + linked publishingOwner for %s (uri=%s)",
+            auth_session.did,
+            uri,
+        )
+    else:
+        logger.info(
+            "created publishingOwner for %s (uri=%s, not linked)",
+            auth_session.did,
+            uri,
+        )
+    return uri, modeled
+
+
+async def edit_owner_for_user(
+    auth_session: AuthSession,
+    uri: str,
+    owner: PublishingOwnerInput,
+) -> dict[str, Any]:
+    """edit an existing publishingOwner record with merge-preserve semantics.
+
+    fetches the record fresh from PDS (never from local cache), strips the
+    fields plyr models so individual↔company switches actually clear stale
+    keys, then putRecord with the merged body. any keys we don't model are
+    preserved untouched — gives other clients (and future lexicon extensions)
+    room to add fields without us silently dropping them.
+
+    if `uri` is the currently-in-use config_uri, updates paradigm_data so the
+    prefill cache stays consistent with what was just written.
+
+    returns the modeled paradigm_data dict.
+    """
+    await _validate_owner_uri(auth_session, uri)
+
+    # ALWAYS re-fetch fresh — never trust the local cache. another client
+    # could have written between our last read and this edit.
+    fresh = await get_publishing_owner_record(auth_session, uri)
+    fresh_value = fresh.get("value", {})
+    if not isinstance(fresh_value, dict):
+        raise ValueError(f"PDS returned non-dict record value for {uri}")
+
+    merged = merge_publishing_owner_for_put(fresh_value, owner)
+    await put_publishing_owner_record(auth_session, uri, merged)
+
+    modeled = owner.model_dump(by_alias=True, exclude_none=True)
+
+    cfg = await get_user_copyright_config(auth_session.did)
+    if cfg and cfg.config_uri == uri:
+        # the edited record IS the one plyr currently references — refresh
+        # the cached prefill data so the portal summary reflects the new shape
+        await upsert_user_copyright_config(
+            did=auth_session.did,
+            paradigm=settings.indiemusi.paradigm_id,
+            config_uri=uri,
+            paradigm_data=modeled,
+        )
+    logger.info("edited publishingOwner for %s (uri=%s)", auth_session.did, uri)
+    return modeled
+
+
+async def use_owner_for_user(auth_session: AuthSession, uri: str) -> dict[str, Any]:
+    """point user_copyright_configs at an existing publishingOwner record.
+
+    DB-only: no PDS write. validates URI ownership + collection + that the
+    record exists, fetches it to populate paradigm_data, and saves the row.
+    """
+    await _validate_owner_uri(auth_session, uri)
+
+    fresh = await get_publishing_owner_record(auth_session, uri)
+    fresh_value = fresh.get("value", {})
+    if not isinstance(fresh_value, dict):
+        raise ValueError(f"PDS returned non-dict record value for {uri}")
+
+    # cache the modeled subset for prefill / summary — but only fields we
+    # recognize. anything else lives only on PDS, fetched fresh on edit.
+    parsed = PublishingOwnerInput.model_validate(
+        {k: v for k, v in fresh_value.items() if k != "$type"}
+    )
+    modeled = parsed.model_dump(by_alias=True, exclude_none=True)
+
+    await upsert_user_copyright_config(
+        did=auth_session.did,
+        paradigm=settings.indiemusi.paradigm_id,
+        config_uri=uri,
+        paradigm_data=modeled,
+    )
+    logger.info(
+        "linked existing publishingOwner for %s (uri=%s)",
+        auth_session.did,
+        uri,
+    )
+    return modeled
+
+
+async def delete_owner_for_user(auth_session: AuthSession, uri: str) -> None:
+    """delete a publishingOwner record from the user's PDS.
+
+    if the deleted record was the in-use one, clears config_uri + paradigm_data
+    on the row (the user must pick a different owner before writing track
+    rights again).
+    """
+    await _validate_owner_uri(auth_session, uri)
+    await delete_publishing_owner_record(auth_session, uri)
+
+    cfg = await get_user_copyright_config(auth_session.did)
+    if cfg and cfg.config_uri == uri:
+        await upsert_user_copyright_config(
+            did=auth_session.did,
+            paradigm=settings.indiemusi.paradigm_id,
+            config_uri=None,
+            paradigm_data=None,
+        )
+        logger.info(
+            "deleted in-use publishingOwner for %s, cleared config_uri",
+            auth_session.did,
+        )
+    else:
+        logger.info(
+            "deleted non-in-use publishingOwner for %s (uri=%s)",
+            auth_session.did,
+            uri,
+        )
+
+
+# --- pending-scope-upgrade callback dispatch -------------------------------
+#
+# `paradigm_data` on a pending row carries a discriminated action so the
+# OAuth callback knows what work to finalize once the new session has scopes.
+
+
+def _normalize_pending_paradigm_data(
+    paradigm_data: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """back-compat shim for pre-deploy pending rows.
+
+    rows stashed before the discriminated-union refactor have the flat
+    `{firstName, lastName, ipi, ...}` shape. wrap them as a create action so
+    the new dispatch can handle them during the 10-min TTL window.
+    """
+    if paradigm_data is None:
+        return None
+    if "action" in paradigm_data:
+        return paradigm_data
+    # legacy flat shape — treat as create
+    return {"action": "create", "publishing_owner": paradigm_data}
+
+
 async def complete_indiemusi_setup(
     auth_session: AuthSession, paradigm_data: dict[str, Any]
 ) -> None:
     """callback-side completion for the indiemusi paradigm.
 
-    runs after the new (upgraded) session has indiemusi scopes. writes the
-    publishingOwner record to the user's PDS and saves the config row pointing
-    at it. paradigm_data is the validated PublishingOwnerInput as a dict
-    (model_dump(by_alias=True)).
+    runs after the new (upgraded) session has indiemusi scopes. dispatches on
+    `paradigm_data.action`:
+
+    - `create`: writes a new publishingOwner + saves config row
+    - `edit`:   merge-preserve putRecord on existing URI + (maybe) refresh cache
+    - `use`:    DB-only link to an existing URI, no PDS write
     """
-    owner = PublishingOwnerInput.model_validate(paradigm_data)
-    uri, _cid = await create_publishing_owner_record(auth_session, owner)
-    await upsert_user_copyright_config(
-        did=auth_session.did,
-        paradigm=settings.indiemusi.paradigm_id,
-        config_uri=uri,
-        paradigm_data=owner.model_dump(by_alias=True, exclude_none=True),
-    )
-    logger.info(
-        "completed indiemusi setup for %s (publishingOwner=%s)",
-        auth_session.did,
-        uri,
-    )
+    data = _normalize_pending_paradigm_data(paradigm_data)
+    if not data:
+        logger.warning("complete_indiemusi_setup called with empty paradigm_data")
+        return
+
+    action = data.get("action")
+
+    if action == "create":
+        owner = PublishingOwnerInput.model_validate(data["publishing_owner"])
+        await create_owner_for_user(auth_session, owner, use_as_config=True)
+    elif action == "edit":
+        owner = PublishingOwnerInput.model_validate(data["publishing_owner"])
+        await edit_owner_for_user(auth_session, data["uri"], owner)
+    elif action == "use":
+        await use_owner_for_user(auth_session, data["uri"])
+    else:
+        logger.warning(
+            "complete_indiemusi_setup: unknown action %r in paradigm_data", action
+        )
 
 
 # --- per-track rights writers ------------------------------------------------
