@@ -545,7 +545,14 @@ async def _validate_audio(ctx: UploadContext) -> AudioInfo:
         raise UploadPhaseError(f"unsupported file type: .{ctx.audio_extension}")
 
     is_gated = ctx.support_gate is not None
-    if is_gated:
+    # the atprotofans requirement applies ONLY to supporter-gated tracks
+    # (support_gate.type == "any"). copyright-typed gates use the same
+    # private-storage pipeline but have a different access policy (any
+    # authenticated listener), so atprotofans setup must not be required.
+    gate_type = (
+        ctx.support_gate.get("type") if isinstance(ctx.support_gate, dict) else None
+    )
+    if gate_type == "any":
         async with db_session() as db:
             prefs_result = await db.execute(
                 select(UserPreferences).where(UserPreferences.did == ctx.artist_did)
