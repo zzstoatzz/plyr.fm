@@ -55,6 +55,22 @@ repos:
         files: ^frontend/src/routes/privacy/\+page\.svelte$
         pass_filenames: true
 
+      - id: check-oauth-scope-universe
+        name: oauth scope universe (runtime ⊆ published metadata)
+        # runs when any of:
+        #   - the runtime scope composer (config.py)
+        #   - the metadata endpoint (api/meta.py)
+        #   - the oauth client construction (auth/oauth.py)
+        #   - any lexicon record module (records/*)
+        # changes. cheap to run (~0.5s pytest startup + 1 instant test). guards
+        # against adding a new repo: scope to the runtime composer but forgetting
+        # to declare it in /oauth-client-metadata.json — failure mode is PAR
+        # invalid_scope at login, hard to debug without auth-server logs.
+        entry: bash -c 'cd backend && uv run pytest tests/api/test_oauth_client_metadata.py -q'
+        language: system
+        files: ^backend/src/backend/(config\.py|api/meta\.py|_internal/auth/oauth\.py|_internal/atproto/records/.+)
+        pass_filenames: false
+
       - id: cargo-check-moderation
         name: cargo check (moderation)
         entry: bash -c 'cd services/moderation && cargo check --quiet'

@@ -51,13 +51,24 @@ async def client_metadata() -> dict[str, Any]:
     # extract base URL from client_id for client_uri
     client_uri = settings.atproto.client_id.replace("/oauth-client-metadata.json", "")
 
+    # the published `scope` is the *universe* of scopes the client may request
+    # across all flows. authservers (Bluesky's, custom PDS') reject any PAR
+    # whose scope isn't a subset of this declaration. compose with every
+    # integration we might ever ask for — runtime decides which subset to
+    # actually send for a given user's flow.
     metadata: dict[str, Any] = {
         "client_id": settings.atproto.client_id,
         "client_name": settings.app.name,
         "client_uri": client_uri,
         "redirect_uris": [settings.atproto.redirect_uri],
-        "scope": settings.atproto.resolved_scope_with_teal(
-            settings.teal.play_collection, settings.teal.status_collection
+        "scope": settings.atproto.resolved_scope_with_extras(
+            teal_play=settings.teal.play_collection,
+            teal_status=settings.teal.status_collection,
+            indiemusi_tokens=(
+                settings.indiemusi.scope_tokens()
+                if settings.indiemusi.enabled
+                else None
+            ),
         ),
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
