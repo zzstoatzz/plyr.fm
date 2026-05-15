@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { API_URL } from '$lib/config';
+	import InfoTooltip from '$lib/components/InfoTooltip.svelte';
 
 	export type TrackRights = {
 		iswc?: string;
@@ -77,19 +78,27 @@
 		<p class="hint">loading…</p>
 	{:else if !config}
 		<p class="hint missing-config">
-			set up a copyright paradigm in
+			set up copyright in
 			<a href="/portal">your portal</a>
 			before flagging tracks as copyrighted.
 		</p>
 	{:else if enabled}
-		<p class="hint paradigm-row">
-			using <strong>{config.paradigm}</strong>
-			{#if ownerSummary}· primary owner: <strong>{ownerSummary}</strong>{/if}
-		</p>
+		{#if ownerSummary}
+			<p class="hint owner-line">
+				rights credited to <strong>{ownerSummary}</strong>
+			</p>
+		{/if}
 
 		<div class="grid-2">
 			<div class="form-group">
-				<label for="copyright-rights-iswc">ISWC (optional)</label>
+				<label for="copyright-rights-iswc">
+					ISWC (optional)
+					<InfoTooltip label="what's an ISWC?">
+						International Standard Musical Work Code — uniquely identifies the
+						song (the composition). assigned when a song is registered with a
+						collecting society.
+					</InfoTooltip>
+				</label>
 				<input
 					id="copyright-rights-iswc"
 					type="text"
@@ -99,11 +108,17 @@
 					oninput={(e) => (rights = { ...rights, iswc: (e.currentTarget as HTMLInputElement).value })}
 					{disabled}
 				/>
-				<p class="hint">composition code from your collecting society</p>
 			</div>
 
 			<div class="form-group">
-				<label for="copyright-rights-isrc">ISRC (optional)</label>
+				<label for="copyright-rights-isrc">
+					ISRC (optional)
+					<InfoTooltip label="what's an ISRC?">
+						International Standard Recording Code — uniquely identifies a
+						specific recording (this performance, not the song). issued by your
+						label or distributor.
+					</InfoTooltip>
+				</label>
 				<input
 					id="copyright-rights-isrc"
 					type="text"
@@ -113,12 +128,18 @@
 					oninput={(e) => (rights = { ...rights, isrc: (e.currentTarget as HTMLInputElement).value })}
 					{disabled}
 				/>
-				<p class="hint">recording code</p>
 			</div>
 		</div>
 
 		<div class="form-group">
-			<label for="copyright-rights-master">master owner (optional)</label>
+			<label for="copyright-rights-master">
+				master owner (optional)
+				<InfoTooltip label="what's a master owner?">
+					who owns this specific recording (the "master"), separate from the
+					song itself. usually the artist for self-released work, or the label
+					if you're signed.
+				</InfoTooltip>
+			</label>
 			<input
 				id="copyright-rights-master"
 				type="text"
@@ -128,9 +149,7 @@
 				oninput={syncMasterOwner}
 				{disabled}
 			/>
-			<p class="hint">
-				leave blank if you own your own masters (we'll fill it in for you)
-			</p>
+			<p class="hint">leave blank if you own your own masters</p>
 		</div>
 
 		<p class="hint storage-note">
@@ -187,7 +206,7 @@
 		color: var(--text-tertiary);
 	}
 
-	.paradigm-row {
+	.owner-line {
 		color: var(--text-tertiary);
 		margin-bottom: 0.75rem;
 	}

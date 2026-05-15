@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
+	import InfoTooltip from '$lib/components/InfoTooltip.svelte';
 
 	type PublishingOwner = {
 		ipi?: string;
@@ -29,8 +30,6 @@
 	let lastName = $state('');
 	let companyName = $state('');
 	let collectingSociety = $state('');
-
-	const paradigmLabel = 'indiemusi.ch alpha';
 
 	const canSubmit = $derived(
 		(ownerKind === 'individual' && firstName.trim() !== '' && lastName.trim() !== '') ||
@@ -190,15 +189,6 @@
 	{:else if config && !expanded}
 		<div class="config-summary">
 			<div class="summary-info">
-				<div class="summary-paradigm">{paradigmLabel}</div>
-				{#if config.paradigm_data?.ipi}
-					<div class="summary-row"><span class="summary-label">ipi</span> {config.paradigm_data.ipi}</div>
-				{/if}
-				{#if config.paradigm_data?.collectingSociety}
-					<div class="summary-row">
-						<span class="summary-label">collecting society</span> {config.paradigm_data.collectingSociety}
-					</div>
-				{/if}
 				{#if config.paradigm_data?.companyName}
 					<div class="summary-row"><span class="summary-label">company</span> {config.paradigm_data.companyName}</div>
 				{:else if config.paradigm_data?.firstName || config.paradigm_data?.lastName}
@@ -207,6 +197,17 @@
 						{[config.paradigm_data.firstName, config.paradigm_data.lastName].filter(Boolean).join(' ')}
 					</div>
 				{/if}
+				{#if config.paradigm_data?.ipi}
+					<div class="summary-row"><span class="summary-label">IPI</span> {config.paradigm_data.ipi}</div>
+				{/if}
+				{#if config.paradigm_data?.collectingSociety}
+					<div class="summary-row">
+						<span class="summary-label">collecting society</span> {config.paradigm_data.collectingSociety}
+					</div>
+				{/if}
+				<div class="summary-footnote">
+					published via <a href="https://indiemusi.ch" target="_blank" rel="noopener">indiemusi.ch</a>'s rights schema
+				</div>
 			</div>
 			<div class="summary-actions">
 				<button type="button" class="edit-btn" onclick={openEditForm} disabled={saving}>edit</button>
@@ -218,24 +219,23 @@
 	{:else if !config && !expanded}
 		<div class="setup-prompt">
 			<p class="explainer">
-				publish rights metadata to your pds so other atproto music apps can show who owns what. uses
-				<a href="https://indiemusi.ch" target="_blank" rel="noopener">indiemusi.ch</a>'s lexicon.
+				publish copyright info to your PDS so other ATProto music apps can show
+				who owns what. uses <a href="https://indiemusi.ch" target="_blank" rel="noopener">indiemusi.ch</a>'s
+				open schema for rights metadata.
 			</p>
-			<button type="button" class="setup-btn" onclick={openSetupForm}>set up copyright paradigm</button>
+			<button type="button" class="setup-btn" onclick={openSetupForm}>set up copyright</button>
 		</div>
 	{:else}
 		<form onsubmit={handleSubmit}>
-			<div class="form-group">
-				<span class="form-label">paradigm</span>
-				<div class="paradigm-row">{paradigmLabel}</div>
-				<p class="hint">
-					only paradigm available right now. published by
-					<a href="https://indiemusi.ch" target="_blank" rel="noopener">indiemusi.ch</a>.
-				</p>
-			</div>
-
 			<div class="form-group" role="group" aria-labelledby="owner-kind-label">
-				<span id="owner-kind-label" class="form-label">publishing owner</span>
+				<span id="owner-kind-label" class="form-label">
+					publishing owner
+					<InfoTooltip label="what's a publishing owner?">
+						the person or company that holds the copyright to the song — the melody,
+						lyrics, and arrangement. self-published songwriters are their own
+						publishing owner.
+					</InfoTooltip>
+				</span>
 				<div class="owner-kind-options">
 					<label class="owner-kind-option">
 						<input
@@ -298,7 +298,14 @@
 			{/if}
 
 			<div class="form-group">
-				<label for="copyright-ipi">ipi (optional)</label>
+				<label for="copyright-ipi">
+					IPI (optional)
+					<InfoTooltip label="what's an IPI?">
+						Interested Party Information — an international ID assigned by a
+						collecting society. you probably only have one if you've registered
+						with a society like ASCAP, BMI, or Suisa.
+					</InfoTooltip>
+				</label>
 				<input
 					id="copyright-ipi"
 					type="text"
@@ -309,11 +316,17 @@
 					maxlength="11"
 					placeholder="e.g. 00012345678"
 				/>
-				<p class="hint">interested parties information number, if you have one</p>
 			</div>
 
 			<div class="form-group">
-				<label for="copyright-society">collecting society (optional)</label>
+				<label for="copyright-society">
+					collecting society (optional)
+					<InfoTooltip label="what's a collecting society?">
+						the organization that collects and distributes royalties on your
+						behalf. ASCAP and BMI in the US, Suisa in Switzerland, PRS in the UK,
+						GEMA in Germany.
+					</InfoTooltip>
+				</label>
 				<input
 					id="copyright-society"
 					type="text"
@@ -327,7 +340,7 @@
 			<div class="form-actions">
 				<button type="button" class="cancel-link" onclick={cancelForm} disabled={saving}>cancel</button>
 				<button type="submit" disabled={!canSubmit || saving}>
-					{saving ? 'saving…' : config ? 'save changes' : 'set up paradigm'}
+					{saving ? 'saving…' : config ? 'save changes' : 'save'}
 				</button>
 			</div>
 		</form>
@@ -426,12 +439,6 @@
 		min-width: 0;
 	}
 
-	.summary-paradigm {
-		font-weight: 600;
-		color: var(--text-primary);
-		font-size: var(--text-base);
-	}
-
 	.summary-row {
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
@@ -440,6 +447,21 @@
 	.summary-label {
 		color: var(--text-muted);
 		margin-right: 0.4rem;
+	}
+
+	.summary-footnote {
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+		margin-top: 0.35rem;
+	}
+
+	.summary-footnote a {
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.summary-footnote a:hover {
+		text-decoration: underline;
 	}
 
 	.summary-actions {
@@ -520,30 +542,6 @@
 	input[type='text']:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
-	}
-
-	.paradigm-row {
-		padding: 0.6rem 0.75rem;
-		background: var(--bg-primary);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		color: var(--text-primary);
-		font-size: var(--text-base);
-	}
-
-	.hint {
-		margin-top: 0.35rem;
-		font-size: var(--text-xs);
-		color: var(--text-muted);
-	}
-
-	.hint a {
-		color: var(--accent);
-		text-decoration: none;
-	}
-
-	.hint a:hover {
-		text-decoration: underline;
 	}
 
 	.owner-kind-options {
