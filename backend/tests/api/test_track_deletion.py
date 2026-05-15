@@ -502,7 +502,7 @@ async def test_edit_same_image_does_not_delete(
             side_effect=mock_delete,
         ),
         patch(
-            "backend.api.tracks.mutations._update_atproto_record",
+            "backend.api.tracks.mutations.rebuild_track_pds_record",
             new_callable=AsyncMock,
         ),
     ):

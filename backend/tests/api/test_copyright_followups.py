@@ -262,10 +262,12 @@ async def test_p1_1_public_to_copyright_schedules_move_and_rebuild(
         # PDS fm.plyr.track record must be rebuilt
         rebuild.assert_awaited()
 
-    # row was updated in place
+    # row was updated in place. capture id before expire_all so the eventual
+    # comparison doesn't trigger a lazy-load on the expired ORM object.
+    track_id = track.id
     db_session.expire_all()
     refreshed = (
-        await db_session.execute(select(Track).where(Track.id == track.id))
+        await db_session.execute(select(Track).where(Track.id == track_id))
     ).scalar_one()
     assert refreshed.support_gate == {"type": "copyright"}
     assert refreshed.copyright_song_uri is not None
@@ -308,10 +310,16 @@ async def test_p1_1_already_private_track_does_not_schedule_move(
         sched_move.assert_not_called()
 
 
-async def test_p1_1_clear_track_rights_moves_audio_back_to_public(
+async def test_p1_1_clear_track_rights_moves_audio_then_rebuilds_pds(
     _user_with_paradigm: str, db_session: AsyncSession
 ) -> None:
-    """clearing copyright from a gated track must schedule a public move + clear gate."""
+    """clearing copyright must move audio public synchronously THEN rebuild PDS.
+
+    the ordering matters: rebuild_track_pds_record needs r2_url set on the row,
+    which only happens after move_track_audio commits. doing the move async
+    (as we used to) left the PDS record stale with the old copyright audioUrl
+    indefinitely.
+    """
     track = await _insert_track(
         db_session,
         _user_with_paradigm,
@@ -323,7 +331,27 @@ async def test_p1_1_clear_track_rights_moves_audio_back_to_public(
         "at://did:test:copyright-user/ch.indiemusi.alpha.recording/r"
     )
     await db_session.commit()
+    track_id = track.id
     sess = _fake_session(_user_with_paradigm)
+
+    call_order: list[str] = []
+
+    async def fake_move(track_id_: int, to_private: bool) -> None:
+        # simulate what move_track_audio commits: r2_url repopulated on the row
+        from sqlalchemy import update as _update
+
+        call_order.append(f"move(to_private={to_private})")
+        await db_session.execute(
+            _update(Track)
+            .where(Track.id == track_id_)
+            .values(r2_url="https://audio.example.com/abc.mp3")
+        )
+        await db_session.commit()
+
+    async def fake_rebuild(track_: Track, _session) -> None:
+        call_order.append(
+            f"rebuild(r2_url={track_.r2_url}, gate={track_.support_gate})"
+        )
 
     with (
         patch(
@@ -332,29 +360,92 @@ async def test_p1_1_clear_track_rights_moves_audio_back_to_public(
         ),
         patch(
             "backend._internal.copyright.rebuild_track_pds_record",
+            side_effect=fake_rebuild,
+        ),
+        patch(
+            "backend._internal.copyright.move_track_audio",
+            side_effect=fake_move,
+        ),
+    ):
+        await clear_track_rights(sess, track)
+
+    # move must have fired before rebuild, with to_private=False
+    assert call_order[0].startswith("move(to_private=False")
+    # rebuild must see the freshly-populated r2_url AND the cleared gate
+    assert (
+        "rebuild(r2_url=https://audio.example.com/abc.mp3, gate=None)" in call_order[1]
+    )
+
+    db_session.expire_all()
+    refreshed = (
+        await db_session.execute(select(Track).where(Track.id == track_id))
+    ).scalar_one()
+    assert refreshed.support_gate is None
+    assert refreshed.copyright_song_uri is None
+    assert refreshed.copyright_recording_uri is None
+
+
+async def test_p1_1_write_rolls_back_on_pds_rebuild_failure(
+    _user_with_paradigm: str, db_session: AsyncSession
+) -> None:
+    """if rebuild_track_pds_record fails for a public→copyright transition, the
+    local gate state must NOT be committed — otherwise the PDS record keeps
+    pointing at the public R2 URL while local state says gated, leaving a
+    bypassable security gap.
+    """
+    track = await _insert_track(
+        db_session,
+        _user_with_paradigm,
+        support_gate=None,
+        r2_url="https://audio.example.com/abc.mp3",
+    )
+    track_id = track.id
+    sess = _fake_session(_user_with_paradigm)
+
+    with (
+        patch(
+            "backend._internal.copyright.create_song_record",
             new_callable=AsyncMock,
+        ) as cr_song,
+        patch(
+            "backend._internal.copyright.create_recording_record",
+            new_callable=AsyncMock,
+        ) as cr_rec,
+        patch(
+            "backend._internal.copyright.rebuild_track_pds_record",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("PDS rebuild boom"),
         ),
         patch(
             "backend._internal.copyright.schedule_move_track_audio",
             new_callable=AsyncMock,
         ) as sched_move,
     ):
-        await clear_track_rights(sess, track)
-        sched_move.assert_awaited_once()
-        call_args = sched_move.await_args
-        # accept either positional or keyword
-        to_private = call_args.kwargs.get("to_private")
-        if to_private is None:
-            to_private = call_args.args[1]
-        assert to_private is False
+        cr_song.return_value = (
+            "at://did:test:copyright-user/ch.indiemusi.alpha.song/s",
+            "cid1",
+        )
+        cr_rec.return_value = (
+            "at://did:test:copyright-user/ch.indiemusi.alpha.recording/r",
+            "cid2",
+        )
+        with pytest.raises(RuntimeError, match="PDS rebuild boom"):
+            await write_track_rights(sess, track, TrackRightsInput())
+
+        # the move must NOT have been scheduled — we never got past the rebuild
+        sched_move.assert_not_called()
 
     db_session.expire_all()
     refreshed = (
-        await db_session.execute(select(Track).where(Track.id == track.id))
+        await db_session.execute(select(Track).where(Track.id == track_id))
     ).scalar_one()
+    # phase A's URI write committed (idempotent retry shape); but the gate
+    # transition and r2_url null must have rolled back
     assert refreshed.support_gate is None
-    assert refreshed.copyright_song_uri is None
-    assert refreshed.copyright_recording_uri is None
+    assert refreshed.r2_url == "https://audio.example.com/abc.mp3"
+    assert refreshed.copyright_song_uri == (
+        "at://did:test:copyright-user/ch.indiemusi.alpha.song/s"
+    )
 
 
 # --- P1.2: disconnect blocked by copyright-gated tracks ----------------------

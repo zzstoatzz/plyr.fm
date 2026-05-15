@@ -32,7 +32,10 @@ from backend._internal.atproto.records.fm_plyr.track import (
     delete_record_by_uri,
     rebuild_track_pds_record,
 )
-from backend._internal.tasks.storage import schedule_move_track_audio
+from backend._internal.tasks.storage import (
+    move_track_audio,
+    schedule_move_track_audio,
+)
 from backend.config import settings
 from backend.models import Artist, Track, UserCopyrightConfig
 from backend.utilities.database import db_session
@@ -224,12 +227,18 @@ async def write_track_rights(
     - flips support_gate to {"type": "copyright"}
     - rebuilds the fm.plyr.track PDS record so its audioUrl points at the
       auth-proxied /audio/{file_id} endpoint instead of the public R2 URL
-    - schedules a background move of the audio file into the private bucket
     - clears r2_url on the row so other callers stop treating it as public
+    - schedules a background move of the audio file into the private bucket
 
     raises ValueError when the user hasn't completed indiemusi setup or when
     the track already has a non-copyright support_gate (e.g., atprotofans
     supporter gating). gate modes are mutually exclusive.
+
+    raises any underlying exception from rebuild_track_pds_record when the
+    track is transitioning from public to copyright-gated. on failure the
+    transition is rolled back so the PDS record's audioUrl never lags
+    behind the local gate state (which would let third-party clients keep
+    pulling audio from the cached public R2 URL).
     """
     cfg = await get_user_copyright_config(auth_session.did)
     if not cfg or cfg.paradigm != settings.indiemusi.paradigm_id:
@@ -275,6 +284,10 @@ async def write_track_rights(
         song=None,  # song lives at its own URI; don't duplicate inline
     )
 
+    # phase A: write song + recording records to PDS and persist the URIs
+    # locally. these are idempotent on retry (existing rkeys → putRecord). a
+    # failure between PDS write and DB commit leaves orphan PDS records, but
+    # they're re-targeted (not re-created) on the retry.
     if track.copyright_song_uri:
         song_uri, _ = await update_song_record(
             auth_session, track.copyright_song_uri, song_input
@@ -289,10 +302,8 @@ async def write_track_rights(
     else:
         recording_uri, _ = await create_recording_record(auth_session, recording_input)
 
-    # apply the track-side state transitions in a single DB session so the
-    # rebuilt PDS record reads the post-transition row (audioUrl wants the
-    # auth-proxied endpoint, support_gate set, etc.)
     transitioning_to_private = existing_gate is None and track.r2_url is not None
+
     async with db_session() as db:
         result = await db.execute(
             select(Track)
@@ -302,29 +313,24 @@ async def write_track_rights(
         row = result.scalar_one()
         row.copyright_song_uri = song_uri
         row.copyright_recording_uri = recording_uri
-        if row.support_gate is None:
+
+        # tracks that were already copyright-gated or never public can flip
+        # the gate without rebuilding the PDS record — the audioUrl was set
+        # to the auth-proxied endpoint at upload (or by a previous transition)
+        if not transitioning_to_private:
+            if row.support_gate is None:
+                row.support_gate = {"type": "copyright"}
+            await db.commit()
+        else:
+            # phase B: transition public → copyright. rebuild the fm.plyr.track
+            # record so its audioUrl no longer points at the public R2 URL,
+            # then commit. raising here rolls back the DB write so the gate
+            # state and the PDS record stay in sync.
             row.support_gate = {"type": "copyright"}
-        if transitioning_to_private:
-            # null the cached public URL so audio resolution stops handing it
-            # out; the move task will not repopulate it (private bucket has no
-            # public URL). the PDS record below now points at the auth-proxied
-            # endpoint, so third-party clients can't bypass the gate.
             row.r2_url = None
-
-        if row.atproto_record_uri:
-            try:
+            if row.atproto_record_uri:
                 await rebuild_track_pds_record(row, auth_session)
-            except Exception as e:
-                # don't roll the local DB write back — the PDS song/recording
-                # were already written and the row should reflect that. log
-                # and let the caller retry; rebuild is idempotent.
-                logger.warning(
-                    "failed to rebuild fm.plyr.track record for track %s: %s",
-                    track.id,
-                    e,
-                )
-
-        await db.commit()
+            await db.commit()
 
     if transitioning_to_private:
         await schedule_move_track_audio(track.id, to_private=True)
@@ -348,17 +354,20 @@ async def clear_track_rights(
     best-effort PDS deletes — local state is cleared regardless. when the
     track was actually copyright-gated (support_gate.type == "copyright"),
     this also reverses the storage transition:
-    - clears support_gate
-    - rebuilds the fm.plyr.track PDS record (early-returns until the move
-      completes; the auth-proxied URL keeps working in the meantime via
-      redirect)
-    - schedules a move of the audio file back to the public bucket
+    - synchronously moves the file back to the public bucket so r2_url is
+      repopulated before the rebuild runs (otherwise the PDS record stays
+      pointed at /audio/{file_id} with stale supportGate metadata)
+    - clears support_gate + URI columns
+    - rebuilds the fm.plyr.track PDS record with the fresh public r2_url
+      so reading clients see the canonical state
 
     if the track had a different support_gate (e.g., atprotofans supporter
     gating that pre-dated the copyright write — shouldn't be reachable with
-    the mutex in write_track_rights, but defensive), that gate is left alone.
+    the mutex in write_track_rights, but defensive), that gate is left alone
+    and no move is scheduled.
     """
     was_copyright_gated = _is_copyright_gate(track.support_gate)
+    track_id = track.id
 
     for uri in (track.copyright_song_uri, track.copyright_recording_uri):
         if not uri:
@@ -368,11 +377,19 @@ async def clear_track_rights(
         except Exception as e:
             logger.warning("failed to delete %s: %s", uri, e)
 
+    if was_copyright_gated:
+        # move the file back to the public bucket synchronously so the
+        # rebuild below has a valid r2_url to write into the PDS record.
+        # `move_track_audio` updates the row's r2_url after a successful
+        # copy. if this raises, local state stays gated and the user can
+        # retry the clear.
+        await move_track_audio(track_id, to_private=False)
+
     async with db_session() as db:
         result = await db.execute(
             select(Track)
             .options(selectinload(Track.artist))
-            .where(Track.id == track.id)
+            .where(Track.id == track_id)
         )
         row = result.scalar_one()
         row.copyright_song_uri = None
@@ -381,21 +398,18 @@ async def clear_track_rights(
             row.support_gate = None
 
         if was_copyright_gated and row.atproto_record_uri:
-            # rebuild is best-effort: r2_url is still None until the move task
-            # finishes, so this will likely early-return. that's fine — the
-            # auth-proxied /audio/{file_id} URL in the existing PDS record
-            # still resolves correctly after the gate is cleared (it redirects
-            # through the public path).
+            # post-move rebuild: r2_url is now populated, support_gate is
+            # None — the PDS record's audioUrl flips back to r2_url and
+            # supportGate is omitted. best-effort: a failure here leaves
+            # the record with /audio/{file_id} which still serves correctly
+            # via redirect, just with stale supportGate metadata.
             try:
                 await rebuild_track_pds_record(row, auth_session)
             except Exception as e:
                 logger.warning(
                     "failed to rebuild fm.plyr.track record on clear for %s: %s",
-                    track.id,
+                    track_id,
                     e,
                 )
 
         await db.commit()
-
-    if was_copyright_gated:
-        await schedule_move_track_audio(track.id, to_private=False)
