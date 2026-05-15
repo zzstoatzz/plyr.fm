@@ -62,6 +62,25 @@
 			masterOwner: name ? { name } : null
 		};
 	}
+
+	// format patterns mirror the backend's pydantic validators
+	// (ch_indiemusi/models.py). client-side checks give immediate feedback;
+	// the backend still rejects anything that slips through.
+	const iswcError = $derived.by(() => {
+		const v = (rights.iswc ?? '').trim();
+		if (!v) return null;
+		return /^T-?\d{9}-?\d$/.test(v)
+			? null
+			: 'ISWC should look like T-330690274-5 (T + 9 digits + check digit)';
+	});
+
+	const isrcError = $derived.by(() => {
+		const v = (rights.isrc ?? '').trim();
+		if (!v) return null;
+		return /^[A-Z]{2}[A-Z0-9]{3}\d{2}\d{5}$/.test(v)
+			? null
+			: 'ISRC should look like CHD542500009 — uppercase, 12 chars, no hyphens';
+	});
 </script>
 
 <div class="rights-panel" class:disabled>
@@ -107,7 +126,12 @@
 					value={rights.iswc ?? ''}
 					oninput={(e) => (rights = { ...rights, iswc: (e.currentTarget as HTMLInputElement).value })}
 					{disabled}
+					aria-invalid={iswcError ? 'true' : undefined}
+					aria-describedby={iswcError ? 'copyright-rights-iswc-error' : undefined}
 				/>
+				{#if iswcError}
+					<p class="field-error" id="copyright-rights-iswc-error">{iswcError}</p>
+				{/if}
 			</div>
 
 			<div class="form-group">
@@ -127,7 +151,12 @@
 					value={rights.isrc ?? ''}
 					oninput={(e) => (rights = { ...rights, isrc: (e.currentTarget as HTMLInputElement).value })}
 					{disabled}
+					aria-invalid={isrcError ? 'true' : undefined}
+					aria-describedby={isrcError ? 'copyright-rights-isrc-error' : undefined}
 				/>
+				{#if isrcError}
+					<p class="field-error" id="copyright-rights-isrc-error">{isrcError}</p>
+				{/if}
 			</div>
 		</div>
 
@@ -254,6 +283,16 @@
 	.form-group input:focus {
 		outline: none;
 		border-color: var(--accent);
+	}
+
+	.form-group input[aria-invalid='true'] {
+		border-color: var(--danger, #e5484d);
+	}
+
+	.field-error {
+		margin: 0.35rem 0 0;
+		font-size: var(--text-xs);
+		color: var(--danger, #e5484d);
 	}
 
 	.form-group input:disabled {

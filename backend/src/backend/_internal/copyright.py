@@ -16,6 +16,8 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.records.ch_indiemusi import (
+    ISRC_PATTERN,
+    ISWC_PATTERN,
     InterestedPartyInput,
     MasterOwnerInput,
     PublishingOwnerInput,
@@ -56,8 +58,8 @@ class TrackRightsInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    iswc: str | None = Field(default=None, max_length=13)
-    isrc: str | None = Field(default=None, max_length=12)
+    iswc: str | None = Field(default=None, max_length=13, pattern=ISWC_PATTERN)
+    isrc: str | None = Field(default=None, max_length=12, pattern=ISRC_PATTERN)
     master_owner: MasterOwnerInput | None = Field(default=None, alias="masterOwner")
     additional_interested_parties: list[InterestedPartyInput] = Field(
         default_factory=list,

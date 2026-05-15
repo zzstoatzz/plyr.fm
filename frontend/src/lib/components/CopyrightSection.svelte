@@ -31,9 +31,20 @@
 	let companyName = $state('');
 	let collectingSociety = $state('');
 
+	// IPI Name Number — CISAC spec, exactly 11 digits (leading zeros included).
+	// matches the backend pattern in ch_indiemusi/models.py.
+	const ipiError = $derived.by(() => {
+		const v = ipi.trim();
+		if (!v) return null;
+		return /^\d{11}$/.test(v) ? null : 'IPI must be exactly 11 digits';
+	});
+
 	const canSubmit = $derived(
-		(ownerKind === 'individual' && firstName.trim() !== '' && lastName.trim() !== '') ||
-			(ownerKind === 'company' && companyName.trim() !== '')
+		!ipiError &&
+			((ownerKind === 'individual' &&
+				firstName.trim() !== '' &&
+				lastName.trim() !== '') ||
+				(ownerKind === 'company' && companyName.trim() !== ''))
 	);
 
 	async function fetchConfig() {
@@ -315,7 +326,12 @@
 					disabled={saving}
 					maxlength="11"
 					placeholder="e.g. 00012345678"
+					aria-invalid={ipiError ? 'true' : undefined}
+					aria-describedby={ipiError ? 'copyright-ipi-error' : undefined}
 				/>
+				{#if ipiError}
+					<p class="field-error" id="copyright-ipi-error">{ipiError}</p>
+				{/if}
 			</div>
 
 			<div class="form-group">
@@ -537,6 +553,16 @@
 	input[type='text']:focus {
 		outline: none;
 		border-color: var(--accent);
+	}
+
+	input[type='text'][aria-invalid='true'] {
+		border-color: var(--danger, #e5484d);
+	}
+
+	.field-error {
+		margin-top: 0.35rem;
+		font-size: var(--text-xs);
+		color: var(--danger, #e5484d);
 	}
 
 	input[type='text']:disabled {

@@ -9,6 +9,9 @@ from backend._internal.atproto.records.ch_indiemusi.actor_publishing_owner impor
     create_publishing_owner_record,
 )
 from backend._internal.atproto.records.ch_indiemusi.models import (
+    IPI_PATTERN,
+    ISRC_PATTERN,
+    ISWC_PATTERN,
     InterestedPartyInput,
     MasterOwnerInput,
     PublishingOwnerInput,
@@ -28,6 +31,9 @@ from backend._internal.atproto.records.ch_indiemusi.song import (
 )
 
 __all__ = [
+    "IPI_PATTERN",
+    "ISRC_PATTERN",
+    "ISWC_PATTERN",
     "InterestedPartyInput",
     "MasterOwnerInput",
     "PublishingOwnerInput",
