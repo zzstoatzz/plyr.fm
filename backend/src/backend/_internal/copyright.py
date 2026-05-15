@@ -304,35 +304,40 @@ async def write_track_rights(
 
     transitioning_to_private = existing_gate is None and track.r2_url is not None
 
+    # commit the URI pointers FIRST so a failure during the gate transition
+    # (phase B) doesn't roll back our knowledge of the PDS records we just
+    # wrote. on retry, phase A then targets the existing rkeys via putRecord
+    # (idempotent) instead of creating duplicate orphans.
     async with db_session() as db:
-        result = await db.execute(
-            select(Track)
-            .options(selectinload(Track.artist))
-            .where(Track.id == track.id)
-        )
+        result = await db.execute(select(Track).where(Track.id == track.id))
         row = result.scalar_one()
         row.copyright_song_uri = song_uri
         row.copyright_recording_uri = recording_uri
+        # tracks already gated (re-edit) or never public (upload-time) can
+        # flip the gate alongside the URIs — the audioUrl was already set to
+        # the auth-proxied endpoint on a prior write, no rebuild needed
+        if not transitioning_to_private and row.support_gate is None:
+            row.support_gate = {"type": "copyright"}
+        await db.commit()
 
-        # tracks that were already copyright-gated or never public can flip
-        # the gate without rebuilding the PDS record — the audioUrl was set
-        # to the auth-proxied endpoint at upload (or by a previous transition)
-        if not transitioning_to_private:
-            if row.support_gate is None:
-                row.support_gate = {"type": "copyright"}
-            await db.commit()
-        else:
-            # phase B: transition public → copyright. rebuild the fm.plyr.track
-            # record so its audioUrl no longer points at the public R2 URL,
-            # then commit. raising here rolls back the DB write so the gate
-            # state and the PDS record stay in sync.
+    if transitioning_to_private:
+        # phase B: public → copyright transition. rebuild fm.plyr.track so
+        # its audioUrl flips to /audio/{file_id}, then commit the gate state.
+        # raising during rebuild rolls back this phase only — the URIs
+        # committed above stay, so retry uses putRecord on the same rkeys.
+        async with db_session() as db:
+            result = await db.execute(
+                select(Track)
+                .options(selectinload(Track.artist))
+                .where(Track.id == track.id)
+            )
+            row = result.scalar_one()
             row.support_gate = {"type": "copyright"}
             row.r2_url = None
             if row.atproto_record_uri:
                 await rebuild_track_pds_record(row, auth_session)
             await db.commit()
 
-    if transitioning_to_private:
         await schedule_move_track_audio(track.id, to_private=True)
 
     logger.info(
