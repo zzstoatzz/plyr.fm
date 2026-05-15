@@ -104,7 +104,8 @@
 	{:else if enabled}
 		{#if ownerSummary}
 			<p class="hint owner-line">
-				rights credited to <strong>{ownerSummary}</strong>
+				rights credited to <strong>{ownerSummary}</strong> ·
+				<a href="/portal">change</a>
 			</p>
 		{/if}
 
