@@ -3,23 +3,31 @@ title: "for listeners"
 description: "discover and stream audio on plyr.fm"
 ---
 
-you have an account! you like _sound_! let's go!
+you like sound. so do we.
+
+<iframe
+  src="https://plyr.fm/embed/track/778"
+  width="100%"
+  height="152"
+  frameborder="0"
+  allow="autoplay; encrypted-media"
+  loading="lazy"
+  title="a track on plyr.fm"
+></iframe>
+
+plyr.fm is an atproto-based audio app — music, podcasts, ASMR, ringtones, prayer, sound art, whatever gets recorded. you queue tracks, like them, build playlists, comment at specific moments.
 
 :::caution[🚦]
-you _don't_ have an account? head to [plyr.fm/login](https://plyr.fm/login) to create one.
-
-if you don't want to create an account, you can still queue and listen to audio on plyr.fm. you just won't be able to like, comment, build playlists, support creators, or save your preferences.
+no account? head to [plyr.fm/login](https://plyr.fm/login) to create one. you can also listen without signing in — you just won't be able to like, comment, build playlists, support creators, or save your preferences.
 :::
 
-on plyr.fm, you'll find **music**, **spoken word**, **ringtones**, **ASMR**, and other assorted sounds from people all over the internet.
-
 when you find something you like:
-- add it to your "liked" collection
-- add it to a playlist of yours
-- leave a comment at a certain moment in a track
-- support the creator (via [atprotofans](https://atprotofans.com), [ko-fi](https://ko-fi.com), or a custom link)
+- <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg> **like it** — [how](#your-first-5-minutes)
+- **add it to a playlist** — [how](#your-first-5-minutes)
+- **leave a comment** at a specific moment in the track
+- **support the creator** via [atprotofans](https://atprotofans.com), [ko-fi](https://ko-fi.com), or a custom link
 
-everything you do — likes, playlists, comments, support — is stored in [a place you control](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io) so that if sometime later you don't like this audio streaming app anymore, you can take your audio-related history with you to an app that you prefer (without an annoying migration process!).
+your records live on [your own data repo](https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io) — take them with you to any other atproto audio app whenever you want, no migration step.
 
 even today, other apps (like [aetheros.computer](https://aetheros.computer)) already use plyr.fm records to provide an [alternate user interface to audio stored on plyr.fm](https://bsky.app/profile/plyr.fm/post/3mh23kjcelc2u).
 
@@ -50,12 +58,14 @@ even today, other apps (like [aetheros.computer](https://aetheros.computer)) alr
 
 to track and [visualize your listening history](https://teal-appview-production.up.railway.app/), you can [enable teal.fm scrobbling in your settings](https://plyr.fm/settings).
 
-## what you get
+## what's here
 
 - **stream audio** — music, podcasts, sound art, whatever creators publish
-- **like, comment, and build playlists** (public or private) — all yours, not locked into plyr.fm
-- **timed comments** — leave reactions at specific moments in a track
-- **jams** — create shared listening rooms and listen with friends in real time
+- **like, comment, and build playlists** — public (visible to other atproto apps) or private
+- **timed comments** — leave a reaction at a specific moment in a track
+- **jams** — shared listening rooms, in real time with friends
+
+your records — likes, playlists, comments — are stored on your [PDS](/glossary/#pds), the same place a Bluesky post lives. they belong to your atmosphere account, not to plyr.fm.
 
 ## keyboard shortcuts
 
