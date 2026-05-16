@@ -52,7 +52,29 @@ class _MockSession(Session):
 
 
 @pytest.fixture
-def app_without_scopes(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
+async def _seed_copyright_flag(db_session: AsyncSession) -> None:
+    """seed Artist + copyright-paradigm flag for the mock session DID.
+
+    every endpoint test in this module exercises the in-flag path; the
+    out-of-flag 404 contract is covered separately in
+    test_copyright_feature_flag.py.
+    """
+    from backend._internal import enable_flag
+    from backend.models import Artist
+
+    did = "did:test:copyright-user"
+    db_session.add(
+        Artist(did=did, handle="copyright-user.bsky.social", display_name="Test")
+    )
+    await db_session.commit()
+    await enable_flag(db_session, did, "copyright-paradigm")
+    await db_session.commit()
+
+
+@pytest.fixture
+def app_without_scopes(
+    db_session: AsyncSession, _seed_copyright_flag: None
+) -> Generator[FastAPI, None, None]:
     """session has no indiemusi scopes — setup should kick off OAuth."""
 
     async def mock_require_auth() -> Session:
@@ -64,7 +86,9 @@ def app_without_scopes(db_session: AsyncSession) -> Generator[FastAPI, None, Non
 
 
 @pytest.fixture
-def app_with_scopes(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
+def app_with_scopes(
+    db_session: AsyncSession, _seed_copyright_flag: None
+) -> Generator[FastAPI, None, None]:
     """session has indiemusi scopes — setup should complete in place."""
 
     indiemusi_scope = " ".join(settings.indiemusi.scope_tokens())

@@ -79,7 +79,9 @@ def test_p3_additional_performance_splits_over_100_percent_rejected() -> None:
 
 @pytest.fixture
 async def _user_with_paradigm(db_session: AsyncSession):
-    """seed an artist + copyright config for the test user DID."""
+    """seed an artist + copyright config + feature flag for the test user DID."""
+    from backend._internal import enable_flag
+
     did = "did:test:copyright-user"
     db_session.add(
         Artist(
@@ -99,6 +101,10 @@ async def _user_with_paradigm(db_session: AsyncSession):
             "ipi": "00000000000",
         },
     )
+    # the feature-flag gate now wraps every /copyright/* endpoint; the
+    # endpoint-level tests in this module exercise the in-flag path
+    await enable_flag(db_session, did, "copyright-paradigm")
+    await db_session.commit()
     yield did
     # let the session-scoped cleanup handle teardown
 

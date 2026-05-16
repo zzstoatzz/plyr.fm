@@ -106,6 +106,11 @@ async def test_config_passes_through_with_flag(
 ) -> None:
     """gate raises only when the flag is missing — with it set, normal behavior
     (here: returns null because no config row exists yet)."""
+    # feature_flags has an FK to artists.did, so we need the row first
+    db_session.add(
+        Artist(did=_TEST_DID, handle="flag-user.example", display_name="Flag User")
+    )
+    await db_session.commit()
     await enable_flag(db_session, _TEST_DID, "copyright-paradigm")
     await db_session.commit()
 
