@@ -301,7 +301,18 @@ async def _check_teal_preference(did: str) -> bool:
 
 
 async def _check_copyright_paradigm(did: str) -> bool:
-    """check if user has opted into the indiemusi copyright paradigm."""
+    """check if user should have the indiemusi copyright paradigm scopes
+    re-requested on this OAuth flow.
+
+    requires BOTH:
+    - an active user_copyright_configs row (the user actually opted in), AND
+    - the `copyright-paradigm` feature flag on this DID
+
+    without the flag check, a user opted in pre-flag-rollback would keep
+    requesting indiemusi scopes on every sign-in even after we'd disabled
+    the feature for them — defeating the point of feature flagging.
+    """
+    from backend._internal.feature_flags import has_flag
     from backend.models import UserCopyrightConfig
 
     async with db_session() as db:
@@ -311,4 +322,6 @@ async def _check_copyright_paradigm(did: str) -> bool:
             )
         )
         paradigm = result.scalar_one_or_none()
-        return paradigm == settings.indiemusi.paradigm_id
+        if paradigm != settings.indiemusi.paradigm_id:
+            return False
+        return await has_flag(db, did, "copyright-paradigm")

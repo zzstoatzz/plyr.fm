@@ -1,6 +1,14 @@
 <script lang="ts">
-	import { API_URL } from '$lib/config';
+	import { API_URL, COPYRIGHT_PARADIGM_FLAG } from '$lib/config';
+	import { auth } from '$lib/auth.svelte';
 	import InfoTooltip from '$lib/components/InfoTooltip.svelte';
+
+	// hide the panel entirely for users without the feature flag. parents
+	// (upload page, edit form) keep rendering normally — they just see no
+	// copyright section in the form.
+	const flagEnabled = $derived(
+		auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false
+	);
 
 	export type TrackRights = {
 		iswc?: string;
@@ -83,6 +91,7 @@
 	});
 </script>
 
+{#if flagEnabled}
 <div class="rights-panel" class:disabled>
 	<label class="enable-row">
 		<input
@@ -187,6 +196,7 @@
 		</p>
 	{/if}
 </div>
+{/if}
 
 <style>
 	.rights-panel {

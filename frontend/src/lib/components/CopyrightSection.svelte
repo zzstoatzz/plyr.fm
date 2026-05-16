@@ -1,7 +1,15 @@
 <script lang="ts">
-	import { API_URL } from '$lib/config';
+	import { API_URL, COPYRIGHT_PARADIGM_FLAG } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
+	import { auth } from '$lib/auth.svelte';
 	import InfoTooltip from '$lib/components/InfoTooltip.svelte';
+
+	// hide the entire section for users who don't have the copyright-paradigm
+	// feature flag. backend endpoints 404 for unflagged users too, so even a
+	// devtools poke wouldn't see anything useful.
+	const flagEnabled = $derived(
+		auth.user?.enabled_flags?.includes(COPYRIGHT_PARADIGM_FLAG) ?? false
+	);
 
 	type PublishingOwner = {
 		ipi?: string;
@@ -186,10 +194,11 @@
 	}
 
 	$effect(() => {
-		fetchConfig();
+		if (flagEnabled) fetchConfig();
 	});
 </script>
 
+{#if flagEnabled}
 <section class="copyright-section">
 	<div class="section-header">
 		<h2>copyright</h2>
@@ -362,6 +371,7 @@
 		</form>
 	{/if}
 </section>
+{/if}
 
 <style>
 	.copyright-section {
