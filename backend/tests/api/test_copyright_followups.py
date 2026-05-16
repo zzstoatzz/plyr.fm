@@ -504,11 +504,45 @@ async def test_p1_2_disconnect_409_when_copyright_tracks_exist(
 async def test_p1_2_disconnect_proceeds_when_no_copyright_tracks(
     auth_app: FastAPI, _user_with_paradigm: str, db_session: AsyncSession
 ) -> None:
-    # no tracks with copyright_song_uri set
+    """disconnect clears the local config row and does NOT touch PDS.
+
+    after the post-#1409 review, /copyright/disconnect is DB-only:
+    `config_uri` may reference a record authored by another client (the
+    "link" path of the record manager), so we never delete from PDS on
+    disconnect. explicit PDS deletion is the record manager's
+    DELETE /publishing-owners/{rkey} only.
+    """
+    async with AsyncClient(
+        transport=ASGITransport(app=auth_app), base_url="http://test"
+    ) as client:
+        response = await client.post("/copyright/disconnect")
+
+    assert response.status_code == 200
+    assert response.json() == {"deleted": True}
+
+    cfg = (
+        await db_session.execute(
+            select(UserCopyrightConfig).where(
+                UserCopyrightConfig.user_did == _user_with_paradigm
+            )
+        )
+    ).scalar_one_or_none()
+    assert cfg is None
+
+
+async def test_p1_2_disconnect_does_not_touch_pds(
+    auth_app: FastAPI, _user_with_paradigm: str, db_session: AsyncSession
+) -> None:
+    """regression: disconnect must not call any PDS delete helper.
+
+    pre-fix, `delete_record_by_uri` was best-effort called on `config_uri`.
+    after #1409 a linked record may be owned by another client; deleting it
+    here would silently destroy data plyr never wrote.
+    """
     with patch(
-        "backend.api.copyright.delete_record_by_uri",
+        "backend._internal.atproto.records.fm_plyr.track.delete_record_by_uri",
         new_callable=AsyncMock,
-    ):
+    ) as mock_delete:
         async with AsyncClient(
             transport=ASGITransport(app=auth_app), base_url="http://test"
         ) as client:
@@ -516,6 +550,7 @@ async def test_p1_2_disconnect_proceeds_when_no_copyright_tracks(
 
     assert response.status_code == 200
     assert response.json() == {"deleted": True}
+    mock_delete.assert_not_called()
 
 
 # --- P2.2: supporter probe skips copyright-typed gates -----------------------
@@ -574,3 +609,61 @@ async def test_p2_2_listing_skips_supporter_probe_for_copyright(
             response = await client.get("/tracks/")
         assert response.status_code == 200
         mock_probe.assert_not_called()
+
+
+# --- post-#1409 review: use-owner tolerates unknown fields -------------------
+
+
+async def test_use_owner_accepts_records_with_unknown_fields(
+    _user_with_paradigm: str, db_session: AsyncSession
+) -> None:
+    """regression: linking to a record that carries fields plyr doesn't model
+    (other clients' extensions, future lexicon additions) must NOT 400.
+
+    pre-fix, `use_owner_for_user` round-tripped the full fetched record body
+    through `PublishingOwnerInput.model_validate`, which is `extra="forbid"` —
+    so any record with `taxId`, `notes`, or any other foreign key would reject
+    here, exactly the interop case the record manager exists to support.
+    """
+    from backend._internal.copyright import (
+        get_user_copyright_config,
+        use_owner_for_user,
+    )
+
+    did = _user_with_paradigm
+    uri = f"at://{did}/{settings.indiemusi.publishing_owner_collection}/withextras"
+    fetched = {
+        "uri": uri,
+        "value": {
+            "$type": settings.indiemusi.publishing_owner_collection,
+            "firstName": "Hilke",
+            "lastName": "Ros",
+            "ipi": "01145982828",
+            "collectingSociety": "Suisa",
+            # foreign fields plyr doesn't model — must not cause a 400
+            "taxId": "CHE-123.456.789",
+            "notes": "primary identity for solo work",
+        },
+    }
+
+    sess = _fake_session(did)
+    with patch(
+        "backend._internal.copyright.get_publishing_owner_record",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.return_value = fetched
+        modeled = await use_owner_for_user(sess, uri)
+
+    # modeled cache contains only known keys (camelCase aliases)
+    assert modeled == {
+        "firstName": "Hilke",
+        "lastName": "Ros",
+        "ipi": "01145982828",
+        "collectingSociety": "Suisa",
+    }
+    assert "taxId" not in modeled
+    assert "notes" not in modeled
+
+    cfg = await get_user_copyright_config(did)
+    assert cfg is not None
+    assert cfg.config_uri == uri

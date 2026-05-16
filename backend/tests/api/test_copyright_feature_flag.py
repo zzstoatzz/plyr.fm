@@ -59,10 +59,16 @@ def auth_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
 # --- endpoint gate ---------------------------------------------------------
 
 
+_OWNER_BODY = {
+    "publishing_owner": {"firstName": "x", "lastName": "y"},
+}
+
+
 @pytest.mark.parametrize(
     "method,path,body",
     [
         ("GET", "/copyright/config", None),
+        # legacy alias still gated
         (
             "POST",
             "/copyright/setup",
@@ -71,7 +77,18 @@ def auth_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
                 "publishing_owner": {"firstName": "x", "lastName": "y"},
             },
         ),
+        # record manager (added in #1409)
+        ("GET", "/copyright/publishing-owners", None),
+        ("POST", "/copyright/publishing-owners", _OWNER_BODY),
+        ("PUT", "/copyright/publishing-owners/abc", _OWNER_BODY),
+        ("DELETE", "/copyright/publishing-owners/abc", None),
+        (
+            "POST",
+            "/copyright/use-owner",
+            {"uri": "at://did:test:x/ch.indiemusi.alpha.actor.publishingOwner/abc"},
+        ),
         ("POST", "/copyright/disconnect", None),
+        # per-track copyright endpoints
         ("POST", "/tracks/9999/copyright", {}),
         ("DELETE", "/tracks/9999/copyright", None),
     ],
@@ -94,6 +111,8 @@ async def test_endpoints_404_without_flag(
             response = await client.get(path)
         elif method == "POST":
             response = await client.post(path, json=body or {})
+        elif method == "PUT":
+            response = await client.put(path, json=body or {})
         elif method == "DELETE":
             response = await client.delete(path)
         else:

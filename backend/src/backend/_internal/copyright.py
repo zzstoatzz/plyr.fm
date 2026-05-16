@@ -19,6 +19,7 @@ from backend._internal.atproto.client import parse_at_uri
 from backend._internal.atproto.records.ch_indiemusi import (
     ISRC_PATTERN,
     ISWC_PATTERN,
+    KNOWN_OWNER_KEYS,
     InterestedPartyInput,
     MasterOwnerInput,
     PublishingOwnerInput,
@@ -294,11 +295,15 @@ async def use_owner_for_user(auth_session: AuthSession, uri: str) -> dict[str, A
     if not isinstance(fresh_value, dict):
         raise ValueError(f"PDS returned non-dict record value for {uri}")
 
-    # cache the modeled subset for prefill / summary — but only fields we
-    # recognize. anything else lives only on PDS, fetched fresh on edit.
-    parsed = PublishingOwnerInput.model_validate(
-        {k: v for k, v in fresh_value.items() if k != "$type"}
-    )
+    # cache the modeled subset for prefill / summary. extract only keys plyr
+    # models — anything else (other clients' fields, future lexicon extensions)
+    # lives only on PDS and is preserved on edit via merge_publishing_owner_for_put.
+    # passing the full record body to PublishingOwnerInput would 400 on records
+    # written by other clients, since the model is `extra="forbid"`.
+    known_only = {
+        k: v for k, v in fresh_value.items() if k in KNOWN_OWNER_KEYS and k != "$type"
+    }
+    parsed = PublishingOwnerInput.model_validate(known_only)
     modeled = parsed.model_dump(by_alias=True, exclude_none=True)
 
     await upsert_user_copyright_config(

@@ -296,8 +296,8 @@ max_lines = 800
 
 [[rules]]
 path = "backend/tests/api/test_copyright_followups.py"
-max_lines = 576
+max_lines = 669
 
 [[rules]]
 path = "backend/src/backend/_internal/copyright.py"
-max_lines = 644
+max_lines = 649

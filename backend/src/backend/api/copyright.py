@@ -10,7 +10,6 @@ load what's already there, let the user pick or extend, never silently
 clobber records other clients may have written.
 """
 
-import logging
 from typing import Annotated, Any
 
 from atproto_oauth.scopes import ScopesSet
@@ -30,7 +29,6 @@ from backend._internal.atproto.records.ch_indiemusi import (
     PublishingOwnerInput,
     list_publishing_owner_records,
 )
-from backend._internal.atproto.records.fm_plyr.track import delete_record_by_uri
 from backend._internal.copyright import (
     create_owner_for_user,
     delete_owner_for_user,
@@ -42,8 +40,6 @@ from backend._internal.copyright import (
 from backend.config import settings
 from backend.models import Track
 from backend.utilities.database import db_session
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/copyright", tags=["copyright"])
 
@@ -386,12 +382,18 @@ async def use_publishing_owner(
 async def disconnect(
     session: Session = Depends(require_auth),
 ) -> dict[str, bool]:
-    """delete the user's copyright config and best-effort delete the PDS record.
+    """clear the user's local copyright config row.
 
     refuses with 409 when the user still has tracks carrying rights metadata —
     those would be left orphaned (gated, with no paradigm config to update or
     clear them through). users must clear each via DELETE /tracks/{id}/copyright
     before disconnecting.
+
+    DB-only: the user's PDS publishingOwner records are NOT touched. after
+    #1409, `config_uri` can reference a record authored by another client (the
+    "link" path of the record manager); deleting it here would silently destroy
+    data plyr never owned. explicit PDS deletion is the record manager's
+    DELETE /publishing-owners/{rkey} only.
     """
     await _require_copyright_flag(session)
     cfg = await get_user_copyright_config(session.did)
@@ -422,18 +424,6 @@ async def disconnect(
                 ],
             ).model_dump(),
         )
-
-    if cfg.config_uri:
-        try:
-            await delete_record_by_uri(session, cfg.config_uri)
-        except Exception as e:
-            # best-effort — we still want to clear the local row even if PDS write fails
-            logger.warning(
-                "failed to delete PDS record %s for %s: %s",
-                cfg.config_uri,
-                session.did,
-                e,
-            )
 
     await delete_user_copyright_config(session.did)
     return {"deleted": True}
