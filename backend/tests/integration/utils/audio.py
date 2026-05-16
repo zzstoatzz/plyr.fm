@@ -2,9 +2,24 @@
 
 generates simple drone sounds (sine waves) without external dependencies.
 these are useful for testing upload/streaming without needing FFmpeg.
+
+every generator introduces a per-call random phase offset by default, so
+the produced bytes — and the resulting content-hashed `file_id` — differ
+on every invocation. this is intentional: deterministic test content
+uploaded against a shared staging bucket creates a hidden class of bug
+where stale R2 blobs from older test runs mask present-day regressions.
+example: woody.fm's 2026-05-16 `.aif` outage in production was masked in
+staging by an `audio/<drone-id>.aiff` blob written by a pre-#797 test
+run, which the buggy reader happily found and returned. randomized phase
+means each test run hits a fresh storage path with no stale shadow.
+
+pass `phase_offset_rad=0.0` explicitly when a deterministic file is
+genuinely required (e.g. asserting a known checksum). otherwise let it
+default.
 """
 
 import math
+import random
 import struct
 from io import BytesIO
 from pathlib import Path
@@ -54,6 +69,7 @@ def generate_drone(
     duration_sec: float = 2.0,
     sample_rate: int = 22050,
     amplitude: float = 0.3,
+    phase_offset_rad: float | None = None,
 ) -> BytesIO:
     """generate a pure sine wave drone as WAV audio.
 
@@ -65,6 +81,11 @@ def generate_drone(
         duration_sec: duration in seconds
         sample_rate: samples per second (lower = smaller file)
         amplitude: volume from 0.0 to 1.0
+        phase_offset_rad: starting phase of the sine wave, in radians.
+            defaults to a per-call random value so each generated drone has
+            a unique byte sequence (→ unique content-hashed file_id).
+            pass `0.0` for deterministic content when a known hash is
+            required. see module docstring for the bug class this prevents.
 
     returns:
         BytesIO containing valid WAV file data
@@ -75,6 +96,8 @@ def generate_drone(
     """
     freq = note_to_freq(note)
     num_samples = int(sample_rate * duration_sec)
+    if phase_offset_rad is None:
+        phase_offset_rad = random.uniform(0.0, 2.0 * math.pi)
 
     # generate sine wave with fade envelope
     samples = []
@@ -86,7 +109,11 @@ def generate_drone(
         envelope = fade_in * fade_out
 
         # generate sample
-        sample_value = amplitude * envelope * math.sin(2 * math.pi * freq * t)
+        sample_value = (
+            amplitude
+            * envelope
+            * math.sin(2 * math.pi * freq * t + phase_offset_rad)
+        )
         # convert to 16-bit signed integer
         sample_int = int(32767 * max(-1.0, min(1.0, sample_value)))
         samples.append(struct.pack("<h", sample_int))
@@ -220,6 +247,7 @@ def save_longform_drone(
     *,
     sample_rate: int = 22050,
     note: str = "A4",
+    deterministic: bool = False,
 ) -> Path:
     """generate a long-form mono sine WAV via ffmpeg lavfi.
 
@@ -234,6 +262,9 @@ def save_longform_drone(
         sample_rate: samples per second; 22050 mono keeps a 60-min file
             at ~150MB while still passing real audio decoders
         note: musical note name for the sine frequency
+        deterministic: if True, produce identical bytes every call. default
+            False so each call gets a unique content-hashed file_id; see the
+            module docstring for why this matters.
 
     returns:
         the destination path (now a valid WAV file)
@@ -246,6 +277,12 @@ def save_longform_drone(
         raise FileNotFoundError(msg)
 
     freq = note_to_freq(note)
+    # nudge the frequency by a microscopic, per-call random amount so the
+    # generated PCM samples differ even with identical params. inaudible
+    # (<<0.01 Hz at A4) but flips every sample bit → unique file_id.
+    if not deterministic:
+        freq += random.uniform(-0.001, 0.001)
+
     subprocess.run(
         [
             "ffmpeg",

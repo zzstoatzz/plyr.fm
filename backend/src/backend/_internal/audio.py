@@ -69,6 +69,17 @@ class AudioFormat(str, Enum):
         return [f.extension for f in cls]
 
     @classmethod
+    def all_stored_extensions(cls) -> tuple[str, ...]:
+        """every extension we might find in R2, INCLUDING aliases.
+
+        used by fallback-scan paths that probe storage when the extension
+        isn't known up front. iterating `AudioFormat` directly would miss
+        `.aif` (it shares an enum member with `.aiff`) — that's how stuck
+        `.aif` blobs become invisible to cleanup. always probe both.
+        """
+        return ("mp3", "wav", "m4a", "aif", "aiff", "flac", "webm", "ogg")
+
+    @classmethod
     def supported_extensions_str(cls) -> str:
         """get formatted string of supported extensions."""
         return ", ".join(cls.all_extensions())

@@ -17,6 +17,7 @@ from backend._internal.audio import AudioFormat
 from backend._internal.image import ImageFormat
 from backend.config import settings
 from backend.models.track import Track
+from backend.storage.keys import AudioKey, ImageKey, InvalidMediaExtension
 from backend.utilities.database import db_session
 from backend.utilities.hashing import hash_file_chunked
 
@@ -143,33 +144,34 @@ class R2Storage:
         filename: str,
         progress_callback: Callable[[float], None] | None = None,
     ) -> str:
-        """save media file to R2 using streaming upload with chunked hashing."""
+        """save media file to R2 using streaming upload with chunked hashing.
+
+        the destination key is derived from a typed `AudioKey` / `ImageKey`
+        constructed from the filename — every reader uses the same type, so
+        save and read can't disagree about the extension.
+        """
         with logfire.span("R2 save", filename=filename):
             # compute hash in chunks (constant memory)
             file_id = hash_file_chunked(file)[:16]
             logfire.info("computed file hash", file_id=file_id)
 
-            # determine file extension and type
-            ext = Path(filename).suffix.lower()
-
-            # try audio format first
-            audio_format = AudioFormat.from_extension(ext)
-            if audio_format:
-                key = f"audio/{file_id}{ext}"
-                media_type = audio_format.media_type
+            # determine file extension and type via the typed key constructors
+            try:
+                audio_key = AudioKey.from_filename(file_id, filename)
+                key = audio_key.key
+                media_type = audio_key.format.media_type
                 image_format = None
-            else:
-                # try image format
+            except InvalidMediaExtension as exc:
                 image_format, is_valid = ImageFormat.validate_and_extract(filename)
-                if is_valid and image_format:
-                    key = f"images/{file_id}{ext}"
-                    media_type = image_format.media_type
-                else:
+                if not (is_valid and image_format):
                     raise ValueError(
-                        f"unsupported file type: {ext}. "
+                        f"unsupported file type: {Path(filename).suffix}. "
                         f"supported audio: {AudioFormat.supported_extensions_str()}, "
                         f"supported image: jpg, jpeg, png, webp, gif"
-                    )
+                    ) from exc
+                image_key = ImageKey.from_filename(file_id, filename)
+                key = image_key.key
+                media_type = image_format.media_type
 
             # get file size for progress tracking
             # file pointer already reset by hash_file_chunked
@@ -243,33 +245,32 @@ class R2Storage:
             async with self._s3_client() as client:
                 # if file_type is "image", skip audio checks
                 if file_type != "image":
-                    # if extension is provided, try single format
                     if extension:
-                        # normalize extension (remove leading dot if present)
-                        ext = extension.lstrip(".")
-                        key = f"audio/{file_id}.{ext}"
-
                         try:
-                            await client.head_object(
-                                Bucket=self.audio_bucket_name, Key=key
-                            )
-                            return f"{self.public_audio_bucket_url}/{key}"
-                        except client.exceptions.NoSuchKey:
-                            # if specific extension not found, fall through to None
+                            audio_key = AudioKey.for_file(file_id, extension)
+                        except InvalidMediaExtension:
                             if file_type == "audio":
                                 return None
-                        except ClientError as e:
-                            if e.response.get("Error", {}).get("Code") == "404":
+                        else:
+                            key = audio_key.key
+                            try:
+                                await client.head_object(
+                                    Bucket=self.audio_bucket_name, Key=key
+                                )
+                                return f"{self.public_audio_bucket_url}/{key}"
+                            except client.exceptions.NoSuchKey:
                                 if file_type == "audio":
                                     return None
-                            else:
-                                raise
-
-                    # fallback: try all audio formats
+                            except ClientError as e:
+                                if e.response.get("Error", {}).get("Code") == "404":
+                                    if file_type == "audio":
+                                        return None
+                                else:
+                                    raise
                     else:
-                        for audio_format in AudioFormat:
-                            key = f"audio/{file_id}{audio_format.extension}"
-
+                        # probe every stored extension (including .aif/.aiff aliases)
+                        for ext in AudioFormat.all_stored_extensions():
+                            key = AudioKey.for_file(file_id, ext).key
                             try:
                                 await client.head_object(
                                     Bucket=self.audio_bucket_name, Key=key
@@ -282,14 +283,12 @@ class R2Storage:
                                     continue
                                 raise
 
-                    # if explicitly looking for audio, stop here
                     if file_type == "audio":
                         return None
 
                 # try image formats
                 for image_format in ImageFormat:
-                    key = f"images/{file_id}.{image_format.value}"
-
+                    key = ImageKey.for_file(file_id, image_format.value).key
                     try:
                         await client.head_object(Bucket=self.image_bucket_name, Key=key)
                         return f"{self.public_image_bucket_url}/{key}"
@@ -318,17 +317,15 @@ class R2Storage:
         """
         with logfire.span("R2 get_file_data", file_id=file_id, file_type=file_type):
             async with self._s3_client() as client:
-                # build key from file_id and file_type
-                audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
-                if not audio_format:
+                try:
+                    key = AudioKey.for_file(file_id, file_type).key
+                except InvalidMediaExtension:
                     logfire.warning(
                         "unsupported file type for get_file_data",
                         file_id=file_id,
                         file_type=file_type,
                     )
                     return None
-
-                key = f"audio/{file_id}{audio_format.extension}"
 
                 try:
                     response = await client.get_object(
@@ -369,15 +366,15 @@ class R2Storage:
         cancel; partial iteration leaves the connection to be torn down by
         gc, which is correct but noisier than explicit close.
         """
-        audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
-        if not audio_format:
+        try:
+            key = AudioKey.for_file(file_id, file_type).key
+        except InvalidMediaExtension:
             logfire.warning(
                 "unsupported file type for stream_file_data",
                 file_id=file_id,
                 file_type=file_type,
             )
             return
-        key = f"audio/{file_id}{audio_format.extension}"
 
         with logfire.span(
             "R2 stream_file_data",
@@ -407,10 +404,10 @@ class R2Storage:
         file_type: str,
     ) -> int | None:
         """return the byte size of an audio object via HEAD, or None if missing."""
-        audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
-        if not audio_format:
+        try:
+            key = AudioKey.for_file(file_id, file_type).key
+        except InvalidMediaExtension:
             return None
-        key = f"audio/{file_id}{audio_format.extension}"
         async with self._s3_client() as client:
             try:
                 response = await client.head_object(
@@ -470,13 +467,13 @@ class R2Storage:
         async with self._s3_client() as client:
             # if file_type is provided, delete the exact key
             if file_type:
-                audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
-                if audio_format:
-                    key = f"audio/{file_id}{audio_format.extension}"
+                try:
+                    key = AudioKey.for_file(file_id, file_type).key
+                except InvalidMediaExtension:
+                    key = None
+                if key is not None:
                     try:
-                        # check if object exists first
                         await client.head_object(Bucket=self.audio_bucket_name, Key=key)
-                        # object exists, delete it
                         await client.delete_object(
                             Bucket=self.audio_bucket_name, Key=key
                         )
@@ -497,14 +494,11 @@ class R2Storage:
                         )
                         return False
 
-            # fallback: try audio formats (for legacy rows or when file_type is None)
-            for audio_format in AudioFormat:
-                key = f"audio/{file_id}{audio_format.extension}"
-
+            # fallback: probe every stored audio extension (incl. .aif/.aiff aliases)
+            for ext in AudioFormat.all_stored_extensions():
+                key = AudioKey.for_file(file_id, ext).key
                 try:
-                    # check if object exists first
                     await client.head_object(Bucket=self.audio_bucket_name, Key=key)
-                    # object exists, delete it
                     await client.delete_object(Bucket=self.audio_bucket_name, Key=key)
                     logfire.info(
                         "R2 file deleted",
@@ -514,7 +508,6 @@ class R2Storage:
                     )
                     return True
                 except client.exceptions.ClientError as e:
-                    # object doesn't exist or delete failed, try next format
                     logfire.debug(
                         "R2 delete failed for format",
                         file_id=file_id,
@@ -525,12 +518,9 @@ class R2Storage:
 
             # try image formats
             for image_format in ImageFormat:
-                key = f"images/{file_id}.{image_format.value}"
-
+                key = ImageKey.for_file(file_id, image_format.value).key
                 try:
-                    # check if object exists first
                     await client.head_object(Bucket=self.image_bucket_name, Key=key)
-                    # object exists, delete it
                     await client.delete_object(Bucket=self.image_bucket_name, Key=key)
                     logfire.info(
                         "R2 image deleted",
@@ -540,7 +530,6 @@ class R2Storage:
                     )
                     return True
                 except client.exceptions.ClientError as e:
-                    # object doesn't exist or delete failed, try next format
                     logfire.debug(
                         "R2 delete failed for image format",
                         file_id=file_id,
@@ -565,17 +554,17 @@ class R2Storage:
         wasted round trips). the image URL already encodes the correct
         extension, so we can build the key directly.
         """
-        # extract extension from URL: ".../images/abc123.png?..." → ".png"
-        ext = PurePosixPath(image_url.split("?")[0]).suffix.lower()
-        if not ext:
+        # extract extension from URL: ".../images/abc123.png?..." → "png"
+        ext = PurePosixPath(image_url.split("?")[0]).suffix.lower().lstrip(".")
+        try:
+            key = ImageKey.for_file(file_id, ext).key
+        except InvalidMediaExtension:
             logfire.warning(
-                "delete_image: could not extract extension from URL, falling back",
+                "delete_image: could not derive image key from URL, falling back",
                 file_id=file_id,
                 image_url=image_url,
             )
             return await self.delete(file_id)
-
-        key = f"images/{file_id}{ext}"
         async with self._s3_client() as client:
             try:
                 await client.delete_object(Bucket=self.image_bucket_name, Key=key)
@@ -610,17 +599,18 @@ class R2Storage:
             file_id = hash_file_chunked(file)[:16]
             logfire.info("computed file hash for gated content", file_id=file_id)
 
-            # determine file extension - only audio supported for gated content
-            ext = Path(filename).suffix.lower()
-            audio_format = AudioFormat.from_extension(ext)
-            if not audio_format:
+            # only audio is supported for gated content
+            try:
+                audio_key = AudioKey.from_filename(file_id, filename)
+            except InvalidMediaExtension as exc:
                 raise ValueError(
-                    f"unsupported audio type for gated content: {ext}. "
+                    f"unsupported audio type for gated content: "
+                    f"{Path(filename).suffix}. "
                     f"supported: {AudioFormat.supported_extensions_str()}"
-                )
+                ) from exc
 
-            key = f"audio/{file_id}{ext}"
-            media_type = audio_format.media_type
+            key = audio_key.key
+            media_type = audio_key.format.media_type
 
             # get file size for progress tracking
             file_size = file.seek(0, 2)
@@ -698,9 +688,11 @@ class R2Storage:
 
         async with self._s3_client() as client:
             if file_type:
-                audio_format = AudioFormat.from_extension(f".{file_type.lower()}")
-                if audio_format:
-                    key = f"audio/{file_id}{audio_format.extension}"
+                try:
+                    key = AudioKey.for_file(file_id, file_type).key
+                except InvalidMediaExtension:
+                    key = None
+                if key is not None:
                     try:
                         await client.head_object(
                             Bucket=self.private_audio_bucket_name, Key=key
@@ -725,9 +717,9 @@ class R2Storage:
                         )
                         return False
 
-            # fallback: try every audio format
-            for audio_format in AudioFormat:
-                key = f"audio/{file_id}{audio_format.extension}"
+            # fallback: probe every stored audio extension (incl. .aif/.aiff)
+            for ext in AudioFormat.all_stored_extensions():
+                key = AudioKey.for_file(file_id, ext).key
                 try:
                     await client.head_object(
                         Bucket=self.private_audio_bucket_name, Key=key
@@ -778,8 +770,7 @@ class R2Storage:
         if not self.private_audio_bucket_name:
             raise ValueError("R2_PRIVATE_BUCKET not configured")
 
-        ext = extension.lstrip(".")
-        key = f"audio/{file_id}.{ext}"
+        key = AudioKey.for_file(file_id, extension).key
         expiry = expires_in or self.presigned_url_expiry
 
         with logfire.span(
@@ -808,7 +799,8 @@ class R2Storage:
 
     def build_image_url(self, image_id: str, ext: str) -> str:
         """construct public image URL without HEAD checks."""
-        return f"{self.public_image_bucket_url}/images/{image_id}.{ext.lstrip('.')}"
+        key = ImageKey.for_file(image_id, ext).key
+        return f"{self.public_image_bucket_url}/{key}"
 
     async def save_thumbnail(self, thumbnail_data: bytes, image_id: str) -> str:
         """save a WebP thumbnail alongside the original image in R2."""
@@ -851,8 +843,7 @@ class R2Storage:
         if not self.private_audio_bucket_name:
             raise ValueError("R2_PRIVATE_BUCKET not configured")
 
-        ext = extension.lstrip(".")
-        key = f"audio/{file_id}.{ext}"
+        key = AudioKey.for_file(file_id, extension).key
 
         if to_private:
             src_bucket = self.audio_bucket_name
