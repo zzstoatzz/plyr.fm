@@ -26,7 +26,9 @@ from backend._internal import Session, require_auth
 from backend._internal.copyright import (
     TrackRightsInput,
     clear_track_rights,
+    get_user_copyright_config,
     upsert_user_copyright_config,
+    use_owner_for_user,
     write_track_rights,
 )
 from backend.config import settings
@@ -625,11 +627,6 @@ async def test_use_owner_accepts_records_with_unknown_fields(
     so any record with `taxId`, `notes`, or any other foreign key would reject
     here, exactly the interop case the record manager exists to support.
     """
-    from backend._internal.copyright import (
-        get_user_copyright_config,
-        use_owner_for_user,
-    )
-
     did = _user_with_paradigm
     uri = f"at://{did}/{settings.indiemusi.publishing_owner_collection}/withextras"
     fetched = {
