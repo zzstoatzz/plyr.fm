@@ -25,6 +25,7 @@ from backend._internal.copyright import (
     clear_track_rights,
     write_track_rights,
 )
+from backend.api.copyright import _require_copyright_flag
 from backend.models import Track, get_db
 
 from .router import router
@@ -64,6 +65,7 @@ async def set_track_copyright(
     creates a fresh song + recording on first call, updates existing rkeys on
     subsequent calls. always flips the track into copyright gating.
     """
+    await _require_copyright_flag(auth_session)
     track = await _load_owned_track(db, track_id, auth_session)
     try:
         result = await write_track_rights(auth_session, track, body)
@@ -83,6 +85,7 @@ async def clear_track_copyright(
     auth_session: AuthSession = Depends(require_auth),
 ) -> TrackCopyrightResponse:
     """delete rights records for this track and clear the columns + gate."""
+    await _require_copyright_flag(auth_session)
     track = await _load_owned_track(db, track_id, auth_session)
     await clear_track_rights(auth_session, track)
     return TrackCopyrightResponse(

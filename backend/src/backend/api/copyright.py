@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from backend._internal import (
     Session,
+    has_flag,
     require_auth,
     save_pending_scope_upgrade,
     start_oauth_flow_with_scopes,
@@ -34,6 +35,22 @@ from backend.utilities.database import db_session
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/copyright", tags=["copyright"])
+
+# feature flag for the entire copyright-paradigm surface. ungated user
+# requests get a 404 — same shape they'd see for any unmounted endpoint, so
+# we don't leak the existence of the feature to users we haven't enrolled.
+COPYRIGHT_PARADIGM_FLAG = "copyright-paradigm"
+
+
+async def _require_copyright_flag(session: Session) -> None:
+    """guard every /copyright/* endpoint behind the per-user feature flag.
+
+    flagged users see normal behavior; everyone else gets a 404 (not 403) so
+    the existence of the feature isn't leaked while we're rolling out.
+    """
+    async with db_session() as db:
+        if not await has_flag(db, session.did, COPYRIGHT_PARADIGM_FLAG):
+            raise HTTPException(status_code=404, detail="not found")
 
 
 # --- response models ---------------------------------------------------------
@@ -87,6 +104,7 @@ async def get_config(
     session: Session = Depends(require_auth),
 ) -> CopyrightConfigResponse | None:
     """return the user's current copyright config, or null if none."""
+    await _require_copyright_flag(session)
     cfg = await get_user_copyright_config(session.did)
     if not cfg:
         return None
@@ -109,6 +127,7 @@ async def setup(
     OAuth scope upgrade and returns `auth_url` for the frontend to redirect to;
     the callback finishes the write once the new session is in place.
     """
+    await _require_copyright_flag(session)
     if body.paradigm != settings.indiemusi.paradigm_id:
         raise HTTPException(
             status_code=400,
@@ -164,6 +183,7 @@ async def disconnect(
     clear them through). users must clear each via DELETE /tracks/{id}/copyright
     before disconnecting.
     """
+    await _require_copyright_flag(session)
     cfg = await get_user_copyright_config(session.did)
     if not cfg:
         return {"deleted": False}

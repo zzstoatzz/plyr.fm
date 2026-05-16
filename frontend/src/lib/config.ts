@@ -4,6 +4,7 @@ export const API_URL = PUBLIC_API_URL || 'http://localhost:8001';
 export const TYPEAHEAD_URL = 'https://typeahead.waow.tech';
 
 export const VIBE_SEARCH_FLAG = 'vibe-search';
+export const COPYRIGHT_PARADIGM_FLAG = 'copyright-paradigm';
 
 /**
  * generate atprotofans support URL for an artist.
