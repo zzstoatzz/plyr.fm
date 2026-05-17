@@ -191,9 +191,7 @@ class TestAudioSaveReadRoundtrip:
 
         # get_url with explicit extension
         mock_client.head_object.reset_mock()
-        await s.get_url(
-            "abc123def4567890", file_type="audio", extension=file_type
-        )
+        await s.get_url("abc123def4567890", file_type="audio", extension=file_type)
         get_url_call = mock_client.head_object.call_args
         assert get_url_call.kwargs.get("Key") == expected_key
 
@@ -232,7 +230,9 @@ class TestAudioSaveReadRoundtrip:
         with patch("backend.storage.r2.db_session", return_value=mock_db_cm):
             await s.delete("abc123def4567890", file_type=file_type)
 
-        head_keys = [c.kwargs.get("Key") for c in mock_client.head_object.call_args_list]
+        head_keys = [
+            c.kwargs.get("Key") for c in mock_client.head_object.call_args_list
+        ]
         delete_keys = [
             c.kwargs.get("Key") for c in mock_client.delete_object.call_args_list
         ]

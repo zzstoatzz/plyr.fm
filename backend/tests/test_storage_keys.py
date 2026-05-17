@@ -146,7 +146,9 @@ class TestImageKey:
         ],
     )
     def test_from_filename(self, filename: str, expected_extension: str) -> None:
-        assert ImageKey.from_filename("abc123", filename).extension == expected_extension
+        assert (
+            ImageKey.from_filename("abc123", filename).extension == expected_extension
+        )
 
     def test_jpg_and_jpeg_produce_distinct_keys(self) -> None:
         """#1202 regression: `.jpeg` uploads were stored as `images/<id>.jpeg`

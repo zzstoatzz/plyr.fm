@@ -110,9 +110,7 @@ def generate_drone(
 
         # generate sample
         sample_value = (
-            amplitude
-            * envelope
-            * math.sin(2 * math.pi * freq * t + phase_offset_rad)
+            amplitude * envelope * math.sin(2 * math.pi * freq * t + phase_offset_rad)
         )
         # convert to 16-bit signed integer
         sample_int = int(32767 * max(-1.0, min(1.0, sample_value)))

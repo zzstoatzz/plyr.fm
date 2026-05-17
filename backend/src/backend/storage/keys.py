@@ -55,7 +55,9 @@ class AudioKey:
     @classmethod
     def from_filename(cls, file_id: str, filename: str) -> AudioKey:
         """build from a user-supplied filename (validates the suffix)."""
-        return cls(file_id=file_id, extension=_strip_ext(PurePosixPath(filename).suffix))
+        return cls(
+            file_id=file_id, extension=_strip_ext(PurePosixPath(filename).suffix)
+        )
 
     @classmethod
     def for_file(cls, file_id: str, file_type: str) -> AudioKey:
@@ -97,7 +99,9 @@ class ImageKey:
 
     @classmethod
     def from_filename(cls, file_id: str, filename: str) -> ImageKey:
-        return cls(file_id=file_id, extension=_strip_ext(PurePosixPath(filename).suffix))
+        return cls(
+            file_id=file_id, extension=_strip_ext(PurePosixPath(filename).suffix)
+        )
 
     @classmethod
     def for_file(cls, file_id: str, file_type: str) -> ImageKey:
