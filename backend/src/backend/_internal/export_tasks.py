@@ -21,6 +21,7 @@ from backend.config import settings
 from backend.models import Track
 from backend.models.job import JobStatus
 from backend.storage import storage
+from backend.storage.keys import AudioKey, InvalidMediaExtension
 from backend.storage.r2 import UploadProgressTracker
 from backend.utilities.database import db_session
 from backend.utilities.progress import R2ProgressTracker
@@ -104,10 +105,22 @@ async def process_export(export_id: str, artist_did: str) -> None:
                     if c.isalnum() or c in (" ", ".", "-", "_", "(", ")")
                 )
 
+                # route through the typed-key path: same R2 key derivation
+                # as every other read/write site. see backend/storage/keys.py.
+                try:
+                    audio_key = AudioKey.for_file(export_file_id, export_file_type)
+                except InvalidMediaExtension:
+                    logfire.warn(
+                        "skipping track: unsupported file_type for export",
+                        track_id=track.id,
+                        file_type=export_file_type,
+                    )
+                    continue
+
                 track_info.append(
                     {
                         "track": track,
-                        "key": f"audio/{export_file_id}.{export_file_type}",
+                        "key": audio_key.key,
                         "filename": filename,
                         "temp_path": temp_path / filename,
                     }

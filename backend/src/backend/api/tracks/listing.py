@@ -3,10 +3,9 @@
 import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Annotated, Literal, cast
+from typing import Annotated, Literal
 
 import logfire
-from botocore.exceptions import ClientError
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 from redis.exceptions import RedisError
@@ -16,7 +15,6 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, get_supported_artists, require_auth
-from backend._internal.audio import AudioFormat
 from backend.config import settings
 from backend.models import (
     Artist,
@@ -43,10 +41,6 @@ from .constants import DISCOVERY_CACHE_KEY, DISCOVERY_CACHE_TTL_SECONDS
 from .router import router
 
 logger = logging.getLogger(__name__)
-
-
-if TYPE_CHECKING:
-    from backend.storage.r2 import R2Storage
 
 
 class TracksListResponse(BaseModel):
@@ -568,20 +562,13 @@ async def get_my_file_sizes(
     sizes: dict[int, int] = {}
 
     async def get_size(track_id: int, file_id: str, file_type: str) -> None:
-        audio_format = AudioFormat.from_extension(file_type)
-        if not audio_format:
-            return
-        key = f"audio/{file_id}{audio_format.extension}"
-        r2 = cast("R2Storage", storage)
+        # routes through the typed-key path: head_file builds the R2 key via
+        # AudioKey.for_file(file_id, file_type), so this endpoint can't drift
+        # from how save() wrote the object. see backend/storage/keys.py.
         async with semaphore:
-            try:
-                async with r2._s3_client() as client:
-                    response = await client.head_object(
-                        Bucket=storage.audio_bucket_name, Key=key
-                    )
-                    sizes[track_id] = response["ContentLength"]
-            except ClientError:
-                pass  # file not found or other error — skip
+            size = await storage.head_file(file_id, file_type)
+        if size is not None:
+            sizes[track_id] = size
 
     await asyncio.gather(
         *(
