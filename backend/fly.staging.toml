@@ -15,6 +15,9 @@ primary_region = 'iad'
 
 [env]
   ATPROTO_PDS_URL = 'https://pds.zzstoatzz.io'
+  # Mirror backend/fly.toml — identify ourselves to bsky.social's edge so
+  # generic SDK UAs don't 403 us. See #1416.
+  ATPROTO_USER_AGENT = 'plyr.fm/1.0 (+https://plyr.fm)'
   PORT = '8000'
   R2_BUCKET = 'audio-staging'
   R2_ENDPOINT_URL = 'https://8feb33b5fb57ce2bc093bc6f4141f40a.r2.cloudflarestorage.com'
