@@ -133,7 +133,10 @@ async def test_process_export_downloads_concurrently() -> None:
     async def async_chunk_gen():
         yield b"mock audio data"
 
-    # create mock tracks
+    # create mock tracks. MagicMock auto-creates truthy attrs by default —
+    # explicitly null the lossless-original fields so the export branches
+    # down the playable file_id/file_type path (the typical mp3 upload
+    # shape) instead of trying to build an AudioKey from a MagicMock.
     mock_tracks = []
     for i in range(4):
         track = MagicMock()
@@ -141,6 +144,8 @@ async def test_process_export_downloads_concurrently() -> None:
         track.title = f"Track {i}"
         track.file_id = f"file_{i}"
         track.file_type = "mp3"
+        track.original_file_id = None
+        track.original_file_type = None
         mock_tracks.append(track)
 
     # mock database query
