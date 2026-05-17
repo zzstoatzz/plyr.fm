@@ -197,16 +197,13 @@ async def start_oauth_flow(
                 f"starting OAuth for {handle} (did={did}, "
                 f"teal={wants_teal}, indiemusi={wants_indiemusi})"
             )
-            # pass DID so the SDK skips its own handle-resolution leg —
-            # Bluesky's edge has been observed 403'ing `.well-known/atproto-did`
-            # intermittently on *.bsky.social subdomains.
-            login_hint: str = did
         else:
+            # fallback to base client if resolution fails
+            # (OAuth flow will resolve handle again internally)
             client = get_oauth_client()
             logger.info(f"starting OAuth for {handle} (resolution failed, using base)")
-            login_hint = handle
 
-        auth_url, state = await client.start_authorization(login_hint, prompt=prompt)
+        auth_url, state = await client.start_authorization(handle, prompt=prompt)
         return auth_url, state
     except Exception as e:
         raise HTTPException(
