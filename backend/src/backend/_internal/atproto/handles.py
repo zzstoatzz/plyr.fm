@@ -22,6 +22,38 @@ class InvalidFeaturesError(ValueError):
     """user-supplied featured-artists JSON is malformed or unresolvable."""
 
 
+async def _resolve_handle_to_did(handle: str) -> str | None:
+    """resolve handle → DID via SDK, falling back to the AppView XRPC.
+
+    the SDK hits `<handle>/.well-known/atproto-did` first; Cloudflare in
+    front of `*.bsky.social` has been observed returning 403 to that path
+    from certain egress IPs while `public.api.bsky.app` (a different host)
+    still resolves the same handle. the XRPC fallback rescues those flows.
+    """
+    try:
+        did = await _resolver.handle.resolve(handle)
+        if did:
+            return did
+        logger.warning(f"SDK returned no DID for {handle}; trying AppView XRPC")
+    except Exception as e:
+        logger.warning(f"SDK handle resolution failed for {handle}: {e}; trying AppView XRPC")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle",
+                params={"handle": handle},
+                timeout=5.0,
+            )
+        if resp.status_code == 200:
+            return resp.json().get("did")
+        logger.warning(f"AppView XRPC returned {resp.status_code} for {handle}")
+    except Exception as e:
+        logger.warning(f"AppView handle resolution failed for {handle}: {e}")
+
+    return None
+
+
 async def resolve_handle(handle: str) -> dict[str, Any] | None:
     """resolve ATProto handle to DID and profile info.
 
@@ -31,19 +63,14 @@ async def resolve_handle(handle: str) -> dict[str, Any] | None:
     returns:
         dict with {did, handle, display_name, avatar_url} or None if not found
     """
-    # normalize handle (remove @ if present)
     handle = handle.lstrip("@")
 
+    did = await _resolve_handle_to_did(handle)
+    if not did:
+        logger.warning(f"failed to resolve handle {handle}: no DID found")
+        return None
+
     try:
-        # use ATProto SDK for proper handle resolution (works with any PDS)
-        did = await _resolver.handle.resolve(handle)
-
-        if not did:
-            logger.warning(f"failed to resolve handle {handle}: no DID found")
-            return None
-
-        # fetch profile info from Bluesky appview (for display name/avatar)
-        # this is acceptable since we're fetching Bluesky profile data specifically
         async with httpx.AsyncClient() as client:
             profile_response = await client.get(
                 "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile",
@@ -51,32 +78,31 @@ async def resolve_handle(handle: str) -> dict[str, Any] | None:
                 timeout=5.0,
             )
 
-            if profile_response.status_code != 200:
-                logger.warning(
-                    f"failed to fetch profile for {did}: {profile_response.status_code}"
-                )
-                # return basic info even if profile fetch fails
-                return {
-                    "did": did,
-                    "handle": handle,
-                    "display_name": handle,
-                    "avatar_url": None,
-                }
-
-            profile = profile_response.json()
+        if profile_response.status_code != 200:
+            logger.warning(
+                f"failed to fetch profile for {did}: {profile_response.status_code}"
+            )
             return {
                 "did": did,
                 "handle": handle,
-                "display_name": profile.get("displayName") or handle,
-                "avatar_url": profile.get("avatar"),
+                "display_name": handle,
+                "avatar_url": None,
             }
 
+        profile = profile_response.json()
+        return {
+            "did": did,
+            "handle": handle,
+            "display_name": profile.get("displayName") or handle,
+            "avatar_url": profile.get("avatar"),
+        }
+
     except httpx.TimeoutException:
-        logger.error(f"timeout resolving handle {handle}")
-        return None
+        logger.error(f"timeout fetching profile for {did}")
+        return {"did": did, "handle": handle, "display_name": handle, "avatar_url": None}
     except Exception as e:
-        logger.error(f"error resolving handle {handle}: {e}", exc_info=True)
-        return None
+        logger.error(f"error fetching profile for {did}: {e}", exc_info=True)
+        return {"did": did, "handle": handle, "display_name": handle, "avatar_url": None}
 
 
 async def resolve_featured_artists(
