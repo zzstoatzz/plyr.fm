@@ -73,6 +73,11 @@ primary_region = 'iad'
   R2_ENDPOINT_URL = 'https://8feb33b5fb57ce2bc093bc6f4141f40a.r2.cloudflarestorage.com'
   R2_PUBLIC_BUCKET_URL = 'https://pub-d4ed8a1e39d44dac85263d86ad5676fd.r2.dev'
   ATPROTO_PDS_URL = 'https://pds.zzstoatzz.io'
+  # Identify ourselves to bsky.social's edge so generic-SDK-UA WAF rules
+  # don't 403 us. See bluesky-social/atproto#4764 and our 2026-05-17 outage.
+  # Unset this env var (locally remove the line or `fly secrets unset`) to
+  # fall back to httpx's default `python-httpx/X.Y` User-Agent.
+  ATPROTO_USER_AGENT = 'plyr.fm/1.0 (+https://plyr.fm)'
 
 # secrets to set via: fly secrets set KEY=value -a relay-api
 # - DATABASE_URL (neon postgres connection string)
