@@ -47,6 +47,48 @@ plyr.fm should become:
 
 ### May 2026
 
+#### bsky.social WAF JA4 collateral block — 18-hour OAuth outage (PRs #1414→#1419, May 17)
+
+**why**: starting **2026-05-17 03:44 UTC**, every new OAuth flow for `*.bsky.social` users plus every token refresh against `bsky.social` started returning `400: failed to start OAuth flow: Failed to resolve handle: X` to end users. Underneath that user-facing 400, our backend's outbound `httpx` requests to `bsky.social/.well-known/oauth-authorization-server` and `*.bsky.social/.well-known/atproto-did` were getting a flat **403 Forbidden** from Bluesky's edge. Self-hosted PDS handles (anything not under `*.bsky.social`) continued to work fine — the failure mode was specific to bsky.social-hosted accounts. Discovered when aila (@ailawav.bsky.social) couldn't log in to test our DX fixes from #1393.
+
+**root cause (confirmed with bluesky platform team)**: Bluesky's WAF auto-deployed a rule blocking three **JA4 TLS fingerprints** that had been driving a ~2× normal-traffic surge against `bsky.social/xrpc/com.atproto.server.createSession`. One of those fingerprints is the generic JA4 produced by **`uv:python3.12-bookworm-slim` (the Astral official image) + `httpx`** — an extremely common Python deployment shape that we happen to share with potentially thousands of other Python services. The actual abuser was someone else with the same fingerprint; we were collateral. Our total outbound to `bsky.social` over the 5 days leading into the incident was ~200 requests across both environments (peak <20/hour during normal user activity, the only sustained spike was retries of our own failed requests once the WAF block was already in place). Bluesky platform team manually undid the rule at **~21:44 UTC** (~18h after onset) and noted they're improving WAF precision to distinguish legitimate clients from attackers sharing a fingerprint with them.
+
+**investigation arc** (each PR is a snapshot of what we thought the cause was at the time):
+
+1. **#1414 (merged then reverted in #1415)** — initial read was "bsky's edge intermittently 403s `.well-known/atproto-did` for `*.bsky.social` handles." Shipped an AppView XRPC fallback in `_internal/atproto/handles.py:_resolve_handle_to_did` plus passed the resolved DID through to `OAuthClient.start_authorization` so the SDK could skip its own handle-resolution leg. This *did* get handle resolution to succeed, but the SDK then hit `bsky.social/.well-known/oauth-authorization-server` next and 403'd there too — the fix had only moved the failure one hop forward. Reverted same day.
+
+2. **#1416 + #1417** — pivoted to "must be a User-Agent / fingerprint issue, the SDK sends generic `python-httpx/X.Y` and the edge is filtering on UA." Added `ATPROTO_USER_AGENT` env var support to our `zzstoatzz/atproto@oauth-full` fork ([commit](https://github.com/zzstoatzz/atproto/commit/4577e6532bb540a64d5037fde26d7921416a7058)) — module-level patch of `httpx._client.USER_AGENT` on import, opt-in via env var. Set to `plyr.fm/1.0 (+https://plyr.fm)` in `backend/fly.toml` (#1416) and `backend/fly.staging.toml` (#1417 fast-follow because the original PR only edited the prod toml). Verified at runtime that the UA was being sent — and the 403s continued, ruling out UA as the discriminator.
+
+3. **#1418** — surfaced during the investigation: `ATPROTO_PDS_URL = 'https://pds.zzstoatzz.io'` was being set in both fly.toml files (since 2025-11-05) but **no code in the backend reads `settings.atproto.pds_url`** anywhere — every actual PDS lookup pulls the URL from the resolved DID document at runtime, per user. Removed the field from `AtprotoSettings`, the env var from both fly tomls, and the line from `backend/.env.example`. Misleading config drift, harmless because dead, cleaner gone.
+
+4. **Reproduction matrix** — from staging fly machine (IAD, `python:3.12-bookworm-slim`):
+
+   | Source | Client | Result |
+   |---|---|---|
+   | residential laptop | urllib (stdlib) | 200 |
+   | residential laptop | httpx / requests / aiohttp | 200 |
+   | fly.io egress | urllib (stdlib) | **200** |
+   | fly.io egress | httpx, requests, aiohttp | **403** |
+
+   So: **same machine, same IP, same target — only the request-shape changes the result, and only when paired with cloud egress**. Verified that User-Agent isn't the discriminator (custom UA, no UA, urllib's UA on httpx — all 403). Verified ALPN isn't the discriminator (no ALPN, http/1.1 only ALPN — still 403). Discriminator is at the TLS handshake layer — JA4 or similar fingerprint, not anything controllable from the HTTP-headers layer of an SDK.
+
+5. **#1419 — friendly upstream error** (the only PR worth keeping):
+   - New `_bsky_edge_block_error(exc, handle)` helper in `_internal/auth/oauth.py` that detects two failure shapes from production spans: `ValueError: Failed to resolve handle: <X>.bsky.social` (handle resolution leg) and exception messages containing `403 Forbidden` + `bsky.social` (auth-server-metadata leg).
+   - When detected, returns **503** with `"Bluesky's servers are currently blocking sign-in requests from our backend. This is a temporary upstream issue on Bluesky's side, not an account problem — please try again in a few minutes. Tracking: https://github.com/bluesky-social/atproto/issues/4764"` instead of the stack-trace-flavored 400.
+   - Wired into both `start_oauth_flow` (new logins) and `start_oauth_flow_with_scopes` (copyright scope-upgrade).
+   - Real account errors (typos on non-bsky domains, etc.) keep the existing 400 — only the specific upstream-edge-block pattern is rewritten.
+   - 4 regression tests in `tests/_internal/test_bsky_edge_block_error.py`.
+
+**investigation comment posted on [bluesky-social/atproto#4764](https://github.com/bluesky-social/atproto/issues/4764#issuecomment-4472548569)** with the full reproduction matrix and host scoping (every path on `bsky.social` × httpx-from-cloud = 403; `public.api.bsky.app` and `plc.directory` unaffected because they're separate CF zones with different WAF rules).
+
+**lessons**:
+- **JA4 fingerprint collisions are a real risk for Python services on common base images**. We share an indistinguishable TLS handshake with potentially thousands of other services on uv + python:3.12-bookworm-slim + httpx. When any one of them misbehaves badly enough to trigger a WAF rule, we get caught.
+- **No client-side bypass without significant work.** Verified that `httpx`, `requests`, and `aiohttp` all share the same JA4 (all 403 in identical conditions). Bypasses considered but not shipped: `curl_cffi` (impersonates real browser TLS, ~50 LOC SDK-fork change) or switching Docker base to a less-common one (alpine/musl). Bluesky platform team is fixing the precision on their side, so we're not pursuing these.
+- **The handle-resolution-fallback PR was the wrong fix** because the failure shape was multi-hop: get past handle resolution, hit the next bsky.social `.well-known/*` request, fail there too. Shipping it would have given us a slightly different stack trace at the next hop, not a working flow. Reverting promptly was correct.
+- **Friendly error UX matters** even when the bug isn't yours: a 400 with `Failed to resolve handle: X` reads like a typo-your-handle problem; a 503 with `Bluesky is currently blocking us, try again in a few minutes` reads like the actual situation. #1419 is what would have prevented confused users + DM threads in the first hour of the next incident of this shape.
+
+---
+
 #### first external contribution + local-dev DX (PRs #1393, #1394, #1395, May 12)
 
 **why**: @ailawav.bsky.social (aila / @AilaScott on GitHub) forked the repo to contribute and hit two undocumented papercuts on first run — the frontend needed a `.env` nobody had told her about (sample audio wouldn't load without it), and the backend's `DOCKET_URL` defaulted to `""`, requiring a running Redis even for local dev where Redis is overkill.
@@ -311,6 +353,8 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
+**bsky.social WAF JA4 incident resolved upstream** (#1414–#1419, May 17): 18-hour outage where every new `*.bsky.social` login + every token refresh against `bsky.social` returned 403. Bluesky's WAF auto-blocked the generic JA4 fingerprint shared by `uv:python3.12-bookworm-slim + httpx` (us + many other Python services) after a different app with the same fingerprint surged createSession traffic. Bluesky platform team manually undid the rule + is improving precision. #1419 ships a friendly 503 (instead of stack-trace 400) for the next time something of this shape happens. #1414 (handle-resolution fallback) reverted same day because it only papered over one of two failure legs. Investigation comment posted on bluesky-social/atproto#4764 with full reproduction matrix.
+
 **first external contribution merged**: @ailawav.bsky.social (aila / @AilaScott on GitHub) shipped #1393 — a `DOCKET_URL=memory://` default so local dev doesn't require Redis. follow-ups #1394 (`frontend/.env.example` + setup-guide updates) and #1395 (ruff cleanup) closed the surrounding DX gaps she hit on first run, so the contribution path now works end-to-end without insider knowledge.
 
 **upload outage class fully closed**. the 2026-05-06 → 05-10 silent OOM-loop outage (4 days, 9 stranded users, discovered via @cameron.stream's tweet not internal alerting) is fixed end-to-end across three PRs: #1389 streams audio at every stage (R2 → worker → PDS, R2 → worker → Modal, transcode in/out via `/tmp` + `aiofiles`) with a 60-min long-form regression test guarding the buffer points; #1390 sets `restart.policy = always` on the worker process group + adds a logfire silence-alert runbook keyed on "queue is being added to but nothing is being executed"; #1391 adds a docket-Perpetual reaper that fails any upload job stuck in `processing` >10 min, cleans up its R2 blob (new `file_id` / `file_type` / `is_gated` cleanup-hint columns on `jobs`), and sends one batched bsky DM per reap. the "audio must stream end-to-end" rule is encoded in agent memory so future PRs can't regress it.
@@ -457,5 +501,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-13 (first external contribution from @ailawav.bsky.social — `DOCKET_URL=memory://` default + `frontend/.env.example` follow-ups; 4-day upload OOM outage closed end-to-end via streaming refactor + ops backstops + stuck-job reaper; private playlists app-layer v2 + visibility toggle, docs/public/listeners.md updated with brief mention; cover-art scrim; artist identity backfill; backlog-maintenance skill).
+this is a living document. last updated 2026-05-17 (bsky.social WAF JA4 collateral-block outage — 18h OAuth failures resolved upstream after the bluesky platform team manually undid the rule; #1414 handle-resolution fallback reverted because the failure was multi-hop; #1416/#1417 SDK fork ATPROTO_USER_AGENT env var turned out not to matter — TLS-fingerprint-level discriminator, not UA; #1418 removed dead ATPROTO_PDS_URL config drift; #1419 friendly 503 for next time; first external contribution from @ailawav.bsky.social earlier in the cycle; 4-day upload OOM outage closed end-to-end via streaming refactor + ops backstops + stuck-job reaper; private playlists app-layer v2 + visibility toggle; cover-art scrim; artist identity backfill; backlog-maintenance skill).
 
