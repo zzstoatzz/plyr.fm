@@ -302,8 +302,8 @@ wheels = [
 
 [[package]]
 name = "atproto"
-version = "0.0.2.dev1"
-source = { git = "https://github.com/zzstoatzz/atproto?rev=oauth-full#3459f9f696c0f32a81e2d6ae24a87cbcb2bf7d1f" }
+version = "0.0.2.dev5"
+source = { git = "https://github.com/zzstoatzz/atproto?rev=4577e6532bb540a64d5037fde26d7921416a7058#4577e6532bb540a64d5037fde26d7921416a7058" }
 dependencies = [
     { name = "click" },
     { name = "cryptography" },
@@ -381,7 +381,7 @@ requires-dist = [
     { name = "aioboto3", specifier = ">=15.5.0" },
     { name = "alembic", specifier = ">=1.14.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
-    { name = "atproto", git = "https://github.com/zzstoatzz/atproto?rev=oauth-full" },
+    { name = "atproto", git = "https://github.com/zzstoatzz/atproto?rev=4577e6532bb540a64d5037fde26d7921416a7058" },
     { name = "beartype", specifier = ">=0.22.8" },
     { name = "boto3", specifier = ">=1.37.0" },
     { name = "cachetools", specifier = ">=6.2.1" },
