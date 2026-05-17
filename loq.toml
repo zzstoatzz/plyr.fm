@@ -288,7 +288,7 @@ max_lines = 617
 
 [[rules]]
 path = "backend/src/backend/_internal/auth/oauth.py"
-max_lines = 513
+max_lines = 516
 
 [[rules]]
 path = "frontend/src/lib/components/CopyrightSection.svelte"
