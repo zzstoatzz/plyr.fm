@@ -36,7 +36,9 @@ async def _resolve_handle_to_did(handle: str) -> str | None:
             return did
         logger.warning(f"SDK returned no DID for {handle}; trying AppView XRPC")
     except Exception as e:
-        logger.warning(f"SDK handle resolution failed for {handle}: {e}; trying AppView XRPC")
+        logger.warning(
+            f"SDK handle resolution failed for {handle}: {e}; trying AppView XRPC"
+        )
 
     try:
         async with httpx.AsyncClient() as client:
@@ -99,10 +101,20 @@ async def resolve_handle(handle: str) -> dict[str, Any] | None:
 
     except httpx.TimeoutException:
         logger.error(f"timeout fetching profile for {did}")
-        return {"did": did, "handle": handle, "display_name": handle, "avatar_url": None}
+        return {
+            "did": did,
+            "handle": handle,
+            "display_name": handle,
+            "avatar_url": None,
+        }
     except Exception as e:
         logger.error(f"error fetching profile for {did}: {e}", exc_info=True)
-        return {"did": did, "handle": handle, "display_name": handle, "avatar_url": None}
+        return {
+            "did": did,
+            "handle": handle,
+            "display_name": handle,
+            "avatar_url": None,
+        }
 
 
 async def resolve_featured_artists(

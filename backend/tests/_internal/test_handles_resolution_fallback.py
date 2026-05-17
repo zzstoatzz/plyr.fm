@@ -61,7 +61,9 @@ async def test_sdk_returns_none_falls_back_to_appview_xrpc() -> None:
     mock_client_ctx.get.assert_called_once()
     call_url = mock_client_ctx.get.call_args[0][0]
     assert call_url.endswith("/xrpc/com.atproto.identity.resolveHandle")
-    assert mock_client_ctx.get.call_args.kwargs["params"] == {"handle": "ailawav.bsky.social"}
+    assert mock_client_ctx.get.call_args.kwargs["params"] == {
+        "handle": "ailawav.bsky.social"
+    }
 
 
 async def test_sdk_raises_falls_back_to_appview_xrpc() -> None:
@@ -74,11 +76,15 @@ async def test_sdk_raises_falls_back_to_appview_xrpc() -> None:
     mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client_ctx)
     mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
-    sdk_resolve = AsyncMock(side_effect=httpx.HTTPStatusError(
-        "403 Forbidden",
-        request=httpx.Request("GET", "https://x.bsky.social/.well-known/atproto-did"),
-        response=httpx.Response(403, request=httpx.Request("GET", "https://x")),
-    ))
+    sdk_resolve = AsyncMock(
+        side_effect=httpx.HTTPStatusError(
+            "403 Forbidden",
+            request=httpx.Request(
+                "GET", "https://x.bsky.social/.well-known/atproto-did"
+            ),
+            response=httpx.Response(403, request=httpx.Request("GET", "https://x")),
+        )
+    )
 
     with (
         patch(
@@ -95,7 +101,9 @@ async def test_sdk_raises_falls_back_to_appview_xrpc() -> None:
 async def test_both_paths_fail_returns_none() -> None:
     """SDK None + XRPC non-200 → None (not an exception)."""
     mock_client_ctx = AsyncMock()
-    mock_client_ctx.get = AsyncMock(return_value=_httpx_response(400, {"error": "InvalidRequest"}))
+    mock_client_ctx.get = AsyncMock(
+        return_value=_httpx_response(400, {"error": "InvalidRequest"})
+    )
     mock_client = MagicMock()
     mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client_ctx)
     mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
@@ -115,7 +123,9 @@ async def test_both_paths_fail_returns_none() -> None:
 async def test_resolve_handle_returns_full_profile_via_fallback_did() -> None:
     """end-to-end: SDK fails → XRPC supplies DID → profile fetch hydrates the rest."""
     xrpc_resolve = _httpx_response(200, {"did": "did:plc:ailaresolved"})
-    xrpc_profile = _httpx_response(200, {"displayName": "aila", "avatar": "https://cdn/x.jpg"})
+    xrpc_profile = _httpx_response(
+        200, {"displayName": "aila", "avatar": "https://cdn/x.jpg"}
+    )
 
     mock_client_ctx = AsyncMock()
     mock_client_ctx.get = AsyncMock(side_effect=[xrpc_resolve, xrpc_profile])
