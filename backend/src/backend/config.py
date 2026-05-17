@@ -380,11 +380,6 @@ class StorageSettings(AppSettingsSection):
 class AtprotoSettings(AppSettingsSection):
     """ATProto integration settings."""
 
-    pds_url: str = Field(
-        default="https://bsky.social",
-        validation_alias="ATPROTO_PDS_URL",
-        description="ATProto PDS URL",
-    )
     client_id: str = Field(
         default="",
         validation_alias="ATPROTO_CLIENT_ID",
