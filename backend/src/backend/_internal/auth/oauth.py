@@ -173,6 +173,33 @@ def get_oauth_client_for_scope(scope: str) -> OAuthClient:
     )
 
 
+def _bsky_edge_block_error(exc: Exception, handle: str) -> HTTPException | None:
+    """detect the bsky.social edge-block failure mode and surface a clear message.
+
+    bluesky-social/atproto#4764 — bsky.social's edge has been observed returning
+    403 to httpx-shaped requests from cloud egress, breaking handle resolution
+    and OAuth metadata fetches for `*.bsky.social` users. when that happens the
+    SDK surfaces a stack-trace flavored `Failed to resolve handle` error that
+    looks like a plyr.fm bug; this rewrites it to make the upstream cause clear.
+    """
+    msg = str(exc)
+    is_bsky_handle = handle.endswith(".bsky.social")
+    looks_like_edge_block = ("403 Forbidden" in msg and "bsky.social" in msg) or (
+        is_bsky_handle and "Failed to resolve handle" in msg
+    )
+    if not looks_like_edge_block:
+        return None
+    return HTTPException(
+        status_code=503,
+        detail=(
+            "Bluesky's servers are currently blocking sign-in requests from our "
+            "backend. This is a temporary upstream issue on Bluesky's side, not "
+            "an account problem — please try again in a few minutes. Tracking: "
+            "https://github.com/bluesky-social/atproto/issues/4764"
+        ),
+    )
+
+
 async def start_oauth_flow(
     handle: str, prompt: PromptType | None = None
 ) -> tuple[str, str]:
@@ -205,7 +232,11 @@ async def start_oauth_flow(
 
         auth_url, state = await client.start_authorization(handle, prompt=prompt)
         return auth_url, state
+    except HTTPException:
+        raise
     except Exception as e:
+        if friendly := _bsky_edge_block_error(e, handle):
+            raise friendly from e
         raise HTTPException(
             status_code=400,
             detail=f"failed to start OAuth flow: {e}",
@@ -229,7 +260,11 @@ async def start_oauth_flow_with_scopes(
         )
         auth_url, state = await client.start_authorization(handle, prompt=prompt)
         return auth_url, state
+    except HTTPException:
+        raise
     except Exception as e:
+        if friendly := _bsky_edge_block_error(e, handle):
+            raise friendly from e
         raise HTTPException(
             status_code=400,
             detail=f"failed to start OAuth flow: {e}",
