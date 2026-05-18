@@ -365,7 +365,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 **carried forward from prior cycles**: jam deep-link join toast (#1378), mobile Comic Sans fallback (#1377), celestial logo experiment shipped + lived ~36h + ripped (#1375→#1376→#1380), `CONTRIBUTING.md` (#1373), georgia default font + deploy-docs misconfig fix (#1371), image pipeline cleanup (#1364-1366), canonical DID storage for featured artists (#1362-1363), docket worker on its own fly process group (#1359).
 
-**next**: fly worker tcp health check (running-but-stuck detector — symptom-side complement to the silence alert); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop the `_signed_streaming_post` helper); deploy-docs sanity check (assert prod alias moved); ship #1316 (createdAt fix in audio_replace), #1314/#1315 (audio replace race follow-ups), sheets unification (#1348, good-first-issue), `config.py` decomposition.
+**next**: fly worker tcp health check (running-but-stuck detector — symptom-side complement to the silence alert); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop the `_signed_streaming_post` helper); deploy-docs sanity check (assert prod alias moved); #1314/#1315 (audio replace race follow-ups), sheets unification (#1348, good-first-issue), `config.py` decomposition.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
