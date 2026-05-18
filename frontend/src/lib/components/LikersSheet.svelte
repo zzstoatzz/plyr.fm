@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { likersSheet } from '$lib/likers-sheet.svelte';
 	import { getRefreshedAvatar, triggerAvatarRefresh, hasAttemptedRefresh } from '$lib/avatar-refresh.svelte';
-	import { swipeToDismiss } from '$lib/swipe-to-dismiss';
+	import BottomSheet from './BottomSheet.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
 	import type { LikerData } from '$lib/tooltip-cache.svelte';
 
@@ -29,151 +29,69 @@
 		if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
 		return `${Math.floor(seconds / 604800)}w ago`;
 	}
-
-	function handleBackdropClick(event: MouseEvent) {
-		if (event.target === event.currentTarget) likersSheet.close();
-	}
 </script>
 
-<div
-	class="sheet-backdrop"
-	class:open={likersSheet.isOpen}
-	role="presentation"
-	onclick={handleBackdropClick}
+<BottomSheet
+	open={likersSheet.isOpen}
+	onClose={() => likersSheet.close()}
+	ariaLabel="liked by"
 >
-	<div
-		class="sheet"
-		role="dialog"
-		aria-modal="true"
-		aria-label="liked by"
-		{@attach swipeToDismiss(() => likersSheet.close())}
-	>
-		<div class="sheet-handle-area" data-sheet-handle role="presentation">
-			<div class="sheet-handle"></div>
-		</div>
-		<div class="sheet-header">
-			<span class="sheet-title">
-				{likersSheet.likeCount} {likersSheet.likeCount === 1 ? 'like' : 'likes'}
-			</span>
-			<button class="sheet-close" onclick={() => likersSheet.close()} aria-label="close">
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-					<line x1="18" y1="6" x2="6" y2="18"></line>
-					<line x1="6" y1="6" x2="18" y2="18"></line>
-				</svg>
-			</button>
-		</div>
-		<div class="sheet-content">
-			{#if likersSheet.loading}
-				<div class="sheet-loading">
-					{#each [1, 2, 3] as _, i (i)}
-						<div class="liker-skeleton">
-							<div class="avatar-skeleton"></div>
-							<div class="text-skeleton"></div>
-						</div>
-					{/each}
-				</div>
-			{:else if likersSheet.error}
-				<div class="sheet-empty">{likersSheet.error}</div>
-			{:else if likersSheet.likers.length > 0}
-				<div class="likers-list">
-					{#each likersSheet.likers as liker (liker.did)}
-						{@const displayUrl = getDisplayUrl(liker)}
-						{@const showFallback = shouldShowFallback(liker)}
-						<a href="/u/{liker.handle}/liked" class="liker-row" onclick={() => likersSheet.close()}>
-							<div class="liker-avatar">
-								{#if displayUrl && !showFallback}
-									<SensitiveImage src={displayUrl} compact>
-										<img
-											src={displayUrl}
-											alt=""
-											onerror={() => handleAvatarError(liker.did)}
-										/>
-									</SensitiveImage>
-								{:else}
-									<span class="liker-initial">{(liker.display_name || liker.handle).charAt(0).toUpperCase()}</span>
-								{/if}
-							</div>
-							<div class="liker-info">
-								<span class="liker-name">{liker.display_name || liker.handle}</span>
-								<span class="liker-time">{formatTime(liker.liked_at)}</span>
-							</div>
-						</a>
-					{/each}
-				</div>
-			{:else}
-				<div class="sheet-empty">be the first to like this</div>
-			{/if}
-		</div>
+	<div class="sheet-header">
+		<span class="sheet-title">
+			{likersSheet.likeCount} {likersSheet.likeCount === 1 ? 'like' : 'likes'}
+		</span>
+		<button class="sheet-close" onclick={() => likersSheet.close()} aria-label="close">
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+				<line x1="18" y1="6" x2="6" y2="18"></line>
+				<line x1="6" y1="6" x2="18" y2="18"></line>
+			</svg>
+		</button>
 	</div>
-</div>
+	<div class="sheet-content">
+		{#if likersSheet.loading}
+			<div class="sheet-loading">
+				{#each [1, 2, 3] as _, i (i)}
+					<div class="liker-skeleton">
+						<div class="avatar-skeleton"></div>
+						<div class="text-skeleton"></div>
+					</div>
+				{/each}
+			</div>
+		{:else if likersSheet.error}
+			<div class="sheet-empty">{likersSheet.error}</div>
+		{:else if likersSheet.likers.length > 0}
+			<div class="likers-list">
+				{#each likersSheet.likers as liker (liker.did)}
+					{@const displayUrl = getDisplayUrl(liker)}
+					{@const showFallback = shouldShowFallback(liker)}
+					<a href="/u/{liker.handle}/liked" class="liker-row" onclick={() => likersSheet.close()}>
+						<div class="liker-avatar">
+							{#if displayUrl && !showFallback}
+								<SensitiveImage src={displayUrl} compact>
+									<img
+										src={displayUrl}
+										alt=""
+										onerror={() => handleAvatarError(liker.did)}
+									/>
+								</SensitiveImage>
+							{:else}
+								<span class="liker-initial">{(liker.display_name || liker.handle).charAt(0).toUpperCase()}</span>
+							{/if}
+						</div>
+						<div class="liker-info">
+							<span class="liker-name">{liker.display_name || liker.handle}</span>
+							<span class="liker-time">{formatTime(liker.liked_at)}</span>
+						</div>
+					</a>
+				{/each}
+			</div>
+		{:else}
+			<div class="sheet-empty">be the first to like this</div>
+		{/if}
+	</div>
+</BottomSheet>
 
 <style>
-	.sheet-backdrop {
-		position: fixed;
-		inset: 0;
-		background: color-mix(in srgb, var(--bg-primary) 60%, transparent);
-		backdrop-filter: blur(4px);
-		-webkit-backdrop-filter: blur(4px);
-		z-index: 9999;
-		opacity: 0;
-		pointer-events: none;
-		transition: opacity 0.15s;
-		display: flex;
-		align-items: flex-end;
-		justify-content: center;
-	}
-
-	.sheet-backdrop.open {
-		opacity: 1;
-		pointer-events: auto;
-	}
-
-	.sheet {
-		width: 100%;
-		max-width: 400px;
-		max-height: 60vh;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-subtle);
-		border-bottom: none;
-		border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-		display: flex;
-		flex-direction: column;
-		transform: translateY(100%);
-		transition: transform 0.2s ease-out;
-		padding-bottom: env(safe-area-inset-bottom, 0px);
-	}
-
-	.sheet-backdrop.open .sheet {
-		transform: translateY(0);
-	}
-
-	.sheet-handle-area {
-		/* expanded hit target (>= 44px tall) so a thumb-flick anywhere along the
-		   top strip triggers swipe-to-dismiss. visible handle stays small. */
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		padding: 0.75rem 1rem 0.5rem;
-		flex-shrink: 0;
-		cursor: grab;
-		/* prevent ios from interpreting the vertical drag as scroll */
-		touch-action: none;
-		-webkit-user-select: none;
-		user-select: none;
-	}
-
-	.sheet-handle-area:active {
-		cursor: grabbing;
-	}
-
-	.sheet-handle {
-		width: 36px;
-		height: 4px;
-		background: var(--border-default);
-		border-radius: 2px;
-		flex-shrink: 0;
-	}
-
 	.sheet-header {
 		display: flex;
 		align-items: center;
@@ -331,12 +249,6 @@
 		.avatar-skeleton,
 		.text-skeleton {
 			animation: none;
-		}
-		.sheet {
-			transition: none;
-		}
-		.sheet-backdrop {
-			transition: none;
 		}
 	}
 </style>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import BottomSheet from './BottomSheet.svelte';
+
 	interface RevisionRow {
 		id: number;
 		track_id: number;
@@ -68,149 +70,77 @@
 		if (rev.was_gated) parts.push('was gated');
 		return parts.join(' · ');
 	}
-
-	function handleBackdropClick(event: MouseEvent) {
-		if (event.target === event.currentTarget) onClose();
-	}
-
-	function stopPropagation(event: MouseEvent) {
-		event.stopPropagation();
-	}
-
-	function handleSheetKeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			onClose();
-		}
-	}
 </script>
 
-<div
-	class="sheet-backdrop"
-	class:open
-	role="presentation"
-	onclick={handleBackdropClick}
+<BottomSheet
+	{open}
+	{onClose}
+	ariaLabel="version history"
+	maxWidth="480px"
+	maxHeight="70vh"
+	centerOnDesktop
 >
-	<div
-		class="sheet"
-		role="dialog"
-		aria-modal="true"
-		aria-label="version history"
-		tabindex="-1"
-		onclick={stopPropagation}
-		onkeydown={handleSheetKeydown}
-	>
-		<div class="sheet-handle"></div>
-		<div class="sheet-header">
-			<div class="sheet-titles">
-				<span class="sheet-title">version history</span>
-				<span class="sheet-subtitle">{trackTitle}</span>
-			</div>
-			<button class="sheet-close" onclick={onClose} aria-label="close">
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-					<line x1="18" y1="6" x2="6" y2="18"></line>
-					<line x1="6" y1="6" x2="18" y2="18"></line>
-				</svg>
-			</button>
+	<div class="sheet-header">
+		<div class="sheet-titles">
+			<span class="sheet-title">version history</span>
+			<span class="sheet-subtitle">{trackTitle}</span>
 		</div>
-		<div class="sheet-content">
-			{#if loading}
-				<div class="sheet-loading">
-					{#each [1, 2, 3] as _, i (i)}
-						<div class="revision-skeleton">
-							<div class="icon-skeleton"></div>
-							<div class="text-skeleton-stack">
-								<div class="text-skeleton wide"></div>
-								<div class="text-skeleton narrow"></div>
-							</div>
-							<div class="btn-skeleton"></div>
-						</div>
-					{/each}
-				</div>
-			{:else if error}
-				<div class="sheet-empty error">{error}</div>
-			{:else if revisions.length > 0}
-				<div class="revisions-list">
-					{#each revisions as rev (rev.id)}
-						<div class="revision-row">
-							<div class="revision-icon" aria-hidden="true">
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-									<path d="M9 18V5l12-2v13"></path>
-									<circle cx="6" cy="18" r="3"></circle>
-									<circle cx="18" cy="16" r="3"></circle>
-								</svg>
-							</div>
-							<div class="revision-info">
-								<span class="revision-format">{formatFormat(rev)}</span>
-								<span class="revision-meta">{buildSubtitle(rev)}</span>
-							</div>
-							<button
-								class="restore-btn"
-								onclick={() => onRestore(rev)}
-							>
-								restore
-							</button>
-						</div>
-					{/each}
-				</div>
-			{:else}
-				<div class="sheet-empty">
-					no previous versions yet — replace the audio to start building history
-				</div>
-			{/if}
-		</div>
+		<button class="sheet-close" onclick={onClose} aria-label="close">
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+				<line x1="18" y1="6" x2="6" y2="18"></line>
+				<line x1="6" y1="6" x2="18" y2="18"></line>
+			</svg>
+		</button>
 	</div>
-</div>
+	<div class="sheet-content">
+		{#if loading}
+			<div class="sheet-loading">
+				{#each [1, 2, 3] as _, i (i)}
+					<div class="revision-skeleton">
+						<div class="icon-skeleton"></div>
+						<div class="text-skeleton-stack">
+							<div class="text-skeleton wide"></div>
+							<div class="text-skeleton narrow"></div>
+						</div>
+						<div class="btn-skeleton"></div>
+					</div>
+				{/each}
+			</div>
+		{:else if error}
+			<div class="sheet-empty error">{error}</div>
+		{:else if revisions.length > 0}
+			<div class="revisions-list">
+				{#each revisions as rev (rev.id)}
+					<div class="revision-row">
+						<div class="revision-icon" aria-hidden="true">
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M9 18V5l12-2v13"></path>
+								<circle cx="6" cy="18" r="3"></circle>
+								<circle cx="18" cy="16" r="3"></circle>
+							</svg>
+						</div>
+						<div class="revision-info">
+							<span class="revision-format">{formatFormat(rev)}</span>
+							<span class="revision-meta">{buildSubtitle(rev)}</span>
+						</div>
+						<button
+							class="restore-btn"
+							onclick={() => onRestore(rev)}
+						>
+							restore
+						</button>
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<div class="sheet-empty">
+				no previous versions yet — replace the audio to start building history
+			</div>
+		{/if}
+	</div>
+</BottomSheet>
 
 <style>
-	.sheet-backdrop {
-		position: fixed;
-		inset: 0;
-		background: color-mix(in srgb, var(--bg-primary) 60%, transparent);
-		backdrop-filter: blur(4px);
-		-webkit-backdrop-filter: blur(4px);
-		z-index: 9999;
-		opacity: 0;
-		pointer-events: none;
-		transition: opacity 0.15s;
-		display: flex;
-		align-items: flex-end;
-		justify-content: center;
-	}
-
-	.sheet-backdrop.open {
-		opacity: 1;
-		pointer-events: auto;
-	}
-
-	.sheet {
-		width: 100%;
-		max-width: 480px;
-		max-height: 70vh;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-subtle);
-		border-bottom: none;
-		border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-		display: flex;
-		flex-direction: column;
-		transform: translateY(100%);
-		transition: transform 0.2s ease-out;
-		padding-bottom: env(safe-area-inset-bottom, 0px);
-	}
-
-	.sheet-backdrop.open .sheet {
-		transform: translateY(0);
-	}
-
-	.sheet-handle {
-		width: 32px;
-		height: 4px;
-		background: var(--border-default);
-		border-radius: 2px;
-		margin: 0.75rem auto 0;
-		flex-shrink: 0;
-	}
-
 	.sheet-header {
 		display: flex;
 		align-items: flex-start;
@@ -410,42 +340,11 @@
 		100% { background-position: -200% 0; }
 	}
 
-	@media (min-width: 600px) {
-		.sheet-backdrop {
-			align-items: center;
-		}
-
-		.sheet {
-			border-radius: var(--radius-xl);
-			border-bottom: 1px solid var(--border-subtle);
-			max-width: 480px;
-			max-height: 70vh;
-			transform: scale(0.95);
-			opacity: 0;
-			transition: transform 0.2s ease-out, opacity 0.15s;
-		}
-
-		.sheet-backdrop.open .sheet {
-			transform: scale(1);
-			opacity: 1;
-		}
-
-		.sheet-handle {
-			display: none;
-		}
-	}
-
 	@media (prefers-reduced-motion: reduce) {
 		.icon-skeleton,
 		.text-skeleton,
 		.btn-skeleton {
 			animation: none;
-		}
-		.sheet {
-			transition: none;
-		}
-		.sheet-backdrop {
-			transition: none;
 		}
 	}
 </style>
