@@ -230,22 +230,18 @@ class TestReplaceOrchestration:
         external ATProto consumers (PDSLS, firehose, other clients) see only
         the PDS record — stamping `createdAt` to now on every replace makes a
         years-old track look freshly published every time its audio changes.
+
+        compares the captured `createdAt` against the track's actual
+        `created_at` (microsecond-precision postgres timestamp). without the
+        fix, `build_track_record` falls through to `datetime.now(UTC)` at
+        publish time — different microsecond, assertion fails.
         """
         track = make_track(file_id="OLD")
         db_session.add(track)
         await db_session.commit()
         await db_session.refresh(track)
         track_id = track.id
-
-        # backdate so the assertion can distinguish "preserved" from "happens
-        # to equal datetime.now() because the test is fast".
-        original_created_at = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
-        await db_session.execute(
-            update(Track)
-            .where(Track.id == track_id)
-            .values(created_at=original_created_at)
-        )
-        await db_session.commit()
+        original_created_at = track.created_at
 
         captured_record: dict = {}
 
@@ -262,7 +258,8 @@ class TestReplaceOrchestration:
             await _process_replace_background(replace_ctx(track_id=track_id))
 
         # `build_track_record` serializes UTC datetimes as `...Z`.
-        assert captured_record["createdAt"] == "2024-01-01T12:00:00Z"
+        expected = original_created_at.isoformat().replace("+00:00", "Z")
+        assert captured_record["createdAt"] == expected
 
     async def test_lossless_replace_records_original_file_id(
         self, db_session: AsyncSession, owner: Artist
