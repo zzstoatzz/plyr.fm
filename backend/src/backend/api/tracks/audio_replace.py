@@ -24,6 +24,7 @@ import contextlib
 import logging
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urljoin
@@ -112,6 +113,7 @@ class TrackAudioState:
     image_url: str | None
     description: str | None
     support_gate: dict | None
+    created_at: datetime  # original record creation time — must survive replace
 
 
 @dataclass
@@ -177,6 +179,7 @@ async def _load_and_authorize(
             image_url=await track.get_image_url(),
             description=track.description,
             support_gate=dict(track.support_gate) if track.support_gate else None,
+            created_at=track.created_at,
         )
 
 
@@ -250,6 +253,7 @@ async def _publish_record_update(
         support_gate=state.support_gate,
         audio_blob=pds_result.blob_ref if pds_result else None,
         description=state.description,
+        created_at=state.created_at,
     )
 
     try:
@@ -540,6 +544,7 @@ async def _refresh_metadata_state(state: TrackAudioState) -> TrackAudioState:
             image_url=await track.get_image_url(),
             description=track.description,
             support_gate=dict(track.support_gate) if track.support_gate else None,
+            created_at=state.created_at,
         )
 
 
