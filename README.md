@@ -34,47 +34,7 @@ check the [plyr.fm artist page](https://plyr.fm/u/plyr.fm) for the latest [auto-
 <details>
 <summary>local development</summary>
 
-### prerequisites
-
-- [uv](https://docs.astral.sh/uv/) for Python
-- [bun](https://bun.sh/) for frontend
-- [just](https://github.com/casey/just) for task running
-- [docker](https://www.docker.com/) for dev services (redis)
-
-### quick start
-
-```bash
-# install dependencies
-uv sync
-cd frontend && bun install && cd ..
-
-# start dev services (redis for background tasks)
-just dev-services
-
-# run backend (hot reloads at http://localhost:8001)
-just backend run
-
-# run frontend (hot reloads at http://localhost:5173)
-just frontend run
-```
-
-### useful commands
-
-```bash
-# run tests
-just backend test
-
-# run linting
-just backend lint
-just frontend check
-
-# database migrations
-just backend migrate "migration message"
-just backend migrate-up
-
-# stop dev services
-just dev-services-down
-```
+setup, prerequisites, and `just` commands live in the **[contributing guide on docs.plyr.fm](https://docs.plyr.fm/contributing/)**. PR rules, code conventions, and the social/process side are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 </details>
 
