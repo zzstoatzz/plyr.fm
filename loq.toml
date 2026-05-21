@@ -301,3 +301,7 @@ max_lines = 669
 [[rules]]
 path = "backend/src/backend/_internal/copyright.py"
 max_lines = 649
+
+[[rules]]
+path = "backend/tests/test_post_create_hooks.py"
+max_lines = 505
