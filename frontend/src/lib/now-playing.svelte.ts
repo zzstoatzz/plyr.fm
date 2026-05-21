@@ -73,9 +73,15 @@ class NowPlayingService {
 			this.reportTimer = null;
 		}
 
-		await this.sendReport(track, isPlaying, currentTimeMs, durationMs);
+		// claim the throttle BEFORE awaiting the network round-trip. svelte's
+		// `bind:currentTime` fires timeupdate ~4–60Hz during playback; if we
+		// updated these AFTER the await, the dozens of effect runs that come
+		// in during the ~100ms sendReport would each see stale state, pass
+		// both throttle gates, and dispatch parallel duplicate fetches —
+		// observed in prod as 5–9 simultaneous POSTs on every 10s bucket flip.
 		this.lastReportTime = now;
 		this.lastReportedState = stateFingerprint;
+		await this.sendReport(track, isPlaying, currentTimeMs, durationMs);
 	}
 
 	private pendingState: { track: Track; isPlaying: boolean; currentTimeMs: number; durationMs: number } | null = null;
