@@ -121,7 +121,7 @@ def get_zone_analytics(days: int = 7, use_cache: bool = True) -> dict[str, Any]:
           httpRequests1dGroups(
             filter: {date_gt: $since}
             orderBy: [date_ASC]
-            limit: 100
+            limit: 200
           ) {
             dimensions {
               date
