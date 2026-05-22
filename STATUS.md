@@ -47,6 +47,70 @@ plyr.fm should become:
 
 ### May 2026
 
+#### notification + now-playing fixes traced from "woody isn't getting DMs" (PRs #1425, #1426, release 2026.0522.162731, May 22)
+
+**why**: user mentioned during a deploy-prep conversation that they hadn't been getting DMs for new track uploads. Logfire showed the last successful `send_dm` span fired **2026-05-16 21:23 UTC**; zero since. The production release `2026.0517.034304` had deployed at **2026-05-17 03:43 UTC** — **one minute before** the bsky.social WAF JA4 block began (03:44 UTC, per the prior incident entry below). Every process that came up during the WAF window had `NotificationService.setup()` 403 at `bsky.social/xrpc/com.atproto.server.createSession`, silently leaving `recipient_did = None`. Two compounding bugs kept the service broken even after the WAF was lifted:
+
+1. **`setup()` ran exactly once at process startup** — there was no retry path, so the workers stayed broken until the next deploy. Even after the WAF lifted at 21:44 UTC, the worker processes still had `recipient_did = None`.
+2. **`_send_track_notification` set `track.notification_sent = True` unconditionally** after the call returned, even when `send_track_notification` returned `None` ("recipient not set, skipping"). This permanently locked out the Jetstream identity-update consumer (which calls the same hook on every identity event) from retrying.
+
+Net effect: **13 production tracks between 2026-05-17 19:01 UTC and 2026-05-18 17:37 UTC** were marked sent without ever generating a DM, and even after fixing the service no automated retry could fire for them.
+
+**#1425 — notification resilience**:
+- New `NotificationService.ensure_ready() -> str | None` that returns the recipient DID if cached, otherwise re-runs `setup()`. Rate-limited to one attempt per minute via `_SETUP_RETRY_COOLDOWN_S` so a sustained upstream outage doesn't get amplified into every-upload login attempts.
+- All five `send_*_notification` methods (track / copyright / image / user-report / reaper) go through `ensure_ready()` and use the returned DID directly — also makes type-narrowing trivial vs the prior `if not self.recipient_did:` pattern that ty couldn't follow across the `await`.
+- `_send_track_notification` only marks `notification_sent = True` when `result.success` is true, or when notifications are globally disabled (so Jetstream stops firing the hook for a deliberate no-op). Failed DM attempts now leave the row untouched so Jetstream can retry.
+- 9 regression tests across `backend/tests/_internal/test_notification_service.py` and `test_post_create_hooks.py`.
+
+**#1426 — now-playing burst race** (discovered while investigating why woody.fm was tripping the 30/min rate limit during the same upload session): production data showed bursts of **5–9 simultaneous `POST /now-playing/`** calls within ~85ms every 10 seconds. Cross-user impact: every active listener was hitting it proportional to playback length (zzstoatzz.io averaging 1.42 calls/active-sec, woody.fm 2.64).
+
+Root cause: in `nowPlaying.report()`, the throttle bookkeeping (`lastReportTime` / `lastReportedState`) was updated **after** `await sendReport(...)`. `<audio bind:currentTime>` fires `timeupdate` at ~4–60Hz during playback, so Svelte's `$effect` calls `report()` dozens of times during the ~100ms it takes the first send to round-trip. Each intermediate call saw stale state, passed both throttle gates, and dispatched its own parallel `fetch`.
+
+Fix: a two-line move — set the throttle state **before** `await sendReport(...)`. Subsequent effect runs during the in-flight send now see the updated fingerprint and early-return as intended.
+
+**post-deploy verification** (release `2026.0522.162731`): both `app` and `worker` notification bots authenticated cleanly at 16:29 UTC. Zero "failed to authenticate" or "recipient not set" since. Single observed `POST /now-playing/` in the post-deploy hour was 1 OK / 0 throttled — the burst signature is absent.
+
+**still open**: backfill DMs for the 13 stranded tracks (one-off `UPDATE tracks SET notification_sent = false WHERE id IN (...)` against the affected window — surfaces them to Jetstream's identity-update consumer or a script-driven re-fire). Logged as a known issue.
+
+---
+
+#### BottomSheet frame + Instagram-style swipe-to-dismiss (PR #1423, closes #1348, May 17)
+
+**why**: five different bottom-sheet implementations (`LikersSheet`, `AudioRevisionsSheet`, `Queue`, and inline sheets in route pages) each invented their own backdrop / handle / animation / aria semantics. PR #1342 had extracted a swipe gesture into an attachment, but only `LikersSheet` used it — and the gesture only fired on the tiny 36×4px decorative handle, which is bad UX. The next sheet added would quietly diverge again.
+
+**what shipped**:
+- New `frontend/src/lib/components/BottomSheet.svelte` frame that owns backdrop, handle affordance, `role="dialog"` + `aria-modal` + `aria-label`, Escape-to-dismiss, focus trap + restore, `inert` on the backdrop while closed, `prefers-reduced-motion`, and `safe-area-inset-bottom`. Consumers provide `{ open, onClose, ariaLabel, children }` plus optional `maxWidth` / `maxHeight` / `centerOnDesktop`.
+- `swipe-to-dismiss.ts` rewritten to **Instagram-comments style** — gesture binds on the whole sheet, not the handle. Activates only when motion is dominantly vertical-down **and** the inner scroller (`.sheet-content` by default) is at `scrollTop === 0`. Once the user has scrolled into the content, a downward swipe scrolls; once back at top, the next swipe drags the sheet. Mouse pointers excluded (close button + backdrop + Escape cover them).
+- `LikersSheet` and `AudioRevisionsSheet` migrated onto the frame. `AudioRevisionsSheet` keeps its 600px+ centered-modal behavior via `centerOnDesktop` and gains focus management for the first time.
+
+**scope notes**: the other "sheets" listed in the issue (playlist / album / liked route pages) are centered modals or contain no actual bottom-sheet markup — left out of scope. `Queue.svelte` is a global panel, not a sheet. Backgrounded-inert-while-open (the more aggressive aria pattern) requires DOM portaling and was kept simple as inert-when-closed; not yet seen as a practical focus-leakage issue.
+
+---
+
+#### audio-replace preserves PDS record `createdAt` (PR #1422, May 17)
+
+**why**: when a user replaced the audio file on an existing track, the new PDS record was written with the **current** timestamp rather than the original track's `createdAt`. Replaces should look like edits — a new revision of the same record, not a new record entirely. The track's chronological position in the user's feed shouldn't jump to "now" just because they re-uploaded the audio bytes.
+
+**what shipped**: `backend/src/backend/api/tracks/audio_replace.py` carries the original PDS record's `createdAt` through to the replacement write. New regression test in `backend/tests/api/track_audio_replace/test_pipeline.py` asserts the timestamp is preserved across the replace path.
+
+---
+
+#### traffic-overview skill — multi-horizon report via Logfire + Cloudflare API MCP (PR #1427, May 22)
+
+**why**: the user asked "how have things been going" and wanted a tool that emits a multi-horizon (24h / 7d / 30d / 90d / 180d) traffic + performance read. Existing tooling was scattered: `scripts/cf_analytics.py` (Cloudflare GraphQL CLI, needed `.env` tokens not committed) and ad-hoc Logfire queries. No unified entry point, no documented gotchas, no awareness of what each tool can actually reach.
+
+**what shipped**: new `.claude/skills/traffic-overview/SKILL.md` (~80 lines) that codifies:
+- **Two lenses**: Logfire (app-server view — per-route p95/p99, errors, user identity) for ≤14d horizons; Cloudflare edge MCP (`mcp__plugin_cloudflare_cloudflare-api__execute`, via the cloudflare plugin's OAuth) for 24h–30d, with cache % / bytes / threats that Logfire can't see.
+- **Hard ceilings** discovered empirically: Logfire MCP caps every query at a **14-day window**; Cloudflare `httpRequests1dGroups` retention is **~30 days** even on paid plans (querying for 180d returned 34 days). The skill explicitly instructs the model not to fabricate 90d/180d numbers.
+- **Six gotchas that silently bite**: the CF MCP unwraps the GraphQL `data:` envelope (data lives at `r.result.viewer.zones`, NOT `r.result.data.viewer.zones`); use `date_geq` not `date_gt` (the latter skips the boundary day); DataFusion `GROUP BY` needs the expression verbatim not by alias; `approx_percentile_cont(duration, 0.95) * 1000` gives p95 in ms; `service_name` is `plyr-api` everywhere so filter by `deployment_environment`; `/health` is ~60% of request volume so exclude it for "real" traffic.
+- **No more shared secrets**: the cloudflare plugin's OAuth means there's no `SCRIPT_CF_API_TOKEN` to manage. accountId is pre-set; zone ID is hardcoded in the skill.
+
+Side-fix included in the PR: `scripts/cf_analytics.py`'s `httpRequests1dGroups limit: 100 → 200` (still useful as a CLI fallback for anyone with the older token-based setup, even though the real ceiling is CF retention, not the limit).
+
+**lesson**: building this empirically — running the queries in real time, hitting the limits, documenting them in the skill before they bit again — produced a much tighter SKILL.md than designing it upfront would have. Final document went 165 → 83 lines after trimming non-load-bearing prose.
+
+---
+
 #### bsky.social WAF JA4 collateral block — 18-hour OAuth outage (PRs #1414→#1419, May 17)
 
 **why**: starting **2026-05-17 03:44 UTC**, every new OAuth flow for `*.bsky.social` users plus every token refresh against `bsky.social` started returning `400: failed to start OAuth flow: Failed to resolve handle: X` to end users. Underneath that user-facing 400, our backend's outbound `httpx` requests to `bsky.social/.well-known/oauth-authorization-server` and `*.bsky.social/.well-known/atproto-did` were getting a flat **403 Forbidden** from Bluesky's edge. Self-hosted PDS handles (anything not under `*.bsky.social`) continued to work fine — the failure mode was specific to bsky.social-hosted accounts. Discovered when aila (@ailawav.bsky.social) couldn't log in to test our DX fixes from #1393.
@@ -353,7 +417,13 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
+**notification + now-playing fixes traced from "woody isn't getting DMs"** (#1425, #1426, release 2026.0522.162731, May 22): the May 17 production deploy started one minute before the bsky.social WAF block hit, so every process came up with a 403'd `NotificationService.setup()` and silently dropped all subsequent DMs. Compounding bug: `_send_track_notification` was marking `notification_sent = true` unconditionally even on the no-op "recipient not set" path, locking out Jetstream's identity-update retry route. #1425 adds `ensure_ready()` (1-min cooldown re-setup) and conditional mark; 13 stranded tracks in the affected window still need a one-off backfill. Same investigation surfaced #1426 — `nowPlaying.report()` was racing its own throttle, producing 5–9 simultaneous `POST /now-playing/` per 10s bucket flip on every active listener. Two-line fix moves the throttle state-update before the `await`.
+
 **bsky.social WAF JA4 incident resolved upstream** (#1414–#1419, May 17): 18-hour outage where every new `*.bsky.social` login + every token refresh against `bsky.social` returned 403. Bluesky's WAF auto-blocked the generic JA4 fingerprint shared by `uv:python3.12-bookworm-slim + httpx` (us + many other Python services) after a different app with the same fingerprint surged createSession traffic. Bluesky platform team manually undid the rule + is improving precision. #1419 ships a friendly 503 (instead of stack-trace 400) for the next time something of this shape happens. #1414 (handle-resolution fallback) reverted same day because it only papered over one of two failure legs. Investigation comment posted on bluesky-social/atproto#4764 with full reproduction matrix.
+
+**sheets unified + Instagram-style swipe** (#1423, closes #1348, May 17): one `BottomSheet.svelte` frame replaces five hand-rolled sheet implementations. Gesture-from-anywhere with scroll-aware activation (only dismisses when the inner scroller is at top, otherwise scroll consumes the gesture). `LikersSheet` and `AudioRevisionsSheet` migrated; the latter keeps its desktop-modal mode via `centerOnDesktop`.
+
+**developer tooling**: `traffic-overview` skill (#1427, May 22) gives a multi-horizon Logfire + Cloudflare MCP read with the access ceilings documented (14d Logfire query window, ~30d CF retention). Built empirically; OAuth-driven so no per-script tokens.
 
 **first external contribution merged**: @ailawav.bsky.social (aila / @AilaScott on GitHub) shipped #1393 — a `DOCKET_URL=memory://` default so local dev doesn't require Redis. follow-ups #1394 (`frontend/.env.example` + setup-guide updates) and #1395 (ruff cleanup) closed the surrounding DX gaps she hit on first run, so the contribution path now works end-to-end without insider knowledge.
 
@@ -365,9 +435,10 @@ See `.status_history/2025-11.md` for detailed history.
 
 **carried forward from prior cycles**: jam deep-link join toast (#1378), mobile Comic Sans fallback (#1377), celestial logo experiment shipped + lived ~36h + ripped (#1375→#1376→#1380), `CONTRIBUTING.md` (#1373), georgia default font + deploy-docs misconfig fix (#1371), image pipeline cleanup (#1364-1366), canonical DID storage for featured artists (#1362-1363), docket worker on its own fly process group (#1359).
 
-**next**: fly worker tcp health check (running-but-stuck detector — symptom-side complement to the silence alert); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop the `_signed_streaming_post` helper); deploy-docs sanity check (assert prod alias moved); #1314/#1315 (audio replace race follow-ups), sheets unification (#1348, good-first-issue), `config.py` decomposition.
+**next**: backfill DMs for the 13 stranded tracks (2026-05-17 19:01 → 2026-05-18 17:37 UTC, `notification_sent = true` with no DM sent); fly worker tcp health check (running-but-stuck detector — symptom-side complement to the silence alert); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop the `_signed_streaming_post` helper); deploy-docs sanity check (assert prod alias moved); #1314/#1315 (audio replace race follow-ups); `config.py` decomposition.
 
 ### known issues
+- 13 production tracks created between 2026-05-17 19:01 UTC and 2026-05-18 17:37 UTC are marked `notification_sent = true` with no DM ever sent (collateral damage of the WAF-window deploy + the unconditional-mark bug now fixed in #1425). Eligible for a one-off backfill via `UPDATE tracks SET notification_sent = false WHERE id IN (...)` against the affected window — Jetstream's identity-update consumer will pick them up, or fire the hook directly via a script.
 - iOS PWA audio may hang on first play after backgrounding
 - audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
 
@@ -501,5 +572,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-17 (bsky.social WAF JA4 collateral-block outage — 18h OAuth failures resolved upstream after the bluesky platform team manually undid the rule; #1414 handle-resolution fallback reverted because the failure was multi-hop; #1416/#1417 SDK fork ATPROTO_USER_AGENT env var turned out not to matter — TLS-fingerprint-level discriminator, not UA; #1418 removed dead ATPROTO_PDS_URL config drift; #1419 friendly 503 for next time; first external contribution from @ailawav.bsky.social earlier in the cycle; 4-day upload OOM outage closed end-to-end via streaming refactor + ops backstops + stuck-job reaper; private playlists app-layer v2 + visibility toggle; cover-art scrim; artist identity backfill; backlog-maintenance skill).
+this is a living document. last updated 2026-05-22 (notification + now-playing fixes traced from "woody isn't getting DMs" — #1425 NotificationService.ensure_ready() with 60s-cooldown retry and conditional notification_sent mark; #1426 nowPlaying.report() claims throttle state before await, killing the 5–9-burst-per-10s-bucket race that hit every active listener; both shipped in release 2026.0522.162731. BottomSheet frame + Instagram-style swipe-from-anywhere unifies five hand-rolled sheets (#1423, closes #1348). audio-replace preserves PDS createdAt (#1422). traffic-overview skill gives multi-horizon Logfire + Cloudflare MCP reads with the 14d / ~30d retention ceilings documented (#1427)).
 
