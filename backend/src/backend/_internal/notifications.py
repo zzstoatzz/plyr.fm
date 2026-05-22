@@ -1,6 +1,7 @@
 """notification service for relay events."""
 
 import logging
+import time
 from dataclasses import dataclass
 
 import logfire
@@ -25,13 +26,21 @@ class NotificationResult:
 class NotificationService:
     """service for sending notifications about relay events."""
 
+    # if setup fails (e.g. bsky.social returning 403 during a WAF incident),
+    # retry no more than once per this many seconds. each track upload would
+    # otherwise re-attempt the login and hammer the upstream during outages.
+    _SETUP_RETRY_COOLDOWN_S = 60.0
+
     def __init__(self):
         self.client: AsyncClient | None = None
         self.dm_client: AsyncClient | None = None
         self.recipient_did: str | None = None
+        self._last_setup_attempt: float = 0.0
 
     async def setup(self):
-        """initialize the notification service."""
+        """initialize the notification service. safe to call repeatedly."""
+        self._last_setup_attempt = time.monotonic()
+
         if not settings.notify.enabled:
             logger.info("notification service disabled")
             return
@@ -68,7 +77,7 @@ class NotificationService:
                 {"actor": settings.notify.recipient_handle}
             )
             self.recipient_did = profile.did
-            logger.debug(
+            logger.info(
                 f"resolved {settings.notify.recipient_handle} to {self.recipient_did}"
             )
 
@@ -79,6 +88,23 @@ class NotificationService:
             self.client = None
             self.dm_client = None
             self.recipient_did = None
+
+    async def ensure_ready(self) -> str | None:
+        """return the resolved recipient DID if the service is ready, else None.
+
+        if state is broken (recipient_did missing) and notifications are
+        enabled, attempt to re-run setup() to recover. retries are rate-
+        limited by _SETUP_RETRY_COOLDOWN_S so a sustained upstream outage
+        doesn't get amplified into every-upload login attempts.
+        """
+        if self.recipient_did is not None:
+            return self.recipient_did
+        if not settings.notify.enabled:
+            return None
+        if (time.monotonic() - self._last_setup_attempt) < self._SETUP_RETRY_COOLDOWN_S:
+            return None
+        await self.setup()
+        return self.recipient_did
 
     async def _send_dm_to_did(
         self, recipient_did: str, message_text: str
@@ -161,7 +187,8 @@ class NotificationService:
         matches: list[dict],
     ) -> NotificationResult | None:
         """send admin-only notification about a copyright flag."""
-        if not self.recipient_did:
+        recipient_did = await self.ensure_ready()
+        if recipient_did is None:
             logger.warning("recipient not set, skipping notification")
             return None
 
@@ -188,7 +215,7 @@ class NotificationService:
         if track_url:
             message_text += f"\n{track_url}"
 
-        result = await self._send_dm_to_did(self.recipient_did, message_text)
+        result = await self._send_dm_to_did(recipient_did, message_text)
         if result.success:
             logger.info(f"sent copyright flag notification for track {track_id}")
         return result
@@ -208,7 +235,8 @@ class NotificationService:
             categories: list of violated policy categories
             context: where the image was uploaded (e.g., "track cover", "album cover")
         """
-        if not self.recipient_did:
+        recipient_did = await self.ensure_ready()
+        if recipient_did is None:
             logger.warning("recipient not set, skipping notification")
             return None
 
@@ -221,7 +249,7 @@ class NotificationService:
             f"categories: {categories_str}"
         )
 
-        result = await self._send_dm_to_did(self.recipient_did, message_text)
+        result = await self._send_dm_to_did(recipient_did, message_text)
         if result.success:
             logger.info(f"sent image flag notification for {image_id}")
         return result
@@ -237,7 +265,8 @@ class NotificationService:
         description: str | None,
     ) -> NotificationResult | None:
         """send notification about a new user report."""
-        if not self.recipient_did:
+        recipient_did = await self.ensure_ready()
+        if recipient_did is None:
             logger.warning("recipient not set, skipping notification")
             return None
 
@@ -264,14 +293,15 @@ class NotificationService:
             desc = description[:200] + "..." if len(description) > 200 else description
             message_text += f'\n"{desc}"'
 
-        result = await self._send_dm_to_did(self.recipient_did, message_text)
+        result = await self._send_dm_to_did(recipient_did, message_text)
         if result.success:
             logger.info(f"sent user report notification for report {report_id}")
         return result
 
     async def send_track_notification(self, track: Track) -> NotificationResult | None:
         """send notification about a new track."""
-        if not self.recipient_did:
+        recipient_did = await self.ensure_ready()
+        if recipient_did is None:
             logger.warning("recipient not set, skipping notification")
             return None
 
@@ -298,7 +328,7 @@ class NotificationService:
                 f"uploaded: {track.created_at.strftime('%b %d at %H:%M UTC')}"
             )
 
-        result = await self._send_dm_to_did(self.recipient_did, message_text)
+        result = await self._send_dm_to_did(recipient_did, message_text)
         if result.success:
             logger.info(f"sent notification for track {track.id}")
         return result
@@ -317,7 +347,8 @@ class NotificationService:
         on-call (you) jump straight to logfire / DB to investigate without
         another query.
         """
-        if not self.recipient_did:
+        recipient_did = await self.ensure_ready()
+        if recipient_did is None:
             logger.warning("recipient not set, skipping reaper notification")
             return None
 
@@ -342,7 +373,7 @@ class NotificationService:
             f"runbook: docs/internal/retrospectives/2026-05-10-worker-oom-loop-streaming.md"
         )
 
-        result = await self._send_dm_to_did(self.recipient_did, message_text)
+        result = await self._send_dm_to_did(recipient_did, message_text)
         if result.success:
             logger.info(
                 "sent reaper notification (reaped=%d, affected=%d)",

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal.atproto.client import pds_blob_url
+from backend._internal.notifications import NotificationResult
 from backend._internal.tasks.hooks import resolve_audio_url, run_post_track_create_hooks
 from backend.models import Artist, Track
 
@@ -292,6 +293,139 @@ class TestRunPostTrackCreateHooks:
             )
 
         mock_service.send_track_notification.assert_not_called()
+
+    async def test_marks_sent_only_when_dm_succeeded(
+        self, db_session: AsyncSession
+    ) -> None:
+        """regression (#1424): when send_track_notification returns None
+        (recipient_did failed to resolve) while notifications are enabled,
+        notification_sent must stay False so the Jetstream identity-update
+        consumer has a chance to retry.
+        """
+        artist = await _create_artist(db_session)
+        track = await _create_track(db_session, artist)
+
+        mock_service = AsyncMock()
+        # `None` ⇒ recipient not set; this is what the bug paved over before
+        mock_service.send_track_notification = AsyncMock(return_value=None)
+
+        with (
+            patch(MOCK_COPYRIGHT_PATH, new_callable=AsyncMock),
+            patch(MOCK_EMBEDDING_PATH, new_callable=AsyncMock),
+            patch(MOCK_GENRE_PATH, new_callable=AsyncMock),
+            patch(MOCK_NOTIFICATION_PATH, mock_service),
+            patch(MOCK_REDIS_PATH, return_value=AsyncMock()),
+            patch(MOCK_SETTINGS_PATH) as mock_settings,
+        ):
+            mock_settings.modal.enabled = False
+            mock_settings.turbopuffer.enabled = False
+            mock_settings.replicate.enabled = False
+            mock_settings.notify.enabled = True
+            await run_post_track_create_hooks(
+                track.id, audio_url="https://r2.example.com/test.mp3"
+            )
+
+        await db_session.refresh(track)
+        assert track.notification_sent is False
+
+    async def test_marks_sent_when_notifications_disabled(
+        self, db_session: AsyncSession
+    ) -> None:
+        """when notifications are globally disabled, mark the track sent so
+        Jetstream's identity-update consumer doesn't keep firing the hook
+        forever for a notification that will never go out.
+        """
+        artist = await _create_artist(db_session)
+        track = await _create_track(db_session, artist)
+
+        mock_service = AsyncMock()
+        mock_service.send_track_notification = AsyncMock(return_value=None)
+
+        with (
+            patch(MOCK_COPYRIGHT_PATH, new_callable=AsyncMock),
+            patch(MOCK_EMBEDDING_PATH, new_callable=AsyncMock),
+            patch(MOCK_GENRE_PATH, new_callable=AsyncMock),
+            patch(MOCK_NOTIFICATION_PATH, mock_service),
+            patch(MOCK_REDIS_PATH, return_value=AsyncMock()),
+            patch(MOCK_SETTINGS_PATH) as mock_settings,
+        ):
+            mock_settings.modal.enabled = False
+            mock_settings.turbopuffer.enabled = False
+            mock_settings.replicate.enabled = False
+            mock_settings.notify.enabled = False
+            await run_post_track_create_hooks(
+                track.id, audio_url="https://r2.example.com/test.mp3"
+            )
+
+        await db_session.refresh(track)
+        assert track.notification_sent is True
+
+    async def test_marks_sent_on_dm_success(self, db_session: AsyncSession) -> None:
+        artist = await _create_artist(db_session)
+        track = await _create_track(db_session, artist)
+
+        mock_service = AsyncMock()
+        mock_service.send_track_notification = AsyncMock(
+            return_value=NotificationResult(success=True, recipient_did="did:plc:abc")
+        )
+
+        with (
+            patch(MOCK_COPYRIGHT_PATH, new_callable=AsyncMock),
+            patch(MOCK_EMBEDDING_PATH, new_callable=AsyncMock),
+            patch(MOCK_GENRE_PATH, new_callable=AsyncMock),
+            patch(MOCK_NOTIFICATION_PATH, mock_service),
+            patch(MOCK_REDIS_PATH, return_value=AsyncMock()),
+            patch(MOCK_SETTINGS_PATH) as mock_settings,
+        ):
+            mock_settings.modal.enabled = False
+            mock_settings.turbopuffer.enabled = False
+            mock_settings.replicate.enabled = False
+            mock_settings.notify.enabled = True
+            await run_post_track_create_hooks(
+                track.id, audio_url="https://r2.example.com/test.mp3"
+            )
+
+        await db_session.refresh(track)
+        assert track.notification_sent is True
+
+    async def test_does_not_mark_sent_on_dm_failure(
+        self, db_session: AsyncSession
+    ) -> None:
+        """recipient is reachable but the DM itself failed (rate limit,
+        blocked, network) — leave notification_sent False so the Jetstream
+        identity-update consumer retries.
+        """
+        artist = await _create_artist(db_session)
+        track = await _create_track(db_session, artist)
+
+        mock_service = AsyncMock()
+        mock_service.send_track_notification = AsyncMock(
+            return_value=NotificationResult(
+                success=False,
+                recipient_did="did:plc:abc",
+                error="429 rate limited",
+                error_type="network",
+            )
+        )
+
+        with (
+            patch(MOCK_COPYRIGHT_PATH, new_callable=AsyncMock),
+            patch(MOCK_EMBEDDING_PATH, new_callable=AsyncMock),
+            patch(MOCK_GENRE_PATH, new_callable=AsyncMock),
+            patch(MOCK_NOTIFICATION_PATH, mock_service),
+            patch(MOCK_REDIS_PATH, return_value=AsyncMock()),
+            patch(MOCK_SETTINGS_PATH) as mock_settings,
+        ):
+            mock_settings.modal.enabled = False
+            mock_settings.turbopuffer.enabled = False
+            mock_settings.replicate.enabled = False
+            mock_settings.notify.enabled = True
+            await run_post_track_create_hooks(
+                track.id, audio_url="https://r2.example.com/test.mp3"
+            )
+
+        await db_session.refresh(track)
+        assert track.notification_sent is False
 
     async def test_skips_copyright_when_flagged(self, db_session: AsyncSession) -> None:
         artist = await _create_artist(db_session)

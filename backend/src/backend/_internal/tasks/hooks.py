@@ -182,7 +182,18 @@ async def _mark_notification_sent(track_id: int) -> None:
 
 
 async def _send_track_notification(track_id: int) -> None:
-    """send notification for new track, if not already sent."""
+    """send notification for new track, if not already sent.
+
+    `notification_sent` is only flipped to True when:
+      - the DM actually succeeded, OR
+      - notifications are globally disabled (otherwise Jetstream would
+        keep re-firing on every identity sync forever).
+
+    if a DM was attempted but failed (transient bsky issue, recipient_did
+    not yet resolved, etc.), leave the row untouched so the next caller —
+    typically Jetstream's identity-update consumer firing the same hook —
+    has a chance to retry once the upstream recovers.
+    """
     from backend._internal.notifications import notification_service
 
     try:
@@ -197,8 +208,11 @@ async def _send_track_notification(track_id: int) -> None:
                 return
             if track.notification_sent:
                 return
-            await notification_service.send_track_notification(track)
-            track.notification_sent = True
-            await db.commit()
+            result = await notification_service.send_track_notification(track)
+            sent_ok = result is not None and result.success
+            disabled = result is None and not settings.notify.enabled
+            if sent_ok or disabled:
+                track.notification_sent = True
+                await db.commit()
     except Exception as e:
         logger.warning(f"failed to send notification for track {track_id}: {e}")
