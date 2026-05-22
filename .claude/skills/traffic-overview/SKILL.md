@@ -1,55 +1,39 @@
 ---
-description: Multi-horizon traffic & performance report (24h / 7d / 30d / 90d / 180d) drawing on Logfire and Cloudflare analytics
-argument-hint: [optional: single horizon like "7d" or "30d", or specific question like "5xx breakdown"]
+description: Multi-horizon traffic & performance report (24h / 7d / 30d) drawing on Logfire (app-server view) and the Cloudflare API MCP (edge view)
+argument-hint: [optional: single horizon like "7d" or "30d", or a specific question]
 ---
 
 # traffic-overview
 
-Report how plyr.fm production has been going over a range of timescales. By default emit a multi-horizon summary; if the user asks for a single horizon, focus there.
+Report how plyr.fm production has been going across multiple timescales. Two complementary lenses:
 
-## horizons & which tool serves them
+- **Logfire** = inside-the-app view: per-route p95/p99, error breakdowns, user identity, exception types.
+- **Cloudflare edge** = outside-the-app view: total requests, unique visitors, bytes, cache hit %, threats blocked, country split. Sees the requests that never hit the origin.
 
-| horizon | tool | why |
+Default: emit a side-by-side multi-horizon summary. If the user asks for a single horizon, focus there.
+
+## horizons & tools
+
+| horizon | Logfire (`mcp__logfire__query_run`) | Cloudflare (`mcp__plugin_cloudflare_cloudflare-api__execute`) |
 |---|---|---|
-| 24h, 7d | Logfire | rich SQL — per-route p95/p99, per-user, error breakdown |
-| 14d | Logfire | maximum single-query window — see "rough edges" |
-| 30d, 90d, 180d | Cloudflare (`scripts/cf_analytics.py`) | edge-level aggregates over long horizons |
+| 24h | ✅ | ✅ |
+| 7d  | ✅ | ✅ |
+| 14d | ✅ (single-shot — max window) | ✅ |
+| 30d | ⚠️ chunk into ≥3 14d windows | ✅ (CF retention ceiling) |
+| 90d / 180d | ❌ infeasible (too many chunks) | ❌ CF zone analytics retention is **~30 days** even on paid plans for httpRequests1dGroups — `first_date` returns ~30d ago no matter what `date_geq` you pass |
 
-For Logfire-served horizons, use the `mcp__logfire__query_run` tool with `project: "plyr-fm"`. For CF, run the script:
+If the user explicitly asks for 90d or 180d, say so explicitly: that data isn't accessible from the tools we have. Don't fabricate or guess.
 
-```bash
-uv run scripts/cf_analytics.py --days 30
-uv run scripts/cf_analytics.py --days 90
-uv run scripts/cf_analytics.py --days 180
-```
+## prerequisites
 
-## rough edges (learn these once, don't relearn each invocation)
+- **Logfire MCP**: auto-available. Use `project: "plyr-fm"` on every `query_run` call.
+- **Cloudflare API MCP**: requires the user to have run `/mcp` to authenticate `plugin:cloudflare:cloudflare-api`. If `cloudflare-api__execute` isn't available, prompt the user to run `/mcp` — **do not** call `authenticate` directly (see memory: don't initiate MCP auth flows yourself).
 
-1. **Logfire MCP caps each query at a 14-day window.** Trying `start_timestamp` more than 14 days before `end_timestamp` errors out with `Time range N days exceeds max 14 days`. For 30d via Logfire, chunk into ≥3 separate queries and sum client-side. For 90d/180d, use Cloudflare instead.
+The CF MCP pre-sets `accountId` to `3e9ba01cd687b3c4d29033908177072e` (N8@zzstoatzz.io's account, where plyr.fm lives). The plyr.fm zone ID is `2bfcb9ffe7847604e9febbb62d9649a3`.
 
-2. **`scripts/cf_analytics.py` requires env vars not in any `.env` file checked into the repo:**
-   - `SCRIPT_CF_API_TOKEN` — needs Analytics:Read at the zone level
-   - `CF_ZONE_ID` — the plyr.fm zone tag
-   - `CF_ACCOUNT_ID` — the personal-account ID (`3e9ba01cd687b3c4d29033908177072e`, per memory)
+## Logfire queries (the SQL pieces)
 
-   If `uv run scripts/cf_analytics.py --days 7` errors with `script_cf_api_token Field required`, the token isn't set. Ask the user where they keep it (1Password / shell rc / temporary paste) before claiming the long-horizon data is unavailable — don't fabricate numbers from training data.
-
-3. **`httpRequests1dGroups` query in `cf_analytics.py` has `limit: 100`.** As of 2026-05-22 this was bumped to 200 so 180d works in one shot. If you need ≥200 days, paginate or bump again.
-
-4. **`/health` dominates request counts** (~60% of total). Almost always worth filtering it out for "real" traffic metrics — `WHERE http_route != '/health'`. Leave it in only when counting overall server load.
-
-5. **DataFusion quirks:**
-   - Expressions in `GROUP BY` must be repeated verbatim, not aliased — `GROUP BY date_trunc('day', start_timestamp)`, NOT `GROUP BY day`.
-   - JSONB access uses `->` / `->>` (Postgres-flavored).
-   - `approx_percentile_cont(duration, 0.95) * 1000` gives p95 in ms (duration is in seconds).
-
-6. **`service_name` is `plyr-api` everywhere.** Filter environments with `deployment_environment` (top-level column), never `service_name`. See `docs/internal/tools/logfire.md`.
-
-## standard short-horizon query (24h / 7d / 14d)
-
-For each Logfire-served horizon, run two queries:
-
-### Overall stats
+### Overall stats (any horizon ≤14d)
 
 ```sql
 SELECT
@@ -68,7 +52,7 @@ WHERE deployment_environment = 'production'
   AND http_route != '/health'
 ```
 
-### Day-by-day breakdown (for ≥3-day horizons)
+### Day-by-day breakdown
 
 ```sql
 SELECT
@@ -87,7 +71,7 @@ GROUP BY date_trunc('day', start_timestamp)
 ORDER BY day DESC
 ```
 
-### Top routes by traffic (sanity check + perf hotspots)
+### Top routes
 
 ```sql
 SELECT
@@ -105,18 +89,67 @@ ORDER BY req DESC
 LIMIT 15
 ```
 
+## Cloudflare query (the JS piece)
+
+Call `mcp__plugin_cloudflare_cloudflare-api__execute` with this code, parameterizing `days`:
+
+```js
+async () => {
+  const ZONE = "2bfcb9ffe7847604e9febbb62d9649a3";
+  const days = /* fill in */;
+  const since = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
+  const r = await cloudflare.request({
+    method: "POST",
+    path: "/graphql",
+    body: {
+      query: `query { viewer { zones(filter: {zoneTag: "${ZONE}"}) {
+        httpRequests1dGroups(filter: {date_geq: "${since}"}, orderBy: [date_ASC], limit: 200) {
+          dimensions { date }
+          sum { requests pageViews bytes cachedBytes threats }
+          uniq { uniques }
+        }
+      } } }`
+    }
+  });
+  return r.result?.viewer?.zones?.[0]?.httpRequests1dGroups ?? [];
+}
+```
+
+Aggregate client-side: sum `requests` / `pageViews` / `bytes` / `cachedBytes` / `threats`; sum `uniques` as a naive overcounting upper bound (CF doesn't expose deduped uniques across days via this endpoint).
+
+## rough edges (don't relearn each invocation)
+
+1. **CF GraphQL response is unwrapped** — the MCP returns `r.result.viewer.zones`, NOT `r.result.data.viewer.zones`. (Standard GraphQL responses are wrapped in `data:`; the CF MCP strips that envelope.) If you see "0 days returned" but expect data, this is almost certainly the bug.
+
+2. **Use `date_geq`, not `date_gt`** — `date_gt` of "today minus N" silently skips the inclusive boundary day and can return empty results when N is small.
+
+3. **CF zone analytics retention ≈ 30 days** — empirically confirmed: querying for 90 days returns ~34 days starting from `first_date: ~30d ago`. The `limit: 100` in `scripts/cf_analytics.py` was bumped to 200 in PR #1427, but the real ceiling is CF-side retention, not the limit.
+
+4. **Logfire MCP caps each query at a 14-day window** — `Time range N days exceeds max 14 days`. For 30d via Logfire, chunk into ≥3 separate queries. For ≥30d, CF is the better fit (when within its retention window).
+
+5. **`/health` is ~60% of Logfire request counts** — filter it (`http_route != '/health'`) for any "real" traffic metric. Leave it in only when counting overall server load.
+
+6. **DataFusion quirks** —
+   - `GROUP BY` needs the expression verbatim, not by alias: `GROUP BY date_trunc('day', start_timestamp)`, NOT `GROUP BY day`.
+   - JSONB uses `->` / `->>` (Postgres-flavored).
+   - `approx_percentile_cont(duration, 0.95) * 1000` gives p95 in ms (`duration` is in seconds).
+
+7. **`service_name` is `plyr-api` for all environments** — filter by `deployment_environment` (top-level column), never `service_name`. See `docs/internal/tools/logfire.md`.
+
+8. **Cloudflare API MCP needs OAuth via `/mcp`** — if `cloudflare-api__execute` is unavailable, prompt the user to run `/mcp` themselves. Do not call the server's `authenticate` tool.
+
 ## what to report
 
 For each horizon, three things:
 
-1. **The numbers**: requests, unique users, 4xx/5xx/429 counts, p50/p95/p99.
-2. **The shape**: day-by-day trend. Flag any day that breaks the band (>2× the median for errors or p95).
-3. **One concrete thing worth knowing**: top error route, slowest route, or notable event correlation (e.g., "the 293 rate-limited on 05-16 maps to the now-playing burst bug, now fixed in #1426").
+1. **The numbers** (side-by-side where available): Logfire app-server view (requests, users, 4xx/5xx/429, p50/p95/p99) and Cloudflare edge view (total requests, page views, GB transferred, cache hit %, threats).
+2. **The shape**: day-by-day trend (Logfire for ≤7d, CF for 7-30d). Flag any day that breaks the band (>2× the median for errors or p95).
+3. **One concrete thing worth knowing**: top error route, slowest route, notable spike, or correlation (e.g., "the 293 rate-limited on 05-16 maps to the now-playing burst bug, fixed in #1426").
 
 Don't dump every column. The user wants the read, not the raw.
 
 ## tone
 
 - Lead with the punchline (healthy / one concern / multiple concerns).
-- Use concrete numbers, not adjectives. "p95 jumped from 95ms to 314ms on 05-16" beats "performance was slow."
-- When CF data is unavailable because the token isn't set, say so explicitly — never fabricate long-horizon numbers from training data.
+- Concrete numbers, not adjectives. "p95 jumped from 95ms to 314ms on 05-16" beats "performance was slow."
+- When 90d/180d is requested, name the retention ceiling — never fabricate long-horizon numbers.
