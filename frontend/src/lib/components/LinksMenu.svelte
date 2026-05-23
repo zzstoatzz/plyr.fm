@@ -12,7 +12,16 @@
 	function closeMenu() {
 		showMenu = false;
 	}
+
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && showMenu) {
+			event.preventDefault();
+			closeMenu();
+		}
+	}
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="links-menu">
 	<button class="menu-button" onclick={toggleMenu} title="more" aria-label="open menu">
