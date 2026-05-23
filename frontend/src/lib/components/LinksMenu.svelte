@@ -15,21 +15,8 @@
 </script>
 
 <div class="links-menu">
-	<button class="menu-button" onclick={toggleMenu} title="view links">
-		<svg
-			width="20"
-			height="20"
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="2"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-		>
-			<circle cx="12" cy="12" r="10"></circle>
-			<line x1="12" y1="16" x2="12" y2="12"></line>
-			<line x1="12" y1="8" x2="12.01" y2="8"></line>
-		</svg>
+	<button class="menu-button" onclick={toggleMenu} title="more" aria-label="open menu">
+		<span class="glyph" aria-hidden="true">✻</span>
 	</button>
 
 	{#if showMenu}
@@ -191,12 +178,24 @@
 		color: var(--text-secondary);
 		cursor: pointer;
 		transition: all 0.2s;
+		font-family: inherit;
+		padding: 0;
 	}
 
 	.menu-button:hover {
 		background: var(--bg-tertiary);
 		border-color: var(--accent);
 		color: var(--accent);
+	}
+
+	/* the asterisk glyph rendered in the brand font — has more character than
+	   a generic info SVG and shares typography with the rest of the UI */
+	.glyph {
+		font-family: inherit;
+		font-size: 1.1rem;
+		line-height: 1;
+		display: inline-block;
+		transform: translateY(-0.05em);
 	}
 
 	.menu-backdrop {
