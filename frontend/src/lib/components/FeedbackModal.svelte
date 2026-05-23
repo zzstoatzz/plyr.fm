@@ -7,6 +7,13 @@
 		}
 	}
 
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && feedback.isOpen) {
+			event.preventDefault();
+			feedback.close();
+		}
+	}
+
 	function handleSearchInput(event: Event) {
 		const target = event.target as HTMLInputElement;
 		feedback.setSearchQuery(target.value);
@@ -22,6 +29,8 @@
 		feedback.setReason(target.value as ReportReason);
 	}
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div

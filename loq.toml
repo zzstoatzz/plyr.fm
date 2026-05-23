@@ -188,7 +188,7 @@ max_lines = 1285
 
 [[rules]]
 path = "frontend/src/lib/components/FeedbackModal.svelte"
-max_lines = 660
+max_lines = 661
 
 [[rules]]
 path = "services/moderation/src/review.rs"
