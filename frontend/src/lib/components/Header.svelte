@@ -18,58 +18,12 @@
 </script>
 
 <header>
-	<!-- Info icon + social links in left margin, outside main content flow.
-	     LinksMenu stays visible at 769-1000px when the social-link cluster hides,
-	     mirroring the mobile top-left affordance for all desktop sizes. -->
+	<!-- Single info-icon affordance top-left on desktop (mobile-first parity).
+	     LinksMenu's modal contains the social/docs links + platform stats,
+	     so there's no need to surface those inline as a separate cluster. -->
 	<div class="margin-left desktop-only">
 		<div class="desktop-info-icon">
 			<LinksMenu />
-		</div>
-		<div class="social-links">
-			<a
-				href="https://bsky.app/profile/plyr.fm"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="social-link"
-				title="follow @plyr.fm on bluesky"
-			>
-				<svg width="18" height="18" viewBox="0 0 600 530" fill="currentColor">
-					<path d="m135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46 47.98-36.021 125.72-63.892 125.72 24.795 0 17.712-10.155 148.79-16.111 170.07-20.703 73.984-96.144 92.854-163.25 81.433 117.3 19.964 147.14 86.092 82.697 152.22-122.39 125.59-175.91-31.511-189.63-71.766-2.514-7.3797-3.6904-10.832-3.7077-7.8964-0.0174-2.9357-1.1937 0.51669-3.7077 7.8964-13.714 40.255-67.233 197.36-189.63 71.766-64.444-66.128-34.605-132.26 82.697-152.22-67.108 11.421-142.55-7.4491-163.25-81.433-5.9562-21.282-16.111-152.36-16.111-170.07 0-88.687 77.742-60.816 125.72-24.795z"/>
-				</svg>
-			</a>
-			<a
-				href="https://status.zzstoatzz.io/@plyr.fm"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="social-link"
-				title="view status page"
-			>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<rect x="6" y="14" width="4" height="6" rx="1"></rect>
-					<rect x="14" y="8" width="4" height="12" rx="1"></rect>
-				</svg>
-			</a>
-			<a
-				href="https://tangled.org/@zzstoatzz.io/plyr.fm"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="social-link"
-				title="view source on tangled"
-			>
-				<img src="https://cdn.bsky.app/img/avatar/plain/did:plc:wshs7t2adsemcrrd4snkeqli/bafkreif6z53z4ukqmdgwstspwh5asmhxheblcd2adisoccl4fflozc3kva@jpeg" alt="Tangled" width="18" height="18" class="tangled-icon" />
-			</a>
-			<a
-				href="https://docs.plyr.fm"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="social-link"
-				title="documentation"
-			>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-					<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-				</svg>
-			</a>
 		</div>
 	</div>
 
@@ -186,17 +140,13 @@
 		gap: 0.5rem;
 	}
 
-	.social-links {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	/* render the embedded LinksMenu as a bare icon to match adjacent social-links */
+	/* render the LinksMenu trigger as a bare glyph on desktop — no border or bg,
+	   just the asterisk character in the brand font. small padding keeps the
+	   click target comfortable without adding visible chrome. */
 	.desktop-info-icon :global(.menu-button) {
-		width: 18px;
-		height: 18px;
-		padding: 0;
+		width: auto;
+		height: auto;
+		padding: 0.25rem 0.4rem;
 		border: none;
 		background: transparent;
 		color: var(--text-secondary);
@@ -208,9 +158,8 @@
 		color: var(--accent);
 	}
 
-	.desktop-info-icon :global(.menu-button svg) {
-		width: 18px;
-		height: 18px;
+	.desktop-info-icon :global(.glyph) {
+		font-size: 1.25rem;
 	}
 
 	.margin-right {
@@ -290,16 +239,6 @@
 
 	.social-link:hover svg {
 		color: var(--accent);
-	}
-
-	.tangled-icon {
-		border-radius: var(--radius-sm);
-		opacity: 0.7;
-		transition: opacity 0.15s;
-	}
-
-	.social-link:hover .tangled-icon {
-		opacity: 1;
 	}
 
 	h1 {
@@ -415,11 +354,9 @@
 		color: var(--bg-primary);
 	}
 
-	/* Below 1000px, the social-link cluster + feedback button hide, but the
-	   info icon stays visible — it's the mobile-equivalent top-left affordance
-	   for narrow desktop sizes. */
+	/* feedback button hides below 1000px; info icon in .margin-left stays
+	   visible at all desktop widths (mobile-equivalent top-left affordance). */
 	@media (max-width: 1000px) {
-		.margin-left .social-links,
 		.margin-right {
 			display: none !important;
 		}
