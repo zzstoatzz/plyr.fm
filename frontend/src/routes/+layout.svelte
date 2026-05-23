@@ -592,6 +592,10 @@
 		--track-bg-playing: rgba(18, 18, 18, 0.88);
 		--track-border: rgba(255, 255, 255, 0.06);
 		--track-border-hover: rgba(255, 255, 255, 0.1);
+
+		/* subtle elevation shadow for section titles — makes headings appear to
+		   float above busy backgrounds (custom-background images, live ambient) */
+		--text-elevation: 0 1px 3px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.2);
 	}
 
 	/* light theme overrides */
@@ -629,12 +633,23 @@
 		--track-bg-playing: rgba(255, 255, 255, 0.94);
 		--track-border: rgba(0, 0, 0, 0.08);
 		--track-border-hover: rgba(0, 0, 0, 0.12);
+
+		/* lighter elevation shadow for light theme — text is dark so the shadow
+		   needs to be much subtler to read as depth rather than blur */
+		--text-elevation: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
 	}
 
 	/* light theme specific overrides for components */
 	:global(:root.theme-light) :global(.tag-badge) {
 		background: color-mix(in srgb, var(--accent) 12%, white);
 		color: var(--accent-muted);
+	}
+
+	/* shared utility class for section titles ("top tracks", "for you", etc.) —
+	   subtle elevation shadow that gives the heading a sense of floating above
+	   the page bg without any chrome. theme-aware via --text-elevation. */
+	:global(.section-title) {
+		text-shadow: var(--text-elevation);
 	}
 
 	/* shared animation for active play buttons */

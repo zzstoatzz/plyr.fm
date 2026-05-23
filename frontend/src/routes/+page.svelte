@@ -271,7 +271,7 @@
 	{#key loadingTopTracks}
 		{#if loadingTopTracks}
 			<section class="top-tracks" transition:fade={{ duration: 200 }}>
-				<h2>
+				<h2 class="section-title">
 					top tracks <button class="period-toggle" onclick={cyclePeriod}>{periodLabel}</button>
 				</h2>
 				<div class="loading-container compact">
@@ -280,7 +280,7 @@
 			</section>
 		{:else if hasTopTracks}
 			<section class="top-tracks" transition:fade={{ duration: 200 }}>
-				<h2>
+				<h2 class="section-title">
 					top tracks <button class="period-toggle" onclick={cyclePeriod}>{periodLabel}</button>
 				</h2>
 				<div class="top-tracks-grid">
@@ -300,7 +300,7 @@
 	<!-- artists from your bluesky network -->
 	{#if hasNetworkArtists}
 		<section class="network-artists" transition:fade={{ duration: 200 }}>
-			<h2>artists you know</h2>
+			<h2 class="section-title">artists you know</h2>
 			<div class="artist-grid">
 				{#each networkArtists as artist (artist.did)}
 					{@const refreshedUrl = getRefreshedAvatar(artist.did)}
@@ -332,7 +332,7 @@
 
 	<section class="tracks">
 		<div class="section-header">
-			<h2>
+			<h2 class="section-title">
 				<button
 					type="button"
 					class="clickable-heading"
