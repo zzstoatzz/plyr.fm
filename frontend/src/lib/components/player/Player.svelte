@@ -549,9 +549,12 @@
 				}
 			} else if (indexChanged) {
 				player.currentTime = 0;
-				// only auto-play if this was a local update
+				// only auto-play if this was a local update; remote updates pause to
+				// avoid two tabs playing the same track in parallel (mirrors #1424)
 				if (queue.lastUpdateWasLocal) {
 					player.paused = false;
+				} else {
+					player.paused = true;
 				}
 				previousQueueIndex = queue.currentIndex;
 			}
