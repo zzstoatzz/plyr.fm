@@ -173,233 +173,73 @@ Side-fix included in the PR: `scripts/cf_analytics.py`'s `httpRequests1dGroups l
 
 ---
 
-#### first external contribution + local-dev DX (PRs #1393, #1394, #1395, May 12)
+#### copyright paradigm — indiemusi.ch alpha shipped behind a flag (PRs #1400→#1411, May 14–16)
 
-**why**: @ailawav.bsky.social (aila / @AilaScott on GitHub) forked the repo to contribute and hit two undocumented papercuts on first run — the frontend needed a `.env` nobody had told her about (sample audio wouldn't load without it), and the backend's `DOCKET_URL` defaulted to `""`, requiring a running Redis even for local dev where Redis is overkill.
+**why**: [Hilke's blog post on indiemusi.ch](https://hilkeu.leaflet.pub/3mhzj3ouxx22k) describes a 10-record lexicon family on atproto for capturing music rights metadata — interestedParty splits in basis points, publishingOwner identities (individual or company), ISWC/ISRC/IPI identifiers. it's already published as `com.atproto.lexicon.schema` records on `did:plc:lcmrbur2pydmpelfcs7fjbdx`. plyr.fm now offers it as the first opt-in **copyright paradigm**: a track flagged as copyrighted writes `ch.indiemusi.alpha.song` + `ch.indiemusi.alpha.recording` records to the user's PDS alongside the existing `fm.plyr.track`, with the audio routed through the supporter-gated storage path (private R2 bucket, no PDS blob, no public URL).
+
+**what shipped (eight PRs, ordered)**:
+
+1. **#1400 — phase 1 / foundation**: `IndiemusiSettings` config section, migration `16cfa67553bd` (`user_copyright_configs` row per user + `tracks.copyright_song_uri` / `copyright_recording_uri` columns), pydantic input models, and create/update/delete helpers for `actor.publishingOwner` / `song` / `recording` records under `backend/_internal/atproto/records/ch_indiemusi/`. 13 unit tests verify we emit records byte-equivalent to what real indiemusi clients write — basis-point royalty splits, `publishingOwner` inlining, `companyName` vs `firstName`/`lastName` variants. **intentionally NOT shipped**: Hilke's DRM layer (encrypted audioBlob + RSA-wrapped grants) — conflicts with our streaming-end-to-end rule from #1389; we use the existing supporter-gated audio path instead.
+
+2. **#1401 — phase 2 / portal section + scope-upgrade plumbing**: new `api/copyright.py` router (`GET /config`, `POST /setup`, `POST /disconnect`). setup branches on whether the session already has indiemusi scopes — if not, kicks off an OAuth scope upgrade with the form data stashed on the pending row + `redirect_to=/portal`; if so, writes the record in place. `AtprotoSettings.resolved_scope_with_extras` cleanly composes teal + indiemusi (and any future paradigms) into the requested OAuth scope. migration `2ff28fd69210` adds `paradigm_data jsonb` + `redirect_to` to `pending_scope_upgrades`. Frontend gets a new `CopyrightSection.svelte` component in the portal (extracted because `portal/+page.svelte` is at its loq limit, 3.8k lines).
+
+3. **#1402 — phase 3 / upload + edit rights, per-track endpoints, audio gating**: `support_gate` JSONB gains a `type` discriminator (`{"type": "copyright"}` joining the existing `{"type": "any"}`). single `_check_gate_access` helper in `api/audio.py` branches on type — `copyright` requires any authenticated session (no atprotofans check). `POST /tracks/{id}/copyright` writes the song + recording pair, sets the gate, populates the URI columns; `DELETE` clears them. upload-time path accepts a `copyright` Form field (mutually exclusive with `support_gate`). `CopyrightRightsPanel.svelte` wired into both the upload form and the portal edit form.
+
+4. **#1403 — phase 3 review findings, the load-bearing fixes**:
+   - **P1.1 audio migration on edit-time toggle**: before, `POST /tracks/{id}/copyright` set the gate and wrote rights records but left `r2_url` populated and `fm.plyr.track.audioUrl` pointing at the public R2 URL — third-party PDS readers could fetch the audio directly, bypassing the gate. fix detects the public→copyright transition, schedules `schedule_move_track_audio(to_private=True)`, nulls `r2_url`, and rebuilds the PDS record with the auth-proxied `/audio/{file_id}` URL. `clear_track_rights` is symmetric.
+   - **P2.1 backend mutex**: copyright and supporter gates are mutually exclusive in the UI; `write_track_rights` now raises 400 if a track already carries a non-copyright gate (UI was the only enforcement before).
+   - **P1.2 disconnect blocked when copyright-gated tracks exist**: before, disconnect deleted the config + publishingOwner record, leaving any gated tracks orphaned with no escape hatch. now returns 409 with the list of blocking tracks; the portal surfaces it as a toast directing the user to the edit form.
+   - **P2.2 atprotofans probe skips copyright gates**: the supporter-status HTTP call at three call sites (`listing.py`, `for_you.py`) now filters out `type == "copyright"` tracks (pure waste otherwise).
+   - **P3 royalty totals**: `additional_interested_parties` is now validated to sum ≤ 10000 basis points for both mechanical and performance splits — primary party was previously being clamped to `max(0, 10000 - sum)`, so additionals summing to 15000 emitted a record with aggregate splits at 150%.
+
+5. **#1404 — IPI / ISWC / ISRC format validation**: screenshot showed "asdfasdf" sailing through as an IPI. now: `IPI_PATTERN = r"^\d{11}$"` (CISAC spec), `ISWC_PATTERN = r"^T-?\d{9}-?\d$"`, `ISRC_PATTERN` for CC+XXX+YY+NNNNN. inline frontend errors. the hyphenated period-grouped ISWC form (`T-DDD.DDD.DDD-C`, 15 chars) was deliberately rejected because the lexicon enforces maxLength=13.
+
+6. **#1405 — declare indiemusi scopes in oauth client metadata**: required so the OAuth grant accepts them. coupling-locking test asserts every scope token from `IndiemusiSettings.scope_tokens()` is also present in `client-metadata.json` so future scope additions can't drift.
+
+7. **#1407 — copyright uploads don't require atprotofans**: `requires_atprotofans_check` on the upload path was branching on truthy `support_gate` rather than `type == "any"`. copyright-flagged users without atprotofans setup were being blocked at upload-validate. fix narrowed the check.
+
+8. **#1409 — publishingOwner record manager**: Hilke pointed out that any user opening plyr.fm with existing `publishingOwner` records on their PDS would get a duplicate created by our single-form setup. After design review (with codex pushing back on the initial overload-link-to-uri instinct), shipped a small CRUD manager modeled like the tags UX — `GET /copyright/publishing-owners` (with `in_use` + `needs_scope_upgrade` per row), `POST` (create), `PUT /{rkey}` (edit, merge-preserve), `DELETE /{rkey}` (PDS deleteRecord), `POST /use-owner` (DB-only link, no putRecord — plyr "claims" the existing record as in-use). The **merge-preserve write contract** is the load-bearing bit: every edit fetches the record fresh from PDS, strips only known modeled keys, spreads validated input back. Unknown fields (Hilke's hypothetical `taxId`, future lexicon extensions) are preserved untouched. individual↔company switches actually clear stale firstName/lastName. `pending_scope_upgrades.paradigm_data` becomes a discriminated union (`{"action": "create" | "edit" | "use"}`) so the scope-upgrade callback dispatches correctly. `CopyrightSection.svelte` rewritten from a single form into a card list.
+
+9. **#1410 — feature-flag the whole thing behind `copyright-paradigm`**: lets the merged code (phases 1-3 + all fixes, already in main) ship to prod dormant. flag-enrolled users get the full UX; everyone else gets a 404 on `/copyright/*` endpoints and a hidden frontend section — same shape as `vibe-search`. `_check_copyright_paradigm` (the login-time scope-extension probe) requires BOTH config row AND flag — without this, a user opted in pre-rollout would keep re-requesting indiemusi scopes on every fresh login even after we'd disabled the feature for them, defeating the rollback path. **404 not 403** so the rollout boundary isn't leaked.
+
+10. **#1411 — disconnect is DB-only; use-owner tolerates unknown fields**: post-#1409 cleanup. disconnect no longer deletes the publishingOwner record (it's a user-owned PDS record; we shouldn't auto-delete on app disconnect — the explicit-delete button on the card list handles that). `use-owner` no longer 400s if the record has fields outside our model — same merge-preserve principle, app-layer doesn't get to police shape.
+
+**rollout shape**: 1) land flag (#1410, merged), 2) `just release` to prod (dormant), 3) `uv run scripts/enable_flag.py did:plc:xbtmt2zjwlrfegqvch7fboei copyright-paradigm` for own DID, 4) dogfood on prod, 5) broaden (Hilke, other partners), 6) drop the flag check.
+
+**design notes**:
+- `support_gate` JSONB is extended with a type discriminator rather than introducing a parallel column. storage / gating semantics are identical to supporter-gating (private bucket, auth-proxied serving) — only the access check at serve time differs. cost: the field name is slightly misleading for the copyright case; benefit: every storage code path (upload, audio serving, audio replace, R2 URL synthesis) just works untouched.
+- streaming access is "any authenticated listener" — not monetization-gated, not anonymous. constraint was "not as a public PDS blob, not on the public R2 URL," not "paid only."
+- co-writer / publisher editing is plumbed end-to-end on the backend (`additionalInterestedParties`) but the UI is a future enhancement. for now the user is the only `interestedParty` written, auto-derived from their portal config.
+
+---
+
+#### typed R2 storage keys — make save/read extension drift unrepresentable (PR #1413, May 17)
+
+**why**: woody.fm hit it in production 2026-05-16 — five `.aif` uploads stranded at "× staged audio file missing from storage." files were sitting in R2 the whole time at `audio/<id>.aif` but `R2Storage.stream_file_data` / `head_file` / `get_url` / `delete` were all looking at `audio/<id>.aiff` because they normalized via `AudioFormat.from_extension`. `R2Storage.save` stored under the raw extension. drift between two halves of the same module.
+
+**this is a recurring bug class**: five separate incidents over six months ([#332](https://github.com/zzstoatzz/plyr.fm/pull/332), [#797](https://github.com/zzstoatzz/plyr.fm/pull/797), [#849](https://github.com/zzstoatzz/plyr.fm/pull/849), [#1202](https://github.com/zzstoatzz/plyr.fm/pull/1202), and woody.fm) where save and read disagreed about the extension to use. #797 (2026-01-25) flipped save to the raw filename extension to fix a DB-stored-`'aiff'`-but-file-is-`.aif` case, but forgot to update the readers — that's the regression woody.fm tripped four months later.
 
 **what shipped**:
-- **#1393** (aila — first external PR merged): `DOCKET_URL` default flips from `""` to `"memory://"` so `just backend run` works against an in-process queue out of the box. production / staging override via env var, unchanged
-- **#1394**: new `frontend/.env.example` with `PUBLIC_API_URL=http://localhost:8001`; `docs/public/contributing.md` and `docs/internal/local-development/setup.md` now include `cp frontend/.env.example frontend/.env` in the quickstart
-- **#1395**: ruff-format pass on #1393 to keep the tree clean
+- new `backend/src/backend/storage/keys.py`: `AudioKey` / `ImageKey` frozen dataclasses. Construct via `from_filename(file_id, filename)` at upload time or `for_file(file_id, file_type)` when rehydrating from the DB. `__post_init__` validates against `AudioFormat` / `ImageFormat`. `.key` property is the single source of truth.
+- `r2.py`: every key-construction site (19 of them, audited end-to-end) goes through one of those types. save returns `file_id`; readers take `(file_id, file_type)` and construct the key internally. Public protocol stays compatible, no callsite migration.
+- `AudioFormat.all_stored_extensions()` yields every extension we might find in R2 **including aliases** (`.aif` AND `.aiff`). Fallback-scan paths in `delete` / `get_url` use it; old code iterated `AudioFormat` directly and silently skipped `.aif` because `.aiff` is the canonical enum value.
+- **test fixture hygiene**: `generate_drone` now applies a random phase offset per call (callers needing determinism opt in via `phase_offset_rad=0.0` or `deterministic=True`). This matters because the existing `test_upload_aif` integration test passed against staging at 06:04 UTC on the same day prod users were hitting the bug at 18:42 UTC. The deterministic fixture (2-second A4 drone, identical content) hashed to the same `file_id` every run; staging R2 still had a pre-#797 `audio/<drone-file-id>.aiff` blob from when save used canonical extensions. The buggy reader was finding that stale blob and reporting success for months.
 
-**why it matters**: the contribution path now works end-to-end without insider knowledge. every new contributor between #1394 landing and the next regression will find what aila had to discover by reading source. external PR #1393 also validated that #1373's `CONTRIBUTING.md` actually gets people to the right place.
-
----
-
-#### upload outage cluster — streaming end-to-end + ops backstops (PRs #1389, #1390, #1391, May 10–12)
-
-**why**: production was silently broken from **2026-05-06 18:56 UTC → 2026-05-10 19:02 UTC** — almost 4 days. every track upload stranded at "uploading to storage… 100%" forever. `POST /tracks/` returned 200 and queued a `run_track_upload` task, but the docket worker process group was OOM-dead and nothing was draining the queue. discovered by @cameron.stream tweeting about it, **not** by any internal alerting. 9 stranded users. full postmortem at `docs/internal/retrospectives/2026-05-10-worker-oom-loop-streaming.md`.
-
-**root cause was structural**: the upload pipeline buffered the **entire audio file** in worker memory at four distinct points (R2 read, transcode result, PDS `uploadBlob`, CLAP embedding base64). with `concurrency=10` and post-upload fan-out, each in-flight upload held the bytes 3–5× simultaneously. on the cold-start backlog drain after a deploy, a long-form upload OOM-killed the 2 GB worker. fly's default `restart.policy = on-failure max_retries = 10` gave up after 10 consecutive OOMs and left the machine `stopped`.
-
-**what shipped** (three PRs, layered):
-
-1. **#1389 — structural fix: stream audio end-to-end**
-   - `StorageProtocol.stream_file_data()` (async iter of chunks) + `head_file()` (for Content-Length); new `_signed_streaming_post` helper that supports DPoP retries with body factories (upstream `make_authenticated_request` exhausts an async iterator on its inner retry)
-   - transcoder client streams response → `/tmp` via `httpx.AsyncClient.stream` + `aiofiles`; `_transcode_audio` and `_upload_to_pds` stream R2 → /tmp / PDS uniformly. `TranscodeInfo.transcoded_data: bytes` removed entirely
-   - Modal CLAP service now accepts `audio_url` and Range-fetches the first ~12 MB itself (model only uses the first 30 s); the worker no longer downloads or base64-encodes
-   - `migrate-to-PDS`, `restore-revision`, and PDS backfill task all moved off `get_file_data`
-   - **regression test**: 60-min mono WAV (~150 MB) generated via ffmpeg at fixture time, uploaded through the real API, polled to completion. future PRs that re-buffer fail CI instead of an angry user tweet. CI integration-tests timeout 15 → 30 min to accommodate it
-   - **also imports 19 historical retros** from local `sandbox/` into `docs/internal/retrospectives/` — convention has existed since 2025-11 but nothing was reviewable / cross-linkable until now
-   - **post-merge action**: redeploy Modal CLAP service (`uvx modal deploy services/clap/app.py`); `audio_b64` path kept for backwards-compat so redeploy can lag merge
-
-2. **#1390 — never-give-up worker restart + silence alert runbook**
-   - `backend/fly.toml`: scoped `[[restart]]` block for `processes = ["worker"]` with `policy = "always"` (was on-failure / max_retries=10). singleton consumer of the upload queue has no scenario where giving up is correct; worst case is a noisy restart loop, which is what the silence alert catches
-   - `app` keeps fly's default (it has HTTP health checks + redundancy)
-   - new runbook `docs/internal/runbooks/worker-silence-alert.md`: logfire saved query that fires when (1) the HTTP API accepted ≥1 `POST /tracks/` in a 5-min window AND (2) the worker emitted **zero** task-execution spans. condition (2) is the load-bearing part — "queue is being added to but nothing is being executed" is the exact shape of the May 6 failure. saved-query wiring is a manual one-time UI step; the runbook is reviewable
-
-3. **#1391 — stuck-job reaper (symptom-side detector)**
-   - direct user-symptom check: a `jobs` row in `status='processing'` whose `updated_at` is >10 min old is, by definition, a user staring at a stuck progress bar — regardless of why
-   - `jobs` schema gains `file_id` / `file_type` / `is_gated` (nullable) populated by both upload entry points after staging, so the reaper deletes the staged R2 blob from the **right bucket** before failing the row. composite index `idx_jobs_reaper_scan` on `(type, status, updated_at)`
-   - new docket Perpetual at `backend/_internal/tasks/reaper.py`, runs every 60 s. marks row failed → best-effort R2 cleanup → sends **one batched bsky DM per reap** (not per stuck job) summarizing affected users. batched DM is deliberate: a May-6-style outage would otherwise produce 9 separate DMs and risk bsky rate-limiting
-   - reuses the existing bsky DM client / recipient resolution; no new infra or secrets
-
-**decisions / trade-offs**:
-- streaming chunks vs. presigned-URL pulls: every stage either streams chunks or hands Modal a URL to range-fetch. **no `await body.read()` into bytes anywhere on the audio path.** encoded as a hard rule in agent memory so future PRs can't regress it
-- reaper threshold: 10 min. `updated_at` ticks forward at every phase boundary, so a legitimate slow upload still has fresh `updated_at`. if false-positives appear, either bump to 15/20 OR add a heartbeat ping inside `_signed_streaming_post` (5-line change)
-- reaper marks-failed-immediately, no retry. retry would require storing full upload kwargs on the job row — deferred until we observe a class of recoverable failures
-- one batched DM per reap rather than per stuck job
-
-**still open**: fly worker tcp health check (catches running-but-stuck, not in-scope for the May 6 OOM-kill specifically); upstream `atproto_oauth.OAuthClient` body-factory support (then `_signed_streaming_post` can be removed).
+**tests**: 54 unit tests for `AudioKey` / `ImageKey` (validation, alias preservation, immutability, equality); 24 round-trip tests parametrized over every audio + image extension + alias proving save's key == every reader's key — `('song.aif', 'aif')` is the specific case that would have caught woody.fm; 4 fixture-invariant tests pinning the new randomized-by-default behavior.
 
 ---
 
-#### private playlists v2 + visibility toggle (PRs #1386, #1387, #1388 — superseding closed #1385, May 9–10)
+#### copyright paradigm follow-ups (PRs #1412, May 16; #1421, May 17)
 
-**why**: every other playlist app has a private mode. plyr.fm didn't — every playlist was published to the user's PDS and discoverable. needed a privacy story now, but atproto's permissioned-data substrate ("spaces") is in active development upstream and realistically ~end of summer 2026 ([dholms's spec](https://dholms.leaflet.pub/3mhj6bcqats2o), [PDS branch](https://github.com/bluesky-social/atproto/compare/permissioned-data), [tranquil-pds#72](https://tangled.org/tranquil.farm/tranquil-pds/issues/72)). question to answer: build a forward-looking abstraction that mirrors the substrate so storage swaps cleanly later, or take the simplest app-layer shape and decide migration per-feature when the substrate lands?
+**#1412 — listeners docs refresh**: trimmed the "data sovereignty" prose that was reading as marketing slop; added an inline like-icon example to the intro. one of those edits where killing your darlings tightens the page.
 
-**design evolution — v1 (#1385, closed) → v2 (#1386, merged)**:
-
-v1 (#1385) built a full backend `Space` abstraction: new `spaces` / `space_members` / `space_records` tables mirroring the protocol shape exactly (flat member list, no read/write distinction, no tier column), a `plyr-space://` URI scheme that one-line-swaps to `ats://` when the substrate lands, `get_or_create_personal_space` lazy-creating a single-member space on first private playlist, separate `_internal.spaces` module with `can_read` / membership ops mirroring `com.atproto.space.*` XRPC. ~26 tests across spaces + private-playlists. the bet: build the storage interface today so feature code doesn't change when the substrate ships.
-
-**closed in favor of v2** because the substrate timing is uncertain (the upstream PDS branch is ~30 commits but lexicons aren't stable) and the `Space` abstraction was speculative — no second consumer in this PR. drafts and members-only jams would have validated the abstraction but they aren't built yet, and v1's `Space` shape was pinned to today's reading of an upstream spec that's still being revised. shipping the abstraction now bets that the shape we coded against matches what lands later; getting it wrong is more expensive than a v2-to-substrate migration later when the spec is concrete.
-
-#1384 currently classifies private playlists as "may always stay app-layer; degenerate single-user case" against dholms's framing of permissioned data as a *shared social context* primitive. **that framing is too narrow.** the natural product trajectory for a private playlist is "private → selectively shared with a few people" — that's a multi-member permissioned context, exactly what the substrate is for. so the v2 shape isn't a permanent answer; it's the simplest thing that works for the single-user case today, and the substrate is the right home the moment collaborative-playlist UX shows up. #1384's classification table should be updated to reflect that.
-
-**v2 (#1386) — what shipped**:
-- migration `5c56f12bc84d`: `is_private boolean` + `items_json jsonb` on the existing `playlists` table, `atproto_record_uri` / `atproto_record_cid` nullable. that's the whole storage shape — no new tables
-- create-modal two-card visibility picker (public / private, accent-border selection). private creates skip the PDS round-trip entirely; items live inline in `items_json`
-- every playlist endpoint branches on `is_private`. new `/lists/playlists/{id}/reorder` handles both paths uniformly (replaces the legacy rkey-keyed reorder for playlists)
-- `Playlist.atproto_record_uri` becomes `string | null` end-to-end (TS types + frontend)
-
-**existence-leak hardening** (the part worth the most review — inherited verbatim from #1385's audit, this is the bit a hostile non-member must not be able to walk around):
-
-non-members shouldn't be able to distinguish "exists but I can't read" from "doesn't exist." anything subtler is a leak.
-
-| leak surface | fix | what it would have leaked |
-|---|---|---|
-| mutation endpoints | non-owners get **404, not 403** via `_assert_can_mutate` on all 5 paths (`add_track`, `remove_track`, `reorder`, `update`, `delete`, `upload_cover`) | "this playlist exists" via 403 vs 404 distinguishability |
-| `/search` | `WHERE is_private = false` on the trigram name match | playlist names |
-| `/oembed` | 404 for private (no auth path on this endpoint) | title + owner via twitter/leaflet/bluesky embed preview cards — would have surfaced anywhere the URL was pasted |
-| `/activity` | no `CollectionEvent` emitted for private creates or for adding tracks to private playlists; defense-in-depth `WHERE is_private = false` on the SQL feed query | private playlist existence + composition via the public activity feed |
-| `/playlists/by-uri` | only matches public URIs (private has `atproto_record_uri = NULL`) | resolution of leaked PDS URIs (defensive — private playlists don't write to PDS, so this is theoretically unreachable) |
-| `list_artist_public_playlists` | excludes private regardless of `show_on_profile` setting | profile-page enumeration |
-
-verified-safe paths (audited, no change required): `ingest.py` jetstream/PDS event handlers look up by `atproto_record_uri` which is NULL for private, so private playlists are **invisible to the firehose by construction** — events never match. `/activity/histogram` counts `collection_events` without joining `playlists`, but since we don't emit events for private writes the count isn't biased.
-
-13 e2e tests in `tests/api/test_private_playlists.py` cover the 5 mutation paths, the 6 leak surfaces, plus owner-can-read / non-owner-404 / anonymous-404 / list filters / add+remove+reorder+delete lifecycle.
-
-**#1387 — visibility toggle** (originally deferred in #1385 as "comes alongside artist drafts," landed standalone the same day): extends `PATCH /lists/playlists/{id}` with `is_private`. private→public writes `items_json` to a new PDS list record and clears the JSONB; public→private snapshots current PDS items into `items_json` (preserving order + cids) and best-effort deletes the PDS record. `show_on_profile` resets to false on either transition — visibility changed, the user opts back in if they want. ordering rule: **persist new state → update row → clean up old state**. failures during new-state abort the transition; cleanup failures are logged and tolerated.
-
-**#1388 — UI polish**: the new "make public" / "make private" button no longer stretches like a text input.
-
-**the trade-off we're owning**: app-layer privacy. plyr.fm's backend can read these records by definition — that's true of every "private" feature on every SaaS product, but worth saying explicitly since the rest of the platform is designed around user-owned PDS storage. anything that needs *cryptographic* guarantees against a hostile/compromised plyr backend must wait for the substrate; private playlists today are v0 listener-organization, not security-critical state.
-
-**collaborative playlists are the obvious next step**, and they're the trigger for substrate adoption: "private → selectively shared" is a multi-member permissioned context, exactly the shape dholms's spec serves. when that UX shows up, the migration path is to lift `items_json` onto a shared SpaceRecord and add a member list — which is what v1 (#1385) prefigured, minus the speculation about today's lexicon shape. #1384's substrate-time plan column should reflect "yes, when sharing lands" rather than "may always stay app-layer."
-
-**docs**: `docs/public/listeners.md` now mentions private playlists in passing with the "why it's app-layer for now + substrate on the way" framing (one paragraph after the build-a-playlist step + parenthetical in the feature list).
+**#1421 — README points local-dev at canonical sources**: trimmed the stale setup snippet from the top-level README; the contributing path now lives in CONTRIBUTING.md and docs.plyr.fm. 41-line deletion, 1 line added.
 
 ---
 
-#### cover-art background scrim — readability fix (PR #1381, May 8, closes #1374)
+#### archived — earlier May entries (May 1 – May 13)
 
-**why**: @incognitothief reported that on the track-detail page with *use currently playing track's artwork as background* enabled, title text and *add to queue* were invisible against a light cover. same root cause showed up on home, playlists, albums, embeds, activity, profile pages — every route with text directly on the body background.
-
-**what shipped**: a single layer change rather than patching ~15 transparent-on-body offenders. `body::before` now composites a theme-aware flat-color scrim on top of the cover image inside the same blur (`rgba(10,10,10,0.65)` dark / `rgba(250,250,250,0.65)` light, alpha picked so pure-white covers still hit ≥4.5:1 WCAG AA contrast with `--text-primary`). cover still tiles, blurs, and shows through at 35% transmittance — atmosphere instead of competing with content. user-chosen custom background images are deliberately untouched (explicit aesthetic choice).
-
----
-
-#### artist identity backfill from bsky (PR #1382, May 8)
-
-**why**: artists whose bsky identity changed before #1200 (Jetstream identity-event sync, 2026-03-30) never got their plyr.fm row updated — the consumer didn't exist when those events fired. surfaced today: a user who changed their handle on 2026-03-04 still appears under their old handle two months later. additionally `ingest_identity_update` only syncs `handle` / `pds_url` / `avatar_url`, so an auto-default `display_name` (`== handle` from `ensure_artist_exists`) stays stuck until the user manually touches their profile.
-
-**what shipped**: new admin script `scripts/backfill_artist_identity.py` following the existing backfill shape (uv shebang, asyncio + semaphore, `--dry-run`, `--limit`, `--concurrency`, `--did` for spot fixes). per artist: fetch bsky profile → diff stored row vs profile → apply (or print). `display_name` is **only** updated when it currently equals the stored `handle` (the auto-default marker) so deliberately-set display names are preserved. when `Artist.handle` changes, `UserSession.handle` is updated in lockstep, matching what `ingest_identity_update` does for live events.
-
----
-
-#### default-hide suno + voice memo tag (PR #1383, May 8)
-
-`suno` joins `ai` / `ai-slop` in `DEFAULT_HIDDEN_TAGS` (backend `utilities/tags.py` + frontend `preferences.svelte.ts`) so fresh accounts default to hiding it. existing users keep whatever they have — `DEFAULT_HIDDEN_TAGS` only applies to fresh preference rows; existing users add `suno` from the tag filter UI if they want. `/record` now tags voice captures with `voice memo` (space, matches the normalized form) instead of `voice-memo`.
-
----
-
-#### backlog-maintenance skill (PR #1396, May 13)
-
-new `.claude/skills/backlog-maintenance/SKILL.md` codifying the triage rules that were previously living only in memory. propose-and-wait flow over labels and closes; the strict `good first issue` bar (small scope ≠ good-first — deep state / creds / unsettled product judgment / upstream blockers / "annoying state issues" all disqualify); stale-close heuristics (link dumps without acceptance criteria, superseded work, owner comments indicating a tool has shipped). explicit "if zero candidates exist, say so" — don't stretch the bar. born out of the triage pass that landed `good first issue` on #1348 and closed #494 (pmgfal supersedes it). skill files are repo-checked and shared across contributors; memory files are local-only — moving the rules out of memory makes them reviewable for the next contributor running the skill.
-
----
-
-#### jam deep-link join toast (PR #1378, May 7)
-
-**why**: @hipstersmoothie.com reported that following Tynan's `plyr.fm/jam/0toyxh1w` share link, signing in, and ending up on the homepage looked like the join hadn't worked. logfire spans confirmed the #993 intent-preservation cookie landed him on `/jam/[code]` correctly and `jam.join()` returned 200 — he then re-tapped the share link twice over the next ~90s, each time re-joining, because the home landing gave no acknowledgement.
-
-**what shipped**:
-- `frontend/src/routes/jam/[code]/+page.svelte`: fire `toast.success(\`joined ${host_display_name}'s jam\`)` after a successful page-onMount join, before the existing `goto('/')` to home. falls back to `'joined jam'` if `data.preview` failed to load
-- two-line diff. layout's auto-rejoin path (queue/jam reconnect on every page mount) is unaffected — toast only fires when the user actually arrives at `/jam/[code]`
-
-**why a toast and not a routing change**:
-- there is no jam page UI for authed users — `/jam/[code]` only renders `<p>joining jam...</p>` before `goto('/')`. the actual jam UI is the global queue panel, which `+layout.svelte` already auto-opens on `jam.active` transition
-- so "stay on /jam/[code]" would be staying on an empty page. the gap was acknowledgement, not destination
-
----
-
-#### comic sans actually renders on mobile (PR #1377, May 6)
-
-**why**: the comic sans font option's stack was `'Comic Sans MS', 'Comic Sans', cursive`. iOS and Android don't ship Comic Sans MS, so mobile fell through to the generic `cursive` family — Snell Roundhand on iOS, something else on Android. desktop (macOS/Windows) had Comic Sans MS preinstalled and masked the issue.
-
-**what shipped**:
-- added [Comic Neue](https://fonts.google.com/specimen/Comic+Neue) (free open-source clone) to the Google Fonts preload and to the stack as a pre-cursive fallback
-- desktop with local Comic Sans MS keeps using the local font (no extra fetch); mobile gets Comic Neue
-
----
-
-#### live theme celestial logo — shipped, lived in prod for ~36h, then ripped out (PRs #1375, #1376, #1380, May 6–7)
-
-**arc**: #1375 (May 6, 00:04Z) added a `live_logo_celestial_enabled` opt-in setting that rendered the plyr.fm SVG mark as a location/time-aware sun or moon when live theme was active. #1376 (May 6, 13:43Z, ~13h later) removed the setting and made the celestial layer inherent to live theme — the logo sky belongs to the same product surface as the gradient, a second toggle was the wrong abstraction. both shipped to prod via `just release-frontend-only`. #1380 (May 7, 21:15Z) ripped the celestial layer out entirely — it was live in prod and the user didn't like how it looked once seen at scale on the actual site. rest of live theme (gradient + ambient color from location/weather) is unchanged.
-
-**lesson**: aesthetic calls don't always survive contact with prod. the experiment closed cleanly because the inherent version (#1376) made the revert a delete rather than a deprecation — no `live_logo_celestial_enabled` rows to migrate. fast forward / fast revert is the right shape for visual experiments where staging can't fully predict the live-app feel.
-
----
-
-#### CONTRIBUTING.md (PR #1373, May 5)
-
-added a top-level `CONTRIBUTING.md` pointing at the public docs at `docs.plyr.fm/contributing` and the local `.claude/skills/contribute/SKILL.md` for AI coding assistants. surfaces the contribution path for drive-by visitors who don't otherwise crawl `docs/`.
-
----
-
-#### georgia as default font + deploy-docs misconfig (PR #1371, May 5)
-
-**why**: informal poll favored georgia over the previous mono default. only changes the resolved default for users who never explicitly picked a font; explicit choices (including mono) are preserved by the `?? DEFAULT_FONT` fall-through, since `ui_settings.font_family` is absent from the JSONB until the user sets it.
-
-**what shipped**:
-- `DEFAULT_FONT: 'mono' → 'georgia'` (`preferences.svelte.ts`), `FONT_OPTIONS` reordered to lead with georgia
-- body CSS fallback in `+layout.svelte` updated to Georgia stack (covers the moment before JS sets `--font-family`)
-- docs site `--sl-font` switched to Georgia in `docs/site/src/styles/custom.css`. `--sl-font-system-mono` kept for code blocks
-- accepted: one-frame mono → georgia flash on first post-deploy load for users with stale `localStorage['fontFamily'] === 'mono'` (cache was written from the resolved default, not raw `font_family`)
-
-**incident surfaced during rollout**:
-- merging the PR shipped Georgia to the **app** (staging, then prod via `just release-frontend-only`) but `docs.plyr.fm` kept serving mono
-- diagnosis: `deploy-docs.yml` was succeeding to a Cloudflare Pages project on the **wrong account**. the `CLOUDFLARE_API_TOKEN` GitHub secret had been minted in the Prefect/work account (since 2026-03-06); the workflow was happily deploying into a black-hole project there while `docs.plyr.fm` is bound to the personal-account project (`plyr-fm-docs`, subdomain `plyr-fm-docs-9ac.pages.dev`)
-- the personal-account project had not received a CI deploy since 2026-04-19 (commit `a4977bc2`, the last manual `wrangler` push). luckily only one PR (this one) actually changed `docs/site/**` in that window, so no backlog of stale docs — only the font change was missing
-- fix: rotated `CLOUDFLARE_API_TOKEN` to a new token scoped to the personal account with Pages:Edit, updated `CLOUDFLARE_ACCOUNT_ID` to `3e9ba01cd687b3c4d29033908177072e`, re-ran the workflow. docs.plyr.fm now serves Georgia from a freshly-built bundle
-
-**lesson**:
-- a deploy that "succeeds" but never updates the user-facing surface is almost worse than a failure. consider: a sanity check at the end of `deploy-docs.yml` that GETs `https://docs.plyr.fm/_astro/<known-bundle>.css` (or the fresh hash from the build) and asserts the deploy actually moved the production alias
-
----
-
-#### image pipeline cleanup (PRs #1364-1366, May 3)
-
-**why**: phone JPEGs typically store the sensor in landscape with an EXIF `Orientation` tag asking viewers to rotate at display time. browsers honor it; PIL doesn't. cropped/resized WebP thumbnails came out sideways for any track whose source had a non-identity tag. surfaced as @incognitothief / @zzstoatzz.io's "day and age" cover rendering rotated everywhere except the detail page (which read the unrotated `image_url`).
-
-**what shipped**:
-- **EXIF orientation** (#1364) — `ImageOps.exif_transpose` on upload + thumbnail generation. backfill script (`scripts/backfill_image_orientation.py`) reprocessed historical assets
-- **two upload paths consolidated** (#1365) — `_internal/image_uploads.process_image_upload` (used by edit paths: tracks PATCH, albums, playlists) and `api/tracks/uploads.stage_image_to_storage` (used by the upload pipeline) were two parallel functions doing the same job with subtly different behavior. #1364's `normalize_orientation` only landed in the first one. consolidated, same anti-pattern as #1363's resolver dup
-- **iPhone MPO normalization + backfill fix** (#1366) — iPhone JPEGs are recognized by Pillow as `MPO` (Multi-Picture Object), not `JPEG`. the `_PIL_SAVE_FORMAT` mapping in #1364 was missing `'mpo'`, so `save_format` came back None and `normalize_orientation` silently skipped 13 of 20 affected prod images. also unwrapped storage proxy in the backfill script
-
-**decisions**:
-- backfill is opt-in via script rather than a one-time migration — tracks are content-hashed so re-upload would change keys and break `audioUrl` references in PDS records
-- followed up with two new issues filed today (#1367 auto-purge CF cache when R2 image overwritten, #1368 data integrity for orphan `image_id` refs) — kept as backlog rather than rolled into this cluster
-
----
-
-#### canonical DID storage with read-time profile resolution (PRs #1362-1363, May 3)
-
-**why**: closes #1355. 3 prod tracks (918, 938, 88) rendered "feat." with no name because `track.features` rows had `displayName` (camelCase) but the frontend reads `display_name` (snake_case). root cause was deeper than case: identity metadata (handle, displayName, avatar) was denormalized into both the PDS record AND the DB row, so it drifted on every profile change.
-
-**what shipped**:
-- **lexicon relaxed** — `featuredArtist.required` from `["did","handle"]` → `["did"]`, marked handle/displayName deprecated. consumers should resolve from DID
-- **profile resolver** — new `_internal.atproto.profiles.resolve_dids()`: JOIN artists table → in-process LRU → bsky `getProfile` fallback. `TrackResponse.features` becomes typed `list[FeaturedArtist]`, populated by resolver, never returns raw JSONB
-- **resolver consolidation** (#1363) — found two parallel features-from-handles resolvers drifted apart in error semantics: `resolve_featured_artists` in `_internal/atproto/handles.py` (lenient, used by upload) vs `resolve_feature_handles` in `api/tracks/metadata_service.py` (strict, used by edit). consolidated into one with a configurable `strict` flag, killed ~80 lines of duplication
-
-**decisions**:
-- read-time resolution over write-time normalization — chose to take the resolver hit on every API read rather than rewrite all historical track records. profile changes propagate instantly without backfill
-- LRU + DB-first means most lookups never hit bsky getProfile, so the read-time cost is negligible after warmup
-- full design rationale in `docs/internal/plans/featured-artist-references.md`
-
----
-
-#### docket worker on its own fly process group (#1359, May 1)
-
-**why**: 2026-04-30 incident — one user's album upload OOM'd uvicorn and produced 502s + silent logouts. before this PR, `relay-api` ran uvicorn AND a docket Worker in the same process; any background-task OOM took the HTTP server with it. structural fix from #1357.
-
-**what shipped**:
-- two fly process groups: **`app`** runs just uvicorn (opens a Docket *client*, no Worker, sized for HTTP fan-out only); **`worker`** runs just the Docket Worker via dedicated `backend.worker` entrypoint (no HTTP, sized at 2GB for the in-memory upload pipeline)
-- `_internal/background.py` split into `docket_client_lifespan()` and `docket_worker_lifespan()`. `main.py` switches to client lifespan (one-line change). new `backend/worker.py` mirrors observability setup
-- `fly.toml` declares both process groups, machines auto-distribute
-
-**decisions**:
-- a runaway upload task can now only OOM its own machine; HTTP stays up. the cost is one extra always-on worker machine — worth it for clean isolation
+**why**: this section was getting unwieldy. moved entries with detailed write-ups to `.status_history/2026-05.md`. covers the upload-outage streaming cluster (#1389-#1391, ~4-day silent outage discovered via @cameron.stream's tweet), the first external contribution (#1393-#1395, @ailawav.bsky.social), private playlists v2 (#1386-#1388, design collapsed from v1's Space abstraction), cover-art scrim (#1381), artist identity backfill (#1382), suno/voice-memo tag defaults (#1383), the backlog-maintenance skill (#1396), jam deep-link toast (#1378), comic-sans-on-mobile (#1377), the celestial-logo experiment shipped-then-ripped (#1375/#1376/#1380), CONTRIBUTING.md (#1373), georgia-default-font + the deploy-docs misconfig surfaced during rollout (#1371), image pipeline cleanup (#1364-#1366), canonical DID storage with read-time profile resolution (#1362-#1363), and the docket worker process-group split (#1359).
 
 ---
 
@@ -437,27 +277,21 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
-**header polish cluster** (#1429→#1431, frontend-only deploy May 23): desktop got the top-left info-icon affordance mobile has had forever — single asterisk (`✻`) glyph, consolidated so the icon's menu is the only surface for stats/links (the previous inline social-link cluster was duplicating what the menu already contained). New `--text-elevation` token + global `.section-title` class gives home-page section h2s a subtle floating drop-shadow. Escape now closes the feedback modal and the more/links menu (matching `AudioRevisionsSheet` / `BottomSheet`). The `.section-title` class + `--text-elevation` token are positioned for extension to settings/portal/costs h2s and other page-hero titles in a follow-up polish PR.
+**copyright paradigm — indiemusi.ch alpha shipped behind `copyright-paradigm` flag** (#1400→#1411, May 14–16): plyr.fm's first opt-in copyright paradigm. flagged tracks write `ch.indiemusi.alpha.song` + `recording` records to the user's PDS alongside the `fm.plyr.track` and route audio through the existing supporter-gated storage path (private R2, auth-proxied, no PDS blob). Three foundational PRs (#1400 phase 1 config + record writers, #1401 portal section + OAuth scope-upgrade plumbing, #1402 upload + edit forms + per-track endpoints), five follow-ups (#1403 review fixes including the load-bearing P1.1 audio migration on edit-time toggle, #1404 IPI/ISWC/ISRC format validators, #1405 oauth-metadata scope coupling lock, #1407 atprotofans check narrowed, #1409 the publishingOwner record manager with merge-preserve writes after Hilke flagged the duplicate-on-existing-record case), and finally #1410 the feature flag itself so the merged code ships to prod dormant. #1411 disconnect-is-DB-only is the cleanup. **Rollout shape**: flag-on for own DID, dogfood, broaden to Hilke + partners, then drop the flag. The merge-preserve write contract (`fetch fresh from PDS → strip known modeled keys → spread validated input back`) is the reusable pattern — unknown fields preserved, individual↔company switches actually clear stale state, blanking a field removes it.
+
+**typed R2 storage keys close a 6-month recurring bug class** (#1413, May 17): woody.fm's `.aif` uploads stranded because `save` stored at `audio/<id>.aif` while every reader looked at `audio/<id>.aiff`. Same drift bit four prior times (#332, #797, #849, #1202). New `AudioKey` / `ImageKey` frozen dataclasses make save/read mismatch unrepresentable at the type level. 19 R2 callsites audited end-to-end. Bonus: the integration test fixture had been masking the bug for months because the deterministic A4 drone hashed to the same file_id every run and found a pre-#797 stale R2 blob — now defaults to a random phase offset per call.
+
+**header polish cluster** (#1429→#1431, frontend-only deploy May 23): desktop got the top-left info-icon affordance mobile has had forever — single asterisk (`✻`) glyph in the brand font, consolidated so the menu is the only surface for stats/links. New `--text-elevation` token + global `.section-title` class gives home-page section h2s a subtle floating drop-shadow. Escape now closes the feedback modal and the more/links menu.
 
 **notification + now-playing fixes traced from "woody isn't getting DMs"** (#1425, #1426, release 2026.0522.162731, May 22): the May 17 production deploy started one minute before the bsky.social WAF block hit, so every process came up with a 403'd `NotificationService.setup()` and silently dropped all subsequent DMs. Compounding bug: `_send_track_notification` was marking `notification_sent = true` unconditionally even on the no-op "recipient not set" path, locking out Jetstream's identity-update retry route. #1425 adds `ensure_ready()` (1-min cooldown re-setup) and conditional mark; 13 stranded tracks in the affected window still need a one-off backfill. Same investigation surfaced #1426 — `nowPlaying.report()` was racing its own throttle, producing 5–9 simultaneous `POST /now-playing/` per 10s bucket flip on every active listener. Two-line fix moves the throttle state-update before the `await`.
 
-**bsky.social WAF JA4 incident resolved upstream** (#1414–#1419, May 17): 18-hour outage where every new `*.bsky.social` login + every token refresh against `bsky.social` returned 403. Bluesky's WAF auto-blocked the generic JA4 fingerprint shared by `uv:python3.12-bookworm-slim + httpx` (us + many other Python services) after a different app with the same fingerprint surged createSession traffic. Bluesky platform team manually undid the rule + is improving precision. #1419 ships a friendly 503 (instead of stack-trace 400) for the next time something of this shape happens. #1414 (handle-resolution fallback) reverted same day because it only papered over one of two failure legs. Investigation comment posted on bluesky-social/atproto#4764 with full reproduction matrix.
+**bsky.social WAF JA4 incident resolved upstream** (#1414–#1419, May 17): 18-hour outage where every new `*.bsky.social` login + every token refresh against `bsky.social` returned 403. Bluesky's WAF auto-blocked the generic JA4 fingerprint shared by `uv:python3.12-bookworm-slim + httpx` (us + many other Python services) after a different app with the same fingerprint surged createSession traffic. Bluesky platform team manually undid the rule + is improving precision. #1419 ships a friendly 503 (instead of stack-trace 400) for the next time something of this shape happens. #1414 (handle-resolution fallback) reverted same day because it only papered over one of two failure legs.
 
-**sheets unified + Instagram-style swipe** (#1423, closes #1348, May 17): one `BottomSheet.svelte` frame replaces five hand-rolled sheet implementations. Gesture-from-anywhere with scroll-aware activation (only dismisses when the inner scroller is at top, otherwise scroll consumes the gesture). `LikersSheet` and `AudioRevisionsSheet` migrated; the latter keeps its desktop-modal mode via `centerOnDesktop`.
+**sheets unified + Instagram-style swipe** (#1423, closes #1348, May 17): one `BottomSheet.svelte` frame replaces five hand-rolled sheet implementations. Gesture-from-anywhere with scroll-aware activation (only dismisses when the inner scroller is at top, otherwise scroll consumes the gesture). `LikersSheet` and `AudioRevisionsSheet` migrated.
 
-**developer tooling**: `traffic-overview` skill (#1427, May 22) gives a multi-horizon Logfire + Cloudflare MCP read with the access ceilings documented (14d Logfire query window, ~30d CF retention). Built empirically; OAuth-driven so no per-script tokens.
+**developer tooling**: `traffic-overview` skill (#1427, May 22) gives a multi-horizon Logfire + Cloudflare MCP read with access ceilings documented (14d Logfire query window, ~30d CF retention).
 
-**first external contribution merged**: @ailawav.bsky.social (aila / @AilaScott on GitHub) shipped #1393 — a `DOCKET_URL=memory://` default so local dev doesn't require Redis. follow-ups #1394 (`frontend/.env.example` + setup-guide updates) and #1395 (ruff cleanup) closed the surrounding DX gaps she hit on first run, so the contribution path now works end-to-end without insider knowledge.
-
-**upload outage class fully closed**. the 2026-05-06 → 05-10 silent OOM-loop outage (4 days, 9 stranded users, discovered via @cameron.stream's tweet not internal alerting) is fixed end-to-end across three PRs: #1389 streams audio at every stage (R2 → worker → PDS, R2 → worker → Modal, transcode in/out via `/tmp` + `aiofiles`) with a 60-min long-form regression test guarding the buffer points; #1390 sets `restart.policy = always` on the worker process group + adds a logfire silence-alert runbook keyed on "queue is being added to but nothing is being executed"; #1391 adds a docket-Perpetual reaper that fails any upload job stuck in `processing` >10 min, cleans up its R2 blob (new `file_id` / `file_type` / `is_gated` cleanup-hint columns on `jobs`), and sends one batched bsky DM per reap. the "audio must stream end-to-end" rule is encoded in agent memory so future PRs can't regress it.
-
-**private playlists shipped — and the design collapsed from v1 to v2 mid-flight**: closed PR #1385 built a full backend `Space` abstraction (tables mirroring atproto's permissioned-data spec, `plyr-space://` URI scheme, one-line-swap migration story) — closed in favor of #1386, which is just `is_private boolean` + `items_json jsonb` on the existing `playlists` table. the lesson: don't pre-build abstractions against a spec that's still being revised upstream; ship the simplest shape that works and migrate when the substrate is concrete. v2 carries the same 6-surface existence-leak audit (mutations 404 not 403, `/search` / `/oembed` / `/activity` / `/by-uri` / `list_artist_public_playlists` all filter or refuse; ingest.py is firehose-invisible by construction). #1387 added the post-creation toggle (private→public publishes a PDS record; public→private snapshots into `items_json` and best-effort deletes); #1388 fixed the toggle button's text-input stretch. **collaborative playlists are the obvious substrate trigger**: "private → selectively shared with a few people" is a multi-member permissioned context, which is exactly what dholms's spec is for — #1384's classification of private playlists as "may always stay app-layer; degenerate single-user case" should be updated to reflect that.
-
-**polish + DX**: cover-art background scrim (#1381, closes #1374) — single-layer fix for ~15 sites where transparent foreground collapsed against light covers; artist identity backfill from bsky (#1382) for rows missed by the pre-#1200 identity-event window; suno hidden by default + voice memo tag normalization (#1383); backlog-maintenance skill (#1396) so the strict good-first-issue rules live in the repo not in memory.
-
-**carried forward from prior cycles**: jam deep-link join toast (#1378), mobile Comic Sans fallback (#1377), celestial logo experiment shipped + lived ~36h + ripped (#1375→#1376→#1380), `CONTRIBUTING.md` (#1373), georgia default font + deploy-docs misconfig fix (#1371), image pipeline cleanup (#1364-1366), canonical DID storage for featured artists (#1362-1363), docket worker on its own fly process group (#1359).
-
-**next**: backfill DMs for the 13 stranded tracks (2026-05-17 19:01 → 2026-05-18 17:37 UTC, `notification_sent = true` with no DM sent); fly worker tcp health check (running-but-stuck detector — symptom-side complement to the silence alert); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop the `_signed_streaming_post` helper); deploy-docs sanity check (assert prod alias moved); #1314/#1315 (audio replace race follow-ups); `config.py` decomposition.
+**next**: enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); backfill DMs for the 13 stranded tracks (`UPDATE tracks SET notification_sent = false WHERE id IN (...)`); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
 
 ### known issues
 - 13 production tracks created between 2026-05-17 19:01 UTC and 2026-05-18 17:37 UTC are marked `notification_sent = true` with no DM ever sent (collateral damage of the WAF-window deploy + the unconditional-mark bug now fixed in #1425). Eligible for a one-off backfill via `UPDATE tracks SET notification_sent = false WHERE id IN (...)` against the affected window — Jetstream's identity-update consumer will pick them up, or fire the hook directly via a script.
@@ -594,5 +428,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-23 (header polish cluster shipped to prod via just release-frontend-only: #1429 added the mobile-equivalent info icon to desktop top-left + a `.section-title` class with `--text-elevation` token for floating drop-shadow on home h2s; #1430 dropped the redundant inline social-links cluster and swapped to a typographic asterisk glyph ✻ rendered in the brand font; #1431 wired window-level Escape handlers into FeedbackModal + LinksMenu).
+this is a living document. last updated 2026-05-24 (status maintenance — added detailed write-ups for the copyright paradigm cluster #1400→#1411 and the typed-R2-keys fix #1413 that had shipped May 14–17 without yet making it into STATUS.md; archived the May 1–13 detailed entries to `.status_history/2026-05.md`).
 
