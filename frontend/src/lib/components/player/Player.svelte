@@ -544,6 +544,8 @@
 				// only set shouldAutoPlay if this was a local update (not from another tab's broadcast)
 				if (queue.lastUpdateWasLocal) {
 					shouldAutoPlay = true;
+				} else {
+					player.paused = true;
 				}
 			} else if (indexChanged) {
 				player.currentTime = 0;
