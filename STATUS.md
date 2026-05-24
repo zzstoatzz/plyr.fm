@@ -47,6 +47,26 @@ plyr.fm should become:
 
 ### May 2026
 
+#### header polish cluster — desktop info icon + floating section titles + Escape-to-close (PRs #1429→#1431, frontend-only deploy May 23)
+
+**why**: three QoL items rolled into one frontend deploy.
+
+1. The mobile header's top-left info icon (opens a modal with platform stats + bsky/source/docs/status/report links) had no desktop equivalent — desktop users couldn't see platform stats anywhere.
+2. Section titles ("top tracks", "artists you know", "tracks") on the home page were flat against busy backgrounds (especially over custom-background images or the live ambient theme).
+3. Neither the feedback modal nor the more/links menu closed on Escape, even though `AudioRevisionsSheet` / `BottomSheet` already established that pattern.
+
+**what shipped**:
+- **#1429** (initial cut): added `<LinksMenu />` to `.margin-left` on desktop and made the 4 existing bsky/status/tangled/docs social icons coexist with it; added a new `--text-elevation` CSS variable (theme-aware: stronger on dark, lighter on light) applied via a global `.section-title` class on the three home-page h2s.
+- **#1430** (review feedback): dropped the inline social-links cluster — the LinksMenu modal contains those same links, so surfacing them inline next to the icon was redundant. Single info icon is now the only top-left affordance, mirroring the mobile-first pattern. Also swapped the generic SVG circle-info for a typographic asterisk (`✻` U+273B) rendered in the inherited font — shares typography with the rest of the UI, reads as a "footnote/aside" affordance.
+- **#1431**: window-level keydown handler on `FeedbackModal` and `LinksMenu` — Escape closes when open, no-op otherwise. Same pattern already used in `AudioRevisionsSheet` and `BottomSheet`.
+
+**design notes**:
+- The `--text-elevation` variable is positioned as a reusable token. Polish-PR candidates: extend to settings/portal/costs h2s, page-hero titles, dialog titles — once we know the dark-mode shadow (`0 1px 3px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.2)`) reads well on the home page first.
+- Asterisk glyph picked over generic icon, three-dot kebab, and wordmark variants. Trade-off: relies on the user's chosen font (Georgia by default) having a distinctive asterisk — should still be recognizable in mono / Inter / system-ui but may look mundane in some.
+- Volume-control behavior question came up mid-thread (does our volume slider duplicate system volume?): confirmed current behavior is correct — `<audio bind:volume>` is per-element by spec on every platform, matches Spotify/YouTube/Apple Music. The slider is already hidden via `display: none` at `@media (max-width: 768px)` in `PlaybackControls.svelte:425`, so iOS's read-only `audio.volume` quirk is already handled.
+
+---
+
 #### notification + now-playing fixes traced from "woody isn't getting DMs" (PRs #1425, #1426, release 2026.0522.162731, May 22)
 
 **why**: user mentioned during a deploy-prep conversation that they hadn't been getting DMs for new track uploads. Logfire showed the last successful `send_dm` span fired **2026-05-16 21:23 UTC**; zero since. The production release `2026.0517.034304` had deployed at **2026-05-17 03:43 UTC** — **one minute before** the bsky.social WAF JA4 block began (03:44 UTC, per the prior incident entry below). Every process that came up during the WAF window had `NotificationService.setup()` 403 at `bsky.social/xrpc/com.atproto.server.createSession`, silently leaving `recipient_did = None`. Two compounding bugs kept the service broken even after the WAF was lifted:
@@ -417,6 +437,8 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
+**header polish cluster** (#1429→#1431, frontend-only deploy May 23): desktop got the top-left info-icon affordance mobile has had forever — single asterisk (`✻`) glyph, consolidated so the icon's menu is the only surface for stats/links (the previous inline social-link cluster was duplicating what the menu already contained). New `--text-elevation` token + global `.section-title` class gives home-page section h2s a subtle floating drop-shadow. Escape now closes the feedback modal and the more/links menu (matching `AudioRevisionsSheet` / `BottomSheet`). The `.section-title` class + `--text-elevation` token are positioned for extension to settings/portal/costs h2s and other page-hero titles in a follow-up polish PR.
+
 **notification + now-playing fixes traced from "woody isn't getting DMs"** (#1425, #1426, release 2026.0522.162731, May 22): the May 17 production deploy started one minute before the bsky.social WAF block hit, so every process came up with a 403'd `NotificationService.setup()` and silently dropped all subsequent DMs. Compounding bug: `_send_track_notification` was marking `notification_sent = true` unconditionally even on the no-op "recipient not set" path, locking out Jetstream's identity-update retry route. #1425 adds `ensure_ready()` (1-min cooldown re-setup) and conditional mark; 13 stranded tracks in the affected window still need a one-off backfill. Same investigation surfaced #1426 — `nowPlaying.report()` was racing its own throttle, producing 5–9 simultaneous `POST /now-playing/` per 10s bucket flip on every active listener. Two-line fix moves the throttle state-update before the `await`.
 
 **bsky.social WAF JA4 incident resolved upstream** (#1414–#1419, May 17): 18-hour outage where every new `*.bsky.social` login + every token refresh against `bsky.social` returned 403. Bluesky's WAF auto-blocked the generic JA4 fingerprint shared by `uv:python3.12-bookworm-slim + httpx` (us + many other Python services) after a different app with the same fingerprint surged createSession traffic. Bluesky platform team manually undid the rule + is improving precision. #1419 ships a friendly 503 (instead of stack-trace 400) for the next time something of this shape happens. #1414 (handle-resolution fallback) reverted same day because it only papered over one of two failure legs. Investigation comment posted on bluesky-social/atproto#4764 with full reproduction matrix.
@@ -572,5 +594,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-22 (notification + now-playing fixes traced from "woody isn't getting DMs" — #1425 NotificationService.ensure_ready() with 60s-cooldown retry and conditional notification_sent mark; #1426 nowPlaying.report() claims throttle state before await, killing the 5–9-burst-per-10s-bucket race that hit every active listener; both shipped in release 2026.0522.162731. BottomSheet frame + Instagram-style swipe-from-anywhere unifies five hand-rolled sheets (#1423, closes #1348). audio-replace preserves PDS createdAt (#1422). traffic-overview skill gives multi-horizon Logfire + Cloudflare MCP reads with the 14d / ~30d retention ceilings documented (#1427)).
+this is a living document. last updated 2026-05-23 (header polish cluster shipped to prod via just release-frontend-only: #1429 added the mobile-equivalent info icon to desktop top-left + a `.section-title` class with `--text-elevation` token for floating drop-shadow on home h2s; #1430 dropped the redundant inline social-links cluster and swapped to a typographic asterisk glyph ✻ rendered in the brand font; #1431 wired window-level Escape handlers into FeedbackModal + LinksMenu).
 
