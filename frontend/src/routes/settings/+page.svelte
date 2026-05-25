@@ -1197,9 +1197,15 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	}
 
 	.client-btn img {
-		width: 20px;
-		height: 20px;
+		/* external client logos have arbitrary/transparent backgrounds (blacksky's
+		   mark is black and vanishes on dark) — sit them on a constant light tile so
+		   they stay legible in every theme */
+		width: 24px;
+		height: 24px;
+		padding: 2px;
+		box-sizing: border-box;
 		border-radius: var(--radius-sm);
+		background: #fff;
 	}
 
 	.client-btn span {

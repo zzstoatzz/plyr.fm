@@ -1,5 +1,6 @@
 // preferred atproto client — open profiles and records in the app of your choice.
-// the registry below is the single source of truth; add an entry to support a new client.
+// the registry mirrors the shared client list in leaflet-search / status
+// (@zzstoatzz.io); keep it in sync with those rather than inventing entries.
 import { browser } from '$app/environment';
 import { preferences } from '$lib/preferences.svelte';
 
@@ -13,7 +14,7 @@ export interface AtClient {
 
 const BSKY: AtClient = {
 	value: 'bsky',
-	label: 'Bluesky',
+	label: 'bluesky',
 	iconUrl: 'https://web-cdn.bsky.app/static/apple-touch-icon.png',
 	profileUrl: (h) => `https://bsky.app/profile/${h}`
 };
@@ -21,16 +22,22 @@ const BSKY: AtClient = {
 export const AT_CLIENTS: AtClient[] = [
 	BSKY,
 	{
-		value: 'deer',
-		label: 'deer.social',
-		iconUrl: 'https://deer.social/favicon.ico',
-		profileUrl: (h) => `https://deer.social/profile/${h}`
-	},
-	{
 		value: 'blacksky',
-		label: 'Blacksky',
+		label: 'blacksky',
 		iconUrl: 'https://blacksky.community/static/apple-touch-icon.png',
 		profileUrl: (h) => `https://blacksky.community/profile/${h}`
+	},
+	{
+		value: 'witchsky',
+		label: 'witchsky',
+		iconUrl: 'https://witchsky.app/favicon.ico',
+		profileUrl: (h) => `https://witchsky.app/profile/${h}`
+	},
+	{
+		value: 'reddwarf',
+		label: 'red dwarf',
+		iconUrl: 'https://reddwarf.app/redstar.png',
+		profileUrl: (h) => `https://reddwarf.app/profile/${h}`
 	},
 	{
 		value: 'pdsls',
