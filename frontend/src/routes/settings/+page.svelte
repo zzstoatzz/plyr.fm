@@ -538,26 +538,6 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 
 				<div class="setting-row">
 					<div class="setting-info">
-						<h3>open links in</h3>
-						<p>choose which app profile and record links open in across plyr.fm</p>
-					</div>
-					<div class="client-controls">
-						{#each AT_CLIENTS as client}
-							<button
-								class="client-btn"
-								class:active={currentClient === client.value}
-								onclick={() => selectClient(client.value)}
-								title={client.label}
-							>
-								<img src={client.iconUrl} alt="" width="20" height="20" loading="lazy" />
-								<span>{client.label}</span>
-							</button>
-						{/each}
-					</div>
-				</div>
-
-				<div class="setting-row">
-					<div class="setting-info">
 						<h3>background image</h3>
 						<p>set a custom background image (URL){#if usePlayingArtwork} — used as fallback when nothing is playing{/if}</p>
 					</div>
@@ -708,6 +688,25 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 						<span>authorization expired — disable and re-enable to reconnect</span>
 					</div>
 				{/if}
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>open links in</h3>
+						<p>choose which app profile and record links open in across plyr.fm</p>
+					</div>
+					<div class="client-controls">
+						{#each AT_CLIENTS as client}
+							<button
+								class="client-btn"
+								class:active={currentClient === client.value}
+								onclick={() => selectClient(client.value)}
+								title={client.label}
+							>
+								<img src={client.iconUrl} alt="" width="20" height="20" loading="lazy" />
+								<span>{client.label}</span>
+							</button>
+						{/each}
+					</div>
+				</div>
 			</div>
 		</section>
 
