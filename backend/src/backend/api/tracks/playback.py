@@ -48,9 +48,7 @@ class PlayRequest(BaseModel):
     ref: str | None = None
 
 
-def _listener_key(
-    request: Request, response: Response, session: Session | None
-) -> str:
+def _listener_key(request: Request, response: Response, session: Session | None) -> str:
     """stable per-listener key for play-count dedup.
 
     authenticated listeners key on their DID; anonymous listeners key on a

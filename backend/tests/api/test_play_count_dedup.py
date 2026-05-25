@@ -192,9 +192,7 @@ async def test_dedup_ttl_clamped_to_track_duration(
     duration: int | None,
     expected_ttl: int,
 ) -> None:
-    track = await _make_track(
-        db_session, suffix=f"ttl{duration}", duration=duration
-    )
+    track = await _make_track(db_session, suffix=f"ttl{duration}", duration=duration)
 
     async with _client(authed_app) as client:
         await client.post(f"/tracks/{track.id}/play")
@@ -213,9 +211,7 @@ async def test_counts_when_redis_unavailable(
     def boom() -> object:
         raise RuntimeError("redis down")
 
-    monkeypatch.setattr(
-        "backend.api.tracks.playback.get_async_redis_client", boom
-    )
+    monkeypatch.setattr("backend.api.tracks.playback.get_async_redis_client", boom)
 
     async with _client(authed_app) as client:
         first = await client.post(f"/tracks/{track.id}/play")
