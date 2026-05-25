@@ -1,6 +1,10 @@
 import type { Track } from './types';
 import { API_URL } from './config';
 
+// natural timeupdate steps are sub-second; a larger jump is a seek, scrub, or a
+// restored hydration position — none of which is listened time.
+const PLAY_PROGRESS_SEEK_THRESHOLD_S = 5;
+
 // global player state using Svelte 5 runes
 class PlayerState {
 	currentTrack = $state<Track | null>(null);
@@ -19,6 +23,12 @@ class PlayerState {
 	// synchronous guard to prevent duplicate play count requests
 	// (reactive state updates are batched, so we need this to block rapid-fire calls)
 	private _playCountPending: number | null = null;
+
+	// accumulated *listened* time for the current track (seconds). only advances
+	// while playing and stepping forward naturally, so seeks and restored
+	// hydration positions never trip the play-count threshold on their own.
+	private _playedSeconds = 0;
+	private _lastProgressTime: number | null = null;
 
 	// lock play counting during track transitions to prevent spurious fires
 	// from stale currentTime/duration values before new audio loads
@@ -54,6 +64,18 @@ class PlayerState {
 			return;
 		}
 
+		// accumulate real listened time from forward playback only. a seek or a
+		// hydration position-restore jumps currentTime with nothing listened, so
+		// large or backward steps (and any step while paused) are ignored.
+		const now = this.currentTime;
+		if (this._lastProgressTime !== null) {
+			const delta = now - this._lastProgressTime;
+			if (!this.paused && delta > 0 && delta <= PLAY_PROGRESS_SEEK_THRESHOLD_S) {
+				this._playedSeconds += delta;
+			}
+		}
+		this._lastProgressTime = now;
+
 		// synchronous check to prevent race condition from batched reactive updates
 		if (this._playCountPending === this.currentTrack.id) {
 			return;
@@ -62,7 +84,7 @@ class PlayerState {
 		// threshold: minimum of 30 seconds or 50% of track duration
 		const threshold = Math.min(30, this.duration * 0.5);
 
-		if (this.currentTime >= threshold) {
+		if (this._playedSeconds >= threshold) {
 			// set synchronous guard immediately (before async fetch)
 			this._playCountPending = this.currentTrack.id;
 			this.playCountedForTrack = this.currentTrack.id;
@@ -85,6 +107,8 @@ class PlayerState {
 		this.playCountedForTrack = null;
 		this._playCountPending = null;
 		this._playCountLocked = true;
+		this._playedSeconds = 0;
+		this._lastProgressTime = null;
 	}
 
 	unlockPlayCount() {

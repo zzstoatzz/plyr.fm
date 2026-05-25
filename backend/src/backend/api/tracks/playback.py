@@ -2,10 +2,12 @@
 
 import asyncio
 import logging
+import secrets
 from typing import Annotated
 
+import logfire
 from atproto_oauth.scopes import ScopesSet
-from fastapi import Body, Depends, HTTPException, Query
+from fastapi import Body, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,16 +27,70 @@ from backend.models import (
 )
 from backend.schemas import PlayCountResponse, TrackResponse
 from backend.utilities.aggregations import get_like_counts, get_track_tags
+from backend.utilities.redis import get_async_redis_client
 
 from .router import router
 
 logger = logging.getLogger(__name__)
+
+# play-count dedup: a listener can only add one counted play per track within
+# roughly one track-length — you cannot genuinely finish the same track twice
+# inside its own duration. anonymous listeners key on a first-party cookie.
+_PLAY_ID_COOKIE = "plyr_play_id"
+_PLAY_DEDUP_MIN_TTL_S = 30
+_PLAY_DEDUP_MAX_TTL_S = 60 * 60
+_PLAY_DEDUP_DEFAULT_TTL_S = 5 * 60
 
 
 class PlayRequest(BaseModel):
     """optional request body for play endpoint."""
 
     ref: str | None = None
+
+
+def _listener_key(request: Request, response: Response, session: Session | None) -> str:
+    """stable per-listener key for play-count dedup.
+
+    authenticated listeners key on their DID; anonymous listeners key on a
+    long-lived first-party cookie (best-effort — a cleared cookie counts again).
+    """
+    if session:
+        return f"did:{session.did}"
+    if anon_id := request.cookies.get(_PLAY_ID_COOKIE):
+        return f"anon:{anon_id}"
+    anon_id = secrets.token_urlsafe(16)
+    is_localhost = bool(settings.frontend.url) and settings.frontend.url.startswith(
+        "http://localhost"
+    )
+    response.set_cookie(
+        key=_PLAY_ID_COOKIE,
+        value=anon_id,
+        httponly=True,
+        secure=not is_localhost,
+        samesite="lax",
+        max_age=180 * 24 * 60 * 60,
+    )
+    return f"anon:{anon_id}"
+
+
+async def _claim_play(listener_key: str, track_id: int, ttl_seconds: int) -> bool:
+    """claim a play for (listener, track), allowing one per ``ttl_seconds`` window.
+
+    fails open (counts the play) when redis is unavailable so play counting never
+    hard-depends on the cache.
+    """
+    try:
+        claimed = await get_async_redis_client().set(
+            f"play-count:{listener_key}:{track_id}", "1", nx=True, ex=ttl_seconds
+        )
+    except Exception as exc:
+        logfire.warning(
+            "play-count dedup unavailable; counting play",
+            track_id=track_id,
+            error=str(exc),
+        )
+        return True
+    return bool(claimed)
 
 
 async def _resolve_track(
@@ -105,11 +161,17 @@ async def get_track(
 @router.post("/{track_id}/play")
 async def increment_play_count(
     track_id: int,
+    request: Request,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
     session: Session | None = Depends(get_optional_session),
     body: PlayRequest | None = Body(default=None),
 ) -> PlayCountResponse:
-    """Increment play count for a track (called after 30 seconds of playback).
+    """Increment play count for a track (called after sustained playback).
+
+    Deduplicated per listener per track for roughly one track-length, so
+    refreshing other tabs (or replaying the same position) does not inflate the
+    count while genuine repeat listens still count.
 
     If user has teal.fm scrobbling enabled and has the required scopes,
     also writes play record to their PDS.
@@ -125,6 +187,14 @@ async def increment_play_count(
 
     if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
+
+    ttl = max(
+        _PLAY_DEDUP_MIN_TTL_S,
+        min(track.duration or _PLAY_DEDUP_DEFAULT_TTL_S, _PLAY_DEDUP_MAX_TTL_S),
+    )
+    if not await _claim_play(_listener_key(request, response, session), track_id, ttl):
+        logfire.info("play count deduped", track_id=track_id)
+        return PlayCountResponse(play_count=track.play_count)
 
     track.play_count += 1
 
