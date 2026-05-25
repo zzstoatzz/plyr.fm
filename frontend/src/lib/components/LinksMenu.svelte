@@ -304,13 +304,15 @@
 	}
 
 	.menu-icon-img {
+		/* light tile so any client logo (e.g. blacksky's black mark) stays legible */
 		border-radius: var(--radius-sm);
-		opacity: 0.7;
-		transition: opacity 0.2s, box-shadow 0.2s;
+		background: #fff;
+		padding: 2px;
+		box-sizing: border-box;
+		transition: box-shadow 0.2s;
 	}
 
 	.menu-link:hover .menu-icon-img {
-		opacity: 1;
 		box-shadow: 0 0 0 2px var(--accent);
 	}
 
