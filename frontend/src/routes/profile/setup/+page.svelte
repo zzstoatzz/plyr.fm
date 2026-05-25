@@ -181,9 +181,9 @@
 					/>
 					<p class="hint">
 						{#if fetchingAvatar}
-							discovering your bluesky avatar...
+							discovering your avatar...
 						{:else}
-							we'll try to use your bluesky avatar automatically
+							we'll try to use your existing avatar automatically
 						{/if}
 					</p>
 				</div>

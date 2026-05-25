@@ -126,7 +126,7 @@
 					<HandleAutocomplete
 						bind:value={handle}
 						onSelect={handleSelect}
-						placeholder="you.bsky.social"
+						placeholder="you.example.com"
 						disabled={loading}
 					/>
 					<div class="handle-hint">

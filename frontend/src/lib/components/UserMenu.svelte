@@ -270,7 +270,7 @@
 									<HandleAutocomplete
 										bind:value={newHandle}
 										onSelect={handleSelectHandle}
-										placeholder="handle.bsky.social"
+										placeholder="you.example.com"
 										disabled={addingAccount}
 									/>
 									<button
