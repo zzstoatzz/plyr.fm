@@ -8,6 +8,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences, FONT_OPTIONS, type Theme, type FontFamily } from '$lib/preferences.svelte';
+	import { AT_CLIENTS, DEFAULT_AT_CLIENT } from '$lib/atclients';
 	import { ambient } from '$lib/ambient.svelte';
 	import { queue } from '$lib/queue.svelte';
 
@@ -22,6 +23,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	let currentTheme = $derived(preferences.theme);
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let currentFont = $derived(preferences.fontFamily);
+	let currentClient = $derived(preferences.atprotoClient ?? DEFAULT_AT_CLIENT);
 	let autoAdvance = $derived(preferences.autoAdvance);
 	let backgroundImageUrl = $derived(preferences.uiSettings.background_image_url ?? '');
 	let backgroundTile = $derived(preferences.uiSettings.background_tile ?? false);
@@ -59,6 +61,11 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		{ value: 'system', label: 'auto', icon: 'auto' },
 		{ value: 'live', label: 'live', icon: 'live' }
 	];
+
+	function selectClient(value: string) {
+		preferences.updateUiSettings({ atproto_client: value });
+		localStorage.setItem('atprotoClient', value);
+	}
 
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
@@ -525,6 +532,26 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 								onclick={() => selectFont(option.value)}
 							>
 								{option.label}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>open links in</h3>
+						<p>choose which app profile and record links open in across plyr.fm</p>
+					</div>
+					<div class="client-controls">
+						{#each AT_CLIENTS as client}
+							<button
+								class="client-btn"
+								class:active={currentClient === client.value}
+								onclick={() => selectClient(client.value)}
+								title={client.label}
+							>
+								<img src={client.iconUrl} alt="" width="20" height="20" loading="lazy" />
+								<span>{client.label}</span>
 							</button>
 						{/each}
 					</div>
@@ -1133,6 +1160,52 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		border-color: var(--accent);
 		color: var(--accent);
+	}
+
+	/* atproto client controls */
+	.client-controls {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		flex-shrink: 0;
+	}
+
+	.client-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0.5rem 0.6rem;
+		background: var(--bg-primary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.15s;
+		min-width: 64px;
+	}
+
+	.client-btn:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.client-btn.active {
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.client-btn img {
+		width: 20px;
+		height: 20px;
+		border-radius: var(--radius-sm);
+	}
+
+	.client-btn span {
+		font-size: 0.65rem;
+		text-transform: lowercase;
+		letter-spacing: 0.02em;
 	}
 
 	/* background controls */

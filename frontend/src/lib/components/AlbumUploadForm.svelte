@@ -9,6 +9,7 @@
 	import { setReturnUrl } from '$lib/utils/return-url';
 	import { preflightAuth } from '$lib/upload-form-stash';
 	import { getServerConfig, API_URL } from '$lib/config';
+	import { profileLink } from '$lib/atclients';
 
 	const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aiff', '.aif', '.flac'];
 	const FILE_INPUT_ACCEPT =
@@ -529,7 +530,7 @@
 			permission, or the content may be removed to keep plyr.fm in
 			compliance. For any questions or concerns, please DM
 			<a
-				href="https://bsky.app/profile/zzstoatzz.io"
+				href={profileLink('zzstoatzz.io')}
 				target="_blank"
 				rel="noopener">@zzstoatzz.io</a
 			> :) have a nice day!

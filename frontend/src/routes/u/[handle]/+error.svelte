@@ -3,36 +3,36 @@
 	import { page } from '$app/stores';
 	import { AtpAgent } from '@atproto/api';
 	import { APP_NAME } from '$lib/branding';
+	import { profileLink } from '$lib/atclients';
 
 	const status = $page.status;
 	const handle = $page.params.handle;
 	const isDid = handle?.startsWith('did:') ?? false;
 
-	let checkingBluesky = $state(false);
-	let blueskyProfileExists = $state(false);
-	let blueskyUrl = $state('');
+	let checking = $state(false);
+	let profileExists = $state(false);
+	let profileUrl = $state('');
 
 	onMount(async () => {
-		// bluesky handle resolution only works with handles, not DIDs
+		// handle resolution only works with handles, not DIDs
 		if (isDid) return;
 
-		// if this is a 404, check if the handle exists on the ATProto network
+		// if this is a 404, check if the handle exists on the atproto network
 		if (status === 404 && handle) {
-			checkingBluesky = true;
+			checking = true;
 			try {
-				// use ATProto SDK for proper handle resolution (works with any PDS)
 				const agent = new AtpAgent({ service: 'https://public.api.bsky.app' });
 				const response = await agent.resolveHandle({ handle });
 
 				if (response.data.did) {
-					blueskyProfileExists = true;
-					blueskyUrl = `https://bsky.app/profile/${handle}`;
+					profileExists = true;
+					profileUrl = profileLink(handle);
 				}
 			} catch (_e) {
-				// handle doesn't exist on ATProto network
-				blueskyProfileExists = false;
+				// handle doesn't exist on the atproto network
+				profileExists = false;
 			} finally {
-				checkingBluesky = false;
+				checking = false;
 			}
 		}
 	});
@@ -53,14 +53,14 @@
 
 	<h1>404</h1>
 
-	{#if checkingBluesky}
+	{#if checking}
 		<p class="error-message">checking if @{handle} exists...</p>
-	{:else if blueskyProfileExists}
+	{:else if profileExists}
 		<p class="error-message">@{handle} hasn't joined {APP_NAME} yet</p>
-		<p class="error-detail">but they're on Bluesky!</p>
+		<p class="error-detail">but they're in the atmosphere!</p>
 		<div class="actions">
-			<a href={blueskyUrl} target="_blank" rel="noopener" class="bsky-link">
-				view their Bluesky profile
+			<a href={profileUrl} target="_blank" rel="noopener" class="profile-link">
+				view their profile
 			</a>
 			<a href="/" class="home-link">go home</a>
 		</div>
@@ -123,7 +123,7 @@
 	}
 
 	.home-link,
-	.bsky-link {
+	.profile-link {
 		color: var(--accent);
 		text-decoration: none;
 		font-size: var(--text-xl);
@@ -134,12 +134,12 @@
 		display: inline-block;
 	}
 
-	.bsky-link {
+	.profile-link {
 		background: var(--accent);
 		color: var(--bg-primary);
 	}
 
-	.bsky-link:hover {
+	.profile-link:hover {
 		background: var(--accent-hover);
 		border-color: var(--accent-hover);
 	}
