@@ -64,7 +64,6 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 
 	function selectClient(value: string) {
 		preferences.updateUiSettings({ atproto_client: value });
-		localStorage.setItem('atprotoClient', value);
 	}
 
 	onMount(async () => {

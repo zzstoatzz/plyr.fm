@@ -1,7 +1,6 @@
 // preferred atproto client — open profiles and records in the app of your choice.
 // the registry mirrors the shared client list in leaflet-search / status
 // (@zzstoatzz.io); keep it in sync with those rather than inventing entries.
-import { browser } from '$app/environment';
 import { preferences } from '$lib/preferences.svelte';
 
 export interface AtClient {
@@ -50,17 +49,16 @@ export const AT_CLIENTS: AtClient[] = [
 
 export const DEFAULT_AT_CLIENT = BSKY.value;
 
-function storedClientValue(): string | null {
-	// account preference wins; fall back to the per-browser cache so links also
-	// resolve for logged-out viewers and before preferences finish loading.
-	if (preferences.atprotoClient) return preferences.atprotoClient;
-	if (browser) return localStorage.getItem('atprotoClient');
-	return null;
+// resolve a client purely from the account-scoped preference value.
+// deliberately does NOT read localStorage: a single global cache would leak one
+// account's choice into another after switching accounts (the picker reads the
+// account pref, so a global fallback makes links disagree with settings).
+export function resolveClient(value: string | null | undefined): AtClient {
+	return AT_CLIENTS.find((c) => c.value === value) ?? BSKY;
 }
 
 export function getPreferredClient(): AtClient {
-	const value = storedClientValue();
-	return AT_CLIENTS.find((c) => c.value === value) ?? BSKY;
+	return resolveClient(preferences.atprotoClient);
 }
 
 export function profileLink(handleOrDid: string): string {
