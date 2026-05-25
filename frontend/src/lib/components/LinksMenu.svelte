@@ -2,8 +2,10 @@
 	import { portal } from 'svelte-portal';
 	import PlatformStats from './PlatformStats.svelte';
 	import { feedback } from '$lib/feedback.svelte';
+	import { getPreferredClient } from '$lib/atclients';
 
 	let showMenu = $state(false);
+	let client = $derived(getPreferredClient());
 
 	function toggleMenu() {
 		showMenu = !showMenu;
@@ -57,24 +59,15 @@
 			</div>
 			<nav class="menu-links">
 				<a
-					href="https://bsky.app/profile/plyr.fm"
+					href={client.profileUrl('plyr.fm')}
 					target="_blank"
 					rel="noopener noreferrer"
 					class="menu-link"
 				>
-					<svg
-						width="24"
-						height="24"
-						viewBox="0 0 600 530"
-						fill="currentColor"
-					>
-						<path
-							d="m135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46 47.98-36.021 125.72-63.892 125.72 24.795 0 17.712-10.155 148.79-16.111 170.07-20.703 73.984-96.144 92.854-163.25 81.433 117.3 19.964 147.14 86.092 82.697 152.22-122.39 125.59-175.91-31.511-189.63-71.766-2.514-7.3797-3.6904-10.832-3.7077-7.8964-0.0174-2.9357-1.1937 0.51669-3.7077 7.8964-13.714 40.255-67.233 197.36-189.63 71.766-64.444-66.128-34.605-132.26 82.697-152.22-67.108 11.421-142.55-7.4491-163.25-81.433-5.9562-21.282-16.111-152.36-16.111-170.07 0-88.687 77.742-60.816 125.72-24.795z"
-						/>
-					</svg>
+					<img src={client.iconUrl} alt="" width="24" height="24" class="menu-icon-img" />
 					<div class="link-info">
-						<span class="link-title">bluesky profile</span>
-						<span class="link-subtitle">@plyr.fm</span>
+						<span class="link-title">profile</span>
+						<span class="link-subtitle">@plyr.fm on {client.label}</span>
 					</div>
 				</a>
 				<a
@@ -106,13 +99,19 @@
 					rel="noopener noreferrer"
 					class="menu-link"
 				>
-					<img
-						src="https://cdn.bsky.app/img/avatar/plain/did:plc:wshs7t2adsemcrrd4snkeqli/bafkreif6z53z4ukqmdgwstspwh5asmhxheblcd2adisoccl4fflozc3kva@jpeg"
-						alt="Tangled"
+					<svg
 						width="24"
 						height="24"
-						class="tangled-menu-icon"
-					/>
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<polyline points="16 18 22 12 16 6"></polyline>
+						<polyline points="8 6 2 12 8 18"></polyline>
+					</svg>
 					<div class="link-info">
 						<span class="link-title">source code</span>
 						<span class="link-subtitle">tangled.org</span>
@@ -304,13 +303,13 @@
 		color: var(--accent);
 	}
 
-	.tangled-menu-icon {
+	.menu-icon-img {
 		border-radius: var(--radius-sm);
 		opacity: 0.7;
 		transition: opacity 0.2s, box-shadow 0.2s;
 	}
 
-	.menu-link:hover .tangled-menu-icon {
+	.menu-link:hover .menu-icon-img {
 		opacity: 1;
 		box-shadow: 0 0 0 2px var(--accent);
 	}

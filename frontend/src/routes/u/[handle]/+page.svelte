@@ -21,6 +21,7 @@
 		hasAttemptedRefresh
 	} from '$lib/avatar-refresh.svelte';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
+	import { profileLink } from '$lib/atclients';
 	import { getAtprotofansProfile, getAtprotofansSupporters, type Supporter } from '$lib/atprotofans';
 	import type { PageData } from './$types';
 
@@ -423,7 +424,7 @@ $effect(() => {
 				<div class="artist-info">
 					<h1>{artist.display_name}</h1>
 					<div class="handle-row">
-						<a href="https://bsky.app/profile/{artist.handle}" target="_blank" rel="noopener" class="handle">
+						<a href={profileLink(artist.handle)} target="_blank" rel="noopener" class="handle">
 							@{artist.handle}
 						</a>
 						{#if isSupporter}
@@ -561,12 +562,12 @@ $effect(() => {
 						{artist.display_name} hasn't uploaded any music to {APP_NAME}.
 					</p>
 					<a
-						href="https://bsky.app/profile/{artist.handle}"
+						href={profileLink(artist.handle)}
 						target="_blank"
 						rel="noopener"
-						class="bsky-link"
+						class="profile-link"
 					>
-						view their Bluesky profile
+						view their profile
 					</a>
 				</div>
 			{:else}
@@ -1206,7 +1207,7 @@ $effect(() => {
 		margin: 0 0 1.5rem 0;
 	}
 
-	.bsky-link {
+	.profile-link {
 		color: var(--accent);
 		text-decoration: none;
 		font-size: var(--text-lg);
@@ -1217,7 +1218,7 @@ $effect(() => {
 		display: inline-block;
 	}
 
-	.bsky-link:hover {
+	.profile-link:hover {
 		background: var(--accent);
 		color: var(--bg-primary);
 	}

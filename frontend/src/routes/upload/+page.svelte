@@ -13,6 +13,7 @@
 	import type { TrackRights } from "$lib/components/CopyrightRightsPanel.svelte";
 	import type { FeaturedArtist, AlbumSummary, Artist } from "$lib/types";
 	import { API_URL, getServerConfig } from "$lib/config";
+	import { profileLink } from "$lib/atclients";
 	import { uploader } from "$lib/uploader.svelte";
 	import { toast } from "$lib/toast.svelte";
 	import { auth } from "$lib/auth.svelte";
@@ -536,7 +537,7 @@
 					permission, or the content may be removed to keep plyr.fm in
 					compliance. For any questions or concerns, please DM
 					<a
-						href="https://bsky.app/profile/zzstoatzz.io"
+						href={profileLink('zzstoatzz.io')}
 						target="_blank"
 						rel="noopener">@zzstoatzz.io</a
 					> :) have a nice day!

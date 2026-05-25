@@ -25,6 +25,7 @@ export interface UiSettings {
 	use_playing_artwork_as_background?: boolean;
 	pds_audio_uploads_enabled?: boolean;
 	font_family?: FontFamily;
+	atproto_client?: string;
 }
 
 export interface Preferences {
@@ -126,6 +127,10 @@ class PreferencesManager {
 
 	get fontFamily(): FontFamily {
 		return this.data?.ui_settings?.font_family ?? DEFAULT_FONT;
+	}
+
+	get atprotoClient(): string | null {
+		return this.data?.ui_settings?.atproto_client ?? null;
 	}
 
 	applyFont(font: FontFamily): void {
@@ -254,6 +259,8 @@ class PreferencesManager {
 				const font = this.data.ui_settings?.font_family ?? DEFAULT_FONT;
 				localStorage.setItem('fontFamily', font);
 				this.applyFont(font);
+				const atClient = this.data.ui_settings?.atproto_client;
+				if (atClient) localStorage.setItem('atprotoClient', atClient);
 				this.applyTheme(this.data.theme);
 				if (this.data.theme === 'live') {
 					ambient.activate();
