@@ -11,6 +11,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { AT_CLIENTS, DEFAULT_AT_CLIENT } from '$lib/atclients';
 	import { ambient } from '$lib/ambient.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import { redirectToLogin } from '$lib/utils/auth-redirect';
 
 	let loading = $state(true);
 
@@ -112,7 +113,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		}
 
 		if (!auth.isAuthenticated) {
-			window.location.href = '/login';
+			redirectToLogin();
 			return;
 		}
 

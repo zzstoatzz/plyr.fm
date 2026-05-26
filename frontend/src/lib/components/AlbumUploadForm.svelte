@@ -1,12 +1,11 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import type { AlbumSummary, Artist } from '$lib/types';
 	import type { TrackEntry } from '$lib/components/TrackEntryCard.svelte';
 	import TrackEntryCard from '$lib/components/TrackEntryCard.svelte';
 	import PdsTooltip from '$lib/components/PdsTooltip.svelte';
 	import { uploader, type UploadResult } from '$lib/uploader.svelte';
 	import { toast } from '$lib/toast.svelte';
-	import { setReturnUrl } from '$lib/utils/return-url';
+	import { redirectToLogin } from '$lib/utils/auth-redirect';
 	import { preflightAuth } from '$lib/upload-form-stash';
 	import { getServerConfig, API_URL } from '$lib/config';
 	import { profileLink } from '$lib/atclients';
@@ -245,9 +244,8 @@
 		// form is lost on redirect, but at least the error is honest.)
 		const authStatus = await preflightAuth();
 		if (authStatus === 'expired') {
-			setReturnUrl('/upload?mode=album');
 			toast.error('your session expired — sign in to continue your upload');
-			goto('/login');
+			redirectToLogin('/upload?mode=album');
 			return;
 		}
 		if (authStatus === 'unverified') {

@@ -9,6 +9,7 @@ import { browser } from '$app/environment';
 import { queue } from './queue.svelte';
 import { toast } from './toast.svelte';
 import { API_URL, getAtprotofansSupportUrl } from './config';
+import { loginHref } from './utils/auth-redirect';
 import type { Track } from './types';
 
 interface GatedCheckResult {
@@ -71,7 +72,10 @@ async function checkAccess(track: Track): Promise<GatedCheckResult> {
  */
 function showDeniedToast(result: GatedCheckResult): void {
 	if (result.requiresAuth) {
-		toast.info('sign in to play supporter-only tracks');
+		toast.info('sign in to play supporter-only tracks', 5000, {
+			label: 'sign in',
+			href: loginHref()
+		});
 	} else if (result.artistDid) {
 		toast.info('this track is for supporters only', 5000, {
 			label: 'become a supporter',
@@ -87,7 +91,10 @@ function showDeniedToast(result: GatedCheckResult): void {
  */
 function showGatedToast(track: Track, isAuthenticated: boolean): void {
 	if (!isAuthenticated) {
-		toast.info('sign in to play supporter-only tracks');
+		toast.info('sign in to play supporter-only tracks', 5000, {
+			label: 'sign in',
+			href: loginHref()
+		});
 	} else if (track.artist_did) {
 		toast.info('this track is for supporters only', 5000, {
 			label: 'become a supporter',

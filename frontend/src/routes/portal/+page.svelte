@@ -23,7 +23,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { uploader } from '$lib/uploader.svelte';
 	import { player } from '$lib/player.svelte';
-	import { preferences } from '$lib/preferences.svelte'; import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
+	import { preferences } from '$lib/preferences.svelte'; import { redirectToLogin, resolvePostLogin } from '$lib/utils/auth-redirect';
 
 	// supported audio formats — matches backend AudioFormat enum + AlbumUploadForm
 	const AUDIO_FILE_INPUT_ACCEPT = '.mp3,.wav,.m4a,.aiff,.aif,.flac,audio/mpeg,audio/wav,audio/mp4,audio/aiff,audio/x-aiff,audio/flac';
@@ -170,13 +170,8 @@
 					await preferences.fetch();
 					if (isScopeUpgrade) {
 						toast.success('copyright paradigm configured');
-					} else {
-						const r = getReturnUrl();
-						if (r) {
-							clearReturnUrl();
-							window.location.href = r;
-							return;
-						}
+					} else if (resolvePostLogin()) {
+						return;
 					}
 				}
 			} catch (_e) {
@@ -192,7 +187,7 @@
 		}
 
 		if (!auth.isAuthenticated) {
-			window.location.href = '/login';
+			redirectToLogin();
 			return;
 		}
 
