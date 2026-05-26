@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 import WaveLoading from '$lib/components/WaveLoading.svelte';
@@ -66,6 +66,27 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		preferences.updateUiSettings({ atproto_client: value });
 	}
 
+	// deep-linkable section headers: slug the title so a #hash can target it
+	const slugify = (s: string) =>
+		s
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-+|-+$/g, '');
+
+	function linkToSection(e: MouseEvent, slug: string) {
+		e.preventDefault();
+		document.getElementById(slug)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		history.pushState(null, '', `#${slug}`);
+	}
+
+	function scrollToHash() {
+		const slug = window.location.hash.slice(1);
+		if (!slug) return;
+		window.requestAnimationFrame(() => {
+			document.getElementById(slug)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		});
+	}
+
 	onMount(async () => {
 		// check if exchange_token is in URL (from OAuth callback)
 		const params = new URLSearchParams(window.location.search);
@@ -118,6 +139,8 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 
 		await loadDeveloperTokens();
 		loading = false;
+		await tick();
+		scrollToHash();
 	});
 
 	async function loadDeveloperTokens() {
@@ -440,8 +463,17 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 			<a href="/portal" class="portal-link">manage your content →</a>
 		</div>
 
+		{#snippet sectionHeading(title: string)}
+			{@const slug = slugify(title)}
+			<h2 id={slug}>
+				<a href="#{slug}" class="section-anchor" onclick={(e) => linkToSection(e, slug)}>
+					{title}<span class="anchor-hash" aria-hidden="true">#</span>
+				</a>
+			</h2>
+		{/snippet}
+
 		<section class="settings-section">
-			<h2>appearance</h2>
+			{@render sectionHeading('appearance')}
 			<div class="settings-card">
 				<div class="setting-row">
 					<div class="setting-info">
@@ -581,7 +613,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		</section>
 
 		<section class="settings-section">
-			<h2>playback</h2>
+			{@render sectionHeading('playback')}
 			<div class="settings-card">
 				<div class="setting-row">
 					<div class="setting-info">
@@ -601,7 +633,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		</section>
 
 		<section class="settings-section">
-			<h2>privacy & display</h2>
+			{@render sectionHeading('privacy & display')}
 			<div class="settings-card">
 				<div class="setting-row">
 					<div class="setting-info">
@@ -652,7 +684,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		</section>
 
 		<section class="settings-section">
-			<h2>integrations</h2>
+			{@render sectionHeading('integrations')}
 			<div class="settings-card">
 				<div class="setting-row">
 					<div class="setting-info">
@@ -711,7 +743,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		</section>
 
 		<section class="settings-section">
-			<h2>developer</h2>
+			{@render sectionHeading('developer')}
 			<div class="settings-card">
 				<div class="setting-info full-width">
 					<h3>developer tokens</h3>
@@ -798,7 +830,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		</section>
 
 		<section class="settings-section">
-			<h2>experimental</h2>
+			{@render sectionHeading('experimental')}
 			<div class="settings-card">
 				<div class="setting-row">
 					<div class="setting-info">
@@ -983,6 +1015,25 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		color: var(--text-tertiary);
 		margin-bottom: 0.75rem;
 		text-shadow: var(--text-shadow, none);
+		/* keep the target clear of the sticky header when deep-linked */
+		scroll-margin-top: 5rem;
+	}
+
+	.section-anchor {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.anchor-hash {
+		margin-left: 0.35em;
+		color: var(--accent);
+		opacity: 0;
+		transition: opacity 0.12s ease;
+	}
+
+	.section-anchor:hover .anchor-hash,
+	.section-anchor:focus-visible .anchor-hash {
+		opacity: 0.7;
 	}
 
 	.settings-card {
