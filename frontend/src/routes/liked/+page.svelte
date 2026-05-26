@@ -5,6 +5,7 @@
 	import { queue } from '$lib/queue.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { redirectToLogin } from '$lib/utils/auth-redirect';
 	import { API_URL } from '$lib/config';
 	import type { Track } from '$lib/types';
 	import type { PageData } from './$types';
@@ -195,6 +196,7 @@
 			{#if !auth.isAuthenticated}
 				<h2>sign in to like tracks</h2>
 				<p>you need to be signed in to like tracks</p>
+				<a class="empty-cta" href="/login" onclick={(e) => { e.preventDefault(); redirectToLogin(); }}>sign in</a>
 			{:else}
 				<h2>no liked tracks yet</h2>
 				<p>tracks you like will appear here</p>
@@ -423,6 +425,21 @@
 	.empty-state p {
 		font-size: var(--text-base);
 		margin: 0;
+	}
+
+	.empty-cta {
+		display: inline-block;
+		margin-top: 1.25rem;
+		padding: 0.5rem 1.25rem;
+		border-radius: var(--radius-md);
+		background: var(--accent);
+		color: white;
+		font-size: var(--text-sm);
+		text-decoration: none;
+	}
+
+	.empty-cta:hover {
+		background: var(--accent-hover);
 	}
 
 	.tracks-list {

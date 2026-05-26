@@ -3,7 +3,7 @@
 	import { APP_NAME } from '$lib/branding';
 	import { API_URL } from '$lib/config';
 	import HandleAutocomplete from '$lib/components/HandleAutocomplete.svelte';
-	import { isValidReturnPath } from '$lib/utils/return-url';
+	import { isValidReturnPath, setReturnUrl } from '$lib/utils/return-url';
 
 	const returnTo = (() => {
 		const raw = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('return_to');
@@ -32,6 +32,10 @@
 	let selectedPds = $state('');
 
 	onMount(async () => {
+		// arm the return destination so it survives the OAuth round-trip — this is
+		// what makes a shared /login?return_to=… link land back on the right page
+		if (returnTo) setReturnUrl(returnTo);
+
 		try {
 			const res = await fetch(`${API_URL}/auth/pds-options`);
 			if (res.ok) {

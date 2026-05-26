@@ -148,7 +148,7 @@ max_lines = 730
 
 [[rules]]
 path = "frontend/src/routes/liked/+page.svelte"
-max_lines = 540
+max_lines = 552
 
 [[rules]]
 path = "frontend/src/routes/playlist/\\[id\\]/+page.svelte"
@@ -208,7 +208,7 @@ max_lines = 628
 
 [[rules]]
 path = "frontend/src/routes/login/+page.svelte"
-max_lines = 535
+max_lines = 537
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
