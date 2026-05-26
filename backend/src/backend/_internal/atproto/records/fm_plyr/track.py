@@ -2,7 +2,7 @@
 
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urljoin
 
 from atproto_identity.did.resolver import AsyncDidResolver
@@ -11,9 +11,7 @@ from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import BlobRef, make_pds_request, parse_at_uri
 from backend._internal.atproto.profiles import resolve_dids
 from backend.config import settings
-
-if TYPE_CHECKING:
-    from backend.models import Track
+from backend.models import Track
 
 logger = logging.getLogger(__name__)
 
@@ -294,7 +292,7 @@ async def update_record(
 
 
 async def rebuild_track_pds_record(
-    track: "Track",
+    track: Track,
     auth_session: AuthSession,
     image_url_override: str | None = None,
 ) -> None:
