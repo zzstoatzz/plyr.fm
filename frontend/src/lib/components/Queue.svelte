@@ -51,13 +51,14 @@
 			.filter(({ index }) => index > currentIdx);
 	});
 
-	// the "next from: for you" tail (ambient backfill) is rendered as a
-	// separate, labeled zone below the explicit queue. jams have no ambient.
+	// the "next from: for you" tail (ambient backfill) is the contiguous suffix
+	// at/after queue.ambientFromIndex, rendered as a separate labeled zone below
+	// the explicit queue. jams have no ambient tail.
 	const explicitUpcoming = $derived(
-		jam.active ? upcoming : upcoming.filter(({ track }) => !queue.ambientFileIds.has(track.file_id))
+		jam.active ? upcoming : upcoming.filter(({ index }) => index < queue.ambientFromIndex)
 	);
 	const ambientUpcoming = $derived(
-		jam.active ? [] : upcoming.filter(({ track }) => queue.ambientFileIds.has(track.file_id))
+		jam.active ? [] : upcoming.filter(({ index }) => index >= queue.ambientFromIndex)
 	);
 
 	const outputParticipant = $derived.by<JamParticipant | null>(() => {

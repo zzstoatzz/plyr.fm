@@ -37,13 +37,26 @@ class Queue {
 	progressMs = $state(0);
 
 	/**
-	 * file_ids of tracks appended by the "keep playing" backfill (the
-	 * "next from: for you" tail). Client-only — not synced to the server,
-	 * which only ever sees flat track_ids; on reload the tail simply
-	 * re-tops-up. Reassigned (never mutated in place) so reads stay reactive.
+	 * Index where the "next from: for you" ambient tail begins. The tail is
+	 * always a contiguous suffix, so a single boundary captures it (vs a
+	 * file-id set, which mis-handles duplicates). Equals `tracks.length` when
+	 * there is no tail. Persisted in queue state as `ambient_from_index` so it
+	 * survives reload / cross-tab sync.
 	 */
-	ambientFileIds = $state<Set<string>>(new Set());
+	ambientFromIndex = $state(0);
+
+	/**
+	 * Transient "the user just cleared the queue" intent. Suppresses backfill
+	 * until the next explicit play context so "clear upcoming" actually clears.
+	 * Client-only — a fresh session resumes backfill.
+	 */
+	suppressAmbient = false;
 	private backfilling = false;
+
+	/** whether the track at `index` is part of the ambient ("next from") tail */
+	isAmbientIndex(index: number): boolean {
+		return index >= this.ambientFromIndex && index < this.tracks.length;
+	}
 
 	revision = $state<number | null>(null);
 	etag = $state<string | null>(null);
@@ -326,6 +339,14 @@ class Queue {
 			state.current_index,
 			this.tracks
 		);
+
+		// restore the ambient "next from" boundary (clamped). older states
+		// without the field => no tail (boundary at end).
+		const restored = state.ambient_from_index;
+		this.ambientFromIndex =
+			typeof restored === 'number'
+				? Math.max(0, Math.min(restored, this.tracks.length))
+				: this.tracks.length;
 	}
 
 	resolveCurrentIndex(currentTrackId: string | null, index: number, tracks: Track[]): number {
@@ -401,7 +422,8 @@ class Queue {
 				shuffle: this.shuffle,
 				original_order_ids: this.originalOrder.map((t) => t.file_id),
 				auto_advance: this.autoAdvance,
-				progress_ms: this.progressMs
+				progress_ms: this.progressMs,
+				ambient_from_index: this.ambientFromIndex
 			};
 
 			const headers: HeadersInit = {
@@ -505,34 +527,28 @@ class Queue {
 
 	// ── track mutations (routed through bridge when jam active) ──
 
-	/**
-	 * Insertion point for explicit "add to queue": the first ambient ("next
-	 * from") track in the *upcoming* region, so explicit adds slot ahead of the
-	 * recommendation tail without ever disturbing already-played history (the
-	 * current track may itself be ambient once playback advances into the tail).
-	 */
-	private firstAmbientIndex(): number {
-		if (this.ambientFileIds.size === 0) return this.tracks.length;
-		for (let i = this.currentIndex + 1; i < this.tracks.length; i++) {
-			if (this.ambientFileIds.has(this.tracks[i].file_id)) return i;
-		}
-		return this.tracks.length;
-	}
-
 	addTracks(tracks: Track[], playNow = false) {
 		if (tracks.length === 0) return;
 
 		this.lastUpdateWasLocal = true;
+		this.suppressAmbient = false;
 
-		// explicit adds jump ahead of any ambient "next from: for you" tail so
-		// the user's own picks always play before recommendations
-		const insertAt = this.firstAmbientIndex();
+		// explicit adds slot ahead of the ambient tail (so the user's own picks
+		// play before recommendations) but never before the current track —
+		// which may itself be ambient once playback advances into the tail
+		const insertAt = Math.max(this.ambientFromIndex, this.currentIndex + 1);
 		this.tracks = [
 			...this.tracks.slice(0, insertAt),
 			...tracks,
 			...this.tracks.slice(insertAt)
 		];
 		this.originalOrder = [...this.originalOrder, ...tracks];
+
+		// keep the ambient suffix starting after the inserted explicit tracks
+		this.ambientFromIndex =
+			insertAt <= this.ambientFromIndex
+				? this.ambientFromIndex + tracks.length
+				: insertAt + tracks.length;
 
 		if (playNow) {
 			this.currentIndex = insertAt;
@@ -542,30 +558,27 @@ class Queue {
 	}
 
 	/**
-	 * Append recommendation tracks to the end of the queue as the "next from:
-	 * for you" tail (deduped against the existing queue + prior ambient adds).
+	 * Append recommendation tracks as the "next from: for you" tail (deduped
+	 * against the existing queue). The tail is a contiguous suffix anchored by
+	 * `ambientFromIndex`.
 	 */
 	appendAmbient(tracks: Track[]) {
 		const inQueue = new Set(this.tracks.map((t) => t.file_id));
-		const fresh = tracks.filter(
-			(t) => !inQueue.has(t.file_id) && !this.ambientFileIds.has(t.file_id)
-		);
+		const fresh = tracks.filter((t) => !inQueue.has(t.file_id));
 		if (fresh.length === 0) return;
 
 		this.lastUpdateWasLocal = true;
+		// if there's no tail yet, it begins where the current queue ends
+		if (this.ambientFromIndex >= this.tracks.length) {
+			this.ambientFromIndex = this.tracks.length;
+		}
 		this.tracks = [...this.tracks, ...fresh];
 		this.originalOrder = [...this.originalOrder, ...fresh];
-		this.ambientFileIds = new Set([
-			...this.ambientFileIds,
-			...fresh.map((t) => t.file_id)
-		]);
 		this.syncState();
 	}
 
-	private clearAmbient() {
-		if (this.ambientFileIds.size > 0) {
-			this.ambientFileIds = new Set();
-		}
+	private resetAmbient() {
+		this.ambientFromIndex = this.tracks.length;
 	}
 
 	setQueue(tracks: Track[], startIndex = 0) {
@@ -575,33 +588,34 @@ class Queue {
 		}
 
 		this.lastUpdateWasLocal = true;
-		this.clearAmbient();
+		this.suppressAmbient = false;
 		this.tracks = [...tracks];
 		this.originalOrder = [...tracks];
 		this.currentIndex = this.clampIndex(startIndex);
+		this.resetAmbient();
 		this.syncState();
 	}
 
 	playNow(track: Track, autoPlay = true) {
 		this.lastUpdateWasLocal = autoPlay;
+		this.suppressAmbient = false;
 		// keep explicitly-queued up-next, but drop the stale "next from" tail —
 		// the new track is a new context, so let backfill regenerate it
-		const upNext = this.tracks
-			.slice(this.currentIndex + 1)
-			.filter((t) => !this.ambientFileIds.has(t.file_id));
-		this.clearAmbient();
+		const upNext = this.tracks.slice(this.currentIndex + 1, this.ambientFromIndex);
 		this.tracks = [track, ...upNext];
 		this.originalOrder = [...this.tracks];
 		this.currentIndex = 0;
+		this.resetAmbient();
 		this.syncState();
 	}
 
 	clear() {
 		this.lastUpdateWasLocal = true;
-		this.clearAmbient();
+		this.suppressAmbient = false;
 		this.tracks = [];
 		this.originalOrder = [];
 		this.currentIndex = 0;
+		this.resetAmbient();
 		this.syncState();
 	}
 
@@ -649,12 +663,14 @@ class Queue {
 
 		this.lastUpdateWasLocal = true;
 
-		// keep current track, shuffle everything after it
-		const current = this.tracks[this.currentIndex];
-		const before = this.tracks.slice(0, this.currentIndex);
-		const after = this.tracks.slice(this.currentIndex + 1);
+		// shuffle only the explicit up-next; leave the current track, history,
+		// and the ambient "next from" tail untouched
+		const before = this.tracks.slice(0, this.currentIndex + 1);
+		const explicitEnd = Math.max(this.currentIndex + 1, this.ambientFromIndex);
+		const after = this.tracks.slice(this.currentIndex + 1, explicitEnd);
+		const ambientTail = this.tracks.slice(explicitEnd);
 
-		// if only one track in up next, nothing to shuffle
+		// if only one track in the explicit up next, nothing to shuffle
 		if (after.length <= 1) {
 			return;
 		}
@@ -676,11 +692,9 @@ class Queue {
 			shuffled.every((track, i) => track.file_id === after[i].file_id)
 		);
 
-		// rebuild queue: everything before current + current + shuffled upcoming
-		this.tracks = [...before, current, ...shuffled];
-
-		// current index stays the same (it's in the same position)
-		// no need to update currentIndex
+		// rebuild: history + current + shuffled explicit up-next + ambient tail.
+		// counts are preserved on both sides of the boundary, so it stays put.
+		this.tracks = [...before, ...shuffled, ...ambientTail];
 
 		this.schedulePush();
 	}
@@ -689,6 +703,14 @@ class Queue {
 		if (fromIndex === toIndex) return;
 		if (fromIndex < 0 || fromIndex >= this.tracks.length) return;
 		if (toIndex < 0 || toIndex >= this.tracks.length) return;
+
+		// the ambient "next from" tail isn't reorderable; clamp moves to the
+		// explicit region so the suffix boundary stays stable
+		if (fromIndex >= this.ambientFromIndex) return;
+		if (this.ambientFromIndex < this.tracks.length) {
+			toIndex = Math.min(toIndex, this.ambientFromIndex - 1);
+		}
+		if (fromIndex === toIndex) return;
 
 		this.lastUpdateWasLocal = true;
 		const updated = [...this.tracks];
@@ -723,11 +745,12 @@ class Queue {
 		this.tracks = updated;
 		this.originalOrder = this.originalOrder.filter((track) => track.file_id !== removed.file_id);
 
-		if (this.ambientFileIds.has(removed.file_id)) {
-			const next = new Set(this.ambientFileIds);
-			next.delete(removed.file_id);
-			this.ambientFileIds = next;
+		// removing an explicit track shifts the ambient suffix left; removing an
+		// ambient one just shrinks it
+		if (index < this.ambientFromIndex) {
+			this.ambientFromIndex -= 1;
 		}
+		this.ambientFromIndex = Math.min(this.ambientFromIndex, updated.length);
 
 		if (updated.length === 0) {
 			this.currentIndex = 0;
@@ -753,10 +776,12 @@ class Queue {
 		const currentTrack = this.tracks[this.currentIndex];
 		if (!currentTrack) return;
 
-		this.clearAmbient();
+		// explicit "clear" intent — don't let backfill immediately refill it
+		this.suppressAmbient = true;
 		this.tracks = [currentTrack];
 		this.originalOrder = [currentTrack];
 		this.currentIndex = 0;
+		this.resetAmbient();
 
 		this.syncState();
 	}
@@ -770,6 +795,7 @@ class Queue {
 	async fillFromForYou(): Promise<void> {
 		if (!browser) return;
 		if (this.jamBridge) return;
+		if (this.suppressAmbient) return;
 		if (this.backfilling) return;
 
 		this.backfilling = true;

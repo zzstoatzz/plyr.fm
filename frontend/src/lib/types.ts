@@ -100,6 +100,8 @@ export interface QueueState {
 	original_order_ids: string[];
 	auto_advance?: boolean;
 	progress_ms?: number;
+	/** index where the "next from: for you" ambient tail begins (== length when none) */
+	ambient_from_index?: number;
 }
 
 export interface QueueResponse {
