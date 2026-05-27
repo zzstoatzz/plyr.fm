@@ -15,7 +15,7 @@
 	import LikersSheet from '$lib/components/LikersSheet.svelte';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { page } from '$app/stores';
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences } from '$lib/preferences.svelte';
 	import { ambient } from '$lib/ambient.svelte';
@@ -245,6 +245,14 @@
 		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
 			event.preventDefault();
 			search.toggle();
+			return;
+		}
+
+		// Cmd/Ctrl+, : open settings (the idiomatic "preferences" shortcut —
+		// Cmd+, on macOS, Ctrl+, elsewhere). works from anywhere, like search.
+		if ((event.metaKey || event.ctrlKey) && event.key === ',') {
+			event.preventDefault();
+			goto('/settings');
 			return;
 		}
 

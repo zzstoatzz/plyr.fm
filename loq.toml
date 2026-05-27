@@ -132,7 +132,7 @@ max_lines = 863
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"
-max_lines = 816
+max_lines = 824
 
 [[rules]]
 path = "frontend/src/routes/costs/+page.svelte"
