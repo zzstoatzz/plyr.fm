@@ -22,6 +22,10 @@ from backend.utilities.rate_limit import limiter
 
 router = APIRouter(prefix="/now-playing", tags=["now-playing"])
 
+# the client heartbeat is one report per 10s (~6/min); this ceiling is a
+# script-abuse backstop set far above any real listener, not a usage throttle.
+NOW_PLAYING_LIMIT = "120/minute"
+
 
 class NowPlayingUpdate(BaseModel):
     """request to update now playing state."""
@@ -65,7 +69,7 @@ class NowPlayingResponse(BaseModel):
 
 
 @router.post("/")
-@limiter.limit("30/minute")
+@limiter.limit(NOW_PLAYING_LIMIT)
 async def update_now_playing(
     request: Request,
     update: NowPlayingUpdate,
@@ -96,7 +100,7 @@ async def update_now_playing(
 
 
 @router.delete("/")
-@limiter.limit("30/minute")
+@limiter.limit(NOW_PLAYING_LIMIT)
 async def clear_now_playing(
     request: Request,
     session: Session = Depends(require_auth),

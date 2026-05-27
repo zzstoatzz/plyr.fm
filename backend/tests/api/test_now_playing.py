@@ -8,9 +8,11 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, now_playing_service
+from backend.api.now_playing import NOW_PLAYING_LIMIT
 from backend.config import settings
 from backend.main import app
 from backend.models import Artist
+from backend.utilities.rate_limit import limiter
 
 
 # create a mock session object
@@ -39,12 +41,15 @@ def test_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
 
     # clear the now_playing_service cache before each test
     now_playing_service._cache.clear()
+    # clear any rate-limit budget consumed by other tests sharing the client IP
+    limiter.reset()
 
     yield app
 
     # cleanup
     app.dependency_overrides.clear()
     now_playing_service._cache.clear()
+    limiter.reset()
 
 
 async def test_update_now_playing(test_app: FastAPI, db_session: AsyncSession):
@@ -340,3 +345,41 @@ async def test_update_now_playing_without_album(
     assert state is not None
     assert state.album_name is None
     assert state.image_url is None
+
+
+async def test_now_playing_burst_past_old_throttle_not_rate_limited(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """a burst larger than the retired 30/min throttle must not be 429'd.
+
+    the client heartbeat is ~6/min; the server ceiling is a script-abuse
+    backstop, not a usage throttle. regression for listeners getting 429'd
+    during normal playback under the old 30/minute limit.
+    """
+    ceiling = int(NOW_PLAYING_LIMIT.split("/")[0])
+    burst = 31  # one past the retired throttle, comfortably under the backstop
+    assert burst > 30
+    assert burst <= ceiling
+
+    payload = {
+        "track_id": 123,
+        "file_id": "test-file-abc",
+        "track_name": "Test Track",
+        "artist_name": "Test Artist",
+        "duration_ms": 180000,
+        "progress_ms": 30000,
+        "is_playing": True,
+    }
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        statuses = [
+            (await client.post("/now-playing/", json=payload)).status_code
+            for _ in range(burst)
+        ]
+
+    assert all(s == 200 for s in statuses), (
+        f"burst of {burst} should not be rate-limited under {NOW_PLAYING_LIMIT}; "
+        f"got {statuses.count(429)} x 429"
+    )
