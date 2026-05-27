@@ -176,7 +176,6 @@
 		class="queue-track"
 		class:drag-over={draggable && dragOverIndex === index && touchDragIndex !== index}
 		class:is-dragging={draggable && (touchDragIndex === index || draggedIndex === index)}
-		class:continuation={!draggable}
 		data-index={index}
 		{draggable}
 		role="button"
@@ -205,6 +204,8 @@
 					<circle cx="11" cy="13" r="1.5"></circle>
 				</svg>
 			</button>
+		{:else}
+			<span class="drag-placeholder" aria-hidden="true"></span>
 		{/if}
 
 		<div class="track-info">
@@ -403,7 +404,9 @@
 						{/each}
 
 						{#if continuationUpcoming.length > 0}
-							<div class="continuation-header">next from: for you</div>
+							<div class="section-header continuation-header">
+								<h3>next from: <a href="/for-you" class="source-link">for you</a></h3>
+							</div>
 							{#each continuationUpcoming as { track, index } (`${track.file_id}:${index}`)}
 								{@render queueRow(track, index, false)}
 							{/each}
@@ -787,37 +790,28 @@
 		padding-right: 0.35rem;
 	}
 
-	/* "next from: for you" divider above the continuation tail */
+	/* "next from: for you" header — same language as the "up next" header,
+	   with the source as an accent link to the For You feed */
 	.continuation-header {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		margin-top: 0.35rem;
-		padding: 0 0.1rem 0.1rem;
-		font-size: var(--text-xs);
-		letter-spacing: 0.04em;
-		color: var(--text-tertiary);
+		margin-top: 0.5rem;
+		padding-top: 0.85rem;
+		border-top: 1px solid var(--border-subtle);
 	}
 
-	.continuation-header::before {
-		content: '';
-		width: 6px;
-		height: 6px;
-		border-radius: var(--radius-full);
-		background: var(--accent);
-		opacity: 0.6;
+	.continuation-header .source-link {
+		color: var(--accent);
+		text-decoration: none;
+		transition: color 0.15s ease;
+	}
+
+	.continuation-header .source-link:hover {
+		text-decoration: underline;
+	}
+
+	/* keeps continuation rows' titles aligned with draggable rows (no handle) */
+	.drag-placeholder {
+		width: calc(16px + 0.7rem);
 		flex-shrink: 0;
-	}
-
-	/* continuation rows read as tentative/auto-generated vs explicit queue items */
-	.queue-track.continuation {
-		border-style: dashed;
-		background: transparent;
-	}
-
-	.queue-track.continuation:hover {
-		background: var(--bg-hover);
-		border-style: solid;
 	}
 
 	.queue-track {
