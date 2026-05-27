@@ -47,6 +47,48 @@ plyr.fm should become:
 
 ### May 2026
 
+#### "keep playing" + queue refactor — continuous playback and unified queue items (PRs #1450→#1453, prod-deployed May 27)
+
+**why**: when the queue ran dry, playback just stopped — listeners had repeatedly asked for continuous playback (#1446, #1353, #1445). Separately, the queue-sidebar items were visually inconsistent (no artwork, text misaligned because up-next rows carried a left drag handle) and the new "next from" divider read as an afterthought.
+
+**what shipped (four frontend-only PRs)**:
+
+1. **#1450 — "keep playing" continuation**: opt-in setting (settings → playback, **default off**) that backfills the queue tail from the For You feed once your explicit queue runs low, surfaced as a distinct **"next from: for you"** zone *below* your explicit adds. The toggle rides the schema-less `ui_settings` JSONB (no migration); the existing `/for-you/` endpoint + `forYouCache` supply tracks.
+   - **load-bearing constraint**: the locked-screen autoplay grace requires the next track's audio to be prefetched *before* the current one ends (`Player.svelte` swaps `audio.src` synchronously in the `ended` handler — no `await` allowed). So the continuation can't be computed lazily; it appends real tracks to `queue.tracks` ahead of time where the existing prefetch effect resolves them. **Zero changes to the audio path.**
+   - **two-zone model**: a positional `continuationFromIndex` boundary marks the auto-generated suffix; explicit "add to queue" inserts ahead of it so your picks always play first. Persisted in queue state (`continuation_from_index`, `continuation_suppressed`) so it survives reload / cross-tab. (Started as a `Set<file_id>`; Codex review caught that it mis-handled duplicate tracks and didn't survive reload, so it became the positional boundary.)
+
+2. **#1451 — settings keyboard shortcut**: `Cmd+,` (macOS) / `Ctrl+,` (Windows/Linux) opens settings from anywhere — the platform-independent "preferences" convention. Documented in the internal shortcuts reference + the public listeners table.
+
+3. **#1452 — "next from" divider polish**: the divider now speaks the same section-header language as "up next" (uppercase, letter-spaced) and "for you" links to the `/for-you` route.
+
+4. **#1453 — unified queue items**: every item (now playing / up next / next from) shows a 48px artwork thumbnail (reusing `trackThumbnailUrl` + `SensitiveImage` compact mode), all text aligned to a shared left gutter. Reorder via an explicit drag handle moved to the **right** (artwork stays leftmost, so alignment holds) — native drag on desktop, touch-the-handle on mobile. Continuation rows are draggable too: dragging a recommendation up into the explicit region **promotes** it into the queue (`continuationFromIndex` grows), while explicit picks are clamped from being buried into the tail.
+
+**design notes**:
+- The mechanism is named `continuation*` — deliberately source-/product-agnostic. Product names stay in the UI layer (the `keepPlaying` pref, the "next from: for you" label); "ambient" was avoided because it's vague *and* already names the live-weather theme.
+- Drag UX went through a revision: an initial handle-less whole-row long-press was reverted after review (less discoverable, competes with tap-to-play/scroll) in favor of the right-side handle — keeping the artwork-driven alignment while giving a direct, legible reorder affordance.
+- **Deferred (Part B)**: tapping a track *inside* a collection (album/playlist/artist) to queue the rest — see `## priorities → next`.
+
+---
+
+#### atproto client picker + deep-linkable settings (PRs #1436→#1442, #1447, May)
+
+**why**: profile/record links were hardcoded to open in bsky.app, baking in a Bluesky assumption; and settings sections couldn't be linked to directly.
+
+**what shipped**:
+- **#1436 — "open links in" your client**: a templated, user-selectable preference for which atproto app profile/record links open in, modeled on the shared `clients.js` registry pattern. New `frontend/src/lib/atclients.ts` registry; picked in settings like theme/font.
+- follow-ups: **#1437** use the curated reference client registry + theme-safe logos (dropped an unmaintained `deer.social` entry); **#1438** drop Bluesky-specific copy from avatar-setup / handle placeholders; **#1439** loq limit raise after the picker UI; **#1440** scope the preferred-client preference to the signed-in account (it was leaking across account switches — a global localStorage fallback); **#1442** moved the picker out of appearance into integrations.
+- **#1447 — deep-linkable settings section headers**: each settings heading gets a slugged `id` + a hover `#`; `plyr.fm/settings#integrations` jumps and smooth-scrolls to that section.
+
+---
+
+#### play-count + track-edit fixes (PRs #1443, #1449, May)
+
+**#1443 (closes #1441) — tab refresh inflated play counts**: a play counted once `currentTime >= min(30s, 50% duration)`, but a refreshed/cold-loaded tab restores position by *seeking* there — satisfying the threshold with nothing actually listened to (and it counted while paused). Fix has two reinforcing layers: the frontend now counts *listened* time rather than absolute position, and the backend dedupes one counted play per listener per track for ~one track-length.
+
+**#1449 (closes #1444) — track edits silently failed to sync to ATProto**: editing a track 500'd with `BeartypeCallHintForwardRefException` — `rebuild_track_pds_record` was annotated `track: "Track"` with `Track` imported only under `TYPE_CHECKING`, and beartype resolves that string forward-ref at call time against the module's runtime namespace where the name doesn't exist. Because the handler rolls back the edit on sync failure, edits couldn't be saved at all.
+
+---
+
 #### header polish cluster — desktop info icon + floating section titles + Escape-to-close (PRs #1429→#1431, frontend-only deploy May 23)
 
 **why**: three QoL items rolled into one frontend deploy.
@@ -275,6 +317,8 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
+**"keep playing" continuous playback + unified queue items** (#1450→#1453, prod-deployed May 27): opt-in (default off) continuation that backfills the queue tail from For You when it runs dry, shown as a "next from: for you" zone ahead of which your explicit adds always play. Frontend-only — rides `ui_settings`, with a positional `continuationFromIndex` boundary persisted in queue state. The same cluster unified the queue-sidebar items (48px artwork, shared left gutter, right-side drag handle; continuation rows promote into the queue on drag-up) and added the `Cmd/Ctrl+,` settings shortcut. Naming convention worth keeping: the mechanism is `continuation*` (source-agnostic), product names stay in the UI layer.
+
 **copyright paradigm — indiemusi.ch alpha shipped behind `copyright-paradigm` flag** (#1400→#1411, May 14–16): plyr.fm's first opt-in copyright paradigm. flagged tracks write `ch.indiemusi.alpha.song` + `recording` records to the user's PDS alongside the `fm.plyr.track` and route audio through the existing supporter-gated storage path (private R2, auth-proxied, no PDS blob). Three foundational PRs (#1400 phase 1 config + record writers, #1401 portal section + OAuth scope-upgrade plumbing, #1402 upload + edit forms + per-track endpoints), five follow-ups (#1403 review fixes including the load-bearing P1.1 audio migration on edit-time toggle, #1404 IPI/ISWC/ISRC format validators, #1405 oauth-metadata scope coupling lock, #1407 atprotofans check narrowed, #1409 the publishingOwner record manager with merge-preserve writes after Hilke flagged the duplicate-on-existing-record case), and finally #1410 the feature flag itself so the merged code ships to prod dormant. #1411 disconnect-is-DB-only is the cleanup. **Rollout shape**: flag-on for own DID, dogfood, broaden to Hilke + partners, then drop the flag. The merge-preserve write contract (`fetch fresh from PDS → strip known modeled keys → spread validated input back`) is the reusable pattern — unknown fields preserved, individual↔company switches actually clear stale state, blanking a field removes it.
 
 **typed R2 storage keys close a 6-month recurring bug class** (#1413, May 17): woody.fm's `.aif` uploads stranded because `save` stored at `audio/<id>.aif` while every reader looked at `audio/<id>.aiff`. Same drift bit four prior times (#332, #797, #849, #1202). New `AudioKey` / `ImageKey` frozen dataclasses make save/read mismatch unrepresentable at the type level. 19 R2 callsites audited end-to-end. Bonus: the integration test fixture had been masking the bug for months because the deterministic A4 drone hashed to the same file_id every run and found a pre-#797 stale R2 blob — now defaults to a random phase offset per call.
@@ -289,7 +333,7 @@ See `.status_history/2025-11.md` for detailed history.
 
 **developer tooling**: `traffic-overview` skill (#1427, May 22) gives a multi-horizon Logfire + Cloudflare MCP read with access ceilings documented (14d Logfire query window, ~30d CF retention).
 
-**next**: enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
+**next**: **collection continuity (Part B of continuous playback)** — tapping a track *inside* a collection should queue the rest of it (today's row tap calls `playNow`, which drops the collection). The clean framing is to generalize the "next from" machinery we already shipped: the tapped collection becomes a labeled *playback context* ("next from: \<album/playlist\>") that plays after your explicit adds and falls through to For You when it ends. Held pending a design call on which surfaces count as ordered/queueable — albums & playlists are clear, artist catalogs (#1353) and feeds/search are fuzzier. enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
 
 ### known issues
 - iOS PWA audio may hang on first play after backgrounding
@@ -347,6 +391,8 @@ See `.status_history/2025-11.md` for detailed history.
 - ✅ lossless audio (AIFF/FLAC) with automatic transcoding for browser compatibility
 - ✅ PDS blob storage for audio (user data ownership)
 - ✅ play count tracking, likes, queue management
+- ✅ "keep playing" — opt-in continuous playback from the For You feed when the queue runs dry ("next from: for you")
+- ✅ queue items with artwork thumbnails + right-side drag-to-reorder (desktop + touch)
 - ✅ unified search with Cmd/Ctrl+K (keyword + mood search in parallel)
 - ✅ mood search via CLAP embeddings + turbopuffer (feature-flagged)
 - ✅ teal.fm scrobbling
@@ -425,5 +471,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-24 (status maintenance — added detailed write-ups for the copyright paradigm cluster #1400→#1411 and the typed-R2-keys fix #1413 that had shipped May 14–17 without yet making it into STATUS.md; archived the May 1–13 detailed entries to `.status_history/2026-05.md`).
+this is a living document. last updated 2026-05-27 (documented the "keep playing" continuous-playback + queue-items cluster #1450→#1453 shipped to prod this session, plus the previously-undocumented atproto client-picker cluster #1436→#1442/#1447 and the play-count #1443 / track-edit #1449 fixes; added Part B / collection-continuity to `next`).
 
