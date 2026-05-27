@@ -143,9 +143,15 @@
 	$effect(() => {
 		if (!browser) return;
 		const enabled = preferences.keepPlaying && preferences.autoAdvance;
+		if (!enabled) {
+			// setting off: tear down any materialized "next from" tail so it doesn't
+			// outlive the toggle (the tail is persisted in server queue state)
+			untrack(() => queue.clearContinuation());
+			return;
+		}
 		const playing = queue.currentTrack !== null;
 		const low = queue.upNext.length <= CONTINUATION_LOW_WATER;
-		if (enabled && playing && low && !jam.active) {
+		if (playing && low && !jam.active) {
 			untrack(() => void queue.fillContinuation());
 		}
 	});

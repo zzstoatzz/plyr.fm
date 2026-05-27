@@ -587,6 +587,28 @@ class Queue {
 		this.continuationFromIndex = this.tracks.length;
 	}
 
+	/**
+	 * Drop the auto-generated "next from" tail, keeping the explicit queue (and
+	 * the currently-playing track if playback already advanced into the tail).
+	 * Called when "keep playing" is turned off — the tail is materialized into
+	 * `tracks` and persisted server-side, so declining to refill it isn't enough;
+	 * the existing tail has to be removed or it outlives the setting.
+	 */
+	clearContinuation() {
+		if (this.jamBridge) return; // jam owns the queue; never a continuation tail
+		if (this.continuationFromIndex >= this.tracks.length) return; // no tail
+
+		const keepUpTo = Math.max(this.continuationFromIndex, this.currentIndex + 1);
+		if (keepUpTo < this.tracks.length) {
+			const removedIds = new Set(this.tracks.slice(keepUpTo).map((t) => t.file_id));
+			this.tracks = this.tracks.slice(0, keepUpTo);
+			this.originalOrder = this.originalOrder.filter((t) => !removedIds.has(t.file_id));
+		}
+		this.continuationFromIndex = this.tracks.length;
+		this.lastUpdateWasLocal = true;
+		this.syncState();
+	}
+
 	setQueue(tracks: Track[], startIndex = 0) {
 		if (tracks.length === 0) {
 			this.clear();
