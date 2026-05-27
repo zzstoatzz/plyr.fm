@@ -4,17 +4,36 @@
 	import { goToIndex } from '$lib/playback.svelte';
 	import { jam } from '$lib/jam.svelte';
 	import { toast } from '$lib/toast.svelte';
+	import SensitiveImage from './SensitiveImage.svelte';
+	import { trackCoverUrl, trackThumbnailUrl } from '$lib/track-cover';
 	import type { Track, JamParticipant } from '$lib/types';
 
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
 
-	// touch drag state
+	// touch drag state — there is no visible handle, so a press-and-hold
+	// (long-press) on the row initiates a reorder; a quick tap plays the
+	// track and a vertical drag before the hold fires just scrolls the list.
 	let touchDragIndex = $state<number | null>(null);
+	let touchStartX = 0;
 	let touchStartY = $state(0);
 	let touchCurrentY = $state(0);
 	let touchDragElement = $state<HTMLElement | null>(null);
 	let queueTracksElement = $state<HTMLElement | null>(null);
+	let longPressTimer: number | null = null;
+	let longPressActive = $state(false);
+	let suppressClick = false;
+	const LONG_PRESS_MS = 350;
+	const MOVE_CANCEL_PX = 10;
+
+	// per-track artwork load failures (file_id), so a broken thumbnail falls
+	// back to the placeholder rather than showing a busted image
+	let imgErrored = $state(new Set<string>());
+	function markImgError(fileId: string) {
+		const next = new Set(imgErrored);
+		next.add(fileId);
+		imgErrored = next;
+	}
 
 	async function startJam() {
 		const trackIds = queue.tracks.map((t) => t.file_id);
@@ -74,6 +93,11 @@
 	const hiddenParticipantCount = $derived(jam.participants.length - MAX_VISIBLE_PARTICIPANTS);
 
 	function handleTrackClick(index: number) {
+		// a just-completed long-press drag also fires a click — swallow it
+		if (suppressClick) {
+			suppressClick = false;
+			return;
+		}
 		goToIndex(index);
 	}
 
@@ -108,22 +132,50 @@
 		dragOverIndex = null;
 	}
 
-	// touch drag and drop
+	// touch drag and drop — press-and-hold to pick a row up, then drag
+	function clearLongPress() {
+		if (longPressTimer !== null) {
+			window.clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
+	}
+
 	function handleTouchStart(event: TouchEvent, index: number) {
 		const touch = event.touches[0];
-		touchDragIndex = index;
+		touchStartX = touch.clientX;
 		touchStartY = touch.clientY;
 		touchCurrentY = touch.clientY;
-		touchDragElement = event.currentTarget as HTMLElement;
+		const el = event.currentTarget as HTMLElement;
 
-		// add dragging class
-		touchDragElement.classList.add('touch-dragging');
+		clearLongPress();
+		longPressActive = false;
+		longPressTimer = window.setTimeout(() => {
+			longPressTimer = null;
+			longPressActive = true;
+			touchDragIndex = index;
+			touchDragElement = el;
+			el.classList.add('touch-dragging');
+			navigator.vibrate?.(8);
+		}, LONG_PRESS_MS);
 	}
 
 	function handleTouchMove(event: TouchEvent) {
-		if (touchDragIndex === null || !touchDragElement || !queueTracksElement) return;
+		// still waiting on the hold: any real movement means scroll/tap, not drag
+		if (longPressTimer !== null) {
+			const t = event.touches[0];
+			if (
+				Math.abs(t.clientY - touchStartY) > MOVE_CANCEL_PX ||
+				Math.abs(t.clientX - touchStartX) > MOVE_CANCEL_PX
+			) {
+				clearLongPress();
+			}
+			return;
+		}
 
-		event.preventDefault();
+		if (!longPressActive || touchDragIndex === null || !touchDragElement || !queueTracksElement)
+			return;
+
+		event.preventDefault(); // hold the scroll; we're dragging now
 		const touch = event.touches[0];
 		touchCurrentY = touch.clientY;
 
@@ -154,9 +206,16 @@
 		}
 	}
 
-	function handleTouchEnd() {
-		if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
-			queue.moveTrack(touchDragIndex, dragOverIndex);
+	function handleTouchEnd(event: TouchEvent) {
+		clearLongPress();
+
+		if (longPressActive) {
+			// a drag happened — suppress the click that would otherwise play
+			event.preventDefault();
+			suppressClick = true;
+			if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
+				queue.moveTrack(touchDragIndex, dragOverIndex);
+			}
 		}
 
 		// cleanup
@@ -168,54 +227,67 @@
 		touchDragIndex = null;
 		dragOverIndex = null;
 		touchDragElement = null;
+		longPressActive = false;
 	}
 </script>
 
-{#snippet queueRow(track: Track, index: number, draggable: boolean)}
+{#snippet artwork(track: Track)}
+	{@const thumb = trackThumbnailUrl(track) ?? trackCoverUrl(track)}
+	<div class="queue-art" aria-hidden="true">
+		{#if thumb && !imgErrored.has(track.file_id)}
+			<SensitiveImage src={thumb} compact>
+				<img
+					src={thumb}
+					alt=""
+					loading="lazy"
+					draggable="false"
+					onerror={() => markImgError(track.file_id)}
+				/>
+			</SensitiveImage>
+		{:else}
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+				<path d="M9 18V5l12-2v13"></path>
+				<circle cx="6" cy="18" r="3"></circle>
+				<circle cx="18" cy="16" r="3"></circle>
+			</svg>
+		{/if}
+	</div>
+{/snippet}
+
+<!-- shared item content: artwork + title/artist. used by both the now-playing
+     card and the draggable queue rows so every item aligns to the same gutter -->
+{#snippet media(track: Track)}
+	{@render artwork(track)}
+	<div class="track-info">
+		<div class="track-title">{track.title}</div>
+		<div class="track-artist">
+			<a href="/u/{track.artist_handle}" draggable="false" onclick={(e) => e.stopPropagation()}>
+				{track.artist}
+			</a>
+		</div>
+	</div>
+{/snippet}
+
+<!-- a reorderable queue row: the whole row is the drag affordance (no handle).
+     desktop uses native HTML5 drag; touch uses press-and-hold (handleTouchStart). -->
+{#snippet queueRow(track: Track, index: number)}
 	<div
 		class="queue-track"
-		class:drag-over={draggable && dragOverIndex === index && touchDragIndex !== index}
-		class:is-dragging={draggable && (touchDragIndex === index || draggedIndex === index)}
+		class:drag-over={dragOverIndex === index && touchDragIndex !== index}
+		class:is-dragging={touchDragIndex === index || draggedIndex === index}
 		data-index={index}
-		{draggable}
+		draggable="true"
 		role="button"
 		tabindex="0"
-		ondragstart={draggable ? (e) => handleDragStart(e, index) : undefined}
-		ondragover={draggable ? (e) => handleDragOver(e, index) : undefined}
-		ondrop={draggable ? (e) => handleDrop(e, index) : undefined}
-		ondragend={draggable ? handleDragEnd : undefined}
+		ondragstart={(e) => handleDragStart(e, index)}
+		ondragover={(e) => handleDragOver(e, index)}
+		ondrop={(e) => handleDrop(e, index)}
+		ondragend={handleDragEnd}
+		ontouchstart={(e) => handleTouchStart(e, index)}
 		onclick={() => handleTrackClick(index)}
 		onkeydown={(e) => e.key === 'Enter' && handleTrackClick(index)}
 	>
-		{#if draggable}
-			<button
-				class="drag-handle"
-				ontouchstart={(e) => handleTouchStart(e, index)}
-				onclick={(e) => e.stopPropagation()}
-				aria-label="drag to reorder"
-				title="drag to reorder"
-			>
-				<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-					<circle cx="5" cy="3" r="1.5"></circle>
-					<circle cx="11" cy="3" r="1.5"></circle>
-					<circle cx="5" cy="8" r="1.5"></circle>
-					<circle cx="11" cy="8" r="1.5"></circle>
-					<circle cx="5" cy="13" r="1.5"></circle>
-					<circle cx="11" cy="13" r="1.5"></circle>
-				</svg>
-			</button>
-		{:else}
-			<span class="drag-placeholder" aria-hidden="true"></span>
-		{/if}
-
-		<div class="track-info">
-			<div class="track-title">{track.title}</div>
-			<div class="track-artist">
-				<a href="/u/{track.artist_handle}" onclick={(e) => e.stopPropagation()}>
-					{track.artist}
-				</a>
-			</div>
-		</div>
+		{@render media(track)}
 
 		<button
 			class="remove-btn"
@@ -373,13 +445,7 @@
 				<section class="now-playing">
 					<div class="section-label">now playing</div>
 					<div class="now-playing-card">
-						<div class="track-info">
-							<div class="track-title">{currentTrack.title}</div>
-							<div class="track-artist">
-								<a href="/u/{currentTrack.artist_handle}">{currentTrack.artist}</a>
-							</div>
-						</div>
-
+						{@render media(currentTrack)}
 					</div>
 				</section>
 			{/if}
@@ -400,7 +466,7 @@
 						ontouchcancel={handleTouchEnd}
 					>
 						{#each explicitUpcoming as { track, index } (`${track.file_id}:${index}`)}
-							{@render queueRow(track, index, true)}
+							{@render queueRow(track, index)}
 						{/each}
 
 						{#if continuationUpcoming.length > 0}
@@ -408,7 +474,7 @@
 								<h3>next from: <a href="/for-you" class="source-link">for you</a></h3>
 							</div>
 							{#each continuationUpcoming as { track, index } (`${track.file_id}:${index}`)}
-								{@render queueRow(track, index, false)}
+								{@render queueRow(track, index)}
 							{/each}
 						{/if}
 					</div>
@@ -723,12 +789,11 @@
 	.now-playing-card {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		padding: 1rem 1.1rem;
+		padding: 0.85rem 0.9rem;
 		border-radius: var(--radius-md);
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-default);
-		gap: 1rem;
+		gap: 0.7rem;
 		box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 15%, transparent);
 	}
 
@@ -808,16 +873,33 @@
 		text-decoration: underline;
 	}
 
-	/* keeps continuation rows' titles aligned with draggable rows (no handle) */
-	.drag-placeholder {
-		width: calc(16px + 0.7rem);
+	/* track artwork square — shared by now-playing and queue rows so every
+	   item's text starts at the same left edge (matches TrackItem's thumbnail) */
+	.queue-art {
 		flex-shrink: 0;
+		width: 48px;
+		height: 48px;
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-subtle);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-muted);
+	}
+
+	.queue-art :global(img) {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
 	}
 
 	.queue-track {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.7rem;
 		padding: 0.85rem 0.9rem;
 		border-radius: var(--radius-md);
 		cursor: pointer;
@@ -847,38 +929,6 @@
 	:global(.queue-track.touch-dragging) {
 		z-index: 100;
 		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-	}
-
-	.drag-handle {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0.35rem;
-		background: transparent;
-		border: none;
-		color: var(--text-muted);
-		cursor: grab;
-		touch-action: none;
-		border-radius: var(--radius-sm);
-		transition: all 0.2s;
-		flex-shrink: 0;
-	}
-
-	.drag-handle:hover {
-		color: var(--text-secondary);
-		background: var(--bg-tertiary);
-	}
-
-	.drag-handle:active {
-		cursor: grabbing;
-		color: var(--accent);
-	}
-
-	/* always show drag handle on touch devices */
-	@media (pointer: coarse) {
-		.drag-handle {
-			color: var(--text-tertiary);
-		}
 	}
 
 	.track-info {
