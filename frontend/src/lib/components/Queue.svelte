@@ -11,20 +11,14 @@
 	let draggedIndex = $state<number | null>(null);
 	let dragOverIndex = $state<number | null>(null);
 
-	// touch drag state — there is no visible handle, so a press-and-hold
-	// (long-press) on the row initiates a reorder; a quick tap plays the
-	// track and a vertical drag before the hold fires just scrolls the list.
+	// touch drag state — the right-side handle is the drag affordance: a touch
+	// that starts on the handle initiates a reorder, while the rest of the row
+	// stays tap-to-play and the list scrolls normally.
 	let touchDragIndex = $state<number | null>(null);
-	let touchStartX = 0;
 	let touchStartY = $state(0);
 	let touchCurrentY = $state(0);
 	let touchDragElement = $state<HTMLElement | null>(null);
 	let queueTracksElement = $state<HTMLElement | null>(null);
-	let longPressTimer: number | null = null;
-	let longPressActive = $state(false);
-	let suppressClick = false;
-	const LONG_PRESS_MS = 350;
-	const MOVE_CANCEL_PX = 10;
 
 	// per-track artwork load failures (file_id), so a broken thumbnail falls
 	// back to the placeholder rather than showing a busted image
@@ -93,11 +87,6 @@
 	const hiddenParticipantCount = $derived(jam.participants.length - MAX_VISIBLE_PARTICIPANTS);
 
 	function handleTrackClick(index: number) {
-		// a just-completed long-press drag also fires a click — swallow it
-		if (suppressClick) {
-			suppressClick = false;
-			return;
-		}
 		goToIndex(index);
 	}
 
@@ -132,50 +121,21 @@
 		dragOverIndex = null;
 	}
 
-	// touch drag and drop — press-and-hold to pick a row up, then drag
-	function clearLongPress() {
-		if (longPressTimer !== null) {
-			window.clearTimeout(longPressTimer);
-			longPressTimer = null;
-		}
-	}
-
+	// touch drag and drop — initiated by a touch on the row's drag handle
 	function handleTouchStart(event: TouchEvent, index: number) {
 		const touch = event.touches[0];
-		touchStartX = touch.clientX;
+		touchDragIndex = index;
 		touchStartY = touch.clientY;
 		touchCurrentY = touch.clientY;
-		const el = event.currentTarget as HTMLElement;
-
-		clearLongPress();
-		longPressActive = false;
-		longPressTimer = window.setTimeout(() => {
-			longPressTimer = null;
-			longPressActive = true;
-			touchDragIndex = index;
-			touchDragElement = el;
-			el.classList.add('touch-dragging');
-			navigator.vibrate?.(8);
-		}, LONG_PRESS_MS);
+		// lift the whole row, not just the handle the touch landed on
+		touchDragElement = (event.currentTarget as HTMLElement).closest('.queue-track');
+		touchDragElement?.classList.add('touch-dragging');
 	}
 
 	function handleTouchMove(event: TouchEvent) {
-		// still waiting on the hold: any real movement means scroll/tap, not drag
-		if (longPressTimer !== null) {
-			const t = event.touches[0];
-			if (
-				Math.abs(t.clientY - touchStartY) > MOVE_CANCEL_PX ||
-				Math.abs(t.clientX - touchStartX) > MOVE_CANCEL_PX
-			) {
-				clearLongPress();
-			}
-			return;
-		}
+		if (touchDragIndex === null || !touchDragElement || !queueTracksElement) return;
 
-		if (!longPressActive || touchDragIndex === null || !touchDragElement || !queueTracksElement)
-			return;
-
-		event.preventDefault(); // hold the scroll; we're dragging now
+		event.preventDefault();
 		const touch = event.touches[0];
 		touchCurrentY = touch.clientY;
 
@@ -206,16 +166,9 @@
 		}
 	}
 
-	function handleTouchEnd(event: TouchEvent) {
-		clearLongPress();
-
-		if (longPressActive) {
-			// a drag happened — suppress the click that would otherwise play
-			event.preventDefault();
-			suppressClick = true;
-			if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
-				queue.moveTrack(touchDragIndex, dragOverIndex);
-			}
+	function handleTouchEnd() {
+		if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
+			queue.moveTrack(touchDragIndex, dragOverIndex);
 		}
 
 		// cleanup
@@ -227,7 +180,6 @@
 		touchDragIndex = null;
 		dragOverIndex = null;
 		touchDragElement = null;
-		longPressActive = false;
 	}
 </script>
 
@@ -283,7 +235,6 @@
 		ondragover={(e) => handleDragOver(e, index)}
 		ondrop={(e) => handleDrop(e, index)}
 		ondragend={handleDragEnd}
-		ontouchstart={(e) => handleTouchStart(e, index)}
 		onclick={() => handleTrackClick(index)}
 		onkeydown={(e) => e.key === 'Enter' && handleTrackClick(index)}
 	>
@@ -301,6 +252,23 @@
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<line x1="18" y1="6" x2="6" y2="18"></line>
 				<line x1="6" y1="6" x2="18" y2="18"></line>
+			</svg>
+		</button>
+
+		<button
+			class="drag-handle"
+			ontouchstart={(e) => handleTouchStart(e, index)}
+			onclick={(e) => e.stopPropagation()}
+			aria-label="drag to reorder"
+			title="drag to reorder"
+		>
+			<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+				<circle cx="5" cy="3" r="1.5"></circle>
+				<circle cx="11" cy="3" r="1.5"></circle>
+				<circle cx="5" cy="8" r="1.5"></circle>
+				<circle cx="11" cy="8" r="1.5"></circle>
+				<circle cx="5" cy="13" r="1.5"></circle>
+				<circle cx="11" cy="13" r="1.5"></circle>
 			</svg>
 		</button>
 	</div>
@@ -894,6 +862,33 @@
 		height: 100%;
 		object-fit: cover;
 		display: block;
+	}
+
+	/* right-side reorder handle — the explicit, legible drag affordance.
+	   touch-action:none so a touch that lands here drags instead of scrolling. */
+	.drag-handle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		padding: 0.35rem;
+		background: transparent;
+		border: none;
+		color: var(--text-muted);
+		cursor: grab;
+		touch-action: none;
+		border-radius: var(--radius-sm);
+		transition: color 0.2s, background 0.2s;
+	}
+
+	.drag-handle:hover {
+		color: var(--text-secondary);
+		background: var(--bg-tertiary);
+	}
+
+	.drag-handle:active {
+		cursor: grabbing;
+		color: var(--accent);
 	}
 
 	.queue-track {
