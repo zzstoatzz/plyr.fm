@@ -710,11 +710,13 @@ class Queue {
 		if (fromIndex < 0 || fromIndex >= this.tracks.length) return;
 		if (toIndex < 0 || toIndex >= this.tracks.length) return;
 
-		// the continuation tail isn't reorderable; clamp moves to the
-		// explicit region so the suffix boundary stays stable
-		if (fromIndex >= this.continuationFromIndex) return;
-		if (this.continuationFromIndex < this.tracks.length) {
-			toIndex = Math.min(toIndex, this.continuationFromIndex - 1);
+		const boundary = this.continuationFromIndex;
+		const fromContinuation = fromIndex >= boundary;
+
+		// an explicit pick can't be buried into the continuation tail — clamp it
+		// to stay within the explicit region (the suffix boundary stays put)
+		if (!fromContinuation && boundary < this.tracks.length) {
+			toIndex = Math.max(0, Math.min(toIndex, boundary - 1));
 		}
 		if (fromIndex === toIndex) return;
 
@@ -729,6 +731,16 @@ class Queue {
 			this.currentIndex -= 1;
 		} else if (fromIndex > this.currentIndex && toIndex <= this.currentIndex) {
 			this.currentIndex += 1;
+		}
+
+		// boundary maintenance:
+		// - explicit reorder (clamped above): the moved item stays explicit and
+		//   the prefix size is unchanged → boundary unchanged.
+		// - continuation drag UP into the explicit prefix (toIndex < boundary):
+		//   the item is promoted to the queue → prefix grows by one.
+		// - continuation reorder within the tail (toIndex >= boundary): unchanged.
+		if (fromContinuation && toIndex < boundary) {
+			this.continuationFromIndex = Math.min(boundary + 1, updated.length);
 		}
 
 		this.tracks = updated;
