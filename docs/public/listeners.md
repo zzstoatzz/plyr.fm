@@ -76,6 +76,7 @@ your records — likes, playlists, comments — are stored on your [PDS](/glossa
 | `l` | next track |
 | `q` | toggle queue |
 | `cmd+k` | search |
+| `cmd+,` | open settings |
 | `m` | mute / unmute |
 
 ## leaving

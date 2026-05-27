@@ -31,6 +31,18 @@ the search modal supports fuzzy matching across tracks, artists, albums, and tag
 
 ---
 
+### Cmd/Ctrl+, - open settings
+
+**location**: `frontend/src/routes/+layout.svelte`
+
+navigates to the settings page. mirrors the platform-independent "preferences" convention — **Cmd+,** on macOS, **Ctrl+,** on windows/linux (also VS Code's settings shortcut).
+
+**behavior**:
+- works from anywhere, including input fields (uses modifier key)
+- desktop-oriented — mobile has no modifier keys, so use the settings button in the menu instead
+
+---
+
 ### Q - toggle queue
 
 **location**: `frontend/src/routes/+layout.svelte`
