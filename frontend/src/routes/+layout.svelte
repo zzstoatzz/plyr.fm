@@ -21,7 +21,7 @@
 	import { ambient } from '$lib/ambient.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
-	import { queue } from '$lib/queue.svelte';
+	import { queue, AMBIENT_LOW_WATER } from '$lib/queue.svelte';
 	import { jam } from '$lib/jam.svelte';
 	import { search } from '$lib/search.svelte';
 	import { browser } from '$app/environment';
@@ -134,6 +134,20 @@
 		player.currentTrack;
 		player.paused;
 		updateTitle();
+	});
+
+	// "keep playing": when the queue runs low, backfill the tail from For You.
+	// extends auto-advance, so it only runs when auto-advance is on; jams own
+	// their own queue. tracks are appended ahead of the current track ending
+	// so Player.svelte's synchronous prefetch path can resolve them.
+	$effect(() => {
+		if (!browser) return;
+		const enabled = preferences.keepPlaying && preferences.autoAdvance;
+		const playing = queue.currentTrack !== null;
+		const low = queue.upNext.length <= AMBIENT_LOW_WATER;
+		if (enabled && playing && low && !jam.active) {
+			untrack(() => void queue.fillFromForYou());
+		}
 	});
 
 	// set CSS custom property for queue width adjustment

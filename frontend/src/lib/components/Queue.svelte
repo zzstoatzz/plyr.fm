@@ -51,6 +51,15 @@
 			.filter(({ index }) => index > currentIdx);
 	});
 
+	// the "next from: for you" tail (ambient backfill) is rendered as a
+	// separate, labeled zone below the explicit queue. jams have no ambient.
+	const explicitUpcoming = $derived(
+		jam.active ? upcoming : upcoming.filter(({ track }) => !queue.ambientFileIds.has(track.file_id))
+	);
+	const ambientUpcoming = $derived(
+		jam.active ? [] : upcoming.filter(({ track }) => queue.ambientFileIds.has(track.file_id))
+	);
+
 	const outputParticipant = $derived.by<JamParticipant | null>(() => {
 		if (!jam.active || !jam.outputDid) return null;
 		return jam.participants.find((p) => p.did === jam.outputDid) ?? null;
@@ -160,6 +169,68 @@
 		touchDragElement = null;
 	}
 </script>
+
+{#snippet queueRow(track: Track, index: number, draggable: boolean)}
+	<div
+		class="queue-track"
+		class:drag-over={draggable && dragOverIndex === index && touchDragIndex !== index}
+		class:is-dragging={draggable && (touchDragIndex === index || draggedIndex === index)}
+		class:ambient={!draggable}
+		data-index={index}
+		{draggable}
+		role="button"
+		tabindex="0"
+		ondragstart={draggable ? (e) => handleDragStart(e, index) : undefined}
+		ondragover={draggable ? (e) => handleDragOver(e, index) : undefined}
+		ondrop={draggable ? (e) => handleDrop(e, index) : undefined}
+		ondragend={draggable ? handleDragEnd : undefined}
+		onclick={() => handleTrackClick(index)}
+		onkeydown={(e) => e.key === 'Enter' && handleTrackClick(index)}
+	>
+		{#if draggable}
+			<button
+				class="drag-handle"
+				ontouchstart={(e) => handleTouchStart(e, index)}
+				onclick={(e) => e.stopPropagation()}
+				aria-label="drag to reorder"
+				title="drag to reorder"
+			>
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+					<circle cx="5" cy="3" r="1.5"></circle>
+					<circle cx="11" cy="3" r="1.5"></circle>
+					<circle cx="5" cy="8" r="1.5"></circle>
+					<circle cx="11" cy="8" r="1.5"></circle>
+					<circle cx="5" cy="13" r="1.5"></circle>
+					<circle cx="11" cy="13" r="1.5"></circle>
+				</svg>
+			</button>
+		{/if}
+
+		<div class="track-info">
+			<div class="track-title">{track.title}</div>
+			<div class="track-artist">
+				<a href="/u/{track.artist_handle}" onclick={(e) => e.stopPropagation()}>
+					{track.artist}
+				</a>
+			</div>
+		</div>
+
+		<button
+			class="remove-btn"
+			onclick={(e) => {
+				e.stopPropagation();
+				handleRemoveTrack(index);
+			}}
+			aria-label="remove from queue"
+			title="remove from queue"
+		>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<line x1="18" y1="6" x2="6" y2="18"></line>
+				<line x1="6" y1="6" x2="18" y2="18"></line>
+			</svg>
+		</button>
+	</div>
+{/snippet}
 
 {#if tracks.length > 0}
 	<div class="queue" class:jam-mode={jam.active}>
@@ -314,10 +385,10 @@
 			<section class="queue-upcoming">
 				<div class="section-header">
 					<h3>up next</h3>
-					<span>{upcoming.length}</span>
+					<span>{explicitUpcoming.length}</span>
 				</div>
 
-				{#if upcoming.length > 0}
+				{#if explicitUpcoming.length > 0 || ambientUpcoming.length > 0}
 					<div
 						class="queue-tracks"
 						role="list"
@@ -326,64 +397,16 @@
 						ontouchend={handleTouchEnd}
 						ontouchcancel={handleTouchEnd}
 					>
-						{#each upcoming as { track, index } (`${track.file_id}:${index}`)}
-							<div
-								class="queue-track"
-								class:drag-over={dragOverIndex === index && touchDragIndex !== index}
-								class:is-dragging={touchDragIndex === index || draggedIndex === index}
-								data-index={index}
-								draggable={true}
-								role="button"
-								tabindex="0"
-								ondragstart={(e) => handleDragStart(e, index)}
-								ondragover={(e) => handleDragOver(e, index)}
-								ondrop={(e) => handleDrop(e, index)}
-								ondragend={handleDragEnd}
-								onclick={() => handleTrackClick(index)}
-								onkeydown={(e) => e.key === 'Enter' && handleTrackClick(index)}
-							>
-								<button
-									class="drag-handle"
-									ontouchstart={(e) => handleTouchStart(e, index)}
-									onclick={(e) => e.stopPropagation()}
-									aria-label="drag to reorder"
-									title="drag to reorder"
-								>
-									<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-										<circle cx="5" cy="3" r="1.5"></circle>
-										<circle cx="11" cy="3" r="1.5"></circle>
-										<circle cx="5" cy="8" r="1.5"></circle>
-										<circle cx="11" cy="8" r="1.5"></circle>
-										<circle cx="5" cy="13" r="1.5"></circle>
-										<circle cx="11" cy="13" r="1.5"></circle>
-									</svg>
-								</button>
-
-								<div class="track-info">
-									<div class="track-title">{track.title}</div>
-									<div class="track-artist">
-										<a href="/u/{track.artist_handle}" onclick={(e) => e.stopPropagation()}>
-											{track.artist}
-										</a>
-									</div>
-								</div>
-
-								<button
-									class="remove-btn"
-									onclick={(e) => {
-										e.stopPropagation();
-										handleRemoveTrack(index);
-									}}
-									aria-label="remove from queue"
-									title="remove from queue"
-								>
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<line x1="18" y1="6" x2="6" y2="18"></line>
-										<line x1="6" y1="6" x2="18" y2="18"></line>
-									</svg>
-								</button>
-							</div>
+						{#each explicitUpcoming as { track, index } (`${track.file_id}:${index}`)}
+							{@render queueRow(track, index, true)}
 						{/each}
+
+						{#if ambientUpcoming.length > 0}
+							<div class="ambient-header">next from: for you</div>
+							{#each ambientUpcoming as { track, index } (`${track.file_id}:${index}`)}
+								{@render queueRow(track, index, false)}
+							{/each}
+						{/if}
 					</div>
 				{:else}
 					<div class="empty-up-next">
@@ -761,6 +784,39 @@
 		flex-direction: column;
 		gap: 0.5rem;
 		padding-right: 0.35rem;
+	}
+
+	/* "next from: for you" divider above the ambient backfill tail */
+	.ambient-header {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin-top: 0.35rem;
+		padding: 0 0.1rem 0.1rem;
+		font-size: var(--text-xs);
+		letter-spacing: 0.04em;
+		color: var(--text-tertiary);
+	}
+
+	.ambient-header::before {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: var(--radius-full);
+		background: var(--accent);
+		opacity: 0.6;
+		flex-shrink: 0;
+	}
+
+	/* ambient rows read as tentative/auto-generated vs explicit queue items */
+	.queue-track.ambient {
+		border-style: dashed;
+		background: transparent;
+	}
+
+	.queue-track.ambient:hover {
+		background: var(--bg-hover);
+		border-style: solid;
 	}
 
 	.queue-track {

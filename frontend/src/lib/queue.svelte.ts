@@ -4,8 +4,15 @@ import { API_URL } from './config';
 import { APP_BROADCAST_PREFIX } from './branding';
 import { auth } from './auth.svelte';
 import { player } from './player.svelte';
+import { forYouCache } from './for-you.svelte';
 
 const SYNC_DEBOUNCE_MS = 250;
+
+// "keep playing": when the queue drains to this many upcoming tracks, top the
+// tail up from the For You feed. tracks must be appended ahead of the current
+// track ending so Player.svelte's synchronous prefetch path can resolve them.
+export const AMBIENT_LOW_WATER = 2;
+const AMBIENT_BATCH = 20;
 
 /** bridge for routing queue mutations through a jam's WebSocket transport */
 export interface JamBridge {
@@ -28,6 +35,15 @@ class Queue {
 	originalOrder = $state<Track[]>([]);
 	autoAdvance = $state(true);
 	progressMs = $state(0);
+
+	/**
+	 * file_ids of tracks appended by the "keep playing" backfill (the
+	 * "next from: for you" tail). Client-only — not synced to the server,
+	 * which only ever sees flat track_ids; on reload the tail simply
+	 * re-tops-up. Reassigned (never mutated in place) so reads stay reactive.
+	 */
+	ambientFileIds = $state<Set<string>>(new Set());
+	private backfilling = false;
 
 	revision = $state<number | null>(null);
 	etag = $state<string | null>(null);
@@ -489,18 +505,67 @@ class Queue {
 
 	// ── track mutations (routed through bridge when jam active) ──
 
+	/**
+	 * Insertion point for explicit "add to queue": the first ambient ("next
+	 * from") track in the *upcoming* region, so explicit adds slot ahead of the
+	 * recommendation tail without ever disturbing already-played history (the
+	 * current track may itself be ambient once playback advances into the tail).
+	 */
+	private firstAmbientIndex(): number {
+		if (this.ambientFileIds.size === 0) return this.tracks.length;
+		for (let i = this.currentIndex + 1; i < this.tracks.length; i++) {
+			if (this.ambientFileIds.has(this.tracks[i].file_id)) return i;
+		}
+		return this.tracks.length;
+	}
+
 	addTracks(tracks: Track[], playNow = false) {
 		if (tracks.length === 0) return;
 
 		this.lastUpdateWasLocal = true;
-		this.tracks = [...this.tracks, ...tracks];
+
+		// explicit adds jump ahead of any ambient "next from: for you" tail so
+		// the user's own picks always play before recommendations
+		const insertAt = this.firstAmbientIndex();
+		this.tracks = [
+			...this.tracks.slice(0, insertAt),
+			...tracks,
+			...this.tracks.slice(insertAt)
+		];
 		this.originalOrder = [...this.originalOrder, ...tracks];
 
 		if (playNow) {
-			this.currentIndex = this.tracks.length - tracks.length;
+			this.currentIndex = insertAt;
 		}
 
 		this.syncState();
+	}
+
+	/**
+	 * Append recommendation tracks to the end of the queue as the "next from:
+	 * for you" tail (deduped against the existing queue + prior ambient adds).
+	 */
+	appendAmbient(tracks: Track[]) {
+		const inQueue = new Set(this.tracks.map((t) => t.file_id));
+		const fresh = tracks.filter(
+			(t) => !inQueue.has(t.file_id) && !this.ambientFileIds.has(t.file_id)
+		);
+		if (fresh.length === 0) return;
+
+		this.lastUpdateWasLocal = true;
+		this.tracks = [...this.tracks, ...fresh];
+		this.originalOrder = [...this.originalOrder, ...fresh];
+		this.ambientFileIds = new Set([
+			...this.ambientFileIds,
+			...fresh.map((t) => t.file_id)
+		]);
+		this.syncState();
+	}
+
+	private clearAmbient() {
+		if (this.ambientFileIds.size > 0) {
+			this.ambientFileIds = new Set();
+		}
 	}
 
 	setQueue(tracks: Track[], startIndex = 0) {
@@ -510,6 +575,7 @@ class Queue {
 		}
 
 		this.lastUpdateWasLocal = true;
+		this.clearAmbient();
 		this.tracks = [...tracks];
 		this.originalOrder = [...tracks];
 		this.currentIndex = this.clampIndex(startIndex);
@@ -518,7 +584,12 @@ class Queue {
 
 	playNow(track: Track, autoPlay = true) {
 		this.lastUpdateWasLocal = autoPlay;
-		const upNext = this.tracks.slice(this.currentIndex + 1);
+		// keep explicitly-queued up-next, but drop the stale "next from" tail —
+		// the new track is a new context, so let backfill regenerate it
+		const upNext = this.tracks
+			.slice(this.currentIndex + 1)
+			.filter((t) => !this.ambientFileIds.has(t.file_id));
+		this.clearAmbient();
 		this.tracks = [track, ...upNext];
 		this.originalOrder = [...this.tracks];
 		this.currentIndex = 0;
@@ -527,6 +598,7 @@ class Queue {
 
 	clear() {
 		this.lastUpdateWasLocal = true;
+		this.clearAmbient();
 		this.tracks = [];
 		this.originalOrder = [];
 		this.currentIndex = 0;
@@ -651,6 +723,12 @@ class Queue {
 		this.tracks = updated;
 		this.originalOrder = this.originalOrder.filter((track) => track.file_id !== removed.file_id);
 
+		if (this.ambientFileIds.has(removed.file_id)) {
+			const next = new Set(this.ambientFileIds);
+			next.delete(removed.file_id);
+			this.ambientFileIds = next;
+		}
+
 		if (updated.length === 0) {
 			this.currentIndex = 0;
 			this.syncState();
@@ -675,11 +753,49 @@ class Queue {
 		const currentTrack = this.tracks[this.currentIndex];
 		if (!currentTrack) return;
 
+		this.clearAmbient();
 		this.tracks = [currentTrack];
 		this.originalOrder = [currentTrack];
 		this.currentIndex = 0;
 
 		this.syncState();
+	}
+
+	/**
+	 * "keep playing": top up the queue tail from the For You feed. Appends
+	 * real tracks ahead of the current track ending so the Player's
+	 * synchronous prefetch can resolve them. No-op in a jam (jam owns the
+	 * queue) or when the feed has nothing fresh to offer.
+	 */
+	async fillFromForYou(): Promise<void> {
+		if (!browser) return;
+		if (this.jamBridge) return;
+		if (this.backfilling) return;
+
+		this.backfilling = true;
+		try {
+			if (forYouCache.tracks.length === 0) {
+				await forYouCache.fetch();
+			}
+
+			const inQueue = new Set(this.tracks.map((t) => t.file_id));
+			const currentId = this.currentTrack?.file_id;
+			const candidates = () =>
+				forYouCache.tracks.filter(
+					(t) => !inQueue.has(t.file_id) && t.file_id !== currentId
+				);
+
+			let fresh = candidates();
+			if (fresh.length < AMBIENT_BATCH && forYouCache.hasMore) {
+				await forYouCache.fetchMore();
+				fresh = candidates();
+			}
+
+			if (fresh.length === 0) return;
+			this.appendAmbient(fresh.slice(0, AMBIENT_BATCH));
+		} finally {
+			this.backfilling = false;
+		}
 	}
 
 	startPositionSave() {

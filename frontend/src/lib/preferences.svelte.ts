@@ -26,6 +26,7 @@ export interface UiSettings {
 	pds_audio_uploads_enabled?: boolean;
 	font_family?: FontFamily;
 	atproto_client?: string;
+	keep_playing?: boolean;
 }
 
 export interface Preferences {
@@ -131,6 +132,11 @@ class PreferencesManager {
 
 	get atprotoClient(): string | null {
 		return this.data?.ui_settings?.atproto_client ?? null;
+	}
+
+	/** when the queue runs out, keep playing from the For You feed ("keep playing") */
+	get keepPlaying(): boolean {
+		return this.data?.ui_settings?.keep_playing ?? false;
 	}
 
 	applyFont(font: FontFamily): void {

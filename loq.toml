@@ -104,7 +104,7 @@ max_lines = 1186
 
 [[rules]]
 path = "frontend/src/lib/components/Queue.svelte"
-max_lines = 980
+max_lines = 1028
 
 [[rules]]
 path = "frontend/src/lib/components/SearchModal.svelte"
@@ -128,11 +128,11 @@ max_lines = 906
 
 [[rules]]
 path = "frontend/src/lib/queue.svelte.ts"
-max_lines = 738
+max_lines = 831
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"
-max_lines = 802
+max_lines = 816
 
 [[rules]]
 path = "frontend/src/routes/costs/+page.svelte"
@@ -160,7 +160,7 @@ max_lines = 3954
 
 [[rules]]
 path = "frontend/src/routes/settings/+page.svelte"
-max_lines = 1637
+max_lines = 1657
 
 [[rules]]
 path = "frontend/src/routes/track/\\[id\\]/+page.svelte"

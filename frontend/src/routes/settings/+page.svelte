@@ -25,6 +25,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	let currentFont = $derived(preferences.fontFamily);
 	let currentClient = $derived(preferences.atprotoClient ?? DEFAULT_AT_CLIENT);
 	let autoAdvance = $derived(preferences.autoAdvance);
+	let keepPlaying = $derived(preferences.keepPlaying);
 	let backgroundImageUrl = $derived(preferences.uiSettings.background_image_url ?? '');
 	let backgroundTile = $derived(preferences.uiSettings.background_tile ?? false);
 	let usePlayingArtwork = $derived(preferences.uiSettings.use_playing_artwork_as_background ?? false);
@@ -235,6 +236,11 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		queue.setAutoAdvance(value);
 		localStorage.setItem('autoAdvance', value ? '1' : '0');
 		await preferences.update({ auto_advance: value });
+	}
+
+	async function handleKeepPlayingToggle(event: Event) {
+		const value = (event.target as HTMLInputElement).checked;
+		await preferences.updateUiSettings({ keep_playing: value });
 	}
 
 	function handleAutoDownloadToggle(enabled: boolean) {
@@ -625,6 +631,20 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 							type="checkbox"
 							checked={autoAdvance}
 							onchange={handleAutoAdvanceToggle}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>keep playing</h3>
+						<p>when your queue runs out, keep playing from your for you feed</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={keepPlaying}
+							onchange={handleKeepPlayingToggle}
 						/>
 						<span class="toggle-slider"></span>
 					</label>
