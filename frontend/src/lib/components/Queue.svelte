@@ -51,14 +51,14 @@
 			.filter(({ index }) => index > currentIdx);
 	});
 
-	// the "next from: for you" tail (ambient backfill) is the contiguous suffix
-	// at/after queue.ambientFromIndex, rendered as a separate labeled zone below
-	// the explicit queue. jams have no ambient tail.
+	// the "next from: for you" tail (the auto-generated continuation) is the
+	// contiguous suffix at/after queue.continuationFromIndex, rendered as a
+	// separate labeled zone below the explicit queue. jams have no continuation.
 	const explicitUpcoming = $derived(
-		jam.active ? upcoming : upcoming.filter(({ index }) => index < queue.ambientFromIndex)
+		jam.active ? upcoming : upcoming.filter(({ index }) => index < queue.continuationFromIndex)
 	);
-	const ambientUpcoming = $derived(
-		jam.active ? [] : upcoming.filter(({ index }) => index >= queue.ambientFromIndex)
+	const continuationUpcoming = $derived(
+		jam.active ? [] : upcoming.filter(({ index }) => index >= queue.continuationFromIndex)
 	);
 
 	const outputParticipant = $derived.by<JamParticipant | null>(() => {
@@ -176,7 +176,7 @@
 		class="queue-track"
 		class:drag-over={draggable && dragOverIndex === index && touchDragIndex !== index}
 		class:is-dragging={draggable && (touchDragIndex === index || draggedIndex === index)}
-		class:ambient={!draggable}
+		class:continuation={!draggable}
 		data-index={index}
 		{draggable}
 		role="button"
@@ -389,7 +389,7 @@
 					<span>{explicitUpcoming.length}</span>
 				</div>
 
-				{#if explicitUpcoming.length > 0 || ambientUpcoming.length > 0}
+				{#if explicitUpcoming.length > 0 || continuationUpcoming.length > 0}
 					<div
 						class="queue-tracks"
 						role="list"
@@ -402,9 +402,9 @@
 							{@render queueRow(track, index, true)}
 						{/each}
 
-						{#if ambientUpcoming.length > 0}
-							<div class="ambient-header">next from: for you</div>
-							{#each ambientUpcoming as { track, index } (`${track.file_id}:${index}`)}
+						{#if continuationUpcoming.length > 0}
+							<div class="continuation-header">next from: for you</div>
+							{#each continuationUpcoming as { track, index } (`${track.file_id}:${index}`)}
 								{@render queueRow(track, index, false)}
 							{/each}
 						{/if}
@@ -787,8 +787,8 @@
 		padding-right: 0.35rem;
 	}
 
-	/* "next from: for you" divider above the ambient backfill tail */
-	.ambient-header {
+	/* "next from: for you" divider above the continuation tail */
+	.continuation-header {
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
@@ -799,7 +799,7 @@
 		color: var(--text-tertiary);
 	}
 
-	.ambient-header::before {
+	.continuation-header::before {
 		content: '';
 		width: 6px;
 		height: 6px;
@@ -809,13 +809,13 @@
 		flex-shrink: 0;
 	}
 
-	/* ambient rows read as tentative/auto-generated vs explicit queue items */
-	.queue-track.ambient {
+	/* continuation rows read as tentative/auto-generated vs explicit queue items */
+	.queue-track.continuation {
 		border-style: dashed;
 		background: transparent;
 	}
 
-	.queue-track.ambient:hover {
+	.queue-track.continuation:hover {
 		background: var(--bg-hover);
 		border-style: solid;
 	}

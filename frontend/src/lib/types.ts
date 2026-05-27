@@ -100,8 +100,10 @@ export interface QueueState {
 	original_order_ids: string[];
 	auto_advance?: boolean;
 	progress_ms?: number;
-	/** index where the "next from: for you" ambient tail begins (== length when none) */
-	ambient_from_index?: number;
+	/** index where the auto-generated continuation tail begins (== length when none) */
+	continuation_from_index?: number;
+	/** user explicitly cleared the queue — suppress backfill until next play context */
+	continuation_suppressed?: boolean;
 }
 
 export interface QueueResponse {
