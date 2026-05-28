@@ -24,7 +24,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,7 +42,10 @@ from backend._internal.atproto.handles import (
 )
 from backend._internal.audio import AudioFormat
 from backend._internal.background import get_docket
-from backend._internal.clients.transcoder import get_transcoder_client
+from backend._internal.clients.transcoder import (
+    TranscoderClient,
+    get_transcoder_client,
+)
 from backend._internal.copyright import TrackRightsInput, write_track_rights
 from backend._internal.image_uploads import (
     ImageUploadError,
@@ -156,6 +159,11 @@ class StorageResult:
     playable_format: AudioFormat
     r2_url: str | None
     transcode_info: "TranscodeInfo | None"
+    # True when this is a fast playable rendition (16-bit WAV remux of a
+    # lossless source) published ahead of the smaller MP3. signals the
+    # pipeline to skip the PDS blob at publish (the deferred optimize task
+    # writes the single canonical MP3 blob) and to enqueue that task.
+    needs_optimization: bool = False
 
 
 class UploadPhaseError(Exception):
@@ -376,6 +384,9 @@ async def _transcode_audio(
     original_file_id: str,
     filename: str,
     source_format: str,
+    *,
+    target_format: str,
+    timeout_seconds: int | None = None,
 ) -> TranscodeInfo | None:
     """transcode an already-staged audio file to a web-playable format.
 
@@ -391,6 +402,13 @@ async def _transcode_audio(
         original_file_id: storage file_id for the lossless source bytes
         filename: original filename (used to derive transcoded filename)
         source_format: source format (e.g., "aiff", "flac")
+        target_format: format to produce — "wav" for the fast compatibility
+            remux on the upload critical path, "mp3" for the deferred
+            optimization pass.
+        timeout_seconds: per-request transcoder timeout override. the WAV
+            remux is seconds, so the default (settings) is fine; the MP3
+            optimization runs off the critical path and passes a generous
+            value since no user is waiting on it.
 
     returns:
         TranscodeInfo with both file IDs, or None on failure
@@ -411,7 +429,6 @@ async def _transcode_audio(
     # `output_path`. these temp files exist only on this worker and are
     # unlinked in the `finally` below — they never cross the request →
     # worker boundary, which is fine on a multi-machine fly setup.
-    target_format = settings.transcoder.target_format
     source_path: str | None = None
     output_path: str | None = None
     try:
@@ -473,11 +490,20 @@ async def _transcode_audio(
         async def transcode_heartbeat() -> None:
             await job_service.heartbeat(upload_id)
 
-        client = get_transcoder_client()
+        if timeout_seconds is not None:
+            client = TranscoderClient(
+                service_url=str(settings.transcoder.service_url),
+                auth_token=settings.transcoder.auth_token,
+                timeout_seconds=timeout_seconds,
+                target_format=target_format,
+            )
+        else:
+            client = get_transcoder_client()
         result = await client.transcode_file(
             source_path,
             source_format,
             output_path=output_path,
+            target_format=target_format,
             heartbeat=transcode_heartbeat,
         )
 
@@ -582,11 +608,18 @@ async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResu
                 "supporter-gated tracks cannot use lossless formats yet"
             )
 
-        # the handler-staged file_id IS the lossless original. transcoding
-        # downloads it from storage, produces the playable sibling, and
-        # registers the staged id as `original_file_id`.
+        # the handler-staged file_id IS the lossless original. we produce a
+        # fast 16-bit WAV compatibility rendition (a near-instant PCM rewrap,
+        # not the slow MP3 encode) so the track can publish immediately and
+        # play in every browser; the smaller MP3 is generated off the critical
+        # path by the deferred optimize task. the staged id becomes
+        # `original_file_id` (the lossless master, preserved untouched).
         transcode_info = await _transcode_audio(
-            ctx.upload_id, ctx.audio_file_id, ctx.filename, ctx.audio_extension
+            ctx.upload_id,
+            ctx.audio_file_id,
+            ctx.filename,
+            ctx.audio_extension,
+            target_format="wav",
         )
         if not transcode_info:
             raise UploadPhaseError("transcoding failed")
@@ -625,16 +658,29 @@ async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResu
         playable_format=playable_format,
         r2_url=r2_url,
         transcode_info=transcode_info,
+        # a transcode here means we remuxed a lossless source to the interim
+        # WAV rendition, so the smaller MP3 still needs to be produced.
+        needs_optimization=transcode_info is not None,
     )
 
 
 async def _check_duplicate(ctx: UploadContext, sr: StorageResult) -> None:
-    """phase 3: check for duplicate tracks."""
+    """phase 3: check for duplicate tracks.
+
+    matches on the playable file_id OR the staged source id against an
+    existing track's `original_file_id`. the latter is what keeps dedup
+    robust for lossless re-uploads: the playable rendition swaps from WAV to
+    MP3 during optimization, so the playable file_id is not stable — but the
+    lossless source hash (the staged id) is.
+    """
     async with db_session() as db:
         result = await db.execute(
             select(Track).where(
-                Track.file_id == sr.file_id,
                 Track.artist_did == ctx.artist_did,
+                or_(
+                    Track.file_id == sr.file_id,
+                    Track.original_file_id == ctx.audio_file_id,
+                ),
             )
         )
         if existing := result.scalar_one_or_none():
@@ -653,6 +699,13 @@ async def _upload_to_pds(
     a HEAD request so the PDS can validate up-front without buffering.
     """
     if audio_info.is_gated:
+        return None
+
+    # the interim WAV rendition is large and throwaway — never push it to the
+    # user's PDS. the deferred optimize task writes the single canonical blob
+    # (the MP3) once. publishing now with audioUrl-only is an already-supported
+    # record shape (it's the same shape as the large-file R2-only fallback).
+    if sr.needs_optimization:
         return None
 
     async with db_session() as db:
@@ -1120,6 +1173,21 @@ async def _process_upload_background(ctx: UploadContext) -> None:
 
             # phase 7: post-upload tasks (tags, album sync, shared hooks)
             await _schedule_post_upload(ctx, sr, track, run_hooks=published_by_us)
+
+            # phase 8: for tracks published with the interim WAV rendition,
+            # kick off the deferred MP3 optimization. the track already exists
+            # and plays; this swaps in the smaller streaming rendition and
+            # writes the single canonical PDS blob off the critical path.
+            # (lazy import: audio_optimize imports the phase helpers from this
+            # module, so a top-level import would be circular.)
+            if published_by_us and sr.needs_optimization:
+                from backend.api.tracks.audio_optimize import (
+                    schedule_optimize_track_audio,
+                )
+
+                await schedule_optimize_track_audio(
+                    track.id, ctx.auth_session.session_id
+                )
 
             result: dict[str, Any] = {
                 "track_id": track.id,

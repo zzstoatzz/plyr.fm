@@ -439,6 +439,7 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
             )
 
             track = await _commit_db_swap(state, audio_info, sr, pds_result, new_cid)
+            replaced_needs_optimization = sr.needs_optimization
 
         except UploadPhaseError as e:
             await _rollback_new_files(
@@ -497,6 +498,17 @@ async def _process_replace_background(ctx: ReplaceContext) -> None:
 
         with contextlib.suppress(Exception):
             await invalidate_tracks_discovery_cache()
+
+        # replacing with a lossless source publishes the interim WAV rendition
+        # (same fast path as upload); kick off the deferred MP3 optimization so
+        # the replaced track also ends up on the smaller streaming rendition.
+        # lazy import: audio_optimize pulls the phase helpers from uploads.
+        if replaced_needs_optimization:
+            from backend.api.tracks.audio_optimize import (
+                schedule_optimize_track_audio,
+            )
+
+            await schedule_optimize_track_audio(track.id, ctx.auth_session.session_id)
 
         await job_service.update_progress(
             ctx.job_id,

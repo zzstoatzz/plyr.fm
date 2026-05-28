@@ -27,6 +27,10 @@ class JobType(str, Enum):
     UPLOAD = "upload"
     EXPORT = "export"
     PDS_BACKFILL = "pds_backfill"
+    # deferred MP3 optimization of a track published with the interim WAV
+    # rendition. a distinct type so the stuck-upload reaper (which scans
+    # type='upload') never reaps a legitimately long encode running here.
+    OPTIMIZE = "optimize"
 
 
 class Job(Base):

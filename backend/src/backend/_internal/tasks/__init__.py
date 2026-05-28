@@ -84,6 +84,7 @@ def _build_background_tasks() -> list:
     import time.
     """
     from backend._internal.jetstream import consume_jetstream
+    from backend.api.tracks.audio_optimize import optimize_track_audio
     from backend.api.tracks.audio_replace import run_track_audio_replace
     from backend.api.tracks.uploads import run_track_upload
 
@@ -121,6 +122,7 @@ def _build_background_tasks() -> list:
         scan_image_moderation,
         run_track_upload,
         run_track_audio_replace,
+        optimize_track_audio,
         reap_stuck_uploads,
     ]
 

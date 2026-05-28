@@ -70,7 +70,7 @@ async def test_transcoder_client_success(
     temp_output_file: Path,
 ) -> None:
     """successful transcode streams the response body to output_path."""
-    response, stream_cm = _make_streaming_response(
+    _response, stream_cm = _make_streaming_response(
         [b"transcoded ", b"mp3 data"], {"content-type": "audio/mpeg"}
     )
 
