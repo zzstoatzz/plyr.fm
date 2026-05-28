@@ -303,14 +303,21 @@ async def optimize_track_audio(
             )
             if not transcode_info:
                 # _transcode_audio already marked the job failed with detail.
-                raise _OptimizeAbort("transcode to mp3 failed")
+                # this is the transient family (transcoder timeout / 5xx / I/O
+                # error) — raise a plain exception so docket retries under
+                # `_OPTIMIZE_RETRY`. a genuinely bad source would also have
+                # failed the WAV remux on the publish path, which it didn't.
+                raise RuntimeError("transcode to mp3 failed; see job error detail")
             new_mp3_file_id = transcode_info.transcoded_file_id
 
             mp3_url = await storage.get_url(
                 new_mp3_file_id, file_type="audio", extension=OPTIMIZE_TARGET_FORMAT
             )
             if not mp3_url:
-                raise _OptimizeAbort("failed to resolve mp3 url")
+                # transient R2 hiccup; retry rather than give up on the track.
+                raise RuntimeError(
+                    f"failed to resolve mp3 url for file_id={new_mp3_file_id}"
+                )
 
             sr = StorageResult(
                 file_id=new_mp3_file_id,

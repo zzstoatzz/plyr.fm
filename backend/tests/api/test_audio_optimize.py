@@ -454,6 +454,30 @@ async def test_optimize_transient_failure_raises_for_retry_and_drops_orphan_mp3(
     assert "WAVID" not in deleted
 
 
+async def test_optimize_transient_transcode_failure_raises_for_retry(
+    db_session: AsyncSession, owner: Artist
+) -> None:
+    """`_transcode_audio` returns None for the transient family (transcoder
+    timeout / 5xx / I/O error). That path must raise so docket's
+    `ExponentialRetry` actually fires — treating it as a terminal abort would
+    leave the track on WAV forever despite the explicit retry plumbing."""
+    track = _wav_track()
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+    track_id = track.id
+
+    with (
+        _patch_optimize(transcode=None, pds=None),
+        pytest.raises(RuntimeError, match="transcode to mp3 failed"),
+    ):
+        await optimize_track_audio(track_id, "session-id")
+
+    await db_session.refresh(track)
+    assert track.file_id == "WAVID"  # untouched; retry will try again
+    assert track.file_type == "wav"
+
+
 async def test_optimize_aborts_when_track_replaced_during_encode(
     db_session: AsyncSession, owner: Artist
 ) -> None:

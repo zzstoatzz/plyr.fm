@@ -308,4 +308,4 @@ max_lines = 505
 
 [[rules]]
 path = "backend/tests/api/test_audio_optimize.py"
-max_lines = 584
+max_lines = 610
