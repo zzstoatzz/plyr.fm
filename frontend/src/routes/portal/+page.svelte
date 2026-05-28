@@ -11,6 +11,7 @@
 	import CopyrightSection from '$lib/components/CopyrightSection.svelte';
 	import PlaylistsSection from '$lib/components/portal/PlaylistsSection.svelte';
 	import TracksSection from '$lib/components/portal/TracksSection.svelte';
+	import AlbumsSection from '$lib/components/portal/AlbumsSection.svelte';
 	import SharesSection from '$lib/components/portal/SharesSection.svelte';
 	import type { Track, AlbumSummary } from '$lib/types';
 	import { API_URL } from '$lib/config';
@@ -611,41 +612,7 @@
 			onTracksChanged={reloadTracksAndAlbums}
 		/>
 
-		<section class="albums-section">
-			<h2>your albums</h2>
-
-			{#if loadingAlbums}
-				<div class="loading-container">
-					<WaveLoading size="lg" message="loading albums..." />
-				</div>
-			{:else if albums.length === 0}
-				<p class="empty">no albums yet - upload tracks with album names to create albums</p>
-			{:else}
-				<div class="albums-grid">
-					{#each albums as album}
-						<a href="/u/{auth.user?.handle}/album/{album.slug}" class="album-card">
-							{#if album.image_url}
-								<img src={album.image_url} alt="{album.title} cover" class="album-cover" />
-							{:else}
-								<div class="album-cover-placeholder">
-									<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-										<rect x="3" y="3" width="18" height="18" stroke="currentColor" stroke-width="1.5" fill="none"/>
-										<circle cx="12" cy="12" r="4" fill="currentColor"/>
-									</svg>
-								</div>
-							{/if}
-							<div class="album-info">
-								<h3 class="album-title">{album.title}</h3>
-								<p class="album-stats">
-									{album.track_count} {album.track_count === 1 ? 'track' : 'tracks'} •
-									{album.total_plays} {album.total_plays === 1 ? 'play' : 'plays'}
-								</p>
-							</div>
-						</a>
-					{/each}
-				</div>
-			{/if}
-		</section>
+		<AlbumsSection albums={albums} loadingAlbums={loadingAlbums} />
 
 		<PlaylistsSection />
 
@@ -1142,93 +1109,6 @@
 		transform: translateY(0);
 	}
 
-	.empty {
-		color: var(--text-muted);
-		padding: 2rem;
-		text-align: center;
-		background: var(--bg-tertiary);
-		border-radius: var(--radius-md);
-		border: 1px solid var(--border-subtle);
-	}
-
-	.loading-container {
-		display: flex;
-		justify-content: center;
-		padding: 3rem 1rem;
-	}
-
-	.albums-section {
-		margin-top: 3rem;
-	}
-
-	.albums-section h2 {
-		font-size: var(--text-page-heading);
-		margin-bottom: 1.5rem;
-	}
-
-	.albums-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-		gap: 1.5rem;
-	}
-
-	.album-card {
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-md);
-		padding: 1rem;
-		transition: all 0.2s;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		text-decoration: none;
-		color: inherit;
-	}
-
-	.album-card:hover {
-		border-color: var(--accent);
-		transform: translateY(-2px);
-	}
-
-	.album-cover {
-		width: 100%;
-		aspect-ratio: 1;
-		border-radius: var(--radius-base);
-		object-fit: cover;
-	}
-
-	.album-cover-placeholder {
-		width: 100%;
-		aspect-ratio: 1;
-		border-radius: var(--radius-base);
-		background: linear-gradient(135deg, rgba(var(--accent-rgb, 139, 92, 246), 0.15), rgba(var(--accent-rgb, 139, 92, 246), 0.05));
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--accent);
-	}
-
-	.album-info {
-		min-width: 0;
-		flex: 1;
-	}
-
-	.album-title {
-		font-size: var(--text-lg);
-		font-weight: 600;
-		color: var(--text-primary);
-		margin: 0 0 0.25rem 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.album-stats {
-		font-size: var(--text-sm);
-		color: var(--text-tertiary);
-		margin: 0;
-	}
-
 	/* your data section */
 	.data-section {
 		margin-top: 2.5rem;
@@ -1479,7 +1359,6 @@
 		}
 
 		.profile-section h2,
-		.albums-section h2,
 		.data-section h2 {
 			font-size: var(--text-xl);
 		}
@@ -1555,7 +1434,6 @@
 			font-size: var(--text-xs);
 		}
 
-		.albums-section,
 		.data-section {
 			margin-top: 2rem;
 		}
@@ -1576,21 +1454,6 @@
 
 		.export-btn {
 			padding: 0.5rem 0.85rem;
-			font-size: var(--text-sm);
-		}
-
-		/* albums mobile */
-		.albums-grid {
-			grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-			gap: 0.75rem;
-		}
-
-		.album-card {
-			padding: 0.75rem;
-			gap: 0.5rem;
-		}
-
-		.album-title {
 			font-size: var(--text-sm);
 		}
 
