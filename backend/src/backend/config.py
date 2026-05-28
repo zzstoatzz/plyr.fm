@@ -739,6 +739,15 @@ class TranscoderSettings(AppSettingsSection):
         default=600,
         description="Timeout for transcoder requests (10 min default for large files)",
     )
+    optimize_timeout_seconds: int = Field(
+        default=3600,
+        description=(
+            "Timeout for the deferred MP3 optimization pass. Generous (1 hour) "
+            "because it runs off the upload critical path — no user is waiting "
+            "— so even a long lossless source can finish its single-threaded "
+            "encode without tripping the request timeout."
+        ),
+    )
     target_format: str = Field(
         default="mp3",
         description="Target format for transcoded files",

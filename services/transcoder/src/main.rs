@@ -18,6 +18,7 @@ use sanitize_filename::sanitize;
 use serde::Deserialize;
 use tempfile::TempDir;
 use tokio::{fs::File, io::AsyncWriteExt, net::TcpListener, process::Command};
+use tokio_util::io::ReaderStream;
 use tracing::{error, info, warn};
 
 #[derive(Debug, Deserialize, Default)]
@@ -119,9 +120,16 @@ async fn transcode(
     let output_path = temp_dir.path().join(format!("output.{}", target_ext));
     run_ffmpeg(&input_path, &output_path, &target_ext).await?;
 
-    let bytes = tokio::fs::read(&output_path)
+    // stream the output file back rather than reading it all into a Vec. a
+    // long lossless source produces a large output (a ~90-min WAV is ~900MB),
+    // and buffering that whole blob in memory OOM-kills a 1GB machine. we open
+    // the file now and hand the open handle to a ReaderStream; the TempDir
+    // drops when this function returns, unlinking the path, but the open fd
+    // keeps the bytes readable until the stream finishes (Unix unlinked-open).
+    let file = File::open(&output_path)
         .await
-        .map_err(|e| AppError::Io(format!("failed to read output file: {e}")))?;
+        .map_err(|e| AppError::Io(format!("failed to open output file: {e}")))?;
+    let body = Body::from_stream(ReaderStream::new(file));
 
     let media_type = match target_ext.as_str() {
         "mp3" => "audio/mpeg",
@@ -145,7 +153,7 @@ async fn transcode(
             HeaderValue::from_str(&format!("attachment; filename=\"{}\"", download_name))
                 .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
         )
-        .body(Body::from(bytes))
+        .body(body)
         .map_err(|e| AppError::Http(e.to_string()))?;
 
     Ok(response)
@@ -222,7 +230,14 @@ async fn run_ffmpeg(input: &Path, output: &Path, target_ext: &str) -> Result<(),
             cmd.args(["-acodec", "libmp3lame", "-b:a", "320k", "-ar", "44100"]);
         }
         "wav" => {
-            cmd.args(["-acodec", "pcm_s16le", "-ar", "44100"]);
+            // compatibility remux: 16-bit little-endian PCM is the universal
+            // browser-playable floor. we deliberately do NOT force a sample
+            // rate or channel count — preserving the source keeps this a near-
+            // instant PCM rewrap (e.g. AIFF pcm_s16be -> WAV pcm_s16le is a
+            // byte-swap), instead of a full resample. the lossless master is
+            // retained separately by the caller, so 16-bit here is a delivery
+            // rendition, not the archival copy.
+            cmd.args(["-acodec", "pcm_s16le"]);
         }
         "m4a" => {
             cmd.args(["-acodec", "aac", "-b:a", "256k", "-ar", "44100"]);

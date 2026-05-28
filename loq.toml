@@ -40,11 +40,11 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1624
+max_lines = 1692
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 1081
+max_lines = 1085
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
@@ -256,7 +256,7 @@ max_lines = 1050
 
 [[rules]]
 path = "backend/src/backend/api/tracks/audio_replace.py"
-max_lines = 813
+max_lines = 825
 
 [[rules]]
 path = "backend/tests/conftest.py"
