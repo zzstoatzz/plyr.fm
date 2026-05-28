@@ -83,19 +83,19 @@ def _wav_track(**overrides) -> Track:
     duration is a computed property backed by `extra`, so it's seeded there
     (mirrors the audio-replace suite's `make_track`).
     """
-    defaults = dict(
-        title="Long Mix",
-        artist_did=OWNER_DID,
-        file_id="WAVID",
-        file_type="wav",
-        original_file_id="AIFFID",
-        original_file_type="aiff",
-        atproto_record_uri=TRACK_URI,
-        atproto_record_cid="bafyWAV",
-        r2_url="https://audio.example/WAVID.wav",
-        audio_storage="r2",
-        extra={"duration": 5400},
-    )
+    defaults = {
+        "title": "Long Mix",
+        "artist_did": OWNER_DID,
+        "file_id": "WAVID",
+        "file_type": "wav",
+        "original_file_id": "AIFFID",
+        "original_file_type": "aiff",
+        "atproto_record_uri": TRACK_URI,
+        "atproto_record_cid": "bafyWAV",
+        "r2_url": "https://audio.example/WAVID.wav",
+        "audio_storage": "r2",
+        "extra": {"duration": 5400},
+    }
     defaults.update(overrides)
     return Track(**defaults)
 
@@ -378,8 +378,7 @@ async def test_optimize_swaps_wav_to_mp3_preserving_original_and_created_at(
     assert call.args[3] == "aiff"  # source format
     assert call.kwargs["target_format"] == "mp3"
     assert (
-        call.kwargs["timeout_seconds"]
-        == settings.transcoder.optimize_timeout_seconds
+        call.kwargs["timeout_seconds"] == settings.transcoder.optimize_timeout_seconds
     )
 
     # DB row swapped to the mp3 rendition; lossless original preserved
@@ -412,9 +411,7 @@ async def test_optimize_is_noop_when_already_mp3(
     await db_session.refresh(track)
     track_id = track.id
 
-    with _patch_optimize(
-        transcode=_transcode_info("X", "mp3"), pds=None
-    ) as mocks:
+    with _patch_optimize(transcode=_transcode_info("X", "mp3"), pds=None) as mocks:
         await optimize_track_audio(track_id, "session-id")
 
     mocks["transcode"].assert_not_awaited()
@@ -422,11 +419,12 @@ async def test_optimize_is_noop_when_already_mp3(
     assert track.file_id == "MP3DONE"  # untouched
 
 
-async def test_optimize_failure_leaves_track_on_wav_and_drops_orphan_mp3(
+async def test_optimize_transient_failure_raises_for_retry_and_drops_orphan_mp3(
     db_session: AsyncSession, owner: Artist
 ) -> None:
-    """if the record update fails after the MP3 was produced, the track stays on
-    its (consistent) WAV rendition and the orphaned MP3 is cleaned up."""
+    """transient failure before PDS publishes: the track stays on its WAV
+    rendition (consistent), the orphaned MP3 is cleaned up, and the exception
+    propagates so docket's `ExponentialRetry` can try again."""
     track = _wav_track()
     db_session.add(track)
     await db_session.commit()
@@ -434,11 +432,14 @@ async def test_optimize_failure_leaves_track_on_wav_and_drops_orphan_mp3(
     track_id = track.id
 
     deleted: list[str] = []
-    with _patch_optimize(
-        transcode=_transcode_info("MP3NEW", "mp3"),
-        pds=None,
-        update_record_side_effect=RuntimeError("PDS putRecord exploded"),
-        deleted=deleted,
+    with (
+        _patch_optimize(
+            transcode=_transcode_info("MP3NEW", "mp3"),
+            pds=None,
+            update_record_side_effect=RuntimeError("PDS putRecord exploded"),
+            deleted=deleted,
+        ),
+        pytest.raises(RuntimeError, match="PDS putRecord exploded"),
     ):
         await optimize_track_audio(track_id, "session-id")
 
@@ -447,9 +448,113 @@ async def test_optimize_failure_leaves_track_on_wav_and_drops_orphan_mp3(
     assert track.file_id == "WAVID"
     assert track.file_type == "wav"
 
-    # the orphaned MP3 was deleted; the live WAV was NOT
+    # the orphaned MP3 was deleted (PDS hadn't been told about it); the live
+    # WAV was NOT
     assert "MP3NEW" in deleted
     assert "WAVID" not in deleted
+
+
+async def test_optimize_aborts_when_track_replaced_during_encode(
+    db_session: AsyncSession, owner: Artist
+) -> None:
+    """race with `audio_replace`: if the track audio changes between when the
+    optimization captures state and when it goes to publish, the pre-publish
+    guard aborts terminally — the user's replacement is NOT clobbered."""
+    track = _wav_track()
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+    track_id = track.id
+
+    # simulate a concurrent audio_replace that lands between the optimize's
+    # _upload_to_pds and the pre-publish guard: side-effect on the PDS-upload
+    # boundary mutates the track row to a different rendition + lossless source.
+    from backend.utilities.database import db_session as app_db_session
+
+    async def replace_during_encode(*_a, **_kw):
+        async with app_db_session() as db:
+            row = await db.get(Track, track_id)
+            if row is not None:
+                row.file_id = "REPLACED_WAV"
+                row.original_file_id = "REPLACED_AIFF"
+                await db.commit()
+        return None  # _upload_to_pds returns None (no PDS blob)
+
+    deleted: list[str] = []
+    # _patch_optimize sets a default _upload_to_pds patch; we re-patch over it
+    # AFTER entering so our mutation side_effect wins.
+    with (
+        _patch_optimize(
+            transcode=_transcode_info("MP3NEW", "mp3"),
+            pds=None,
+            deleted=deleted,
+        ),
+        patch(
+            "backend.api.tracks.audio_optimize._upload_to_pds",
+            new_callable=AsyncMock,
+            side_effect=replace_during_encode,
+        ),
+    ):
+        await optimize_track_audio(track_id, "session-id")
+
+    # the user's replacement survives — optimize did NOT clobber it
+    await db_session.refresh(track)
+    assert track.file_id == "REPLACED_WAV"
+    assert track.original_file_id == "REPLACED_AIFF"
+
+    # the orphaned MP3 was cleaned up; we never published it to PDS
+    assert "MP3NEW" in deleted
+
+
+async def test_optimize_preserves_mp3_when_pds_published_then_cas_misses(
+    db_session: AsyncSession, owner: Artist
+) -> None:
+    """if a concurrent replace lands AFTER our PDS write but BEFORE our DB CAS,
+    the CAS misses and we abort — but we must NOT delete the MP3, because PDS
+    now references it and third-party readers may already be fetching the url.
+
+    better to leak storage than to 404 their playback. the racing replace will
+    overwrite our PDS record with its own audio shortly after.
+    """
+    track = _wav_track()
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+    track_id = track.id
+
+    # side-effect on update_record (which runs AFTER the pre-publish guard) —
+    # mutates the track AFTER PDS has been written, so the CAS in
+    # _commit_optimize_swap sees mismatched file_id and rowcount==0.
+    from backend.utilities.database import db_session as app_db_session
+
+    async def replace_after_pds_write(**_kwargs):
+        async with app_db_session() as db:
+            row = await db.get(Track, track_id)
+            if row is not None:
+                row.file_id = "REPLACED_AFTER_PDS"
+                row.original_file_id = "REPLACED_AIFF"
+                await db.commit()
+        return (TRACK_URI, "bafyNEWREC")
+
+    deleted: list[str] = []
+    with _patch_optimize(
+        transcode=_transcode_info("MP3NEW", "mp3"),
+        pds=PdsBlobResult(
+            blob_ref={"$type": "blob", "ref": {"$link": "bafyMP3"}, "size": 216},
+            cid="bafyMP3",
+            size=216,
+        ),
+        update_record_side_effect=replace_after_pds_write,
+        deleted=deleted,
+    ):
+        await optimize_track_audio(track_id, "session-id")
+
+    # the racing replace survived; our CAS correctly refused to overwrite it
+    await db_session.refresh(track)
+    assert track.file_id == "REPLACED_AFTER_PDS"
+
+    # CRUCIAL: the MP3 was NOT deleted — PDS references it
+    assert "MP3NEW" not in deleted
 
 
 async def test_optimize_skips_when_session_gone(

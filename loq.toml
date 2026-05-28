@@ -305,3 +305,7 @@ max_lines = 649
 [[rules]]
 path = "backend/tests/test_post_create_hooks.py"
 max_lines = 505
+
+[[rules]]
+path = "backend/tests/api/test_audio_optimize.py"
+max_lines = 584
