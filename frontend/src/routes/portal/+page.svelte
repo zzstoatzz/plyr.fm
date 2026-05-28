@@ -16,7 +16,6 @@
 	import CopyrightRightsPanel from '$lib/components/CopyrightRightsPanel.svelte';
 	import type { TrackRights } from '$lib/components/CopyrightRightsPanel.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary } from '$lib/types';
-	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import AudioRevisionsSheet from '$lib/components/AudioRevisionsSheet.svelte';
 	import { API_URL, getServerConfig } from '$lib/config';
