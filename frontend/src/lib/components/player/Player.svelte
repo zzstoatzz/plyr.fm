@@ -631,12 +631,6 @@
 	});
 
 	function handleTrackEnded() {
-		if (!queue.autoAdvance) {
-			player.reset();
-			nowPlaying.clear();
-			return;
-		}
-
 		const next = queue.autoAdvanceTrack;
 		if (!next) {
 			player.reset();

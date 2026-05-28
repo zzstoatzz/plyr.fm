@@ -90,10 +90,6 @@ class PreferencesManager {
 		return this.data?.accent_color ?? null;
 	}
 
-	get autoAdvance(): boolean {
-		return this.data?.auto_advance ?? DEFAULT_PREFERENCES.auto_advance;
-	}
-
 	get allowComments(): boolean {
 		return this.data?.allow_comments ?? DEFAULT_PREFERENCES.allow_comments;
 	}

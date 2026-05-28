@@ -2,7 +2,6 @@
 	import { portal } from 'svelte-portal';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { queue } from '$lib/queue.svelte';
 	import { preferences, FONT_OPTIONS, type Theme, type FontFamily } from '$lib/preferences.svelte';
 	import { ambient } from '$lib/ambient.svelte';
 	import { API_URL } from '$lib/config';
@@ -45,7 +44,7 @@
 
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let currentFont = $derived(preferences.fontFamily);
-	let autoAdvance = $derived(preferences.autoAdvance);
+	let keepPlaying = $derived(preferences.keepPlaying);
 	let currentTheme = $derived(preferences.theme);
 
 	let ambientGradient = $derived(ambient.gradient);
@@ -65,10 +64,6 @@
 		if (currentColor) {
 			applyColorLocally(currentColor);
 		}
-	});
-
-	$effect(() => {
-		queue.setAutoAdvance(autoAdvance);
 	});
 
 	onMount(() => {
@@ -128,12 +123,9 @@
 		await preferences.updateUiSettings({ font_family: font });
 	}
 
-	async function handleAutoAdvanceToggle(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const value = input.checked;
-		queue.setAutoAdvance(value);
-		localStorage.setItem('autoAdvance', value ? '1' : '0');
-		await preferences.update({ auto_advance: value });
+	async function handleKeepPlayingToggle(event: Event) {
+		const value = (event.target as HTMLInputElement).checked;
+		await preferences.updateUiSettings({ keep_playing: value });
 	}
 
 	function selectTheme(theme: Theme) {
@@ -447,8 +439,8 @@
 					<section class="settings-section">
 						<h3>playback</h3>
 						<label class="toggle">
-							<input type="checkbox" checked={autoAdvance} oninput={handleAutoAdvanceToggle} />
-							<span class="toggle-text">auto-play next</span>
+							<input type="checkbox" checked={keepPlaying} oninput={handleKeepPlayingToggle} />
+							<span class="toggle-text">keep playing</span>
 						</label>
 					</section>
 

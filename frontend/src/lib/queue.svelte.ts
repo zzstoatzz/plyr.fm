@@ -33,7 +33,6 @@ class Queue {
 	currentIndex = $state(0);
 	shuffle = $state(false);
 	originalOrder = $state<Track[]>([]);
-	autoAdvance = $state(true);
 	progressMs = $state(0);
 
 	/**
@@ -132,13 +131,6 @@ class Queue {
 			.filter(({ index }) => index > this.currentIndex);
 	}
 
-	setAutoAdvance(value: boolean) {
-		this.autoAdvance = value;
-		if (browser) {
-			localStorage.setItem('autoAdvance', value ? '1' : '0');
-		}
-	}
-
 	async initialize() {
 		if (!browser || this.initialized) return;
 		this.initialized = true;
@@ -149,11 +141,6 @@ class Queue {
 		} else {
 			this.tabId = this.createTabId();
 			sessionStorage.setItem('queue_tab_id', this.tabId);
-		}
-
-		const savedAutoAdvance = localStorage.getItem('autoAdvance');
-		if (savedAutoAdvance !== null) {
-			this.autoAdvance = savedAutoAdvance !== '0';
 		}
 
 		// set up cross-tab synchronization
@@ -326,11 +313,6 @@ class Queue {
 
 		this.shuffle = state.shuffle;
 
-		// sync autoAdvance from server
-		if (state.auto_advance !== undefined) {
-			this.autoAdvance = state.auto_advance;
-		}
-
 		if (state.progress_ms !== undefined) {
 			this.progressMs = state.progress_ms;
 		}
@@ -426,7 +408,6 @@ class Queue {
 				current_track_id: this.currentTrack?.file_id ?? null,
 				shuffle: this.shuffle,
 				original_order_ids: this.originalOrder.map((t) => t.file_id),
-				auto_advance: this.autoAdvance,
 				progress_ms: this.progressMs,
 				continuation_from_index: this.continuationFromIndex,
 				continuation_suppressed: this.suppressContinuation

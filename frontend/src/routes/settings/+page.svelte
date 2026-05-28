@@ -10,7 +10,6 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { preferences, FONT_OPTIONS, type Theme, type FontFamily } from '$lib/preferences.svelte';
 	import { AT_CLIENTS, DEFAULT_AT_CLIENT } from '$lib/atclients';
 	import { ambient } from '$lib/ambient.svelte';
-	import { queue } from '$lib/queue.svelte';
 
 	let loading = $state(true);
 
@@ -24,7 +23,6 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let currentFont = $derived(preferences.fontFamily);
 	let currentClient = $derived(preferences.atprotoClient ?? DEFAULT_AT_CLIENT);
-	let autoAdvance = $derived(preferences.autoAdvance);
 	let keepPlaying = $derived(preferences.keepPlaying);
 	let backgroundImageUrl = $derived(preferences.uiSettings.background_image_url ?? '');
 	let backgroundTile = $derived(preferences.uiSettings.background_tile ?? false);
@@ -228,14 +226,6 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 
 	function selectTheme(theme: Theme) {
 		preferences.setTheme(theme);
-	}
-
-	async function handleAutoAdvanceToggle(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const value = input.checked;
-		queue.setAutoAdvance(value);
-		localStorage.setItem('autoAdvance', value ? '1' : '0');
-		await preferences.update({ auto_advance: value });
 	}
 
 	async function handleKeepPlayingToggle(event: Event) {
@@ -621,20 +611,6 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		<section class="settings-section">
 			{@render sectionHeading('playback')}
 			<div class="settings-card">
-				<div class="setting-row">
-					<div class="setting-info">
-						<h3>auto-play next</h3>
-						<p>when a track ends, automatically play the next item in your queue</p>
-					</div>
-					<label class="toggle-switch">
-						<input
-							type="checkbox"
-							checked={autoAdvance}
-							onchange={handleAutoAdvanceToggle}
-						/>
-						<span class="toggle-slider"></span>
-					</label>
-				</div>
 				<div class="setting-row">
 					<div class="setting-info">
 						<h3>keep playing</h3>

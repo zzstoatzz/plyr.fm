@@ -137,12 +137,12 @@
 	});
 
 	// "keep playing": when the queue runs low, extend it with a continuation
-	// from For You. extends auto-advance, so it only runs when auto-advance is
-	// on; jams own their own queue. tracks are appended ahead of the current
-	// track ending so Player.svelte's synchronous prefetch path can resolve them.
+	// from For You. jams own their own queue. tracks are appended ahead of the
+	// current track ending so Player.svelte's synchronous prefetch path can
+	// resolve them.
 	$effect(() => {
 		if (!browser) return;
-		const enabled = preferences.keepPlaying && preferences.autoAdvance;
+		const enabled = preferences.keepPlaying;
 		if (!enabled) {
 			// setting off: tear down any materialized "next from" tail so it doesn't
 			// outlive the toggle (the tail is persisted in server queue state)
