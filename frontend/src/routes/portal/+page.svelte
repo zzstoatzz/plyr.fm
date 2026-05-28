@@ -24,6 +24,7 @@
 	import { uploader } from '$lib/uploader.svelte';
 	import { player } from '$lib/player.svelte';
 	import { preferences } from '$lib/preferences.svelte'; import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
+	import { isOptimizingInterimWav } from '$lib/utils/track-audio';
 
 	// supported audio formats — matches backend AudioFormat enum + AlbumUploadForm
 	const AUDIO_FILE_INPUT_ACCEPT = '.mp3,.wav,.m4a,.aiff,.aif,.flac,audio/mpeg,audio/wav,audio/mp4,audio/aiff,audio/x-aiff,audio/flac';
@@ -1246,7 +1247,7 @@
 												{:else}
 													<div class="audio-current">
 														<span class="audio-current-label">
-															current: {track.file_type}{track.original_file_type && track.original_file_type !== track.file_type ? ` (transcoded from ${track.original_file_type})` : ''}{track.audio_storage === 'both' || track.audio_storage === 'pds' ? ' · stored on your PDS' : ' · stored on plyr.fm'}
+															current: {track.file_type}{track.original_file_type && track.original_file_type !== track.file_type ? ` (transcoded from ${track.original_file_type})` : ''}{isOptimizingInterimWav(track) ? ' · optimizing — mp3 will land on your PDS shortly' : track.audio_storage === 'both' || track.audio_storage === 'pds' ? ' · stored on your PDS' : ' · stored on plyr.fm'}
 														</span>
 													</div>
 													<label class="audio-upload-btn">

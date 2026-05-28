@@ -9,7 +9,7 @@ title: "streaming uploads"
 
 plyr.fm uses streaming uploads for audio files to maintain constant memory usage regardless of file size. this prevents out-of-memory errors when handling large files on constrained environments (fly.io shared-cpu VMs).
 
-note: this doc covers the **HTTP request → R2** path (handler-side, on the `app` process group). the **R2 → in-process consumer** path (worker-side, used during transcode + PDS upload) does *not* yet stream — `storage.get_file_data()` returns full bytes. that gap caused the 2026-04-30 OOM cycle and is tracked in zzstoatzz/plyr.fm#1357.
+note: this doc covers the original **HTTP request → R2** path (handler-side, on the `app` process group). the **R2 → in-process consumer** path (worker-side, used during transcode + PDS upload) was the gap that caused the 2026-04-30 OOM cycle (#1357) and has since been closed by [#1389](https://github.com/zzstoatzz/plyr.fm/pull/1389): `storage.stream_file_data()` yields chunks instead of `get_file_data()` returning full bytes, the transcoder client streams its response to disk via `aiofiles`, and the PDS upload path uses a body factory so DPoP-nonce retries get a fresh stream each attempt. the [transcoder service](/backend/transcoder/) now also streams its response body (PR #1461) so it doesn't buffer a ~900 MB WAV output in memory.
 
 ## problem (pre-implementation)
 

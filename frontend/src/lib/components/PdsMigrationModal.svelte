@@ -2,6 +2,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { API_URL } from '$lib/config';
 	import type { Track } from '$lib/types';
+	import { isOptimizingInterimWav } from '$lib/utils/track-audio';
 
 	interface Props {
 		tracks: Track[];
@@ -16,7 +17,13 @@
 	let fileSizes = $state<Record<number, number>>({});
 
 	let eligible = $derived(
-		tracks.filter((t) => !t.support_gate && !t.pds_blob_cid && t.file_id)
+		tracks.filter(
+			(t) =>
+				!t.support_gate &&
+				!t.pds_blob_cid &&
+				t.file_id &&
+				!isOptimizingInterimWav(t)
+		)
 	);
 
 	let allSelected = $derived(
@@ -34,9 +41,12 @@
 		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 	}
 
-	function trackStatus(track: Track): 'eligible' | 'migrated' | 'gated' {
+	function trackStatus(
+		track: Track
+	): 'eligible' | 'migrated' | 'gated' | 'optimizing' {
 		if (track.support_gate) return 'gated';
 		if (track.audio_storage === 'both' || track.pds_blob_cid) return 'migrated';
+		if (isOptimizingInterimWav(track)) return 'optimizing';
 		return 'eligible';
 	}
 
@@ -117,8 +127,9 @@
 		</div>
 
 		<p class="pds-description">
-			select tracks to back up to your personal data server. gated and already-migrated tracks
-			are shown for reference.
+			select tracks to back up to your personal data server. gated, already-migrated, and
+			currently-optimizing tracks are shown for reference — optimizing tracks land on your
+			PDS automatically once the mp3 rendition is ready.
 		</p>
 
 		{#if eligible.length > 0}
@@ -155,6 +166,11 @@
 							<span class="pds-badge migrated">on pds</span>
 						{:else if status === 'gated'}
 							<span class="pds-badge gated">gated</span>
+						{:else if status === 'optimizing'}
+							<span
+								class="pds-badge optimizing"
+								title="mp3 rendition is being prepared; it will be written to your PDS automatically when ready"
+							>optimizing</span>
 						{/if}
 					</div>
 				</div>
@@ -361,6 +377,12 @@
 	.pds-badge.gated {
 		background: color-mix(in srgb, var(--text-tertiary) 15%, transparent);
 		color: var(--text-tertiary);
+	}
+
+	.pds-badge.optimizing {
+		background: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
+		color: var(--text-secondary);
+		font-style: italic;
 	}
 
 	.pds-footer {

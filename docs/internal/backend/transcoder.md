@@ -50,12 +50,12 @@ curl -X POST https://plyr-transcoder.fly.dev/transcode?target=mp3 \
 - `Content-Type`: appropriate media type for target format
 - `Content-Disposition`: attachment with original filename + new extension
 
-**supported formats**:
-- mp3 (MPEG Layer 3)
-- m4a (AAC in MP4 container)
-- wav (PCM audio)
-- flac (lossless compression)
-- ogg (Vorbis codec)
+**supported target formats** (`?target=`):
+- `mp3` (libmp3lame, 320 kbps CBR) — the canonical streaming rendition produced by the deferred optimize task
+- `wav` (pcm_s16le, source rate/channels preserved) — the fast compatibility remux used on the publish path
+- `m4a` (AAC, 256 kbps) — available but not currently exercised by the backend
+
+source formats accepted on `file`: anything ffmpeg can decode (commonly aiff, flac, wav, m4a, mp3).
 
 **status codes**:
 - 200: transcoding successful, returns audio file
@@ -110,42 +110,34 @@ TRANSCODER_AUTH_TOKEN=dev-token-change-me
 2. **create temp directory**: isolated workspace for this request
 3. **save input file**: write uploaded bytes to temp file
 4. **determine format**: sanitize and validate target format
-5. **run ffmpeg**: spawn ffmpeg process with appropriate codec settings
-6. **stream output**: return transcoded file directly to client
-7. **cleanup**: delete temp directory (automatic)
+5. **run ffmpeg**: spawn ffmpeg, wait for completion (writes to an on-disk temp output so WAV/M4A get correct container headers)
+6. **stream output file**: open the temp output and serve it as the response body in chunks via `ReaderStream` — at no point does the service hold the whole transcoded blob in memory (a ~900 MB WAV remux would OOM the 1 GB machine otherwise)
+7. **cleanup**: drop the `TempDir`; the open output fd survives the unlink so the stream finishes reading from the now-unlinked-but-still-open file (standard Unix trick)
 
 ### ffmpeg command
 
 the service constructs ffmpeg commands based on target format:
 
 ```bash
-# example: convert to MP3
-ffmpeg -i input.wav -codec:a libmp3lame -qscale:a 2 -map_metadata 0 output.mp3
+# MP3 (canonical streaming rendition; produced by the deferred optimize task)
+ffmpeg -y -i input.aif -acodec libmp3lame -b:a 320k -ar 44100 output.mp3
 
-# example: convert to M4A (AAC)
-ffmpeg -i input.wav -codec:a aac -b:a 192k -map_metadata 0 output.m4a
+# WAV (fast compatibility remux on the publish path; source rate/channels preserved)
+ffmpeg -y -i input.aif -acodec pcm_s16le output.wav
 
-# example: convert to FLAC (lossless)
-ffmpeg -i input.flac -codec:a flac -compression_level 8 -map_metadata 0 output.flac
+# M4A (AAC; available but not currently exercised by the backend)
+ffmpeg -y -i input.wav -acodec aac -b:a 256k -ar 44100 output.m4a
 ```
 
-**flags explained**:
-- `-i input.wav`: input file
-- `-codec:a <codec>`: audio codec to use
-- `-qscale:a 2`: variable bitrate quality (0-9, lower = better)
-- `-b:a 192k`: constant bitrate (for AAC)
-- `-map_metadata 0`: preserve metadata (artist, title, etc.)
-- `-compression_level 8`: FLAC compression (0-12, higher = smaller file)
+**why no `-ar` on WAV**: the WAV path is a compatibility *remux* — the goal is a 16-bit container that plays everywhere, not a re-sample. preserving the source sample rate keeps it a near-instant PCM rewrap (e.g. AIFF `pcm_s16be` → WAV `pcm_s16le` is a byte-swap), instead of a full resample.
 
 ### codec selection
 
-| format | codec | container | typical use case |
-|--------|-------|-----------|------------------|
-| mp3 | libmp3lame | MPEG | universal compatibility |
-| m4a | aac | MP4 | modern devices, good compression |
-| wav | pcm_s16le | WAV | lossless, uncompressed |
-| flac | flac | FLAC | lossless, compressed |
-| ogg | libvorbis | OGG | open format, good compression |
+| target | codec | container | use |
+|--------|-------|-----------|-----|
+| mp3 | libmp3lame | MPEG | canonical streaming rendition (deferred optimize) |
+| wav | pcm_s16le | WAV | fast compatibility remux on the publish path |
+| m4a | aac | MP4 | available but not currently used |
 
 ## deployment
 
@@ -219,15 +211,20 @@ fly secrets unset TRANSCODER_AUTH_TOKEN -a plyr-transcoder
 
 ## integration with main backend
 
-the transcoder is integrated into the upload pipeline for lossless audio support (AIFF/FLAC). when a user uploads a non-web-playable format, the backend:
+the transcoder is integrated into the upload pipeline for AIFF (the only currently-supported lossless format that isn't browser-playable — FLAC, WAV, M4A, MP3 are all served as-is without transcoding). publishing is **decoupled** from MP3 optimization so a long lossless source doesn't block the upload on a multi-minute single-threaded encode:
 
-1. saves the original file to R2 (`original_file_id`)
-2. calls the transcoder to convert to MP3
-3. saves the transcoded file to R2 (`file_id`)
-4. ATProto record points to MP3 for browser compatibility
-5. export returns the original lossless file
+1. **publish path (fast, on critical path)**: the worker remuxes the staged AIFF → **16-bit WAV** via the transcoder (`target=wav` — a near-instant PCM rewrap, not an MP3 encode). The track is created and playable in every browser within seconds. The audio is served from R2 (`audioUrl`); **no PDS blob is written at this stage**.
+2. **optimize task (deferred, off critical path)**: a background task (`backend.api.tracks.audio_optimize`) reads the lossless original, transcodes it to **MP3** via the transcoder (`target=mp3`, generous timeout), uploads the MP3 to the user's PDS as the single canonical `audioBlob`, rebuilds the `fm.plyr.track` record (preserving `createdAt`), atomically swaps the playable rendition to MP3 (CAS to refuse if a concurrent `audio_replace` moved the audio under us), and deletes the interim WAV.
+3. **export**: returns the lossless `original_file_id` so the user always has their master.
 
-this enables "best of both worlds": universal browser playback + lossless export for data portability.
+so the transcoder is called in two distinct modes:
+
+| mode | target | called from | typical duration | timeout (`settings.transcoder`) | reaped by stuck-upload reaper? |
+|------|--------|-------------|------------------|---------------------------------|---------------------------------|
+| publish remux | `wav` | `_store_audio` (`api.tracks.uploads`) | seconds | `timeout_seconds` (default 600s) | yes — `type=upload` jobs |
+| deferred optimize | `mp3` | `optimize_track_audio` (`api.tracks.audio_optimize`) | minutes (1-CPU encode) | `optimize_timeout_seconds` (default 3600s) | no — `type=optimize` jobs are out of the reaper's scope |
+
+failure of the deferred optimize is safe: the track stays on its WAV rendition (fully consistent — R2 row, DB row, and PDS record all agree on the WAV `audioUrl`), and docket retries via `ExponentialRetry`. once the swap commits, the PDS record references the MP3 blob and the interim WAV is cleaned up.
 
 ### backend configuration
 
@@ -238,56 +235,46 @@ class TranscoderSettings(AppSettingsSection):
     """Transcoder service configuration for lossless audio conversion."""
 
     enabled: bool = True  # set to False to reject lossless uploads
-    url: str = "https://plyr-transcoder.fly.dev"
+    service_url: AnyHttpUrl = "https://plyr-transcoder.fly.dev"
     auth_token: str = ""  # set via TRANSCODER_AUTH_TOKEN env var
-    timeout: int = 300  # 5 minutes for large files
+    timeout_seconds: int = 600          # request-blocking remux on the publish path
+    optimize_timeout_seconds: int = 3600  # generous; deferred MP3 has no user waiting
+    target_format: str = "mp3"
 ```
 
 environment variables:
 - `TRANSCODER_ENABLED`: enable/disable transcoding (default: true)
-- `TRANSCODER_URL`: transcoder service URL
+- `TRANSCODER_SERVICE_URL`: transcoder service URL
 - `TRANSCODER_AUTH_TOKEN`: bearer token for authentication
+- `TRANSCODER_TIMEOUT_SECONDS`: per-request timeout for the publish-path WAV remux
+- `TRANSCODER_OPTIMIZE_TIMEOUT_SECONDS`: per-request timeout for the deferred MP3 encode
 
 ### calling from backend
 
-```python
-import httpx
+the backend never holds the full transcoded file in memory — it streams the request body to the transcoder and streams the response body to a worker-local temp file, then streams that temp file into R2:
 
-async def transcode_audio(
-    file: BinaryIO,
-    target_format: str = "mp3"
-) -> bytes:
-    """transcode audio file using transcoder service."""
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{settings.transcoder.url}/transcode",
-            params={"target": target_format},
-            files={"file": file},
-            headers={"X-Transcoder-Key": settings.transcoder.auth_token},
-            timeout=300.0  # 5 minutes for large files
-        )
-        response.raise_for_status()
-        return response.content
+```python
+client = get_transcoder_client()
+result = await client.transcode_file(
+    source_path,          # local path of the staged source (streamed from R2)
+    source_format,        # e.g. "aiff"
+    output_path=output_path,
+    target_format="wav",  # "wav" on the publish path, "mp3" on the deferred optimize
+    heartbeat=transcode_heartbeat,  # ticks jobs.updated_at so the reaper trusts liveness
+)
 ```
+
+`TranscoderClient.transcode_file` POSTs the file as multipart, then reads the response with `httpx.AsyncClient.stream(...)` and writes it chunk-by-chunk to `output_path` via `aiofiles`. the heartbeat fires on each chunk received (throttled to every 5s or every 10MB).
 
 ### error handling
 
-```python
-try:
-    transcoded = await transcode_audio(file, "mp3")
-except httpx.HTTPStatusError as e:
-    if e.response.status_code == 401:
-        logger.error("transcoder authentication failed")
-        raise HTTPException(500, "transcoding service unavailable")
-    elif e.response.status_code == 413:
-        raise HTTPException(413, "file too large for transcoding")
-    else:
-        logger.error(f"transcoding failed: {e}")
-        raise HTTPException(500, "transcoding failed")
-except httpx.TimeoutException:
-    logger.error("transcoding timed out")
-    raise HTTPException(504, "transcoding took too long")
-```
+`_transcode_audio` (in `api.tracks.uploads`) catches the typical failure modes and marks the job FAILED with detail before returning `None`:
+
+- `httpx.TimeoutException` — surfaced as `"transcode timed out after Ns"`
+- `httpx.HTTPStatusError` — surfaced with the response body (truncated)
+- unexpected exceptions — surfaced via `logfire.error(..., exc_info=True)`
+
+the **publish path** treats a `None` return as a failed upload (the track is never created; the user re-tries). the **deferred optimize task** treats a `None` return as a *transient* failure and re-raises so docket retries with exponential backoff — a true source-level failure would also have failed the publish-path WAV remux, which it didn't. terminal aborts (track removed, track moved on under us, session gone, already optimized) raise `_OptimizeAbort` and are swallowed so docket does not retry them.
 
 ## local development
 
@@ -346,9 +333,16 @@ transcoding performance depends on:
 - available CPU
 
 **benchmarks** (shared-cpu-1x on fly.io):
-- 3-minute MP3 (5MB) → MP3: ~2-3 seconds
-- 3-minute WAV (30MB) → MP3: ~4-5 seconds
-- 10-minute FLAC (50MB) → MP3: ~10-15 seconds
+
+WAV remux (publish path — PCM rewrap, not a re-encode; effectively I/O-bound):
+- 3-min AIFF (30 MB) → WAV: ~1 sec
+- 10-min AIFF (100 MB) → WAV: ~2 sec
+- 90-min AIFF (~900 MB) → WAV: ~5–10 sec
+
+MP3 encode (deferred optimize path — single-threaded libmp3lame, CPU-bound):
+- 3-min AIFF (30 MB) → MP3: ~5–10 sec
+- 10-min AIFF (100 MB) → MP3: ~30–60 sec
+- 90-min AIFF (~900 MB) → MP3: ~10–15 min (the case that motivated the decoupling — see `optimize_timeout_seconds`)
 
 ### resource usage
 
