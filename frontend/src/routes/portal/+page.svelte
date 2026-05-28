@@ -37,6 +37,7 @@
 	let loadingMoreTracks = $state(false);
 	// track editing state
 	let editingTrackId = $state<number | null>(null);
+	let savingTrackEdit = $state(false);
 	let editTitle = $state('');
 	let editDescription = $state('');
 	let editAlbum = $state('');
@@ -633,6 +634,8 @@
 
 
 	async function saveTrackEdit(trackId: number) {
+		if (savingTrackEdit) return;
+		savingTrackEdit = true;
 		const formData = new FormData();
 		formData.append('title', editTitle);
 		formData.append('description', editDescription);
@@ -705,7 +708,9 @@
 			cancelEdit();
 			toast.success('track updated successfully');
 		} catch (e) {
-			alert(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
+			toast.error(`network error: ${e instanceof Error ? e.message : 'unknown error'}`);
+		} finally {
+			savingTrackEdit = false;
 		}
 	}
 
@@ -1336,6 +1341,7 @@
 											type="button"
 											class="edit-cancel-btn"
 											onclick={cancelEdit}
+											disabled={savingTrackEdit}
 										>
 											cancel
 										</button>
@@ -1343,10 +1349,10 @@
 											type="button"
 											class="edit-save-btn"
 											onclick={() => saveTrackEdit(track.id)}
-											disabled={hasUnresolvedEditFeaturesInput}
+											disabled={savingTrackEdit || hasUnresolvedEditFeaturesInput}
 											title={hasUnresolvedEditFeaturesInput ? "please select or clear featured artist" : "save changes"}
 										>
-											save changes
+											{savingTrackEdit ? 'saving...' : 'save changes'}
 										</button>
 									</div>
 								</div>
