@@ -47,6 +47,44 @@ plyr.fm should become:
 
 ### May 2026
 
+#### decoupled publish/optimize — AIFF publishes instantly as WAV, MP3 follows in background (PRs #1461, #1462, release 2026.0528.060101, May 28)
+
+**why**: a reaper DM landed claiming a stuck upload — but the worker wasn't dead. Investigation surfaced woody.fm uploading a **939 MB / ~90-min AIFF** that took the 1-shared-CPU transcoder >10 min to MP3-encode and tripped the client's 600 s read timeout, producing `"transcoding failed"` and **no track at all**. Because the transcoder's heartbeat only fires on response-stream chunks (and ffmpeg writes nothing until it's done), `jobs.updated_at` froze mid-encode and the stuck-upload reaper false-fired at minute ~10 — making a slow-but-alive encode look like a dead worker. Two bundled decisions were the structural problem: (a) MP3 was a hard prerequisite for the track to exist at all, and (b) that encode ran under a fixed wall-clock deadline.
+
+**what shipped**:
+
+1. **transcoder service** (Rust, `services/transcoder/src/main.rs`):
+   - stream the output file back via `tokio_util::io::ReaderStream` instead of `fs::read`-ing it into a `Vec` — a ~900 MB WAV output would OOM the 1 GB box otherwise. relies on the Unix open-fd-after-unlink trick so the `TempDir` can drop while the stream finishes reading.
+   - `wav` target is now a **compat remux** (`pcm_s16le`, preserves source rate + channels — dropped the hardcoded `-ar 44100`). For a 16-bit/44.1 AIFF source this is a pure byte-swap, seconds at any length.
+
+2. **backend publish path** (`api/tracks/uploads.py`, shared with `audio_replace`):
+   - `_store_audio` for AIFF now remuxes to **WAV** instead of MP3 and sets `StorageResult.needs_optimization = True`.
+   - `_upload_to_pds` skips at publish when `needs_optimization` — the interim WAV is large and throwaway; we publish `audioUrl`-only (already-supported record shape, same as the `PayloadTooLargeError` R2-only fallback). The single canonical PDS blob (MP3) is written once, by the optimize task.
+   - `_check_duplicate` also matches `original_file_id == ctx.audio_file_id` so dedup survives the WAV→MP3 swap (the lossless source hash is stable; the playable `file_id` is not).
+   - `_process_upload_background` enqueues `optimize_track_audio(track.id, session_id)` after `_create_records` when `needs_optimization`. `audio_replace` does the same after its `_commit_db_swap`.
+
+3. **deferred MP3 optimize task** (new `api/tracks/audio_optimize.py`, `JobType.OPTIMIZE`):
+   - transcodes the lossless original (AIFF) → MP3 with `optimize_timeout_seconds=3600` (generous; no user is waiting and a 90-min single-threaded encode legitimately takes ~11 min)
+   - uploads MP3 to PDS as the **single** canonical `audioBlob` via the shared `_upload_to_pds` (with a built phase-ctx), rebuilds `fm.plyr.track` via `build_track_record` + `update_record` (preserves `createdAt` like `audio_replace` does)
+   - atomically swaps the playable rendition via a **CAS UPDATE** keyed on `file_id == captured_interim_wav AND original_file_id == captured_aiff` — refuses to clobber a concurrent `audio_replace` that landed mid-encode
+   - distinct from `JobType.UPLOAD` so the stuck-upload reaper (which scans `type='upload'`) never reaps a legitimately long encode running here
+
+4. **race-safety hardening** (after Codex review caught it):
+   - `_verify_still_optimizable(state)` re-reads `file_id` + `original_file_id` right before `update_record` so we don't push a stale MP3 to PDS on top of a replacement done during the encode
+   - new `pds_published` flag — once `update_record` returns, the cleanup paths leave the MP3 in R2 (the PDS record references the URL; third-party readers may already be fetching it). better to leak storage than 404 their playback.
+   - `_OPTIMIZE_RETRY = ExponentialRetry(attempts=3, 30s–5min)`. `_OptimizeAbort` (terminal: track moved on / session gone / already MP3) is swallowed; **other exceptions re-raise so docket retries** — including the original Codex-caught miss where `_transcode_audio` returning `None` (transient: transcoder timeout / 5xx / I/O error) was being treated as terminal.
+
+5. **docs + portal copy** (#1462): rewrote `docs/internal/backend/transcoder.md` integration section around the two call modes (publish-path WAV remux vs. deferred MP3 optimize) with refreshed config + supported-target table; updated `streaming-uploads.md`'s stale "worker→R2 doesn't stream" note (closed by #1389 + #1461). Introduced `frontend/src/lib/utils/track-audio.ts::isOptimizingInterimWav` so the **PDS migration modal**, **PDS backfill banner**, and **portal per-track status** all stop offering interim WAV tracks for manual migration and instead surface an "optimizing — mp3 will land on your PDS shortly" indicator. Without this, a user clicking migrate on an optimizing track would race the optimize task with a redundant ~900 MB PDS blob upload.
+
+**design notes**:
+- **16-bit WAV is a delivery rendition, not the archival copy.** The lossless master is preserved untouched as `original_file_id`. 24-bit / hi-res WAV isn't universally browser-playable, so 16-bit is the compat floor; we revisit if anyone asks for hi-res streaming.
+- **PDS blob is written exactly once, as MP3.** The fast-publish record carries `audioUrl` only; the optimize swap writes the single canonical `audioBlob`. Avoids the wasted ~900 MB AIFF→WAV PDS push the obvious-naive implementation would have done.
+- **The transcoder service has TWO timeout knobs.** `timeout_seconds` (default 600 s) for the publish-path WAV remux (seconds, but a real ceiling against a wedged service). `optimize_timeout_seconds` (default 3600 s) for the deferred MP3 encode, because each retry attempt re-runs the entire ~11 min encode and stacking short retries would waste CPU more than it'd help.
+- **Concurrency note for the future**: the optimize task currently keys `ConcurrencyLimit` on `session_id` (max 2). Cross-user is unbounded, which is fine at current upload volume but would saturate the single-CPU transcoder on a busy day. Logged as a follow-up.
+- **Diagnostic from the original incident**: the reaper false-fired because the transcoder client's heartbeat only ticks on `aiter_bytes` chunks. We deliberately did *not* try to fix that for the publish path — it's now seconds-long (no time to trip the threshold). For the deferred optimize the encode is minutes long, but it's a `JobType.OPTIMIZE` row that the reaper doesn't scan, so the heartbeat gap is moot there too. The reaper's contract ("`updated_at` reflects worker liveness for upload jobs") is preserved without further changes.
+
+---
+
 #### "keep playing" + queue refactor — continuous playback and unified queue items (PRs #1450→#1453, #1455, prod-deployed May 27)
 
 **why**: when the queue ran dry, playback just stopped — listeners had repeatedly asked for continuous playback (#1446, #1353, #1445). Separately, the queue-sidebar items were visually inconsistent (no artwork, text misaligned because up-next rows carried a left drag handle) and the new "next from" divider read as an afterthought.
@@ -319,6 +357,8 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
+**decoupled publish/optimize — AIFF publishes instantly as WAV** (#1461, #1462, release 2026.0528.060101, May 28): lossless uploads no longer block on a multi-minute MP3 encode. The track is created in seconds with a fast 16-bit WAV compatibility rendition (a near-instant PCM rewrap, plays in every browser); the smaller MP3 streaming rendition + single canonical PDS `audioBlob` land via a deferred `optimize_track_audio` task with a generous timeout. Race-safe against concurrent `audio_replace` (pre-publish guard + atomic CAS DB swap), preserves third-party PDS readers on partial failure (`pds_published` gate around the MP3 cleanup), retriable transient failures via `ExponentialRetry`. **Reusable pattern**: split "publish" from "optimize" anywhere the canonical artifact is expensive — let the cheap-but-universal rendition be the contract, the expensive one be an upgrade. Caught a real concurrency miss in code review (Codex flagged the `_OptimizeAbort`-vs-retryable distinction on the transcoder-None path), now pinned with a regression test that the transient path actually re-raises. The mechanism is `optimize_track_audio` / `needs_optimization` / `interim WAV` — product/format-agnostic.
+
 **"keep playing" continuous playback + unified queue items** (#1450→#1453, #1455, prod-deployed May 27): opt-in (default off) continuation that backfills the queue tail from For You when it runs dry, shown as a "next from: for you" zone ahead of which your explicit adds always play. Frontend-only — rides `ui_settings`, with a positional `continuationFromIndex` boundary persisted in queue state. The same cluster unified the queue-sidebar items (48px artwork, shared left gutter, right-side drag handle; continuation rows promote into the queue on drag-up) and added the `Cmd/Ctrl+,` settings shortcut. Naming convention worth keeping: the mechanism is `continuation*` (source-agnostic), product names stay in the UI layer. **#1455 follow-up**: turning the toggle off now actively prunes the materialized tail (`Queue.clearContinuation()`) — previously it only stopped future fills, so the persisted tail kept showing on or off.
 
 **copyright paradigm — indiemusi.ch alpha shipped behind `copyright-paradigm` flag** (#1400→#1411, May 14–16): plyr.fm's first opt-in copyright paradigm. flagged tracks write `ch.indiemusi.alpha.song` + `recording` records to the user's PDS alongside the `fm.plyr.track` and route audio through the existing supporter-gated storage path (private R2, auth-proxied, no PDS blob). Three foundational PRs (#1400 phase 1 config + record writers, #1401 portal section + OAuth scope-upgrade plumbing, #1402 upload + edit forms + per-track endpoints), five follow-ups (#1403 review fixes including the load-bearing P1.1 audio migration on edit-time toggle, #1404 IPI/ISWC/ISRC format validators, #1405 oauth-metadata scope coupling lock, #1407 atprotofans check narrowed, #1409 the publishingOwner record manager with merge-preserve writes after Hilke flagged the duplicate-on-existing-record case), and finally #1410 the feature flag itself so the merged code ships to prod dormant. #1411 disconnect-is-DB-only is the cleanup. **Rollout shape**: flag-on for own DID, dogfood, broaden to Hilke + partners, then drop the flag. The merge-preserve write contract (`fetch fresh from PDS → strip known modeled keys → spread validated input back`) is the reusable pattern — unknown fields preserved, individual↔company switches actually clear stale state, blanking a field removes it.
@@ -342,7 +382,6 @@ See `.status_history/2025-11.md` for detailed history.
 - audio may persist after closing bluesky in-app browser on iOS ([#779](https://github.com/zzstoatzz/plyr.fm/issues/779)) - user reported audio and lock screen controls continue after dismissing SFSafariViewController. expo-web-browser has a [known fix](https://github.com/expo/expo/issues/22406) that calls `dismissBrowser()` on close, and bluesky uses a version with the fix, but it didn't help in this case. we [opened an upstream issue](https://github.com/expo/expo/issues/42454) then closed it as duplicate after finding prior art. root cause unclear - may be iOS version specific or edge case timing issue.
 
 ### backlog
-- harden file format support — revisit transcoding pipeline (FLAC graduated in #1189, AIFF still transcodes)
 - Jetstream audit trail / activity feed integration — persistent log of firehose events, toggle for visibility
 - share to bluesky (#334)
 - lyrics and annotations (#373)
@@ -390,7 +429,7 @@ See `.status_history/2025-11.md` for detailed history.
 - ✅ artist profiles synced with Bluesky
 - ✅ track upload with streaming
 - ✅ audio streaming via 307 redirects to CDN (audio.plyr.fm, edge-cached)
-- ✅ lossless audio (AIFF/FLAC) with automatic transcoding for browser compatibility
+- ✅ lossless audio (AIFF/FLAC) — AIFF uploads publish instantly as a 16-bit WAV compatibility rendition; the MP3 streaming rendition + PDS blob are produced by a deferred background task without blocking the upload
 - ✅ PDS blob storage for audio (user data ownership)
 - ✅ play count tracking, likes, queue management
 - ✅ "keep playing" — opt-in continuous playback from the For You feed when the queue runs dry ("next from: for you")
@@ -473,5 +512,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-27 (documented the "keep playing" continuous-playback + queue-items cluster #1450→#1453 shipped to prod this session, plus the previously-undocumented atproto client-picker cluster #1436→#1442/#1447 and the play-count #1443 / track-edit #1449 fixes; added Part B / collection-continuity to `next`. Then folded in #1455 — the toggle-prune fix that makes "keep playing" off actually tear down the persisted continuation tail, with the diagnostic note that frontend has no telemetry so `queue_state` is ground truth and staging can't demo the feature since For You excludes own uploads).
+this is a living document. last updated 2026-05-28 (documented the decoupled publish/optimize cluster #1461→#1462 shipped to prod this session as release `2026.0528.060101` — AIFF uploads now publish instantly as 16-bit WAV with the MP3 streaming rendition + canonical PDS blob produced by a deferred `optimize_track_audio` task; race-safe against concurrent `audio_replace`; the reusable pattern is "split publish from optimize" anywhere the canonical artifact is expensive. Removed the "harden file format support" backlog item — AIFF was the only remaining non-web-playable upload format, and it no longer blocks).
 
