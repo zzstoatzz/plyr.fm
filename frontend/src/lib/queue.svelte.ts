@@ -538,6 +538,7 @@ class Queue {
 				: insertAt + tracks.length;
 
 		if (playNow) {
+			player.radio = null; // playing a track leaves radio mode
 			this.currentIndex = insertAt;
 		}
 
@@ -606,6 +607,7 @@ class Queue {
 	}
 
 	playNow(track: Track, autoPlay = true) {
+		player.radio = null; // playing a track leaves radio mode
 		this.lastUpdateWasLocal = autoPlay;
 		this.suppressContinuation = false;
 		// keep explicitly-queued up-next, but drop the stale "next from" tail —
@@ -631,6 +633,7 @@ class Queue {
 	goTo(index: number) {
 		if (index < 0 || index >= this.tracks.length) return;
 
+		player.radio = null; // playing a queue item leaves radio mode
 		this.lastUpdateWasLocal = true;
 		this.currentIndex = index;
 		this.syncState();

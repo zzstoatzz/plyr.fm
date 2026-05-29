@@ -1,6 +1,18 @@
 import type { Track } from './types';
 import { API_URL } from './config';
 
+// radio is a distinct *source* on the same player: when set, the one <audio>
+// element plays this stream instead of a queue track. metadata only — no
+// second audio element, no second player.
+export interface RadioNowPlaying {
+	title: string;
+	artist_handle: string;
+	artwork_url: string | null;
+	stream_url: string;
+	/** station position to resume at (seconds) */
+	start_at: number;
+}
+
 // natural timeupdate steps are sub-second; a larger jump is a seek, scrub, or a
 // restored hydration position — none of which is listened time.
 const PLAY_PROGRESS_SEEK_THRESHOLD_S = 5;
@@ -8,6 +20,8 @@ const PLAY_PROGRESS_SEEK_THRESHOLD_S = 5;
 // global player state using Svelte 5 runes
 class PlayerState {
 	currentTrack = $state<Track | null>(null);
+	// when non-null, the player is in radio mode (overrides currentTrack)
+	radio = $state<RadioNowPlaying | null>(null);
 	audioElement = $state<HTMLAudioElement | undefined>(undefined);
 	paused = $state(true);
 
@@ -56,6 +70,33 @@ class PlayerState {
 
 	togglePlayPause() {
 		this.paused = !this.paused;
+	}
+
+	/** start (or switch) radio playback through the shared audio element.
+	 * call from a user gesture so the play() isn't blocked by autoplay policy. */
+	playRadio(np: RadioNowPlaying) {
+		this.radio = np;
+		this.currentTrack = null; // exit track mode; the track loader bails on null
+		this.paused = false;
+		const el = this.audioElement;
+		if (!el) return;
+		el.src = np.stream_url;
+		el.load();
+		// play immediately (preserve the gesture), then align to station position
+		el.play().catch(() => (this.paused = true));
+		const seek = () => {
+			if (np.start_at > 0 && Number.isFinite(el.duration)) {
+				el.currentTime = Math.min(np.start_at, el.duration);
+			}
+		};
+		if (el.readyState >= 1) seek();
+		else el.onloadedmetadata = seek;
+	}
+
+	stopRadio() {
+		this.radio = null;
+		this.paused = true;
+		this.audioElement?.pause();
 	}
 
 	incrementPlayCount() {
