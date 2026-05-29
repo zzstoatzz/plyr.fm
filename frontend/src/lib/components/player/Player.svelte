@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
+	import { radio } from '$lib/radio.svelte';
 	import { jam } from '$lib/jam.svelte';
 	import { nowPlaying } from '$lib/now-playing.svelte';
 	import { moderation } from '$lib/moderation.svelte';
@@ -18,6 +19,7 @@
 	import { page } from '$app/stores';
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
+	import RadioFooter from './RadioFooter.svelte';
 	import type { Track } from '$lib/types';
 
 	// atprotofans base URL for supporter CTAs
@@ -630,6 +632,20 @@
 		return () => window.clearInterval(interval);
 	});
 
+	// radio shares the audio output with the queue: when a queue track starts
+	// playing, drop out of radio mode (tuneIn() already pauses the track the
+	// other direction).
+	$effect(() => {
+		if (radio.active && player.currentTrack && !player.paused) {
+			radio.stop();
+		}
+	});
+
+	// the footer's volume control drives the radio <audio> too
+	$effect(() => {
+		if (radio.audioElement) radio.audioElement.volume = player.volume;
+	});
+
 	function handleTrackEnded() {
 		const next = queue.autoAdvanceTrack;
 		if (!next) {
@@ -737,8 +753,19 @@
 
 </script>
 
-{#if player.currentTrack}
-	<div class="player" class:jam-active={jam.active} class:is-playing={!player.paused}>
+<!-- persistent radio audio: lives in the footer player (not on the radio page)
+     so radio playback survives route navigation -->
+<audio
+	bind:this={radio.audioElement}
+	preload="metadata"
+	ontimeupdate={() => { if (radio.audioElement) radio.progressSeconds = radio.audioElement.currentTime; }}
+	onended={() => radio.onEnded()}
+	onplay={() => (radio.playing = true)}
+	onpause={() => (radio.playing = false)}
+></audio>
+
+{#if player.currentTrack || radio.active}
+	<div class="player" class:jam-active={jam.active} class:is-playing={radio.active ? radio.playing : !player.paused}>
 		<audio
 			bind:this={player.audioElement}
 			bind:currentTime={player.currentTime}
@@ -749,6 +776,9 @@
 			onended={handleTrackEnded}
 		></audio>
 
+		{#if radio.active}
+			<RadioFooter />
+		{:else if player.currentTrack}
 		{#if jam.active}
 			<div class="jam-stripe-label">
 				<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>{#if jam.isOutputDevice}<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>{/if}</svg>
@@ -771,6 +801,7 @@
 			/>
 			<PlaybackControls />
 		</div>
+		{/if}
 	</div>
 {/if}
 
