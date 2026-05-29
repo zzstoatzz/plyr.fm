@@ -1,22 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { invalidateAll, replaceState } from '$app/navigation';
-	import { AtpAgent } from '@atproto/api';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
-	import CopyrightSection from '$lib/components/CopyrightSection.svelte';
+	import PortalIdentity from '$lib/components/portal/PortalIdentity.svelte';
 	import PlaylistsSection from '$lib/components/portal/PlaylistsSection.svelte';
-	import ProfileSection from '$lib/components/portal/ProfileSection.svelte';
 	import TracksSection from '$lib/components/portal/TracksSection.svelte';
 	import AlbumsSection from '$lib/components/portal/AlbumsSection.svelte';
-	import SharesSection from '$lib/components/portal/SharesSection.svelte';
-	import DataSection from '$lib/components/portal/DataSection.svelte';
 	import type { Track, AlbumSummary } from '$lib/types';
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { checkAtprotofansEligibility } from '$lib/utils/atprotofans';
 	import { preferences } from '$lib/preferences.svelte'; import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
 
 	let loading = $state(true);
@@ -26,9 +23,8 @@
 	let tracksHasMore = $state(false);
 	let loadingTracks = $state(false);
 	let loadingMoreTracks = $state(false);
-	// atprotofans eligibility - checked on mount; shared with TracksSection + ProfileSection
+	// atprotofans eligibility - checked on mount; gates the supporter toggle in TracksSection
 	let atprotofansEligible = $state(false);
-	let checkingAtprotofans = $state(false);
 
 	// album management state
 	let albums = $state<AlbumSummary[]>([]);
@@ -93,7 +89,7 @@
 		try {
 			await Promise.all([
 				loadMyTracks(),
-				checkAtprotofansEligibility(),
+				loadAtprotofansEligibility(),
 				loadMyAlbums()
 			]);
 		} catch (_e) {
@@ -133,36 +129,8 @@
 		}
 	}
 
-	async function checkAtprotofansEligibility() {
-		if (!auth.user?.did) return;
-		checkingAtprotofans = true;
-		try {
-			// resolve DID to find user's PDS (com.atprotofans.profile isn't indexed by Bluesky appview)
-			const didDoc = await fetch(`https://plc.directory/${auth.user.did}`).then((r) => r.json());
-			const pdsService = didDoc?.service?.find(
-				(s: { id: string }) => s.id === '#atproto_pds'
-			);
-			const pdsUrl = pdsService?.serviceEndpoint;
-			if (!pdsUrl) {
-				atprotofansEligible = false;
-				return;
-			}
-
-			// use SDK agent pointed at user's PDS to fetch the record
-			const agent = new AtpAgent({ service: pdsUrl });
-			const response = await agent.com.atproto.repo.getRecord({
-				repo: auth.user.did,
-				collection: 'com.atprotofans.profile',
-				rkey: 'self'
-			});
-			const value = response.data.value as { acceptingSupporters?: boolean } | undefined;
-			atprotofansEligible = value?.acceptingSupporters === true;
-		} catch (_e) {
-			// record doesn't exist or other error - not eligible
-			atprotofansEligible = false;
-		} finally {
-			checkingAtprotofans = false;
-		}
+	async function loadAtprotofansEligibility() {
+		atprotofansEligible = await checkAtprotofansEligibility(auth.user?.did);
 	}
 
 	async function loadMyAlbums() {
@@ -211,9 +179,7 @@
 			<h2>artist portal</h2>
 		</div>
 
-		<ProfileSection {atprotofansEligible} {checkingAtprotofans} />
-
-		<CopyrightSection />
+		<PortalIdentity trackCount={tracksTotal} albumCount={albums.length} />
 
 		<a href="/upload" class="upload-card">
 			<div class="upload-card-icon">
@@ -226,6 +192,29 @@
 			<div class="upload-card-text">
 				<span class="upload-card-title">upload track</span>
 				<span class="upload-card-subtitle">add new music</span>
+			</div>
+			<svg class="upload-card-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<polyline points="9 18 15 12 9 6"></polyline>
+			</svg>
+		</a>
+
+		<a href="/portal/manage" class="upload-card">
+			<div class="upload-card-icon">
+				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<line x1="4" y1="21" x2="4" y2="14"></line>
+					<line x1="4" y1="10" x2="4" y2="3"></line>
+					<line x1="12" y1="21" x2="12" y2="12"></line>
+					<line x1="12" y1="8" x2="12" y2="3"></line>
+					<line x1="20" y1="21" x2="20" y2="16"></line>
+					<line x1="20" y1="12" x2="20" y2="3"></line>
+					<line x1="1" y1="14" x2="7" y2="14"></line>
+					<line x1="9" y1="8" x2="15" y2="8"></line>
+					<line x1="17" y1="16" x2="23" y2="16"></line>
+				</svg>
+			</div>
+			<div class="upload-card-text">
+				<span class="upload-card-title">manage</span>
+				<span class="upload-card-subtitle">profile, rights, sharing, data</span>
 			</div>
 			<svg class="upload-card-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 				<polyline points="9 18 15 12 9 6"></polyline>
@@ -247,10 +236,6 @@
 		<AlbumsSection albums={albums} loadingAlbums={loadingAlbums} />
 
 		<PlaylistsSection />
-
-		<SharesSection />
-
-		<DataSection tracks={tracks} tracksTotal={tracksTotal} loadMyTracks={loadMyTracks} />
 	</main>
 {/if}
 
