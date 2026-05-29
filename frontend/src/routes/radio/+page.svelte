@@ -2,12 +2,18 @@
 	import { onMount } from 'svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { API_URL } from '$lib/config';
-	import { APP_NAME } from '$lib/branding';
+	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { auth } from '$lib/auth.svelte';
 	import { radio } from '$lib/radio.svelte';
 
 	let helpOpen = $state(false);
 	const endpoint = `${API_URL}/radio/state`;
+
+	// link preview — a stable station identity, not a per-moment "now playing"
+	// (the on-air track changes constantly and scrapers cache the snapshot).
+	const RADIO_DESCRIPTION =
+		'a live, always-on stream of audio from across plyr.fm — tune in and let it play.';
+	const RADIO_OG_IMAGE = `${APP_CANONICAL_URL}/icons/icon-512.png`;
 
 	async function handleLogout() {
 		await auth.logout();
@@ -23,10 +29,25 @@
 
 <svelte:head>
 	<title>radio • {APP_NAME}</title>
-	<meta
-		name="description"
-		content="live public radio state from plyr.fm for listeners, games, and lightweight clients"
-	/>
+	<meta name="description" content={RADIO_DESCRIPTION} />
+
+	<!-- Open Graph / Facebook -->
+	<meta property="og:type" content="website" />
+	<meta property="og:title" content="radio · {APP_NAME}" />
+	<meta property="og:description" content={RADIO_DESCRIPTION} />
+	<meta property="og:url" content={`${APP_CANONICAL_URL}/radio`} />
+	<meta property="og:site_name" content={APP_NAME} />
+	<meta property="og:image" content={RADIO_OG_IMAGE} />
+	<meta property="og:image:secure_url" content={RADIO_OG_IMAGE} />
+	<meta property="og:image:width" content="512" />
+	<meta property="og:image:height" content="512" />
+	<meta property="og:image:alt" content="{APP_NAME} radio" />
+
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content="radio · {APP_NAME}" />
+	<meta name="twitter:description" content={RADIO_DESCRIPTION} />
+	<meta name="twitter:image" content={RADIO_OG_IMAGE} />
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
