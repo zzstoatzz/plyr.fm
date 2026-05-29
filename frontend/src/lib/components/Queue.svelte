@@ -415,7 +415,7 @@
 		<div class="queue-body">
 			{#if currentTrack}
 				<section class="now-playing">
-					<div class="section-label">now playing</div>
+					<div class="section-label">now playing{#if player.radio} · radio{/if}</div>
 					<div class="now-playing-card">
 						{@render media(currentTrack)}
 					</div>
