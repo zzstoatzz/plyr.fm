@@ -1,4 +1,4 @@
-"""API endpoints for PDS audio backfill."""
+"""API endpoints for saving audio to a user's PDS."""
 
 import asyncio
 import json
@@ -13,39 +13,39 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_auth
 from backend._internal.jobs import job_service
-from backend._internal.pds_backfill_tasks import schedule_pds_backfill
+from backend._internal.pds_save_tasks import schedule_pds_save
 from backend.models import Track, get_db
 from backend.models.job import JobStatus, JobType
 
-router = APIRouter(prefix="/pds-backfill", tags=["pds"])
+router = APIRouter(prefix="/pds-save", tags=["pds"])
 logger = logging.getLogger(__name__)
 
 
-class PdsBackfillStartRequest(BaseModel):
-    """optional request body for selective backfill."""
+class PdsSaveStartRequest(BaseModel):
+    """optional request body for selectively saving tracks."""
 
-    track_ids: list[int] | None = None  # if None, backfill all eligible
+    track_ids: list[int] | None = None  # if None, save all eligible
 
 
-class PdsBackfillStartResponse(BaseModel):
-    """response when PDS backfill is queued for processing."""
+class PdsSaveStartResponse(BaseModel):
+    """response when a PDS save is queued for processing."""
 
-    backfill_id: str
+    save_id: str
     status: str
     message: str
     track_count: int
 
 
 @router.post("/audio")
-async def backfill_audio_to_pds(
+async def save_audio_to_pds(
     session: Annotated[Session, Depends(require_auth)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    body: PdsBackfillStartRequest | None = None,
-) -> PdsBackfillStartResponse:
-    """start backfill of existing tracks to the user's PDS.
+    body: PdsSaveStartRequest | None = None,
+) -> PdsSaveStartResponse:
+    """start saving existing tracks' audio to the user's PDS.
 
-    optionally accepts a list of track_ids to selectively backfill.
-    returns a backfill_id for tracking progress via SSE.
+    optionally accepts a list of track_ids to selectively save.
+    returns a save_id for tracking progress via SSE.
     """
     stmt = (
         select(Track.id)
@@ -63,39 +63,39 @@ async def backfill_audio_to_pds(
     track_ids = [row[0] for row in result.all()]
 
     if not track_ids:
-        raise HTTPException(status_code=404, detail="no tracks found to backfill")
+        raise HTTPException(status_code=404, detail="no tracks found to save")
 
-    backfill_id = await job_service.create_job(
-        JobType.PDS_BACKFILL,
+    save_id = await job_service.create_job(
+        JobType.PDS_SAVE,
         session.did,
-        "backfill queued for processing",
+        "save queued for processing",
     )
 
-    await schedule_pds_backfill(backfill_id, session.session_id, track_ids)
+    await schedule_pds_save(save_id, session.session_id, track_ids)
 
-    return PdsBackfillStartResponse(
-        backfill_id=backfill_id,
+    return PdsSaveStartResponse(
+        save_id=save_id,
         status="pending",
-        message="backfill queued for processing",
+        message="save queued for processing",
         track_count=len(track_ids),
     )
 
 
-@router.get("/{backfill_id}/progress")
-async def backfill_progress(backfill_id: str) -> StreamingResponse:
-    """SSE endpoint for PDS backfill progress."""
+@router.get("/{save_id}/progress")
+async def save_progress(save_id: str) -> StreamingResponse:
+    """SSE endpoint for PDS save progress."""
 
     async def event_stream():
         try:
             while True:
-                job = await job_service.get_job(backfill_id)
+                job = await job_service.get_job(save_id)
                 if not job:
                     yield (
                         "data: "
                         + json.dumps(
                             {
                                 "status": "failed",
-                                "message": "backfill job not found",
+                                "message": "save job not found",
                                 "error": "job lost",
                             }
                         )
@@ -104,7 +104,7 @@ async def backfill_progress(backfill_id: str) -> StreamingResponse:
                     break
 
                 payload = {
-                    "backfill_id": job.id,
+                    "save_id": job.id,
                     "status": job.status,
                     "message": job.message,
                     "error": job.error,
@@ -112,9 +112,7 @@ async def backfill_progress(backfill_id: str) -> StreamingResponse:
                     if job.result
                     else 0,
                     "total_count": job.result.get("total_count") if job.result else 0,
-                    "backfilled_count": job.result.get("backfilled_count")
-                    if job.result
-                    else 0,
+                    "saved_count": job.result.get("saved_count") if job.result else 0,
                     "skipped_count": job.result.get("skipped_count")
                     if job.result
                     else 0,
@@ -135,7 +133,7 @@ async def backfill_progress(backfill_id: str) -> StreamingResponse:
                 await asyncio.sleep(1.0)
 
         except Exception as e:
-            logger.error(f"error in backfill progress stream: {e}")
+            logger.error(f"error in pds save progress stream: {e}")
             yield (
                 "data: "
                 + json.dumps(

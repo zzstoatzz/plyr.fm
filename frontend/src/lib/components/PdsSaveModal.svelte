@@ -8,10 +8,10 @@
 		tracks: Track[];
 		open: boolean;
 		onClose: () => void;
-		onMigrate?: (trackIds: number[]) => void;
+		onSave?: (trackIds: number[]) => void;
 	}
 
-	let { tracks, open = $bindable(), onClose, onMigrate }: Props = $props();
+	let { tracks, open = $bindable(), onClose, onSave }: Props = $props();
 
 	let selected = new SvelteSet<number>();
 	let fileSizes = $state<Record<number, number>>({});
@@ -43,9 +43,9 @@
 
 	function trackStatus(
 		track: Track
-	): 'eligible' | 'migrated' | 'gated' | 'optimizing' {
+	): 'eligible' | 'saved' | 'gated' | 'optimizing' {
 		if (track.support_gate) return 'gated';
-		if (track.audio_storage === 'both' || track.pds_blob_cid) return 'migrated';
+		if (track.audio_storage === 'both' || track.pds_blob_cid) return 'saved';
 		if (isOptimizingInterimWav(track)) return 'optimizing';
 		return 'eligible';
 	}
@@ -94,9 +94,9 @@
 		}
 	}
 
-	function startMigration() {
+	function startSave() {
 		if (selected.size === 0) return;
-		onMigrate?.([...selected]);
+		onSave?.([...selected]);
 		onClose();
 	}
 
@@ -106,9 +106,9 @@
 </script>
 
 <div class="pds-backdrop" class:open role="presentation" onclick={handleBackdropClick}>
-	<div class="pds-modal" role="dialog" aria-modal="true" aria-label="migrate tracks to pds">
+	<div class="pds-modal" role="dialog" aria-modal="true" aria-label="save tracks to your PDS">
 		<div class="pds-header">
-			<h2 class="pds-title">migrate to pds</h2>
+			<h2 class="pds-title">save to your PDS</h2>
 			<button class="pds-close-btn" onclick={onClose} aria-label="close">
 				<svg
 					width="18"
@@ -127,7 +127,7 @@
 		</div>
 
 		<p class="pds-description">
-			select tracks to back up to your personal data server. gated, already-migrated, and
+			select tracks to save to your personal data server. gated, already-saved, and
 			currently-optimizing tracks are shown for reference — optimizing tracks land on your
 			PDS automatically once the mp3 rendition is ready.
 		</p>
@@ -162,8 +162,8 @@
 						{#if fileSizes[track.id]}
 							<span class="pds-track-size">{formatBytes(fileSizes[track.id])}</span>
 						{/if}
-						{#if status === 'migrated'}
-							<span class="pds-badge migrated">on pds</span>
+						{#if status === 'saved'}
+							<span class="pds-badge saved">saved to PDS</span>
 						{:else if status === 'gated'}
 							<span class="pds-badge gated">gated</span>
 						{:else if status === 'optimizing'}
@@ -178,8 +178,8 @@
 		</div>
 
 		<div class="pds-footer">
-			<button class="pds-migrate-btn" disabled={selected.size === 0} onclick={startMigration}>
-				migrate {selected.size} track{selected.size !== 1 ? 's' : ''}{#if selectedBytes > 0}
+			<button class="pds-save-btn" disabled={selected.size === 0} onclick={startSave}>
+				save {selected.size} track{selected.size !== 1 ? 's' : ''}{#if selectedBytes > 0}
 					&nbsp;({formatBytes(selectedBytes)}){/if}
 			</button>
 		</div>
@@ -369,7 +369,7 @@
 		font-weight: 500;
 	}
 
-	.pds-badge.migrated {
+	.pds-badge.saved {
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		color: var(--accent);
 	}
@@ -389,7 +389,7 @@
 		flex-shrink: 0;
 	}
 
-	.pds-migrate-btn {
+	.pds-save-btn {
 		width: 100%;
 		padding: 0.75rem 1rem;
 		background: var(--accent);
@@ -403,11 +403,11 @@
 		transition: all 0.15s;
 	}
 
-	.pds-migrate-btn:hover:not(:disabled) {
+	.pds-save-btn:hover:not(:disabled) {
 		background: var(--accent-hover);
 	}
 
-	.pds-migrate-btn:disabled {
+	.pds-save-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}

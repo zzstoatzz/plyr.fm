@@ -26,7 +26,7 @@ class JobType(str, Enum):
 
     UPLOAD = "upload"
     EXPORT = "export"
-    PDS_BACKFILL = "pds_backfill"
+    PDS_SAVE = "pds_save"
     # deferred MP3 optimization of a track published with the interim WAV
     # rendition. a distinct type so the stuck-upload reaper (which scans
     # type='upload') never reaps a legitimately long encode running here.
@@ -62,7 +62,7 @@ class Job(Base):
     # an upload job row is created so that if the job sits in `processing`
     # past the reaper threshold, we can delete the staged R2 blob from the
     # right bucket (public vs gated) before marking the job failed. nullable
-    # so non-upload job types (export, pds_backfill) don't need them; also
+    # so non-upload job types (export, pds_save) don't need them; also
     # nullable to support upload rows created before this migration.
     file_id: Mapped[str | None] = mapped_column(String, nullable=True)
     file_type: Mapped[str | None] = mapped_column(String, nullable=True)
