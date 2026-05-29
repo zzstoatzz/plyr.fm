@@ -402,7 +402,7 @@
 <section class="tracks-section">
 	<h2>your tracks</h2>
 
-	{#if !loadingTracks && (tracks.length > 0 || hasQuery)}
+	{#if tracks.length > 0 || hasQuery}
 		<div class="tracks-toolbar">
 			<input
 				type="search"
@@ -420,14 +420,14 @@
 		</div>
 	{/if}
 
-	{#if loadingTracks}
+	{#if loadingTracks && tracks.length === 0}
 		<div class="loading-container">
 			<WaveLoading size="lg" message="loading tracks..." />
 		</div>
 	{:else if tracks.length === 0}
 		<p class="empty">{hasQuery ? `no tracks match “${searchInput.trim()}”` : 'no tracks uploaded yet'}</p>
 	{:else}
-		<div class="tracks-list">
+		<div class="tracks-list" class:refreshing={loadingTracks}>
 			{#each tracks as track}
 				<div class="track-item" class:editing={editingTrackId === track.id} class:copyright-flagged={track.copyright_flagged}>
 					{#if editingTrackId === track.id}
@@ -1027,6 +1027,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
+	}
+
+	/* while a filter/sort reload is in flight, dim the prior results instead of
+	   blanking to a spinner — keeps the search box and list in place */
+	.tracks-list.refreshing {
+		opacity: 0.5;
+		transition: opacity 0.15s;
 	}
 
 	.track-item {
