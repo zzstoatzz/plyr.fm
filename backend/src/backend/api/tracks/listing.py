@@ -438,27 +438,41 @@ async def list_top_tracks(
     return list(track_responses)
 
 
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards so user input matches literally (not as a pattern)."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("/me")
 async def list_my_tracks(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth_session: AuthSession = Depends(require_auth),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(None),
+    sort: Literal["recent", "title", "plays"] = Query("recent"),
 ) -> MyTracksResponse:
-    """List tracks uploaded by authenticated user."""
-    total_stmt = (
-        select(func.count())
-        .select_from(Track)
-        .where(Track.artist_did == auth_session.did)
-    )
+    """List tracks uploaded by authenticated user, with optional title search and sort."""
+    where = [Track.artist_did == auth_session.did]
+    if q and (term := q.strip()):
+        where.append(Track.title.ilike(f"%{_escape_like(term)}%", escape="\\"))
+
+    total_stmt = select(func.count()).select_from(Track).where(*where)
     total = (await db.execute(total_stmt)).scalar_one()
+
+    # id tie-breakers keep offset pagination stable when the primary key has ties
+    order_by = {
+        "recent": (Track.created_at.desc(), Track.id.desc()),
+        "title": (func.lower(Track.title).asc(), Track.id.asc()),
+        "plays": (Track.play_count.desc(), Track.id.desc()),
+    }[sort]
 
     stmt = (
         select(Track)
         .join(Artist)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
-        .where(Track.artist_did == auth_session.did)
-        .order_by(Track.created_at.desc())
+        .where(*where)
+        .order_by(*order_by)
         .offset(offset)
         .limit(limit)
     )
