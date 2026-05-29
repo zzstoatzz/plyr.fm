@@ -23,12 +23,22 @@
 
 	async function loadTracks() {
 		try {
-			const res = await fetch(`${API_URL}/tracks/me?limit=100`, { credentials: 'include' });
-			if (res.ok) {
+			// page through the entire catalog: PDS-save candidate detection in
+			// DataSection must see every eligible track, not just the first page.
+			const all: Track[] = [];
+			let total = 0;
+			for (let page = 0; page < 100; page++) {
+				const res = await fetch(`${API_URL}/tracks/me?limit=100&offset=${all.length}`, {
+					credentials: 'include'
+				});
+				if (!res.ok) break;
 				const data = await res.json();
-				tracks = data.tracks;
-				tracksTotal = data.total;
+				all.push(...data.tracks);
+				total = data.total;
+				if (!data.has_more) break;
 			}
+			tracks = all;
+			tracksTotal = total;
 		} catch (_e) {
 			console.error('failed to load tracks:', _e);
 		}

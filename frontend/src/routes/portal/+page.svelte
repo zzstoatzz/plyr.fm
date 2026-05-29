@@ -20,12 +20,17 @@
 	let error = $state('');
 	let tracks = $state<Track[]>([]);
 	let tracksTotal = $state(0);
+	// full (unfiltered) catalog size for the identity header — tracksTotal
+	// reflects the active search/sort filter, so it can't be reused there.
+	let libraryTrackTotal = $state(0);
 	let tracksHasMore = $state(false);
 	let loadingTracks = $state(false);
 	let loadingMoreTracks = $state(false);
 	// server-side search/sort for the tracks tab (owned here since this fetches)
 	let trackQuery = $state('');
 	let trackSort = $state<'recent' | 'title' | 'plays'>('recent');
+	// monotonic token so an older (slower) search response can't overwrite a newer one
+	let loadToken = 0;
 	// atprotofans eligibility - checked on mount; gates the supporter toggle in TracksSection
 	let atprotofansEligible = $state(false);
 
@@ -104,6 +109,7 @@
 	});
 
 	async function loadMyTracks(append = false) {
+		const token = ++loadToken;
 		if (append) {
 			loadingMoreTracks = true;
 		} else {
@@ -120,8 +126,11 @@
 			const response = await fetch(`${API_URL}/tracks/me?${params}`, {
 				credentials: 'include'
 			});
+			// a newer load has superseded this one (e.g. fast typing) — drop it
+			if (token !== loadToken) return;
 			if (response.ok) {
 				const data = await response.json();
+				if (token !== loadToken) return;
 				if (append) {
 					tracks = [...tracks, ...data.tracks];
 				} else {
@@ -129,12 +138,16 @@
 				}
 				tracksTotal = data.total;
 				tracksHasMore = data.has_more;
+				// only an unfiltered load reflects the true catalog size
+				if (!trackQuery) libraryTrackTotal = data.total;
 			}
 		} catch (_e) {
 			console.error('failed to load tracks:', _e);
 		} finally {
-			loadingTracks = false;
-			loadingMoreTracks = false;
+			if (token === loadToken) {
+				loadingTracks = false;
+				loadingMoreTracks = false;
+			}
 		}
 	}
 
@@ -196,7 +209,7 @@
 					<h2>artist portal</h2>
 				</div>
 
-				<PortalIdentity trackCount={tracksTotal} albumCount={albums.length} />
+				<PortalIdentity trackCount={libraryTrackTotal} albumCount={albums.length} />
 
 				<a href="/upload" class="upload-card">
 					<div class="upload-card-icon">
