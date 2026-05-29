@@ -980,20 +980,12 @@
 		margin-bottom: 1.5rem;
 	}
 
-	/* search + sort bar — sticks just beneath the pager tab bar so you can
-	   filter a long catalog without scrolling back to the top. */
+	/* search + sort row — inline above the list, no surrounding surface; the
+	   input/select are the only chrome (they match the track cards below) */
 	.tracks-toolbar {
-		position: sticky;
-		top: calc(var(--header-height, 0px) + var(--pager-tabbar-height, 0px));
-		z-index: 15;
 		display: flex;
 		gap: 0.5rem;
-		padding: 0.5rem 0 0.75rem;
-		margin-bottom: 0.5rem;
-		/* glass so it blends with the live-theme gradient like the tab bar/header */
-		background: var(--glass-bg, var(--bg-primary));
-		backdrop-filter: var(--glass-blur, none);
-		-webkit-backdrop-filter: var(--glass-blur, none);
+		margin-bottom: 1rem;
 	}
 
 	.track-search {
