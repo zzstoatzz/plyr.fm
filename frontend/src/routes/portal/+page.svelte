@@ -6,7 +6,7 @@
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
 	import BrokenTracks from '$lib/components/BrokenTracks.svelte';
 	import PortalIdentity from '$lib/components/portal/PortalIdentity.svelte';
-	import PlaylistsSection from '$lib/components/portal/PlaylistsSection.svelte';
+	import PagerTabs from '$lib/components/PagerTabs.svelte';
 	import TracksSection from '$lib/components/portal/TracksSection.svelte';
 	import AlbumsSection from '$lib/components/portal/AlbumsSection.svelte';
 	import type { Track, AlbumSummary } from '$lib/types';
@@ -175,67 +175,73 @@
 		<MigrationBanner />
 		<BrokenTracks />
 
-		<div class="portal-header">
-			<h2>artist portal</h2>
-		</div>
+		<PagerTabs tabs={[{ id: 'tracks', label: 'tracks' }, { id: 'albums', label: 'albums' }]}>
+			{#snippet header()}
+				<div class="portal-header">
+					<h2>artist portal</h2>
+				</div>
 
-		<PortalIdentity trackCount={tracksTotal} albumCount={albums.length} />
+				<PortalIdentity trackCount={tracksTotal} albumCount={albums.length} />
 
-		<a href="/upload" class="upload-card">
-			<div class="upload-card-icon">
-				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-					<polyline points="17 8 12 3 7 8"></polyline>
-					<line x1="12" y1="3" x2="12" y2="15"></line>
-				</svg>
-			</div>
-			<div class="upload-card-text">
-				<span class="upload-card-title">upload track</span>
-				<span class="upload-card-subtitle">add new music</span>
-			</div>
-			<svg class="upload-card-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<polyline points="9 18 15 12 9 6"></polyline>
-			</svg>
-		</a>
+				<a href="/upload" class="upload-card">
+					<div class="upload-card-icon">
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+							<polyline points="17 8 12 3 7 8"></polyline>
+							<line x1="12" y1="3" x2="12" y2="15"></line>
+						</svg>
+					</div>
+					<div class="upload-card-text">
+						<span class="upload-card-title">upload track</span>
+						<span class="upload-card-subtitle">add new music</span>
+					</div>
+					<svg class="upload-card-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<polyline points="9 18 15 12 9 6"></polyline>
+					</svg>
+				</a>
 
-		<a href="/portal/manage" class="upload-card">
-			<div class="upload-card-icon">
-				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<line x1="4" y1="21" x2="4" y2="14"></line>
-					<line x1="4" y1="10" x2="4" y2="3"></line>
-					<line x1="12" y1="21" x2="12" y2="12"></line>
-					<line x1="12" y1="8" x2="12" y2="3"></line>
-					<line x1="20" y1="21" x2="20" y2="16"></line>
-					<line x1="20" y1="12" x2="20" y2="3"></line>
-					<line x1="1" y1="14" x2="7" y2="14"></line>
-					<line x1="9" y1="8" x2="15" y2="8"></line>
-					<line x1="17" y1="16" x2="23" y2="16"></line>
-				</svg>
-			</div>
-			<div class="upload-card-text">
-				<span class="upload-card-title">manage</span>
-				<span class="upload-card-subtitle">profile, rights, sharing, data</span>
-			</div>
-			<svg class="upload-card-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<polyline points="9 18 15 12 9 6"></polyline>
-			</svg>
-		</a>
+				<a href="/portal/manage" class="upload-card">
+					<div class="upload-card-icon">
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<line x1="4" y1="21" x2="4" y2="14"></line>
+							<line x1="4" y1="10" x2="4" y2="3"></line>
+							<line x1="12" y1="21" x2="12" y2="12"></line>
+							<line x1="12" y1="8" x2="12" y2="3"></line>
+							<line x1="20" y1="21" x2="20" y2="16"></line>
+							<line x1="20" y1="12" x2="20" y2="3"></line>
+							<line x1="1" y1="14" x2="7" y2="14"></line>
+							<line x1="9" y1="8" x2="15" y2="8"></line>
+							<line x1="17" y1="16" x2="23" y2="16"></line>
+						</svg>
+					</div>
+					<div class="upload-card-text">
+						<span class="upload-card-title">manage</span>
+						<span class="upload-card-subtitle">profile, rights, sharing, data</span>
+					</div>
+					<svg class="upload-card-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<polyline points="9 18 15 12 9 6"></polyline>
+					</svg>
+				</a>
+			{/snippet}
 
-		<TracksSection
-			tracks={tracks}
-			tracksTotal={tracksTotal}
-			tracksHasMore={tracksHasMore}
-			loadingTracks={loadingTracks}
-			loadingMoreTracks={loadingMoreTracks}
-			albums={albums}
-			atprotofansEligible={atprotofansEligible}
-			onLoadMore={() => loadMyTracks(true)}
-			onTracksChanged={reloadTracksAndAlbums}
-		/>
-
-		<AlbumsSection albums={albums} loadingAlbums={loadingAlbums} />
-
-		<PlaylistsSection />
+			{#snippet pane(id)}
+				{#if id === 'tracks'}
+					<TracksSection
+						tracks={tracks}
+						tracksTotal={tracksTotal}
+						tracksHasMore={tracksHasMore}
+						loadingTracks={loadingTracks}
+						loadingMoreTracks={loadingMoreTracks}
+						albums={albums}
+						atprotofansEligible={atprotofansEligible}
+						onLoadMore={() => loadMyTracks(true)}
+						onTracksChanged={reloadTracksAndAlbums}
+					/>
+				{:else if id === 'albums'}
+					<AlbumsSection albums={albums} loadingAlbums={loadingAlbums} />
+				{/if}
+			{/snippet}
+		</PagerTabs>
 	</main>
 {/if}
 

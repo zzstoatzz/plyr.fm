@@ -15,9 +15,18 @@
 	}
 
 	let { user, isAuthenticated, onLogout }: Props = $props();
+
+	// publish the rendered header height so sticky elements below it (e.g. the
+	// portal's tabbed pager) can offset themselves with top: var(--header-height).
+	let headerHeight = $state(0);
+	$effect(() => {
+		if (typeof document !== 'undefined') {
+			document.documentElement.style.setProperty('--header-height', `${headerHeight}px`);
+		}
+	});
 </script>
 
-<header>
+<header bind:clientHeight={headerHeight}>
 	<!-- Single info-icon affordance top-left on desktop (mobile-first parity).
 	     LinksMenu's modal contains the social/docs links + platform stats,
 	     so there's no need to surface those inline as a separate cluster. -->
