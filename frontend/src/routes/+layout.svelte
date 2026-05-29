@@ -450,7 +450,11 @@
 		/>
 		<meta property="og:site_name" content={APP_NAME} />
 		<meta property="og:url" content={APP_CANONICAL_URL} />
-		<meta property="og:image" content={logo} />
+		<!-- absolute URL — scrapers can't resolve the relative hashed asset path -->
+		<meta property="og:image" content={`${APP_CANONICAL_URL}/icons/icon-512.png`} />
+		<meta property="og:image:secure_url" content={`${APP_CANONICAL_URL}/icons/icon-512.png`} />
+		<meta property="og:image:width" content="512" />
+		<meta property="og:image:height" content="512" />
 
 		<!-- Twitter -->
 		<meta name="twitter:card" content="summary" />
@@ -459,7 +463,7 @@
 			name="twitter:description"
 			content={`discover and stream audio on the AT Protocol with ${APP_NAME}`}
 		/>
-		<meta name="twitter:image" content={logo} />
+		<meta name="twitter:image" content={`${APP_CANONICAL_URL}/icons/icon-512.png`} />
 	{/if}
 
 	<script>

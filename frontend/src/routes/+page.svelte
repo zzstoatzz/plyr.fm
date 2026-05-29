@@ -257,11 +257,17 @@
 	<meta property="og:description" content={APP_TAGLINE} />
 	<meta property="og:url" content={APP_CANONICAL_URL} />
 	<meta property="og:site_name" content={APP_NAME} />
+	<meta property="og:image" content={`${APP_CANONICAL_URL}/icons/icon-512.png`} />
+	<meta property="og:image:secure_url" content={`${APP_CANONICAL_URL}/icons/icon-512.png`} />
+	<meta property="og:image:width" content="512" />
+	<meta property="og:image:height" content="512" />
+	<meta property="og:image:alt" content={APP_NAME} />
 
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary" />
 	<meta name="twitter:title" content={APP_NAME} />
 	<meta name="twitter:description" content={APP_TAGLINE} />
+	<meta name="twitter:image" content={`${APP_CANONICAL_URL}/icons/icon-512.png`} />
 </svelte:head>
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={logout} />
