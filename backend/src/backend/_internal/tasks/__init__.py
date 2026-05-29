@@ -7,7 +7,7 @@ requires DOCKET_URL to be set (Redis is always available).
 """
 
 from backend._internal.export_tasks import process_export
-from backend._internal.pds_backfill_tasks import backfill_tracks_to_pds
+from backend._internal.pds_save_tasks import save_tracks_to_pds
 from backend._internal.tasks.copyright import (
     scan_copyright,
     schedule_copyright_resolution_sync,
@@ -101,7 +101,7 @@ def _build_background_tasks() -> list:
         pds_create_comment,
         pds_delete_comment,
         pds_update_comment,
-        backfill_tracks_to_pds,
+        save_tracks_to_pds,
         move_track_audio,
         generate_embedding,
         classify_genres,

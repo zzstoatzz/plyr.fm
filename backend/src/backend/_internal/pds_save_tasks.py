@@ -1,4 +1,4 @@
-"""background tasks for backfilling audio blobs to user PDS."""
+"""background tasks for saving audio blobs to a user's PDS."""
 
 from __future__ import annotations
 
@@ -25,24 +25,24 @@ from backend.utilities.database import db_session
 logger = logging.getLogger(__name__)
 
 
-async def backfill_tracks_to_pds(
-    backfill_id: str,
+async def save_tracks_to_pds(
+    save_id: str,
     session_id: str,
     track_ids: list[int],
 ) -> None:
-    """backfill existing track audio to the user's PDS in the background.
+    """save existing track audio to the user's PDS in the background.
 
     args:
-        backfill_id: job ID for tracking progress
+        save_id: job ID for tracking progress
         session_id: OAuth session ID for authentication
-        track_ids: list of track IDs to backfill
+        track_ids: list of track IDs to save
     """
     auth_session = await get_session(session_id)
     if not auth_session:
         await job_service.update_progress(
-            backfill_id,
+            save_id,
             JobStatus.FAILED,
-            "backfill failed",
+            "save failed",
             error="session not found",
         )
         return
@@ -50,14 +50,14 @@ async def backfill_tracks_to_pds(
     total_count = len(track_ids)
     if total_count == 0:
         await job_service.update_progress(
-            backfill_id,
+            save_id,
             JobStatus.COMPLETED,
-            "no tracks to backfill",
+            "no tracks to save",
             progress_pct=100.0,
             result={
                 "total_count": 0,
                 "processed_count": 0,
-                "backfilled_count": 0,
+                "saved_count": 0,
                 "skipped_count": 0,
                 "failed_count": 0,
             },
@@ -65,21 +65,21 @@ async def backfill_tracks_to_pds(
         return
 
     await job_service.update_progress(
-        backfill_id,
+        save_id,
         JobStatus.PROCESSING,
-        "starting backfill...",
+        "starting save...",
         progress_pct=0.0,
         phase="init",
         result={
             "total_count": total_count,
             "processed_count": 0,
-            "backfilled_count": 0,
+            "saved_count": 0,
             "skipped_count": 0,
             "failed_count": 0,
         },
     )
 
-    backfilled_count = 0
+    saved_count = 0
     skipped_count = 0
     failed_count = 0
     processed_count = 0
@@ -93,14 +93,14 @@ async def backfill_tracks_to_pds(
     async def update_progress(message: str) -> None:
         progress_pct = (processed_count / total_count) * 100.0
         await job_service.update_progress(
-            backfill_id,
+            save_id,
             JobStatus.PROCESSING,
             message,
             progress_pct=progress_pct,
-            phase="backfill",
+            phase="save",
             result={
                 "processed_count": processed_count,
-                "backfilled_count": backfilled_count,
+                "saved_count": saved_count,
                 "skipped_count": skipped_count,
                 "failed_count": failed_count,
                 "last_processed_track_id": last_processed_track_id,
@@ -108,8 +108,8 @@ async def backfill_tracks_to_pds(
             },
         )
 
-    async def backfill_one(track_id: int) -> None:
-        nonlocal backfilled_count, skipped_count, failed_count, processed_count
+    async def save_one(track_id: int) -> None:
+        nonlocal saved_count, skipped_count, failed_count, processed_count
         nonlocal last_processed_track_id, last_status
 
         async with semaphore:
@@ -246,15 +246,15 @@ async def backfill_tracks_to_pds(
                         track.atproto_record_cid = new_record_cid
                     await db.commit()
 
-                backfilled_count += 1
-                one_status = "backfilled"
+                saved_count += 1
+                one_status = "saved"
 
             except PayloadTooLargeError:
                 skipped_count += 1
                 one_status = "skipped"
             except Exception as e:
                 logger.error(
-                    "pds backfill failed for track %s: %s",
+                    "pds save failed for track %s: %s",
                     track_id,
                     e,
                     exc_info=True,
@@ -266,21 +266,19 @@ async def backfill_tracks_to_pds(
                     processed_count += 1
                     last_processed_track_id = track_id
                     last_status = one_status
-                    await update_progress(
-                        f"backfilled {backfilled_count}/{total_count} tracks"
-                    )
+                    await update_progress(f"saved {saved_count}/{total_count} tracks")
 
-    await asyncio.gather(*(backfill_one(track_id) for track_id in track_ids))
+    await asyncio.gather(*(save_one(track_id) for track_id in track_ids))
 
-    if backfilled_count == 0 and failed_count > 0 and skipped_count == 0:
+    if saved_count == 0 and failed_count > 0 and skipped_count == 0:
         await job_service.update_progress(
-            backfill_id,
+            save_id,
             JobStatus.FAILED,
-            "backfill failed",
+            "save failed",
             progress_pct=100.0,
             result={
                 "processed_count": processed_count,
-                "backfilled_count": backfilled_count,
+                "saved_count": saved_count,
                 "skipped_count": skipped_count,
                 "failed_count": failed_count,
             },
@@ -288,30 +286,30 @@ async def backfill_tracks_to_pds(
         return
 
     summary = (
-        f"backfill completed ({backfilled_count} backfilled, {skipped_count} skipped, {failed_count} failed)"
+        f"save completed ({saved_count} saved, {skipped_count} skipped, {failed_count} failed)"
         if failed_count > 0 or skipped_count > 0
-        else "backfill completed"
+        else "save completed"
     )
     await job_service.update_progress(
-        backfill_id,
+        save_id,
         JobStatus.COMPLETED,
         summary,
         progress_pct=100.0,
         result={
             "processed_count": processed_count,
-            "backfilled_count": backfilled_count,
+            "saved_count": saved_count,
             "skipped_count": skipped_count,
             "failed_count": failed_count,
         },
     )
 
 
-async def schedule_pds_backfill(
-    backfill_id: str,
+async def schedule_pds_save(
+    save_id: str,
     session_id: str,
     track_ids: list[int],
 ) -> None:
-    """schedule a PDS audio backfill via docket."""
+    """schedule a PDS audio save via docket."""
     docket = get_docket()
-    await docket.add(backfill_tracks_to_pds)(backfill_id, session_id, track_ids)
-    logfire.info("scheduled pds audio backfill", backfill_id=backfill_id)
+    await docket.add(save_tracks_to_pds)(save_id, session_id, track_ids)
+    logfire.info("scheduled pds audio save", save_id=save_id)

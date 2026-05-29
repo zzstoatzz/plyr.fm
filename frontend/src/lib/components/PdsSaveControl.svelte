@@ -1,5 +1,5 @@
 <script lang="ts">
-	import PdsMigrationModal from './PdsMigrationModal.svelte';
+	import PdsSaveModal from './PdsSaveModal.svelte';
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
@@ -14,9 +14,9 @@
 	} = $props();
 
 	let showModal = $state(false);
-	let migrating = $state(false);
+	let saving = $state(false);
 
-	let backfillableTrackCount = $derived(
+	let savableTrackCount = $derived(
 		tracks.filter(
 			(track) =>
 				!track.support_gate &&
@@ -25,13 +25,13 @@
 		).length
 	);
 
-	async function handleMigrate(trackIds: number[]) {
-		migrating = true;
+	async function handleSave(trackIds: number[]) {
+		saving = true;
 		const count = trackIds.length;
-		const toastId = toast.info(`migrating ${count} track${count !== 1 ? 's' : ''}...`, 0);
+		const toastId = toast.info(`saving ${count} track${count !== 1 ? 's' : ''}...`, 0);
 
 		try {
-			const res = await fetch(`${API_URL}/pds-backfill/audio`, {
+			const res = await fetch(`${API_URL}/pds-save/audio`, {
 				method: 'POST',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json' },
@@ -40,49 +40,49 @@
 
 			if (!res.ok) {
 				const err = await res.json().catch(() => null);
-				migrating = false;
+				saving = false;
 				toast.dismiss(toastId);
-				toast.error(err?.detail || 'failed to start migration');
+				toast.error(err?.detail || 'failed to start saving');
 				return;
 			}
 
 			const data = await res.json();
-			listenToProgress(data.backfill_id, toastId);
+			listenToProgress(data.save_id, toastId);
 		} catch {
-			migrating = false;
+			saving = false;
 			toast.dismiss(toastId);
-			toast.error('failed to start migration');
+			toast.error('failed to start saving');
 		}
 	}
 
-	function listenToProgress(backfillId: string, toastId: string) {
-		const eventSource = new EventSource(`${API_URL}/pds-backfill/${backfillId}/progress`);
+	function listenToProgress(saveId: string, toastId: string) {
+		const eventSource = new EventSource(`${API_URL}/pds-save/${saveId}/progress`);
 
 		eventSource.onmessage = (event) => {
 			try {
 				const data = JSON.parse(event.data);
 
 				if (data.processed_count != null && data.total_count) {
-					toast.update(toastId, `migrating... ${data.processed_count}/${data.total_count}`);
+					toast.update(toastId, `saving... ${data.processed_count}/${data.total_count}`);
 				}
 
 				if (data.status === 'completed') {
 					eventSource.close();
-					migrating = false;
+					saving = false;
 					toast.dismiss(toastId);
 					const parts: string[] = [];
-					if (data.backfilled_count) parts.push(`${data.backfilled_count} migrated`);
+					if (data.saved_count) parts.push(`${data.saved_count} saved`);
 					if (data.skipped_count) parts.push(`${data.skipped_count} skipped`);
 					if (data.failed_count) parts.push(`${data.failed_count} failed`);
-					toast.success(parts.join(', ') || 'migration complete');
+					toast.success(parts.join(', ') || 'saved to your PDS');
 					onComplete?.();
 				}
 
 				if (data.status === 'failed') {
 					eventSource.close();
-					migrating = false;
+					saving = false;
 					toast.dismiss(toastId);
-					toast.error(data.error || 'migration failed');
+					toast.error(data.error || 'save failed');
 				}
 			} catch {
 				/* ignore parse errors */
@@ -91,39 +91,39 @@
 
 		eventSource.onerror = () => {
 			eventSource.close();
-			migrating = false;
+			saving = false;
 			toast.dismiss(toastId);
-			toast.error('migration connection lost');
+			toast.error('save connection lost');
 		};
 	}
 </script>
 
-{#if backfillableTrackCount > 0}
+{#if savableTrackCount > 0}
 	<div class="data-control">
 		<div class="control-info">
-			<h3>migrate audio to your PDS</h3>
+			<h3>save audio to your PDS</h3>
 			<p class="control-description">
-				{backfillableTrackCount === 1
+				{savableTrackCount === 1
 					? 'copy your audio blob to your PDS and keep the CDN fallback'
-					: `copy ${backfillableTrackCount} audio blobs to your PDS and keep the CDN fallback`}
+					: `copy ${savableTrackCount} audio blobs to your PDS and keep the CDN fallback`}
 			</p>
 		</div>
 		<button
-			class="migrate-trigger-btn"
+			class="save-trigger-btn"
 			onclick={() => (showModal = true)}
-			disabled={migrating}
+			disabled={saving}
 		>
-			{migrating ? 'migrating...' : 'choose tracks'}
+			{saving ? 'saving...' : 'choose tracks'}
 		</button>
 	</div>
 {/if}
 
 {#if showModal}
-	<PdsMigrationModal
+	<PdsSaveModal
 		{tracks}
 		bind:open={showModal}
 		onClose={() => (showModal = false)}
-		onMigrate={handleMigrate}
+		onSave={handleSave}
 	/>
 {/if}
 
@@ -158,7 +158,7 @@
 		margin: 0;
 	}
 
-	.migrate-trigger-btn {
+	.save-trigger-btn {
 		background: var(--accent);
 		color: var(--bg-primary);
 		border: none;
@@ -172,12 +172,12 @@
 		white-space: nowrap;
 	}
 
-	.migrate-trigger-btn:hover:not(:disabled) {
+	.save-trigger-btn:hover:not(:disabled) {
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
-	.migrate-trigger-btn:disabled {
+	.save-trigger-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
@@ -188,7 +188,7 @@
 			align-items: stretch;
 		}
 
-		.migrate-trigger-btn {
+		.save-trigger-btn {
 			width: 100%;
 			text-align: center;
 		}

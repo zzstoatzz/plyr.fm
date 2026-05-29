@@ -31,7 +31,7 @@ class JobService:
         for upload jobs, callers should pass `file_id`, `file_type`, and
         `is_gated` so the stuck-upload reaper can clean up the staged R2
         blob from the right bucket if the job stalls. other job types
-        (export, pds_backfill) leave them None.
+        (export, pds_save) leave them None.
         """
         async with db_session() as db:
             job = Job(
