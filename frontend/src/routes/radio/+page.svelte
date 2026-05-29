@@ -15,6 +15,12 @@
 		'a live, always-on stream of audio from across plyr.fm — tune in and let it play.';
 	const RADIO_OG_IMAGE = `${APP_CANONICAL_URL}/icons/icon-512.png`;
 
+	let progressPercent = $derived(
+		radio.current && radio.current.duration > 0
+			? Math.min(100, (radio.positionSeconds / radio.current.duration) * 100)
+			: 0
+	);
+
 	async function handleLogout() {
 		await auth.logout();
 		window.location.href = '/';
@@ -107,9 +113,9 @@
 					</button>
 				{/if}
 			</div>
-			{#if radio.active}
-				<p class="now-hint">playing in your player — keep browsing, it follows you.</p>
-			{/if}
+			<div class="progress" aria-label="track progress">
+				<div class="progress-fill" style={`width: ${progressPercent}%`}></div>
+			</div>
 		{:else}
 			<div class="status">no tracks in rotation yet</div>
 		{/if}
@@ -138,6 +144,10 @@
 			</div>
 		</section>
 	{/if}
+
+	<p class="credit">
+		inspired by <a href="https://radio.wisp.place" target="_blank" rel="noopener">radio.wisp.place</a>
+	</p>
 </main>
 
 <style>
@@ -308,10 +318,19 @@
 		transform: none;
 	}
 
-	.now-hint {
-		margin: 1rem 0 0;
-		color: var(--text-tertiary);
-		font-size: var(--text-sm);
+	.progress {
+		margin: 1.25rem 0 0;
+		height: 4px;
+		border-radius: 999px;
+		background: var(--bg-secondary);
+		overflow: hidden;
+	}
+
+	.progress-fill {
+		height: 100%;
+		border-radius: inherit;
+		background: var(--accent);
+		transition: width 0.25s linear;
 	}
 
 	.status {
@@ -388,6 +407,22 @@
 		font-size: var(--text-xs);
 	}
 
+	.credit {
+		margin: 2.5rem 0 0;
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
+	}
+
+	.credit a {
+		color: var(--text-secondary);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.credit a:hover {
+		color: var(--text-primary);
+	}
+
 	@media (max-width: 720px) {
 		.radio-page {
 			padding-top: 0;
@@ -395,6 +430,28 @@
 
 		.station {
 			padding-top: 2.25rem;
+		}
+	}
+
+	@media (max-width: 520px) {
+		.now-card {
+			gap: 1rem;
+		}
+
+		.art {
+			width: 5.5rem;
+			height: 5.5rem;
+		}
+
+		/* let the meta shrink next to the art; the button wraps full-width below */
+		.now-meta {
+			min-width: 0;
+			flex-basis: calc(100% - 6.5rem);
+		}
+
+		.tune-btn {
+			width: 100%;
+			justify-content: center;
 		}
 	}
 </style>

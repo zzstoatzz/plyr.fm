@@ -54,6 +54,13 @@ class Radio {
 		return player.radio !== null;
 	}
 
+	/** how far into the current track (seconds): live position when tuned in,
+	 * else the shared station position. */
+	get positionSeconds(): number {
+		if (player.radio && Number.isFinite(player.currentTime)) return player.currentTime;
+		return this.state ? this.stateProgress(this.state) : 0;
+	}
+
 	private stateProgress(fetched: RadioState): number {
 		const generatedAt = Date.parse(fetched.generated_at);
 		const drift = Number.isFinite(generatedAt) ? Math.max(0, (Date.now() - generatedAt) / 1000) : 0;
