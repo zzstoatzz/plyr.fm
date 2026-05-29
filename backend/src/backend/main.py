@@ -34,6 +34,7 @@ from backend.api import (
     pds_save_router,
     preferences_router,
     queue_router,
+    radio_router,
     search_router,
     stats_router,
     tracks_router,
@@ -173,6 +174,7 @@ app.include_router(audio_router)
 app.include_router(search_router)
 app.include_router(preferences_router)
 app.include_router(queue_router)
+app.include_router(radio_router)
 app.include_router(now_playing_router)
 app.include_router(migration_router)
 app.include_router(exports_router)

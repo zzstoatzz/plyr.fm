@@ -17,6 +17,7 @@ from backend.api.oembed import router as oembed_router
 from backend.api.pds_save import router as pds_save_router
 from backend.api.preferences import router as preferences_router
 from backend.api.queue import router as queue_router
+from backend.api.radio import router as radio_router
 from backend.api.search import router as search_router
 from backend.api.stats import router as stats_router
 from backend.api.tracks import router as tracks_router
@@ -41,6 +42,7 @@ __all__ = [
     "pds_save_router",
     "preferences_router",
     "queue_router",
+    "radio_router",
     "search_router",
     "stats_router",
     "tracks_router",
