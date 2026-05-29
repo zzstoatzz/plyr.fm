@@ -86,7 +86,11 @@
 		display: flex;
 		gap: 0.25rem;
 		margin-bottom: 1.5rem;
-		background: var(--bg-primary);
+		/* glass (not opaque --bg-primary) so the sticky bar blends with the live
+		   theme's ambient gradient, matching the app header */
+		background: var(--glass-bg, var(--bg-primary));
+		backdrop-filter: var(--glass-blur, none);
+		-webkit-backdrop-filter: var(--glass-blur, none);
 		border-bottom: 1px solid var(--border-subtle);
 	}
 

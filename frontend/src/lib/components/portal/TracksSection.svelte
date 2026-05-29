@@ -990,7 +990,10 @@
 		gap: 0.5rem;
 		padding: 0.5rem 0 0.75rem;
 		margin-bottom: 0.5rem;
-		background: var(--bg-primary);
+		/* glass so it blends with the live-theme gradient like the tab bar/header */
+		background: var(--glass-bg, var(--bg-primary));
+		backdrop-filter: var(--glass-blur, none);
+		-webkit-backdrop-filter: var(--glass-blur, none);
 	}
 
 	.track-search {
