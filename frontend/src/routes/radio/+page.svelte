@@ -6,7 +6,6 @@
 	import { auth } from '$lib/auth.svelte';
 	import { radio } from '$lib/radio.svelte';
 
-	let helpOpen = $state(false);
 	const endpoint = `${API_URL}/radio/state`;
 
 	// link preview — a stable station identity, not a per-moment "now playing"
@@ -59,26 +58,6 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 <main class="radio-page">
-	<div class="help-corner">
-		<button
-			class="help-button"
-			type="button"
-			aria-label="radio integration details"
-			aria-expanded={helpOpen}
-			onclick={() => (helpOpen = !helpOpen)}
-		>
-			?
-		</button>
-		{#if helpOpen}
-			<div class="help-panel" role="tooltip">
-				<strong>integration</strong>
-				<p>poll <code>{endpoint}</code> for the shared station state.</p>
-				<p>play <code>current.stream_url</code> and seek to <code>progress_seconds</code>.</p>
-				<p>refresh when <code>current_ends_at</code> passes, or poll every 30s.</p>
-			</div>
-		{/if}
-	</div>
-
 	<section class="station">
 		<div class="station-copy">
 			<p class="eyebrow">live station</p>
@@ -145,9 +124,17 @@
 		</section>
 	{/if}
 
-	<p class="credit">
-		inspired by <a href="https://radio.wisp.place" target="_blank" rel="noopener">radio.wisp.place</a>
-	</p>
+	<footer class="radio-footer">
+		<p class="credit">
+			inspired by <a href="https://radio.wisp.place" target="_blank" rel="noopener">radio.wisp.place</a>
+		</p>
+		<details class="integration">
+			<summary>integration</summary>
+			<p>poll <code>{endpoint}</code> for the shared station state.</p>
+			<p>play <code>current.stream_url</code>, seek to <code>progress_seconds</code>.</p>
+			<p>refresh when <code>current_ends_at</code> passes, or poll every 30s.</p>
+		</details>
+	</footer>
 </main>
 
 <style>
@@ -159,47 +146,43 @@
 		min-height: 100vh;
 	}
 
-	.help-corner {
-		position: fixed;
-		top: calc(1rem + env(safe-area-inset-top, 0px));
-		right: 1rem;
-		z-index: 20;
+	.radio-footer {
+		margin-top: 2.5rem;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.5rem 1.5rem;
 	}
 
-	.help-button {
-		width: 2rem;
-		height: 2rem;
-		border-radius: 999px;
-		border: 1px solid var(--border-default);
-		background: var(--bg-secondary);
-		color: var(--text-primary);
-		font-weight: 700;
-		cursor: help;
-	}
-
-	.help-panel {
-		position: absolute;
-		top: calc(100% + 0.5rem);
-		right: 0;
-		width: min(21rem, calc(100vw - 2rem));
-		padding: 0.85rem;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		background: var(--bg-primary);
-		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
-		color: var(--text-secondary);
+	.integration {
 		font-size: var(--text-sm);
-		line-height: 1.45;
+		color: var(--text-tertiary);
 	}
 
-	.help-panel strong {
-		display: block;
-		margin-bottom: 0.35rem;
+	.integration summary {
+		cursor: pointer;
+		color: var(--text-secondary);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		list-style: none;
+	}
+
+	.integration summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.integration summary:hover {
 		color: var(--text-primary);
 	}
 
-	.help-panel p {
+	.integration[open] summary {
+		margin-bottom: 0.5rem;
+	}
+
+	.integration p {
 		margin: 0.35rem 0;
+		max-width: 42rem;
+		line-height: 1.5;
 	}
 
 	code {
@@ -408,7 +391,7 @@
 	}
 
 	.credit {
-		margin: 2.5rem 0 0;
+		margin: 0;
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
 	}
