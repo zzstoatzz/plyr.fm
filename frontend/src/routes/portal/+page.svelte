@@ -23,6 +23,9 @@
 	let tracksHasMore = $state(false);
 	let loadingTracks = $state(false);
 	let loadingMoreTracks = $state(false);
+	// server-side search/sort for the tracks tab (owned here since this fetches)
+	let trackQuery = $state('');
+	let trackSort = $state<'recent' | 'title' | 'plays'>('recent');
 	// atprotofans eligibility - checked on mount; gates the supporter toggle in TracksSection
 	let atprotofansEligible = $state(false);
 
@@ -108,7 +111,13 @@
 		}
 		try {
 			const offset = append ? tracks.length : 0;
-			const response = await fetch(`${API_URL}/tracks/me?limit=10&offset=${offset}`, {
+			const params = new URLSearchParams({
+				limit: '10',
+				offset: String(offset),
+				sort: trackSort
+			});
+			if (trackQuery) params.set('q', trackQuery);
+			const response = await fetch(`${API_URL}/tracks/me?${params}`, {
 				credentials: 'include'
 			});
 			if (response.ok) {
@@ -152,6 +161,12 @@
 	async function reloadTracksAndAlbums() {
 		await loadMyTracks();
 		await loadMyAlbums();
+	}
+
+	function applyTrackFilters(filters: { q: string; sort: 'recent' | 'title' | 'plays' }) {
+		trackQuery = filters.q;
+		trackSort = filters.sort;
+		loadMyTracks();
 	}
 
 	async function logout() {
@@ -234,6 +249,9 @@
 						loadingMoreTracks={loadingMoreTracks}
 						albums={albums}
 						atprotofansEligible={atprotofansEligible}
+						q={trackQuery}
+						sort={trackSort}
+						onFilterChange={applyTrackFilters}
 						onLoadMore={() => loadMyTracks(true)}
 						onTracksChanged={reloadTracksAndAlbums}
 					/>

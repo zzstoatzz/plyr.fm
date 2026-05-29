@@ -22,6 +22,15 @@
 
 	let tablistEl = $state<HTMLDivElement>();
 
+	// publish the tab-bar height so a pane's own sticky toolbar (e.g. the tracks
+	// search/sort bar) can sit just beneath it: top = header + tab-bar.
+	let tabbarHeight = $state(0);
+	$effect(() => {
+		if (typeof document !== 'undefined') {
+			document.documentElement.style.setProperty('--pager-tabbar-height', `${tabbarHeight}px`);
+		}
+	});
+
 	function onKeydown(event: KeyboardEvent) {
 		const idx = tabs.findIndex((t) => t.id === active);
 		if (idx === -1) return;
@@ -39,7 +48,7 @@
 	<div class="pager-header">{@render header()}</div>
 {/if}
 
-<div class="pager-tabbar" bind:this={tablistEl} role="tablist">
+<div class="pager-tabbar" bind:this={tablistEl} bind:clientHeight={tabbarHeight} role="tablist">
 	{#each tabs as tab (tab.id)}
 		<button
 			role="tab"

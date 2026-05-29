@@ -17,6 +17,8 @@
 	// supported audio formats — matches backend AudioFormat enum + AlbumUploadForm
 	const AUDIO_FILE_INPUT_ACCEPT = '.mp3,.wav,.m4a,.aiff,.aif,.flac,audio/mpeg,audio/wav,audio/mp4,audio/aiff,audio/x-aiff,audio/flac';
 
+	type SortMode = 'recent' | 'title' | 'plays';
+
 	interface Props {
 		tracks: Track[];
 		tracksTotal: number;
@@ -27,6 +29,9 @@
 		atprotofansEligible: boolean;
 		onLoadMore: () => void;
 		onTracksChanged: () => Promise<void>;
+		q?: string;
+		sort?: SortMode;
+		onFilterChange?: (filters: { q: string; sort: SortMode }) => void;
 	}
 
 	let {
@@ -38,8 +43,27 @@
 		albums,
 		atprotofansEligible,
 		onLoadMore,
-		onTracksChanged
+		onTracksChanged,
+		q = '',
+		sort = 'recent',
+		onFilterChange
 	}: Props = $props();
+
+	// search/sort controls — server-side via onFilterChange (the parent owns the
+	// fetch). debounced so typing doesn't fire a request per keystroke.
+	let searchInput = $state(q);
+	let sortMode = $state<SortMode>(sort);
+	let hasQuery = $derived(searchInput.trim().length > 0);
+	let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+	function emitFilter() {
+		onFilterChange?.({ q: searchInput.trim(), sort: sortMode });
+	}
+
+	function onSearchInput() {
+		clearTimeout(searchDebounce);
+		searchDebounce = setTimeout(emitFilter, 250);
+	}
 
 	// track editing state
 	let editingTrackId = $state<number | null>(null);
@@ -378,12 +402,30 @@
 <section class="tracks-section">
 	<h2>your tracks</h2>
 
+	{#if !loadingTracks && (tracks.length > 0 || hasQuery)}
+		<div class="tracks-toolbar">
+			<input
+				type="search"
+				class="track-search"
+				placeholder="filter your tracks…"
+				bind:value={searchInput}
+				oninput={onSearchInput}
+				aria-label="filter your tracks"
+			/>
+			<select class="track-sort" bind:value={sortMode} onchange={emitFilter} aria-label="sort tracks">
+				<option value="recent">recent</option>
+				<option value="title">title</option>
+				<option value="plays">most played</option>
+			</select>
+		</div>
+	{/if}
+
 	{#if loadingTracks}
 		<div class="loading-container">
 			<WaveLoading size="lg" message="loading tracks..." />
 		</div>
 	{:else if tracks.length === 0}
-		<p class="empty">no tracks uploaded yet</p>
+		<p class="empty">{hasQuery ? `no tracks match “${searchInput.trim()}”` : 'no tracks uploaded yet'}</p>
 	{:else}
 		<div class="tracks-list">
 			{#each tracks as track}
@@ -936,6 +978,54 @@
 	.tracks-section h2 {
 		font-size: var(--text-page-heading);
 		margin-bottom: 1.5rem;
+	}
+
+	/* search + sort bar — sticks just beneath the pager tab bar so you can
+	   filter a long catalog without scrolling back to the top. */
+	.tracks-toolbar {
+		position: sticky;
+		top: calc(var(--header-height, 0px) + var(--pager-tabbar-height, 0px));
+		z-index: 15;
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.5rem 0 0.75rem;
+		margin-bottom: 0.5rem;
+		background: var(--bg-primary);
+	}
+
+	.track-search {
+		flex: 1;
+		min-width: 0;
+		padding: 0.55rem 0.75rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-base);
+		color: var(--text-primary);
+		font-family: inherit;
+		font-size: var(--text-base);
+		transition: border-color 0.15s;
+	}
+
+	.track-search:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.track-sort {
+		flex-shrink: 0;
+		padding: 0.55rem 0.6rem;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-base);
+		color: var(--text-primary);
+		font-family: inherit;
+		font-size: var(--text-sm);
+		cursor: pointer;
+	}
+
+	.track-sort:focus {
+		outline: none;
+		border-color: var(--accent);
 	}
 
 	.tracks-list {

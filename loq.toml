@@ -312,7 +312,7 @@ max_lines = 610
 
 [[rules]]
 path = "frontend/src/lib/components/portal/TracksSection.svelte"
-max_lines = 1740
+max_lines = 1830
 
 [[rules]]
 path = "frontend/src/lib/components/portal/SharesSection.svelte"
