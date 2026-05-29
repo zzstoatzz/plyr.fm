@@ -210,7 +210,7 @@
 		<div class="station-copy">
 			<p class="eyebrow">live station</p>
 			<h1>radio</h1>
-			<p class="subtitle">one public plyr.fm signal for clients, games, and late-night tabs</p>
+			<p class="subtitle">plyr.fm, on air</p>
 		</div>
 
 		{#if loading}
