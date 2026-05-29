@@ -325,3 +325,7 @@ max_lines = 561
 [[rules]]
 path = "frontend/src/lib/components/portal/DataSection.svelte"
 max_lines = 612
+
+[[rules]]
+path = "frontend/src/routes/radio/+page.svelte"
+max_lines = 674

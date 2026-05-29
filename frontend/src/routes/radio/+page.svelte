@@ -44,7 +44,7 @@
 	let audioElement = $state<HTMLAudioElement | null>(null);
 	let progressSeconds = $state(0);
 	let volume = $state(0.72);
-	let pollTimer: ReturnType<typeof setInterval> | null = null;
+	let pollTimer: number | null = null;
 
 	let current = $derived(radioState?.current ?? null);
 	let duration = $derived(current?.duration ?? 0);
@@ -151,12 +151,12 @@
 		const savedVolume = localStorage.getItem('radio_volume');
 		if (savedVolume) volume = Number(savedVolume);
 		fetchRadioState(false);
-		pollTimer = setInterval(() => {
+		pollTimer = window.setInterval(() => {
 			fetchRadioState(playing);
 		}, 30000);
 
 		return () => {
-			if (pollTimer) clearInterval(pollTimer);
+			if (pollTimer) window.clearInterval(pollTimer);
 		};
 	});
 
