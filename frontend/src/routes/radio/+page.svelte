@@ -20,6 +20,11 @@
 			: 0
 	);
 
+	function formatTime(seconds: number): string {
+		const t = Math.max(0, Math.floor(seconds));
+		return `${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, '0')}`;
+	}
+
 	async function handleLogout() {
 		await auth.logout();
 		window.location.href = '/';
@@ -94,6 +99,10 @@
 			</div>
 			<div class="progress" aria-label="track progress">
 				<div class="progress-fill" style={`width: ${progressPercent}%`}></div>
+			</div>
+			<div class="progress-times">
+				<span>{formatTime(radio.positionSeconds)}</span>
+				<span>{formatTime(radio.current.duration)}</span>
 			</div>
 		{:else}
 			<div class="status">no tracks in rotation yet</div>
@@ -314,6 +323,15 @@
 		border-radius: inherit;
 		background: var(--accent);
 		transition: width 0.25s linear;
+	}
+
+	.progress-times {
+		display: flex;
+		justify-content: space-between;
+		margin-top: 0.5rem;
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.status {
