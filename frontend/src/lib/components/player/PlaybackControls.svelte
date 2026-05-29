@@ -3,6 +3,9 @@
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
 
+	// radio mode: live stream — no prev/next or scrubbing, just play/pause + volume
+	let { radioMode = false }: { radioMode?: boolean } = $props();
+
 	let seekValue = $state(0);
 	let isScrubbing = $state(false);
 	let rafId: number | null = null;
@@ -108,12 +111,14 @@
 	}
 </script>
 
-<div class="player-controls">
-	<button class="control-btn" onclick={handlePrevious} title="previous track / restart">
-		<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-			<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z" />
-		</svg>
-	</button>
+<div class="player-controls" class:radio-mode={radioMode}>
+	{#if !radioMode}
+		<button class="control-btn" onclick={handlePrevious} title="previous track / restart">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+				<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z" />
+			</svg>
+		</button>
+	{/if}
 
 	<button
 		class="control-btn play-pause"
@@ -132,39 +137,43 @@
 		{/if}
 	</button>
 
-	<button
-		class="control-btn"
-		class:disabled={!queue.hasNext}
-		onclick={() => queue.next()}
-		title="next track"
-		disabled={!queue.hasNext}
-	>
-		<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-			<path d="M16 4h2v16h-2V4zM6 4l10 8-10 8V4z"></path>
-		</svg>
-	</button>
+	{#if !radioMode}
+		<button
+			class="control-btn"
+			class:disabled={!queue.hasNext}
+			onclick={() => queue.next()}
+			title="next track"
+			disabled={!queue.hasNext}
+		>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+				<path d="M16 4h2v16h-2V4zM6 4l10 8-10 8V4z"></path>
+			</svg>
+		</button>
 
-	<div class="time-control">
-		<span class="time">{formattedCurrentTime}</span>
-		<input
-			type="range"
-			class="seek-bar"
-			min="0"
-			max={player.duration || 0}
-			step="0.01"
-			value={seekValue}
-			oninput={handleSeekInput}
-			onchange={handleSeekChange}
-			onpointerdown={() => (isScrubbing = true)}
-			onpointerup={handleSeekPointerUp}
-			onpointerleave={(event) => {
-				if (isScrubbing) handleSeekPointerCancel(event);
-			}}
-			onpointercancel={handleSeekPointerCancel}
-			style="--progress: {progressPercent}%"
-		/>
-		<span class="time">{formattedDuration}</span>
-	</div>
+		<div class="time-control">
+			<span class="time">{formattedCurrentTime}</span>
+			<input
+				type="range"
+				class="seek-bar"
+				min="0"
+				max={player.duration || 0}
+				step="0.01"
+				value={seekValue}
+				oninput={handleSeekInput}
+				onchange={handleSeekChange}
+				onpointerdown={() => (isScrubbing = true)}
+				onpointerup={handleSeekPointerUp}
+				onpointerleave={(event) => {
+					if (isScrubbing) handleSeekPointerCancel(event);
+				}}
+				onpointercancel={handleSeekPointerCancel}
+				style="--progress: {progressPercent}%"
+			/>
+			<span class="time">{formattedDuration}</span>
+		</div>
+	{:else}
+		<span class="live-pill">live</span>
+	{/if}
 
 	<div class="volume-control">
 		<div class="volume-icon" class:muted={volumeState === 'muted'}>
@@ -208,6 +217,17 @@
 		gap: 1rem;
 		min-width: 0;
 		width: 100%;
+	}
+
+	/* radio: "live" fills the slot the scrubber would occupy, keeping play/pause
+	   left and volume right — same control row, no scrubber/skip */
+	.live-pill {
+		flex: 1;
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--accent);
 	}
 
 	.control-btn {

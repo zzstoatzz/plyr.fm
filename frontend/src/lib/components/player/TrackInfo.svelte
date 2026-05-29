@@ -6,9 +6,10 @@
 	interface Props {
 		track: Track;
 		isOnTrackDetailPage: boolean;
+		radioMode?: boolean;
 	}
 
-	let { track, isOnTrackDetailPage }: Props = $props();
+	let { track, isOnTrackDetailPage, radioMode = false }: Props = $props();
 
 	let titleEl = $state<HTMLElement | null>(null);
 	let artistEl = $state<HTMLElement | null>(null);
@@ -111,7 +112,15 @@
 				</div>
 			</div>
 			<div class="metadata-line">
-				{#if track.album}
+				{#if radioMode}
+					<span class="metadata-link radio-indicator">
+						<svg class="metadata-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+							<circle cx="12" cy="12" r="2" />
+							<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
+						</svg>
+						<div class="text-container"><span>radio.plyr.fm</span></div>
+					</span>
+				{:else if track.album}
 					<a
 						href="/u/{track.artist_handle}/album/{track.album.slug}"
 						class="metadata-link"
@@ -273,6 +282,12 @@
 		min-width: 0;
 		white-space: nowrap;
 		line-height: 1.15;
+	}
+
+	/* radio source indicator — sits in the album/single slot, tinted to signal
+	   the player is on the station */
+	.radio-indicator {
+		color: var(--accent);
 	}
 
 	.metadata-link:hover,

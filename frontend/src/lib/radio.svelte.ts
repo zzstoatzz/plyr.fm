@@ -4,6 +4,7 @@
 // single source of truth.
 import { API_URL } from './config';
 import { player, type RadioNowPlaying } from './player.svelte';
+import type { Track } from './types';
 
 export interface RadioTrack {
 	id: number;
@@ -60,10 +61,28 @@ class Radio {
 	}
 
 	private toNowPlaying(c: RadioTrack): RadioNowPlaying {
-		return {
+		// the on-air entry is a real track — reshape it as a Track so the normal
+		// player strip renders it identically to any other track.
+		const track: Track = {
+			id: c.id,
 			title: c.title,
+			artist: c.artist,
 			artist_handle: c.artist_handle,
-			artwork_url: c.artwork_url,
+			artist_did: c.artist_did,
+			file_id: '',
+			file_type: c.file_type,
+			play_count: c.play_count,
+			like_count: c.like_count,
+			image_url: c.artwork_url ?? undefined,
+			thumbnail_url: c.thumbnail_url ?? undefined,
+			created_at: c.created_at,
+			tags: c.tags,
+			atproto_record_uri: c.atproto_record_uri ?? undefined,
+			album: null,
+			features: []
+		};
+		return {
+			track,
 			stream_url: c.stream_url,
 			start_at: this.state ? this.stateProgress(this.state) : 0
 		};

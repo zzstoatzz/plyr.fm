@@ -106,6 +106,9 @@
 	let isOnTrackDetailPage = $derived(
 		player.currentTrack && $page.url.pathname === `/track/${player.currentTrack.id}`
 	);
+	// what the strip shows: the radio on-air track when in radio mode, else the
+	// queue track. radio renders through the SAME strip (TrackInfo + controls).
+	let nowPlayingTrack = $derived(player.radio?.track ?? player.currentTrack);
 	let trackInfoRef = $state<{ recalcOverflow: () => void } | null>(null);
 
 	$effect(() => {
@@ -741,7 +744,7 @@
 
 </script>
 
-{#if player.currentTrack || player.radio}
+{#if nowPlayingTrack}
 	<div class="player" class:jam-active={jam.active} class:is-playing={!player.paused}>
 		<audio
 			bind:this={player.audioElement}
@@ -753,31 +756,7 @@
 			onended={() => (player.radio ? radio.onEnded() : handleTrackEnded())}
 		></audio>
 
-		{#if player.radio}
-			<div class="player-content radio-content">
-				<div class="radio-info">
-					<svg class="radio-tower" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-						<circle cx="12" cy="12" r="2"></circle>
-						<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"></path>
-					</svg>
-					<div class="radio-text">
-						<span class="radio-station">radio.plyr.fm</span>
-						<a class="radio-track" href="/u/{player.radio.artist_handle}">{player.radio.title} · @{player.radio.artist_handle}</a>
-					</div>
-				</div>
-				<div class="radio-controls">
-					<button class="radio-toggle" onclick={() => player.togglePlayPause()} aria-label={player.paused ? 'play radio' : 'pause radio'}>
-						{#if player.paused}
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
-						{:else}
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
-						{/if}
-					</button>
-					<button class="radio-stop" onclick={() => radio.stop()}>stop</button>
-				</div>
-			</div>
-		{:else if player.currentTrack}
-		{#if jam.active}
+		{#if jam.active && !player.radio}
 			<div class="jam-stripe-label">
 				<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>{#if jam.isOutputDevice}<path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>{/if}</svg>
 				{#if jam.outputMode === 'everyone'}
@@ -793,13 +772,13 @@
 
 		<div class="player-content">
 			<TrackInfo
-				track={player.currentTrack}
+				track={nowPlayingTrack}
 				isOnTrackDetailPage={Boolean(isOnTrackDetailPage)}
+				radioMode={Boolean(player.radio)}
 				bind:this={trackInfoRef}
 			/>
-			<PlaybackControls />
+			<PlaybackControls radioMode={Boolean(player.radio)} />
 		</div>
-		{/if}
 	</div>
 {/if}
 
@@ -832,93 +811,6 @@
 		grid-template-columns: minmax(200px, 420px) minmax(0, 1fr);
 		align-items: center;
 		gap: 1.5rem;
-	}
-
-	/* radio source — a simple row in the same player, not the track grid */
-	.player-content.radio-content {
-		display: flex;
-		gap: 1rem;
-	}
-
-	.radio-info {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex: 1;
-		min-width: 0;
-	}
-
-	.radio-tower {
-		color: var(--accent);
-		flex-shrink: 0;
-	}
-
-	.radio-text {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-	}
-
-	.radio-station {
-		font-size: var(--text-xs);
-		color: var(--text-tertiary);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.radio-track {
-		font-size: var(--text-sm);
-		color: var(--text-primary);
-		text-decoration: none;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.radio-track:hover {
-		color: var(--accent);
-	}
-
-	.radio-controls {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-shrink: 0;
-	}
-
-	.radio-toggle {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 40px;
-		height: 40px;
-		border-radius: var(--radius-full);
-		border: none;
-		background: var(--accent);
-		color: var(--bg-primary);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.radio-toggle:hover {
-		background: var(--accent-hover);
-	}
-
-	.radio-stop {
-		padding: 0.4rem 0.75rem;
-		border-radius: var(--radius-base);
-		border: 1px solid var(--border-default);
-		background: transparent;
-		color: var(--text-secondary);
-		font-family: inherit;
-		font-size: var(--text-sm);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.radio-stop:hover {
-		border-color: var(--text-secondary);
-		color: var(--text-primary);
 	}
 
 	@media (max-width: 1100px) {

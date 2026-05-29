@@ -57,7 +57,11 @@
 	// when jam is active, show jam tracks; otherwise show personal queue
 	const tracks = $derived(jam.active ? jam.tracks : queue.tracks);
 	const currentIdx = $derived(jam.active ? jam.currentIndex : queue.currentIndex);
-	const currentTrack = $derived.by<Track | null>(() => tracks[currentIdx] ?? null);
+	// radio is what's actually playing when active — reflect it in the now-playing
+	// card so the panel doesn't claim a queue track is playing.
+	const currentTrack = $derived.by<Track | null>(
+		() => player.radio?.track ?? tracks[currentIdx] ?? null
+	);
 	const upcoming = $derived.by<{ track: Track; index: number }[]>(() => {
 		return tracks
 			.map((track, index) => ({ track, index }))

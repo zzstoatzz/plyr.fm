@@ -2,12 +2,12 @@ import type { Track } from './types';
 import { API_URL } from './config';
 
 // radio is a distinct *source* on the same player: when set, the one <audio>
-// element plays this stream instead of a queue track. metadata only — no
-// second audio element, no second player.
+// element plays this stream instead of a queue track, and the normal player
+// strip renders `track` (the on-air track) with a radioMode flag. no second
+// audio element, no second strip.
 export interface RadioNowPlaying {
-	title: string;
-	artist_handle: string;
-	artwork_url: string | null;
+	/** the on-air track, rendered in the normal player strip (TrackInfo) */
+	track: Track;
 	stream_url: string;
 	/** station position to resume at (seconds) */
 	start_at: number;
