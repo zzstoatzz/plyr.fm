@@ -113,13 +113,13 @@
 			</div>
 			<div class="metadata-line">
 				{#if radioMode}
-					<span class="metadata-link radio-indicator">
+					<a href="/radio" class="metadata-link radio-indicator">
 						<svg class="metadata-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
 							<circle cx="12" cy="12" r="2" />
 							<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
 						</svg>
 						<div class="text-container"><span>radio.plyr.fm</span></div>
-					</span>
+					</a>
 				{:else if track.album}
 					<a
 						href="/u/{track.artist_handle}/album/{track.album.slug}"
