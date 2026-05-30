@@ -64,16 +64,15 @@
 <main class="radio-page">
 	<section class="station">
 		<div class="station-copy">
-			<div class="station-kicker">
-				<p class="eyebrow">live station</p>
+			<h1 class="station-title">
+				<span>live radio</span>
 				<span class="radio-mark" aria-hidden="true">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<circle cx="12" cy="12" r="2" />
 						<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
 					</svg>
 				</span>
-			</div>
-			<h1>radio</h1>
+			</h1>
 		</div>
 
 		{#if radio.loading && !radio.state}
@@ -122,13 +121,19 @@
 	{#if radio.state}
 		<section class="station-board" aria-label="station">
 			<div class="rotation-card">
-				<div class="rotation-artworks" aria-hidden="true">
+				<div class="rotation-artworks" aria-label="tracks in rotation">
 					{#each radio.state.rotation.slice(0, 10) as track (track.id)}
-						{#if track.thumbnail_url || track.artwork_url}
-							<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
-						{:else}
-							<div class="rotation-fallback"></div>
-						{/if}
+						<a
+							class="rotation-artwork"
+							href={`/track/${track.id}`}
+							aria-label={`view ${track.title} by ${track.artist}`}
+						>
+							{#if track.thumbnail_url || track.artwork_url}
+								<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
+							{:else}
+								<div class="rotation-fallback"></div>
+							{/if}
+						</a>
 					{/each}
 				</div>
 				<p>from across plyr.fm</p>
@@ -152,7 +157,7 @@
 <style>
 	.radio-page {
 		position: relative;
-		max-width: 980px;
+		max-width: 1120px;
 		margin: 0 auto;
 		padding: 0 1rem calc(var(--player-height, 0px) + 3rem + env(safe-area-inset-bottom, 0px));
 		min-height: 100vh;
@@ -203,21 +208,24 @@
 	}
 
 	.station {
-		padding-top: 3.5rem;
+		padding-top: 2.75rem;
 	}
 
 	.station-copy {
-		margin-bottom: 2.75rem;
+		margin-bottom: 2rem;
 	}
 
-	.station-kicker {
+	.station-title {
 		display: flex;
 		align-items: center;
 		gap: 0.65rem;
-		margin-bottom: 0.35rem;
+		margin: 0;
+		color: var(--text-secondary);
+		font-size: var(--text-xl);
+		line-height: 1;
+		text-transform: lowercase;
 	}
 
-	.eyebrow,
 	.label {
 		margin: 0;
 		color: var(--text-tertiary);
@@ -243,17 +251,11 @@
 		height: 100%;
 	}
 
-	h1 {
-		margin: 0;
-		font-size: clamp(3rem, 11vw, 5.75rem);
-		line-height: 0.9;
-	}
-
 	.now-card {
-		display: flex;
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
 		align-items: center;
 		gap: 1.5rem;
-		flex-wrap: wrap;
 	}
 
 	.art-link {
@@ -281,15 +283,15 @@
 	}
 
 	.now-meta {
-		flex: 1;
-		min-width: 12rem;
+		min-width: 0;
 	}
 
 	.now-meta h2 {
 		margin: 0;
-		font-size: clamp(1.75rem, 5vw, 3rem);
-		line-height: 1;
-		overflow-wrap: anywhere;
+		font-size: clamp(2rem, 4vw, 3.35rem);
+		line-height: 0.96;
+		overflow-wrap: normal;
+		text-wrap: balance;
 	}
 
 	.now-meta h2 a {
@@ -389,30 +391,142 @@
 
 	.rotation-card {
 		min-width: 0;
+		text-align: center;
 	}
 
 	.rotation-artworks {
 		display: flex;
 		align-items: center;
-		min-width: 0;
+		justify-content: center;
+		width: min(100%, 34rem);
+		margin: 0 auto;
+		padding: 0.55rem 0.85rem;
+		overflow: visible;
 	}
 
-	.rotation-artworks img,
+	.rotation-artwork {
+		position: relative;
+		display: block;
+		flex: 0 0 auto;
+		width: 3.35rem;
+		height: 3.35rem;
+		margin: 0 -0.28rem;
+		border-radius: var(--radius-sm);
+		color: inherit;
+		text-decoration: none;
+		transform: rotate(var(--tilt, 0deg)) translateY(var(--lift, 0));
+		transition:
+			transform 0.16s ease,
+			z-index 0.16s ease;
+		z-index: var(--z, 1);
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.rotation-artwork:nth-child(1) {
+		--tilt: -5deg;
+		--lift: 0.25rem;
+		--z: 1;
+	}
+
+	.rotation-artwork:nth-child(2) {
+		--tilt: 3deg;
+		--lift: -0.15rem;
+		--z: 2;
+	}
+
+	.rotation-artwork:nth-child(3) {
+		--tilt: -2deg;
+		--lift: 0.1rem;
+		--z: 3;
+	}
+
+	.rotation-artwork:nth-child(4) {
+		--tilt: 4deg;
+		--lift: -0.25rem;
+		--z: 4;
+	}
+
+	.rotation-artwork:nth-child(5) {
+		--tilt: -4deg;
+		--lift: 0.05rem;
+		--z: 5;
+	}
+
+	.rotation-artwork:nth-child(6) {
+		--tilt: 2deg;
+		--lift: -0.1rem;
+		--z: 6;
+	}
+
+	.rotation-artwork:nth-child(7) {
+		--tilt: -3deg;
+		--lift: 0.22rem;
+		--z: 7;
+	}
+
+	.rotation-artwork:nth-child(8) {
+		--tilt: 5deg;
+		--lift: -0.18rem;
+		--z: 8;
+	}
+
+	.rotation-artwork:nth-child(9) {
+		--tilt: -1deg;
+		--lift: 0.08rem;
+		--z: 9;
+	}
+
+	.rotation-artwork:nth-child(10) {
+		--tilt: 3deg;
+		--lift: -0.05rem;
+		--z: 10;
+	}
+
+	.rotation-artwork img,
 	.rotation-fallback {
-		width: 3rem;
-		height: 3rem;
-		margin-right: -0.65rem;
+		display: block;
+		width: 100%;
+		height: 100%;
 		object-fit: cover;
 		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
+		border-radius: inherit;
 		background:
 			linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 45%),
 			var(--bg-secondary);
-		box-shadow: 0 0 0 2px var(--bg-primary);
+		box-shadow:
+			0 0 0 2px var(--bg-primary),
+			0 0.45rem 1.2rem rgba(0, 0, 0, 0.24);
+		transition:
+			border-color 0.16s ease,
+			box-shadow 0.16s ease,
+			filter 0.16s ease;
+	}
+
+	.rotation-artwork:hover,
+	.rotation-artwork:focus-visible {
+		transform: rotate(0deg) translateY(-0.45rem) scale(1.12);
+		z-index: 20;
+		outline: none;
+	}
+
+	.rotation-artwork:hover img,
+	.rotation-artwork:hover .rotation-fallback,
+	.rotation-artwork:focus-visible img,
+	.rotation-artwork:focus-visible .rotation-fallback {
+		border-color: var(--text-secondary);
+		box-shadow:
+			0 0 0 2px var(--bg-primary),
+			0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent),
+			0 0.8rem 1.8rem rgba(0, 0, 0, 0.34);
+		filter: saturate(1.08);
+	}
+
+	.rotation-artwork:active {
+		transform: rotate(0deg) translateY(-0.2rem) scale(1.04);
 	}
 
 	.rotation-card p {
-		margin: 0.6rem 0 0;
+		margin: 0.45rem 0 0;
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
 	}
@@ -447,6 +561,14 @@
 		.station {
 			padding-top: 2.25rem;
 		}
+
+		.now-card {
+			grid-template-columns: auto minmax(0, 1fr);
+		}
+
+		.tune-btn {
+			grid-column: 1 / -1;
+		}
 	}
 
 	@media (max-width: 520px) {
@@ -462,7 +584,6 @@
 		/* let the meta shrink next to the art; the button wraps full-width below */
 		.now-meta {
 			min-width: 0;
-			flex-basis: calc(100% - 9rem);
 		}
 
 		.tune-btn {
@@ -474,10 +595,15 @@
 			margin-top: 2rem;
 		}
 
-		.rotation-artworks img,
-		.rotation-fallback {
-			width: 2.75rem;
-			height: 2.75rem;
+		.rotation-artworks {
+			width: 100%;
+			padding-inline: 0.25rem;
+		}
+
+		.rotation-artwork {
+			width: 2.85rem;
+			height: 2.85rem;
+			margin-inline: -0.22rem;
 		}
 	}
 </style>
