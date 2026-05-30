@@ -36,3 +36,6 @@ api-ref:
         mkdir -p tracks && \
         for f in tracks-*.md; do mv "$f" "tracks/${f#tracks-}"; done && \
         mv tracks/__init__.md tracks/overview.md
+    # mdxify emits no directory landing page; restore the curated index so
+    # /developers/api-reference/ doesn't 404
+    cp templates/api-reference-index.md ../public/developers/api-reference/index.md
