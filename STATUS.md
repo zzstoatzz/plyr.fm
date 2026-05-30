@@ -47,6 +47,21 @@ plyr.fm should become:
 
 ### May 2026
 
+#### radio as a player mode + portal de-scroll redesign (PRs #1473→#1498, prod May 29)
+
+**why**: the artist portal stacked 9 sections into one punishing mobile scroll, and the new public radio feature (#1480) played through its own page-local `<audio>` — divorced from the global player, so navigating away killed playback and the footer showed a stale paused track.
+
+**what shipped**:
+- **portal redesign**: created content is now a sticky tabbed pager (`Tracks · Albums`) under a collapsing header; profile/copyright/sharing/data moved into a `/portal/manage` drill-in; playlists removed (they're curation → live in `/library`). Server-side title search + sort on `/tracks/me` (`q`, `sort` with stable `id` tie-breakers, escaped LIKE wildcards) backs a sticky filter on the tracks tab.
+- **radio = a source on the existing player** (not a second player): `player.radio` holds the on-air track; the *same* footer strip (`TrackInfo` + `PlaybackControls`) renders it with a `radioMode` flag (radio badge, "live" pill, no scrubber/skip). Persists across navigation; the queue is never touched; playing a track takes over. `/embed/radio` for external embeds (e.g. the personal site's player). Reachable from the LinksMenu + footer badge. Position/duration shown though a live stream isn't scrubbable.
+- **link previews**: real OG/Twitter cards for `/radio` and the homepage (the homepage had none; the layout default used a relative asset path scrapers can't resolve — both now point at the absolute `icon-512.png`).
+- **PDS rename**: the R2→PDS audio op is now "save" everywhere (was a muddle of "backfill" in code + "migrate" in UI); endpoint `/pds-save`, `JobType.PDS_SAVE`.
+
+**technical notes / lessons**:
+- **don't bolt a parallel system next to an existing one to dodge its complexity** — integrate into it. Radio took 4 tries: a 2nd `<audio>` + clone footer (reverted #1486), then a separate `radio-content` *visual block* (still "two players"), before rendering through the one strip via `radioMode`.
+- **OG defaults are an allowlist (`hasPageMetadata` in `+layout.svelte`)**: a page that sets its own OG must be added to it, or the layout *also* emits the default tags and scrapers take the first (default) `og:*`. `/radio` hit this. Smell flagged — a page-`data.meta`-driven single OG emitter would remove the footgun.
+- **local pre-commit hooks were silently bypassed** by a global `core.hooksPath` (a zig-fmt-only hook) shadowing every repo's `.git/hooks` — so loq/ruff-format failures only surfaced in CI. Removed the global override; repo hooks run again.
+
 #### decoupled publish/optimize — AIFF publishes instantly as WAV, MP3 follows in background (PRs #1461, #1462, release 2026.0528.060101, May 28)
 
 **why**: a reaper DM landed claiming a stuck upload — but the worker wasn't dead. Investigation surfaced woody.fm uploading a **939 MB / ~90-min AIFF** that took the 1-shared-CPU transcoder >10 min to MP3-encode and tripped the client's 600 s read timeout, producing `"transcoding failed"` and **no track at all**. Because the transcoder's heartbeat only fires on response-stream chunks (and ffmpeg writes nothing until it's done), `jobs.updated_at` froze mid-encode and the stuck-upload reaper false-fired at minute ~10 — making a slow-but-alive encode look like a dead worker. Two bundled decisions were the structural problem: (a) MP3 was a hard prerequisite for the track to exist at all, and (b) that encode ran under a fixed wall-clock deadline.
@@ -512,5 +527,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-28 (documented the decoupled publish/optimize cluster #1461→#1462 shipped to prod this session as release `2026.0528.060101` — AIFF uploads now publish instantly as 16-bit WAV with the MP3 streaming rendition + canonical PDS blob produced by a deferred `optimize_track_audio` task; race-safe against concurrent `audio_replace`; the reusable pattern is "split publish from optimize" anywhere the canonical artifact is expensive. Removed the "harden file format support" backlog item — AIFF was the only remaining non-web-playable upload format, and it no longer blocks).
+this is a living document. last updated 2026-05-29 (documented the radio-as-player-mode + portal de-scroll redesign cluster #1473→#1498 shipped to prod across several frontend-only releases this session: portal is now tabbed Tracks·Albums + a `/portal/manage` drill-in with server-side track search/sort; radio plays through the *one* footer player as a `radioMode` source — not a second player — with `/embed/radio` for external sites; OG/link previews fixed for `/radio` + homepage; the R2→PDS op renamed "save". Key lessons captured inline: integrate-don't-bolt-a-parallel-system, the `hasPageMetadata` OG-allowlist footgun, and a global `core.hooksPath` that was silently bypassing local pre-commit hooks).
 
