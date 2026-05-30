@@ -127,12 +127,17 @@
 							class="rotation-artwork"
 							href={`/track/${track.id}`}
 							aria-label={`view ${track.title} by ${track.artist}`}
+							title={`${track.title} by ${track.artist}`}
 						>
 							{#if track.thumbnail_url || track.artwork_url}
 								<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
 							{:else}
 								<div class="rotation-fallback"></div>
 							{/if}
+							<span class="rotation-tooltip" aria-hidden="true">
+								<strong>{track.title}</strong>
+								<span>{track.artist}</span>
+							</span>
 						</a>
 					{/each}
 				</div>
@@ -157,7 +162,7 @@
 <style>
 	.radio-page {
 		position: relative;
-		max-width: 1120px;
+		max-width: 980px;
 		margin: 0 auto;
 		padding: 0 1rem calc(var(--player-height, 0px) + 3rem + env(safe-area-inset-bottom, 0px));
 		min-height: 100vh;
@@ -208,16 +213,17 @@
 	}
 
 	.station {
-		padding-top: 2.75rem;
+		padding-top: 2.25rem;
 	}
 
 	.station-copy {
-		margin-bottom: 2rem;
+		margin-bottom: 1.75rem;
 	}
 
 	.station-title {
 		display: flex;
 		align-items: center;
+		justify-content: center;
 		gap: 0.65rem;
 		margin: 0;
 		color: var(--text-secondary);
@@ -252,28 +258,34 @@
 	}
 
 	.now-card {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr) auto;
+		display: flex;
+		flex-direction: column;
 		align-items: center;
-		gap: 1.5rem;
+		gap: 1rem;
+		text-align: center;
 	}
 
 	.art-link {
 		display: block;
-		flex-shrink: 0;
 		text-decoration: none;
+		border-radius: var(--radius-md);
 	}
 
 	.art {
-		width: clamp(11rem, 24vw, 15rem);
-		height: clamp(11rem, 24vw, 15rem);
+		display: block;
+		width: clamp(14rem, 34vw, 20rem);
+		height: clamp(14rem, 34vw, 20rem);
 		object-fit: cover;
-		border: 1px solid var(--border-default);
-		transition: border-color 0.15s ease;
+		border-radius: var(--radius-md);
+		box-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.34);
+		transition:
+			box-shadow 0.15s ease,
+			transform 0.15s ease;
 	}
 
 	.art-link:hover .art {
-		border-color: var(--text-secondary);
+		box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.42);
+		transform: translateY(-1px);
 	}
 
 	.art.fallback {
@@ -283,13 +295,14 @@
 	}
 
 	.now-meta {
+		width: min(100%, 48rem);
 		min-width: 0;
 	}
 
 	.now-meta h2 {
 		margin: 0;
-		font-size: clamp(2rem, 4vw, 3.35rem);
-		line-height: 0.96;
+		font-size: clamp(2rem, 6vw, 3rem);
+		line-height: 1.05;
 		overflow-wrap: normal;
 		text-wrap: balance;
 	}
@@ -321,7 +334,9 @@
 	.tune-btn {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: 0.5rem;
+		min-width: 8.5rem;
 		padding: 0.7rem 1.4rem;
 		border: none;
 		border-radius: var(--radius-full);
@@ -353,7 +368,8 @@
 	}
 
 	.progress {
-		margin: 1.25rem 0 0;
+		width: min(100%, 54rem);
+		margin: 1.35rem auto 0;
 		height: 4px;
 		border-radius: 999px;
 		background: var(--bg-secondary);
@@ -368,9 +384,10 @@
 	}
 
 	.progress-times {
+		width: min(100%, 54rem);
 		display: flex;
 		justify-content: space-between;
-		margin-top: 0.5rem;
+		margin: 0.5rem auto 0;
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
 		font-variant-numeric: tabular-nums;
@@ -386,7 +403,7 @@
 	}
 
 	.station-board {
-		margin-top: 2.25rem;
+		margin-top: 2rem;
 	}
 
 	.rotation-card {
@@ -525,6 +542,53 @@
 		transform: rotate(0deg) translateY(-0.2rem) scale(1.04);
 	}
 
+	.rotation-tooltip {
+		position: absolute;
+		left: 50%;
+		bottom: calc(100% + 0.6rem);
+		width: max-content;
+		max-width: min(16rem, 72vw);
+		padding: 0.45rem 0.55rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: var(--bg-secondary);
+		color: var(--text-secondary);
+		box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.28);
+		font-size: var(--text-xs);
+		line-height: 1.25;
+		text-align: left;
+		opacity: 0;
+		pointer-events: none;
+		transform: translate(-50%, 0.35rem);
+		transition:
+			opacity 0.14s ease,
+			transform 0.14s ease;
+	}
+
+	.rotation-tooltip strong,
+	.rotation-tooltip span {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.rotation-tooltip strong {
+		color: var(--text-primary);
+		font-weight: 600;
+	}
+
+	.rotation-tooltip span {
+		margin-top: 0.15rem;
+		color: var(--text-tertiary);
+	}
+
+	.rotation-artwork:hover .rotation-tooltip,
+	.rotation-artwork:focus-visible .rotation-tooltip {
+		opacity: 1;
+		transform: translate(-50%, 0);
+	}
+
 	.rotation-card p {
 		margin: 0.45rem 0 0;
 		color: var(--text-tertiary);
@@ -561,14 +625,6 @@
 		.station {
 			padding-top: 2.25rem;
 		}
-
-		.now-card {
-			grid-template-columns: auto minmax(0, 1fr);
-		}
-
-		.tune-btn {
-			grid-column: 1 / -1;
-		}
 	}
 
 	@media (max-width: 520px) {
@@ -577,17 +633,12 @@
 		}
 
 		.art {
-			width: 8rem;
-			height: 8rem;
-		}
-
-		/* let the meta shrink next to the art; the button wraps full-width below */
-		.now-meta {
-			min-width: 0;
+			width: min(78vw, 17rem);
+			height: min(78vw, 17rem);
 		}
 
 		.tune-btn {
-			width: 100%;
+			width: min(100%, 16rem);
 			justify-content: center;
 		}
 
