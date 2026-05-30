@@ -112,7 +112,15 @@
 </script>
 
 <div class="player-controls" class:radio-mode={radioMode}>
-	{#if !radioMode}
+	{#if radioMode}
+		<!-- live stream: a static ∞ marker holds play/pause in its normal slot
+		     instead of letting it jump left where the prev button used to be -->
+		<button class="control-btn infinity" disabled aria-hidden="true" title="continuous — radio doesn't skip">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+				<path d="M18.6 6.62c-1.44 0-2.8.56-3.77 1.53L7.8 14.39c-.64.64-1.49.99-2.4.99-1.87 0-3.39-1.51-3.39-3.38S3.53 8.62 5.4 8.62c.91 0 1.76.35 2.44 1.03l1.13 1 1.51-1.34L9.22 8.2C8.2 7.18 6.84 6.62 5.4 6.62 2.42 6.62 0 9.04 0 12s2.42 5.38 5.4 5.38c1.44 0 2.8-.56 3.77-1.53l7.43-6.57c.64-.64 1.49-.99 2.4-.99 1.87 0 3.39 1.51 3.39 3.38s-1.52 3.38-3.39 3.38c-.9 0-1.76-.35-2.44-1.03l-1.14-1.01-1.51 1.34 1.27 1.12c1.02 1.01 2.37 1.57 3.82 1.57 2.98 0 5.4-2.42 5.4-5.38s-2.42-5.37-5.4-5.37z" />
+			</svg>
+		</button>
+	{:else}
 		<button class="control-btn" onclick={handlePrevious} title="previous track / restart">
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 				<path d="M6 4h2v16H6V4zm12 0l-10 8 10 8V4z" />
@@ -260,6 +268,18 @@
 	.control-btn.disabled {
 		opacity: 0.4;
 		pointer-events: none;
+	}
+
+	/* radio: static, non-interactive marker that holds play/pause in place */
+	.control-btn.infinity {
+		color: var(--text-tertiary);
+		opacity: 0.55;
+		cursor: default;
+	}
+
+	.control-btn.infinity:hover {
+		color: var(--text-tertiary);
+		background: transparent;
 	}
 
 	.time-control {
@@ -435,6 +455,13 @@
 		.time-control {
 			grid-row: 2;
 			grid-column: 1 / 7;
+		}
+
+		/* radio: "live" takes the scrubber's row instead of the control row */
+		.live-pill {
+			grid-row: 2;
+			grid-column: 1 / 7;
+			text-align: center;
 		}
 
 		.time {

@@ -500,6 +500,19 @@
 		});
 	});
 
+	// radio swaps audio.src directly (player.playRadio), bypassing the loader's
+	// attach bookkeeping. when radio takes over, forget the attached queue track
+	// so leaving radio always re-resolves + re-attaches — otherwise re-selecting
+	// the exact track that was playing before tuning in dedupes to a no-op and
+	// the element keeps playing the (now stale) radio stream instead.
+	$effect(() => {
+		if (!player.radio) return;
+		previousTrackId = null;
+		previousFileId = null;
+		attachedTrackId = null;
+		attachedFileId = null;
+	});
+
 	// sync paused state with audio element (output device only — non-output stays silent)
 	$effect(() => {
 		if (!player.audioElement || isLoadingTrack) return;

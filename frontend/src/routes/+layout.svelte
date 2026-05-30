@@ -292,6 +292,14 @@
 			return;
 		}
 
+		// radio owns the player but has no currentTrack — let space still toggle
+		// it (seek/skip below stay track-only; a live stream isn't scrubbable)
+		if (player.radio && (event.key === ' ' || event.code === 'Space')) {
+			event.preventDefault();
+			queue.togglePlayPause();
+			return;
+		}
+
 		// playback shortcuts - only when a track is loaded
 		if (!player.currentTrack) {
 			return;
