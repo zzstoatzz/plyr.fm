@@ -64,7 +64,15 @@
 <main class="radio-page">
 	<section class="station">
 		<div class="station-copy">
-			<p class="eyebrow">live station</p>
+			<div class="station-kicker">
+				<p class="eyebrow">live station</p>
+				<span class="radio-mark" aria-hidden="true">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="2" />
+						<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
+					</svg>
+				</span>
+			</div>
 			<h1>radio</h1>
 			<p class="subtitle">plyr.fm, on air</p>
 		</div>
@@ -206,17 +214,42 @@
 		margin-bottom: 2rem;
 	}
 
+	.station-kicker {
+		display: flex;
+		align-items: center;
+		gap: 0.65rem;
+		margin-bottom: 0.35rem;
+	}
+
 	.eyebrow,
 	.label {
-		margin: 0 0 0.35rem;
+		margin: 0;
 		color: var(--text-tertiary);
 		font-size: var(--text-xs);
 		text-transform: uppercase;
 	}
 
+	.label {
+		margin-bottom: 0.35rem;
+	}
+
+	.radio-mark {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.4rem;
+		height: 1.4rem;
+		color: var(--text-tertiary);
+	}
+
+	.radio-mark svg {
+		width: 100%;
+		height: 100%;
+	}
+
 	h1 {
 		margin: 0;
-		font-size: clamp(3rem, 13vw, 7rem);
+		font-size: clamp(3rem, 11vw, 5.75rem);
 		line-height: 0.9;
 	}
 
@@ -365,9 +398,12 @@
 	}
 
 	.up-next {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+		display: flex;
 		gap: 0.75rem;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scroll-snap-type: x proximity;
+		padding-bottom: 0.35rem;
 	}
 
 	.next-track {
@@ -378,6 +414,8 @@
 		min-height: 4rem;
 		color: var(--text-secondary);
 		text-decoration: none;
+		flex: 0 0 clamp(13rem, 28vw, 17rem);
+		scroll-snap-align: start;
 	}
 
 	.next-track img,
@@ -423,6 +461,12 @@
 		color: var(--text-primary);
 	}
 
+	@media (min-width: 721px) {
+		.radio-footer {
+			justify-content: center;
+		}
+	}
+
 	@media (max-width: 720px) {
 		.radio-page {
 			padding-top: 0;
@@ -452,6 +496,10 @@
 		.tune-btn {
 			width: 100%;
 			justify-content: center;
+		}
+
+		.next-track {
+			flex-basis: min(17rem, 74vw);
 		}
 	}
 </style>

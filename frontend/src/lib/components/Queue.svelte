@@ -62,6 +62,7 @@
 	const currentTrack = $derived.by<Track | null>(
 		() => player.radio?.track ?? tracks[currentIdx] ?? null
 	);
+	const currentSourceLabel = $derived(player.radio ? 'radio' : jam.active ? 'jam' : 'queue');
 	const upcoming = $derived.by<{ track: Track; index: number }[]>(() => {
 		return tracks
 			.map((track, index) => ({ track, index }))
@@ -415,7 +416,16 @@
 		<div class="queue-body">
 			{#if currentTrack}
 				<section class="now-playing">
-					<div class="section-label">now playing{#if player.radio} · radio{/if}</div>
+					<div class="section-label">
+						<span>now playing</span>
+						{#if player.radio}
+							<a class="source-chip radio-source" href="/radio">{currentSourceLabel}</a>
+						{:else if jam.active && jam.code}
+							<a class="source-chip" href={`/jam/${jam.code}`}>{currentSourceLabel}</a>
+						{:else}
+							<span class="source-chip">{currentSourceLabel}</span>
+						{/if}
+					</div>
 					<div class="now-playing-card">
 						{@render media(currentTrack)}
 					</div>
@@ -751,11 +761,41 @@
 	}
 
 	.section-label {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
 		font-size: var(--text-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--text-tertiary);
 		margin-bottom: 0.5rem;
+	}
+
+	.source-chip {
+		display: inline-flex;
+		align-items: center;
+		max-width: 45%;
+		padding: 0.1rem 0.45rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-full);
+		color: var(--text-tertiary);
+		text-decoration: none;
+		font-size: var(--text-xs);
+		letter-spacing: 0.04em;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.source-chip.radio-source {
+		color: var(--accent);
+		border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+	}
+
+	.source-chip:hover {
+		color: var(--text-secondary);
+		border-color: var(--border-default);
 	}
 
 	.now-playing-card {
