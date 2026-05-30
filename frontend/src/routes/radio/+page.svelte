@@ -163,12 +163,12 @@
 		position: relative;
 		max-width: 980px;
 		margin: 0 auto;
-		padding: 0 1rem calc(var(--player-height, 0px) + 3rem + env(safe-area-inset-bottom, 0px));
+		padding: 0 1rem calc(var(--player-height, 0px) + 2rem + env(safe-area-inset-bottom, 0px));
 		min-height: 100vh;
 	}
 
 	.radio-footer {
-		margin-top: 2.5rem;
+		margin-top: 1.5rem;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: baseline;
@@ -212,11 +212,11 @@
 	}
 
 	.station {
-		padding-top: 3.5rem;
+		padding-top: 2rem;
 	}
 
 	.station-copy {
-		margin-bottom: 2.75rem;
+		margin-bottom: 1.5rem;
 	}
 
 	.station-kicker {
@@ -254,8 +254,8 @@
 
 	h1 {
 		margin: 0;
-		font-size: clamp(3rem, 11vw, 5.75rem);
-		line-height: 0.9;
+		font-size: clamp(2.75rem, 7vw, 4.25rem);
+		line-height: 0.95;
 	}
 
 	.now-card {
@@ -396,7 +396,7 @@
 	}
 
 	.queue-strip {
-		margin-top: 3rem;
+		margin-top: 2rem;
 	}
 
 	.section-heading {
@@ -498,7 +498,38 @@
 		}
 
 		.station {
-			padding-top: 2.25rem;
+			padding-top: 1.5rem;
+		}
+	}
+
+	@media (max-height: 820px) and (min-width: 721px) {
+		.radio-page {
+			padding-bottom: calc(var(--player-height, 0px) + 1.25rem + env(safe-area-inset-bottom, 0px));
+		}
+
+		.station {
+			padding-top: 1.25rem;
+		}
+
+		.station-copy {
+			margin-bottom: 1rem;
+		}
+
+		h1 {
+			font-size: clamp(2.5rem, 6vw, 3.5rem);
+		}
+
+		.art {
+			width: clamp(9.5rem, 20vw, 12rem);
+			height: clamp(9.5rem, 20vw, 12rem);
+		}
+
+		.queue-strip {
+			margin-top: 1.5rem;
+		}
+
+		.radio-footer {
+			margin-top: 1rem;
 		}
 	}
 
