@@ -14,6 +14,11 @@
 		'a live, always-on stream of audio from across plyr.fm — tune in and let it play.';
 	const RADIO_OG_IMAGE = `${APP_CANONICAL_URL}/icons/icon-512.png`;
 
+	async function handleLogout() {
+		await auth.logout();
+		window.location.href = '/';
+	}
+
 	let progressPercent = $derived(
 		radio.current && radio.current.duration > 0
 			? Math.min(100, (radio.positionSeconds / radio.current.duration) * 100)
@@ -25,13 +30,7 @@
 		return `${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, '0')}`;
 	}
 
-	async function handleLogout() {
-		await auth.logout();
-		window.location.href = '/';
-	}
-
 	onMount(() => {
-		auth.initialize();
 		// populate "what's on" for display without starting playback
 		if (!radio.state) radio.loadState();
 	});

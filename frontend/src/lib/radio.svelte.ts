@@ -132,6 +132,12 @@ class Radio {
 
 	/** poll: follow the shared station when it rotates to a new track */
 	private async syncToStation(): Promise<void> {
+		// radio was turned off elsewhere (playing a track nulls player.radio
+		// without calling stop()) — tear the poll down so it doesn't leak.
+		if (!player.radio) {
+			this.stopPolling();
+			return;
+		}
 		await this.loadState();
 		const c = this.current;
 		if (!c || !player.radio) return;
