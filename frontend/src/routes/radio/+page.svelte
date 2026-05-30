@@ -74,7 +74,6 @@
 				</span>
 			</div>
 			<h1>radio</h1>
-			<p class="subtitle">plyr.fm, on air</p>
 		</div>
 
 		{#if radio.loading && !radio.state}
@@ -83,15 +82,19 @@
 			<div class="status error">{radio.error}</div>
 		{:else if radio.current}
 			<div class="now-card">
-				{#if radio.current.artwork_url}
-					<img src={radio.current.artwork_url} alt="" class="art" />
-				{:else}
-					<div class="art fallback"></div>
-				{/if}
+				<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
+					{#if radio.current.artwork_url}
+						<img src={radio.current.artwork_url} alt="" class="art" />
+					{:else}
+						<div class="art fallback"></div>
+					{/if}
+				</a>
 				<div class="now-meta">
 					<p class="label">{radio.active ? 'on air' : "what's on"}</p>
-					<h2>{radio.current.title}</h2>
-					<a class="artist" href={`/u/${radio.current.artist_handle}`}>@{radio.current.artist_handle}</a>
+					<h2>
+						<a href={`/track/${radio.current.id}`}>{radio.current.title}</a>
+					</h2>
+					<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
 				</div>
 				{#if radio.active}
 					<button class="tune-btn stop" onclick={() => radio.stop()}>stop</button>
@@ -124,17 +127,19 @@
 			</div>
 			<div class="up-next">
 				{#each radio.state.up_next as track (track.id)}
-					<a class="next-track" href={`/track/${track.id}`}>
-						{#if track.thumbnail_url || track.artwork_url}
-							<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
-						{:else}
-							<div class="thumb-fallback"></div>
-						{/if}
+					<div class="next-track">
+						<a class="next-art-link" href={`/track/${track.id}`} aria-label={`view ${track.title}`}>
+							{#if track.thumbnail_url || track.artwork_url}
+								<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
+							{:else}
+								<div class="thumb-fallback"></div>
+							{/if}
+						</a>
 						<div>
-							<strong>{track.title}</strong>
-							<span>@{track.artist_handle}</span>
+							<a class="next-title" href={`/track/${track.id}`}>{track.title}</a>
+							<a class="next-artist" href={`/u/${track.artist_handle}`}>{track.artist}</a>
 						</div>
-					</a>
+					</div>
 				{/each}
 			</div>
 		</section>
@@ -211,7 +216,7 @@
 	}
 
 	.station-copy {
-		margin-bottom: 2rem;
+		margin-bottom: 2.75rem;
 	}
 
 	.station-kicker {
@@ -253,14 +258,6 @@
 		line-height: 0.9;
 	}
 
-	.subtitle {
-		max-width: 38rem;
-		margin: 1rem 0 0;
-		color: var(--text-secondary);
-		font-size: var(--text-lg);
-		line-height: 1.45;
-	}
-
 	.now-card {
 		display: flex;
 		align-items: center;
@@ -268,12 +265,23 @@
 		flex-wrap: wrap;
 	}
 
+	.art-link,
+	.next-art-link {
+		display: block;
+		flex-shrink: 0;
+		text-decoration: none;
+	}
+
 	.art {
-		width: 8rem;
-		height: 8rem;
+		width: clamp(11rem, 24vw, 15rem);
+		height: clamp(11rem, 24vw, 15rem);
 		object-fit: cover;
 		border: 1px solid var(--border-default);
-		flex-shrink: 0;
+		transition: border-color 0.15s ease;
+	}
+
+	.art-link:hover .art {
+		border-color: var(--text-secondary);
 	}
 
 	.art.fallback,
@@ -295,6 +303,18 @@
 		overflow-wrap: anywhere;
 	}
 
+	.now-meta h2 a {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.now-meta h2 a:hover {
+		color: var(--text-primary);
+		text-decoration: underline;
+		text-decoration-thickness: 0.06em;
+		text-underline-offset: 0.08em;
+	}
+
 	.artist {
 		display: inline-block;
 		margin-top: 0.6rem;
@@ -304,7 +324,7 @@
 	}
 
 	.artist:hover,
-	.next-track:hover strong {
+	.next-title:hover {
 		color: var(--text-primary);
 	}
 
@@ -413,7 +433,6 @@
 		gap: 0.75rem;
 		min-height: 4rem;
 		color: var(--text-secondary);
-		text-decoration: none;
 		flex: 0 0 clamp(13rem, 28vw, 17rem);
 		scroll-snap-align: start;
 	}
@@ -426,23 +445,29 @@
 		border: 1px solid var(--border-default);
 	}
 
-	.next-track strong,
-	.next-track span {
+	.next-title,
+	.next-artist {
 		display: block;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		text-decoration: none;
 	}
 
-	.next-track strong {
+	.next-title {
 		color: var(--text-primary);
 		font-size: var(--text-sm);
+		font-weight: 600;
 	}
 
-	.next-track span {
+	.next-artist {
 		margin-top: 0.15rem;
 		color: var(--text-tertiary);
 		font-size: var(--text-xs);
+	}
+
+	.next-artist:hover {
+		color: var(--text-secondary);
 	}
 
 	.credit {
@@ -483,14 +508,14 @@
 		}
 
 		.art {
-			width: 5.5rem;
-			height: 5.5rem;
+			width: 8rem;
+			height: 8rem;
 		}
 
 		/* let the meta shrink next to the art; the button wraps full-width below */
 		.now-meta {
 			min-width: 0;
-			flex-basis: calc(100% - 6.5rem);
+			flex-basis: calc(100% - 9rem);
 		}
 
 		.tune-btn {
