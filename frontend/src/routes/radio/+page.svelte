@@ -419,29 +419,35 @@
 
 	.up-next {
 		display: flex;
+		flex-direction: column;
 		gap: 0.75rem;
-		overflow-x: auto;
-		overscroll-behavior-x: contain;
-		scroll-snap-type: x proximity;
-		padding-bottom: 0.35rem;
 	}
 
 	.next-track {
 		display: grid;
-		grid-template-columns: 3.25rem minmax(0, 1fr);
+		grid-template-columns: 48px minmax(0, 1fr);
 		align-items: center;
-		gap: 0.75rem;
-		min-height: 4rem;
+		gap: 0.7rem;
+		min-height: 64px;
+		padding: 0.45rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: var(--bg-secondary);
 		color: var(--text-secondary);
-		flex: 0 0 clamp(13rem, 28vw, 17rem);
-		scroll-snap-align: start;
+		transition: background 0.15s ease, border-color 0.15s ease;
+	}
+
+	.next-track:hover {
+		background: var(--bg-hover);
+		border-color: var(--border-default);
 	}
 
 	.next-track img,
 	.thumb-fallback {
-		width: 3.25rem;
-		height: 3.25rem;
+		width: 48px;
+		height: 48px;
 		object-fit: cover;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border-default);
 	}
 
@@ -456,7 +462,7 @@
 
 	.next-title {
 		color: var(--text-primary);
-		font-size: var(--text-sm);
+		font-size: var(--text-base);
 		font-weight: 600;
 	}
 
@@ -521,10 +527,6 @@
 		.tune-btn {
 			width: 100%;
 			justify-content: center;
-		}
-
-		.next-track {
-			flex-basis: min(17rem, 74vw);
 		}
 	}
 </style>
