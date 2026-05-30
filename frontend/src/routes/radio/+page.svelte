@@ -168,9 +168,11 @@
 		margin: 0 auto;
 		height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem);
 		padding: 0 1rem 0.75rem;
-		display: grid;
-		grid-template-rows: minmax(0, 1fr) auto;
-		gap: 0.65rem;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		justify-content: center;
+		gap: clamp(0.7rem, 1.8vh, 1.25rem);
 		overflow: hidden;
 	}
 
@@ -185,6 +187,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		align-items: baseline;
+		justify-content: center;
 		gap: 0.5rem 1.5rem;
 	}
 
@@ -227,9 +230,6 @@
 	.station {
 		min-height: 0;
 		padding-top: 0;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
 	}
 
 	.station-title {
@@ -281,7 +281,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.55rem;
+		gap: clamp(0.5rem, 1.35vh, 0.85rem);
 		text-align: center;
 	}
 
@@ -293,8 +293,8 @@
 
 	.art {
 		display: block;
-		width: clamp(11rem, min(30vw, 34vh), 17rem);
-		height: clamp(11rem, min(30vw, 34vh), 17rem);
+		width: clamp(12rem, min(30vw, 32vh), 18rem);
+		height: clamp(12rem, min(30vw, 32vh), 18rem);
 		object-fit: cover;
 		border-radius: var(--radius-md);
 		box-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.34);
@@ -426,7 +426,7 @@
 	}
 
 	.station-board {
-		margin-top: 1rem;
+		margin-top: 0;
 	}
 
 	.rotation-card {
@@ -644,7 +644,7 @@
 		.radio-page {
 			height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem);
 			padding-top: 0;
-			gap: 0.5rem;
+			gap: 0.6rem;
 		}
 
 		@supports (height: 100dvh) {
@@ -656,7 +656,7 @@
 
 	@media (max-width: 520px) {
 		.radio-player {
-			gap: 0.55rem;
+			gap: 0.5rem;
 		}
 
 		.art {
@@ -670,7 +670,7 @@
 		}
 
 		.station-board {
-			margin-top: 0.75rem;
+			margin-top: 0;
 		}
 
 		.rotation-artworks {
