@@ -13,6 +13,10 @@ export interface RadioNowPlaying {
 	start_at: number;
 }
 
+interface RadioPlaybackOptions {
+	autoplay?: boolean;
+}
+
 // natural timeupdate steps are sub-second; a larger jump is a seek, scrub, or a
 // restored hydration position — none of which is listened time.
 const PLAY_PROGRESS_SEEK_THRESHOLD_S = 5;
@@ -74,16 +78,21 @@ class PlayerState {
 
 	/** start (or switch) radio playback through the shared audio element.
 	 * call from a user gesture so the play() isn't blocked by autoplay policy. */
-	playRadio(np: RadioNowPlaying) {
+	playRadio(np: RadioNowPlaying, options: RadioPlaybackOptions = {}) {
+		const autoplay = options.autoplay ?? true;
 		this.radio = np;
 		this.currentTrack = null; // exit track mode; the track loader bails on null
-		this.paused = false;
+		this.paused = !autoplay;
 		const el = this.audioElement;
 		if (!el) return;
 		el.src = np.stream_url;
 		el.load();
-		// play immediately (preserve the gesture), then align to station position
-		el.play().catch(() => (this.paused = true));
+		if (autoplay) {
+			// play immediately (preserve the gesture), then align to station position
+			el.play().catch(() => (this.paused = true));
+		} else {
+			el.pause();
+		}
 		const seek = () => {
 			if (np.start_at > 0 && Number.isFinite(el.duration)) {
 				el.currentTime = Math.min(np.start_at, el.duration);

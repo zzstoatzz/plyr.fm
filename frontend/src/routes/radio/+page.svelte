@@ -119,28 +119,15 @@
 		{/if}
 	</section>
 
-	{#if radio.state && radio.state.up_next.length > 0}
-		<section class="queue-strip" aria-label="up next">
-			<div class="section-heading">
-				<h2>up next</h2>
-				<span>{radio.state.rotation.length} in rotation</span>
+	{#if radio.state}
+		<section class="station-board" aria-label="station">
+			<div class="station-stat">
+				<span>{radio.state.rotation.length}</span>
+				<p>tracks in rotation</p>
 			</div>
-			<div class="up-next">
-				{#each radio.state.up_next as track (track.id)}
-					<div class="next-track">
-						<a class="next-art-link" href={`/track/${track.id}`} aria-label={`view ${track.title}`}>
-							{#if track.thumbnail_url || track.artwork_url}
-								<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
-							{:else}
-								<div class="thumb-fallback"></div>
-							{/if}
-						</a>
-						<div>
-							<a class="next-title" href={`/track/${track.id}`}>{track.title}</a>
-							<a class="next-artist" href={`/u/${track.artist_handle}`}>{track.artist}</a>
-						</div>
-					</div>
-				{/each}
+			<div class="request-card">
+				<h2>requests</h2>
+				<p>coming soon</p>
 			</div>
 		</section>
 	{/if}
@@ -265,8 +252,7 @@
 		flex-wrap: wrap;
 	}
 
-	.art-link,
-	.next-art-link {
+	.art-link {
 		display: block;
 		flex-shrink: 0;
 		text-decoration: none;
@@ -284,8 +270,7 @@
 		border-color: var(--text-secondary);
 	}
 
-	.art.fallback,
-	.thumb-fallback {
+	.art.fallback {
 		background:
 			linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 45%),
 			var(--bg-secondary);
@@ -323,8 +308,7 @@
 		font-size: var(--text-lg);
 	}
 
-	.artist:hover,
-	.next-title:hover {
+	.artist:hover {
 		color: var(--text-primary);
 	}
 
@@ -395,85 +379,54 @@
 		color: var(--error);
 	}
 
-	.queue-strip {
-		margin-top: 3rem;
-	}
-
-	.section-heading {
+	.station-board {
 		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
+		align-items: stretch;
 		gap: 1rem;
-		margin-bottom: 0.85rem;
+		margin-top: 2.25rem;
 	}
 
-	.section-heading h2 {
-		margin: 0;
-		font-size: var(--text-lg);
+	.station-stat,
+	.request-card {
+		min-height: 5rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-md);
+		padding: 0.85rem 1rem;
 	}
 
-	.section-heading span {
+	.station-stat {
+		width: 9rem;
+		flex-shrink: 0;
+		background:
+			linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 45%),
+			var(--bg-secondary);
+		color: var(--text-secondary);
+	}
+
+	.station-stat span {
+		display: block;
+		color: var(--text-primary);
+		font-size: var(--text-2xl);
+		font-weight: 600;
+		line-height: 1;
+	}
+
+	.station-stat p,
+	.request-card p {
+		margin: 0.35rem 0 0;
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
 	}
 
-	.up-next {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.next-track {
-		display: grid;
-		grid-template-columns: 48px minmax(0, 1fr);
-		align-items: center;
-		gap: 0.7rem;
-		min-height: 64px;
-		padding: 0.45rem;
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-md);
-		background: var(--bg-secondary);
+	.request-card {
+		flex: 1;
 		color: var(--text-secondary);
-		transition: background 0.15s ease, border-color 0.15s ease;
 	}
 
-	.next-track:hover {
-		background: var(--bg-hover);
-		border-color: var(--border-default);
-	}
-
-	.next-track img,
-	.thumb-fallback {
-		width: 48px;
-		height: 48px;
-		object-fit: cover;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border-default);
-	}
-
-	.next-title,
-	.next-artist {
-		display: block;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		text-decoration: none;
-	}
-
-	.next-title {
+	.request-card h2 {
+		margin: 0;
 		color: var(--text-primary);
-		font-size: var(--text-base);
-		font-weight: 600;
-	}
-
-	.next-artist {
-		margin-top: 0.15rem;
-		color: var(--text-tertiary);
-		font-size: var(--text-xs);
-	}
-
-	.next-artist:hover {
-		color: var(--text-secondary);
+		font-size: var(--text-lg);
 	}
 
 	.credit {
@@ -527,6 +480,16 @@
 		.tune-btn {
 			width: 100%;
 			justify-content: center;
+		}
+
+		.station-board {
+			flex-direction: column;
+			gap: 0.75rem;
+			margin-top: 2rem;
+		}
+
+		.station-stat {
+			width: auto;
 		}
 	}
 </style>

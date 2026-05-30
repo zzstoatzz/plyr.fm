@@ -142,7 +142,7 @@ class Radio {
 		const c = this.current;
 		if (!c || !player.radio) return;
 		if (player.radio.stream_url !== c.stream_url) {
-			player.playRadio(this.toNowPlaying(c));
+			player.playRadio(this.toNowPlaying(c), { autoplay: !player.paused });
 		}
 	}
 
