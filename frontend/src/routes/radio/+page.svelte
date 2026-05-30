@@ -63,15 +63,18 @@
 
 <main class="radio-page">
 	<section class="station">
-		<div class="station-header">
-			<div>
-				<p class="eyebrow">plyr.fm</p>
-				<h1>radio</h1>
+		<div class="station-copy">
+			<div class="station-kicker">
+				<p class="eyebrow">live station</p>
+				<span class="radio-mark" aria-hidden="true">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="2" />
+						<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
+					</svg>
+				</span>
 			</div>
-			<span class="station-status" class:active={radio.active}>
-				<span></span>
-				{radio.active ? 'live' : 'on air'}
-			</span>
+			<h1>radio</h1>
+			<p class="subtitle">plyr.fm, on air</p>
 		</div>
 
 		{#if radio.loading && !radio.state}
@@ -86,12 +89,12 @@
 					<div class="art fallback"></div>
 				{/if}
 				<div class="now-meta">
-					<p class="label">{radio.active ? 'now playing from radio' : "what's on radio"}</p>
+					<p class="label">{radio.active ? 'on air' : "what's on"}</p>
 					<h2>{radio.current.title}</h2>
 					<a class="artist" href={`/u/${radio.current.artist_handle}`}>@{radio.current.artist_handle}</a>
 				</div>
 				{#if radio.active}
-					<button class="tune-btn stop" onclick={() => radio.stop()}>stop radio</button>
+					<button class="tune-btn stop" onclick={() => radio.stop()}>stop</button>
 				{:else}
 					<button class="tune-btn" onclick={() => radio.tuneIn()}>
 						<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -153,14 +156,14 @@
 <style>
 	.radio-page {
 		position: relative;
-		max-width: 760px;
+		max-width: 980px;
 		margin: 0 auto;
-		padding: 0 1rem calc(var(--player-height, 0px) + 2.5rem + env(safe-area-inset-bottom, 0px));
+		padding: 0 1rem calc(var(--player-height, 0px) + 3rem + env(safe-area-inset-bottom, 0px));
 		min-height: 100vh;
 	}
 
 	.radio-footer {
-		margin-top: 2rem;
+		margin-top: 2.5rem;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: baseline;
@@ -204,68 +207,73 @@
 	}
 
 	.station {
-		padding-top: 2.25rem;
+		padding-top: 3.5rem;
 	}
 
-	.station-header {
+	.station-copy {
+		margin-bottom: 2rem;
+	}
+
+	.station-kicker {
 		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 1.25rem;
+		align-items: center;
+		gap: 0.65rem;
+		margin-bottom: 0.35rem;
 	}
 
 	.eyebrow,
 	.label {
-		margin: 0 0 0.35rem;
+		margin: 0;
 		color: var(--text-tertiary);
 		font-size: var(--text-xs);
 		text-transform: uppercase;
+	}
+
+	.label {
+		margin-bottom: 0.35rem;
+	}
+
+	.radio-mark {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.4rem;
+		height: 1.4rem;
+		color: var(--text-tertiary);
+	}
+
+	.radio-mark svg {
+		width: 100%;
+		height: 100%;
 	}
 
 	h1 {
 		margin: 0;
-		font-size: var(--text-2xl);
-		line-height: 1;
-		text-transform: lowercase;
+		font-size: clamp(3rem, 11vw, 5.75rem);
+		line-height: 0.9;
 	}
 
-	.station-status {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		margin-bottom: 0.1rem;
-		color: var(--text-tertiary);
-		font-size: var(--text-xs);
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		white-space: nowrap;
-	}
-
-	.station-status span {
-		width: 0.45rem;
-		height: 0.45rem;
-		border-radius: var(--radius-full);
-		background: var(--text-muted);
-	}
-
-	.station-status.active span {
-		background: var(--accent);
+	.subtitle {
+		max-width: 38rem;
+		margin: 1rem 0 0;
+		color: var(--text-secondary);
+		font-size: var(--text-lg);
+		line-height: 1.45;
 	}
 
 	.now-card {
-		display: grid;
-		grid-template-columns: minmax(6.5rem, 9rem) minmax(0, 1fr);
-		align-items: end;
-		gap: 1rem;
+		display: flex;
+		align-items: center;
+		gap: 1.5rem;
+		flex-wrap: wrap;
 	}
 
 	.art {
-		width: 100%;
-		aspect-ratio: 1;
+		width: 8rem;
+		height: 8rem;
 		object-fit: cover;
-		border-radius: var(--radius-md);
 		border: 1px solid var(--border-default);
+		flex-shrink: 0;
 	}
 
 	.art.fallback,
@@ -276,19 +284,20 @@
 	}
 
 	.now-meta {
-		min-width: 0;
+		flex: 1;
+		min-width: 12rem;
 	}
 
 	.now-meta h2 {
 		margin: 0;
-		font-size: clamp(1.8rem, 7vw, 3.25rem);
-		line-height: 0.98;
+		font-size: clamp(1.75rem, 5vw, 3rem);
+		line-height: 1;
 		overflow-wrap: anywhere;
 	}
 
 	.artist {
 		display: inline-block;
-		margin-top: 0.5rem;
+		margin-top: 0.6rem;
 		color: var(--text-secondary);
 		text-decoration: none;
 		font-size: var(--text-lg);
@@ -303,10 +312,9 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.5rem;
-		margin-top: 1rem;
-		padding: 0.65rem 1rem;
+		padding: 0.7rem 1.4rem;
 		border: none;
-		border-radius: var(--radius-base);
+		border-radius: var(--radius-full);
 		background: var(--accent);
 		color: var(--bg-primary);
 		font-family: inherit;
@@ -335,7 +343,7 @@
 	}
 
 	.progress {
-		margin: 1rem 0 0;
+		margin: 1.25rem 0 0;
 		height: 4px;
 		border-radius: 999px;
 		background: var(--bg-secondary);
@@ -368,7 +376,7 @@
 	}
 
 	.queue-strip {
-		margin-top: 2.25rem;
+		margin-top: 3rem;
 	}
 
 	.section-heading {
@@ -381,10 +389,7 @@
 
 	.section-heading h2 {
 		margin: 0;
-		color: var(--text-secondary);
-		font-size: var(--text-sm);
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
+		font-size: var(--text-lg);
 	}
 
 	.section-heading span {
@@ -394,36 +399,30 @@
 
 	.up-next {
 		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
+		gap: 0.75rem;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scroll-snap-type: x proximity;
+		padding-bottom: 0.35rem;
 	}
 
 	.next-track {
 		display: grid;
-		grid-template-columns: 48px minmax(0, 1fr);
+		grid-template-columns: 3.25rem minmax(0, 1fr);
 		align-items: center;
-		gap: 0.7rem;
-		min-height: 64px;
-		padding: 0.45rem;
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-md);
-		background: var(--bg-secondary);
+		gap: 0.75rem;
+		min-height: 4rem;
 		color: var(--text-secondary);
 		text-decoration: none;
-		transition: background 0.15s ease, border-color 0.15s ease;
-	}
-
-	.next-track:hover {
-		background: var(--bg-hover);
-		border-color: var(--border-default);
+		flex: 0 0 clamp(13rem, 28vw, 17rem);
+		scroll-snap-align: start;
 	}
 
 	.next-track img,
 	.thumb-fallback {
-		width: 48px;
-		height: 48px;
+		width: 3.25rem;
+		height: 3.25rem;
 		object-fit: cover;
-		border-radius: var(--radius-sm);
 		border: 1px solid var(--border-default);
 	}
 
@@ -437,7 +436,7 @@
 
 	.next-track strong {
 		color: var(--text-primary);
-		font-size: var(--text-base);
+		font-size: var(--text-sm);
 	}
 
 	.next-track span {
@@ -462,29 +461,45 @@
 		color: var(--text-primary);
 	}
 
-	@media (max-width: 520px) {
+	@media (min-width: 721px) {
+		.radio-footer {
+			justify-content: center;
+		}
+	}
+
+	@media (max-width: 720px) {
+		.radio-page {
+			padding-top: 0;
+		}
+
 		.station {
-			padding-top: 1.5rem;
+			padding-top: 2.25rem;
 		}
+	}
 
+	@media (max-width: 520px) {
 		.now-card {
-			grid-template-columns: 5rem minmax(0, 1fr);
-			align-items: center;
+			gap: 1rem;
 		}
 
-		.now-meta h2 {
-			font-size: var(--text-2xl);
-			line-height: 1.05;
+		.art {
+			width: 5.5rem;
+			height: 5.5rem;
 		}
 
-		.artist {
-			font-size: var(--text-base);
+		/* let the meta shrink next to the art; the button wraps full-width below */
+		.now-meta {
+			min-width: 0;
+			flex-basis: calc(100% - 6.5rem);
 		}
 
 		.tune-btn {
-			grid-column: 1 / -1;
 			width: 100%;
 			justify-content: center;
+		}
+
+		.next-track {
+			flex-basis: min(17rem, 74vw);
 		}
 	}
 </style>
