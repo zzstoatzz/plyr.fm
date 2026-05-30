@@ -63,24 +63,24 @@
 
 <main class="radio-page">
 	<section class="station">
-		<div class="station-copy">
-			<h1 class="station-title">
-				<span>live radio</span>
-				<span class="radio-mark" aria-hidden="true">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<circle cx="12" cy="12" r="2" />
-						<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
-					</svg>
-				</span>
-			</h1>
-		</div>
-
 		{#if radio.loading && !radio.state}
 			<div class="status">tuning...</div>
 		{:else if radio.error}
 			<div class="status error">{radio.error}</div>
 		{:else if radio.current}
-			<div class="now-card">
+			<div class="radio-player">
+				<div class="station-title">
+					<span>live radio</span>
+					<span class="radio-mark" aria-hidden="true">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<circle cx="12" cy="12" r="2" />
+							<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
+						</svg>
+					</span>
+					{#if radio.active}
+						<span class="source-state">listening here</span>
+					{/if}
+				</div>
 				<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
 					{#if radio.current.artwork_url}
 						<img src={radio.current.artwork_url} alt="" class="art" />
@@ -96,22 +96,24 @@
 					<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
 				</div>
 				{#if radio.active}
-					<button class="tune-btn stop" onclick={() => radio.stop()}>stop</button>
+					<button class="tune-btn stop" onclick={() => radio.stop()} aria-label="stop listening to radio">stop</button>
 				{:else}
-					<button class="tune-btn" onclick={() => radio.tuneIn()}>
+					<button class="tune-btn" onclick={() => radio.tuneIn()} aria-label="tune in to radio">
 						<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 							<polygon points="6 4 20 12 6 20 6 4"></polygon>
 						</svg>
 						tune in
 					</button>
 				{/if}
-			</div>
-			<div class="progress" aria-label="track progress">
-				<div class="progress-fill" style={`width: ${progressPercent}%`}></div>
-			</div>
-			<div class="progress-times">
-				<span>{formatTime(radio.positionSeconds)}</span>
-				<span>{formatTime(radio.current.duration)}</span>
+				<div class="progress-wrap">
+					<div class="progress" aria-label="track progress">
+						<div class="progress-fill" style={`width: ${progressPercent}%`}></div>
+					</div>
+					<div class="progress-times">
+						<span>{formatTime(radio.positionSeconds)}</span>
+						<span>{formatTime(radio.current.duration)}</span>
+					</div>
+				</div>
 			</div>
 		{:else}
 			<div class="status">no tracks in rotation yet</div>
@@ -216,20 +218,24 @@
 		padding-top: 2.25rem;
 	}
 
-	.station-copy {
-		margin-bottom: 1.75rem;
-	}
-
 	.station-title {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 0.65rem;
+		gap: 0.55rem;
 		margin: 0;
 		color: var(--text-secondary);
-		font-size: var(--text-xl);
+		font-size: var(--text-lg);
 		line-height: 1;
 		text-transform: lowercase;
+	}
+
+	.source-state {
+		margin-left: 0.15rem;
+		padding-left: 0.7rem;
+		border-left: 1px solid var(--border-subtle);
+		color: var(--text-tertiary);
+		font-size: var(--text-sm);
 	}
 
 	.label {
@@ -257,11 +263,11 @@
 		height: 100%;
 	}
 
-	.now-card {
+	.radio-player {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.9rem;
 		text-align: center;
 	}
 
@@ -273,8 +279,8 @@
 
 	.art {
 		display: block;
-		width: clamp(14rem, 34vw, 20rem);
-		height: clamp(14rem, 34vw, 20rem);
+		width: clamp(14rem, 32vw, 19rem);
+		height: clamp(14rem, 32vw, 19rem);
 		object-fit: cover;
 		border-radius: var(--radius-md);
 		box-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.34);
@@ -301,7 +307,7 @@
 
 	.now-meta h2 {
 		margin: 0;
-		font-size: clamp(2rem, 6vw, 3rem);
+		font-size: clamp(2rem, 5.5vw, 2.9rem);
 		line-height: 1.05;
 		overflow-wrap: normal;
 		text-wrap: balance;
@@ -367,9 +373,13 @@
 		transform: none;
 	}
 
-	.progress {
+	.progress-wrap {
 		width: min(100%, 54rem);
-		margin: 1.35rem auto 0;
+		margin-top: 0.2rem;
+	}
+
+	.progress {
+		margin: 0;
 		height: 4px;
 		border-radius: 999px;
 		background: var(--bg-secondary);
@@ -384,10 +394,9 @@
 	}
 
 	.progress-times {
-		width: min(100%, 54rem);
 		display: flex;
 		justify-content: space-between;
-		margin: 0.5rem auto 0;
+		margin-top: 0.5rem;
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
 		font-variant-numeric: tabular-nums;
@@ -628,7 +637,7 @@
 	}
 
 	@media (max-width: 520px) {
-		.now-card {
+		.radio-player {
 			gap: 1rem;
 		}
 
