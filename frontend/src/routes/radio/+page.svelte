@@ -121,13 +121,17 @@
 
 	{#if radio.state}
 		<section class="station-board" aria-label="station">
-			<div class="station-stat">
-				<span>{radio.state.rotation.length}</span>
-				<p>tracks in rotation</p>
-			</div>
-			<div class="request-card">
-				<h2>requests</h2>
-				<p>coming soon</p>
+			<div class="rotation-card">
+				<div class="rotation-artworks" aria-hidden="true">
+					{#each radio.state.rotation.slice(0, 10) as track (track.id)}
+						{#if track.thumbnail_url || track.artwork_url}
+							<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
+						{:else}
+							<div class="rotation-fallback"></div>
+						{/if}
+					{/each}
+				</div>
+				<p>from across plyr.fm</p>
 			</div>
 		</section>
 	{/if}
@@ -380,53 +384,37 @@
 	}
 
 	.station-board {
-		display: flex;
-		align-items: stretch;
-		gap: 1rem;
 		margin-top: 2.25rem;
 	}
 
-	.station-stat,
-	.request-card {
-		min-height: 5rem;
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-md);
-		padding: 0.85rem 1rem;
+	.rotation-card {
+		min-width: 0;
 	}
 
-	.station-stat {
-		width: 9rem;
-		flex-shrink: 0;
+	.rotation-artworks {
+		display: flex;
+		align-items: center;
+		min-width: 0;
+	}
+
+	.rotation-artworks img,
+	.rotation-fallback {
+		width: 3rem;
+		height: 3rem;
+		margin-right: -0.65rem;
+		object-fit: cover;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
 		background:
 			linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 45%),
 			var(--bg-secondary);
-		color: var(--text-secondary);
+		box-shadow: 0 0 0 2px var(--bg-primary);
 	}
 
-	.station-stat span {
-		display: block;
-		color: var(--text-primary);
-		font-size: var(--text-2xl);
-		font-weight: 600;
-		line-height: 1;
-	}
-
-	.station-stat p,
-	.request-card p {
-		margin: 0.35rem 0 0;
+	.rotation-card p {
+		margin: 0.6rem 0 0;
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
-	}
-
-	.request-card {
-		flex: 1;
-		color: var(--text-secondary);
-	}
-
-	.request-card h2 {
-		margin: 0;
-		color: var(--text-primary);
-		font-size: var(--text-lg);
 	}
 
 	.credit {
@@ -483,13 +471,13 @@
 		}
 
 		.station-board {
-			flex-direction: column;
-			gap: 0.75rem;
 			margin-top: 2rem;
 		}
 
-		.station-stat {
-			width: auto;
+		.rotation-artworks img,
+		.rotation-fallback {
+			width: 2.75rem;
+			height: 2.75rem;
 		}
 	}
 </style>

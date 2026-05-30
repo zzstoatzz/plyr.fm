@@ -11,6 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
 
+# clear_database only removes timestamped rows created after test start.
+TEST_TIME_OFFSET = timedelta(minutes=10)
+
 
 @pytest.fixture
 def radio_app(db_session: AsyncSession) -> Generator[FastAPI, None, None]:
@@ -75,7 +78,7 @@ async def test_radio_state_returns_live_public_rotation(
     radio_artist: Artist,
 ) -> None:
     """radio state returns one live station with public tracks only."""
-    now = datetime.now(UTC)
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
     visible = await _create_track(
         db_session,
         radio_artist,
@@ -125,7 +128,7 @@ async def test_radio_state_orders_rotation_by_likes_then_plays(
     radio_artist: Artist,
 ) -> None:
     """likes and play counts determine what gets into the radio loop."""
-    now = datetime.now(UTC)
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
     played = await _create_track(
         db_session,
         radio_artist,
@@ -180,7 +183,7 @@ async def test_radio_state_includes_tags_and_up_next(
     radio_artist: Artist,
 ) -> None:
     """radio state includes useful metadata for clients."""
-    now = datetime.now(UTC)
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
     first = await _create_track(
         db_session,
         radio_artist,
@@ -213,6 +216,7 @@ async def test_radio_state_includes_tags_and_up_next(
     assert data["progress_seconds"] >= 0
     assert data["current_started_at"] is not None
     assert data["current_ends_at"] is not None
-    assert data["rotation"][0]["tags"] == ["desert"]
+    tagged_track = next(track for track in data["rotation"] if track["id"] == first.id)
+    assert tagged_track["tags"] == ["desert"]
     assert data["up_next"]
     assert {track["id"] for track in data["up_next"]}.issubset({first.id, second.id})

@@ -1,5 +1,6 @@
 """Public live radio state for simple clients and games."""
 
+import hashlib
 import math
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -16,8 +17,10 @@ from backend.utilities.aggregations import get_like_counts, get_track_tags
 router = APIRouter(prefix="/radio", tags=["radio"])
 
 DEFAULT_TRACK_SECONDS = 180
-MAX_ROTATION_SIZE = 50
-SOURCE_CANDIDATE_LIMIT = 250
+DEFAULT_ROTATION_SIZE = 40
+MAX_ROTATION_SIZE = 75
+SOURCE_CANDIDATE_LIMIT = 500
+DAILY_VARIETY_WEIGHT = 0.75
 
 
 class RadioTrack(BaseModel):
@@ -76,8 +79,16 @@ def _score_track(track: Track, like_count: int) -> float:
     return (like_count * 3) + math.log1p(track.play_count)
 
 
+def _daily_variety(track: Track, now: datetime) -> float:
+    """Stable daily jitter so the station is weighted, not a hard top-N chart."""
+    day = now.date().isoformat()
+    digest = hashlib.blake2s(f"{day}:{track.id}".encode(), digest_size=4).digest()
+    return int.from_bytes(digest, "big") / 2**32
+
+
 async def _rotation_tracks(db: AsyncSession, limit: int) -> list[Track]:
     """Build the public radio rotation from catalog signals."""
+    now = datetime.now(UTC)
     stmt = (
         select(Track)
         .join(Artist)
@@ -98,7 +109,8 @@ async def _rotation_tracks(db: AsyncSession, limit: int) -> list[Track]:
     ranked = sorted(
         candidates,
         key=lambda track: (
-            _score_track(track, like_counts.get(track.id, 0)),
+            _score_track(track, like_counts.get(track.id, 0))
+            + (_daily_variety(track, now) * DAILY_VARIETY_WEIGHT),
             track.created_at,
             track.id,
         ),
@@ -181,7 +193,7 @@ def _up_next(rotation: list[RadioTrack], current_index: int | None) -> list[Radi
 async def radio_state(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-    limit: int = Query(25, ge=1, le=MAX_ROTATION_SIZE),
+    limit: int = Query(DEFAULT_ROTATION_SIZE, ge=1, le=MAX_ROTATION_SIZE),
 ) -> RadioStateResponse:
     """Return the live public radio state.
 
