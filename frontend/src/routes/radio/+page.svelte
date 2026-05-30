@@ -166,12 +166,22 @@
 		position: relative;
 		max-width: 980px;
 		margin: 0 auto;
-		padding: 0 1rem calc(var(--player-height, 0px) + 3rem + env(safe-area-inset-bottom, 0px));
-		min-height: 100vh;
+		height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem);
+		padding: 0 1rem 0.75rem;
+		display: grid;
+		grid-template-rows: minmax(0, 1fr) auto;
+		gap: 0.65rem;
+		overflow: hidden;
+	}
+
+	@supports (height: 100dvh) {
+		.radio-page {
+			height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem);
+		}
 	}
 
 	.radio-footer {
-		margin-top: 2.5rem;
+		margin-top: 0;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: baseline;
@@ -215,7 +225,11 @@
 	}
 
 	.station {
-		padding-top: 2.25rem;
+		min-height: 0;
+		padding-top: 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
 	}
 
 	.station-title {
@@ -267,7 +281,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.9rem;
+		gap: 0.55rem;
 		text-align: center;
 	}
 
@@ -279,8 +293,8 @@
 
 	.art {
 		display: block;
-		width: clamp(14rem, 32vw, 19rem);
-		height: clamp(14rem, 32vw, 19rem);
+		width: clamp(11rem, min(30vw, 34vh), 17rem);
+		height: clamp(11rem, min(30vw, 34vh), 17rem);
 		object-fit: cover;
 		border-radius: var(--radius-md);
 		box-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.34);
@@ -307,7 +321,7 @@
 
 	.now-meta h2 {
 		margin: 0;
-		font-size: clamp(2rem, 5.5vw, 2.9rem);
+		font-size: clamp(1.75rem, 4.6vw, 2.65rem);
 		line-height: 1.05;
 		overflow-wrap: normal;
 		text-wrap: balance;
@@ -327,10 +341,10 @@
 
 	.artist {
 		display: inline-block;
-		margin-top: 0.6rem;
+		margin-top: 0.35rem;
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: var(--text-lg);
+		font-size: var(--text-base);
 	}
 
 	.artist:hover {
@@ -375,7 +389,7 @@
 
 	.progress-wrap {
 		width: min(100%, 54rem);
-		margin-top: 0.2rem;
+		margin-top: 0.1rem;
 	}
 
 	.progress {
@@ -396,7 +410,7 @@
 	.progress-times {
 		display: flex;
 		justify-content: space-between;
-		margin-top: 0.5rem;
+		margin-top: 0.35rem;
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
 		font-variant-numeric: tabular-nums;
@@ -412,7 +426,7 @@
 	}
 
 	.station-board {
-		margin-top: 2rem;
+		margin-top: 1rem;
 	}
 
 	.rotation-card {
@@ -426,7 +440,7 @@
 		justify-content: center;
 		width: min(100%, 34rem);
 		margin: 0 auto;
-		padding: 0.55rem 0.85rem;
+		padding: 0.45rem 0.85rem;
 		overflow: visible;
 	}
 
@@ -599,7 +613,7 @@
 	}
 
 	.rotation-card p {
-		margin: 0.45rem 0 0;
+		margin: 0.25rem 0 0;
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
 	}
@@ -628,22 +642,26 @@
 
 	@media (max-width: 720px) {
 		.radio-page {
+			height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem);
 			padding-top: 0;
+			gap: 0.5rem;
 		}
 
-		.station {
-			padding-top: 2.25rem;
+		@supports (height: 100dvh) {
+			.radio-page {
+				height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem);
+			}
 		}
 	}
 
 	@media (max-width: 520px) {
 		.radio-player {
-			gap: 1rem;
+			gap: 0.55rem;
 		}
 
 		.art {
-			width: min(78vw, 17rem);
-			height: min(78vw, 17rem);
+			width: min(58vw, 12rem);
+			height: min(58vw, 12rem);
 		}
 
 		.tune-btn {
@@ -652,7 +670,7 @@
 		}
 
 		.station-board {
-			margin-top: 2rem;
+			margin-top: 0.75rem;
 		}
 
 		.rotation-artworks {
