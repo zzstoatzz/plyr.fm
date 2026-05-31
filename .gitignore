@@ -64,3 +64,6 @@ simple-build.log
 .gemini/
 .gemini-clipboard/
 .loq_cache
+
+# claude code local runtime state
+.claude/scheduled_tasks.lock
