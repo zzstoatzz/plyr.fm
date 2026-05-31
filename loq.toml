@@ -308,7 +308,7 @@ max_lines = 505
 
 [[rules]]
 path = "backend/tests/api/test_audio_optimize.py"
-max_lines = 610
+max_lines = 682
 
 [[rules]]
 path = "frontend/src/lib/components/portal/TracksSection.svelte"

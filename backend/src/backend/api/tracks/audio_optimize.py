@@ -1,18 +1,20 @@
-"""deferred MP3 optimization for tracks published with the interim WAV rendition.
+"""deferred MP3 optimization for tracks published with an interim rendition.
 
-a lossless (AIFF) upload publishes immediately with a fast 16-bit WAV
-compatibility rendition (see `uploads._store_audio`) so the track exists in
-seconds and plays in every browser, instead of blocking on a multi-minute,
-single-threaded MP3 encode. this background task then produces the smaller MP3
-streaming rendition from the lossless original, swaps it in as the canonical
-playable file, and writes the single PDS `audioBlob` — all off the upload's
-critical path. nothing here is reaped by the stuck-upload reaper (it runs under
-a distinct `JobType.OPTIMIZE` row) and it uses a generous transcoder timeout
-since no user is waiting.
+a non-web-playable upload (AIFF, and the browser-recorder webm/ogg) publishes
+immediately referencing the raw staged source as its interim playable rendition
+(see `uploads._store_audio`) so the track exists in seconds, instead of blocking
+on the transcoder — a slow or wedged encode of a large file must never fail the
+upload or it produces no track at all (the woody.fm 939 MB AIFF incident). this
+background task then transcodes the lossless original to the MP3 streaming
+rendition, swaps it in as the canonical playable file, and writes the single PDS
+`audioBlob` — all off the upload's critical path. nothing here is reaped by the
+stuck-upload reaper (it runs under a distinct `JobType.OPTIMIZE` row) and it uses
+a generous transcoder timeout since no user is waiting.
 
-failure is safe: the track simply stays on its WAV rendition (fully consistent
-— DB row, R2 object, and PDS record all agree), and the orphaned MP3 (if any)
-is cleaned up. docket retries the task.
+failure is safe: the track simply stays on its interim rendition (fully
+consistent — DB row, R2 object, and PDS record all agree; clients that can play
+the source format keep playing, others keep seeing "processing"), and the
+orphaned MP3 (if any) is cleaned up. docket retries the task.
 """
 
 import contextlib
@@ -104,11 +106,17 @@ class _MetadataState:
 
 
 def _needs_optimization(track: Track) -> bool:
-    """a track is optimizable iff it currently serves the interim WAV rendition
-    over a lossless original. an already-swapped (mp3) track is a no-op, which
-    makes the task idempotent under docket retries."""
+    """a track is optimizable iff it still serves a non-mp3 interim rendition
+    over a preserved original. an already-swapped (mp3) track is a no-op, which
+    makes the task idempotent under docket retries.
+
+    the interim is the raw lossless source itself (aiff/webm/ogg) for uploads
+    published after the publish/transcode decoupling, or the legacy 16-bit WAV
+    remux for tracks still in flight from the prior scheme — both are caught by
+    "not yet mp3, and an original exists". a directly-uploaded web-playable
+    track (no `original_file_id`) is never optimized."""
     return (
-        track.file_type == AudioFormat.WAV.value
+        track.file_type != AudioFormat.MP3.value
         and track.original_file_id is not None
         and track.original_file_type is not None
     )
@@ -419,10 +427,15 @@ async def optimize_track_audio(
             )
             raise
 
-        # post-commit: the interim WAV is now orphaned — delete it. best-effort;
-        # a leaked WAV is harmless (no row references it) and cheap to sweep.
-        with contextlib.suppress(Exception):
-            await storage.delete(state.interim_file_id, state.interim_file_type)
+        # post-commit: the interim playable rendition is now orphaned — delete
+        # it. best-effort; a leaked object is harmless (no row references it).
+        # CRITICAL: skip when the interim IS the lossless original (the raw
+        # source published directly as the interim stopgap). that object is
+        # still referenced as `original_file_id` (the archival master) — only
+        # the legacy WAV-remux scheme had a distinct, throwaway interim.
+        if state.interim_file_id != state.original_file_id:
+            with contextlib.suppress(Exception):
+                await storage.delete(state.interim_file_id, state.interim_file_type)
         with contextlib.suppress(Exception):
             await invalidate_tracks_discovery_cache()
 

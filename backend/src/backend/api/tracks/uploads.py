@@ -159,10 +159,10 @@ class StorageResult:
     playable_format: AudioFormat
     r2_url: str | None
     transcode_info: "TranscodeInfo | None"
-    # True when this is a fast playable rendition (16-bit WAV remux of a
-    # lossless source) published ahead of the smaller MP3. signals the
-    # pipeline to skip the PDS blob at publish (the deferred optimize task
-    # writes the single canonical MP3 blob) and to enqueue that task.
+    # True when the playable rendition is an interim stopgap (the raw lossless
+    # source itself) published ahead of the mp3. signals the pipeline to skip
+    # the PDS blob at publish (the deferred optimize task writes the single
+    # canonical MP3 blob) and to enqueue that task.
     needs_optimization: bool = False
 
 
@@ -593,74 +593,57 @@ async def _validate_audio(ctx: UploadContext) -> AudioInfo:
 
 
 async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResult:
-    """phase 2: settle on the playable file_id, transcoding if the staged audio is lossless.
+    """phase 2: settle on the playable file_id. NEVER transcodes.
 
-    the staged file_id (already in storage from the HTTP handler) is the
-    starting point. for web-playable formats we use it directly. for
-    lossless formats we keep the staged file as the `original_file_id`
-    and produce a transcoded sibling.
+    track creation is the critical path and must not block on the transcoder
+    (a slow or wedged encode of a large lossless file would otherwise fail the
+    whole upload and produce no track — exactly the woody.fm 939 MB AIFF
+    incident). so this phase only ever points at the already-staged bytes:
+
+    - web-playable formats (mp3, wav, m4a, flac): the staged file IS the
+      playable file. nothing else to do.
+    - non-web-playable formats (aiff, and the browser-recorder webm/ogg): we
+      publish the staged file directly as BOTH the interim playable rendition
+      (a stopgap — it plays for clients that support the source format; others
+      see a "processing" state until the mp3 lands) AND the `original_file_id`
+      (the archival master). the deferred `optimize_track_audio` docket task
+      produces the mp3 streaming rendition off the critical path and swaps it
+      in, writing the single canonical PDS blob.
+
+    the transcode that used to live here moved wholesale into the optimize
+    task; see `audio_optimize.optimize_track_audio`.
     """
-    transcode_info: TranscodeInfo | None = None
+    needs_optimization = not audio_info.format.is_web_playable
 
-    if not audio_info.format.is_web_playable:
-        if audio_info.is_gated:
-            raise UploadPhaseError(
-                "supporter-gated tracks cannot use lossless formats yet"
-            )
+    if needs_optimization and audio_info.is_gated:
+        raise UploadPhaseError("supporter-gated tracks cannot use lossless formats yet")
 
-        # the handler-staged file_id IS the lossless original. we produce a
-        # fast 16-bit WAV compatibility rendition (a near-instant PCM rewrap,
-        # not the slow MP3 encode) so the track can publish immediately and
-        # play in every browser; the smaller MP3 is generated off the critical
-        # path by the deferred optimize task. the staged id becomes
-        # `original_file_id` (the lossless master, preserved untouched).
-        transcode_info = await _transcode_audio(
-            ctx.upload_id,
-            ctx.audio_file_id,
-            ctx.filename,
-            ctx.audio_extension,
-            target_format="wav",
-        )
-        if not transcode_info:
-            raise UploadPhaseError("transcoding failed")
-
-        file_id = transcode_info.transcoded_file_id
-        playable_format = AudioFormat.from_extension(
-            transcode_info.transcoded_file_type
-        )
-        if not playable_format:
-            raise UploadPhaseError("unknown transcoded format")
-    else:
-        # web-playable: staged file_id is already the playable file. for
-        # gated tracks we still need it in the private bucket — gating
-        # is decided at the handler boundary, so the staged file already
-        # lives in the right place.
-        file_id = ctx.audio_file_id
-        playable_format = audio_info.format
-        transcode_info = None
+    # the staged file is the playable file (interim, for lossless). the stored
+    # object carries the RAW upload extension (e.g. ".aif"), so serving + the
+    # record audioUrl must resolve against that, not the canonical enum value.
+    file_id = ctx.audio_file_id
+    playable_format = audio_info.format
+    source_ext = ctx.audio_extension
 
     # public-bucket URL (gated tracks proxy through the auth-protected backend)
     r2_url: str | None = None
     if not audio_info.is_gated:
-        playable_ext = playable_format.value if playable_format else ctx.audio_extension
-        r2_url = await storage.get_url(
-            file_id, file_type="audio", extension=playable_ext
-        )
+        r2_url = await storage.get_url(file_id, file_type="audio", extension=source_ext)
         if not r2_url:
             raise UploadPhaseError("failed to get public audio URL")
 
     return StorageResult(
         file_id=file_id,
-        original_file_id=transcode_info.original_file_id if transcode_info else None,
-        original_file_type=transcode_info.original_file_type
-        if transcode_info
-        else None,
+        # the interim playable rendition IS the lossless master, so they share
+        # one storage object; the optimize task must not delete it as a stale
+        # interim (it's the archival original). web-playable uploads have no
+        # separate original.
+        original_file_id=file_id if needs_optimization else None,
+        original_file_type=source_ext if needs_optimization else None,
         playable_format=playable_format,
         r2_url=r2_url,
-        transcode_info=transcode_info,
-        # a transcode here means we remuxed a lossless source to the interim
-        # WAV rendition, so the smaller MP3 still needs to be produced.
-        needs_optimization=transcode_info is not None,
+        transcode_info=None,
+        needs_optimization=needs_optimization,
     )
 
 

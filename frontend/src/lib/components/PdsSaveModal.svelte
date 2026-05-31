@@ -2,7 +2,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { API_URL } from '$lib/config';
 	import type { Track } from '$lib/types';
-	import { isOptimizingInterimWav } from '$lib/utils/track-audio';
+	import { isOptimizing } from '$lib/utils/track-audio';
 
 	interface Props {
 		tracks: Track[];
@@ -22,7 +22,7 @@
 				!t.support_gate &&
 				!t.pds_blob_cid &&
 				t.file_id &&
-				!isOptimizingInterimWav(t)
+				!isOptimizing(t)
 		)
 	);
 
@@ -46,7 +46,7 @@
 	): 'eligible' | 'saved' | 'gated' | 'optimizing' {
 		if (track.support_gate) return 'gated';
 		if (track.audio_storage === 'both' || track.pds_blob_cid) return 'saved';
-		if (isOptimizingInterimWav(track)) return 'optimizing';
+		if (isOptimizing(track)) return 'optimizing';
 		return 'eligible';
 	}
 
