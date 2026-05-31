@@ -316,9 +316,7 @@ async def optimize_track_audio(
 
             if state.is_gated:
                 backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
-                mp3_url = urljoin(
-                    backend_url + "/", f"audio/{new_mp3_file_id}"
-                )
+                mp3_url = urljoin(backend_url + "/", f"audio/{new_mp3_file_id}")
             else:
                 mp3_url = await storage.get_url(
                     new_mp3_file_id, file_type="audio", extension=OPTIMIZE_TARGET_FORMAT
