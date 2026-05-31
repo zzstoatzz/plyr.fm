@@ -158,6 +158,23 @@
 			</svg>
 		</button>
 
+		<button
+			class="control-btn"
+			class:active={queue.repeatMode === 'one'}
+			onclick={() => queue.toggleRepeatMode()}
+			title={queue.repeatMode === 'one' ? 'stop repeating' : 'repeat this track'}
+		>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<polyline points="17 1 21 5 17 9"></polyline>
+				<path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+				<polyline points="7 23 3 19 7 15"></polyline>
+				<path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+				{#if queue.repeatMode === 'one'}
+					<text x="12" y="17" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" stroke="none">1</text>
+				{/if}
+			</svg>
+		</button>
+
 		<div class="time-control">
 			<span class="time">{formattedCurrentTime}</span>
 			<input
@@ -259,6 +276,10 @@
 	.control-btn:hover {
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.control-btn.active {
+		color: var(--accent);
 	}
 
 	.control-btn.play-pause:active {
@@ -442,6 +463,10 @@
 			grid-column: 6;
 		}
 
+		.control-btn:nth-of-type(4) {
+			grid-column: 7;
+		}
+
 		.control-btn svg {
 			width: 28px;
 			height: 28px;
@@ -454,13 +479,13 @@
 
 		.time-control {
 			grid-row: 2;
-			grid-column: 1 / 7;
+			grid-column: 1 / 8;
 		}
 
 		/* radio: "live" takes the scrubber's row instead of the control row */
 		.live-pill {
 			grid-row: 2;
-			grid-column: 1 / 7;
+			grid-column: 1 / 8;
 			text-align: center;
 		}
 

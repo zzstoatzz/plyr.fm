@@ -94,6 +94,8 @@ export interface Artist {
 	support_url?: string;
 }
 
+export type RepeatMode = 'none' | 'one';
+
 export interface QueueState {
 	track_ids: string[];
 	current_index: number;
@@ -108,6 +110,7 @@ export interface QueueState {
 	continuation_suppressed?: boolean;
 	/** label for the continuation tail ("next from: <label>"); null/absent => the For You feed */
 	continuation_label?: string | null;
+	repeat_mode?: RepeatMode;
 }
 
 export interface QueueResponse {

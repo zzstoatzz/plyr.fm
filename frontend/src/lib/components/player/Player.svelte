@@ -694,6 +694,15 @@
 	});
 
 	function handleTrackEnded() {
+		if (queue.repeatMode === 'one') {
+			const audio = player.audioElement;
+			if (audio) {
+				audio.currentTime = 0;
+				audio.play().catch(() => {});
+			}
+			return;
+		}
+
 		const next = queue.autoAdvanceTrack;
 		if (!next) {
 			player.reset();
@@ -935,7 +944,7 @@
 		}
 
 		.player-content {
-			grid-template-columns: 48px 1fr auto auto auto auto;
+			grid-template-columns: 48px 1fr auto auto auto auto auto;
 			grid-template-rows: auto auto;
 			gap: 0.5rem 0.75rem;
 		}
