@@ -47,6 +47,56 @@ plyr.fm should become:
 
 ### May 2026
 
+#### radio = a source on the persistent footer player (PRs #1480, #1485→#1516, releases through 2026.0530–0531, May 27–31)
+
+**why**: radio playback was a self-contained `<audio>` element on the `/radio` page, divorced from the global player. Navigating away **interrupted playback**, the footer showed a **stale paused track**, and nothing actually played until you fiddled with the volume slider (browser autoplay policy — no explicit gesture). Radio should be a first-class player mode that survives navigation, not page-local audio.
+
+**what shipped**:
+- **public radio endpoint first** (#1480): `GET /radio/state.json` exposes one live station — current track, progress, start/end times, upcoming, and the full deterministic rotation. The rotation is built from public/ungated/listed tracks ranked by likes + log-scaled play counts; the station is **stateless** (durations define a loop, wall-clock determines what's on), so every polling client sees the same track with no scheduler or radio worker.
+- **radio as a source on the one player** (#1487, the right cut after #1485 was reverted): `player.svelte.ts` gains `radio` state + `playRadio()`/`stopRadio()` driving the **existing** `player.audioElement` — no second `<audio>`, no clone footer. Setting `radio` nulls `currentTrack`; the footer renders a radio branch (tower icon + station + on-air track) reusing the normal play/pause + volume. Starting any queue track clears `player.radio` and hands off the shared output; the queue is never mutated. Playback now **persists across navigation**.
+- **player-mode audit** (#1500, closes #1501): logged-out radio verified public on staging (relies on root-layout auth bootstrap, no longer self-initializes); spacebar toggles radio (added a radio branch before the `currentTrack`-gated shortcut guard); queue↔radio switching clears the loader's attached-track bookkeeping so re-selecting the pre-radio track re-attaches instead of deduping to a no-op; footer keeps a dimmed ∞ marker in the hidden prev slot so play/pause stays aligned; the poll timer tears itself down when `player.radio` is cleared elsewhere.
+- **reachability + sharing**: `/radio` made reachable (#1489), real OG/Twitter link-preview card (#1491, #1493), embeddable `/embed/radio` iframe player (#1492, its own local element — correct for a separate iframe context; first consumer is the user's personal site), position/duration under the progress bar (#1498).
+- **layout polish cluster** (#1502→#1516): cold-start audio fix (#1502), then a long iteration on the radio page layout — live-station framing, rotation preview, now-playing artwork centering, viewport fit. Includes one revert (#1508 reverting #1506).
+
+**design notes**:
+- **one audio element, one player, one set of controls** — radio is just another source on it. #1485's two-element / clone-footer approach was reverted precisely because it forked the player; #1487 collapsed it back to a single output.
+- **stateless station** keeps the MVP serverless — no persistent radio process, deterministic from wall-clock + durations.
+- **deferred**: teal scrobbles for signed-in radio listening (gated on the scrobbling setting).
+
+---
+
+#### portal de-scroll redesign — tabs + manage drill-in (PRs #1466→#1472, #1474, #1478, #1479, May 27)
+
+**why**: the artist portal stacked **9 sections** into one punishing mobile scroll that got worse with catalog size.
+
+**what shipped**:
+- **section extraction** (#1466→#1472): playlists / shares / albums / profile / data / tracks each moved into their own `*Section.svelte` component (the monolithic `portal/+page.svelte` was at its loq limit).
+- **the redesign** (#1478, superseding stacked #1476/#1477): a **`/portal/manage` drill-in** moves profile, copyright/rights, sharing, and data off the browse path; the portal top becomes a light read-only **identity header** (avatar, name, handle, counts) instead of the heavy profile form. A **tabbed Tracks · Albums pager** (`PagerTabs`) sits under a sticky tab bar (via a published `--header-height`); all panes stay mounted so switching preserves in-progress edits. **Playlists removed** from the portal — they're curation, they live in `/library`.
+- **server-side search + sort** (#1474): `q` + `sort` (`recent`/`title`/`most played`) on `/tracks/me`, so the portal tracks tab filters the **whole catalog**, not just the loaded page. Debounced; "load more (x of y)" reflects the filtered total.
+- review fixes: identity header uses an **unfiltered** total (searching no longer makes it read "2 tracks"); `loadMyTracks` is race-guarded with a monotonic token; `/portal/manage` pages the whole catalog for PDS-save candidate detection; sticky tab/search bars use the glass bg under the live theme (#1479).
+
+---
+
+#### transcode never blocks track creation — remove the synchronous remux entirely (PR #1519, May 31)
+
+**why**: the *second* miss of the same objective. woody.fm's ~939 MB / 90-min AIFF failed again — this time a `502 Bad Gateway` from the 1 GB/1-CPU transcoder on the **WAV remux** — and **produced no track**. #1461 had deferred the MP3 encode but kept a synchronous WAV remux as a smaller prerequisite on the publish path, explicitly accepting the residual stall risk. It stalled.
+
+**what shipped**: `_store_audio` **no longer transcodes at all**. A non-web-playable upload (AIFF, browser-recorder webm/ogg) publishes the **raw staged source** as both the interim playable rendition (`file_id`) and the preserved archival master (`original_file_id`) — one shared storage object — and flags `needs_optimization`. **All** transcoding moves into the deferred `optimize_track_audio` docket job (already writes the canonical MP3 PDS blob + CAS-swaps the rendition + preserves `createdAt`). Two adjustments: `_needs_optimization` now matches "`file_type != mp3` and an original exists" (was hardcoded `== wav`); interim cleanup is **guarded** to skip the delete when `interim_file_id == original_file_id` (the raw source is still the archival master). Frontend `isOptimizingInterimWav` → `isOptimizing` covers raw-source interim + legacy WAV.
+
+**design note**: the interim plays for clients that support the source format (AIFF in Safari/WebKit); others see "processing" until the MP3 lands — the explicitly-intended tradeoff. **No transcoder memory bump** — it's simply off the critical path now. Closes the loop on the #1213/#1461 principle that was applied to the PDS-blob step but never to the transcode step.
+
+---
+
+#### supporting changes (May 27–31)
+
+- **#1473 — drop "auto-play next", keep "keep playing"**: two side-by-side toggles both read as "play more automatically." They were also wrongly coupled (keep-playing only ran when auto-advance was on) when they're orthogonal — keep-playing refills the *queue*, auto-advance *steps forward*. Auto-advance is table-stakes (Spotify/Apple/YouTube don't offer a switch), so it's now **always-on**, leaving "keep playing" as the single genuinely-optional playback control, shown in both full settings and the mobile preview.
+- **#1475 — rename PDS "backfill"/"migrate" → "save"**: the R2→PDS audio-copy was called *backfill* in code and *migrate* in the UI — both misleading (it's a **copy**, result is `audio_storage: 'both'`, not a move or a gap-fill). Unified on **"save"** across endpoint (`/pds-save`), `JobType.PDS_SAVE`, tasks, models, and UI copy. Internal API surface only (plyr's own frontend), so the rename is safe.
+- **#1496 — real homepage link-preview image**: `https://plyr.fm` previewed with no image (homepage head had no `og:image`; the layout default used a relative hashed asset path scrapers can't resolve). Both now point at the absolute brand icon `/icons/icon-512.png`.
+- **#1507 — API reference landing page**: `/developers/api-reference/` 404'd (the quickstart link, coding-assistant prompt URL, and `llms.txt` entry all pointed there). `just api-ref` ran `mdxify` per-router but emitted no directory index. Fix keeps a curated landing page in `docs/site/templates/api-reference-index.md` that the recipe `cp`s back after the `rm -rf` regen.
+- **coupled traffic report** (`scripts/traffic_report.py` + rebuilt `traffic-overview` skill, May 31): merges the Cloudflare edge lens and Logfire app lens into one script. The summary table distinguishes **window** rows (true sums over the horizon) from **daily** rows (peak/avg) — unique counts only dedup within a day, so a "total" column mislabeled peak-day visitor/user counts as horizon sums.
+
+---
+
 #### decoupled publish/optimize — AIFF publishes instantly as WAV, MP3 follows in background (PRs #1461, #1462, release 2026.0528.060101, May 28)
 
 **why**: a reaper DM landed claiming a stuck upload — but the worker wasn't dead. Investigation surfaced woody.fm uploading a **939 MB / ~90-min AIFF** that took the 1-shared-CPU transcoder >10 min to MP3-encode and tripped the client's 600 s read timeout, producing `"transcoding failed"` and **no track at all**. Because the transcoder's heartbeat only fires on response-stream chunks (and ffmpeg writes nothing until it's done), `jobs.updated_at` froze mid-encode and the stuck-upload reaper false-fired at minute ~10 — making a slow-but-alive encode look like a dead worker. Two bundled decisions were the structural problem: (a) MP3 was a hard prerequisite for the track to exist at all, and (b) that encode ran under a fixed wall-clock deadline.
@@ -357,6 +407,12 @@ See `.status_history/2025-11.md` for detailed history.
 
 ### current focus
 
+**radio = a persistent player mode** (#1480, #1485→#1516, May 27–31): radio is now a source on the **one** footer player rather than a page-local `<audio>` — it survives navigation, uses the normal play/pause/volume, and hands off cleanly when a queue track starts (queue never mutated). Backed by a stateless public station (`/radio/state.json`, wall-clock + durations, no scheduler) plus an embeddable `/embed/radio`. The reusable lesson: #1485's two-element/clone-footer approach was reverted; #1487 collapsed it to a single audio output. **Deferred**: teal scrobbles for signed-in radio listening.
+
+**portal de-scroll redesign** (#1466→#1478, May 27): the 9-section mobile scroll became a tabbed **Tracks · Albums** pager (sticky tab bar, panes stay mounted to preserve edits) with a `/portal/manage` drill-in for profile/rights/sharing/data and a light read-only identity header up top. Playlists moved to `/library`. Server-side `q`+`sort` on `/tracks/me` (#1474) means search filters the whole catalog, not the loaded page.
+
+**transcode never blocks track creation** (#1519, May 31): `_store_audio` no longer transcodes at all — non-web-playable uploads publish the raw source as interim+archival master and **all** transcoding moves to the deferred `optimize_track_audio` job. Closes the loop on the #1213/#1461 principle (applied to the PDS-blob step but never the transcode step); a wedged/OOMing transcoder can no longer fail an upload. No memory bump — it's off the critical path.
+
 **decoupled publish/optimize — AIFF publishes instantly as WAV** (#1461, #1462, release 2026.0528.060101, May 28): lossless uploads no longer block on a multi-minute MP3 encode. The track is created in seconds with a fast 16-bit WAV compatibility rendition (a near-instant PCM rewrap, plays in every browser); the smaller MP3 streaming rendition + single canonical PDS `audioBlob` land via a deferred `optimize_track_audio` task with a generous timeout. Race-safe against concurrent `audio_replace` (pre-publish guard + atomic CAS DB swap), preserves third-party PDS readers on partial failure (`pds_published` gate around the MP3 cleanup), retriable transient failures via `ExponentialRetry`. **Reusable pattern**: split "publish" from "optimize" anywhere the canonical artifact is expensive — let the cheap-but-universal rendition be the contract, the expensive one be an upgrade. Caught a real concurrency miss in code review (Codex flagged the `_OptimizeAbort`-vs-retryable distinction on the transcoder-None path), now pinned with a regression test that the transient path actually re-raises. The mechanism is `optimize_track_audio` / `needs_optimization` / `interim WAV` — product/format-agnostic.
 
 **"keep playing" continuous playback + unified queue items** (#1450→#1453, #1455, prod-deployed May 27): opt-in (default off) continuation that backfills the queue tail from For You when it runs dry, shown as a "next from: for you" zone ahead of which your explicit adds always play. Frontend-only — rides `ui_settings`, with a positional `continuationFromIndex` boundary persisted in queue state. The same cluster unified the queue-sidebar items (48px artwork, shared left gutter, right-side drag handle; continuation rows promote into the queue on drag-up) and added the `Cmd/Ctrl+,` settings shortcut. Naming convention worth keeping: the mechanism is `continuation*` (source-agnostic), product names stay in the UI layer. **#1455 follow-up**: turning the toggle off now actively prunes the materialized tail (`Queue.clearContinuation()`) — previously it only stopped future fills, so the persisted tail kept showing on or off.
@@ -512,5 +568,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-28 (documented the decoupled publish/optimize cluster #1461→#1462 shipped to prod this session as release `2026.0528.060101` — AIFF uploads now publish instantly as 16-bit WAV with the MP3 streaming rendition + canonical PDS blob produced by a deferred `optimize_track_audio` task; race-safe against concurrent `audio_replace`; the reusable pattern is "split publish from optimize" anywhere the canonical artifact is expensive. Removed the "harden file format support" backlog item — AIFF was the only remaining non-web-playable upload format, and it no longer blocks).
+this is a living document. last updated 2026-05-31 (documented the May 27–31 work: **radio = a persistent player mode** #1480/#1485→#1516 — radio is now a source on the single footer player, survives navigation, backed by a stateless public station; **portal de-scroll redesign** #1466→#1478 — tabbed Tracks·Albums pager + `/portal/manage` drill-in + server-side search/sort; **#1519 transcode never blocks track creation** — `_store_audio` no longer transcodes, all of it deferred to `optimize_track_audio`, removing the synchronous WAV remux #1461 had kept; plus #1473 auto-play-next→keep-playing consolidation, #1475 PDS backfill→save rename, #1496 homepage link-preview, #1507 API-reference landing page, and the coupled `scripts/traffic_report.py` traffic tooling).
 
