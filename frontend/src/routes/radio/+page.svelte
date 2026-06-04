@@ -5,8 +5,21 @@
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { auth } from '$lib/auth.svelte';
 	import { radio } from '$lib/radio.svelte';
+	import { horizontalSwipe } from '$lib/horizontal-swipe';
+	import StationPills from '$lib/components/radio/StationPills.svelte';
 
 	const endpoint = `${API_URL}/radio/state`;
+
+	let activeSlug = $derived(radio.state?.station_slug ?? radio.station);
+
+	function onKeydown(event: KeyboardEvent) {
+		if (event.metaKey || event.ctrlKey || event.altKey) return;
+		const target = event.target as HTMLElement | null;
+		if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable))
+			return;
+		if (event.key === 'ArrowRight') radio.flip('next');
+		else if (event.key === 'ArrowLeft') radio.flip('prev');
+	}
 
 	// link preview — a stable station identity, not a per-moment "now playing"
 	// (the on-air track changes constantly and scrapers cache the snapshot).
@@ -31,8 +44,9 @@
 	}
 
 	onMount(() => {
-		// populate "what's on" for display without starting playback
-		if (!radio.state) radio.loadState();
+		// populate "what's on" + station lineup for display without starting playback
+		if (!radio.state) radio.init();
+		else if (radio.stations.length === 0) radio.loadStations();
 	});
 </script>
 
@@ -59,6 +73,8 @@
 	<meta name="twitter:image" content={RADIO_OG_IMAGE} />
 </svelte:head>
 
+<svelte:window onkeydown={onKeydown} />
+
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 <main class="radio-page">
@@ -68,7 +84,7 @@
 		{:else if radio.error}
 			<div class="status error">{radio.error}</div>
 		{:else if radio.current}
-			<div class="radio-player">
+			<div class="radio-player" {@attach horizontalSwipe((dir) => radio.flip(dir === 'left' ? 'next' : 'prev'))}>
 				<div class="station-title">
 					<span>live radio</span>
 					<span class="radio-mark" aria-hidden="true">
@@ -81,6 +97,12 @@
 						<span class="source-state">listening here</span>
 					{/if}
 				</div>
+				<StationPills
+					stations={radio.stations}
+					{activeSlug}
+					onSelect={(slug) => radio.setStation(slug)}
+				/>
+				<div class="now-block" class:tuning={radio.switching}>
 				<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
 					{#if radio.current.artwork_url}
 						<img src={radio.current.artwork_url} alt="" class="art" />
@@ -94,6 +116,7 @@
 						<a href={`/track/${radio.current.id}`}>{radio.current.title}</a>
 					</h2>
 					<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
+				</div>
 				</div>
 				{#if radio.active}
 					<button class="tune-btn stop" onclick={() => radio.stop()} aria-label="stop listening to radio">stop</button>
@@ -143,7 +166,7 @@
 						</a>
 					{/each}
 				</div>
-				<p>from across plyr.fm</p>
+				<p>{radio.activeStation?.description ?? 'from across plyr.fm'}</p>
 			</div>
 		</section>
 	{/if}
@@ -250,6 +273,34 @@
 		border-left: 1px solid var(--border-subtle);
 		color: var(--text-tertiary);
 		font-size: var(--text-sm);
+	}
+
+	/* the swappable station content — artwork + title — fades while tuning */
+	.now-block {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: clamp(0.5rem, 1.35vh, 0.85rem);
+		width: 100%;
+		transition:
+			opacity 0.22s ease,
+			filter 0.22s ease;
+	}
+
+	.now-block.tuning {
+		opacity: 0.35;
+		filter: blur(2px);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.now-block {
+			transition: none;
+		}
+
+		.now-block.tuning {
+			opacity: 0.6;
+			filter: none;
+		}
 	}
 
 	.label {

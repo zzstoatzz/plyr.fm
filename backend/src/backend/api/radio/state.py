@@ -1,61 +1,34 @@
-"""Public live radio state for simple clients and games."""
+"""Public live radio state for simple clients and games.
 
-import hashlib
-import math
+The response is a stateless, deterministic wall-clock loop: every client gets the
+same current track for a given instant, per station. Station selection (which
+tracks, in what order) lives in ``corpus`` / ``lenses`` / ``sampler``; this module
+owns only the HTTP surface and the loop arithmetic.
+"""
+
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
-from pydantic import BaseModel
-from sqlalchemy import select
+from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from backend.models import Artist, Track, get_db
+from backend.api.radio import stations
+from backend.api.radio.corpus import load_corpus
+from backend.api.radio.lenses import LensContext
+from backend.api.radio.router import router
+from backend.api.radio.sampler import build_rotation
+from backend.api.radio.schemas import (
+    RadioStateResponse,
+    RadioTrack,
+    StationsResponse,
+    StationSummary,
+)
+from backend.models import Track, get_db
 from backend.utilities.aggregations import get_like_counts, get_track_tags
-
-router = APIRouter(prefix="/radio", tags=["radio"])
 
 DEFAULT_TRACK_SECONDS = 180
 DEFAULT_ROTATION_SIZE = 40
 MAX_ROTATION_SIZE = 75
-SOURCE_CANDIDATE_LIMIT = 500
-DAILY_VARIETY_WEIGHT = 0.75
-
-
-class RadioTrack(BaseModel):
-    """Small public track shape for radio clients."""
-
-    id: int
-    title: str
-    artist: str
-    artist_handle: str
-    artist_did: str
-    stream_url: str
-    file_type: str
-    duration: int
-    artwork_url: str | None
-    thumbnail_url: str | None
-    atproto_record_uri: str | None
-    created_at: str
-    tags: list[str]
-    like_count: int
-    play_count: int
-
-
-class RadioStateResponse(BaseModel):
-    """Live radio state response."""
-
-    station: str
-    generated_at: str
-    loop_duration_seconds: int
-    current_index: int | None
-    current_started_at: str | None
-    current_ends_at: str | None
-    progress_seconds: int
-    current: RadioTrack | None
-    up_next: list[RadioTrack]
-    rotation: list[RadioTrack]
 
 
 def _stream_url(request: Request, track: Track) -> str:
@@ -70,63 +43,42 @@ def _duration_seconds(track: Track) -> int:
     return DEFAULT_TRACK_SECONDS
 
 
-def _score_track(track: Track, like_count: int) -> float:
-    """Rank tracks for the station rotation.
+async def _select_rotation(
+    db: AsyncSession,
+    station: stations.Station,
+    limit: int,
+    now: datetime,
+) -> tuple[list[Track], dict[int, int]]:
+    """Score the full corpus through the station lens and sample a rotation.
 
-    Likes are explicit taste signals. Plays are weaker implicit signals and are
-    log-scaled so old high-volume tracks do not permanently swallow the station.
+    Returns the chosen tracks plus the corpus-wide like counts (reused for
+    serialization so we only count likes once).
     """
-    return (like_count * 3) + math.log1p(track.play_count)
+    corpus = await load_corpus(db)
+    if not corpus:
+        return [], {}
 
-
-def _daily_variety(track: Track, now: datetime) -> float:
-    """Stable daily jitter so the station is weighted, not a hard top-N chart."""
-    day = now.date().isoformat()
-    digest = hashlib.blake2s(f"{day}:{track.id}".encode(), digest_size=4).digest()
-    return int.from_bytes(digest, "big") / 2**32
-
-
-async def _rotation_tracks(db: AsyncSession, limit: int) -> list[Track]:
-    """Build the public radio rotation from catalog signals."""
-    now = datetime.now(UTC)
-    stmt = (
-        select(Track)
-        .join(Artist)
-        .options(selectinload(Track.artist))
-        .where(
-            Track.unlisted == False,  # noqa: E712
-            Track.support_gate.is_(None),
-        )
-        .order_by(Track.created_at.desc(), Track.id.desc())
-        .limit(SOURCE_CANDIDATE_LIMIT)
+    like_counts = await get_like_counts(db, [track.id for track in corpus])
+    ctx = LensContext(like_counts=like_counts, now=now)
+    weights = {track.id: station.lens(track, ctx) for track in corpus}
+    rotation = build_rotation(
+        corpus,
+        weights,
+        station_slug=station.slug,
+        day=now.date().isoformat(),
+        max_tracks=limit,
     )
-    result = await db.execute(stmt)
-    candidates = list(result.scalars().all())
-    if not candidates:
-        return []
-
-    like_counts = await get_like_counts(db, [track.id for track in candidates])
-    ranked = sorted(
-        candidates,
-        key=lambda track: (
-            _score_track(track, like_counts.get(track.id, 0))
-            + (_daily_variety(track, now) * DAILY_VARIETY_WEIGHT),
-            track.created_at,
-            track.id,
-        ),
-        reverse=True,
-    )
-    return ranked[:limit]
+    return rotation, like_counts
 
 
 async def _to_radio_tracks(
     request: Request,
     db: AsyncSession,
     tracks: list[Track],
+    like_counts: dict[int, int],
 ) -> list[RadioTrack]:
     """Serialize tracks for public radio consumers."""
     track_ids = [track.id for track in tracks]
-    like_counts = await get_like_counts(db, track_ids)
     tag_map = await get_track_tags(db, track_ids)
     return [
         RadioTrack(
@@ -188,27 +140,50 @@ def _up_next(rotation: list[RadioTrack], current_index: int | None) -> list[Radi
     ]
 
 
+@router.get("/stations")
+async def list_stations() -> StationsResponse:
+    """List the current station lineup for the flip UI."""
+    return StationsResponse(
+        default_slug=stations.DEFAULT_STATION_SLUG,
+        stations=[
+            StationSummary(
+                slug=station.slug,
+                name=station.name,
+                description=station.description,
+                is_default=station.slug == stations.DEFAULT_STATION_SLUG,
+            )
+            for station in stations.STATIONS
+        ],
+    )
+
+
 @router.get("/state")
 @router.get("/state.json")
 async def radio_state(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: int = Query(DEFAULT_ROTATION_SIZE, ge=1, le=MAX_ROTATION_SIZE),
+    station: str | None = Query(None, description="station slug; omit for default"),
 ) -> RadioStateResponse:
-    """Return the live public radio state.
+    """Return the live public radio state for a station.
 
-    The MVP station is stateless and deterministic: every client gets the same
-    current track for a given wall-clock time. Rotation order is selected from
-    public, ungated tracks using likes plus log-scaled play counts.
+    Stateless and deterministic per (station, day): every client gets the same
+    current track for a given wall-clock time. Omitting ``station`` serves the
+    default station, preserving the historical single-station contract.
     """
+    resolved = stations.get_station(station)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail=f"unknown station: {station}")
+
     now = datetime.now(UTC)
-    tracks = await _rotation_tracks(db, limit)
-    rotation = await _to_radio_tracks(request, db, tracks)
+    tracks, like_counts = await _select_rotation(db, resolved, limit, now)
+    rotation = await _to_radio_tracks(request, db, tracks, like_counts)
     current_index, progress, started_at, ends_at = _live_window(now, rotation)
     current = rotation[current_index] if current_index is not None else None
 
     return RadioStateResponse(
-        station="plyr.fm radio",
+        station=resolved.name,
+        station_slug=resolved.slug,
         generated_at=now.isoformat(),
         loop_duration_seconds=sum(track.duration for track in rotation),
         current_index=current_index,
