@@ -34,14 +34,14 @@ STATIONS: tuple[Station, ...] = (
     Station(
         slug="fresh",
         name="fresh",
-        description="newly uploaded — what just landed on plyr.fm",
+        description="just landed — the newest uploads on plyr.fm",
         lens=lenses.fresh,
     ),
     Station(
-        slug="discovery",
-        name="discovery",
-        description="deep cuts and overlooked tracks from across the catalog",
-        lens=lenses.discovery,
+        slug="deep-cuts",
+        name="deep cuts",
+        description="older, overlooked tracks from the back catalog",
+        lens=lenses.deep_cuts,
     ),
 )
 

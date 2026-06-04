@@ -164,6 +164,13 @@ class Radio {
 		try {
 			const query = this.station ? `?station=${encodeURIComponent(this.station)}` : '';
 			const response = await fetch(`${API_URL}/radio/state${query}`);
+			if (response.status === 404 && this.station) {
+				// a persisted station slug no longer exists (e.g. renamed) — drop it
+				// and fall back to the server default rather than going "off air".
+				this.station = null;
+				if (typeof localStorage !== 'undefined') localStorage.removeItem(STATION_STORAGE_KEY);
+				return this.loadState();
+			}
 			if (!response.ok) throw new Error(`radio returned ${response.status}`);
 			this.state = await response.json();
 			this.station = this.state?.station_slug ?? this.station;
