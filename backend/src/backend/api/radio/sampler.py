@@ -1,21 +1,24 @@
-"""Airtime-fair, deterministic rotation sampler.
+"""Deterministic, per-artist-budgeted rotation sampler.
 
-This is the piece that turns a scored corpus into something that behaves like a
-radio station rather than a playlist:
+Turns a scored corpus into a daily rotation that doesn't let one artist stack it:
 
 * **Deterministic per (station, day):** seeded by the station slug + calendar day,
-  so every client computes the same rotation for the same day — a hard requirement
-  for the stateless wall-clock loop that existing consumers depend on. The rotation
-  reshuffles once a day, which is the "reason to tune back in" knob.
+  so every client computes the same rotation for the same day — required by the
+  stateless wall-clock loop that existing consumers depend on. It reshuffles once
+  a day.
 
-* **Airtime-fair:** an artist stops being eligible once they have contributed
-  ``ARTIST_AIRTIME_CAP`` of clock time, so one creator's long-form mixes can't
-  swallow the station. A single over-cap track is allowed (you can't split a
-  90-minute mix), but no *new* tracks from that artist are drawn afterward.
+* **Per-artist airtime budget:** once an artist has contributed
+  ``ARTIST_AIRTIME_CAP_SECONDS`` of clock time they stop being drawn, so a creator
+  with many tracks can't fill the rotation. One budget-crossing track is allowed
+  (we can't split a track), so a single long mix can still be one entry — it just
+  won't be joined by more from the same artist. Note this caps how *often* an
+  artist appears, not the share of any one long track: a 2-hour mix can still be a
+  big slice of a single loop. That's a deliberate v1 tradeoff (popular long-form
+  content should still feature) and a knob to revisit.
 
-* **Weighted, not top-N:** tracks are sampled without replacement proportional to
-  their lens weight, so the long tail genuinely rotates instead of the same chart
-  replaying forever.
+* **Weighted draw without replacement:** tracks are sampled in proportion to their
+  lens weight, so the rotation isn't a fixed top-N chart and the long tail turns
+  over.
 """
 
 import hashlib

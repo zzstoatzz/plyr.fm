@@ -8,11 +8,44 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.radio import lenses
+from backend.api.radio.lenses import LensContext
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
 
 # clear_database only removes timestamped rows created after test start.
 TEST_TIME_OFFSET = timedelta(minutes=10)
+
+
+# --- lens semantics (pure functions, no sampler randomness) -----------------
+
+
+def _lens_track(track_id: int, *, play_count: int, created_at: datetime) -> Track:
+    return Track(id=track_id, play_count=play_count, created_at=created_at)
+
+
+def test_loved_lens_prefers_liked() -> None:
+    now = datetime.now(UTC)
+    liked = _lens_track(1, play_count=0, created_at=now)
+    unliked = _lens_track(2, play_count=0, created_at=now)
+    ctx = LensContext(like_counts={liked.id: 5}, now=now)
+    assert lenses.loved(liked, ctx) > lenses.loved(unliked, ctx)
+
+
+def test_fresh_lens_prefers_newer() -> None:
+    now = datetime.now(UTC)
+    newer = _lens_track(1, play_count=0, created_at=now)
+    older = _lens_track(2, play_count=0, created_at=now - timedelta(days=120))
+    ctx = LensContext(like_counts={}, now=now)
+    assert lenses.fresh(newer, ctx) > lenses.fresh(older, ctx)
+
+
+def test_discovery_lens_prefers_lower_play() -> None:
+    now = datetime.now(UTC)
+    obscure = _lens_track(1, play_count=2, created_at=now)
+    popular = _lens_track(2, play_count=5000, created_at=now)
+    ctx = LensContext(like_counts={}, now=now)
+    assert lenses.discovery(obscure, ctx) > lenses.discovery(popular, ctx)
 
 
 @pytest.fixture

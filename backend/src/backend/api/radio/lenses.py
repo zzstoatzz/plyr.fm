@@ -6,8 +6,11 @@ a deterministic, airtime-fair rotation from those weights, so a lens decides
 rotation* (no one artist hogging the clock, genuine day-to-day variety).
 
 All weights carry a small floor so nothing in the corpus is ever strictly
-impossible — that floor is what keeps a station from collapsing into a fixed
-top-N playlist.
+impossible, which keeps a station from collapsing into a fixed top-N. The
+tradeoff: as the catalog grows, the summed floor mass of many off-lens tracks
+dilutes a station's identity (most visible on ``fresh``, where lots of old
+tracks can outweigh a few genuinely new ones). The lenses lean the right way;
+they don't hard-partition. Sharpening this is a tuning follow-up.
 """
 
 import math
