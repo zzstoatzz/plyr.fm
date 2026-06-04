@@ -24,8 +24,16 @@ export interface RadioTrack {
 	play_count: number;
 }
 
+export interface RadioStation {
+	slug: string;
+	name: string;
+	description: string;
+	is_default: boolean;
+}
+
 export interface RadioState {
 	station: string;
+	station_slug: string;
 	generated_at: string;
 	loop_duration_seconds: number;
 	current_index: number | null;
@@ -38,15 +46,72 @@ export interface RadioState {
 }
 
 const POLL_INTERVAL_MS = 30000;
+const STATION_STORAGE_KEY = 'plyr_radio_station';
 
 class Radio {
 	state = $state<RadioState | null>(null);
 	loading = $state(true);
 	error = $state<string | null>(null);
+	stations = $state<RadioStation[]>([]);
+	/** selected station slug; null defers to the server default */
+	station = $state<string | null>(null);
+	/** brief flag while a station flip is in flight, for the tuning transition */
+	switching = $state(false);
 	private pollTimer: number | null = null;
 
 	get current(): RadioTrack | null {
 		return this.state?.current ?? null;
+	}
+
+	/** the resolved station metadata for the loaded state */
+	get activeStation(): RadioStation | null {
+		const slug = this.state?.station_slug;
+		return this.stations.find((s) => s.slug === slug) ?? null;
+	}
+
+	/** load the lineup + restore the listener's last station, then pull state */
+	async init(): Promise<void> {
+		if (this.station === null && typeof localStorage !== 'undefined') {
+			this.station = localStorage.getItem(STATION_STORAGE_KEY);
+		}
+		await Promise.all([this.loadStations(), this.loadState()]);
+	}
+
+	async loadStations(): Promise<void> {
+		try {
+			const response = await fetch(`${API_URL}/radio/stations`);
+			if (!response.ok) return;
+			const data = await response.json();
+			this.stations = data.stations;
+			if (this.station === null) this.station = data.default_slug;
+		} catch (e) {
+			console.error('failed to load radio stations:', e);
+		}
+	}
+
+	/** flip to the next/previous station in the lineup (wraps around) */
+	flip(direction: 'next' | 'prev'): void {
+		if (this.stations.length < 2) return;
+		const slug = this.state?.station_slug ?? this.station;
+		const i = this.stations.findIndex((s) => s.slug === slug);
+		const step = direction === 'next' ? 1 : -1;
+		const next = this.stations[(i + step + this.stations.length) % this.stations.length];
+		void this.setStation(next.slug);
+	}
+
+	/** switch stations: reload state and, if tuned in, follow the audio across */
+	async setStation(slug: string): Promise<void> {
+		if (slug === this.state?.station_slug) return;
+		this.station = slug;
+		if (typeof localStorage !== 'undefined') localStorage.setItem(STATION_STORAGE_KEY, slug);
+		this.switching = true;
+		try {
+			await this.loadState();
+		} finally {
+			this.switching = false;
+		}
+		const c = this.current;
+		if (c && player.radio) player.playRadio(this.toNowPlaying(c), { autoplay: !player.paused });
 	}
 
 	/** whether radio is the active player source (single source of truth) */
@@ -97,9 +162,11 @@ class Radio {
 
 	async loadState(): Promise<void> {
 		try {
-			const response = await fetch(`${API_URL}/radio/state`);
+			const query = this.station ? `?station=${encodeURIComponent(this.station)}` : '';
+			const response = await fetch(`${API_URL}/radio/state${query}`);
 			if (!response.ok) throw new Error(`radio returned ${response.status}`);
 			this.state = await response.json();
+			this.station = this.state?.station_slug ?? this.station;
 			this.error = null;
 		} catch (e) {
 			console.error('failed to load radio state:', e);
