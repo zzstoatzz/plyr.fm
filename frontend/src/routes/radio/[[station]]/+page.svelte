@@ -126,9 +126,6 @@
 							<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
 						</svg>
 					</span>
-					{#if radio.active}
-						<span class="source-state">listening here</span>
-					{/if}
 				</div>
 				<StationPills
 					stations={radio.stations}
@@ -298,14 +295,6 @@
 		font-size: var(--text-lg);
 		line-height: 1;
 		text-transform: lowercase;
-	}
-
-	.source-state {
-		margin-left: 0.15rem;
-		padding-left: 0.7rem;
-		border-left: 1px solid var(--border-subtle);
-		color: var(--text-tertiary);
-		font-size: var(--text-sm);
 	}
 
 	/* the swappable station content — artwork + title — fades while tuning */
@@ -749,18 +738,42 @@
 	}
 
 	@media (max-width: 520px) {
+		/* fit the whole tuner between "live radio" and the footer without scroll */
+		.radio-page {
+			gap: 0.4rem;
+		}
+
 		.radio-player {
-			gap: 0.5rem;
+			gap: 0.4rem;
+		}
+
+		.now-block {
+			gap: 0.4rem;
+		}
+
+		.station-title {
+			font-size: var(--text-base);
 		}
 
 		.art {
-			width: min(58vw, 12rem);
-			height: min(58vw, 12rem);
+			width: min(46vw, 10rem);
+			height: min(46vw, 10rem);
 		}
 
+		.now-meta h2 {
+			font-size: 1.35rem;
+		}
+
+		/* hug the label, not the screen — the stop button was eating the layout */
 		.tune-btn {
-			width: min(100%, 16rem);
-			justify-content: center;
+			width: auto;
+			min-width: 0;
+			padding: 0.45rem 1.2rem;
+			font-size: var(--text-sm);
+		}
+
+		.progress-wrap {
+			margin-top: 0;
 		}
 
 		.station-board {
@@ -769,13 +782,18 @@
 
 		.rotation-artworks {
 			width: 100%;
+			padding-block: 0.25rem;
 			padding-inline: 0.25rem;
 		}
 
 		.rotation-artwork {
-			width: 2.85rem;
-			height: 2.85rem;
+			width: 2.6rem;
+			height: 2.6rem;
 			margin-inline: -0.22rem;
+		}
+
+		.radio-footer {
+			gap: 0.25rem 1rem;
 		}
 	}
 </style>
