@@ -100,7 +100,10 @@ class Radio {
 	 * if tuned in, follows the audio across. */
 	async show(slug: string | null): Promise<void> {
 		const target = slug ?? this.remembered();
-		if (this.state && target === this.state.station_slug) return;
+		// already showing the requested station — or showing *anything* when no
+		// specific station was asked for (bare /radio). a null target must NOT
+		// fall through, or it never matches station_slug and reloads endlessly.
+		if (this.state && (target === null || target === this.state.station_slug)) return;
 		this.station = target;
 		if (slug && typeof localStorage !== 'undefined') {
 			localStorage.setItem(STATION_STORAGE_KEY, slug);

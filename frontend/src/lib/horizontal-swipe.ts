@@ -21,7 +21,10 @@ export function horizontalSwipe(
 	onSwipe: (direction: 'left' | 'right') => void,
 	options: HorizontalSwipeOptions = {}
 ): Attachment<HTMLElement> {
-	const { swipeDeltaPx = 60, activationDeltaPx = 10 } = options;
+	// require a deliberate, sustained-horizontal flick. these thresholds are
+	// intentionally conservative: an accidental station switch is far worse than
+	// a swipe that didn't register.
+	const { swipeDeltaPx = 72, activationDeltaPx = 12 } = options;
 
 	return (node) => {
 		let tracking = false;
@@ -29,32 +32,38 @@ export function horizontalSwipe(
 		let startX = 0;
 		let startY = 0;
 		let dx = 0;
+		let dy = 0;
 		let pointerId = -1;
 
 		function down(event: PointerEvent) {
 			if (event.pointerType === 'mouse') return;
+			// buttons (pills, tune-in) own their taps — never start a swipe on them
+			const el = event.target as HTMLElement | null;
+			if (el && el.closest('button')) return;
 			tracking = true;
 			active = false;
 			startX = event.clientX;
 			startY = event.clientY;
 			dx = 0;
+			dy = 0;
 			pointerId = event.pointerId;
 		}
 
 		function move(event: PointerEvent) {
 			if (!tracking || event.pointerId !== pointerId) return;
 			dx = event.clientX - startX;
-			const dy = event.clientY - startY;
+			dy = event.clientY - startY;
 
-			if (!active) {
-				if (Math.abs(dx) < activationDeltaPx) return; // below noise floor
-				if (Math.abs(dy) > Math.abs(dx)) {
-					// vertical-dominant: leave it to the page scroll
+			// any time the gesture is vertical-dominant, bail for good — a swipe
+			// that curves into a scroll must not still fire on release.
+			if (Math.abs(dy) >= Math.abs(dx)) {
+				if (active || Math.abs(dy) >= activationDeltaPx) {
 					tracking = false;
-					return;
+					active = false;
 				}
-				active = true;
+				return;
 			}
+			if (Math.abs(dx) >= activationDeltaPx) active = true;
 		}
 
 		function up(event: PointerEvent) {
@@ -64,7 +73,11 @@ export function horizontalSwipe(
 			active = false;
 			pointerId = -1;
 			if (!wasActive) return;
-			if (Math.abs(dx) > swipeDeltaPx) onSwipe(dx < 0 ? 'left' : 'right');
+			// fire only on a clear horizontal flick: past the distance threshold
+			// AND clearly more horizontal than vertical.
+			if (Math.abs(dx) > swipeDeltaPx && Math.abs(dx) > 2 * Math.abs(dy)) {
+				onSwipe(dx < 0 ? 'left' : 'right');
+			}
 		}
 
 		node.addEventListener('pointerdown', down);
