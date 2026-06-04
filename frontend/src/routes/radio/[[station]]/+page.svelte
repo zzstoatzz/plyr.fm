@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
@@ -20,8 +20,11 @@
 	let stationParam = $derived($page.params.station ?? null);
 	let activeSlug = $derived(radio.state?.station_slug ?? radio.station);
 
+	// react ONLY to the URL param. untrack so reads of radio.state inside show()
+	// don't subscribe this effect (that would re-fire on every state reload).
 	$effect(() => {
-		radio.show(stationParam);
+		const slug = stationParam;
+		untrack(() => radio.show(slug));
 	});
 
 	/** select a station by navigating, so the URL (and bookmarks/back) stay in sync */
