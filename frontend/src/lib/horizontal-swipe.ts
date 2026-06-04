@@ -6,7 +6,7 @@
 // per gesture when released past the distance threshold.
 //
 // usage:
-//   <div {@attach horizontalSwipe((dir) => radio.flip(dir))}>...</div>
+//   <div {@attach horizontalSwipe((dir) => flip(dir === 'left' ? 'next' : 'prev'))}>...</div>
 
 import type { Attachment } from 'svelte/attachments';
 

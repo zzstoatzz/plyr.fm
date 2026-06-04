@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import { API_URL } from '$lib/config';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
@@ -10,15 +12,32 @@
 
 	const endpoint = `${API_URL}/radio/state`;
 
+	// the URL path is the source of truth for the selected station (bookmarkable).
+	// `/radio` (no slug) shows the remembered/default station; `/radio/<slug>` pins it.
+	let stationParam = $derived($page.params.station ?? null);
 	let activeSlug = $derived(radio.state?.station_slug ?? radio.station);
+
+	$effect(() => {
+		radio.show(stationParam);
+	});
+
+	/** select a station by navigating, so the URL (and bookmarks/back) stay in sync */
+	function tuneToStation(slug: string) {
+		goto(`/radio/${slug}`, { keepFocus: true, noScroll: true });
+	}
+
+	function flip(direction: 'next' | 'prev') {
+		const next = radio.nextStationSlug(direction);
+		if (next) tuneToStation(next);
+	}
 
 	function onKeydown(event: KeyboardEvent) {
 		if (event.metaKey || event.ctrlKey || event.altKey) return;
 		const target = event.target as HTMLElement | null;
 		if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable))
 			return;
-		if (event.key === 'ArrowRight') radio.flip('next');
-		else if (event.key === 'ArrowLeft') radio.flip('prev');
+		if (event.key === 'ArrowRight') flip('next');
+		else if (event.key === 'ArrowLeft') flip('prev');
 	}
 
 	// link preview — a stable station identity, not a per-moment "now playing"
@@ -44,9 +63,8 @@
 	}
 
 	onMount(() => {
-		// populate "what's on" + station lineup for display without starting playback
-		if (!radio.state) radio.init();
-		else if (radio.stations.length === 0) radio.loadStations();
+		// lineup for the pills; the $effect above loads the selected station's state
+		if (radio.stations.length === 0) radio.loadStations();
 	});
 </script>
 
@@ -84,7 +102,7 @@
 		{:else if radio.error}
 			<div class="status error">{radio.error}</div>
 		{:else if radio.current}
-			<div class="radio-player" {@attach horizontalSwipe((dir) => radio.flip(dir === 'left' ? 'next' : 'prev'))}>
+			<div class="radio-player" {@attach horizontalSwipe((dir) => flip(dir === 'left' ? 'next' : 'prev'))}>
 				<div class="station-title">
 					<span>live radio</span>
 					<span class="radio-mark" aria-hidden="true">
@@ -100,7 +118,7 @@
 				<StationPills
 					stations={radio.stations}
 					{activeSlug}
-					onSelect={(slug) => radio.setStation(slug)}
+					onSelect={tuneToStation}
 				/>
 				<div class="now-block" class:tuning={radio.switching}>
 				<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>

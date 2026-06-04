@@ -69,41 +69,42 @@ class Radio {
 		return this.stations.find((s) => s.slug === slug) ?? null;
 	}
 
-	/** load the lineup + restore the listener's last station, then pull state */
-	async init(): Promise<void> {
-		if (this.station === null && typeof localStorage !== 'undefined') {
-			this.station = localStorage.getItem(STATION_STORAGE_KEY);
-		}
-		await Promise.all([this.loadStations(), this.loadState()]);
-	}
-
 	async loadStations(): Promise<void> {
 		try {
 			const response = await fetch(`${API_URL}/radio/stations`);
 			if (!response.ok) return;
 			const data = await response.json();
 			this.stations = data.stations;
-			if (this.station === null) this.station = data.default_slug;
 		} catch (e) {
 			console.error('failed to load radio stations:', e);
 		}
 	}
 
-	/** flip to the next/previous station in the lineup (wraps around) */
-	flip(direction: 'next' | 'prev'): void {
-		if (this.stations.length < 2) return;
+	/** the last station the listener picked, if any (drives bare /radio) */
+	private remembered(): string | null {
+		return typeof localStorage !== 'undefined' ? localStorage.getItem(STATION_STORAGE_KEY) : null;
+	}
+
+	/** slug of the next/previous station in the lineup (wraps); null if <2 stations.
+	 * the page navigates to it so the URL stays the source of truth. */
+	nextStationSlug(direction: 'next' | 'prev'): string | null {
+		if (this.stations.length < 2) return null;
 		const slug = this.state?.station_slug ?? this.station;
 		const i = this.stations.findIndex((s) => s.slug === slug);
 		const step = direction === 'next' ? 1 : -1;
-		const next = this.stations[(i + step + this.stations.length) % this.stations.length];
-		void this.setStation(next.slug);
+		return this.stations[(i + step + this.stations.length) % this.stations.length].slug;
 	}
 
-	/** switch stations: reload state and, if tuned in, follow the audio across */
-	async setStation(slug: string): Promise<void> {
-		if (slug === this.state?.station_slug) return;
-		this.station = slug;
-		if (typeof localStorage !== 'undefined') localStorage.setItem(STATION_STORAGE_KEY, slug);
+	/** show a station, driven by the URL path. `null` (bare /radio) falls back to
+	 * the listener's remembered pick, else the server default. reloads state and,
+	 * if tuned in, follows the audio across. */
+	async show(slug: string | null): Promise<void> {
+		const target = slug ?? this.remembered();
+		if (this.state && target === this.state.station_slug) return;
+		this.station = target;
+		if (slug && typeof localStorage !== 'undefined') {
+			localStorage.setItem(STATION_STORAGE_KEY, slug);
+		}
 		this.switching = true;
 		try {
 			await this.loadState();
