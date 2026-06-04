@@ -49,22 +49,30 @@ async def _select_rotation(
     limit: int,
     now: datetime,
 ) -> tuple[list[Track], dict[int, int]]:
-    """Score the full corpus through the station lens and sample a rotation.
+    """Score the station's eligible corpus through its lens and sample a rotation.
 
-    Returns the chosen tracks plus the corpus-wide like counts (reused for
-    serialization so we only count likes once).
+    Returns the chosen tracks plus their like counts (reused for serialization so
+    we only count likes once).
     """
     corpus = await load_corpus(db)
     if not corpus:
         return [], {}
 
-    like_counts = await get_like_counts(db, [track.id for track in corpus])
-    # corpus is ordered newest-first, so enumeration is the recency rank.
-    recency_rank = {track.id: rank for rank, track in enumerate(corpus)}
+    # a station's corpus_filter decides eligibility from a track's tags (e.g.
+    # `slop` keeps only ai/suno-tagged tracks; every other station excludes them).
+    tag_map = await get_track_tags(db, [track.id for track in corpus])
+    eligible = [t for t in corpus if station.corpus_filter(tag_map.get(t.id, set()))]
+    if not eligible:
+        return [], {}
+
+    like_counts = await get_like_counts(db, [track.id for track in eligible])
+    # eligible keeps the newest-first corpus order, so enumeration is the recency
+    # rank within this station's pool.
+    recency_rank = {track.id: rank for rank, track in enumerate(eligible)}
     ctx = LensContext(like_counts=like_counts, now=now, recency_rank=recency_rank)
-    weights = {track.id: station.lens(track, ctx) for track in corpus}
+    weights = {track.id: station.lens(track, ctx) for track in eligible}
     rotation = build_rotation(
-        corpus,
+        eligible,
         weights,
         station_slug=station.slug,
         day=now.date().isoformat(),

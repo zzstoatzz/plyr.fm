@@ -280,9 +280,49 @@ async def test_stations_endpoint_lists_lineup(radio_app: FastAPI) -> None:
     data = response.json()
     assert data["default_slug"] == "loved"
     slugs = {s["slug"] for s in data["stations"]}
-    assert slugs == {"loved", "fresh", "deep-cuts"}
+    assert slugs == {"loved", "fresh", "deep-cuts", "slop"}
     default = next(s for s in data["stations"] if s["slug"] == "loved")
     assert default["is_default"] is True
+
+
+async def _tag_track(db_session: AsyncSession, track: Track, tag_name: str) -> None:
+    tag = Tag(name=tag_name, created_by_did=track.artist_did)
+    db_session.add(tag)
+    await db_session.flush()
+    db_session.add(TrackTag(track_id=track.id, tag_id=tag.id))
+
+
+async def test_slop_station_isolates_ai_tagged_tracks(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """slop holds exactly the ai/suno-tagged tracks; other stations exclude them."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    ai_track = await _create_track(
+        db_session, radio_artist, title="Slop Jam", file_id="slop", created_at=now
+    )
+    await _tag_track(db_session, ai_track, "ai")
+    clean_track = await _create_track(
+        db_session,
+        radio_artist,
+        title="Real Jam",
+        file_id="clean",
+        created_at=now - timedelta(minutes=1),
+    )
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app),
+        base_url="https://radio.plyr.fm",
+    ) as client:
+        slop = await client.get("/radio/state.json", params={"station": "slop"})
+        loved = await client.get("/radio/state.json")
+
+    slop_ids = {t["id"] for t in slop.json()["rotation"]}
+    loved_ids = {t["id"] for t in loved.json()["rotation"]}
+    assert slop_ids == {ai_track.id}  # slop = only the ai-tagged track
+    assert loved_ids == {clean_track.id}  # default station excludes it
 
 
 async def test_radio_state_includes_tags_and_up_next(
