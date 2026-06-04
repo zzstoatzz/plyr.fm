@@ -136,7 +136,7 @@ class Radio {
 		return Math.min(fetched.current?.duration ?? 0, fetched.progress_seconds + drift);
 	}
 
-	private toNowPlaying(c: RadioTrack): RadioNowPlaying {
+	private toNowPlaying(c: RadioTrack, startAt?: number): RadioNowPlaying {
 		// the on-air entry is a real track — reshape it as a Track so the normal
 		// player strip renders it identically to any other track.
 		const track: Track = {
@@ -160,7 +160,7 @@ class Radio {
 		return {
 			track,
 			stream_url: c.stream_url,
-			start_at: this.state ? this.stateProgress(this.state) : 0
+			start_at: startAt ?? (this.state ? this.stateProgress(this.state) : 0)
 		};
 	}
 
@@ -201,11 +201,20 @@ class Radio {
 		this.stopPolling();
 	}
 
-	/** the current stream ended — pull the station's now-current track */
-	async onEnded(): Promise<void> {
-		await this.loadState();
-		const c = this.current;
-		if (c && player.radio) player.playRadio(this.toNowPlaying(c));
+	/** the current stream ended — advance to the next track.
+	 *
+	 * MUST be synchronous: iOS only keeps autoplay alive across tracks if the
+	 * audio src is swapped within the `ended` handler with no `await` in between.
+	 * Awaiting a /radio/state fetch first (the old behavior) let iOS block the
+	 * play() and radio silently died on every track boundary. So we play the
+	 * already-loaded next track now and refresh station state in the background.
+	 */
+	onEnded(): void {
+		const next = this.state?.up_next[0];
+		if (next && player.radio) player.playRadio(this.toNowPlaying(next, 0));
+		// keep the rotation / up_next current for the next boundary (no await on
+		// the play path above)
+		void this.loadState();
 	}
 
 	/** poll: follow the shared station when it rotates to a new track */

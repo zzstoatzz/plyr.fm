@@ -9,6 +9,7 @@
 	import { radio } from '$lib/radio.svelte';
 	import { horizontalSwipe } from '$lib/horizontal-swipe';
 	import StationPills from '$lib/components/radio/StationPills.svelte';
+	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -134,13 +135,15 @@
 					onSelect={tuneToStation}
 				/>
 				<div class="now-block" class:tuning={radio.switching}>
-				<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
-					{#if radio.current.artwork_url}
-						<img src={radio.current.artwork_url} alt="" class="art" />
-					{:else}
-						<div class="art fallback"></div>
-					{/if}
-				</a>
+				<SensitiveImage src={radio.current.artwork_url} tooltipPosition="center">
+					<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
+						{#if radio.current.artwork_url}
+							<img src={radio.current.artwork_url} alt="" class="art" />
+						{:else}
+							<div class="art fallback"></div>
+						{/if}
+					</a>
+				</SensitiveImage>
 				<div class="now-meta">
 					<p class="label">{radio.active ? 'on air' : "what's on"}</p>
 					<h2>
@@ -185,11 +188,13 @@
 							aria-label={`view ${track.title} by ${track.artist}`}
 							title={`${track.title} by ${track.artist}`}
 						>
-							{#if track.thumbnail_url || track.artwork_url}
-								<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
-							{:else}
-								<div class="rotation-fallback"></div>
-							{/if}
+							<SensitiveImage src={track.thumbnail_url ?? track.artwork_url} compact>
+								{#if track.thumbnail_url || track.artwork_url}
+									<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
+								{:else}
+									<div class="rotation-fallback"></div>
+								{/if}
+							</SensitiveImage>
 							<span class="rotation-tooltip" aria-hidden="true">
 								<strong>{track.title}</strong>
 								<span>{track.artist}</span>
