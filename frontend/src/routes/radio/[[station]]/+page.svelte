@@ -224,7 +224,10 @@
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		justify-content: center;
+		/* distribute through the available height instead of centering — pins the
+		   tuner under the header and the footer above the player, so the top space
+		   isn't wasted and everything (incl. the deck) fits without scrolling */
+		justify-content: space-between;
 		gap: clamp(0.7rem, 1.8vh, 1.25rem);
 		overflow: hidden;
 	}
