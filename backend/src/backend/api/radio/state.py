@@ -61,7 +61,7 @@ async def _select_rotation(
     # a station's corpus_filter decides eligibility from a track's tags (e.g.
     # `slop` keeps only ai/suno-tagged tracks; every other station excludes them).
     tag_map = await get_track_tags(db, [track.id for track in corpus])
-    eligible = [t for t in corpus if station.corpus_filter(tag_map.get(t.id, set()))]
+    eligible = [t for t in corpus if station.corpus_filter(t, tag_map.get(t.id, set()))]
     if not eligible:
         return [], {}
 

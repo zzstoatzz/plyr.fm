@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.radio import lenses
@@ -286,10 +287,14 @@ async def test_stations_endpoint_lists_lineup(radio_app: FastAPI) -> None:
 
 
 async def _tag_track(db_session: AsyncSession, track: Track, tag_name: str) -> None:
-    tag = Tag(name=tag_name, created_by_did=track.artist_did)
-    db_session.add(tag)
-    await db_session.flush()
-    db_session.add(TrackTag(track_id=track.id, tag_id=tag.id))
+    existing = (
+        await db_session.execute(select(Tag).where(Tag.name == tag_name))
+    ).scalar_one_or_none()
+    if existing is None:
+        existing = Tag(name=tag_name, created_by_did=track.artist_did)
+        db_session.add(existing)
+        await db_session.flush()
+    db_session.add(TrackTag(track_id=track.id, tag_id=existing.id))
 
 
 async def test_slop_station_isolates_ai_tagged_tracks(
@@ -323,6 +328,38 @@ async def test_slop_station_isolates_ai_tagged_tracks(
     loved_ids = {t["id"] for t in loved.json()["rotation"]}
     assert slop_ids == {ai_track.id}  # slop = only the ai-tagged track
     assert loved_ids == {clean_track.id}  # default station excludes it
+
+
+async def test_slop_excludes_plyr_fm_account_tracks(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """the plyr.fm account's ai-tagged update posts are kept out of slop."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    plyr = await _create_artist(db_session, "did:plc:plyrfm", "plyr.fm")
+    plyr_track = await _create_track(
+        db_session, plyr, title="plyr.fm update", file_id="update", created_at=now
+    )
+    await _tag_track(db_session, plyr_track, "ai")
+    other_slop = await _create_track(
+        db_session,
+        radio_artist,
+        title="Real Slop",
+        file_id="realslop",
+        created_at=now - timedelta(minutes=1),
+    )
+    await _tag_track(db_session, other_slop, "ai")
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app),
+        base_url="https://radio.plyr.fm",
+    ) as client:
+        slop = await client.get("/radio/state.json", params={"station": "slop"})
+
+    slop_ids = {t["id"] for t in slop.json()["rotation"]}
+    assert slop_ids == {other_slop.id}  # plyr.fm's ai track excluded
 
 
 async def test_radio_state_includes_tags_and_up_next(
