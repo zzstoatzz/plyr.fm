@@ -386,6 +386,7 @@ async def _transcode_audio(
     source_format: str,
     *,
     target_format: str,
+    gated: bool = False,
     timeout_seconds: int | None = None,
 ) -> TranscodeInfo | None:
     """transcode an already-staged audio file to a web-playable format.
@@ -405,6 +406,8 @@ async def _transcode_audio(
         target_format: format to produce — "wav" for the fast compatibility
             remux on the upload critical path, "mp3" for the deferred
             optimization pass.
+        gated: if True, read the source from private storage and save the
+            transcoded result back to private storage.
         timeout_seconds: per-request transcoder timeout override. the WAV
             remux is seconds, so the default (settings) is fine; the MP3
             optimization runs off the critical path and passes a generous
@@ -449,7 +452,7 @@ async def _transcode_audio(
         last_heartbeat = 0.0
         async with aiofiles.open(source_path, "wb") as source_file:
             async for chunk in storage.stream_file_data(
-                original_file_id, source_format
+                original_file_id, source_format, private=gated
             ):
                 await source_file.write(chunk)
                 bytes_streamed += len(chunk)
@@ -523,7 +526,8 @@ async def _transcode_audio(
             phase="upload_transcoded",
         ) as tracker:
             with open(result.output_path, "rb") as transcoded_file:
-                transcoded_file_id = await storage.save(
+                save_fn = storage.save_gated if gated else storage.save
+                transcoded_file_id = await save_fn(
                     transcoded_file,
                     transcoded_filename,
                     progress_callback=tracker.on_progress,
@@ -614,9 +618,6 @@ async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResu
     task; see `audio_optimize.optimize_track_audio`.
     """
     needs_optimization = not audio_info.format.is_web_playable
-
-    if needs_optimization and audio_info.is_gated:
-        raise UploadPhaseError("supporter-gated tracks cannot use lossless formats yet")
 
     # the staged file is the playable file (interim, for lossless). the stored
     # object carries the RAW upload extension (e.g. ".aif"), so serving + the
@@ -1062,15 +1063,14 @@ async def _cleanup_staged_media_pre_db(
     is_gated = ctx.support_gate is not None
 
     if sr is not None and sr.transcode_info is not None:
-        # transcode produced a new sibling. the playable sibling lives
-        # in the public bucket (gated lossless is rejected upstream),
-        # and the staged source is now `original_file_id` (also public).
+        # transcode produced a new sibling. both sibling and staged source
+        # live in the bucket selected at handler-staging time.
         playable_ext = sr.playable_format.value if sr.playable_format else None
-        with contextlib.suppress(Exception):
-            await storage.delete(sr.file_id, playable_ext)
+        await _delete_staged_audio(sr.file_id, playable_ext, gated=is_gated)
         if sr.original_file_id:
-            with contextlib.suppress(Exception):
-                await storage.delete(sr.original_file_id, sr.original_file_type)
+            await _delete_staged_audio(
+                sr.original_file_id, sr.original_file_type, gated=is_gated
+            )
     else:
         # `_store_audio` either didn't run, or returned the staged file
         # as-is (web-playable). either way, only ctx.audio_file_id is
