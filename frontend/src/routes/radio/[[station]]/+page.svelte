@@ -111,6 +111,7 @@
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 <main class="radio-page">
+	<div class="tuner">
 	<section class="station">
 		{#if radio.loading && !radio.state}
 			<div class="status">tuning...</div>
@@ -200,6 +201,7 @@
 			</div>
 		</section>
 	{/if}
+	</div>
 
 	<footer class="radio-footer">
 		<p class="credit">
@@ -224,12 +226,21 @@
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		/* distribute through the available height instead of centering — pins the
-		   tuner under the header and the footer above the player, so the top space
-		   isn't wasted and everything (incl. the deck) fits without scrolling */
-		justify-content: space-between;
-		gap: clamp(0.7rem, 1.8vh, 1.25rem);
 		overflow: hidden;
+	}
+
+	/* the tuner (pills + artwork + now-playing + controls + deck) grows to fill
+	   all space above the footer and centers itself as one block. centering a
+	   single group keeps the spacing balanced whether or not the docked player is
+	   eating height — no lopsided top gap, no giant gaps between pieces. */
+	.tuner {
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: clamp(0.9rem, 3vh, 2rem);
 	}
 
 	@supports (height: 100dvh) {
@@ -239,6 +250,7 @@
 	}
 
 	.radio-footer {
+		flex: 0 0 auto;
 		margin-top: 0;
 		display: flex;
 		flex-wrap: wrap;
@@ -730,7 +742,6 @@
 		.radio-page {
 			height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem);
 			padding-top: 0;
-			gap: 0.6rem;
 		}
 
 		@supports (height: 100dvh) {
@@ -742,8 +753,8 @@
 
 	@media (max-width: 520px) {
 		/* fit the whole tuner between "live radio" and the footer without scroll */
-		.radio-page {
-			gap: 0.4rem;
+		.tuner {
+			gap: 0.9rem;
 		}
 
 		.radio-player {
