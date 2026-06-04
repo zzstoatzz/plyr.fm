@@ -24,6 +24,7 @@ upload critical path and produced no track at all.
 from __future__ import annotations
 
 import contextlib
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -41,6 +42,7 @@ from backend.api.tracks.uploads import (
     UploadPhaseError,
     _check_duplicate,
     _store_audio,
+    _transcode_audio,
     _upload_to_pds,
 )
 from backend.config import settings
@@ -164,6 +166,47 @@ async def test_store_audio_publishes_lossless_raw_and_flags_optimization() -> No
     assert sr.needs_optimization is True
 
 
+async def test_store_audio_allows_gated_lossless_without_public_url() -> None:
+    """regression for #1408: gated lossless uploads should publish the staged
+    private object as the interim/original and queue optimization, without
+    requiring a public R2 URL."""
+    ctx = UploadContext(
+        upload_id="job-gated",
+        auth_session=_MockSession(),
+        audio_file_id="GATEDAIFF",
+        filename="members-only.aiff",
+        duration=300,
+        title="Members Only",
+        artist_did=OWNER_DID,
+        album=None,
+        album_id=None,
+        features_json=None,
+        tags=[],
+        support_gate={"type": "any"},
+    )
+    audio_info = AudioInfo(format=AudioFormat.AIFF, duration=300, is_gated=True)
+
+    with (
+        patch(
+            "backend.api.tracks.uploads._transcode_audio",
+            new_callable=AsyncMock,
+        ) as mock_transcode,
+        patch(
+            "backend.api.tracks.uploads.storage.get_url",
+            new_callable=AsyncMock,
+        ) as mock_get_url,
+    ):
+        sr = await _store_audio(ctx, audio_info)
+
+    mock_transcode.assert_not_awaited()
+    mock_get_url.assert_not_awaited()
+    assert sr.file_id == "GATEDAIFF"
+    assert sr.original_file_id == "GATEDAIFF"
+    assert sr.original_file_type == "aiff"
+    assert sr.r2_url is None
+    assert sr.needs_optimization is True
+
+
 async def test_store_audio_web_playable_does_not_need_optimization() -> None:
     """an already web-playable upload (mp3) is served as-is, no transcode, no
     optimization."""
@@ -236,6 +279,64 @@ async def test_upload_to_pds_skips_when_optimization_pending() -> None:
 
     assert result is None
     mock_upload_blob.assert_not_awaited()
+
+
+async def test_transcode_gated_reads_and_writes_private_storage() -> None:
+    """gated optimization must never read from or write to the public bucket."""
+
+    async def source_chunks(*args, **kwargs):
+        yield b"private-audio"
+
+    class FakeTranscoder:
+        async def transcode_file(
+            self,
+            source_path: str,
+            source_format: str,
+            *,
+            output_path: str,
+            target_format: str,
+            heartbeat,
+        ):
+            await heartbeat()
+            Path(output_path).write_bytes(Path(source_path).read_bytes() + b"-mp3")
+            return type("Result", (), {"success": True, "output_path": output_path})()
+
+    job_service_mock = AsyncMock()
+
+    with (
+        patch("backend.api.tracks.uploads.job_service", job_service_mock),
+        patch(
+            "backend.api.tracks.uploads.storage.stream_file_data",
+            side_effect=source_chunks,
+        ) as mock_stream,
+        patch(
+            "backend.api.tracks.uploads.storage.save_gated",
+            new_callable=AsyncMock,
+            return_value="GATEDMP3",
+        ) as mock_save_gated,
+        patch(
+            "backend.api.tracks.uploads.storage.save",
+            new_callable=AsyncMock,
+        ) as mock_save,
+        patch(
+            "backend.api.tracks.uploads.get_transcoder_client",
+            return_value=FakeTranscoder(),
+        ),
+    ):
+        result = await _transcode_audio(
+            "job-gated-transcode",
+            "GATEDAIFF",
+            "members-only.aiff",
+            "aiff",
+            target_format="mp3",
+            gated=True,
+        )
+
+    assert result is not None
+    assert result.transcoded_file_id == "GATEDMP3"
+    assert mock_stream.call_args.kwargs["private"] is True
+    mock_save_gated.assert_awaited_once()
+    mock_save.assert_not_awaited()
 
 
 async def test_check_duplicate_matches_lossless_original(
@@ -324,7 +425,7 @@ def _patch_optimize(
             "backend.api.tracks.audio_optimize.storage.get_url",
             new_callable=AsyncMock,
             return_value="https://audio.example/MP3NEW.mp3",
-        ),
+        ) as mock_get_url,
         patch(
             "backend.api.tracks.audio_optimize._upload_to_pds",
             new_callable=AsyncMock,
@@ -343,7 +444,12 @@ def _patch_optimize(
             "backend.api.tracks.audio_optimize.storage.delete",
             new_callable=AsyncMock,
             side_effect=fake_delete,
-        ),
+        ) as mock_delete,
+        patch(
+            "backend.api.tracks.audio_optimize.storage.delete_gated",
+            new_callable=AsyncMock,
+            side_effect=fake_delete,
+        ) as mock_delete_gated,
         patch(
             "backend.api.tracks.audio_optimize.invalidate_tracks_discovery_cache",
             new_callable=AsyncMock,
@@ -352,9 +458,12 @@ def _patch_optimize(
     ):
         yield {
             "transcode": mock_transcode,
+            "get_url": mock_get_url,
             "upload_to_pds": mock_upload_to_pds,
             "build_record": mock_build_record,
             "update_record": mock_update_record,
+            "delete": mock_delete,
+            "delete_gated": mock_delete_gated,
         }
 
 
@@ -680,3 +789,52 @@ async def test_optimize_raw_interim_does_not_delete_the_lossless_original(
 
     # CRUCIAL: the raw source/original was NOT deleted as a stale interim
     assert "AIFFID" not in deleted
+
+
+async def test_optimize_gated_lossless_uses_private_storage_and_backend_audio_url(
+    db_session: AsyncSession, owner: Artist
+) -> None:
+    """for gated lossless tracks, the deferred MP3 stays private and the PDS
+    record points at the auth-protected backend audio endpoint."""
+    track = _raw_interim_track(
+        file_id="GATEDAIFF",
+        file_type="aiff",
+        original_file_id="GATEDAIFF",
+        original_file_type="aiff",
+        r2_url=None,
+        support_gate={"type": "any"},
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+    track_id = track.id
+
+    with _patch_optimize(
+        transcode=TranscodeInfo(
+            original_file_id="GATEDAIFF",
+            original_file_type="aiff",
+            transcoded_file_id="GATEDMP3",
+            transcoded_file_type="mp3",
+        ),
+        pds=None,
+    ) as mocks:
+        await optimize_track_audio(track_id, "session-id")
+
+    transcode_call = mocks["transcode"].await_args
+    assert transcode_call.args[1] == "GATEDAIFF"
+    assert transcode_call.kwargs["gated"] is True
+    mocks["get_url"].assert_not_awaited()
+
+    upload_call = mocks["upload_to_pds"].await_args
+    assert upload_call.args[1].is_gated is True
+
+    record_kwargs = mocks["build_record"].await_args.kwargs
+    assert record_kwargs["audio_url"].endswith("/audio/GATEDMP3")
+    assert record_kwargs["support_gate"] == {"type": "any"}
+
+    await db_session.refresh(track)
+    assert track.file_id == "GATEDMP3"
+    assert track.file_type == "mp3"
+    assert track.r2_url is None
+    assert track.audio_storage == "r2"
+    assert track.pds_blob_cid is None

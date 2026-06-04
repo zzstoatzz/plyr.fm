@@ -358,6 +358,7 @@ class R2Storage:
         file_type: str,
         *,
         chunk_size: int = STREAM_CHUNK_SIZE,
+        private: bool = False,
     ) -> AsyncIterator[bytes]:
         """stream the audio body in fixed-size chunks.
 
@@ -381,14 +382,26 @@ class R2Storage:
             file_id=file_id,
             file_type=file_type,
             chunk_size=chunk_size,
+            private=private,
         ):
+            bucket = (
+                self.private_audio_bucket_name if private else self.audio_bucket_name
+            )
+            if not bucket:
+                logfire.warning(
+                    "R2 stream_file_data: private bucket not configured",
+                    file_id=file_id,
+                    file_type=file_type,
+                )
+                return
+
             async with self._s3_client() as client:
                 try:
-                    response = await client.get_object(
-                        Bucket=self.audio_bucket_name, Key=key
-                    )
+                    response = await client.get_object(Bucket=bucket, Key=key)
                 except client.exceptions.NoSuchKey:
-                    logfire.warning("R2 file not found", file_id=file_id, key=key)
+                    logfire.warning(
+                        "R2 file not found", file_id=file_id, key=key, bucket=bucket
+                    )
                     return
                 except ClientError as e:
                     if e.response.get("Error", {}).get("Code") == "404":
