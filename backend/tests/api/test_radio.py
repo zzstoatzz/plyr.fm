@@ -24,28 +24,44 @@ def _lens_track(track_id: int, *, play_count: int, created_at: datetime) -> Trac
     return Track(id=track_id, play_count=play_count, created_at=created_at)
 
 
+def _ctx(
+    *, like_counts: dict[int, int], now: datetime, order: list[int]
+) -> LensContext:
+    """LensContext with `order` listed newest-first (0-based recency rank)."""
+    return LensContext(
+        like_counts=like_counts,
+        now=now,
+        recency_rank={track_id: rank for rank, track_id in enumerate(order)},
+    )
+
+
 def test_loved_lens_prefers_liked() -> None:
     now = datetime.now(UTC)
     liked = _lens_track(1, play_count=0, created_at=now)
     unliked = _lens_track(2, play_count=0, created_at=now)
-    ctx = LensContext(like_counts={liked.id: 5}, now=now)
+    ctx = _ctx(like_counts={liked.id: 5}, now=now, order=[1, 2])
     assert lenses.loved(liked, ctx) > lenses.loved(unliked, ctx)
 
 
-def test_fresh_lens_prefers_newer() -> None:
+def test_fresh_lens_prefers_newer_by_rank() -> None:
     now = datetime.now(UTC)
     newer = _lens_track(1, play_count=0, created_at=now)
-    older = _lens_track(2, play_count=0, created_at=now - timedelta(days=120))
-    ctx = LensContext(like_counts={}, now=now)
+    older = _lens_track(2, play_count=0, created_at=now)
+    # recency is by position, not wall-clock: newer ranks ahead of older
+    ctx = _ctx(like_counts={}, now=now, order=[newer.id, older.id])
     assert lenses.fresh(newer, ctx) > lenses.fresh(older, ctx)
 
 
-def test_discovery_lens_prefers_lower_play() -> None:
+def test_deep_cuts_prefers_older_underplayed() -> None:
     now = datetime.now(UTC)
-    obscure = _lens_track(1, play_count=2, created_at=now)
-    popular = _lens_track(2, play_count=5000, created_at=now)
-    ctx = LensContext(like_counts={}, now=now)
-    assert lenses.discovery(obscure, ctx) > lenses.discovery(popular, ctx)
+    buried = _lens_track(1, play_count=2, created_at=now - timedelta(days=200))
+    brand_new = _lens_track(2, play_count=2, created_at=now)
+    popular_old = _lens_track(3, play_count=5000, created_at=now - timedelta(days=200))
+    ctx = _ctx(like_counts={}, now=now, order=[2, 1, 3])
+    # older + underplayed beats both a brand-new unplayed track (that's `fresh`)
+    # and an old-but-popular track (that's `loved`)
+    assert lenses.deep_cuts(buried, ctx) > lenses.deep_cuts(brand_new, ctx)
+    assert lenses.deep_cuts(buried, ctx) > lenses.deep_cuts(popular_old, ctx)
 
 
 @pytest.fixture
@@ -264,7 +280,7 @@ async def test_stations_endpoint_lists_lineup(radio_app: FastAPI) -> None:
     data = response.json()
     assert data["default_slug"] == "loved"
     slugs = {s["slug"] for s in data["stations"]}
-    assert slugs == {"loved", "fresh", "discovery"}
+    assert slugs == {"loved", "fresh", "deep-cuts"}
     default = next(s for s in data["stations"] if s["slug"] == "loved")
     assert default["is_default"] is True
 

@@ -59,7 +59,9 @@ async def _select_rotation(
         return [], {}
 
     like_counts = await get_like_counts(db, [track.id for track in corpus])
-    ctx = LensContext(like_counts=like_counts, now=now)
+    # corpus is ordered newest-first, so enumeration is the recency rank.
+    recency_rank = {track.id: rank for rank, track in enumerate(corpus)}
+    ctx = LensContext(like_counts=like_counts, now=now, recency_rank=recency_rank)
     weights = {track.id: station.lens(track, ctx) for track in corpus}
     rotation = build_rotation(
         corpus,
