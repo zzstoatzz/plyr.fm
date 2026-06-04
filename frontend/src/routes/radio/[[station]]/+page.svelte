@@ -9,6 +9,9 @@
 	import { radio } from '$lib/radio.svelte';
 	import { horizontalSwipe } from '$lib/horizontal-swipe';
 	import StationPills from '$lib/components/radio/StationPills.svelte';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 
 	const endpoint = `${API_URL}/radio/state`;
 
@@ -42,9 +45,18 @@
 
 	// link preview — a stable station identity, not a per-moment "now playing"
 	// (the on-air track changes constantly and scrapers cache the snapshot).
-	const RADIO_DESCRIPTION =
-		'a live, always-on stream of audio from across plyr.fm — tune in and let it play.';
+	// per-station when the path names one (data.station, resolved server-side),
+	// else a concise generic radio card.
 	const RADIO_OG_IMAGE = `${APP_CANONICAL_URL}/icons/icon-512.png`;
+	let ogTitle = $derived(
+		data.station ? `${data.station.name} · ${APP_NAME} radio` : `${APP_NAME} radio`
+	);
+	let ogDescription = $derived(
+		data.station ? data.station.description : 'live radio from across plyr.fm'
+	);
+	let ogUrl = $derived(
+		data.station ? `${APP_CANONICAL_URL}/radio/${data.station.slug}` : `${APP_CANONICAL_URL}/radio`
+	);
 
 	async function handleLogout() {
 		await auth.logout();
@@ -69,14 +81,14 @@
 </script>
 
 <svelte:head>
-	<title>radio • {APP_NAME}</title>
-	<meta name="description" content={RADIO_DESCRIPTION} />
+	<title>{ogTitle}</title>
+	<meta name="description" content={ogDescription} />
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="radio · {APP_NAME}" />
-	<meta property="og:description" content={RADIO_DESCRIPTION} />
-	<meta property="og:url" content={`${APP_CANONICAL_URL}/radio`} />
+	<meta property="og:title" content={ogTitle} />
+	<meta property="og:description" content={ogDescription} />
+	<meta property="og:url" content={ogUrl} />
 	<meta property="og:site_name" content={APP_NAME} />
 	<meta property="og:image" content={RADIO_OG_IMAGE} />
 	<meta property="og:image:secure_url" content={RADIO_OG_IMAGE} />
@@ -86,8 +98,8 @@
 
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary" />
-	<meta name="twitter:title" content="radio · {APP_NAME}" />
-	<meta name="twitter:description" content={RADIO_DESCRIPTION} />
+	<meta name="twitter:title" content={ogTitle} />
+	<meta name="twitter:description" content={ogDescription} />
 	<meta name="twitter:image" content={RADIO_OG_IMAGE} />
 </svelte:head>
 

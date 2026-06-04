@@ -1,23 +1,16 @@
 """Station lenses — the scoring strategies that make stations feel different.
 
-A lens turns a track + context into a non-negative weight. The sampler then draws
-a deterministic, airtime-fair rotation from those weights, so a lens decides
-*flavor* (what this station leans toward) while the sampler decides *fairness and
-rotation* (no one artist hogging the clock, genuine day-to-day variety).
+A lens turns a track + context into a **score** (higher = more on-axis for that
+station). The caller ranks the eligible corpus by that score and weights the
+sampler by rank-decay, so a lens only needs to produce a sensible *ordering* — raw
+magnitudes don't matter and one station's signal can't swamp another's.
 
 The three lenses are deliberately spread across orthogonal axes so flipping
 between stations means something:
 
 * ``loved``     — popularity (likes + plays), any age
-* ``fresh``     — the *new* end of the catalog (most-recent uploads)
+* ``fresh``     — the *new* end of the catalog (most-recent uploads), nothing else
 * ``deep_cuts`` — the *old* end (older tracks that stayed underplayed)
-
-``fresh`` and ``deep_cuts`` sit at opposite ends of the recency axis on purpose,
-so they don't surface the same brand-new-and-unplayed tracks.
-
-All weights carry a small floor so nothing in the corpus is ever strictly
-impossible, which keeps a station from collapsing into a fixed top-N. The lenses
-lean the right way; they don't hard-partition.
 """
 
 import math
@@ -26,10 +19,6 @@ from datetime import UTC, datetime
 
 from backend.models import Track
 
-WEIGHT_FLOOR = 0.05
-# how fast `fresh` falls off down the newest-first ordering; ~the newest two
-# dozen uploads carry the station regardless of how fast they arrived.
-FRESH_RANK_SCALE = 12.0
 # wall-clock days over which a track "matures" into deep-cut eligibility, so a
 # just-uploaded track belongs to `fresh`, not here.
 DEEP_CUT_MATURITY_DAYS = 30.0
@@ -60,20 +49,17 @@ class LensContext:
 
 def loved(track: Track, ctx: LensContext) -> float:
     """Genuinely liked + played. Closest to the historical radio behavior."""
-    return WEIGHT_FLOOR + ctx.likes(track) * 3 + math.log1p(track.play_count)
+    return ctx.likes(track) * 3 + math.log1p(track.play_count)
 
 
 def fresh(track: Track, ctx: LensContext) -> float:
-    """The leading edge of uploads.
+    """The leading edge of uploads — purely how recently this track landed.
 
     Recency is measured by *position* in the newest-first ordering, not wall-clock
-    age, so "fresh" tracks whatever just landed whether uploads are pouring in or
-    trickling — a quiet week doesn't surface stale tracks and a busy week doesn't
-    flatten everything to the same weight.
+    age, so "fresh" tracks whatever just landed whether uploads pour in or trickle.
+    Engagement is intentionally ignored: just-landed, not well-liked.
     """
-    recency = math.exp(-ctx.recency_position(track) / FRESH_RANK_SCALE)
-    nudge = math.log1p(ctx.likes(track) + track.play_count) * 0.15
-    return WEIGHT_FLOOR + recency + nudge
+    return -float(ctx.recency_position(track))
 
 
 def deep_cuts(track: Track, ctx: LensContext) -> float:
@@ -87,4 +73,4 @@ def deep_cuts(track: Track, ctx: LensContext) -> float:
     obscurity = 1.0 / (1.0 + math.log1p(track.play_count))
     maturity = 1.0 - math.exp(-ctx.age_days(track) / DEEP_CUT_MATURITY_DAYS)
     quality_hint = math.log1p(ctx.likes(track)) * 0.1
-    return WEIGHT_FLOOR + obscurity * maturity + quality_hint
+    return obscurity * maturity + quality_hint

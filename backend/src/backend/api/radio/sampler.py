@@ -22,6 +22,7 @@ Turns a scored corpus into a daily rotation that doesn't let one artist stack it
 """
 
 import hashlib
+import math
 import random
 
 from backend.models import Track
@@ -29,6 +30,16 @@ from backend.models import Track
 DEFAULT_TRACK_SECONDS = 180
 ARTIST_AIRTIME_CAP_SECONDS = 20 * 60  # an artist is done once past ~20 min of airtime
 TARGET_ROTATION_SECONDS = 4 * 60 * 60  # aim for ~4 hours of programming per rotation
+
+
+def rank_decay_weights(ranked_ids: list[int], scale: float) -> dict[int, float]:
+    """Weight items by their position in ``ranked_ids`` (0 = best) as exp(-rank/scale).
+
+    Weighting by *rank* rather than raw score bounds the total tail mass (~scale)
+    regardless of list length, so a long low-rank tail can't out-mass the head —
+    e.g. hundreds of old tracks can't collectively outweigh the few fresh ones.
+    """
+    return {item: math.exp(-rank / scale) for rank, item in enumerate(ranked_ids)}
 
 
 def _seed(station_slug: str, day: str) -> int:
