@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.radio import lenses
 from backend.api.radio.lenses import LensContext
+from backend.api.radio.sampler import rank_decay_weights
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
 
@@ -176,6 +177,21 @@ async def test_default_station_returns_public_tracks_only(
     assert data["current"]["duration"] == 123
     assert data["current"]["artwork_url"] == "https://images.example/cover.jpg"
     assert [track["title"] for track in data["rotation"]] == ["Visible"]
+
+
+def test_rank_decay_weights_zero_the_long_tail() -> None:
+    """rank-decay bounds tail mass so a long low-rank tail can't swamp the head.
+
+    Regression: the old per-track weight floor let hundreds of old tracks
+    collectively out-mass the few fresh ones, leaking ~200-day tracks into `fresh`.
+    """
+    weights = rank_decay_weights(list(range(200)), 12.0)
+    assert weights[0] == 1.0
+    assert weights[1] < weights[0]
+    # a rank-150 track is effectively weightless next to the head
+    assert weights[150] / weights[0] < 1e-4
+    # total mass stays ~bounded (≈scale) regardless of the 200-item length
+    assert sum(weights.values()) < 20
 
 
 async def test_rotation_is_deterministic_per_day(

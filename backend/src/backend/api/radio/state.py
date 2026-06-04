@@ -16,7 +16,7 @@ from backend.api.radio import stations
 from backend.api.radio.corpus import load_corpus
 from backend.api.radio.lenses import LensContext
 from backend.api.radio.router import router
-from backend.api.radio.sampler import build_rotation
+from backend.api.radio.sampler import build_rotation, rank_decay_weights
 from backend.api.radio.schemas import (
     RadioStateResponse,
     RadioTrack,
@@ -29,6 +29,11 @@ from backend.utilities.aggregations import get_like_counts, get_track_tags
 DEFAULT_TRACK_SECONDS = 180
 DEFAULT_ROTATION_SIZE = 40
 MAX_ROTATION_SIZE = 75
+# decay over a station's own ranking: the top ~RANK_DECAY*3 tracks by the lens
+# carry the station, the long tail falls off fast. Weighting by rank (not raw lens
+# score) keeps one station's signal from swamping another and bounds the tail mass
+# regardless of catalog size, so e.g. a 200-day-old track can't leak into `fresh`.
+RANK_DECAY = 12.0
 
 
 def _stream_url(request: Request, track: Track) -> str:
@@ -70,7 +75,9 @@ async def _select_rotation(
     # rank within this station's pool.
     recency_rank = {track.id: rank for rank, track in enumerate(eligible)}
     ctx = LensContext(like_counts=like_counts, now=now, recency_rank=recency_rank)
-    weights = {track.id: station.lens(track, ctx) for track in eligible}
+    # rank by the station's lens, then weight by rank-decay (not the raw score)
+    ranked = sorted(eligible, key=lambda t: station.lens(t, ctx), reverse=True)
+    weights = rank_decay_weights([t.id for t in ranked], RANK_DECAY)
     rotation = build_rotation(
         eligible,
         weights,
