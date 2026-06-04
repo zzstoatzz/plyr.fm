@@ -402,10 +402,16 @@
 
 	.now-meta h2 {
 		margin: 0;
-		font-size: clamp(1.75rem, 4.6vw, 2.65rem);
-		line-height: 1.05;
-		overflow-wrap: normal;
-		text-wrap: balance;
+		font-size: clamp(1.5rem, 4.6vw, 2.65rem);
+		line-height: 1.1;
+		/* long titles (e.g. DJ-set names with dates) must not blow up the
+		   fixed-height layout: wrap hard, then clamp to two lines with an ellipsis */
+		overflow-wrap: anywhere;
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
 	}
 
 	.now-meta h2 a {
@@ -421,11 +427,15 @@
 	}
 
 	.artist {
-		display: inline-block;
+		display: block;
+		max-width: 100%;
 		margin-top: 0.35rem;
 		color: var(--text-secondary);
 		text-decoration: none;
 		font-size: var(--text-base);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.artist:hover {

@@ -378,6 +378,38 @@ async def test_slop_excludes_plyr_fm_account_tracks(
     assert slop_ids == {other_slop.id}  # plyr.fm's ai track excluded
 
 
+async def test_radio_excludes_deactivated_artists(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """tracks from deactivated accounts drop out of radio (their audio is dead)."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    live = await _create_track(
+        db_session, radio_artist, title="Live", file_id="live", created_at=now
+    )
+    gone = await _create_artist(db_session, "did:plc:gone", "gone.plyr.fm")
+    gone.deactivated = True
+    gone_track = await _create_track(
+        db_session,
+        gone,
+        title="Gone",
+        file_id="gone",
+        created_at=now - timedelta(minutes=1),
+    )
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app),
+        base_url="https://radio.plyr.fm",
+    ) as client:
+        response = await client.get("/radio/state.json")
+
+    ids = {t["id"] for t in response.json()["rotation"]}
+    assert live.id in ids
+    assert gone_track.id not in ids
+
+
 async def test_radio_state_includes_tags_and_up_next(
     radio_app: FastAPI,
     db_session: AsyncSession,

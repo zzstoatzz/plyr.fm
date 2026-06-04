@@ -343,6 +343,19 @@ async def get_for_you_feed(
         if hidden_set:
             track_ids = [tid for tid in track_ids if tid not in hidden_set]
 
+    # drop tracks from deactivated accounts (their content is hidden from discovery)
+    if track_ids:
+        deactivated_rows = (
+            await db.execute(
+                select(Track.id)
+                .join(Artist)
+                .where(Track.id.in_(track_ids), Artist.deactivated == True)  # noqa: E712
+            )
+        ).all()
+        deactivated_set = {r.id for r in deactivated_rows}
+        if deactivated_set:
+            track_ids = [tid for tid in track_ids if tid not in deactivated_set]
+
     # apply active tag filter (inclusive — keep only tracks with at least one matching tag)
     if tags and track_ids:
         tagged_rows = (

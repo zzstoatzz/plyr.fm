@@ -22,6 +22,7 @@ async def load_corpus(db: AsyncSession) -> list[Track]:
         .where(
             Track.unlisted == False,  # noqa: E712
             Track.support_gate.is_(None),
+            Artist.deactivated == False,  # noqa: E712
         )
         .order_by(Track.created_at.desc(), Track.id.desc())
     )

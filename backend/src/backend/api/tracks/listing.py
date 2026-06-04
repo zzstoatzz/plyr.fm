@@ -132,8 +132,10 @@ async def list_tracks(
     if artist_did:
         stmt = stmt.where(Track.artist_did == artist_did)
     else:
-        # discovery feed: exclude unlisted tracks (artist pages show all)
+        # discovery feed: exclude unlisted tracks (artist pages show all) and
+        # tracks from deactivated accounts (their content drops out of discovery)
         stmt = stmt.where(Track.unlisted == False)  # noqa: E712
+        stmt = stmt.where(Artist.deactivated == False)  # noqa: E712
 
     # filter out tracks with hidden tags
     # when filter_hidden_tags is None (default), auto-decide:
