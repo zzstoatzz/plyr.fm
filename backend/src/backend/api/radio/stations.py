@@ -16,8 +16,12 @@ from backend.models import Track
 from backend.utilities.tags import is_tag_hidden_by_default
 
 Lens = Callable[[Track, LensContext], float]
-# given a track's normalized tags, is it eligible for this station?
-CorpusFilter = Callable[[set[str]], bool]
+# given a track and its normalized tags, is it eligible for this station?
+CorpusFilter = Callable[[Track, set[str]], bool]
+
+# the plyr.fm app account, whose ai-tagged changelog/update posts we keep out of
+# the slop station for now (they're not music).
+PLYR_FM_ACCOUNT_HANDLE = "plyr.fm"
 
 
 def _has_hidden_tag(tags: set[str]) -> bool:
@@ -25,12 +29,12 @@ def _has_hidden_tag(tags: set[str]) -> bool:
     return any(is_tag_hidden_by_default(tag) for tag in tags)
 
 
-def _exclude_slop(tags: set[str]) -> bool:
+def _exclude_slop(track: Track, tags: set[str]) -> bool:
     return not _has_hidden_tag(tags)
 
 
-def _only_slop(tags: set[str]) -> bool:
-    return _has_hidden_tag(tags)
+def _only_slop(track: Track, tags: set[str]) -> bool:
+    return _has_hidden_tag(tags) and track.artist.handle != PLYR_FM_ACCOUNT_HANDLE
 
 
 @dataclass(frozen=True)
