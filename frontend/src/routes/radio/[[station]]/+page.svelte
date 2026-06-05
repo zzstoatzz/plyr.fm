@@ -225,8 +225,10 @@
 	.radio-page {
 		position: relative;
 		max-width: 980px;
-		margin: 0 auto;
-		height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem);
+		/* cancel the global header's 2rem margin-bottom so the tuner sits right
+		   under the header instead of leaving a dead band */
+		margin: -2rem auto 0;
+		height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem - env(safe-area-inset-bottom, 0px));
 		padding: 0 1rem 0.75rem;
 		display: flex;
 		flex-direction: column;
@@ -253,7 +255,7 @@
 
 	@supports (height: 100dvh) {
 		.radio-page {
-			height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem);
+			height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem - env(safe-area-inset-bottom, 0px));
 		}
 	}
 
@@ -304,7 +306,10 @@
 	}
 
 	.station {
+		flex: 1 1 auto;
 		min-height: 0;
+		display: flex;
+		flex-direction: column;
 		padding-top: 0;
 	}
 
@@ -322,9 +327,12 @@
 
 	/* the swappable station content — artwork + title — fades while tuning */
 	.now-block {
+		flex: 1 1 auto;
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		justify-content: center;
 		gap: clamp(0.5rem, 1.35vh, 0.85rem);
 		width: 100%;
 		transition:
@@ -374,6 +382,9 @@
 	}
 
 	.radio-player {
+		flex: 1 1 auto;
+		min-height: 0;
+		width: 100%;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -382,15 +393,19 @@
 	}
 
 	.art-link {
+		flex: 1 1 auto;
+		min-height: 0;
 		display: block;
+		width: 100%;
 		text-decoration: none;
 		border-radius: var(--radius-md);
+		overflow: hidden;
 	}
 
 	.art {
 		display: block;
-		width: clamp(12rem, min(30vw, 32vh), 18rem);
-		height: clamp(12rem, min(30vw, 32vh), 18rem);
+		width: 100%;
+		height: 100%;
 		object-fit: cover;
 		border-radius: var(--radius-md);
 		box-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.34);
@@ -748,13 +763,13 @@
 
 	@media (max-width: 720px) {
 		.radio-page {
-			height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem);
+			height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem - env(safe-area-inset-bottom, 0px));
 			padding-top: 0;
 		}
 
 		@supports (height: 100dvh) {
 			.radio-page {
-				height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem);
+				height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem - env(safe-area-inset-bottom, 0px));
 			}
 		}
 	}
@@ -775,11 +790,6 @@
 
 		.station-title {
 			font-size: var(--text-base);
-		}
-
-		.art {
-			width: min(46vw, 10rem);
-			height: min(46vw, 10rem);
 		}
 
 		.now-meta h2 {
