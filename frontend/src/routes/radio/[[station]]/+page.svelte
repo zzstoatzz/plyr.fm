@@ -244,7 +244,10 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		justify-content: center;
+		/* anchor to the top: centering left a dead band between the header and
+		   "live radio". with flex-start the content starts right under the header
+		   and any slack falls below (un-cramping the bottom), never above. */
+		justify-content: flex-start;
 		gap: clamp(0.9rem, 3vh, 2rem);
 	}
 

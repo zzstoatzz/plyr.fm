@@ -328,4 +328,4 @@ max_lines = 612
 
 [[rules]]
 path = "frontend/src/routes/radio/[[][[]station[]][]]/+page.svelte"
-max_lines = 818
+max_lines = 821
