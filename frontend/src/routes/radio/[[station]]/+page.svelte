@@ -155,26 +155,26 @@
 					<h2>
 						<a href={`/track/${radio.current.id}`}>{radio.current.title}</a>
 					</h2>
-					<div class="now-by">
-						<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
-						{#if auth.isAuthenticated}
-							{#key radio.current.id}
-								<LikeButton trackId={radio.current.id} trackTitle={radio.current.title} />
-							{/key}
-						{/if}
-					</div>
+					<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
 				</div>
 				</div>
-				{#if radio.active}
-					<button class="tune-btn stop" onclick={() => radio.stop()} aria-label="stop listening to radio">stop</button>
-				{:else}
-					<button class="tune-btn" onclick={() => radio.tuneIn()} aria-label="tune in to radio">
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-							<polygon points="6 4 20 12 6 20 6 4"></polygon>
-						</svg>
-						tune in
-					</button>
-				{/if}
+				<div class="controls">
+					{#if radio.active}
+						<button class="tune-btn stop" onclick={() => radio.stop()} aria-label="stop listening to radio">stop</button>
+					{:else}
+						<button class="tune-btn" onclick={() => radio.tuneIn()} aria-label="tune in to radio">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+								<polygon points="6 4 20 12 6 20 6 4"></polygon>
+							</svg>
+							tune in
+						</button>
+					{/if}
+					{#if auth.isAuthenticated}
+						{#key radio.current.id}
+							<LikeButton trackId={radio.current.id} trackTitle={radio.current.title} />
+						{/key}
+					{/if}
+				</div>
 				<div class="progress-wrap">
 					<div class="progress" aria-label="track progress">
 						<div class="progress-fill" style={`width: ${progressPercent}%`}></div>
@@ -215,7 +215,6 @@
 						</a>
 					{/each}
 				</div>
-				<p>{radio.activeStation?.description ?? 'from across plyr.fm'}</p>
 			</div>
 		</section>
 	{/if}
@@ -321,6 +320,10 @@
 	.station {
 		flex: 1 1 auto;
 		min-height: 0;
+		/* fixed-width column so the dial + controls never resize with the
+		   (height-driven) artwork — the artwork is capped to this width too */
+		width: min(100%, 30rem);
+		align-self: center;
 		display: flex;
 		flex-direction: column;
 		padding-top: 0;
@@ -454,16 +457,11 @@
 		border: 1px solid rgba(255, 255, 255, 0.08);
 	}
 
-	.now-by {
+	.controls {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
-		justify-content: center;
-		gap: 0.6rem;
-		margin-top: 0.35rem;
-	}
-
-	.now-by .artist {
-		margin-top: 0;
+		gap: clamp(0.4rem, 1.2vh, 0.7rem);
 	}
 
 	.art {
@@ -795,12 +793,6 @@
 	.rotation-artwork:focus-visible .rotation-tooltip {
 		opacity: 1;
 		transform: translate(-50%, 0);
-	}
-
-	.rotation-card p {
-		margin: 0.25rem 0 0;
-		color: var(--text-tertiary);
-		font-size: var(--text-sm);
 	}
 
 	.credit {

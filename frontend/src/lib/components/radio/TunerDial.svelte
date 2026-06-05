@@ -78,21 +78,26 @@
 		transition: color 0.15s ease;
 	}
 
-	/* the tick sits on the line; active is a lit dot (the needle) */
+	/* inactive stop: a short flat tick on the line. active: a tall accent "needle"
+	   that rises above the line with a glowing tip (a tuner pointer, not a dot) */
 	.tick {
-		width: 0.55rem;
-		height: 0.55rem;
-		border-radius: 999px;
-		background: var(--bg-primary);
-		box-shadow: inset 0 0 0 2px var(--border-default);
+		width: 2px;
+		height: 0.5rem;
+		border-radius: 2px;
+		background: var(--border-default);
 		transition:
-			background 0.15s ease,
-			box-shadow 0.15s ease,
-			transform 0.15s ease;
+			height 0.18s ease,
+			margin-top 0.18s ease,
+			background 0.18s ease,
+			box-shadow 0.18s ease;
 	}
 
 	.stop:hover {
 		color: var(--text-secondary);
+	}
+
+	.stop:hover .tick {
+		background: var(--text-tertiary);
 	}
 
 	.stop.active {
@@ -101,10 +106,9 @@
 	}
 
 	.stop.active .tick {
+		height: 1.15rem;
+		margin-top: -0.32rem;
 		background: var(--accent);
-		box-shadow:
-			inset 0 0 0 2px var(--accent),
-			0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
-		transform: scale(1.15);
+		box-shadow: 0 0 7px 1px color-mix(in srgb, var(--accent) 65%, transparent);
 	}
 </style>
