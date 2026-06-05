@@ -245,7 +245,8 @@
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		overflow: hidden;
+		overflow-y: auto;
+		overflow-x: hidden;
 	}
 
 	/* the tuner (pills + artwork + now-playing + controls + deck) grows to fill
@@ -413,7 +414,7 @@
 	   cropping the square cover into a weird slice */
 	.art-stage {
 		flex: 1 1 auto;
-		min-height: 0;
+		min-height: clamp(7rem, 22vh, 18rem);
 		width: 100%;
 		position: relative;
 		display: flex;
@@ -883,5 +884,22 @@
 		.radio-footer {
 			gap: 0.25rem 1rem;
 		}
+	}
+
+	/* short viewports (landscape phones, small windows) — width breakpoints miss
+	   these, so shrink by HEIGHT; scroll is the fallback below the smallest case */
+	@media (max-height: 740px) {
+		.tuner { gap: 0.6rem; }
+		.radio-player { gap: 0.4rem; }
+		.now-block { gap: 0.35rem; }
+		.now-meta h2 { font-size: clamp(1.35rem, 4.2vh, 2rem); }
+		.art-stage { min-height: clamp(5rem, 15vh, 11rem); }
+	}
+
+	@media (max-height: 560px) {
+		.now-meta h2 { font-size: 1.2rem; }
+		.art-stage { min-height: 4.5rem; }
+		/* no room for the deck on a very short screen */
+		.station-board { display: none; }
 	}
 </style>
