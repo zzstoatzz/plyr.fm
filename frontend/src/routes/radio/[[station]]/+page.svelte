@@ -135,15 +135,20 @@
 					onSelect={tuneToStation}
 				/>
 				<div class="now-block" class:tuning={radio.switching}>
-				<SensitiveImage src={radio.current.artwork_url} tooltipPosition="center">
-					<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
-						{#if radio.current.artwork_url}
-							<img src={radio.current.artwork_url} alt="" class="art" />
-						{:else}
-							<div class="art fallback"></div>
-						{/if}
-					</a>
-				</SensitiveImage>
+				<div class="art-stage">
+					{#if radio.current.artwork_url}
+						<img class="art-bg" src={radio.current.artwork_url} alt="" aria-hidden="true" />
+					{/if}
+					<SensitiveImage src={radio.current.artwork_url} tooltipPosition="center">
+						<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
+							{#if radio.current.artwork_url}
+								<img src={radio.current.artwork_url} alt="" class="art" />
+							{:else}
+								<div class="art fallback"></div>
+							{/if}
+						</a>
+					</SensitiveImage>
+				</div>
 				<div class="now-meta">
 					<p class="label">{radio.active ? 'on air' : "what's on"}</p>
 					<h2>
@@ -225,9 +230,9 @@
 	.radio-page {
 		position: relative;
 		max-width: 980px;
-		/* cancel the global header's 2rem margin-bottom so the tuner sits right
-		   under the header instead of leaving a dead band */
-		margin: -2rem auto 0;
+		/* the global header has a 2rem margin-bottom; cancel most of it so the tuner
+		   sits just under the header (a small breathing gap, not a dead band) */
+		margin: -1.25rem auto 0;
 		height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem - env(safe-area-inset-bottom, 0px));
 		padding: 0 1rem 0.75rem;
 		display: flex;
@@ -392,11 +397,44 @@
 		text-align: center;
 	}
 
-	.art-link {
+	/* the artwork "stage" fills the leftover space; a blurred copy of the cover is
+	   the ambient backdrop so wide/tall leftovers look intentional instead of
+	   cropping the square cover into a weird slice */
+	.art-stage {
 		flex: 1 1 auto;
 		min-height: 0;
-		display: block;
 		width: 100%;
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		border-radius: var(--radius-md);
+	}
+
+	.art-bg {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		filter: blur(48px) saturate(1.3);
+		opacity: 0.4;
+		transform: scale(1.25);
+		z-index: 0;
+		pointer-events: none;
+	}
+
+	/* foreground cover: a contained square (never cropped to a slice) */
+	.art-link {
+		position: relative;
+		z-index: 1;
+		flex: 0 0 auto;
+		display: block;
+		height: 100%;
+		width: auto;
+		max-width: 100%;
+		aspect-ratio: 1 / 1;
 		text-decoration: none;
 		border-radius: var(--radius-md);
 		overflow: hidden;
