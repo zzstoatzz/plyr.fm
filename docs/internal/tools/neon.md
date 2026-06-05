@@ -329,9 +329,9 @@ returns a postgres connection string for use with `psql`, database clients, or a
 - `databaseName` - specific database (defaults to neondb)
 - `roleName` - specific role (defaults to neondb_owner)
 
-**example output:**
+**example output** (placeholder values — never commit a real connection string):
 ```
-postgresql://neondb_owner:npg_6CNUVfgtz8bY@ep-flat-haze-aefjvcba-pooler.c-2.us-east-2.aws.neon.tech/neondb?channel_binding=require&sslmode=require
+postgresql://<role>:<password>@<endpoint>.<region>.aws.neon.tech/<database>?channel_binding=require&sslmode=require
 ```
 
 ## database environment mapping

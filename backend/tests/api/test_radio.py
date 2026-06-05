@@ -9,11 +9,22 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend._internal import Session, get_optional_session
 from backend.api.radio import lenses
 from backend.api.radio.lenses import LensContext
 from backend.api.radio.sampler import rank_decay_weights
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
+
+
+class _MockSession(Session):
+    """minimal authenticated session for radio liked-state tests."""
+
+    def __init__(self, did: str) -> None:
+        self.did = did
+        self.handle = "liker.test"
+        self.session_id = "sid"
+
 
 # clear_database only removes timestamped rows created after test start.
 TEST_TIME_OFFSET = timedelta(minutes=10)
@@ -457,3 +468,58 @@ async def test_radio_state_includes_tags_and_up_next(
     assert tagged_track["tags"] == ["desert"]
     assert data["up_next"]
     assert {track["id"] for track in data["up_next"]}.issubset({first.id, second.id})
+
+
+async def test_radio_marks_liked_tracks_for_authenticated_user(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+) -> None:
+    """the requesting user's likes surface as `liked` on radio tracks."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    liked = await _create_track(
+        db_session, radio_artist, title="Liked", file_id="liked", created_at=now
+    )
+    plain = await _create_track(
+        db_session,
+        radio_artist,
+        title="Plain",
+        file_id="plain",
+        created_at=now - timedelta(minutes=1),
+    )
+    db_session.add(
+        TrackLike(
+            track_id=liked.id,
+            user_did="did:test:user123",
+            atproto_like_uri="at://did:test:user123/fm.plyr.like/liked",
+        )
+    )
+    await db_session.commit()
+
+    async def mock_session() -> Session:
+        return _MockSession("did:test:user123")
+
+    # unauthenticated: nothing is liked
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app),
+        base_url="https://radio.plyr.fm",
+    ) as client:
+        anon = await client.get("/radio/state.json")
+    assert anon.status_code == 200
+    assert all(not track["liked"] for track in anon.json()["rotation"])
+
+    # authenticated: only the user's liked track is flagged
+    radio_app.dependency_overrides[get_optional_session] = mock_session
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app),
+            base_url="https://radio.plyr.fm",
+        ) as client:
+            response = await client.get("/radio/state.json")
+    finally:
+        del radio_app.dependency_overrides[get_optional_session]
+
+    assert response.status_code == 200
+    rotation = {track["id"]: track["liked"] for track in response.json()["rotation"]}
+    assert rotation[liked.id] is True
+    assert rotation[plain.id] is False

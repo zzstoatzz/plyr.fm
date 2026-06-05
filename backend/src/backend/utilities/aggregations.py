@@ -47,6 +47,20 @@ async def get_like_counts(db: AsyncSession, track_ids: list[int]) -> dict[int, i
     return dict(result.all())
 
 
+async def get_user_liked_track_ids(
+    db: AsyncSession, user_did: str, track_ids: list[int]
+) -> set[int]:
+    """return the subset of track_ids the given user has liked (single query)."""
+    if not track_ids:
+        return set()
+    stmt = select(TrackLike.track_id).where(
+        TrackLike.user_did == user_did,
+        TrackLike.track_id.in_(track_ids),
+    )
+    result = await db.execute(stmt)
+    return set(result.scalars().all())
+
+
 async def get_comment_counts(db: AsyncSession, track_ids: list[int]) -> dict[int, int]:
     """get comment counts for multiple tracks in a single query.
 

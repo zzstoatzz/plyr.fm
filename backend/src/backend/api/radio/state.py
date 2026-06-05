@@ -12,6 +12,8 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend._internal import Session as AuthSession
+from backend._internal import get_optional_session
 from backend.api.radio import stations
 from backend.api.radio.corpus import load_corpus
 from backend.api.radio.lenses import LensContext
@@ -24,7 +26,11 @@ from backend.api.radio.schemas import (
     StationSummary,
 )
 from backend.models import Track, get_db
-from backend.utilities.aggregations import get_like_counts, get_track_tags
+from backend.utilities.aggregations import (
+    get_like_counts,
+    get_track_tags,
+    get_user_liked_track_ids,
+)
 
 DEFAULT_TRACK_SECONDS = 180
 DEFAULT_ROTATION_SIZE = 40
@@ -93,6 +99,7 @@ async def _to_radio_tracks(
     db: AsyncSession,
     tracks: list[Track],
     like_counts: dict[int, int],
+    liked_ids: set[int],
 ) -> list[RadioTrack]:
     """Serialize tracks for public radio consumers."""
     track_ids = [track.id for track in tracks]
@@ -114,6 +121,7 @@ async def _to_radio_tracks(
             tags=sorted(tag_map.get(track.id, set())),
             like_count=like_counts.get(track.id, 0),
             play_count=track.play_count,
+            liked=track.id in liked_ids,
         )
         for track in tracks
     ]
@@ -181,6 +189,7 @@ async def radio_state(
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: int = Query(DEFAULT_ROTATION_SIZE, ge=1, le=MAX_ROTATION_SIZE),
     station: str | None = Query(None, description="station slug; omit for default"),
+    session: AuthSession | None = Depends(get_optional_session),
 ) -> RadioStateResponse:
     """Return the live public radio state for a station.
 
@@ -194,7 +203,12 @@ async def radio_state(
 
     now = datetime.now(UTC)
     tracks, like_counts = await _select_rotation(db, resolved, limit, now)
-    rotation = await _to_radio_tracks(request, db, tracks, like_counts)
+    liked_ids = (
+        await get_user_liked_track_ids(db, session.did, [t.id for t in tracks])
+        if session
+        else set()
+    )
+    rotation = await _to_radio_tracks(request, db, tracks, like_counts, liked_ids)
     current_index, progress, started_at, ends_at = _live_window(now, rotation)
     current = rotation[current_index] if current_index is not None else None
 
