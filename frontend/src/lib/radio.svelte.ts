@@ -211,9 +211,13 @@ class Radio {
 	 */
 	onEnded(): void {
 		const next = this.state?.up_next[0];
-		if (next && player.radio) player.playRadio(this.toNowPlaying(next, 0));
-		// keep the rotation / up_next current for the next boundary (no await on
-		// the play path above)
+		if (next && player.radio && this.state) {
+			player.playRadio(this.toNowPlaying(next, 0));
+			// optimistically advance the displayed state so the artwork + title swap
+			// to the new track immediately, instead of lagging on the background fetch
+			this.state = { ...this.state, current: next, up_next: this.state.up_next.slice(1) };
+		}
+		// refresh rotation / up_next in the background for the next boundary
 		void this.loadState();
 	}
 

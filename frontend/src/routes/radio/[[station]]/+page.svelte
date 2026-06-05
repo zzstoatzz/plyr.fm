@@ -10,6 +10,7 @@
 	import { horizontalSwipe } from '$lib/horizontal-swipe';
 	import TunerDial from '$lib/components/radio/TunerDial.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import LikeButton from '$lib/components/LikeButton.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -154,7 +155,14 @@
 					<h2>
 						<a href={`/track/${radio.current.id}`}>{radio.current.title}</a>
 					</h2>
-					<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
+					<div class="now-by">
+						<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
+						{#if auth.isAuthenticated}
+							{#key radio.current.id}
+								<LikeButton trackId={radio.current.id} trackTitle={radio.current.title} />
+							{/key}
+						{/if}
+					</div>
 				</div>
 				</div>
 				{#if radio.active}
@@ -418,9 +426,13 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		filter: blur(48px) saturate(1.3);
-		opacity: 0.4;
-		transform: scale(1.25);
+		filter: blur(64px) saturate(1.4);
+		opacity: 0.16;
+		transform: scale(1.4);
+		/* soft radial falloff so it reads as a faint ambient glow behind the cover,
+		   not a hard-edged blurred strip */
+		-webkit-mask-image: radial-gradient(closest-side, #000 28%, transparent 72%);
+		mask-image: radial-gradient(closest-side, #000 28%, transparent 72%);
 		z-index: 0;
 		pointer-events: none;
 	}
@@ -438,6 +450,20 @@
 		text-decoration: none;
 		border-radius: var(--radius-md);
 		overflow: hidden;
+		box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.45);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+	}
+
+	.now-by {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.6rem;
+		margin-top: 0.35rem;
+	}
+
+	.now-by .artist {
+		margin-top: 0;
 	}
 
 	.art {
