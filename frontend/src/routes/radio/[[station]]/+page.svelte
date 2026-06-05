@@ -122,13 +122,23 @@
 		{:else if radio.current}
 			<div class="radio-player" {@attach horizontalSwipe((dir) => flip(dir === 'left' ? 'next' : 'prev'))}>
 				<div class="station-title">
-					<span>live radio</span>
+					<span class="live">live radio</span>
 					<span class="radio-mark" aria-hidden="true">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<circle cx="12" cy="12" r="2" />
 							<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
 						</svg>
 					</span>
+					<span class="title-sep" aria-hidden="true"></span>
+					<span class="credit">inspired by <a href="https://radio.wisp.place" target="_blank" rel="noopener">radio.wisp.place</a></span>
+					<details class="integration">
+						<summary>integration</summary>
+						<div class="integration-panel">
+							<p>poll <code>{endpoint}</code> for the shared station state.</p>
+							<p>play <code>current.stream_url</code>, seek to <code>progress_seconds</code>.</p>
+							<p>refresh when <code>current_ends_at</code> passes, or poll every 30s.</p>
+						</div>
+					</details>
 				</div>
 				<TunerDial
 					stations={radio.stations}
@@ -219,18 +229,6 @@
 		</section>
 	{/if}
 	</div>
-
-	<footer class="radio-footer">
-		<p class="credit">
-			inspired by <a href="https://radio.wisp.place" target="_blank" rel="noopener">radio.wisp.place</a>
-		</p>
-		<details class="integration">
-			<summary>integration</summary>
-			<p>poll <code>{endpoint}</code> for the shared station state.</p>
-			<p>play <code>current.stream_url</code>, seek to <code>progress_seconds</code>.</p>
-			<p>refresh when <code>current_ends_at</code> passes, or poll every 30s.</p>
-		</details>
-	</footer>
 </main>
 
 <style>
@@ -272,17 +270,8 @@
 		}
 	}
 
-	.radio-footer {
-		flex: 0 0 auto;
-		margin-top: 0;
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		justify-content: center;
-		gap: 0.5rem 1.5rem;
-	}
-
 	.integration {
+		position: relative;
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 	}
@@ -304,18 +293,46 @@
 	}
 
 	.integration[open] summary {
-		margin-bottom: 0.5rem;
+		color: var(--text-primary);
 	}
 
-	.integration p {
-		margin: 0.35rem 0;
-		max-width: 42rem;
-		line-height: 1.5;
+	/* anchored popover: opens below the summary, right-aligned so it grows leftward
+	   and never runs off the right edge on narrow screens */
+	.integration-panel {
+		position: absolute;
+		top: calc(100% + 0.6rem);
+		right: 0;
+		z-index: 30;
+		width: min(86vw, 30rem);
+		padding: 0.9rem 1.1rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+		-webkit-backdrop-filter: blur(16px);
+		backdrop-filter: blur(16px);
+		box-shadow: 0 0.75rem 2.25rem rgba(0, 0, 0, 0.4);
+		text-align: left;
+		text-transform: none;
+	}
+
+	.integration-panel p {
+		margin: 0.4rem 0;
+		line-height: 1.55;
+		color: var(--text-secondary);
+	}
+
+	.integration-panel p:first-child {
+		margin-top: 0;
+	}
+
+	.integration-panel p:last-child {
+		margin-bottom: 0;
 	}
 
 	code {
 		font-size: 0.85em;
 		color: var(--text-primary);
+		word-break: break-all;
 	}
 
 	.station {
@@ -332,14 +349,31 @@
 
 	.station-title {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: center;
-		gap: 0.55rem;
+		gap: 0.35rem 0.7rem;
 		margin: 0;
 		color: var(--text-secondary);
-		font-size: var(--text-lg);
 		line-height: 1;
 		text-transform: lowercase;
+	}
+
+	.station-title .live {
+		font-size: var(--text-lg);
+	}
+
+	.station-title .credit,
+	.station-title .integration {
+		font-size: var(--text-sm);
+		color: var(--text-tertiary);
+	}
+
+	/* thin divider between the title and the meta links */
+	.title-sep {
+		width: 1px;
+		height: 0.9rem;
+		background: var(--border-default);
 	}
 
 	/* the swappable station content — artwork + title — fades while tuning */
@@ -812,12 +846,6 @@
 		color: var(--text-primary);
 	}
 
-	@media (min-width: 721px) {
-		.radio-footer {
-			justify-content: center;
-		}
-	}
-
 	@media (max-width: 720px) {
 		.radio-page {
 			height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem - env(safe-area-inset-bottom, 0px));
@@ -879,10 +907,6 @@
 			width: 2.6rem;
 			height: 2.6rem;
 			margin-inline: -0.22rem;
-		}
-
-		.radio-footer {
-			gap: 0.25rem 1rem;
 		}
 	}
 
