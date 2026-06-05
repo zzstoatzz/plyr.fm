@@ -8,7 +8,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { radio } from '$lib/radio.svelte';
 	import { horizontalSwipe } from '$lib/horizontal-swipe';
-	import StationPills from '$lib/components/radio/StationPills.svelte';
+	import TunerDial from '$lib/components/radio/TunerDial.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import type { PageData } from './$types';
 
@@ -129,7 +129,7 @@
 						</svg>
 					</span>
 				</div>
-				<StationPills
+				<TunerDial
 					stations={radio.stations}
 					{activeSlug}
 					onSelect={tuneToStation}
