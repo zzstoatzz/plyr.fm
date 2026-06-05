@@ -168,7 +168,11 @@ class Radio {
 	async loadState(): Promise<void> {
 		try {
 			const query = this.station ? `?station=${encodeURIComponent(this.station)}` : '';
-			const response = await fetch(`${API_URL}/radio/state${query}`);
+			// send the session cookie so the server can flag `liked` per track for
+			// signed-in listeners (anonymous requests are unaffected).
+			const response = await fetch(`${API_URL}/radio/state${query}`, {
+				credentials: 'include'
+			});
 			if (response.status === 404 && this.station) {
 				// a persisted station slug no longer exists (e.g. renamed) — drop it
 				// and fall back to the server default rather than going "off air".
