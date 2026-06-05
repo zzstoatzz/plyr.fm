@@ -26,6 +26,7 @@ class RadioTrack(BaseModel):
     tags: list[str]
     like_count: int
     play_count: int
+    liked: bool = False  # whether the requesting (authenticated) user liked it
 
 
 class RadioStateResponse(BaseModel):

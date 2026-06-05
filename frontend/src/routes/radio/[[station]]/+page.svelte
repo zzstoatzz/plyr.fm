@@ -171,7 +171,7 @@
 					{/if}
 					{#if auth.isAuthenticated}
 						{#key radio.current.id}
-							<LikeButton trackId={radio.current.id} trackTitle={radio.current.title} />
+							<LikeButton trackId={radio.current.id} trackTitle={radio.current.title} initialLiked={radio.current.liked} />
 						{/key}
 					{/if}
 				</div>

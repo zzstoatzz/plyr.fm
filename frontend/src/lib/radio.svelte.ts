@@ -22,6 +22,7 @@ export interface RadioTrack {
 	tags: string[];
 	like_count: number;
 	play_count: number;
+	liked: boolean;
 }
 
 export interface RadioStation {
