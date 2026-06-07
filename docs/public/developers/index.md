@@ -18,7 +18,7 @@ https://api.plyr.fm/docs. the Python SDK is `plyrfm` (uv add plyrfm).
 
 public endpoints (no auth): search, list tracks, stream audio, top tracks,
 tags, albums, playlists, RSS feeds, oEmbed. authenticated endpoints require
-a developer token from plyr.fm/portal.
+a developer token from plyr.fm/settings#developer.
 ```
 
 ## get started

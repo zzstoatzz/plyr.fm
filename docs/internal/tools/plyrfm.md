@@ -23,7 +23,7 @@ some operations work without auth (listing public tracks, getting a track by ID)
 
 for authenticated operations:
 
-1. go to [plyr.fm/portal](https://plyr.fm/portal) -> "your data" -> "developer tokens"
+1. go to [plyr.fm/settings#developer](https://plyr.fm/settings#developer) -> "developer tokens"
 2. create a token
 3. `export PLYR_TOKEN="your_token"`
 

@@ -29,7 +29,7 @@ description: "common issues and solutions for plyr.fm"
 
 **cause**: developer tokens rely on OAuth credentials that refresh automatically. if the refresh fails, the token becomes invalid.
 
-**solution**: generate a new token at [plyr.fm/portal](https://plyr.fm/portal). you can revoke the old one from the same page.
+**solution**: generate a new token at [plyr.fm/settings#developer](https://plyr.fm/settings#developer). you can revoke the old one from the same page.
 
 ## uploads
 

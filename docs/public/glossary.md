@@ -75,7 +75,7 @@ a reference to a specific version of a record, consisting of a URI (`at://did/co
 
 ### developer token
 
-an API authentication token generated at [plyr.fm/portal](https://plyr.fm/portal). tokens have their own OAuth credentials and don't expire when your browser session refreshes. used for scripts, bots, and integrations. see [auth guide](/developers/auth/).
+an API authentication token generated at [plyr.fm/settings#developer](https://plyr.fm/settings#developer). tokens have their own OAuth credentials and don't expire when your browser session refreshes. used for scripts, bots, and integrations. see [auth guide](/developers/auth/).
 
 ### jam
 
@@ -87,7 +87,7 @@ semantic search powered by [CLAP](https://github.com/LAION-AI/CLAP) audio embedd
 
 ### portal
 
-the artist dashboard at [plyr.fm/portal](https://plyr.fm/portal). manage your tracks, albums, playlists, developer tokens, and account settings.
+the artist dashboard at [plyr.fm/portal](https://plyr.fm/portal). manage your tracks, albums, and playlists. (developer tokens and account settings live in [settings](https://plyr.fm/settings).)
 
 ### supporter-gated content
 
