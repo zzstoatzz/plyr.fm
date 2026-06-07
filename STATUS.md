@@ -45,7 +45,38 @@ plyr.fm should become:
 
 ## recent work
 
-### May 2026
+### June 2026
+
+#### radio stations + tuner dial + diversity + per-user liked state (PRs #1530→#1548, prod June 5, release 2026.0605.172049 + frontend-only follow-ups)
+
+**why**: radio launched as a single undifferentiated stream that one prolific artist (long DJ sets) dominated, with no way to pick a vibe. It also leaked tracks from deactivated accounts and AI "slop", was broken on mobile (reload loop, accidental station switches, cramped layout), and the like button never reflected what the signed-in listener had already liked.
+
+**what shipped**:
+- **station lineup** (`api/radio/`): the stream is now a set of distinct stations — `loved` (most-played, the default, back-compatible when `?station` is omitted), `fresh` (newest by rank-based recency), `deep-cuts` (underplayed back-catalog), and `slop` (AI/suno-tagged, reusing `DEFAULT_HIDDEN_TAGS`). Every non-slop station excludes slop; slop excludes the plyr.fm account's own tracks. Stations are bookmarkable at `/radio/<slug>`; the URL path is the source of truth.
+- **diversity**: rank-decay weighting (`exp(-rank/RANK_DECAY)` over each station's lens ranking, not raw scores) bounds the tail so no single artist or catalog size swamps a station — replaced a naive airtime cap.
+- **tuner dial** (#1539): replaced station tabs with a horizontal tuner dial + needle indicator; arrow keys and swipe flip stations (the swipe attachment bails on vertical-dominant / button-origin gestures).
+- **per-user liked state** (#1546, #1548): `/radio/state` takes an optional session and returns `liked` per track via a single batch query (`get_user_liked_track_ids`); the page seeds `LikeButton` with it. Anonymous requests are unaffected. Like-from-radio works when signed in.
+- **correctness**: deactivated atproto accounts are excluded from discovery (`Artist.deactivated`, persisted from `#account` firehose events + a backfill migration); long track titles clamp to two lines instead of blowing up the fixed-height layout.
+- **mobile + layout polish**: fixed a reload loop (a `$effect` subscribing to `radio.state`; fixed with `untrack` + guard), accidental station switching, the header/tuner gap, and footer clipping. Artwork is now a contained square over a blurred ambient backdrop (no more weird wide-screen slice); the dial has a fixed width so it never resizes with the artwork; height-based media queries handle short/landscape viewports. The "inspired by radio.wisp.place / integration" credit moved onto the `live radio` header line, with integration opening as a right-anchored glass popover that doesn't reflow the page.
+
+**technical notes / lessons**:
+- **iOS autoplay across track boundaries**: `onEnded` must swap the audio `src` synchronously with no `await` in between, or iOS blocks `play()` and radio dies on every boundary. State advances optimistically; rotation refreshes in the background.
+- **the liked-state bug was a missing `credentials: 'include'`** on the client `/radio/state` fetch — the HttpOnly session cookie never reached the backend, so `get_optional_session` was always `None`. The backend regression test overrode the session dependency directly, so it validated serialization but never cookie propagation and missed it. Authenticated fetches must send credentials.
+
+#### radio as a player mode + portal de-scroll redesign (PRs #1473→#1498, prod May 29)
+
+**why**: the artist portal stacked 9 sections into one punishing mobile scroll, and the new public radio feature (#1480) played through its own page-local `<audio>` — divorced from the global player, so navigating away killed playback and the footer showed a stale paused track.
+
+**what shipped**:
+- **portal redesign**: created content is now a sticky tabbed pager (`Tracks · Albums`) under a collapsing header; profile/copyright/sharing/data moved into a `/portal/manage` drill-in; playlists removed (they're curation → live in `/library`). Server-side title search + sort on `/tracks/me` (`q`, `sort` with stable `id` tie-breakers, escaped LIKE wildcards) backs a sticky filter on the tracks tab.
+- **radio = a source on the existing player** (not a second player): `player.radio` holds the on-air track; the *same* footer strip (`TrackInfo` + `PlaybackControls`) renders it with a `radioMode` flag (radio badge, "live" pill, no scrubber/skip). Persists across navigation; the queue is never touched; playing a track takes over. `/embed/radio` for external embeds (e.g. the personal site's player). Reachable from the LinksMenu + footer badge. Position/duration shown though a live stream isn't scrubbable.
+- **link previews**: real OG/Twitter cards for `/radio` and the homepage (the homepage had none; the layout default used a relative asset path scrapers can't resolve — both now point at the absolute `icon-512.png`).
+- **PDS rename**: the R2→PDS audio op is now "save" everywhere (was a muddle of "backfill" in code + "migrate" in UI); endpoint `/pds-save`, `JobType.PDS_SAVE`.
+
+**technical notes / lessons**:
+- **don't bolt a parallel system next to an existing one to dodge its complexity** — integrate into it. Radio took 4 tries: a 2nd `<audio>` + clone footer (reverted #1486), then a separate `radio-content` *visual block* (still "two players"), before rendering through the one strip via `radioMode`.
+- **OG defaults are an allowlist (`hasPageMetadata` in `+layout.svelte`)**: a page that sets its own OG must be added to it, or the layout *also* emits the default tags and scrapers take the first (default) `og:*`. `/radio` hit this. Smell flagged — a page-`data.meta`-driven single OG emitter would remove the footgun.
+- **local pre-commit hooks were silently bypassed** by a global `core.hooksPath` (a zig-fmt-only hook) shadowing every repo's `.git/hooks` — so loq/ruff-format failures only surfaced in CI. Removed the global override; repo hooks run again.
 
 #### decoupled publish/optimize — AIFF publishes instantly as WAV, MP3 follows in background (PRs #1461, #1462, release 2026.0528.060101, May 28)
 
@@ -512,5 +543,5 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-05-28 (documented the decoupled publish/optimize cluster #1461→#1462 shipped to prod this session as release `2026.0528.060101` — AIFF uploads now publish instantly as 16-bit WAV with the MP3 streaming rendition + canonical PDS blob produced by a deferred `optimize_track_audio` task; race-safe against concurrent `audio_replace`; the reusable pattern is "split publish from optimize" anywhere the canonical artifact is expensive. Removed the "harden file format support" backlog item — AIFF was the only remaining non-web-playable upload format, and it no longer blocks).
+this is a living document. last updated 2026-06-05 (documented the radio stations + tuner-dial cluster #1530→#1548 shipped to prod June 5: radio is now a lineup of distinct stations — loved/fresh/deep-cuts/slop — picked via a tuner dial, with rank-decay weighting for artist diversity, deactivated-account + slop exclusion, bookmarkable `/radio/<slug>`, per-user liked state, and a mobile/layout overhaul. Key lessons inline: iOS needs a synchronous `src` swap in `onEnded`, and authed fetches need `credentials: 'include'` — the liked-state bug was a cookie that never reached the backend, missed because the test stubbed the session dependency). previously 2026-05-29 (documented the radio-as-player-mode + portal de-scroll redesign cluster #1473→#1498 shipped to prod across several frontend-only releases this session: portal is now tabbed Tracks·Albums + a `/portal/manage` drill-in with server-side track search/sort; radio plays through the *one* footer player as a `radioMode` source — not a second player — with `/embed/radio` for external sites; OG/link previews fixed for `/radio` + homepage; the R2→PDS op renamed "save". Key lessons captured inline: integrate-don't-bolt-a-parallel-system, the `hasPageMetadata` OG-allowlist footgun, and a global `core.hooksPath` that was silently bypassing local pre-commit hooks).
 

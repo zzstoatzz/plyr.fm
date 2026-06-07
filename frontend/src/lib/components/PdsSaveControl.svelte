@@ -3,7 +3,7 @@
 	import { API_URL } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
 	import type { Track } from '$lib/types';
-	import { isOptimizingInterimWav } from '$lib/utils/track-audio';
+	import { isOptimizing } from '$lib/utils/track-audio';
 
 	let {
 		tracks,
@@ -21,7 +21,7 @@
 			(track) =>
 				!track.support_gate &&
 				(track.audio_storage ?? 'r2') !== 'both' &&
-				!isOptimizingInterimWav(track)
+				!isOptimizing(track)
 		).length
 	);
 

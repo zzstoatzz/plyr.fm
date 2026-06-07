@@ -817,7 +817,8 @@ async def ingest_account_status_change(
     the CDN URL goes dead during deactivation.
 
     on deactivation (active=False): clear the avatar URL so the frontend
-    doesn't show a broken image pointing at a dead CDN URL.
+    doesn't show a broken image pointing at a dead CDN URL, and mark the artist
+    deactivated so their content drops out of discovery (radio / home / for-you).
     """
     from backend._internal.atproto.profile import fetch_user_avatar
 
@@ -826,6 +827,12 @@ async def ingest_account_status_change(
         if not artist:
             logger.debug("ingest_account_status_change: unknown artist %s", did)
             return
+
+        # persist liveness so discovery queries can exclude deactivated accounts
+        if artist.deactivated == active:
+            artist.deactivated = not active
+            await db.commit()
+            logfire.info("ingest: account status changed", did=did, active=active)
 
         if active:
             # re-fetch avatar on reactivation

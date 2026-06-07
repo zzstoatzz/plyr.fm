@@ -41,6 +41,7 @@ class StorageProtocol(Protocol):
         file_type: str,
         *,
         chunk_size: int = 1024 * 1024,
+        private: bool = False,
     ) -> AsyncIterator[bytes]:
         """async-iterate over the file body in `chunk_size` chunks.
 

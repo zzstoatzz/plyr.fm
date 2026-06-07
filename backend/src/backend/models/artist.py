@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Index, String
+from sqlalchemy import Boolean, DateTime, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.database import Base
@@ -30,6 +30,13 @@ class Artist(Base):
 
     # cached PDS URL (for performance)
     pds_url: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # atproto account deactivated (or suspended): set from #account firehose
+    # events. deactivated accounts' content is hidden from discovery surfaces
+    # (radio, the home feed, for-you) and their PDS blobs / audio go dead.
+    deactivated: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False, index=True
+    )
 
     # metadata
     created_at: Mapped[datetime] = mapped_column(

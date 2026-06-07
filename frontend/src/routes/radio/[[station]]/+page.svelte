@@ -1,18 +1,67 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import { API_URL } from '$lib/config';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
 	import { auth } from '$lib/auth.svelte';
 	import { radio } from '$lib/radio.svelte';
+	import { horizontalSwipe } from '$lib/horizontal-swipe';
+	import TunerDial from '$lib/components/radio/TunerDial.svelte';
+	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import LikeButton from '$lib/components/LikeButton.svelte';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 
 	const endpoint = `${API_URL}/radio/state`;
 
+	// the URL path is the source of truth for the selected station (bookmarkable).
+	// `/radio` (no slug) shows the remembered/default station; `/radio/<slug>` pins it.
+	let stationParam = $derived($page.params.station ?? null);
+	let activeSlug = $derived(radio.state?.station_slug ?? radio.station);
+
+	// react ONLY to the URL param. untrack so reads of radio.state inside show()
+	// don't subscribe this effect (that would re-fire on every state reload).
+	$effect(() => {
+		const slug = stationParam;
+		untrack(() => radio.show(slug));
+	});
+
+	/** select a station by navigating, so the URL (and bookmarks/back) stay in sync */
+	function tuneToStation(slug: string) {
+		goto(`/radio/${slug}`, { keepFocus: true, noScroll: true });
+	}
+
+	function flip(direction: 'next' | 'prev') {
+		const next = radio.nextStationSlug(direction);
+		if (next) tuneToStation(next);
+	}
+
+	function onKeydown(event: KeyboardEvent) {
+		if (event.metaKey || event.ctrlKey || event.altKey) return;
+		const target = event.target as HTMLElement | null;
+		if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable))
+			return;
+		if (event.key === 'ArrowRight') flip('next');
+		else if (event.key === 'ArrowLeft') flip('prev');
+	}
+
 	// link preview — a stable station identity, not a per-moment "now playing"
 	// (the on-air track changes constantly and scrapers cache the snapshot).
-	const RADIO_DESCRIPTION =
-		'a live, always-on stream of audio from across plyr.fm — tune in and let it play.';
+	// per-station when the path names one (data.station, resolved server-side),
+	// else a concise generic radio card.
 	const RADIO_OG_IMAGE = `${APP_CANONICAL_URL}/icons/icon-512.png`;
+	let ogTitle = $derived(
+		data.station ? `${data.station.name} · ${APP_NAME} radio` : `${APP_NAME} radio`
+	);
+	let ogDescription = $derived(
+		data.station ? data.station.description : 'live radio from across plyr.fm'
+	);
+	let ogUrl = $derived(
+		data.station ? `${APP_CANONICAL_URL}/radio/${data.station.slug}` : `${APP_CANONICAL_URL}/radio`
+	);
 
 	async function handleLogout() {
 		await auth.logout();
@@ -31,20 +80,20 @@
 	}
 
 	onMount(() => {
-		// populate "what's on" for display without starting playback
-		if (!radio.state) radio.loadState();
+		// lineup for the pills; the $effect above loads the selected station's state
+		if (radio.stations.length === 0) radio.loadStations();
 	});
 </script>
 
 <svelte:head>
-	<title>radio • {APP_NAME}</title>
-	<meta name="description" content={RADIO_DESCRIPTION} />
+	<title>{ogTitle}</title>
+	<meta name="description" content={ogDescription} />
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="radio · {APP_NAME}" />
-	<meta property="og:description" content={RADIO_DESCRIPTION} />
-	<meta property="og:url" content={`${APP_CANONICAL_URL}/radio`} />
+	<meta property="og:title" content={ogTitle} />
+	<meta property="og:description" content={ogDescription} />
+	<meta property="og:url" content={ogUrl} />
 	<meta property="og:site_name" content={APP_NAME} />
 	<meta property="og:image" content={RADIO_OG_IMAGE} />
 	<meta property="og:image:secure_url" content={RADIO_OG_IMAGE} />
@@ -54,40 +103,63 @@
 
 	<!-- Twitter -->
 	<meta name="twitter:card" content="summary" />
-	<meta name="twitter:title" content="radio · {APP_NAME}" />
-	<meta name="twitter:description" content={RADIO_DESCRIPTION} />
+	<meta name="twitter:title" content={ogTitle} />
+	<meta name="twitter:description" content={ogDescription} />
 	<meta name="twitter:image" content={RADIO_OG_IMAGE} />
 </svelte:head>
+
+<svelte:window onkeydown={onKeydown} />
 
 <Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
 
 <main class="radio-page">
+	<div class="tuner">
 	<section class="station">
 		{#if radio.loading && !radio.state}
 			<div class="status">tuning...</div>
 		{:else if radio.error}
 			<div class="status error">{radio.error}</div>
 		{:else if radio.current}
-			<div class="radio-player">
+			<div class="radio-player" {@attach horizontalSwipe((dir) => flip(dir === 'left' ? 'next' : 'prev'))}>
 				<div class="station-title">
-					<span>live radio</span>
+					<span class="live">live radio</span>
 					<span class="radio-mark" aria-hidden="true">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<circle cx="12" cy="12" r="2" />
 							<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" />
 						</svg>
 					</span>
-					{#if radio.active}
-						<span class="source-state">listening here</span>
-					{/if}
+					<span class="title-sep" aria-hidden="true"></span>
+					<span class="credit">inspired by <a href="https://radio.wisp.place" target="_blank" rel="noopener">radio.wisp.place</a></span>
+					<details class="integration">
+						<summary>integration</summary>
+						<div class="integration-panel">
+							<p>poll <code>{endpoint}</code> for the shared station state.</p>
+							<p>play <code>current.stream_url</code>, seek to <code>progress_seconds</code>.</p>
+							<p>refresh when <code>current_ends_at</code> passes, or poll every 30s.</p>
+						</div>
+					</details>
 				</div>
-				<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
+				<TunerDial
+					stations={radio.stations}
+					{activeSlug}
+					onSelect={tuneToStation}
+				/>
+				<div class="now-block" class:tuning={radio.switching}>
+				<div class="art-stage">
 					{#if radio.current.artwork_url}
-						<img src={radio.current.artwork_url} alt="" class="art" />
-					{:else}
-						<div class="art fallback"></div>
+						<img class="art-bg" src={radio.current.artwork_url} alt="" aria-hidden="true" />
 					{/if}
-				</a>
+					<SensitiveImage src={radio.current.artwork_url} tooltipPosition="center">
+						<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
+							{#if radio.current.artwork_url}
+								<img src={radio.current.artwork_url} alt="" class="art" />
+							{:else}
+								<div class="art fallback"></div>
+							{/if}
+						</a>
+					</SensitiveImage>
+				</div>
 				<div class="now-meta">
 					<p class="label">{radio.active ? 'on air' : "what's on"}</p>
 					<h2>
@@ -95,16 +167,24 @@
 					</h2>
 					<a class="artist" href={`/u/${radio.current.artist_handle}`}>{radio.current.artist}</a>
 				</div>
-				{#if radio.active}
-					<button class="tune-btn stop" onclick={() => radio.stop()} aria-label="stop listening to radio">stop</button>
-				{:else}
-					<button class="tune-btn" onclick={() => radio.tuneIn()} aria-label="tune in to radio">
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-							<polygon points="6 4 20 12 6 20 6 4"></polygon>
-						</svg>
-						tune in
-					</button>
-				{/if}
+				</div>
+				<div class="controls">
+					{#if radio.active}
+						<button class="tune-btn stop" onclick={() => radio.stop()} aria-label="stop listening to radio">stop</button>
+					{:else}
+						<button class="tune-btn" onclick={() => radio.tuneIn()} aria-label="tune in to radio">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+								<polygon points="6 4 20 12 6 20 6 4"></polygon>
+							</svg>
+							tune in
+						</button>
+					{/if}
+					{#if auth.isAuthenticated}
+						{#key radio.current.id}
+							<LikeButton trackId={radio.current.id} trackTitle={radio.current.title} initialLiked={radio.current.liked} />
+						{/key}
+					{/if}
+				</div>
 				<div class="progress-wrap">
 					<div class="progress" aria-label="track progress">
 						<div class="progress-fill" style={`width: ${progressPercent}%`}></div>
@@ -131,11 +211,13 @@
 							aria-label={`view ${track.title} by ${track.artist}`}
 							title={`${track.title} by ${track.artist}`}
 						>
-							{#if track.thumbnail_url || track.artwork_url}
-								<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
-							{:else}
-								<div class="rotation-fallback"></div>
-							{/if}
+							<SensitiveImage src={track.thumbnail_url ?? track.artwork_url} compact>
+								{#if track.thumbnail_url || track.artwork_url}
+									<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
+								{:else}
+									<div class="rotation-fallback"></div>
+								{/if}
+							</SensitiveImage>
 							<span class="rotation-tooltip" aria-hidden="true">
 								<strong>{track.title}</strong>
 								<span>{track.artist}</span>
@@ -143,55 +225,53 @@
 						</a>
 					{/each}
 				</div>
-				<p>from across plyr.fm</p>
 			</div>
 		</section>
 	{/if}
-
-	<footer class="radio-footer">
-		<p class="credit">
-			inspired by <a href="https://radio.wisp.place" target="_blank" rel="noopener">radio.wisp.place</a>
-		</p>
-		<details class="integration">
-			<summary>integration</summary>
-			<p>poll <code>{endpoint}</code> for the shared station state.</p>
-			<p>play <code>current.stream_url</code>, seek to <code>progress_seconds</code>.</p>
-			<p>refresh when <code>current_ends_at</code> passes, or poll every 30s.</p>
-		</details>
-	</footer>
+	</div>
 </main>
 
 <style>
 	.radio-page {
 		position: relative;
 		max-width: 980px;
-		margin: 0 auto;
-		height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem);
+		/* the global header has a 2rem margin-bottom; cancel most of it so the tuner
+		   sits just under the header (a small breathing gap, not a dead band) */
+		margin: -1.25rem auto 0;
+		height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem - env(safe-area-inset-bottom, 0px));
 		padding: 0 1rem 0.75rem;
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		justify-content: center;
-		gap: clamp(0.7rem, 1.8vh, 1.25rem);
-		overflow: hidden;
+		overflow-y: auto;
+		overflow-x: hidden;
+	}
+
+	/* the tuner (pills + artwork + now-playing + controls + deck) grows to fill
+	   all space above the footer and centers itself as one block. centering a
+	   single group keeps the spacing balanced whether or not the docked player is
+	   eating height — no lopsided top gap, no giant gaps between pieces. */
+	.tuner {
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		/* anchor to the top: centering left a dead band between the header and
+		   "live radio". with flex-start the content starts right under the header
+		   and any slack falls below (un-cramping the bottom), never above. */
+		justify-content: flex-start;
+		gap: clamp(0.9rem, 3vh, 2rem);
 	}
 
 	@supports (height: 100dvh) {
 		.radio-page {
-			height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem);
+			height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 2rem - env(safe-area-inset-bottom, 0px));
 		}
 	}
 
-	.radio-footer {
-		margin-top: 0;
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		justify-content: center;
-		gap: 0.5rem 1.5rem;
-	}
-
 	.integration {
+		position: relative;
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 	}
@@ -213,43 +293,118 @@
 	}
 
 	.integration[open] summary {
-		margin-bottom: 0.5rem;
+		color: var(--text-primary);
 	}
 
-	.integration p {
-		margin: 0.35rem 0;
-		max-width: 42rem;
-		line-height: 1.5;
+	/* anchored popover: opens below the summary, right-aligned so it grows leftward
+	   and never runs off the right edge on narrow screens */
+	.integration-panel {
+		position: absolute;
+		top: calc(100% + 0.6rem);
+		right: 0;
+		z-index: 30;
+		width: min(86vw, 30rem);
+		padding: 0.9rem 1.1rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+		-webkit-backdrop-filter: blur(16px);
+		backdrop-filter: blur(16px);
+		box-shadow: 0 0.75rem 2.25rem rgba(0, 0, 0, 0.4);
+		text-align: left;
+		text-transform: none;
+	}
+
+	.integration-panel p {
+		margin: 0.4rem 0;
+		line-height: 1.55;
+		color: var(--text-secondary);
+	}
+
+	.integration-panel p:first-child {
+		margin-top: 0;
+	}
+
+	.integration-panel p:last-child {
+		margin-bottom: 0;
 	}
 
 	code {
 		font-size: 0.85em;
 		color: var(--text-primary);
+		word-break: break-all;
 	}
 
 	.station {
+		flex: 1 1 auto;
 		min-height: 0;
+		/* fixed-width column so the dial + controls never resize with the
+		   (height-driven) artwork — the artwork is capped to this width too */
+		width: min(100%, 30rem);
+		align-self: center;
+		display: flex;
+		flex-direction: column;
 		padding-top: 0;
 	}
 
 	.station-title {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: center;
-		gap: 0.55rem;
+		gap: 0.35rem 0.7rem;
 		margin: 0;
 		color: var(--text-secondary);
-		font-size: var(--text-lg);
 		line-height: 1;
 		text-transform: lowercase;
 	}
 
-	.source-state {
-		margin-left: 0.15rem;
-		padding-left: 0.7rem;
-		border-left: 1px solid var(--border-subtle);
-		color: var(--text-tertiary);
+	.station-title .live {
+		font-size: var(--text-lg);
+	}
+
+	.station-title .credit,
+	.station-title .integration {
 		font-size: var(--text-sm);
+		color: var(--text-tertiary);
+	}
+
+	/* thin divider between the title and the meta links */
+	.title-sep {
+		width: 1px;
+		height: 0.9rem;
+		background: var(--border-default);
+	}
+
+	/* the swappable station content — artwork + title — fades while tuning */
+	.now-block {
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: clamp(0.5rem, 1.35vh, 0.85rem);
+		width: 100%;
+		transition:
+			opacity 0.22s ease,
+			filter 0.22s ease;
+	}
+
+	.now-block.tuning {
+		opacity: 0.35;
+		filter: blur(2px);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.now-block {
+			transition: none;
+		}
+
+		.now-block.tuning {
+			opacity: 0.6;
+			filter: none;
+		}
 	}
 
 	.label {
@@ -278,6 +433,9 @@
 	}
 
 	.radio-player {
+		flex: 1 1 auto;
+		min-height: 0;
+		width: 100%;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -285,16 +443,66 @@
 		text-align: center;
 	}
 
+	/* the artwork "stage" fills the leftover space; a blurred copy of the cover is
+	   the ambient backdrop so wide/tall leftovers look intentional instead of
+	   cropping the square cover into a weird slice */
+	.art-stage {
+		flex: 1 1 auto;
+		min-height: clamp(7rem, 22vh, 18rem);
+		width: 100%;
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		border-radius: var(--radius-md);
+	}
+
+	.art-bg {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		filter: blur(64px) saturate(1.4);
+		opacity: 0.16;
+		transform: scale(1.4);
+		/* soft radial falloff so it reads as a faint ambient glow behind the cover,
+		   not a hard-edged blurred strip */
+		-webkit-mask-image: radial-gradient(closest-side, #000 28%, transparent 72%);
+		mask-image: radial-gradient(closest-side, #000 28%, transparent 72%);
+		z-index: 0;
+		pointer-events: none;
+	}
+
+	/* foreground cover: a contained square (never cropped to a slice) */
 	.art-link {
+		position: relative;
+		z-index: 1;
+		flex: 0 0 auto;
 		display: block;
+		height: 100%;
+		width: auto;
+		max-width: 100%;
+		aspect-ratio: 1 / 1;
 		text-decoration: none;
 		border-radius: var(--radius-md);
+		overflow: hidden;
+		box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.45);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+	}
+
+	.controls {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: clamp(0.4rem, 1.2vh, 0.7rem);
 	}
 
 	.art {
 		display: block;
-		width: clamp(12rem, min(30vw, 32vh), 18rem);
-		height: clamp(12rem, min(30vw, 32vh), 18rem);
+		width: 100%;
+		height: 100%;
 		object-fit: cover;
 		border-radius: var(--radius-md);
 		box-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.34);
@@ -321,10 +529,16 @@
 
 	.now-meta h2 {
 		margin: 0;
-		font-size: clamp(1.75rem, 4.6vw, 2.65rem);
-		line-height: 1.05;
-		overflow-wrap: normal;
-		text-wrap: balance;
+		font-size: clamp(1.5rem, 4.6vw, 2.65rem);
+		line-height: 1.1;
+		/* long titles (e.g. DJ-set names with dates) must not blow up the
+		   fixed-height layout: wrap hard, then clamp to two lines with an ellipsis */
+		overflow-wrap: anywhere;
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
 	}
 
 	.now-meta h2 a {
@@ -340,11 +554,15 @@
 	}
 
 	.artist {
-		display: inline-block;
+		display: block;
+		max-width: 100%;
 		margin-top: 0.35rem;
 		color: var(--text-secondary);
 		text-decoration: none;
 		font-size: var(--text-base);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.artist:hover {
@@ -612,12 +830,6 @@
 		transform: translate(-50%, 0);
 	}
 
-	.rotation-card p {
-		margin: 0.25rem 0 0;
-		color: var(--text-tertiary);
-		font-size: var(--text-sm);
-	}
-
 	.credit {
 		margin: 0;
 		color: var(--text-tertiary);
@@ -634,39 +846,51 @@
 		color: var(--text-primary);
 	}
 
-	@media (min-width: 721px) {
-		.radio-footer {
-			justify-content: center;
-		}
-	}
-
 	@media (max-width: 720px) {
 		.radio-page {
-			height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem);
+			height: calc(100vh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem - env(safe-area-inset-bottom, 0px));
 			padding-top: 0;
-			gap: 0.6rem;
 		}
 
 		@supports (height: 100dvh) {
 			.radio-page {
-				height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem);
+				height: calc(100dvh - var(--header-height, 0px) - var(--player-height, 0px) - 1rem - env(safe-area-inset-bottom, 0px));
 			}
 		}
 	}
 
 	@media (max-width: 520px) {
+		/* fit the whole tuner between "live radio" and the footer without scroll */
+		.tuner {
+			gap: 0.9rem;
+		}
+
 		.radio-player {
-			gap: 0.5rem;
+			gap: 0.4rem;
 		}
 
-		.art {
-			width: min(58vw, 12rem);
-			height: min(58vw, 12rem);
+		.now-block {
+			gap: 0.4rem;
 		}
 
+		.station-title {
+			font-size: var(--text-base);
+		}
+
+		.now-meta h2 {
+			font-size: 1.35rem;
+		}
+
+		/* hug the label, not the screen — the stop button was eating the layout */
 		.tune-btn {
-			width: min(100%, 16rem);
-			justify-content: center;
+			width: auto;
+			min-width: 0;
+			padding: 0.45rem 1.2rem;
+			font-size: var(--text-sm);
+		}
+
+		.progress-wrap {
+			margin-top: 0;
 		}
 
 		.station-board {
@@ -675,13 +899,31 @@
 
 		.rotation-artworks {
 			width: 100%;
+			padding-block: 0.25rem;
 			padding-inline: 0.25rem;
 		}
 
 		.rotation-artwork {
-			width: 2.85rem;
-			height: 2.85rem;
+			width: 2.6rem;
+			height: 2.6rem;
 			margin-inline: -0.22rem;
 		}
+	}
+
+	/* short viewports (landscape phones, small windows) — width breakpoints miss
+	   these, so shrink by HEIGHT; scroll is the fallback below the smallest case */
+	@media (max-height: 740px) {
+		.tuner { gap: 0.6rem; }
+		.radio-player { gap: 0.4rem; }
+		.now-block { gap: 0.35rem; }
+		.now-meta h2 { font-size: clamp(1.35rem, 4.2vh, 2rem); }
+		.art-stage { min-height: clamp(5rem, 15vh, 11rem); }
+	}
+
+	@media (max-height: 560px) {
+		.now-meta h2 { font-size: 1.2rem; }
+		.art-stage { min-height: 4.5rem; }
+		/* no room for the deck on a very short screen */
+		.station-board { display: none; }
 	}
 </style>

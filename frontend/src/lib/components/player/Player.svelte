@@ -10,6 +10,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import {
 		gatedErrorFromResolution,
+		isAwaitingPlayableRendition,
 		pickFileIdForTrack,
 		resolveAudioSource,
 		type GatedError,
@@ -425,6 +426,28 @@
 		}
 	}
 
+	function handleProcessing(): void {
+		toast.info('this track is still processing — its playable version will be ready shortly');
+
+		// skip to the next track that's actually playable now (not gated, not
+		// still awaiting its transcoded rendition in this browser). mirrors
+		// handleGatedDenial so auto-advance never dead-airs on a processing track.
+		let nextPlayable = -1;
+		for (let i = queue.currentIndex + 1; i < queue.tracks.length; i++) {
+			const t = queue.tracks[i];
+			if (!t.gated && !isAwaitingPlayableRendition(t)) {
+				nextPlayable = i;
+				break;
+			}
+		}
+		if (nextPlayable >= 0) {
+			shouldAutoPlay = true;
+			queue.goTo(nextPlayable);
+		} else {
+			player.paused = true;
+		}
+	}
+
 	$effect(() => {
 		if (!player.currentTrack || !player.audioElement) return;
 
@@ -473,6 +496,11 @@
 				handleGatedDenial(gatedErrorFromResolution(cached));
 				return;
 			}
+			if (cached.kind === 'processing') {
+				isLoadingTrack = false;
+				handleProcessing();
+				return;
+			}
 			// stale fileId or `failed` → fall through to fresh fetch below
 		}
 
@@ -494,6 +522,10 @@
 			isLoadingTrack = false;
 			if (resolved.kind === 'gated-denied') {
 				handleGatedDenial(gatedErrorFromResolution(resolved));
+				return;
+			}
+			if (resolved.kind === 'processing') {
+				handleProcessing();
 				return;
 			}
 			console.error('failed to load audio:', resolved.error);

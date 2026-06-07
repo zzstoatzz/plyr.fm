@@ -22,10 +22,19 @@ export interface RadioTrack {
 	tags: string[];
 	like_count: number;
 	play_count: number;
+	liked: boolean;
+}
+
+export interface RadioStation {
+	slug: string;
+	name: string;
+	description: string;
+	is_default: boolean;
 }
 
 export interface RadioState {
 	station: string;
+	station_slug: string;
 	generated_at: string;
 	loop_duration_seconds: number;
 	current_index: number | null;
@@ -38,15 +47,76 @@ export interface RadioState {
 }
 
 const POLL_INTERVAL_MS = 30000;
+const STATION_STORAGE_KEY = 'plyr_radio_station';
 
 class Radio {
 	state = $state<RadioState | null>(null);
 	loading = $state(true);
 	error = $state<string | null>(null);
+	stations = $state<RadioStation[]>([]);
+	/** selected station slug; null defers to the server default */
+	station = $state<string | null>(null);
+	/** brief flag while a station flip is in flight, for the tuning transition */
+	switching = $state(false);
 	private pollTimer: number | null = null;
 
 	get current(): RadioTrack | null {
 		return this.state?.current ?? null;
+	}
+
+	/** the resolved station metadata for the loaded state */
+	get activeStation(): RadioStation | null {
+		const slug = this.state?.station_slug;
+		return this.stations.find((s) => s.slug === slug) ?? null;
+	}
+
+	async loadStations(): Promise<void> {
+		try {
+			const response = await fetch(`${API_URL}/radio/stations`);
+			if (!response.ok) return;
+			const data = await response.json();
+			this.stations = data.stations;
+		} catch (e) {
+			console.error('failed to load radio stations:', e);
+		}
+	}
+
+	/** the last station the listener picked, if any (drives bare /radio) */
+	private remembered(): string | null {
+		return typeof localStorage !== 'undefined' ? localStorage.getItem(STATION_STORAGE_KEY) : null;
+	}
+
+	/** slug of the next/previous station in the lineup (wraps); null if <2 stations.
+	 * the page navigates to it so the URL stays the source of truth. */
+	nextStationSlug(direction: 'next' | 'prev'): string | null {
+		if (this.stations.length < 2) return null;
+		const slug = this.state?.station_slug ?? this.station;
+		const i = this.stations.findIndex((s) => s.slug === slug);
+		const step = direction === 'next' ? 1 : -1;
+		return this.stations[(i + step + this.stations.length) % this.stations.length].slug;
+	}
+
+	/** show a station, driven by the URL path. `null` (bare /radio) falls back to
+	 * the listener's remembered pick, else the server default. reloads state and,
+	 * if tuned in, follows the audio across. */
+	async show(slug: string | null): Promise<void> {
+		const target = slug ?? this.remembered();
+		// already showing the requested station — or showing *anything* when no
+		// specific station was asked for (bare /radio). a null target must NOT
+		// fall through, or it never matches station_slug and reloads endlessly.
+		if (this.state && (target === null || target === this.state.station_slug)) return;
+		this.station = target;
+		if (slug && typeof localStorage !== 'undefined') {
+			localStorage.setItem(STATION_STORAGE_KEY, slug);
+		}
+		this.switching = true;
+		try {
+			await this.loadState();
+		} finally {
+			this.switching = false;
+		}
+		const c = this.current;
+		if (c && player.radio) player.playRadio(this.toNowPlaying(c), { autoplay: !player.paused });
 	}
 
 	/** whether radio is the active player source (single source of truth) */
@@ -67,7 +137,7 @@ class Radio {
 		return Math.min(fetched.current?.duration ?? 0, fetched.progress_seconds + drift);
 	}
 
-	private toNowPlaying(c: RadioTrack): RadioNowPlaying {
+	private toNowPlaying(c: RadioTrack, startAt?: number): RadioNowPlaying {
 		// the on-air entry is a real track — reshape it as a Track so the normal
 		// player strip renders it identically to any other track.
 		const track: Track = {
@@ -91,15 +161,28 @@ class Radio {
 		return {
 			track,
 			stream_url: c.stream_url,
-			start_at: this.state ? this.stateProgress(this.state) : 0
+			start_at: startAt ?? (this.state ? this.stateProgress(this.state) : 0)
 		};
 	}
 
 	async loadState(): Promise<void> {
 		try {
-			const response = await fetch(`${API_URL}/radio/state`);
+			const query = this.station ? `?station=${encodeURIComponent(this.station)}` : '';
+			// send the session cookie so the server can flag `liked` per track for
+			// signed-in listeners (anonymous requests are unaffected).
+			const response = await fetch(`${API_URL}/radio/state${query}`, {
+				credentials: 'include'
+			});
+			if (response.status === 404 && this.station) {
+				// a persisted station slug no longer exists (e.g. renamed) — drop it
+				// and fall back to the server default rather than going "off air".
+				this.station = null;
+				if (typeof localStorage !== 'undefined') localStorage.removeItem(STATION_STORAGE_KEY);
+				return this.loadState();
+			}
 			if (!response.ok) throw new Error(`radio returned ${response.status}`);
 			this.state = await response.json();
+			this.station = this.state?.station_slug ?? this.station;
 			this.error = null;
 		} catch (e) {
 			console.error('failed to load radio state:', e);
@@ -123,11 +206,24 @@ class Radio {
 		this.stopPolling();
 	}
 
-	/** the current stream ended — pull the station's now-current track */
-	async onEnded(): Promise<void> {
-		await this.loadState();
-		const c = this.current;
-		if (c && player.radio) player.playRadio(this.toNowPlaying(c));
+	/** the current stream ended — advance to the next track.
+	 *
+	 * MUST be synchronous: iOS only keeps autoplay alive across tracks if the
+	 * audio src is swapped within the `ended` handler with no `await` in between.
+	 * Awaiting a /radio/state fetch first (the old behavior) let iOS block the
+	 * play() and radio silently died on every track boundary. So we play the
+	 * already-loaded next track now and refresh station state in the background.
+	 */
+	onEnded(): void {
+		const next = this.state?.up_next[0];
+		if (next && player.radio && this.state) {
+			player.playRadio(this.toNowPlaying(next, 0));
+			// optimistically advance the displayed state so the artwork + title swap
+			// to the new track immediately, instead of lagging on the background fetch
+			this.state = { ...this.state, current: next, up_next: this.state.up_next.slice(1) };
+		}
+		// refresh rotation / up_next in the background for the next boundary
+		void this.loadState();
 	}
 
 	/** poll: follow the shared station when it rotates to a new track */
