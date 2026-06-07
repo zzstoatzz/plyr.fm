@@ -4,7 +4,7 @@ description: "plyr.fm REST API — endpoints, request/response examples, error c
 ---
 
 the plyr.fm REST API. public endpoints need no auth; authenticated endpoints
-take a [developer token](/developers/auth/) from plyr.fm/portal. the OpenAPI
+take a [developer token](/developers/auth/) from plyr.fm/settings#developer. the OpenAPI
 spec is live at [api.plyr.fm/docs](https://api.plyr.fm/docs).
 
 new here? start with the [quickstart](/developers/quickstart/) — a track player in 30 lines.

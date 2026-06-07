@@ -8,7 +8,7 @@ this guide walks through building a minimal track player using the plyr.fm API. 
 ## prerequisites
 
 - Python 3.11+ with [uv](https://docs.astral.sh/uv/)
-- a [developer token](/developers/auth/) from [plyr.fm/portal](https://plyr.fm/portal) (for authenticated operations)
+- a [developer token](/developers/auth/) from [plyr.fm/settings#developer](https://plyr.fm/settings#developer) (for authenticated operations)
 
 ## install the SDK
 
@@ -38,7 +38,7 @@ no authentication needed — search, listing, and streaming are public.
 
 ## authenticated operations
 
-generate a developer token at [plyr.fm/portal](https://plyr.fm/portal), then:
+generate a developer token at [plyr.fm/settings#developer](https://plyr.fm/settings#developer), then:
 
 ```python
 authed = PlyrClient(token="your_token")

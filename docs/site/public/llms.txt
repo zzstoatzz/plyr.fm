@@ -19,7 +19,7 @@
 
 - [OpenAPI spec](https://api.plyr.fm/docs): interactive API documentation
 - Base URL: `https://api.plyr.fm`
-- Auth: Bearer token via developer tokens from [plyr.fm/portal](https://plyr.fm/portal)
+- Auth: Bearer token via developer tokens from [plyr.fm/settings#developer](https://plyr.fm/settings#developer)
 - Public endpoints (no auth): search, list tracks, stream audio, stats, oEmbed, RSS feeds
 - Authenticated endpoints: upload, like, comment, playlist management, account settings
 

@@ -380,7 +380,7 @@ for scripts, CLIs, and automated workflows, create a long-lived developer token:
 ### creating a token
 
 **via UI (recommended)**:
-1. go to portal → "your data" → "developer tokens" section
+1. go to [settings → "developer tokens"](https://plyr.fm/settings#developer)
 2. optionally enter a name (e.g., "upload-script", "ci-pipeline")
 3. select expiration (30/90/180/365 days or never)
 4. click "create token"
@@ -404,13 +404,13 @@ const { auth_url } = await response.json();
 ### managing tokens
 
 **list active tokens**:
-the portal shows all your active developer tokens with:
+the settings page shows all your active developer tokens with:
 - token name (or auto-generated identifier)
 - creation date
 - expiration date
 
 **revoke a token**:
-1. go to portal → "your data" → "developer tokens"
+1. go to [settings → "developer tokens"](https://plyr.fm/settings#developer)
 2. find the token in the list
 3. click "revoke" to immediately invalidate it
 
@@ -475,7 +475,7 @@ developer tokens are **scoped to plyr.fm's lexicon namespace** via ATProto OAuth
 
 the PDS enforces these scopes at the protocol level — not just plyr.fm's API. rather than app passwords (full repo access, coupled to Bluesky), plyr.fm issues OAuth grants scoped to the minimum permissions needed.
 
-**security notes**: tokens grant full access to plyr.fm features, but are namespace-scoped at the protocol level. each token is independent — revoke individually via the portal or API.
+**security notes**: tokens grant full access to plyr.fm features, but are namespace-scoped at the protocol level. each token is independent — revoke individually via [settings](https://plyr.fm/settings#developer) or API.
 
 ## OAuth client types: public vs confidential
 

@@ -7,7 +7,7 @@ plyr.fm uses ATProto OAuth 2.1 for authentication. there are two ways to authent
 
 ## developer tokens
 
-the simplest way to authenticate. generate a token at [plyr.fm/portal](https://plyr.fm/portal) and pass it as a Bearer token:
+the simplest way to authenticate. generate a token at [plyr.fm/settings#developer](https://plyr.fm/settings#developer) and pass it as a Bearer token:
 
 ```bash
 curl -H "Authorization: Bearer your_token" https://api.plyr.fm/tracks/liked
@@ -20,12 +20,12 @@ client = PlyrClient(token="your_token")
 my_tracks = client.my_tracks()
 ```
 
-tokens are scoped to your account and have independent OAuth credentials — refreshing your browser session won't invalidate them. revoke tokens at any time from the portal.
+tokens are scoped to your account and have independent OAuth credentials — refreshing your browser session won't invalidate them. revoke tokens at any time from settings.
 
 ### creating tokens
 
-1. go to [plyr.fm/portal](https://plyr.fm/portal)
-2. click "developer tokens"
+1. go to [plyr.fm/settings#developer](https://plyr.fm/settings#developer)
+2. find the "developer tokens" section
 3. name your token and choose an expiry (default: 180 days)
 4. you'll be redirected through an OAuth flow to authorize the token
 5. copy the token — it won't be shown again

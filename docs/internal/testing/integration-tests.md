@@ -25,7 +25,7 @@ uv run pytest tests/integration -m integration -v
 | `PLYR_TEST_TOKEN_2` | plyr.fm | secondary user - cross-user interaction tests |
 | `PLYR_TEST_TOKEN_3` | zzstoatzzdevlog.bsky.social | tertiary user - reserved for future tests |
 
-tokens are developer tokens created at [plyr.fm/portal](https://plyr.fm/portal) → "developer tokens".
+tokens are developer tokens created at [plyr.fm/settings#developer](https://plyr.fm/settings#developer) → "developer tokens".
 
 ## github actions
 

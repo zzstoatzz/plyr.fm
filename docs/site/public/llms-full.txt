@@ -41,7 +41,7 @@ for track in client.discover.top_tracks(limit=5):
     print(f"{track.title} — {track.play_count} plays")
 
 # authenticated: like a track (requires developer token)
-authed = PlyrClient(token="your_token_from_plyr.fm/portal")
+authed = PlyrClient(token="your_token_from_plyr.fm/settings")
 authed.tracks.like(42)
 ```
 
@@ -58,7 +58,7 @@ Tools: search, list_tracks, top_tracks, tracks_by_tag, get_track, liked_tracks, 
 ## API reference
 
 Base URL: `https://api.plyr.fm`
-Auth: `Authorization: Bearer <developer_token>` (get tokens at plyr.fm/portal)
+Auth: `Authorization: Bearer <developer_token>` (get tokens at plyr.fm/settings#developer)
 
 ### public endpoints (no auth)
 
@@ -164,7 +164,7 @@ GET /tracks/?limit=20
 
 ### developer tokens (simplest)
 
-1. Go to plyr.fm/portal → "developer tokens"
+1. Go to plyr.fm/settings#developer → "developer tokens"
 2. Name token, choose expiry (default: 180 days)
 3. Authorize via OAuth flow
 4. Use as Bearer token: `Authorization: Bearer <token>`
@@ -340,5 +340,5 @@ At least one of `audioUrl` or `audioBlob` must be present.
 - **strongRef**: reference to a specific record version (URI + CID content hash)
 - **Jetstream**: real-time ATProto firehose for record change events
 - **AppView**: application service that indexes records from the network
-- **developer token**: API auth token from plyr.fm/portal
+- **developer token**: API auth token from plyr.fm/settings#developer
 - **jam**: shared listening room with real-time sync
