@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, require_artist_profile
+from backend._internal.audio import AudioFormat
 from backend.config import settings
 from backend.main import app
 
@@ -128,3 +129,92 @@ def test_private_and_copyright_mutually_exclusive(app_with_scope: FastAPI):
         )
     assert resp.status_code == 400
     assert "copyright cannot combine" in resp.json()["detail"]
+
+
+# --- success path: private upload goes to the PDS, never R2 (regression) ------
+
+
+def test_private_upload_goes_to_pds_not_r2(app_with_scope: FastAPI):
+    """a capable+scoped private upload must call uploadBlob, never stage to R2,
+    and carry the resulting BlobRef on the enqueued context."""
+    fake_blob = {
+        "$type": "blob",
+        "ref": {"$link": "bafkreiprivatesmoke"},
+        "mimeType": "audio/wav",
+        "size": len(_WAV),
+    }
+    captured: dict = {}
+
+    async def _fake_upload_blob(*args, **kwargs):
+        return fake_blob
+
+    async def _fake_schedule(ctx):
+        captured["ctx"] = ctx
+
+    async def _no_stage(*args, **kwargs):  # must NOT be called for private
+        raise AssertionError("private upload must not stage audio to R2")
+
+    with (
+        patch(
+            "backend.api.tracks.uploads.detect_permissioned_capability",
+            return_value=True,
+        ),
+        patch("backend.api.tracks.uploads.upload_blob", _fake_upload_blob),
+        patch("backend.api.tracks.uploads.stage_audio_to_storage", _no_stage),
+        patch("backend.api.tracks.uploads.schedule_track_upload", _fake_schedule),
+        TestClient(app_with_scope) as client,
+    ):
+        resp = _post(client, data={"visibility": "private"})
+
+    assert resp.status_code == 200, resp.text
+    ctx = captured["ctx"]
+    # the BlobRef from the PDS upload rode through to the worker context
+    assert ctx.visibility == "private"
+    assert ctx.audio_blob == fake_blob
+    assert ctx.private is True
+
+
+async def test_upload_to_pds_reuses_handler_blob_for_private(monkeypatch):
+    """worker phase 4: private uploads return the handler's BlobRef without
+    touching R2 (no head_file / stream_file_data)."""
+    from backend.api.tracks import uploads as up
+    from backend.storage import storage
+
+    blob = {"$type": "blob", "ref": {"$link": "bafkreiabc"}, "size": 99}
+    ctx = up.UploadContext(
+        upload_id="u",
+        auth_session=_MockSession(with_space_scope=True),
+        audio_file_id="hash16",
+        filename="t.wav",
+        duration=1,
+        title="x",
+        artist_did="did:test:artist",
+        album=None,
+        album_id=None,
+        features_json=None,
+        tags=[],
+        visibility="private",
+        audio_blob=blob,
+    )
+    info = up.AudioInfo(
+        format=AudioFormat.MP3, duration=1, is_gated=False, is_private=True
+    )
+    sr = up.StorageResult(
+        file_id="hash16",
+        original_file_id=None,
+        original_file_type=None,
+        playable_format=AudioFormat.MP3,
+        r2_url=None,
+        transcode_info=None,
+    )
+
+    def _boom(*a, **k):
+        raise AssertionError("private must not read audio from R2")
+
+    monkeypatch.setattr(storage, "head_file", _boom)
+    monkeypatch.setattr(storage, "stream_file_data", _boom)
+
+    result = await up._upload_to_pds(ctx, info, sr)
+    assert result is not None
+    assert result.blob_ref == blob
+    assert result.cid == "bafkreiabc"

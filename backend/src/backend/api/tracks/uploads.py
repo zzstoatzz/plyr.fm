@@ -717,14 +717,19 @@ async def _upload_to_pds(
     never holds the full file in memory. content length is sourced from
     a HEAD request so the PDS can validate up-front without buffering.
     """
-    # gated (supporter/copyright) tracks proxy through the backend and don't
-    # push a blob. private tracks are the opposite: the PDS blob IS the canonical
-    # audio, so the upload is mandatory (and bypasses the user's general
-    # PDS-upload preference + the interim-WAV deferral, which private uploads
-    # avoid by requiring a web-playable source at the endpoint).
+    # private media's audio was already uploaded to the PDS blobstore in the
+    # request handler (never staged to R2) — just hand the existing BlobRef back.
     if audio_info.is_private:
-        pass
-    elif audio_info.is_gated:
+        blob = ctx.audio_blob
+        if not blob:
+            return None
+        return PdsBlobResult(
+            blob_ref=blob, cid=blob["ref"]["$link"], size=blob.get("size")
+        )
+
+    # gated (supporter/copyright) tracks proxy through the backend and don't push
+    # a blob.
+    if audio_info.is_gated:
         return None
     elif sr.needs_optimization:
         # the interim WAV rendition is large and throwaway — never push it to the
@@ -1382,6 +1387,7 @@ async def run_track_upload(
         copyright_rights=copyright_rights,
         auto_tag=auto_tag,
         visibility=visibility,
+        audio_blob=audio_blob,
     )
     await _process_upload_background(ctx)
 
@@ -1421,6 +1427,7 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         copyright_rights=ctx.copyright_rights,
         auto_tag=ctx.auto_tag,
         visibility=ctx.visibility,
+        audio_blob=ctx.audio_blob,
     )
 
 

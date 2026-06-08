@@ -12,7 +12,7 @@ two shapes:
   a guard for endpoints that load one track by id/uri/file_id.
 """
 
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from fastapi import HTTPException
 from sqlalchemy import ColumnElement, or_
@@ -20,6 +20,7 @@ from sqlalchemy import ColumnElement, or_
 from backend.models import Track
 
 
+@runtime_checkable
 class _HasDid(Protocol):
     """structural type for anything carrying a DID (e.g. an auth Session)."""
 
