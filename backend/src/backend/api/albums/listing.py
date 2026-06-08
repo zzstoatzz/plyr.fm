@@ -5,13 +5,14 @@ import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session
 from backend._internal.atproto.records import fetch_list_item_uris
+from backend._internal.track_visibility import track_visible_filter, viewer_did
 from backend.models import Album, Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import (
@@ -52,7 +53,9 @@ async def list_albums(
             func.coalesce(func.sum(Track.play_count), 0).label("total_plays"),
         )
         .join(Artist, Album.artist_did == Artist.did)
-        .outerjoin(Track, Track.album_id == Album.id)
+        # count only public tracks — albums that exist solely because of private
+        # uploads have a zero public count and drop out via the having clause
+        .outerjoin(Track, and_(Track.album_id == Album.id, Track.is_private.is_(False)))
         .group_by(Album.id, Artist.did)
         .having(func.count(Track.id) > 0)
         .order_by(func.lower(Album.title))
@@ -89,7 +92,7 @@ async def list_artist_albums(
             func.count(Track.id).label("track_count"),
             func.coalesce(func.sum(Track.play_count), 0).label("total_plays"),
         )
-        .outerjoin(Track, Track.album_id == Album.id)
+        .outerjoin(Track, and_(Track.album_id == Album.id, Track.is_private.is_(False)))
         .where(Album.artist_did == artist.did)
         .group_by(Album.id)
         .having(func.count(Track.id) > 0)
@@ -147,6 +150,8 @@ async def get_album(
         select(Track)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.album_id == album.id)
+        # a private track in an album is visible only to the album's owner
+        .where(track_visible_filter(viewer_did(session)))
     )
     track_result = await db.execute(track_stmt)
     all_tracks = list(track_result.scalars().all())

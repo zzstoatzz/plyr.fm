@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session, require_auth
+from backend._internal.track_visibility import ensure_track_visible
 from backend.config import settings
 from backend.models import Artist, ShareLink, ShareLinkEvent, Track, get_db
 from backend.schemas import OkResponse, TrackResponse
@@ -86,6 +87,9 @@ async def create_share_link(
     track = await db.scalar(select(Track).where(Track.id == track_id))
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
+    ensure_track_visible(track, auth_session.did)  # non-owner → 404
+    if track.is_private:
+        raise HTTPException(status_code=409, detail="private tracks can't be shared")
 
     code = await generate_unique_share_code(db)
 

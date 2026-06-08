@@ -12,6 +12,11 @@ from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session
+from backend._internal.track_visibility import (
+    ensure_track_visible,
+    track_visible_filter,
+    viewer_did,
+)
 from backend.config import settings
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
 from backend.schemas import TrackResponse
@@ -76,6 +81,8 @@ async def get_tracks_by_tag(
         .join(Artist, Track.artist_did == Artist.did)
         .join(TrackTag, Track.id == TrackTag.track_id)
         .where(TrackTag.tag_id == tag.id)
+        # private media isn't tag-discoverable by anyone but its owner
+        .where(track_visible_filter(viewer_did(session)))
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .order_by(Track.created_at.desc())
     )
@@ -183,6 +190,7 @@ async def get_recommended_tags(
     track_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: Annotated[int, Query(ge=1, le=20)] = 5,
+    session: AuthSession | None = Depends(get_optional_session),
 ) -> RecommendedTagsResponse:
     """recommend tags for a track based on ML genre classification.
 
@@ -194,6 +202,7 @@ async def get_recommended_tags(
     track = result.scalar_one_or_none()
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
+    ensure_track_visible(track, viewer_did(session))
 
     # check for stored predictions (invalidate if audio file changed)
     extra = track.extra or {}

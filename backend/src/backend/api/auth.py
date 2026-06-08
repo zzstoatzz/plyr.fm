@@ -39,6 +39,7 @@ from backend._internal import (
     start_oauth_flow_with_scopes,
     switch_active_account,
 )
+from backend._internal.atproto.spaces import detect_permissioned_capability
 from backend._internal.auth import get_refresh_token_lifetime_days
 from backend._internal.copyright import complete_indiemusi_setup
 from backend._internal.tasks import schedule_atproto_sync
@@ -59,6 +60,12 @@ class LinkedAccountResponse(BaseModel):
     avatar_url: str | None
 
 
+class PermissionedSpacesStatus(BaseModel):
+    """whether the user's PDS implements the experimental permissioned-space surface."""
+
+    supported: bool = False
+
+
 class CurrentUserResponse(BaseModel):
     """response model for current user endpoint."""
 
@@ -66,6 +73,7 @@ class CurrentUserResponse(BaseModel):
     handle: str
     linked_accounts: list[LinkedAccountResponse] = []
     enabled_flags: list[str] = []
+    permissioned_spaces: PermissionedSpacesStatus = PermissionedSpacesStatus()
 
 
 class DeveloperTokenInfo(BaseModel):
@@ -482,6 +490,15 @@ async def get_current_user(
     # get feature flags for current user from dedicated table
     current_user_flags = await get_user_flags(db, session.did)
 
+    # permissioned-spaces capability is the gate for the private-media feature;
+    # cached per-PDS in redis so this probe is cheap after the first call. never
+    # let it break /auth/me.
+    try:
+        spaces_supported = await detect_permissioned_capability(session)
+    except Exception as exc:
+        logger.debug(f"permissioned capability probe failed: {exc}")
+        spaces_supported = False
+
     return CurrentUserResponse(
         did=session.did,
         handle=session.handle,
@@ -494,6 +511,7 @@ async def get_current_user(
             for account in linked
         ],
         enabled_flags=current_user_flags,
+        permissioned_spaces=PermissionedSpacesStatus(supported=spaces_supported),
     )
 
 
@@ -607,8 +625,9 @@ async def start_developer_token_flow(
 class ScopeUpgradeStartRequest(BaseModel):
     """request model for starting scope upgrade OAuth flow."""
 
-    # for now, only teal scopes are supported
     include_teal: bool = True
+    # private-media permissioned-space scope (opt-in, capable PDS only)
+    include_permissioned: bool = False
 
 
 class ScopeUpgradeStartResponse(BaseModel):
@@ -635,13 +654,30 @@ async def start_scope_upgrade_flow(
 
     returns the authorization URL that the frontend should redirect to.
     """
-    # start OAuth flow with the requested scopes
+    # a scope upgrade replaces the session's whole scope set, so preserve whatever
+    # the user already granted and only ADD what's requested.
+    current_scope = (session.oauth_session or {}).get("scope", "")
+    include_teal = body.include_teal or (
+        f"repo:{settings.teal.play_collection}" in current_scope
+    )
+    include_indiemusi = settings.indiemusi.song_collection in current_scope
+    include_permissioned = body.include_permissioned or (
+        settings.atproto.private_media_space_scope in current_scope
+    )
+
     auth_url, state = await start_oauth_flow_with_scopes(
-        session.handle, include_teal=body.include_teal
+        session.handle,
+        include_teal=include_teal,
+        include_indiemusi=include_indiemusi,
+        include_permissioned=include_permissioned,
     )
 
     # build the requested scopes string for logging/tracking
-    requested_scopes = "teal" if body.include_teal else "base"
+    requested_scopes = (
+        "permissioned"
+        if body.include_permissioned
+        else ("teal" if include_teal else "base")
+    )
 
     # save pending scope upgrade metadata keyed by state
     await save_pending_scope_upgrade(

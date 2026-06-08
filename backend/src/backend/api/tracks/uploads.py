@@ -40,6 +40,15 @@ from backend._internal.atproto.handles import (
     InvalidFeaturesError,
     resolve_featured_artists,
 )
+from backend._internal.atproto.records.fm_plyr.track import build_track_record
+from backend._internal.atproto.spaces import (
+    build_record_uri,
+    detect_permissioned_capability,
+)
+from backend._internal.atproto.spaces.client import (
+    create_space_record,
+    ensure_personal_space,
+)
 from backend._internal.audio import AudioFormat
 from backend._internal.background import get_docket
 from backend._internal.clients.transcoder import (
@@ -134,6 +143,12 @@ class UploadContext:
     # visibility: unlisted tracks don't appear in discovery feeds
     unlisted: bool = False
 
+    # private media: audio blob + record live in the artist's ATProto permissioned
+    # space (com.atproto.space.*), not the public repo. no public R2 copy; excluded
+    # from discovery; playable only through the space credential path. requires a
+    # PDS that supports permissioned spaces (checked at the endpoint).
+    private: bool = False
+
     @property
     def audio_extension(self) -> str:
         """source-format extension, normalized (lowercase, no leading dot)."""
@@ -147,6 +162,7 @@ class AudioInfo:
     format: AudioFormat
     duration: int | None
     is_gated: bool
+    is_private: bool = False
 
 
 @dataclass
@@ -593,7 +609,12 @@ async def _validate_audio(ctx: UploadContext) -> AudioInfo:
                     "supporter gating requires atprotofans to be enabled in settings"
                 )
 
-    return AudioInfo(format=audio_format, duration=ctx.duration, is_gated=is_gated)
+    return AudioInfo(
+        format=audio_format,
+        duration=ctx.duration,
+        is_gated=is_gated,
+        is_private=ctx.private,
+    )
 
 
 async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResult:
@@ -626,9 +647,11 @@ async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResu
     playable_format = audio_info.format
     source_ext = ctx.audio_extension
 
-    # public-bucket URL (gated tracks proxy through the auth-protected backend)
+    # public-bucket URL — omitted for gated tracks (proxied through the
+    # auth-protected backend) and for private tracks (no public copy at all;
+    # the canonical audio is the PDS blob in the permissioned space).
     r2_url: str | None = None
-    if not audio_info.is_gated:
+    if not audio_info.is_gated and not audio_info.is_private:
         r2_url = await storage.get_url(file_id, file_type="audio", extension=source_ext)
         if not r2_url:
             raise UploadPhaseError("failed to get public audio URL")
@@ -682,20 +705,26 @@ async def _upload_to_pds(
     never holds the full file in memory. content length is sourced from
     a HEAD request so the PDS can validate up-front without buffering.
     """
-    if audio_info.is_gated:
+    # gated (supporter/copyright) tracks proxy through the backend and don't
+    # push a blob. private tracks are the opposite: the PDS blob IS the canonical
+    # audio, so the upload is mandatory (and bypasses the user's general
+    # PDS-upload preference + the interim-WAV deferral, which private uploads
+    # avoid by requiring a web-playable source at the endpoint).
+    if audio_info.is_private:
+        pass
+    elif audio_info.is_gated:
         return None
-
-    # the interim WAV rendition is large and throwaway — never push it to the
-    # user's PDS. the deferred optimize task writes the single canonical blob
-    # (the MP3) once. publishing now with audioUrl-only is an already-supported
-    # record shape (it's the same shape as the large-file R2-only fallback).
-    if sr.needs_optimization:
+    elif sr.needs_optimization:
+        # the interim WAV rendition is large and throwaway — never push it to the
+        # user's PDS. the deferred optimize task writes the single canonical blob
+        # (the MP3) once. publishing now with audioUrl-only is an already-supported
+        # record shape (it's the same shape as the large-file R2-only fallback).
         return None
-
-    async with db_session() as db:
-        allow_pds_upload = await _should_upload_pds_blob(db, ctx.artist_did)
-    if not allow_pds_upload:
-        return None
+    else:
+        async with db_session() as db:
+            allow_pds_upload = await _should_upload_pds_blob(db, ctx.artist_did)
+        if not allow_pds_upload:
+            return None
 
     content_type = sr.playable_format.media_type
     playable_ext = sr.playable_format.value
@@ -762,21 +791,32 @@ async def _create_records(
     ext = Path(ctx.filename).suffix.lower()
     playable_file_type = sr.playable_format.value if sr.playable_format else ext[1:]
 
-    # compute audio URL for ATProto record
-    if audio_info.is_gated:
+    created_at = datetime.now(UTC)
+    rkey = datetime_to_tid(created_at)
+    collection = settings.atproto.track_collection
+
+    # resolve where the record lives + its audio URL.
+    # private: record goes into the artist's permissioned space (ats:// URI, no
+    # public audio URL — the canonical audio is the PDS blob, required).
+    # gated: public repo record, audio proxied through the auth-protected backend.
+    # default: public repo record pointing at the public R2 URL.
+    space_uri: str | None = None
+    if ctx.private:
+        if not (pds_result and pds_result.blob_ref):
+            raise UploadPhaseError("private upload requires the audio blob on the PDS")
+        space_uri = await ensure_personal_space(ctx.auth_session)
+        audio_url_for_record = None
+        uri = build_record_uri(space_uri, ctx.artist_did, collection, rkey)
+    elif audio_info.is_gated:
         from urllib.parse import urljoin
 
         backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
         audio_url_for_record = urljoin(backend_url + "/", f"audio/{sr.file_id}")
+        uri = f"at://{ctx.artist_did}/{collection}/{rkey}"
     else:
         assert sr.r2_url is not None
         audio_url_for_record = sr.r2_url
-
-    # generate deterministic rkey and AT URI
-    created_at = datetime.now(UTC)
-    rkey = datetime_to_tid(created_at)
-    collection = settings.atproto.track_collection
-    uri = f"at://{ctx.artist_did}/{collection}/{rkey}"
+        uri = f"at://{ctx.artist_did}/{collection}/{rkey}"
 
     # step 1: reserve DB row as pending
     await job_service.update_progress(
@@ -859,10 +899,13 @@ async def _create_records(
             image_url=image_url,
             thumbnail_url=thumbnail_url,
             support_gate=ctx.support_gate,
-            unlisted=ctx.unlisted,
-            audio_storage=audio_storage,
+            # private tracks are never surfaced in discovery feeds
+            unlisted=ctx.unlisted or ctx.private,
+            audio_storage="pds" if ctx.private else audio_storage,
             pds_blob_cid=pds_result.cid if pds_result else None,
             pds_blob_size=pds_result.size if pds_result else None,
+            is_private=ctx.private,
+            space_uri=space_uri,
         )
 
         db.add(track)
@@ -888,25 +931,48 @@ async def _create_records(
         phase="atproto",
     )
     try:
-        atproto_result = await create_track_record(
-            auth_session=ctx.auth_session,
-            title=ctx.title,
-            artist=artist_display_name,
-            audio_url=audio_url_for_record,
-            file_type=playable_file_type,
-            album=ctx.album,
-            duration=audio_info.duration,
-            features=featured_artists or None,
-            image_url=image_url,
-            support_gate=ctx.support_gate,
-            audio_blob=pds_result.blob_ref if pds_result else None,
-            description=ctx.description,
-            rkey=rkey,
-            created_at=created_at,
-        )
-        if not atproto_result:
-            raise ValueError("PDS returned no record data")
-        _, atproto_cid = atproto_result
+        if ctx.private:
+            assert space_uri is not None and pds_result is not None
+            record = await build_track_record(
+                title=ctx.title,
+                artist=artist_display_name,
+                audio_url=None,
+                file_type=playable_file_type,
+                album=ctx.album,
+                duration=audio_info.duration,
+                features=featured_artists or None,
+                image_url=image_url,
+                audio_blob=pds_result.blob_ref,
+                description=ctx.description,
+                created_at=created_at,
+            )
+            _, atproto_cid = await create_space_record(
+                ctx.auth_session,
+                space=space_uri,
+                collection=collection,
+                record=record,
+                rkey=rkey,
+            )
+        else:
+            atproto_result = await create_track_record(
+                auth_session=ctx.auth_session,
+                title=ctx.title,
+                artist=artist_display_name,
+                audio_url=audio_url_for_record,
+                file_type=playable_file_type,
+                album=ctx.album,
+                duration=audio_info.duration,
+                features=featured_artists or None,
+                image_url=image_url,
+                support_gate=ctx.support_gate,
+                audio_blob=pds_result.blob_ref if pds_result else None,
+                description=ctx.description,
+                rkey=rkey,
+                created_at=created_at,
+            )
+            if not atproto_result:
+                raise ValueError("PDS returned no record data")
+            _, atproto_cid = atproto_result
     except Exception as e:
         # always include the exception type in the surfaced message — some
         # exception classes (notably httpx.RemoteProtocolError with an empty
@@ -1231,6 +1297,7 @@ async def run_track_upload(
     auto_tag: bool,
     unlisted: bool,
     copyright_rights: dict | None = None,
+    private: bool = False,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("artist_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for track uploads.
@@ -1267,11 +1334,10 @@ async def run_track_upload(
         # the upload can't proceed (no PDS to publish to) and won't recover
         # without a fresh sign-in, so clean up the staged storage objects
         # rather than leaving them as durable orphans.
-        is_gated = support_gate is not None
         await _delete_staged_audio(
             audio_file_id,
             Path(filename).suffix.lower().lstrip(".") or None,
-            gated=is_gated,
+            gated=support_gate is not None or private,
         )
         if image_id:
             with contextlib.suppress(Exception):
@@ -1304,6 +1370,7 @@ async def run_track_upload(
         copyright_rights=copyright_rights,
         auto_tag=auto_tag,
         unlisted=unlisted,
+        private=private,
     )
     await _process_upload_background(ctx)
 
@@ -1343,6 +1410,7 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         copyright_rights=ctx.copyright_rights,
         auto_tag=ctx.auto_tag,
         unlisted=ctx.unlisted,
+        private=ctx.private,
     )
 
 
@@ -1385,6 +1453,13 @@ async def upload_track(
         str | None,
         Form(
             description="set to 'true' to exclude from discovery feeds (latest, top, for-you)"
+        ),
+    ] = None,
+    private: Annotated[
+        str | None,
+        Form(
+            description="set to 'true' to store as private media in the artist's ATProto "
+            "permissioned space (requires a PDS that supports com.atproto.space.*)"
         ),
     ] = None,
     file: UploadFile = File(...),
@@ -1473,6 +1548,37 @@ async def upload_track(
             f"supported: {AudioFormat.supported_extensions_str()}",
         )
 
+    # private media: audio + record live in the artist's ATProto permissioned
+    # space. only available on a PDS that supports com.atproto.space.*, and only
+    # for web-playable sources (the blob is written at publish time; the deferred
+    # transcode path still targets the public repo — see the design note).
+    is_private = private == "true"
+    if is_private:
+        if parsed_support_gate is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="private and gated/copyright are mutually exclusive",
+            )
+        if not await detect_permissioned_capability(auth_session):
+            raise HTTPException(
+                status_code=400,
+                detail="your PDS does not support permissioned spaces (private media)",
+            )
+        # writing to a space needs the granted space scope (the capability probe
+        # passes without it). signal the frontend to run the opt-in scope upgrade.
+        if settings.atproto.private_media_space_scope not in (
+            auth_session.oauth_session or {}
+        ).get("scope", ""):
+            raise HTTPException(status_code=403, detail="permissioned_scope_required")
+        if not audio_format.is_web_playable:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"private media currently supports web-playable audio only "
+                    f"({ext} needs transcoding); convert to mp3/wav/m4a/flac first"
+                ),
+            )
+
     # stage audio + image to shared object storage BEFORE enqueueing the
     # docket task. only stable file_ids travel over Redis to the worker —
     # docket workers are not co-located with the request handler in
@@ -1487,6 +1593,9 @@ async def upload_track(
         JobType.UPLOAD, auth_session.did, "upload queued for processing"
     )
     is_gated = parsed_support_gate is not None
+    # private media also lives off the public bucket — stage it privately so no
+    # public object is ever created (the canonical audio is the PDS blob).
+    stage_private = is_gated or is_private
     audio_extension = ext.lstrip(".") or None
 
     file_path: str | None = None
@@ -1520,7 +1629,7 @@ async def upload_track(
         # stage audio bytes to shared storage
         with open(file_path, "rb") as f:
             audio_file_id = await stage_audio_to_storage(
-                upload_id, f, file.filename, gated=is_gated
+                upload_id, f, file.filename, gated=stage_private
             )
 
         # record where the staged blob lives so the stuck-upload reaper can
@@ -1533,7 +1642,7 @@ async def upload_track(
                 upload_id,
                 file_id=audio_file_id,
                 file_type=audio_extension,
-                is_gated=is_gated,
+                is_gated=stage_private,
             )
 
         # stage image bytes to shared storage (best-effort; missing or
@@ -1575,6 +1684,7 @@ async def upload_track(
             copyright_rights=parsed_copyright,
             auto_tag=auto_tag == "true",
             unlisted=unlisted == "true",
+            private=is_private,
         )
         await schedule_track_upload(ctx)
         enqueued = True
@@ -1582,7 +1692,7 @@ async def upload_track(
         if not enqueued:
             if audio_file_id:
                 await _delete_staged_audio(
-                    audio_file_id, audio_extension, gated=is_gated
+                    audio_file_id, audio_extension, gated=stage_private
                 )
             if image_id:
                 with contextlib.suppress(Exception):

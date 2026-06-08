@@ -71,7 +71,14 @@ async def test_start_scope_upgrade_flow(test_app: FastAPI, db_session: AsyncSess
         data = response.json()
         assert "auth_url" in data
         assert data["auth_url"].startswith("https://auth.example.com")
-        mock_oauth.assert_called_once_with("testuser.bsky.social", include_teal=True)
+        # a scope upgrade preserves every scope the session already has; this
+        # session has neither indiemusi nor the permissioned-space scope.
+        mock_oauth.assert_called_once_with(
+            "testuser.bsky.social",
+            include_teal=True,
+            include_indiemusi=False,
+            include_permissioned=False,
+        )
 
 
 async def test_start_scope_upgrade_default_includes_teal(
@@ -92,7 +99,14 @@ async def test_start_scope_upgrade_default_includes_teal(
             )
 
         assert response.status_code == 200
-        mock_oauth.assert_called_once_with("testuser.bsky.social", include_teal=True)
+        # a scope upgrade preserves every scope the session already has; this
+        # session has neither indiemusi nor the permissioned-space scope.
+        mock_oauth.assert_called_once_with(
+            "testuser.bsky.social",
+            include_teal=True,
+            include_indiemusi=False,
+            include_permissioned=False,
+        )
 
 
 async def test_scope_upgrade_requires_auth(db_session: AsyncSession):

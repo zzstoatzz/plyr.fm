@@ -28,11 +28,11 @@ max_lines = 896
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
-max_lines = 826
+max_lines = 862
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
-max_lines = 596
+max_lines = 601
 
 [[rules]]
 path = "backend/src/backend/api/tracks/mutations.py"
@@ -40,11 +40,11 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1692
+max_lines = 1787
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 1085
+max_lines = 1109
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
@@ -176,7 +176,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 905
+max_lines = 927
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
@@ -256,7 +256,7 @@ max_lines = 1050
 
 [[rules]]
 path = "backend/src/backend/api/tracks/audio_replace.py"
-max_lines = 825
+max_lines = 836
 
 [[rules]]
 path = "backend/tests/conftest.py"
@@ -288,7 +288,7 @@ max_lines = 617
 
 [[rules]]
 path = "backend/src/backend/_internal/auth/oauth.py"
-max_lines = 549
+max_lines = 559
 
 [[rules]]
 path = "frontend/src/lib/components/CopyrightSection.svelte"

@@ -127,7 +127,9 @@ def get_public_jwks() -> dict | None:
 
 
 def get_oauth_client(
-    include_teal: bool = False, include_indiemusi: bool = False
+    include_teal: bool = False,
+    include_indiemusi: bool = False,
+    include_permissioned: bool = False,
 ) -> OAuthClient:
     """create an OAuth client with the appropriate scopes.
 
@@ -140,6 +142,7 @@ def get_oauth_client(
         indiemusi_tokens=(
             settings.indiemusi.scope_tokens() if include_indiemusi else None
         ),
+        permissioned_spaces=include_permissioned,
     )
 
     # load confidential client key if configured
@@ -168,8 +171,12 @@ def get_oauth_client_for_scope(scope: str) -> OAuthClient:
     include_indiemusi = scopes.matches(
         "repo", collection=settings.indiemusi.song_collection, action="create"
     )
+    # ScopesSet doesn't model the experimental space: token, so match on the string
+    include_permissioned = settings.atproto.private_media_space_scope in scope
     return get_oauth_client(
-        include_teal=include_teal, include_indiemusi=include_indiemusi
+        include_teal=include_teal,
+        include_indiemusi=include_indiemusi,
+        include_permissioned=include_permissioned,
     )
 
 
@@ -247,16 +254,20 @@ async def start_oauth_flow_with_scopes(
     handle: str,
     include_teal: bool = False,
     include_indiemusi: bool = False,
+    include_permissioned: bool = False,
     prompt: PromptType | None = None,
 ) -> tuple[str, str]:
     """start OAuth flow with explicit scope selection (used for scope upgrades)."""
     try:
         client = get_oauth_client(
-            include_teal=include_teal, include_indiemusi=include_indiemusi
+            include_teal=include_teal,
+            include_indiemusi=include_indiemusi,
+            include_permissioned=include_permissioned,
         )
         logger.info(
             f"starting scope upgrade OAuth for {handle} "
-            f"(teal={include_teal}, indiemusi={include_indiemusi})"
+            f"(teal={include_teal}, indiemusi={include_indiemusi}, "
+            f"permissioned={include_permissioned})"
         )
         auth_url, state = await client.start_authorization(handle, prompt=prompt)
         return auth_url, state

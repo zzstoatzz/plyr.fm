@@ -72,6 +72,12 @@
 	let supportGated = $state(false);
 	let autoTag = $state(false);
 	let trackUnlisted = $state(false);
+	// private media — stored in the artist's ATProto permissioned space. only
+	// offered when the user's PDS supports com.atproto.space.* (see /auth/me).
+	let keepPrivate = $state(false);
+	const permissionedSupported = $derived(
+		auth.user?.permissioned_spaces?.supported ?? false
+	);
 	// copyright rights metadata — mutually exclusive with supporter gating.
 	// when enabled, audio is uploaded to private storage and the backend writes
 	// indiemusi song + recording records after the track is published.
@@ -212,6 +218,7 @@
 			supportGated = false;
 			autoTag = false;
 			trackUnlisted = false;
+			keepPrivate = false;
 			copyrightEnabled = false;
 			copyrightRights = {};
 
@@ -252,6 +259,7 @@
 			undefined, // albumId
 			isUnlisted,
 			copyrightToSend,
+			keepPrivate,
 		);
 	}
 
@@ -516,6 +524,20 @@
 					</p>
 				{/if}
 			</div>
+
+			{#if permissionedSupported}
+				<div class="form-group">
+					<label class="checkbox-label">
+						<input type="checkbox" bind:checked={keepPrivate} />
+						<span class="checkbox-text">keep private — store in your permissioned space</span>
+					</label>
+					{#if keepPrivate}
+						<p class="field-hint">
+							the audio and its record live in a private space on your PDS — no public copy, not shown in feeds, and playable only by you. your PDS supports this experimental ATProto feature. you'll be asked once to approve private-media access.
+						</p>
+					{/if}
+				</div>
+			{/if}
 
 			<div class="form-group attestation">
 				<label class="checkbox-label">

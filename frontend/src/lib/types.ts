@@ -80,6 +80,8 @@ export interface User {
 	handle: string;
 	linked_accounts: LinkedAccount[];
 	enabled_flags: string[];
+	// whether the user's PDS supports ATProto permissioned spaces (private media)
+	permissioned_spaces?: { supported: boolean };
 }
 
 export interface Artist {
