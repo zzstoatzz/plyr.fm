@@ -929,11 +929,14 @@ async def _create_records(
             await db.refresh(track)
         except IntegrityError as e:
             await db.rollback()
-            with contextlib.suppress(Exception):
-                await storage.delete(sr.file_id, playable_file_type)
-            if sr.original_file_id and sr.original_file_type:
+            # private media has no R2 object (PDS blob); its file_id is a content
+            # hash that could collide with a public track's R2 key — never delete.
+            if not ctx.private:
                 with contextlib.suppress(Exception):
-                    await storage.delete(sr.original_file_id, sr.original_file_type)
+                    await storage.delete(sr.file_id, playable_file_type)
+                if sr.original_file_id and sr.original_file_type:
+                    with contextlib.suppress(Exception):
+                        await storage.delete(sr.original_file_id, sr.original_file_type)
             raise UploadPhaseError(f"database constraint violation: {e!s}") from e
 
         track_id = track.id
@@ -1008,8 +1011,11 @@ async def _create_records(
                 await db.commit()
                 deleted_pending = result.rowcount == 1  # type: ignore[union-attr]
 
-        if deleted_pending:
-            # row was still pending — safe to clean up media
+        if deleted_pending and not ctx.private:
+            # row was still pending — safe to clean up media. private media has no
+            # R2 object (its audio is a PDS blob and its file_id is a content hash
+            # that could collide with a public track's R2 key), so skip it; the
+            # orphaned PDS blob is GC'd by the PDS.
             with contextlib.suppress(Exception):
                 await storage.delete(sr.file_id, playable_file_type)
             if sr.original_file_id and sr.original_file_type:
@@ -1141,6 +1147,12 @@ async def _cleanup_staged_media_pre_db(
     cleanup logic; the orchestrator must not run this past that
     boundary or it'll yank media out from under a committed row.
     """
+    # private media never staged anything to R2 — its audio is a PDS blob and it
+    # has no cover. deleting by the synthetic file_id (a content hash) could yank a
+    # DIFFERENT public track's R2 object that happens to share the same bytes.
+    if ctx.private:
+        return
+
     is_gated = ctx.support_gate is not None
 
     if sr is not None and sr.transcode_info is not None:

@@ -218,3 +218,42 @@ async def test_upload_to_pds_reuses_handler_blob_for_private(monkeypatch):
     assert result is not None
     assert result.blob_ref == blob
     assert result.cid == "bafkreiabc"
+
+
+async def test_private_cleanup_never_touches_r2(monkeypatch):
+    """regression: private failure-cleanup must NOT call storage.delete. the
+    synthetic file_id is a content hash that could collide with a DIFFERENT
+    public track's R2 key; private audio lives only as a PDS blob."""
+    from backend.api.tracks import uploads as up
+    from backend.storage import storage
+
+    ctx = up.UploadContext(
+        upload_id="u",
+        auth_session=_MockSession(with_space_scope=True),
+        audio_file_id="collidinghash16",
+        filename="t.wav",
+        duration=1,
+        title="x",
+        artist_did="did:test:artist",
+        album=None,
+        album_id=None,
+        features_json=None,
+        tags=[],
+        visibility="private",
+    )
+    sr = up.StorageResult(
+        file_id="collidinghash16",
+        original_file_id=None,
+        original_file_type=None,
+        playable_format=AudioFormat.MP3,
+        r2_url=None,
+        transcode_info=None,
+    )
+
+    async def _boom(*a, **k):
+        raise AssertionError("private cleanup must not delete from R2")
+
+    monkeypatch.setattr(storage, "delete", _boom)
+
+    # must be a no-op for private (early return), not an R2 delete
+    await up._cleanup_staged_media_pre_db(ctx, sr)
