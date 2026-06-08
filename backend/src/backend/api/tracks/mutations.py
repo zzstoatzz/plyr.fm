@@ -229,6 +229,10 @@ async def update_track_metadata(
             if was_gated and track.r2_url is None:
                 move_to_private = False
             track.support_gate = None
+            # keep visibility consistent: dropping the supporter gate returns the
+            # track to public (copyright gating doesn't change visibility)
+            if track.visibility == "supporters":
+                track.visibility = "public"
         else:
             try:
                 parsed_gate = json.loads(support_gate)
@@ -244,6 +248,7 @@ async def update_track_metadata(
                 if not was_gated and track.r2_url is not None:
                     move_to_private = True
                 track.support_gate = parsed_gate
+                track.visibility = "supporters"
             except json.JSONDecodeError as e:
                 raise HTTPException(
                     status_code=400, detail=f"invalid support_gate JSON: {e}"
@@ -251,9 +256,10 @@ async def update_track_metadata(
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e)) from e
 
-    # handle unlisted toggle
-    if unlisted is not None:
-        track.unlisted = unlisted.lower() == "true"
+    # handle unlisted toggle — flips public ↔ unlisted only (supporters keep their
+    # visibility; private tracks are rejected earlier with 409)
+    if unlisted is not None and track.visibility in ("public", "unlisted"):
+        track.visibility = "unlisted" if unlisted.lower() == "true" else "public"
 
     # track album changes for list sync
     old_album_id = track.album_id

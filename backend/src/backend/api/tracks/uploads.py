@@ -69,7 +69,7 @@ from backend.models.job import JobStatus, JobType
 from backend.storage import storage
 from backend.utilities.audio import extract_duration
 from backend.utilities.database import db_session
-from backend.utilities.hashing import CHUNK_SIZE
+from backend.utilities.hashing import CHUNK_SIZE, hash_file_chunked
 from backend.utilities.progress import R2ProgressTracker
 from backend.utilities.rate_limit import limiter
 from backend.utilities.tags import add_tags_to_track, parse_tags_json
@@ -140,14 +140,26 @@ class UploadContext:
     # auto-apply recommended genre tags after classification
     auto_tag: bool = False
 
-    # visibility: unlisted tracks don't appear in discovery feeds
-    unlisted: bool = False
+    # visibility is the ONLY visibility/access field — public | unlisted |
+    # supporters | private. private/unlisted are derived from it (below), never
+    # stored or passed separately. `support_gate` stays (it's the gate-type
+    # detail: supporters vs the orthogonal copyright paradigm).
+    visibility: str = "public"
 
-    # private media: audio blob + record live in the artist's ATProto permissioned
-    # space (com.atproto.space.*), not the public repo. no public R2 copy; excluded
-    # from discovery; playable only through the space credential path. requires a
-    # PDS that supports permissioned spaces (checked at the endpoint).
-    private: bool = False
+    # private media's audio is uploaded straight to the PDS blobstore in the
+    # request handler (never R2); this BlobRef carries it across the docket
+    # boundary so the worker only writes the permissioned record.
+    audio_blob: BlobRef | None = None
+
+    @property
+    def private(self) -> bool:
+        """private (permissioned-space) media."""
+        return self.visibility == "private"
+
+    @property
+    def unlisted(self) -> bool:
+        """excluded from discovery feeds (unlisted + private)."""
+        return self.visibility in ("unlisted", "private")
 
     @property
     def audio_extension(self) -> str:
@@ -899,12 +911,10 @@ async def _create_records(
             image_url=image_url,
             thumbnail_url=thumbnail_url,
             support_gate=ctx.support_gate,
-            # private tracks are never surfaced in discovery feeds
-            unlisted=ctx.unlisted or ctx.private,
+            visibility=ctx.visibility,
             audio_storage="pds" if ctx.private else audio_storage,
             pds_blob_cid=pds_result.cid if pds_result else None,
             pds_blob_size=pds_result.size if pds_result else None,
-            is_private=ctx.private,
             space_uri=space_uri,
         )
 
@@ -1295,9 +1305,9 @@ async def run_track_upload(
     thumbnail_url: str | None,
     support_gate: dict | None,
     auto_tag: bool,
-    unlisted: bool,
     copyright_rights: dict | None = None,
-    private: bool = False,
+    audio_blob: BlobRef | None = None,
+    visibility: str = "public",
     concurrency: ConcurrencyLimit = ConcurrencyLimit("artist_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for track uploads.
@@ -1333,12 +1343,14 @@ async def run_track_upload(
         # session expired or was revoked between HTTP request and task start.
         # the upload can't proceed (no PDS to publish to) and won't recover
         # without a fresh sign-in, so clean up the staged storage objects
-        # rather than leaving them as durable orphans.
-        await _delete_staged_audio(
-            audio_file_id,
-            Path(filename).suffix.lower().lstrip(".") or None,
-            gated=support_gate is not None or private,
-        )
+        # rather than leaving them as durable orphans. private media has no R2
+        # object (the audio is a PDS blob); nothing to delete there.
+        if visibility != "private":
+            await _delete_staged_audio(
+                audio_file_id,
+                Path(filename).suffix.lower().lstrip(".") or None,
+                gated=support_gate is not None,
+            )
         if image_id:
             with contextlib.suppress(Exception):
                 await storage.delete(image_id)
@@ -1369,8 +1381,7 @@ async def run_track_upload(
         support_gate=support_gate,
         copyright_rights=copyright_rights,
         auto_tag=auto_tag,
-        unlisted=unlisted,
-        private=private,
+        visibility=visibility,
     )
     await _process_upload_background(ctx)
 
@@ -1409,8 +1420,7 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         support_gate=ctx.support_gate,
         copyright_rights=ctx.copyright_rights,
         auto_tag=ctx.auto_tag,
-        unlisted=ctx.unlisted,
-        private=ctx.private,
+        visibility=ctx.visibility,
     )
 
 
@@ -1429,10 +1439,14 @@ async def upload_track(
     ] = None,
     features: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form(description="JSON array of tag names")] = None,
-    support_gate: Annotated[
-        str | None,
-        Form(description='JSON object for supporter gating, e.g., {"type": "any"}'),
-    ] = None,
+    visibility: Annotated[
+        str,
+        Form(
+            description="one of: public | unlisted | supporters | private. "
+            "supporters = atprotofans-gated; private = PDS permissioned space "
+            "(requires a PDS supporting com.atproto.space.*)."
+        ),
+    ] = "public",
     copyright: Annotated[
         str | None,
         Form(
@@ -1448,19 +1462,6 @@ async def upload_track(
     auto_tag: Annotated[
         str | None,
         Form(description="auto-apply recommended genre tags after classification"),
-    ] = None,
-    unlisted: Annotated[
-        str | None,
-        Form(
-            description="set to 'true' to exclude from discovery feeds (latest, top, for-you)"
-        ),
-    ] = None,
-    private: Annotated[
-        str | None,
-        Form(
-            description="set to 'true' to store as private media in the artist's ATProto "
-            "permissioned space (requires a PDS that supports com.atproto.space.*)"
-        ),
     ] = None,
     file: UploadFile = File(...),
     image: UploadFile | None = File(None),
@@ -1495,35 +1496,27 @@ async def upload_track(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    # parse and validate support_gate if provided
-    parsed_support_gate: dict | None = None
-    if support_gate:
-        try:
-            parsed_support_gate = json.loads(support_gate)
-            if not isinstance(parsed_support_gate, dict):
-                raise ValueError("support_gate must be a JSON object")
-            if "type" not in parsed_support_gate:
-                raise ValueError("support_gate must have a 'type' field")
-            if parsed_support_gate["type"] not in ("any",):
-                raise ValueError(
-                    f"unsupported support_gate type: {parsed_support_gate['type']}"
-                )
-        except json.JSONDecodeError as e:
-            raise HTTPException(
-                status_code=400, detail=f"invalid support_gate JSON: {e}"
-            ) from e
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+    # visibility is the single source of truth; derive the transient gating flags.
+    _VISIBILITIES = {"public", "unlisted", "supporters", "private"}
+    if visibility not in _VISIBILITIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"invalid visibility: {visibility} (one of {sorted(_VISIBILITIES)})",
+        )
+    is_private = visibility == "private"
+    # supporters → atprotofans gate; carried as support_gate on the public record
+    parsed_support_gate: dict | None = (
+        {"type": "any"} if visibility == "supporters" else None
+    )
 
-    # parse and validate copyright payload if provided. mutually exclusive with
-    # support_gate; copyright forces support_gate to {"type": "copyright"} so
-    # the upload pipeline routes audio into private storage.
+    # copyright (indiemusi) is orthogonal — it rides on a public/unlisted track and
+    # gates audio at the app layer. it can't combine with supporters or private.
     parsed_copyright: dict | None = None
     if copyright:
-        if parsed_support_gate is not None:
+        if visibility in ("supporters", "private"):
             raise HTTPException(
                 status_code=400,
-                detail="support_gate and copyright are mutually exclusive",
+                detail=f"copyright cannot combine with {visibility} visibility",
             )
         try:
             parsed_copyright = TrackRightsInput.model_validate_json(
@@ -1552,13 +1545,7 @@ async def upload_track(
     # space. only available on a PDS that supports com.atproto.space.*, and only
     # for web-playable sources (the blob is written at publish time; the deferred
     # transcode path still targets the public repo — see the design note).
-    is_private = private == "true"
     if is_private:
-        if parsed_support_gate is not None:
-            raise HTTPException(
-                status_code=400,
-                detail="private and gated/copyright are mutually exclusive",
-            )
         if not await detect_permissioned_capability(auth_session):
             raise HTTPException(
                 status_code=400,
@@ -1595,13 +1582,11 @@ async def upload_track(
         JobType.UPLOAD, auth_session.did, "upload queued for processing"
     )
     is_gated = parsed_support_gate is not None
-    # private media also lives off the public bucket — stage it privately so no
-    # public object is ever created (the canonical audio is the PDS blob).
-    stage_private = is_gated or is_private
     audio_extension = ext.lstrip(".") or None
 
     file_path: str | None = None
     audio_file_id: str | None = None
+    audio_blob: BlobRef | None = None
     image_id: str | None = None
     image_url: str | None = None
     thumbnail_url: str | None = None
@@ -1628,29 +1613,51 @@ async def upload_track(
         with open(file_path, "rb") as f:
             duration = extract_duration(f)
 
-        # stage audio bytes to shared storage
-        with open(file_path, "rb") as f:
-            audio_file_id = await stage_audio_to_storage(
-                upload_id, f, file.filename, gated=stage_private
-            )
+        if is_private:
+            # permissioned media: audio lives ON THE PDS, never R2. upload the
+            # blob straight to the user's PDS blobstore here (we hold the bytes +
+            # the auth session); the worker only writes the permissioned record.
+            with open(file_path, "rb") as f:
+                audio_file_id = hash_file_chunked(f)[:16]
 
-        # record where the staged blob lives so the stuck-upload reaper can
-        # clean it up if this job stalls in `processing` past the threshold.
-        # audio_extension is the original upload extension (e.g. "wav" for a
-        # lossless upload); the playable file_id may differ post-transcode,
-        # but at this point the only blob in R2 is the staged original.
-        if audio_extension:
-            await job_service.set_cleanup_hints(
-                upload_id,
-                file_id=audio_file_id,
-                file_type=audio_extension,
-                is_gated=stage_private,
+            # stream the temp file (don't buffer audio in memory); the factory is
+            # re-invoked per upload attempt, so it must yield a fresh iterator.
+            def _private_body() -> AsyncIterable[bytes]:
+                async def _gen() -> AsyncIterable[bytes]:
+                    async with aiofiles.open(file_path, "rb") as af:
+                        while chunk := await af.read(CHUNK_SIZE):
+                            yield chunk
+
+                return _gen()
+
+            audio_blob = await upload_blob(
+                auth_session,
+                body_factory=_private_body,
+                content_length=bytes_read,
+                content_type=audio_format.media_type,
             )
+            # no R2 object, no cleanup hint — nothing public/private to roll back
+        else:
+            # stage audio bytes to shared storage (R2). gated tracks (supporter/
+            # copyright) go to the private bucket; public tracks to the public one.
+            with open(file_path, "rb") as f:
+                audio_file_id = await stage_audio_to_storage(
+                    upload_id, f, file.filename, gated=is_gated
+                )
+            if audio_extension:
+                await job_service.set_cleanup_hints(
+                    upload_id,
+                    file_id=audio_file_id,
+                    file_type=audio_extension,
+                    is_gated=is_gated,
+                )
 
         # stage image bytes to shared storage (best-effort; missing or
         # invalid images don't fail the whole upload — the orchestrator
         # treats `image_id is None` as "no track artwork").
-        if image and image.filename:
+        # private media has no public cover in this MVP (a public imageUrl would
+        # leak the artwork); cover-as-PDS-blob is a follow-up.
+        if image and image.filename and not is_private:
             max_image_size = 20 * 1024 * 1024
             image_buffer = BytesIO()
             image_bytes_read = 0
@@ -1685,16 +1692,19 @@ async def upload_track(
             support_gate=parsed_support_gate,
             copyright_rights=parsed_copyright,
             auto_tag=auto_tag == "true",
-            unlisted=unlisted == "true",
-            private=is_private,
+            visibility=visibility,
+            audio_blob=audio_blob,
         )
         await schedule_track_upload(ctx)
         enqueued = True
     except Exception:
         if not enqueued:
-            if audio_file_id:
+            # private media has no R2 object to roll back — the audio is a PDS
+            # blob (an unreferenced blob is GC'd by the PDS). only clean R2 for
+            # the public/gated path.
+            if audio_file_id and not is_private:
                 await _delete_staged_audio(
-                    audio_file_id, audio_extension, gated=stage_private
+                    audio_file_id, audio_extension, gated=is_gated
                 )
             if image_id:
                 with contextlib.suppress(Exception):

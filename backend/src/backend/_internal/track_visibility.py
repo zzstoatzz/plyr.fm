@@ -27,10 +27,11 @@ class _HasDid(Protocol):
 
 
 def track_visible_filter(viewer_did: str | None) -> ColumnElement[bool]:
-    """SQL condition: public tracks, plus the viewer's own private tracks."""
+    """SQL condition: non-private tracks, plus the viewer's own private tracks."""
+    not_private = Track.visibility != "private"
     if viewer_did is None:
-        return Track.is_private.is_(False)
-    return or_(Track.is_private.is_(False), Track.artist_did == viewer_did)
+        return not_private
+    return or_(not_private, Track.artist_did == viewer_did)
 
 
 def can_view_track(viewer_did: str | None, track: Track) -> bool:

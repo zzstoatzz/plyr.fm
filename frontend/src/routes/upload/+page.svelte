@@ -69,16 +69,15 @@
 	let description = $state("");
 	let hasUnresolvedFeaturesInput = $state(false);
 	let attestedRights = $state(false);
-	let supportGated = $state(false);
 	let autoTag = $state(false);
-	let trackUnlisted = $state(false);
-	// private media — stored in the artist's ATProto permissioned space. only
-	// offered when the user's PDS supports com.atproto.space.* (see /auth/me).
-	let keepPrivate = $state(false);
+	// visibility/access — one mutually-exclusive choice:
+	//   public | unlisted | supporters | private
+	// "private" is only offered when the PDS supports com.atproto.space.* (/auth/me).
+	let visibility = $state<'public' | 'unlisted' | 'supporters' | 'private'>('public');
 	const permissionedSupported = $derived(
 		auth.user?.permissioned_spaces?.supported ?? false
 	);
-	// copyright rights metadata — mutually exclusive with supporter gating.
+	// copyright rights metadata — orthogonal, rides on public/unlisted tracks.
 	// when enabled, audio is uploaded to private storage and the backend writes
 	// indiemusi song + recording records after the track is published.
 	let copyrightEnabled = $state(false);
@@ -112,9 +111,12 @@
 			featuredArtists = stashed.featuredArtists;
 			uploadTags = stashed.uploadTags;
 			attestedRights = stashed.attestedRights;
-			supportGated = stashed.supportGated;
 			autoTag = stashed.autoTag;
-			trackUnlisted = stashed.trackUnlisted;
+			visibility = stashed.supportGated
+				? 'supporters'
+				: stashed.trackUnlisted
+					? 'unlisted'
+					: 'public';
 			clearTrackFormStash();
 			toast.info(
 				"your draft was restored — please reattach your audio file",
@@ -174,9 +176,9 @@
 				featuredArtists: [...featuredArtists],
 				uploadTags: [...uploadTags],
 				attestedRights,
-				supportGated,
+				supportGated: visibility === 'supporters',
 				autoTag,
-				trackUnlisted,
+				trackUnlisted: visibility === 'unlisted',
 			});
 			setReturnUrl("/upload");
 			toast.error(
@@ -201,10 +203,9 @@
 		const uploadFeatures = [...featuredArtists];
 		const uploadImage = imageFile;
 		const tagsToUpload = [...uploadTags];
-		const isGated = supportGated;
+		const uploadVisibility = visibility;
 		const shouldAutoTag = autoTag;
 		const uploadDescription = description;
-		const isUnlisted = trackUnlisted;
 
 		const clearForm = () => {
 			title = "";
@@ -215,10 +216,8 @@
 			featuredArtists = [];
 			uploadTags = [];
 			attestedRights = false;
-			supportGated = false;
 			autoTag = false;
-			trackUnlisted = false;
-			keepPrivate = false;
+			visibility = 'public';
 			copyrightEnabled = false;
 			copyrightRights = {};
 
@@ -243,7 +242,7 @@
 			uploadFeatures,
 			uploadImage,
 			tagsToUpload,
-			isGated,
+			uploadVisibility,
 			shouldAutoTag,
 			uploadDescription,
 			async () => {
@@ -257,9 +256,7 @@
 			},
 			undefined, // label
 			undefined, // albumId
-			isUnlisted,
 			copyrightToSend,
-			keepPrivate,
 		);
 	}
 
@@ -475,64 +472,51 @@
 			<CopyrightRightsPanel
 				bind:enabled={copyrightEnabled}
 				bind:rights={copyrightRights}
-				disabled={supportGated}
+				disabled={visibility !== 'public' && visibility !== 'unlisted'}
 			/>
 
 			<fieldset class="form-group access-card">
 				<legend>visibility &amp; access</legend>
 
-				<div class="access-row supporter-gating">
-					{#if artistProfile?.support_url}
-						<label class="checkbox-label">
-							<input
-								type="checkbox"
-								bind:checked={supportGated}
-								disabled={copyrightEnabled}
-							/>
+				<label class="access-row checkbox-label">
+					<input type="radio" bind:group={visibility} value="public" />
+					<span class="access-body">
+						<span class="checkbox-text">public</span>
+						<span class="access-note">appears in feeds; anyone can play it.</span>
+					</span>
+				</label>
+
+				<label class="access-row checkbox-label">
+					<input type="radio" bind:group={visibility} value="unlisted" />
+					<span class="access-body">
+						<span class="checkbox-text">unlisted</span>
+						<span class="access-note">hidden from feeds, but anyone with the link, your profile, albums, playlists, or search can play it.</span>
+					</span>
+				</label>
+
+				{#if artistProfile?.support_url}
+					<label class="access-row checkbox-label supporter-gating">
+						<input type="radio" bind:group={visibility} value="supporters" disabled={copyrightEnabled} />
+						<span class="access-body">
 							<span class="checkbox-text">
 								<svg class="heart-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 									<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
 								</svg>
 								supporters only
 							</span>
-						</label>
-						<p class="access-note">
-							only users who support you via <a href={artistProfile.support_url} target="_blank" rel="noopener">atprotofans</a> can play this track
-						</p>
-					{:else}
-						<div class="gating-disabled">
-							<span class="gating-disabled-icon">
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-								</svg>
-							</span>
-							<span class="gating-disabled-text">
-								want to offer exclusive tracks to supporters? <a href="https://atprotofans.com" target="_blank" rel="noopener">set up atprotofans</a>, then enable it in your <a href="/portal">portal</a>
-							</span>
-						</div>
-					{/if}
-				</div>
-
-				<div class="access-row">
-					<label class="checkbox-label">
-						<input type="checkbox" bind:checked={trackUnlisted} />
-						<span class="checkbox-text">unlisted</span>
+							<span class="access-note">only users who support you via <a href={artistProfile.support_url} target="_blank" rel="noopener">atprotofans</a> can play it.</span>
+						</span>
 					</label>
-					<p class="access-note">
-						hidden from the latest, top, and for-you feeds — still reachable via direct link, your profile, albums, playlists, and search.
-					</p>
-				</div>
+				{/if}
 
 				{#if permissionedSupported}
-					<div class="access-row">
-						<label class="checkbox-label">
-							<input type="checkbox" bind:checked={keepPrivate} />
-							<span class="checkbox-text">keep private</span>
-						</label>
-						<p class="access-note">
-							stored in a private space on your PDS — no public copy, hidden from feeds, playable only by you. you'll be asked once to approve private-media access.
-						</p>
-					</div>
+					<label class="access-row checkbox-label">
+						<input type="radio" bind:group={visibility} value="private" disabled={copyrightEnabled} />
+						<span class="access-body">
+							<span class="checkbox-text">private</span>
+							<span class="access-note">stored in a permissioned space on your PDS — no public copy, hidden from feeds, playable only by you. you'll be asked once to approve private-media access.</span>
+						</span>
+					</label>
 				{/if}
 			</fieldset>
 
@@ -861,11 +845,29 @@
 	}
 
 	.access-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.6rem;
 		padding: 0.875rem 1rem;
+		margin: 0;
+		cursor: pointer;
 	}
 
 	.access-row + .access-row {
 		border-top: 1px solid var(--border-default);
+	}
+
+	.access-row input[type='radio'] {
+		margin-top: 0.2rem;
+		flex-shrink: 0;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+
+	.access-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
 	}
 
 	.supporter-gating .checkbox-text {
@@ -879,8 +881,6 @@
 	}
 
 	.access-note {
-		margin-top: 0.4rem;
-		margin-left: 2rem;
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		line-height: 1.4;
@@ -892,32 +892,6 @@
 	}
 
 	.access-note a:hover {
-		text-decoration: underline;
-	}
-
-	.gating-disabled {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		color: var(--text-muted);
-	}
-
-	.gating-disabled-icon {
-		flex-shrink: 0;
-		margin-top: 0.1rem;
-	}
-
-	.gating-disabled-text {
-		font-size: var(--text-sm);
-		line-height: 1.4;
-	}
-
-	.gating-disabled-text a {
-		color: var(--accent);
-		text-decoration: none;
-	}
-
-	.gating-disabled-text a:hover {
 		text-decoration: underline;
 	}
 

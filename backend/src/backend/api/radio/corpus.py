@@ -20,7 +20,7 @@ async def load_corpus(db: AsyncSession) -> list[Track]:
         .join(Artist)
         .options(selectinload(Track.artist))
         .where(
-            Track.unlisted == False,  # noqa: E712
+            Track.in_discovery,
             Track.support_gate.is_(None),
             Artist.deactivated == False,  # noqa: E712
         )

@@ -134,12 +134,11 @@ async def list_tracks(
         # private (permissioned-space) media is visible only to its owner — an
         # artist page viewed by anyone else (or logged out) must not list it
         if not (session and session.did == artist_did):
-            stmt = stmt.where(Track.is_private == False)  # noqa: E712
+            stmt = stmt.where(Track.visibility != "private")
     else:
-        # discovery feed: exclude unlisted tracks (artist pages show all) and
-        # tracks from deactivated accounts (their content drops out of discovery).
-        # unlisted==False also excludes private media (private implies unlisted).
-        stmt = stmt.where(Track.unlisted == False)  # noqa: E712
+        # discovery feed: only listed visibilities (public + supporters); excludes
+        # unlisted and private. plus tracks from deactivated accounts drop out.
+        stmt = stmt.where(Track.in_discovery)
         stmt = stmt.where(Artist.deactivated == False)  # noqa: E712
 
     # filter out tracks with hidden tags
@@ -378,7 +377,7 @@ async def list_top_tracks(
         select(Track)
         .join(Artist)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
-        .where(Track.id.in_(top_track_ids), Track.unlisted == False)  # noqa: E712
+        .where(Track.id.in_(top_track_ids), Track.in_discovery)
     )
     result = await db.execute(stmt)
     tracks_by_id = {track.id: track for track in result.scalars().all()}

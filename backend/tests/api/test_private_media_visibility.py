@@ -42,8 +42,7 @@ async def _make_track(db_session: AsyncSession, *, title: str, fid: str, private
         artist_did=_DID,
         file_id=fid,
         file_type="mp3",
-        is_private=private,
-        unlisted=private,
+        visibility="private" if private else "public",
         space_uri=(f"ats://{_DID}/fm.plyr.privateMedia/self" if private else None),
         atproto_record_uri=(
             f"ats://{_DID}/fm.plyr.privateMedia/self/{_DID}/fm.plyr.track/rk"
@@ -114,7 +113,11 @@ def test_visibility_helper_rules():
 
     public = Track(title="p", artist_did=_DID, file_id="h_pub", file_type="mp3")
     private = Track(
-        title="x", artist_did=_DID, file_id="h_priv", file_type="mp3", is_private=True
+        title="x",
+        artist_did=_DID,
+        file_id="h_priv",
+        file_type="mp3",
+        visibility="private",
     )
 
     # public: anyone

@@ -84,7 +84,7 @@ def test_private_requires_pds_capability(app_no_scope: FastAPI):
         ),
         TestClient(app_no_scope) as client,
     ):
-        resp = _post(client, data={"private": "true"})
+        resp = _post(client, data={"visibility": "private"})
     assert resp.status_code == 400
     assert "permissioned spaces" in resp.json()["detail"]
 
@@ -97,7 +97,7 @@ def test_private_capable_but_scope_missing_requests_upgrade(app_no_scope: FastAP
         ),
         TestClient(app_no_scope) as client,
     ):
-        resp = _post(client, data={"private": "true"})
+        resp = _post(client, data={"visibility": "private"})
     assert resp.status_code == 403
     assert resp.json()["detail"] == "permissioned_scope_required"
 
@@ -113,17 +113,18 @@ def test_private_rejects_non_web_playable(app_with_scope: FastAPI):
         resp = client.post(
             "/tracks/",
             files={"file": ("t.aiff", _WAV, "audio/aiff")},
-            data={"title": "x", "private": "true"},
+            data={"title": "x", "visibility": "private"},
         )
     assert resp.status_code == 400
     assert "web-playable" in resp.json()["detail"]
 
 
-def test_private_and_gated_mutually_exclusive(app_with_scope: FastAPI):
-    # support_gate + private is rejected before any capability check
+def test_private_and_copyright_mutually_exclusive(app_with_scope: FastAPI):
+    # visibility=private can't combine with the orthogonal copyright gate
     with TestClient(app_with_scope) as client:
         resp = _post(
-            client, data={"private": "true", "support_gate": '{"type": "any"}'}
+            client,
+            data={"visibility": "private", "copyright": '{"iswc": "T-000.000.001-0"}'},
         )
     assert resp.status_code == 400
-    assert "mutually exclusive" in resp.json()["detail"]
+    assert "copyright cannot combine" in resp.json()["detail"]

@@ -99,16 +99,14 @@ class UploaderState {
 		features: FeaturedArtist[],
 		image: File | null | undefined,
 		tags: string[],
-		supportGated: boolean,
+		visibility: string,
 		autoTag: boolean,
 		description: string,
 		onSuccess?: (_result?: UploadResult) => void,
 		callbacks?: UploadProgressCallback,
 		label?: string,
 		albumId?: string,
-		unlisted?: boolean,
-		copyright?: object | null,
-		isPrivate?: boolean
+		copyright?: object | null
 	): void {
 		const taskId = crypto.randomUUID();
 		const fileSizeMB = file.size / 1024 / 1024;
@@ -148,9 +146,9 @@ class UploaderState {
 		if (image) {
 			formData.append('image', image);
 		}
-		if (supportGated) {
-			formData.append('support_gate', JSON.stringify({ type: 'any' }));
-		}
+		// visibility is the single source of truth (public | unlisted | supporters
+		// | private); copyright is orthogonal (rides on public/unlisted).
+		formData.append('visibility', visibility);
 		if (copyright) {
 			formData.append('copyright', JSON.stringify(copyright));
 		}
@@ -159,12 +157,6 @@ class UploaderState {
 		}
 		if (description) {
 			formData.append('description', description);
-		}
-		if (unlisted) {
-			formData.append('unlisted', 'true');
-		}
-		if (isPrivate) {
-			formData.append('private', 'true');
 		}
 
 		const xhr = new XMLHttpRequest();
