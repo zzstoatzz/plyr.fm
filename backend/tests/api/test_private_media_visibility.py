@@ -102,3 +102,61 @@ async def test_private_track_serializes_without_at_uri_crash(
     # passing a pds_url used to push the ats:// URI through parse_at_uri and raise
     resp = await TrackResponse.from_track(track, pds_url="https://test.pds")
     assert resp.atproto_record_url is None
+
+
+# --- centralized helper (the chokepoint every endpoint routes through) --------
+
+
+def test_visibility_helper_rules():
+    from fastapi import HTTPException
+
+    from backend._internal.track_visibility import can_view_track, ensure_track_visible
+
+    public = Track(title="p", artist_did=_DID, file_id="h_pub", file_type="mp3")
+    private = Track(
+        title="x", artist_did=_DID, file_id="h_priv", file_type="mp3", is_private=True
+    )
+
+    # public: anyone
+    assert can_view_track(None, public)
+    assert can_view_track("did:test:other", public)
+    # private: owner only
+    assert can_view_track(_DID, private)
+    assert not can_view_track(None, private)
+    assert not can_view_track("did:test:other", private)
+
+    ensure_track_visible(private, _DID)  # owner: no raise
+    for did in (None, "did:test:other"):
+        with pytest.raises(HTTPException) as exc:
+            ensure_track_visible(private, did)
+        assert exc.value.status_code == 404
+
+
+# --- endpoint proof: GET /tracks/{id} is the headline leak --------------------
+
+
+async def test_track_detail_endpoint_owner_only_for_private(
+    db_session: AsyncSession, artist: Artist
+):
+    from fastapi.testclient import TestClient
+
+    from backend._internal import get_optional_session
+    from backend.main import app
+
+    track = await _make_track(db_session, title="detail", fid="det_priv", private=True)
+
+    async def _anon() -> Session | None:
+        return None
+
+    async def _owner() -> Session | None:
+        return _session(_DID)
+
+    app.dependency_overrides[get_optional_session] = _anon
+    try:
+        with TestClient(app) as client:
+            assert client.get(f"/tracks/{track.id}").status_code == 404
+        app.dependency_overrides[get_optional_session] = _owner
+        with TestClient(app) as client:
+            assert client.get(f"/tracks/{track.id}").status_code == 200
+    finally:
+        app.dependency_overrides.clear()

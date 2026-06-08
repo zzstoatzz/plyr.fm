@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend._internal.track_visibility import track_visible_filter
 from backend.models import Track, TrackLike
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
@@ -26,6 +27,8 @@ async def hydrate_tracks_from_uris(
         select(Track)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(Track.atproto_record_uri.in_(track_uris))
+        # a private track referenced by a list hydrates only for its owner
+        .where(track_visible_filter(session_did))
     )
     all_tracks = track_result.scalars().all()
     track_by_uri = {t.atproto_record_uri: t for t in all_tracks}

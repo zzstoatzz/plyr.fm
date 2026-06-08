@@ -10,12 +10,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
-from backend._internal import require_auth
+from backend._internal import get_optional_session, require_auth
 from backend._internal.tasks import (
     schedule_pds_create_comment,
     schedule_pds_delete_comment,
     schedule_pds_update_comment,
 )
+from backend._internal.track_visibility import ensure_track_visible, viewer_did
 from backend.models import Artist, Track, TrackComment, UserPreferences, get_db
 from backend.schemas import DeletedResponse
 
@@ -66,10 +67,11 @@ class CommentsListResponse(BaseModel):
 async def get_track_comments(
     track_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
+    session: AuthSession | None = Depends(get_optional_session),
 ) -> CommentsListResponse:
     """get all comments for a track, ordered by timestamp.
 
-    public endpoint - no auth required.
+    public for normal tracks; a private track is owner-only (else 404).
     """
     # check track exists and get artist's allow_comments setting
     track_result = await db.execute(select(Track).where(Track.id == track_id))
@@ -77,6 +79,7 @@ async def get_track_comments(
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
+    ensure_track_visible(track, viewer_did(session))
 
     # check if artist allows comments
     prefs_result = await db.execute(
@@ -136,6 +139,7 @@ async def create_comment(
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
+    ensure_track_visible(track, auth_session.did)
 
     if not track.atproto_record_uri or not track.atproto_record_cid:
         raise HTTPException(

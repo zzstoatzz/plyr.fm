@@ -81,6 +81,19 @@ async def run_post_track_create_hooks(
     this is the SINGLE place to add new post-creation behavior.
     both the API upload path and Jetstream ingest call this function.
     """
+    # private (permissioned-space) media must not trigger any public/external
+    # side effect: no follower notification, no turbopuffer embedding, no
+    # copyright scan or genre classification (the audio is credential-gated and
+    # the track is owner-only). mark notification sent so it's never retried.
+    async with db_session() as db:
+        is_private = await db.scalar(
+            select(Track.is_private).where(Track.id == track_id)
+        )
+    if is_private:
+        await _mark_notification_sent(track_id)
+        await invalidate_tracks_discovery_cache()
+        return
+
     if audio_url is None:
         audio_url = await resolve_audio_url(track_id)
 

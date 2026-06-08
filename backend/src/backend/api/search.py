@@ -405,6 +405,8 @@ async def semantic_search(
         select(Track, Artist)
         .join(Artist, Track.artist_did == Artist.did)
         .where(Track.id.in_(track_ids))
+        # private media is never publicly searchable (also shouldn't be indexed)
+        .where(Track.is_private == False)  # noqa: E712
     )
     result = await db.execute(stmt)
     rows = result.all()

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from typing_extensions import TypedDict
 
+from backend._internal.track_visibility import ensure_track_visible
 from backend.config import settings
 from backend.models import Album, Artist, Playlist, Track, get_db
 
@@ -80,6 +81,8 @@ async def _build_track_oembed(
     )
     if not (track := result.scalar_one_or_none()):
         raise HTTPException(status_code=404, detail="track not found")
+    # oEmbed is an unauthenticated public-embed surface — private media never embeds
+    ensure_track_visible(track, None)
 
     return OEmbedResponse(
         title=f"{track.title} - {track.artist.display_name}",

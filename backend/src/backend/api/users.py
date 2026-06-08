@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session, get_optional_session
+from backend._internal.track_visibility import track_visible_filter, viewer_did
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import TrackResponse
 from backend.utilities.aggregations import get_comment_counts, get_like_counts
@@ -59,6 +60,8 @@ async def get_user_liked_tracks(
         .join(Artist, Artist.did == Track.artist_did)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(TrackLike.user_did == artist.did)
+        # a private track this user liked is shown only to that track's owner
+        .where(track_visible_filter(viewer_did(session)))
         .order_by(TrackLike.created_at.desc())
     )
 
@@ -90,11 +93,13 @@ async def get_user_liked_tracks(
         ]
     )
 
-    # get total like count for this user
+    # total like count — match the visible list (exclude others' private tracks)
     count_stmt = (
         select(func.count())
         .select_from(TrackLike)
+        .join(Track, Track.id == TrackLike.track_id)
         .where(TrackLike.user_did == artist.did)
+        .where(track_visible_filter(viewer_did(session)))
     )
     total_count = await db.scalar(count_stmt)
 

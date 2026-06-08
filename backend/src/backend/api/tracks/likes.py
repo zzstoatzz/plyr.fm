@@ -11,10 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session as AuthSession
-from backend._internal import require_auth
+from backend._internal import get_optional_session, require_auth
 from backend._internal.tasks import (
     schedule_pds_create_like,
     schedule_pds_delete_like,
+)
+from backend._internal.track_visibility import (
+    ensure_track_visible,
+    track_visible_filter,
+    viewer_did,
 )
 from backend.models import Artist, Track, TrackLike, get_db
 from backend.schemas import LikedResponse, TrackResponse
@@ -60,6 +65,9 @@ async def list_liked_tracks(
         .join(Artist)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .where(TrackLike.user_did == auth_session.did)
+        # a user may have liked their own private track; never surface a private
+        # track owned by someone else (shouldn't exist, but defense in depth)
+        .where(track_visible_filter(auth_session.did))
         .order_by(TrackLike.created_at.desc())
     )
 
@@ -104,6 +112,7 @@ async def like_track(
 
     if not track:
         raise HTTPException(status_code=404, detail="track not found")
+    ensure_track_visible(track, auth_session.did)
 
     if not track.atproto_record_uri or not track.atproto_record_cid:
         raise HTTPException(
@@ -185,15 +194,23 @@ async def unlike_track(
 async def get_track_likes(
     track_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
+    session: AuthSession | None = Depends(get_optional_session),
 ) -> TrackLikersResponse:
     """Public endpoint returning users who liked a track.
 
     Returns a list of user display info (handle, display name, avatar, liked_at
-    timestamp). This endpoint is public—no authentication required to see who
-    liked a track.
+    timestamp). Public for normal tracks; a private track's likers are visible
+    only to its owner (otherwise it 404s like a missing track).
     """
-    track_exists = await db.scalar(select(Track.id).where(Track.id == track_id))
-    if not track_exists:
+    row = (
+        await db.execute(
+            select(Track.is_private, Track.artist_did).where(Track.id == track_id)
+        )
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="track not found")
+    is_private, artist_did = row
+    if is_private and viewer_did(session) != artist_did:
         raise HTTPException(status_code=404, detail="track not found")
 
     stmt = (
