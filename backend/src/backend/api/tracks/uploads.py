@@ -43,7 +43,7 @@ from backend._internal.atproto.handles import (
 from backend._internal.atproto.records.fm_plyr.track import build_track_record
 from backend._internal.atproto.spaces import (
     build_record_uri,
-    detect_permissioned_capability,
+    session_has_permissioned_scope,
 )
 from backend._internal.atproto.spaces.client import (
     create_space_record,
@@ -1565,18 +1565,12 @@ async def upload_track(
     # for web-playable sources (the blob is written at publish time; the deferred
     # transcode path still targets the public repo — see the design note).
     if is_private:
-        if not await detect_permissioned_capability(auth_session):
-            raise HTTPException(
-                status_code=400,
-                detail="your PDS does not support permissioned spaces (private media)",
-            )
-        # writing to a space needs the granted space scope (the capability probe
-        # passes without it). the granted token carries the expanded
-        # `space:<nsid>?...` scopes, so match on the NSID. absent → tell the
-        # frontend to run the opt-in scope upgrade (which requests include:<nsid>).
-        if settings.atproto.private_media_space_type not in (
-            auth_session.oauth_session or {}
-        ).get("scope", ""):
+        # writing to a space needs the granted space scope. we request it at login
+        # on capable PDSes, so its presence IS the capability signal — absent means
+        # either the PDS can't grant it or the session predates the ask. tell the
+        # frontend to run the scope upgrade; if the PDS can't grant it, that flow's
+        # PAR fails with invalid_scope and the user learns it's unsupported.
+        if not session_has_permissioned_scope(auth_session):
             raise HTTPException(status_code=403, detail="permissioned_scope_required")
         if not audio_format.is_web_playable:
             raise HTTPException(

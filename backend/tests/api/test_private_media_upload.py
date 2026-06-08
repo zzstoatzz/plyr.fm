@@ -77,40 +77,18 @@ def _post(client: TestClient, *, filename: str = "t.wav", data: dict) -> httpx.R
     )
 
 
-def test_private_requires_pds_capability(app_no_scope: FastAPI):
-    with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=False,
-        ),
-        TestClient(app_no_scope) as client,
-    ):
-        resp = _post(client, data={"visibility": "private"})
-    assert resp.status_code == 400
-    assert "permissioned spaces" in resp.json()["detail"]
-
-
-def test_private_capable_but_scope_missing_requests_upgrade(app_no_scope: FastAPI):
-    with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=True,
-        ),
-        TestClient(app_no_scope) as client,
-    ):
+def test_private_without_granted_scope_requests_upgrade(app_no_scope: FastAPI):
+    # capability == the PDS granted the space scope at login. a session without it
+    # (PDS can't grant it, or it predates the ask) gets 403 → frontend runs the
+    # scope upgrade. there's no separate runtime capability probe anymore.
+    with TestClient(app_no_scope) as client:
         resp = _post(client, data={"visibility": "private"})
     assert resp.status_code == 403
     assert resp.json()["detail"] == "permissioned_scope_required"
 
 
 def test_private_rejects_non_web_playable(app_with_scope: FastAPI):
-    with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=True,
-        ),
-        TestClient(app_with_scope) as client,
-    ):
+    with TestClient(app_with_scope) as client:
         resp = client.post(
             "/tracks/",
             files={"file": ("t.aiff", _WAV, "audio/aiff")},
@@ -155,10 +133,6 @@ def test_private_upload_goes_to_pds_not_r2(app_with_scope: FastAPI):
         raise AssertionError("private upload must not stage audio to R2")
 
     with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=True,
-        ),
         patch("backend.api.tracks.uploads.upload_blob", _fake_upload_blob),
         patch("backend.api.tracks.uploads.stage_audio_to_storage", _no_stage),
         patch("backend.api.tracks.uploads.schedule_track_upload", _fake_schedule),
@@ -271,10 +245,6 @@ def test_private_upload_dead_session_returns_401_not_500(app_with_scope: FastAPI
         )
 
     with (
-        patch(
-            "backend.api.tracks.uploads.detect_permissioned_capability",
-            return_value=True,
-        ),
         patch("backend.api.tracks.uploads.upload_blob", _dead_session),
         TestClient(app_with_scope) as client,
     ):

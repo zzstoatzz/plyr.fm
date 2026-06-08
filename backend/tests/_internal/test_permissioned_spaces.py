@@ -45,104 +45,40 @@ def test_parse_space_uri_rejects_malformed(bad):
         parse_space_uri(bad)
 
 
-# --- capability probe interpretation -----------------------------------------
+# --- capability == granted scope ----------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "message,expected",
-    [
-        # the ONLY supported signal from a failure: ZDS's space-scope check ran
-        ("PDS request failed: 403 InsufficientScope", True),
-        # not-a-supporting-PDS responses — all unsupported (fail closed)
-        ("PDS request failed: 401 AuthMissing", False),  # regression: bsky 401 leak
-        ("PDS request failed: 400 InvalidRequest: bad", False),
-        ("PDS request failed: 404 UnknownMethod", False),
-        ("PDS request failed: 405 MethodNotAllowed", False),
-        ("PDS request failed: 501 MethodNotImplemented", False),
-        # genuinely transient → don't cache, fail closed for this call
-        ("PDS request failed: 503 upstream", None),
-        ("PDS request failed: 502 bad gateway", None),
-        ("totally opaque error", None),
-    ],
-)
-def test_classify_failure(message, expected):
-    assert cap._classify_failure(message) is expected
-
-
-async def test_detect_capability_insufficient_scope_is_supported(monkeypatch):
-    # a capable PDS that hasn't been granted the space scope yet returns 403
-    # InsufficientScope from the space route — that proves the route exists.
-    async def fake_request(*args, **kwargs):
-        raise Exception("PDS request failed: 403 InsufficientScope")
-
-    monkeypatch.setattr(cap, "make_pds_request", fake_request)
-    session = Session(
+def _session_with_scope(scope: str) -> Session:
+    return Session(
         session_id="s",
         did="did:plc:x",
         handle="x.test",
-        oauth_session={"pds_url": "https://probe-insufficient.test"},
+        oauth_session={"pds_url": "https://x.test", "scope": scope},
     )
-    assert await cap.detect_permissioned_capability(session) is True
 
 
-async def test_detect_capability_401_is_unsupported(monkeypatch):
-    # regression: a non-supporting PDS (e.g. bsky) must NOT be read as supported
-    async def fake_request(*args, **kwargs):
-        raise Exception("PDS request failed: 401 AuthMissing")
-
-    monkeypatch.setattr(cap, "make_pds_request", fake_request)
-    session = Session(
-        session_id="s",
-        did="did:plc:x",
-        handle="x.test",
-        oauth_session={"pds_url": "https://probe-bsky.test"},
+def test_capability_true_when_scope_granted():
+    # the granted token carries the expanded `space:<nsid>?...` form
+    nsid = settings.atproto.private_media_space_type
+    granted = f"atproto blob:*/* space:{nsid}?action=create&did=*&skey=self"
+    assert cap.session_has_permissioned_scope(_session_with_scope(granted)) is True
+    # the requested `include:<nsid>` form also counts
+    assert (
+        cap.session_has_permissioned_scope(
+            _session_with_scope(f"atproto include:{nsid}")
+        )
+        is True
     )
-    assert await cap.detect_permissioned_capability(session) is False
 
 
-async def test_detect_capability_supported(monkeypatch):
-    async def fake_request(*args, **kwargs):
-        return {"spaces": []}
-
-    monkeypatch.setattr(cap, "make_pds_request", fake_request)
-
-    session = Session(
-        session_id="s",
-        did="did:plc:x",
-        handle="x.test",
-        oauth_session={"pds_url": "https://probe-supported.test"},
+def test_capability_false_without_scope():
+    base = "atproto blob:*/* include:fm.plyr.stg.authFullApp"
+    assert cap.session_has_permissioned_scope(_session_with_scope(base)) is False
+    # a session with no scope key must not crash and must read as unsupported
+    no_scope = Session(
+        session_id="s", did="did:plc:x", handle="x.test", oauth_session={}
     )
-    assert await cap.detect_permissioned_capability(session) is True
-
-
-async def test_detect_capability_unsupported(monkeypatch):
-    async def fake_request(*args, **kwargs):
-        raise Exception("PDS request failed: 501 MethodNotImplemented")
-
-    monkeypatch.setattr(cap, "make_pds_request", fake_request)
-
-    session = Session(
-        session_id="s",
-        did="did:plc:x",
-        handle="x.test",
-        oauth_session={"pds_url": "https://probe-unsupported.test"},
-    )
-    assert await cap.detect_permissioned_capability(session) is False
-
-
-async def test_detect_capability_transient_fails_closed(monkeypatch):
-    async def fake_request(*args, **kwargs):
-        raise Exception("PDS request failed: 503 upstream")
-
-    monkeypatch.setattr(cap, "make_pds_request", fake_request)
-
-    session = Session(
-        session_id="s",
-        did="did:plc:x",
-        handle="x.test",
-        oauth_session={"pds_url": "https://probe-transient.test"},
-    )
-    assert await cap.detect_permissioned_capability(session) is False
+    assert cap.session_has_permissioned_scope(no_scope) is False
 
 
 # --- OAuth scope composition --------------------------------------------------
