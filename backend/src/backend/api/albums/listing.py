@@ -55,7 +55,9 @@ async def list_albums(
         .join(Artist, Album.artist_did == Artist.did)
         # count only public tracks — albums that exist solely because of private
         # uploads have a zero public count and drop out via the having clause
-        .outerjoin(Track, and_(Track.album_id == Album.id, Track.is_private.is_(False)))
+        .outerjoin(
+            Track, and_(Track.album_id == Album.id, Track.visibility != "private")
+        )
         .group_by(Album.id, Artist.did)
         .having(func.count(Track.id) > 0)
         .order_by(func.lower(Album.title))
@@ -92,7 +94,9 @@ async def list_artist_albums(
             func.count(Track.id).label("track_count"),
             func.coalesce(func.sum(Track.play_count), 0).label("total_plays"),
         )
-        .outerjoin(Track, and_(Track.album_id == Album.id, Track.is_private.is_(False)))
+        .outerjoin(
+            Track, and_(Track.album_id == Album.id, Track.visibility != "private")
+        )
         .where(Album.artist_did == artist.did)
         .group_by(Album.id)
         .having(func.count(Track.id) > 0)

@@ -134,7 +134,7 @@ async def _create_track(
         image_url="https://images.example/cover.jpg",
         atproto_record_uri=f"at://{artist.did}/fm.plyr.track/{file_id}",
         play_count=play_count,
-        unlisted=unlisted,
+        visibility="unlisted" if unlisted else "public",
         support_gate=support_gate,
     )
     db_session.add(track)

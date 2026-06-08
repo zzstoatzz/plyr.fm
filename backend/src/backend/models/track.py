@@ -3,8 +3,9 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import ColumnElement, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.database import Base
@@ -101,11 +102,19 @@ class Track(Base):
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # visibility — unlisted tracks don't appear in discovery feeds (latest,
-    # top, for-you) but are still accessible via direct link, artist profile,
-    # album pages, playlists, and search
-    unlisted: Mapped[bool] = mapped_column(
-        nullable=False, default=False, server_default="false"
+    # visibility — single source of truth for discovery + access + where audio
+    # lives. one mutually-exclusive value (no overlapping booleans):
+    #   public     — in feeds; audio on R2/CDN; anyone
+    #   unlisted   — NOT in feeds; audio on R2/CDN; anyone with the link
+    #   supporters — in feeds (locked); audio in R2 private bucket; plyr.fm gates
+    #                on atprotofans support; carries support_gate={"type":"any"}
+    #   private    — NOT in feeds; audio + record live in the artist's ATProto
+    #                permissioned space ON THEIR PDS (never R2); the PDS gates via
+    #                a space credential; owner-only. space_uri holds the ats:// space.
+    # copyright gating (indiemusi) is orthogonal — it rides on public/unlisted via
+    # support_gate={"type":"copyright"} and the copyright_* pointers below.
+    visibility: Mapped[str] = mapped_column(
+        String, nullable=False, default="public", server_default="public", index=True
     )
 
     # notification tracking
@@ -113,19 +122,14 @@ class Track(Base):
         nullable=False, default=False, server_default="false"
     )
 
-    # supporter-gated content (e.g., {"type": "any"} requires any atprotofans support)
+    # gating mechanism detail (drives the ATProto record's supportGate field +
+    # audio access checks): {"type": "any"} for supporters, {"type": "copyright"}
+    # for the indiemusi paradigm. None for ungated tracks.
     support_gate: Mapped[dict | None] = mapped_column(
         JSONB(none_as_null=True), nullable=True, default=None
     )
 
-    # private media stored in an ATProto permissioned space (com.atproto.space.*).
-    # the audio blob + track record live in the artist's permissioned repo on their
-    # PDS; there is no public R2 copy and the track is excluded from discovery.
-    # space_uri is the 3-segment ats:// space URI; the record is reachable only
-    # through the space credential path. requires a PDS that supports spaces.
-    is_private: Mapped[bool] = mapped_column(
-        nullable=False, default=False, server_default="false"
-    )
+    # 3-segment ats:// space URI for private (permissioned) media; None otherwise.
     space_uri: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # copyright paradigm record pointers — set when the user has opted into a
@@ -134,6 +138,28 @@ class Track(Base):
     # app-layer pointer; the PDS records themselves have no back-reference.
     copyright_song_uri: Mapped[str | None] = mapped_column(String, nullable=True)
     copyright_recording_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # --- derived visibility helpers (usable in both Python and SQL queries) ---
+
+    @hybrid_property
+    def is_private(self) -> bool:
+        """private (permissioned-space) media — owner-only, PDS-native."""
+        return self.visibility == "private"
+
+    @is_private.inplace.expression
+    @classmethod
+    def _is_private_expr(cls) -> ColumnElement[bool]:
+        return cls.visibility == "private"
+
+    @hybrid_property
+    def in_discovery(self) -> bool:
+        """appears in discovery feeds (latest / top / for-you / radio)."""
+        return self.visibility in ("public", "supporters")
+
+    @in_discovery.inplace.expression
+    @classmethod
+    def _in_discovery_expr(cls) -> ColumnElement[bool]:
+        return cls.visibility.in_(("public", "supporters"))
 
     @property
     def is_gated(self) -> bool:

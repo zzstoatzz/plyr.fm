@@ -12,7 +12,7 @@ two shapes:
   a guard for endpoints that load one track by id/uri/file_id.
 """
 
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from fastapi import HTTPException
 from sqlalchemy import ColumnElement, or_
@@ -20,6 +20,7 @@ from sqlalchemy import ColumnElement, or_
 from backend.models import Track
 
 
+@runtime_checkable
 class _HasDid(Protocol):
     """structural type for anything carrying a DID (e.g. an auth Session)."""
 
@@ -27,10 +28,11 @@ class _HasDid(Protocol):
 
 
 def track_visible_filter(viewer_did: str | None) -> ColumnElement[bool]:
-    """SQL condition: public tracks, plus the viewer's own private tracks."""
+    """SQL condition: non-private tracks, plus the viewer's own private tracks."""
+    not_private = Track.visibility != "private"
     if viewer_did is None:
-        return Track.is_private.is_(False)
-    return or_(Track.is_private.is_(False), Track.artist_did == viewer_did)
+        return not_private
+    return or_(not_private, Track.artist_did == viewer_did)
 
 
 def can_view_track(viewer_did: str | None, track: Track) -> bool:

@@ -227,7 +227,7 @@
 			[],
 			null,
 			tags,
-			false,
+			'public',
 			false,
 			'',
 			() => {},

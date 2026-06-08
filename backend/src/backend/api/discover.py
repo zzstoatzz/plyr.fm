@@ -49,7 +49,7 @@ async def get_network_artists(
         .join(Track, Track.artist_did == Artist.did)
         .where(Artist.did.in_(follow_dids))
         # private media never counts toward an artist's public track count
-        .where(Track.is_private.is_(False))
+        .where(Track.visibility != "private")
         .group_by(Artist.did)
     )
 

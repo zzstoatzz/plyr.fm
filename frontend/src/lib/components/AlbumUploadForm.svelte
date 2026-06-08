@@ -339,7 +339,7 @@
 					[...track.featuredArtists],
 					null, // no per-track cover — album cover was uploaded above
 					[...track.tags],
-					track.supportGated,
+					track.supportGated ? 'supporters' : 'public',
 					track.autoTag,
 					track.description,
 					(result) => {

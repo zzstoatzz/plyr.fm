@@ -311,7 +311,7 @@ async def get_for_you_feed(
             await db.execute(
                 select(Track.id, Track.artist_did).where(
                     Track.id.in_(top_ids),
-                    Track.unlisted == False,  # noqa: E712
+                    Track.in_discovery,
                 )
             )
         ).all()

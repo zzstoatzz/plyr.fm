@@ -174,7 +174,7 @@ async def _search_tracks(
         .join(Artist, Track.artist_did == Artist.did)
         .where(or_(similarity > 0.1, substring_match))
         # private (permissioned-space) media is never publicly searchable
-        .where(Track.is_private == False)  # noqa: E712
+        .where(Track.visibility != "private")
         .order_by(similarity.desc())
         .limit(limit)
     )
@@ -406,7 +406,7 @@ async def semantic_search(
         .join(Artist, Track.artist_did == Artist.did)
         .where(Track.id.in_(track_ids))
         # private media is never publicly searchable (also shouldn't be indexed)
-        .where(Track.is_private == False)  # noqa: E712
+        .where(Track.visibility != "private")
     )
     result = await db.execute(stmt)
     rows = result.all()
