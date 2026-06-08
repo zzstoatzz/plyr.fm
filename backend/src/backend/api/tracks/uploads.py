@@ -1565,8 +1565,10 @@ async def upload_track(
                 detail="your PDS does not support permissioned spaces (private media)",
             )
         # writing to a space needs the granted space scope (the capability probe
-        # passes without it). signal the frontend to run the opt-in scope upgrade.
-        if settings.atproto.private_media_space_scope not in (
+        # passes without it). the granted token carries the expanded
+        # `space:<nsid>?...` scopes, so match on the NSID. absent → tell the
+        # frontend to run the opt-in scope upgrade (which requests include:<nsid>).
+        if settings.atproto.private_media_space_type not in (
             auth_session.oauth_session or {}
         ).get("scope", ""):
             raise HTTPException(status_code=403, detail="permissioned_scope_required")

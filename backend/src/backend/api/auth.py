@@ -662,7 +662,7 @@ async def start_scope_upgrade_flow(
     )
     include_indiemusi = settings.indiemusi.song_collection in current_scope
     include_permissioned = body.include_permissioned or (
-        settings.atproto.private_media_space_scope in current_scope
+        settings.atproto.private_media_space_type in current_scope
     )
 
     auth_url, state = await start_oauth_flow_with_scopes(
