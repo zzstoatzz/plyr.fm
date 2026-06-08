@@ -200,6 +200,15 @@ async def update_track_metadata(
             detail="you can only edit your own tracks",
         )
 
+    # editing private (permissioned-space) media would route through the public
+    # at:// rebuild path; space record update isn't implemented yet, so reject it
+    # rather than corrupt the record or write to the public repo.
+    if track.is_private:
+        raise HTTPException(
+            status_code=409,
+            detail="editing private tracks isn't supported yet",
+        )
+
     title_changed = False
     if title is not None:
         track.title = title

@@ -711,17 +711,28 @@ async def replace_track_audio(
     async with db_session() as db:
         result = await db.execute(
             select(
-                Track.artist_did, Track.atproto_record_uri, Track.support_gate
+                Track.artist_did,
+                Track.atproto_record_uri,
+                Track.support_gate,
+                Track.is_private,
             ).where(Track.id == track_id)
         )
         row = result.first()
         if not row:
             raise HTTPException(status_code=404, detail="track not found")
-        artist_did, atproto_uri, support_gate = row
+        artist_did, atproto_uri, support_gate, is_private = row
         if artist_did != auth_session.did:
             raise HTTPException(
                 status_code=403,
                 detail="you can only replace audio on your own tracks",
+            )
+        # the replace pipeline builds a public/gated upload context; replacing
+        # audio in a permissioned space isn't implemented yet, so reject rather
+        # than drift a private track toward public storage.
+        if is_private:
+            raise HTTPException(
+                status_code=409,
+                detail="replacing audio on private tracks isn't supported yet",
             )
         if not atproto_uri:
             raise HTTPException(

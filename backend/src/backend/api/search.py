@@ -173,6 +173,8 @@ async def _search_tracks(
         select(Track, Artist, similarity.label("relevance"))
         .join(Artist, Track.artist_did == Artist.did)
         .where(or_(similarity > 0.1, substring_match))
+        # private (permissioned-space) media is never publicly searchable
+        .where(Track.is_private == False)  # noqa: E712
         .order_by(similarity.desc())
         .limit(limit)
     )

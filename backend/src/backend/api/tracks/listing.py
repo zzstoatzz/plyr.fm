@@ -131,9 +131,14 @@ async def list_tracks(
     # filter by artist if provided
     if artist_did:
         stmt = stmt.where(Track.artist_did == artist_did)
+        # private (permissioned-space) media is visible only to its owner — an
+        # artist page viewed by anyone else (or logged out) must not list it
+        if not (session and session.did == artist_did):
+            stmt = stmt.where(Track.is_private == False)  # noqa: E712
     else:
         # discovery feed: exclude unlisted tracks (artist pages show all) and
-        # tracks from deactivated accounts (their content drops out of discovery)
+        # tracks from deactivated accounts (their content drops out of discovery).
+        # unlisted==False also excludes private media (private implies unlisted).
         stmt = stmt.where(Track.unlisted == False)  # noqa: E712
         stmt = stmt.where(Artist.deactivated == False)  # noqa: E712
 
