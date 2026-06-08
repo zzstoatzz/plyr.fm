@@ -219,27 +219,44 @@ async def start_oauth_flow(
     from backend._internal.atproto.handles import resolve_handle
 
     try:
-        # resolve handle to DID to check preferences
-        resolved = await resolve_handle(handle)
-        if resolved:
+        # resolve handle to DID to check preferences (best-effort: the OAuth flow
+        # resolves the handle again internally if this fails)
+        wants_teal = wants_indiemusi = False
+        if resolved := await resolve_handle(handle):
             did = resolved["did"]
             wants_teal = await _check_teal_preference(did)
             wants_indiemusi = await _check_copyright_paradigm(did)
-            client = get_oauth_client(
-                include_teal=wants_teal, include_indiemusi=wants_indiemusi
-            )
-            logger.info(
-                f"starting OAuth for {handle} (did={did}, "
-                f"teal={wants_teal}, indiemusi={wants_indiemusi})"
-            )
-        else:
-            # fallback to base client if resolution fails
-            # (OAuth flow will resolve handle again internally)
-            client = get_oauth_client()
-            logger.info(f"starting OAuth for {handle} (resolution failed, using base)")
 
-        auth_url, state = await client.start_authorization(handle, prompt=prompt)
-        return auth_url, state
+        # request the private-media space scope by default. capability can't be
+        # probed before the scope is granted (a scopeless space call just 401s), so
+        # OAuth itself is the discovery: a PDS that can't resolve the permission set
+        # rejects PAR with `invalid_scope`, and we retry without it (that account
+        # simply won't see private media). a capable PDS grants it up front, so the
+        # granted scope becomes the capability signal — see spaces.capability.
+        try:
+            auth_url, state = await get_oauth_client(
+                include_teal=wants_teal,
+                include_indiemusi=wants_indiemusi,
+                include_permissioned=True,
+            ).start_authorization(handle, prompt=prompt)
+            logger.info(
+                f"starting OAuth for {handle} "
+                f"(teal={wants_teal}, indiemusi={wants_indiemusi}, permissioned=True)"
+            )
+            return auth_url, state
+        except Exception as e:
+            if "invalid_scope" not in str(e):
+                raise
+            logger.info(
+                f"{handle}'s PDS rejected the private-media scope (invalid_scope); "
+                f"retrying login without it"
+            )
+            auth_url, state = await get_oauth_client(
+                include_teal=wants_teal,
+                include_indiemusi=wants_indiemusi,
+                include_permissioned=False,
+            ).start_authorization(handle, prompt=prompt)
+            return auth_url, state
     except HTTPException:
         raise
     except Exception as e:
