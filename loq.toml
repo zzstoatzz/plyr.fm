@@ -28,7 +28,7 @@ max_lines = 896
 
 [[rules]]
 path = "backend/src/backend/api/auth.py"
-max_lines = 826
+max_lines = 862
 
 [[rules]]
 path = "backend/src/backend/api/tracks/listing.py"
@@ -44,7 +44,7 @@ max_lines = 1692
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 1085
+max_lines = 1109
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
@@ -288,7 +288,7 @@ max_lines = 617
 
 [[rules]]
 path = "backend/src/backend/_internal/auth/oauth.py"
-max_lines = 549
+max_lines = 559
 
 [[rules]]
 path = "frontend/src/lib/components/CopyrightSection.svelte"

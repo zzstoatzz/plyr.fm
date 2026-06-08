@@ -118,6 +118,16 @@ class Track(Base):
         JSONB(none_as_null=True), nullable=True, default=None
     )
 
+    # private media stored in an ATProto permissioned space (com.atproto.space.*).
+    # the audio blob + track record live in the artist's permissioned repo on their
+    # PDS; there is no public R2 copy and the track is excluded from discovery.
+    # space_uri is the 3-segment ats:// space URI; the record is reachable only
+    # through the space credential path. requires a PDS that supports spaces.
+    is_private: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default="false"
+    )
+    space_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # copyright paradigm record pointers — set when the user has opted into a
     # copyright paradigm and filled out the rights form on upload/edit. AT-URIs
     # of records on the user's PDS (e.g. ch.indiemusi.alpha.song). pure

@@ -463,6 +463,24 @@ class AtprotoSettings(AppSettingsSection):
 
     @computed_field
     @property
+    def private_media_space_type(self) -> str:
+        """Permissioned-space type NSID for artist-owned private media.
+
+        the OAuth consent boundary for the permissioned-spaces private-media
+        feature; records inside reuse the public track collection lexicon.
+        """
+
+        return f"{self.app_namespace}.privateMedia"
+
+    @computed_field
+    @property
+    def private_media_space_scope(self) -> str:
+        """granular OAuth scope token granting access to the private-media space."""
+
+        return f"space:{self.private_media_space_type}"
+
+    @computed_field
+    @property
     def old_track_collection(self) -> str | None:
         """Collection name for old namespace, if migration is active."""
 
@@ -516,6 +534,7 @@ class AtprotoSettings(AppSettingsSection):
         teal_play: str | None = None,
         teal_status: str | None = None,
         indiemusi_tokens: list[str] | None = None,
+        permissioned_spaces: bool = False,
     ) -> str:
         """OAuth scope composed with optional integration extras.
 
@@ -523,6 +542,9 @@ class AtprotoSettings(AppSettingsSection):
             teal_play: teal.fm play collection NSID, present iff teal scopes wanted
             teal_status: teal.fm status collection NSID, present iff teal scopes wanted
             indiemusi_tokens: indiemusi paradigm scope tokens, present iff requested
+            permissioned_spaces: include the private-media space scope. only ever
+                requested as an opt-in upgrade for accounts on a PDS that supports
+                permissioned spaces (never in a base login).
 
         either teal pair must both be set or both be None.
         """
@@ -531,6 +553,8 @@ class AtprotoSettings(AppSettingsSection):
             parts.extend([f"repo:{teal_play}", f"repo:{teal_status}"])
         if indiemusi_tokens:
             parts.extend(indiemusi_tokens)
+        if permissioned_spaces:
+            parts.append(self.private_media_space_scope)
         return " ".join(parts)
 
 

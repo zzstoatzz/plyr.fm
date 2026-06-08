@@ -69,6 +69,7 @@ async def client_metadata() -> dict[str, Any]:
                 if settings.indiemusi.enabled
                 else None
             ),
+            permissioned_spaces=True,
         ),
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
