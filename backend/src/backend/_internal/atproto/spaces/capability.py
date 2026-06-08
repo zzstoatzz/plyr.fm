@@ -30,37 +30,37 @@ from backend.utilities.redis import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
-_CACHE_PREFIX = "permissioned_capability:"
+# bumped to v2 when the classifier flipped to fail-closed — invalidates any stale
+# (overly-permissive) cached results from the prior heuristic.
+_CACHE_PREFIX = "permissioned_capability:v2:"
 _CACHE_TTL_SECONDS = 6 * 60 * 60
-
-# error codes that mean "this PDS does not implement the space surface"
-_UNSUPPORTED_ERROR_CODES = (
-    "MethodNotImplemented",
-    "UnknownMethod",
-    "XRPCNotSupported",
-    "MethodNotSupported",
-)
-_UNSUPPORTED_STATUS = (404, 501)
 
 _STATUS_RE = re.compile(r"PDS request failed:\s*(\d{3})")
 
 
 def _classify_failure(message: str) -> bool | None:
-    """interpret a failed listSpaces probe.
+    """interpret a FAILED listSpaces probe — fail closed.
 
-    returns True (supported), False (definitively unsupported), or None (ambiguous
-    / transient — caller should fail closed without caching).
+    a PDS is treated as supporting permissioned spaces ONLY on an unambiguous
+    positive signal (handled in `_probe`: HTTP 200, or 403 InsufficientScope —
+    ZDS's space-scope check, which proves the route is implemented). every other
+    failure is unsupported; a non-supporting PDS returns auth/method-not-found
+    errors that must NOT be read as "route exists."
+
+    returns True (supported), False (unsupported, cacheable), or None (transient
+    — don't cache, fail closed for this call only).
     """
-    if any(code in message for code in _UNSUPPORTED_ERROR_CODES):
-        return False
+    # the space-scope check ran → the route is implemented → supported
+    if "InsufficientScope" in message:
+        return True
     if match := _STATUS_RE.search(message):
         status = int(match.group(1))
-        if status in _UNSUPPORTED_STATUS:
-            return False
+        if status == 501:
+            return False  # not implemented
         if 500 <= status < 600:
-            return None  # transient upstream failure
-        return True  # 4xx other than 404: the route dispatched (auth/scope/validation)
-    return None
+            return None  # transient upstream failure (500/502/503/504)
+        return False  # 401/400/404/405/other 4xx → not a supporting PDS
+    return None  # opaque / network error
 
 
 async def _probe(auth_session: AuthSession) -> bool | None:

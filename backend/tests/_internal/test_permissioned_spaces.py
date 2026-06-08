@@ -51,21 +51,53 @@ def test_parse_space_uri_rejects_malformed(bad):
 @pytest.mark.parametrize(
     "message,expected",
     [
-        ("PDS request failed: 501 MethodNotImplemented", False),
+        # the ONLY supported signal from a failure: ZDS's space-scope check ran
+        ("PDS request failed: 403 InsufficientScope", True),
+        # not-a-supporting-PDS responses — all unsupported (fail closed)
+        ("PDS request failed: 401 AuthMissing", False),  # regression: bsky 401 leak
+        ("PDS request failed: 400 InvalidRequest: bad", False),
         ("PDS request failed: 404 UnknownMethod", False),
-        ("XRPCNotSupported", False),
-        ("PDS request failed: 400 InvalidRequest: Missing space", True),  # route ran
-        ("PDS request failed: 403 InsufficientScope", True),  # route ran
-        (
-            "PDS request failed: 503 upstream",
-            None,
-        ),  # transient -> fail closed, no cache
+        ("PDS request failed: 405 MethodNotAllowed", False),
+        ("PDS request failed: 501 MethodNotImplemented", False),
+        # genuinely transient → don't cache, fail closed for this call
+        ("PDS request failed: 503 upstream", None),
         ("PDS request failed: 502 bad gateway", None),
         ("totally opaque error", None),
     ],
 )
 def test_classify_failure(message, expected):
     assert cap._classify_failure(message) is expected
+
+
+async def test_detect_capability_insufficient_scope_is_supported(monkeypatch):
+    # a capable PDS that hasn't been granted the space scope yet returns 403
+    # InsufficientScope from the space route — that proves the route exists.
+    async def fake_request(*args, **kwargs):
+        raise Exception("PDS request failed: 403 InsufficientScope")
+
+    monkeypatch.setattr(cap, "make_pds_request", fake_request)
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://probe-insufficient.test"},
+    )
+    assert await cap.detect_permissioned_capability(session) is True
+
+
+async def test_detect_capability_401_is_unsupported(monkeypatch):
+    # regression: a non-supporting PDS (e.g. bsky) must NOT be read as supported
+    async def fake_request(*args, **kwargs):
+        raise Exception("PDS request failed: 401 AuthMissing")
+
+    monkeypatch.setattr(cap, "make_pds_request", fake_request)
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://probe-bsky.test"},
+    )
+    assert await cap.detect_permissioned_capability(session) is False
 
 
 async def test_detect_capability_supported(monkeypatch):
