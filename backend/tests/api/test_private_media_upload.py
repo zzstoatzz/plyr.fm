@@ -257,3 +257,28 @@ async def test_private_cleanup_never_touches_r2(monkeypatch):
 
     # must be a no-op for private (early return), not an R2 delete
     await up._cleanup_staged_media_pre_db(ctx, sr)
+
+
+def test_private_upload_dead_session_returns_401_not_500(app_with_scope: FastAPI):
+    """a dead atproto refresh token during the in-request PDS blob upload must
+    surface as 401 session_expired (so the client re-auths), not a 500 that the
+    browser shows as a misleading 'connection failed' network error."""
+    from backend._internal.atproto.client import SessionExpiredError
+
+    async def _dead_session(*args, **kwargs):
+        raise SessionExpiredError(
+            "atproto session expired — re-authentication required"
+        )
+
+    with (
+        patch(
+            "backend.api.tracks.uploads.detect_permissioned_capability",
+            return_value=True,
+        ),
+        patch("backend.api.tracks.uploads.upload_blob", _dead_session),
+        TestClient(app_with_scope) as client,
+    ):
+        resp = _post(client, data={"visibility": "private"})
+
+    assert resp.status_code == 401, resp.text
+    assert resp.json()["detail"] == "session_expired"

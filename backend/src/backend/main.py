@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend._internal import jam_service, notification_service, queue_service
+from backend._internal.atproto.client import SessionExpiredError
 from backend._internal.background import docket_client_lifespan
 from backend.api import (
     account_router,
@@ -132,6 +133,19 @@ app = FastAPI(
 # setup rate limiter
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+
+async def _session_expired_handler(request: Request, exc: Exception) -> Response:
+    """a dead atproto refresh token is the user's problem to fix (re-auth), not a
+    server fault — return 401 so the client prompts a fresh sign-in. registered as
+    a typed handler so it runs inside CORSMiddleware (the catch-all 500 handler
+    runs outside it, which strips CORS headers and makes the browser see a opaque
+    network error instead of the real status).
+    """
+    return ORJSONResponse(status_code=401, content={"detail": "session_expired"})
+
+
+app.add_exception_handler(SessionExpiredError, _session_expired_handler)
 
 
 async def _unhandled_exception_handler(request: Request, exc: Exception) -> Response:

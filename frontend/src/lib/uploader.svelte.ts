@@ -1,8 +1,10 @@
 import { browser } from '$app/environment';
+import { goto } from '$app/navigation';
 import { API_URL } from './config';
 import { toast } from './toast.svelte';
 import { tracksCache } from './tracks.svelte';
 import type { FeaturedArtist } from './types';
+import { setReturnUrl } from './utils/return-url';
 
 interface UploadTask {
 	id: string;
@@ -69,6 +71,12 @@ function buildNetworkErrorMessage(progressPercent: number, fileSizeMB: number, i
 
 	if (progressPercent > 0 && progressPercent < 100) {
 		return `upload failed${progressInfo}: connection was interrupted. check your network and try again`;
+	}
+
+	// at 100% the file finished uploading — the failure is on the server while it
+	// processes the file, so don't blame the user's connection.
+	if (progressPercent >= 100) {
+		return `upload failed${progressInfo}: the server had trouble processing your file. please try again in a moment`;
 	}
 
 	return `upload failed${progressInfo}: connection failed. check your internet connection and try again`;
@@ -283,6 +291,16 @@ class UploaderState {
 					// off the one-time opt-in upgrade, then the user retries the upload.
 					if (xhr.status === 403 && error.detail === 'permissioned_scope_required') {
 						void startPermissionedScopeUpgrade();
+						return;
+					}
+					// the atproto session's refresh token died — the upload couldn't
+					// authenticate to the PDS. /auth/me preflight can't catch this (it
+					// doesn't force a token refresh), so handle it at runtime: bounce to
+					// sign-in instead of showing a misleading "connection failed".
+					if (xhr.status === 401 && error.detail === 'session_expired') {
+						toast.error('your session expired — sign in to finish your upload');
+						setReturnUrl('/upload');
+						if (browser) void goto('/login');
 						return;
 					}
 					errorMsg = error.detail || errorMsg;
