@@ -478,66 +478,63 @@
 				disabled={supportGated}
 			/>
 
-			<div class="form-group supporter-gating">
-				{#if artistProfile?.support_url}
-					<label class="checkbox-label">
-						<input
-							type="checkbox"
-							bind:checked={supportGated}
-							disabled={copyrightEnabled}
-						/>
-						<span class="checkbox-text">
-							<svg class="heart-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-								<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-							</svg>
-							supporters only
-						</span>
-					</label>
-					<p class="gating-note">
-						only users who support you via <a href={artistProfile.support_url} target="_blank" rel="noopener">atprotofans</a> can play this track
-					</p>
-				{:else}
-					<div class="gating-disabled">
-						<span class="gating-disabled-icon">
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-							</svg>
-						</span>
-						<span class="gating-disabled-text">
-							want to offer exclusive tracks to supporters? <a href="https://atprotofans.com" target="_blank" rel="noopener">set up atprotofans</a>, then enable it in your <a href="/portal">portal</a>
-						</span>
-					</div>
-				{/if}
-			</div>
+			<fieldset class="form-group access-card">
+				<legend>visibility &amp; access</legend>
 
-			<div class="form-group">
-				<label class="checkbox-label">
-					<input
-						type="checkbox"
-						bind:checked={trackUnlisted}
-					/>
-					<span class="checkbox-text">unlisted — won't appear in feeds</span>
-				</label>
-				{#if trackUnlisted}
-					<p class="field-hint">
-						this track won't show up in the latest, top, or for-you feeds. it's still accessible via direct link, your profile, albums, playlists, and search.
-					</p>
-				{/if}
-			</div>
-
-			{#if permissionedSupported}
-				<div class="form-group">
-					<label class="checkbox-label">
-						<input type="checkbox" bind:checked={keepPrivate} />
-						<span class="checkbox-text">keep private — store in your permissioned space</span>
-					</label>
-					{#if keepPrivate}
-						<p class="field-hint">
-							the audio and its record live in a private space on your PDS — no public copy, not shown in feeds, and playable only by you. your PDS supports this experimental ATProto feature. you'll be asked once to approve private-media access.
+				<div class="access-row supporter-gating">
+					{#if artistProfile?.support_url}
+						<label class="checkbox-label">
+							<input
+								type="checkbox"
+								bind:checked={supportGated}
+								disabled={copyrightEnabled}
+							/>
+							<span class="checkbox-text">
+								<svg class="heart-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+									<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+								</svg>
+								supporters only
+							</span>
+						</label>
+						<p class="access-note">
+							only users who support you via <a href={artistProfile.support_url} target="_blank" rel="noopener">atprotofans</a> can play this track
 						</p>
+					{:else}
+						<div class="gating-disabled">
+							<span class="gating-disabled-icon">
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+								</svg>
+							</span>
+							<span class="gating-disabled-text">
+								want to offer exclusive tracks to supporters? <a href="https://atprotofans.com" target="_blank" rel="noopener">set up atprotofans</a>, then enable it in your <a href="/portal">portal</a>
+							</span>
+						</div>
 					{/if}
 				</div>
-			{/if}
+
+				<div class="access-row">
+					<label class="checkbox-label">
+						<input type="checkbox" bind:checked={trackUnlisted} />
+						<span class="checkbox-text">unlisted</span>
+					</label>
+					<p class="access-note">
+						hidden from the latest, top, and for-you feeds — still reachable via direct link, your profile, albums, playlists, and search.
+					</p>
+				</div>
+
+				{#if permissionedSupported}
+					<div class="access-row">
+						<label class="checkbox-label">
+							<input type="checkbox" bind:checked={keepPrivate} />
+							<span class="checkbox-text">keep private</span>
+						</label>
+						<p class="access-note">
+							stored in a private space on your PDS — no public copy, hidden from feeds, playable only by you. you'll be asked once to approve private-media access.
+						</p>
+					</div>
+				{/if}
+			</fieldset>
 
 			<div class="form-group attestation">
 				<label class="checkbox-label">
@@ -847,11 +844,28 @@
 		text-decoration: underline;
 	}
 
-	.supporter-gating {
-		background: color-mix(in srgb, var(--accent) 8%, var(--bg-primary));
-		padding: 1rem;
+	/* grouped "visibility & access" card: one bordered container, the toggles
+	   stacked as rows with subtle dividers and a persistent note under each */
+	.access-card {
+		padding: 0;
+		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
-		border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border-default));
+		min-width: 0;
+	}
+
+	.access-card legend {
+		margin-left: 0.75rem;
+		padding: 0 0.4rem;
+		font-size: var(--text-sm);
+		color: var(--text-tertiary);
+	}
+
+	.access-row {
+		padding: 0.875rem 1rem;
+	}
+
+	.access-row + .access-row {
+		border-top: 1px solid var(--border-default);
 	}
 
 	.supporter-gating .checkbox-text {
@@ -864,20 +878,20 @@
 		color: var(--accent);
 	}
 
-	.gating-note {
-		margin-top: 0.5rem;
+	.access-note {
+		margin-top: 0.4rem;
 		margin-left: 2rem;
 		font-size: var(--text-sm);
 		color: var(--text-tertiary);
 		line-height: 1.4;
 	}
 
-	.gating-note a {
+	.access-note a {
 		color: var(--accent);
 		text-decoration: none;
 	}
 
-	.gating-note a:hover {
+	.access-note a:hover {
 		text-decoration: underline;
 	}
 
