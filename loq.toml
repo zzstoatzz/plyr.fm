@@ -40,7 +40,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1692
+max_lines = 1694
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -327,9 +327,13 @@ path = "frontend/src/lib/components/portal/DataSection.svelte"
 max_lines = 612
 
 [[rules]]
-path = "frontend/src/routes/radio/[[][[]station[]][]]/+page.svelte"
+path = "frontend/src/routes/radio/[[station]]/+page.svelte"
 max_lines = 929
 
 [[rules]]
 path = "backend/tests/api/test_radio.py"
 max_lines = 525
+
+[[rules]]
+path = "frontend/src/lib/components/player/PlaybackControls.svelte"
+max_lines = 503

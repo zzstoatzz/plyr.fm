@@ -327,6 +327,7 @@ async def optimize_track_audio(
                 mp3_url = urljoin(backend_url + "/", f"audio/{new_mp3_file_id}")
             else:
                 mp3_url = await storage.get_url(
+                mp3_url = await storage.get_url(
                     new_mp3_file_id,
                     file_type="audio",
                     extension=OPTIMIZE_TARGET_FORMAT,

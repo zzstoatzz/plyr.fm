@@ -158,6 +158,38 @@
 			</svg>
 		</button>
 
+		<button
+			class="control-btn"
+			class:active={queue.shuffle}
+			onclick={() => queue.toggleShuffle()}
+			title={queue.shuffle ? 'disable shuffle' : 'enable shuffle'}
+		>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<polyline points="16 3 21 3 21 8"></polyline>
+				<line x1="4" y1="20" x2="21" y2="3"></line>
+				<polyline points="21 16 21 21 16 21"></polyline>
+				<line x1="15" y1="15" x2="21" y2="21"></line>
+				<line x1="4" y1="4" x2="9" y2="9"></line>
+			</svg>
+		</button>
+
+		<button
+			class="control-btn"
+			class:active={queue.repeatMode !== 'none'}
+			onclick={() => queue.toggleRepeatMode()}
+			title={queue.repeatMode === 'none' ? 'enable repeat' : queue.repeatMode === 'all' ? 'repeat all' : 'repeat one'}
+		>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<polyline points="17 1 21 5 17 9"></polyline>
+				<path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+				<polyline points="7 23 3 19 7 15"></polyline>
+				<path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+				{#if queue.repeatMode === 'one'}
+					<text x="12" y="17" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" stroke="none">1</text>
+				{/if}
+			</svg>
+		</button>
+
 		<div class="time-control">
 			<span class="time">{formattedCurrentTime}</span>
 			<input
@@ -259,6 +291,10 @@
 	.control-btn:hover {
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.control-btn.active {
+		color: var(--accent);
 	}
 
 	.control-btn.play-pause:active {
@@ -422,45 +458,36 @@
 
 	@media (max-width: 768px) {
 		.player-controls {
-			display: contents;
+			display: grid;
+			grid-template-columns: repeat(5, auto);
+			justify-content: center;
+			align-items: center;
+			gap: 0.25rem;
 		}
 
 		.control-btn {
-			grid-row: 1;
 			padding: 0.5rem;
 		}
 
-		.control-btn:nth-of-type(1) {
-			grid-column: 4;
-		}
-
-		.control-btn.play-pause {
-			grid-column: 5;
-		}
-
-		.control-btn:nth-of-type(3) {
-			grid-column: 6;
-		}
-
 		.control-btn svg {
+			width: 24px;
+			height: 24px;
+		}
+
+		.control-btn.play-pause svg {
 			width: 28px;
 			height: 28px;
 		}
 
-		.control-btn.play-pause svg {
-			width: 32px;
-			height: 32px;
-		}
-
 		.time-control {
+			grid-column: 1 / -1;
 			grid-row: 2;
-			grid-column: 1 / 7;
 		}
 
 		/* radio: "live" takes the scrubber's row instead of the control row */
 		.live-pill {
 			grid-row: 2;
-			grid-column: 1 / 7;
+			grid-column: 1 / -1;
 			text-align: center;
 		}
 

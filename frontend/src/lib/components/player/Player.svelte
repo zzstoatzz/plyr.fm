@@ -683,8 +683,23 @@
 	});
 
 	function handleTrackEnded() {
+		if (queue.repeatMode === 'one') {
+			const audio = player.audioElement;
+			if (audio) {
+				audio.currentTime = 0;
+				audio.play().catch(() => {});
+			}
+			return;
+		}
+
 		const next = queue.autoAdvanceTrack;
 		if (!next) {
+			if (queue.repeatMode === 'all') {
+				queue.lastUpdateWasLocal = true;
+				queue.currentIndex = 0;
+				queue.syncState();
+				return;
+			}
 			player.reset();
 			nowPlaying.clear();
 			return;

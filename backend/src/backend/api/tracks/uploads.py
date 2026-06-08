@@ -398,6 +398,9 @@ async def _transcode_audio(
     transcoded result back. returns None on failure (job status already
     updated with error).
 
+    when `gated=True` the transcoded output is saved to the private bucket
+    so gated content doesn't leak via a public CDN URL.
+
     args:
         upload_id: job tracking ID
         original_file_id: storage file_id for the lossless source bytes

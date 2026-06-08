@@ -92,6 +92,8 @@ export interface Artist {
 	support_url?: string;
 }
 
+export type RepeatMode = 'none' | 'all' | 'one';
+
 export interface QueueState {
 	track_ids: string[];
 	current_index: number;
@@ -104,6 +106,7 @@ export interface QueueState {
 	continuation_from_index?: number;
 	/** user explicitly cleared the queue — suppress backfill until next play context */
 	continuation_suppressed?: boolean;
+	repeat_mode?: RepeatMode;
 }
 
 export interface QueueResponse {

@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import type { QueueResponse, QueueState, Track } from './types';
+import type { QueueResponse, QueueState, RepeatMode, Track } from './types';
 import { API_URL } from './config';
 import { APP_BROADCAST_PREFIX } from './branding';
 import { auth } from './auth.svelte';
@@ -32,6 +32,7 @@ class Queue {
 	tracks = $state<Track[]>([]);
 	currentIndex = $state(0);
 	shuffle = $state(false);
+	repeatMode = $state<RepeatMode>('none');
 	originalOrder = $state<Track[]>([]);
 	progressMs = $state(0);
 
@@ -374,7 +375,7 @@ class Queue {
 		}, SYNC_DEBOUNCE_MS);
 	}
 
-	private syncState() {
+	syncState() {
 		if (!browser) return;
 		if (this.jamBridge) {
 			this.jamBridge.pushQueueState();
@@ -407,6 +408,7 @@ class Queue {
 				current_index: this.currentIndex,
 				current_track_id: this.currentTrack?.file_id ?? null,
 				shuffle: this.shuffle,
+				repeat_mode: this.repeatMode,
 				original_order_ids: this.originalOrder.map((t) => t.file_id),
 				progress_ms: this.progressMs,
 				continuation_from_index: this.continuationFromIndex,
@@ -709,6 +711,18 @@ class Queue {
 		this.tracks = [...before, ...shuffled, ...continuationTail];
 
 		this.schedulePush();
+	}
+
+	toggleRepeatMode() {
+		if (this.jamBridge) return;
+		if (this.repeatMode === 'none') {
+			this.repeatMode = 'all';
+		} else if (this.repeatMode === 'all') {
+			this.repeatMode = 'one';
+		} else {
+			this.repeatMode = 'none';
+		}
+		this.syncState();
 	}
 
 	moveTrack(fromIndex: number, toIndex: number) {
