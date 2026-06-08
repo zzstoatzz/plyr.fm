@@ -126,6 +126,15 @@ class PayloadTooLargeError(Exception):
     """raised when PDS rejects a blob due to size limits."""
 
 
+class SessionExpiredError(Exception):
+    """raised when an OAuth token refresh fails terminally (the refresh token
+    itself is dead — `invalid_grant`). the only remedy is re-authentication, so
+    callers/handlers should surface a 401, not a 500. distinct from transient
+    refresh failures (network blips), which keep raising ValueError so existing
+    retry/catch logic is unaffected.
+    """
+
+
 # BlobRef uses ATProto's JSON structure with $type, $link keys.
 # TypedDict can't express $ in field names, so we use dict[str, Any] with documentation.
 # Structure: {"$type": "blob", "ref": {"$link": "<CID>"}, "mimeType": str, "size": int}
@@ -277,6 +286,13 @@ async def _refresh_session_tokens(
                     )
                     return retry_oauth_session
 
+            # a dead refresh token (`invalid_grant`) is terminal — the session
+            # can't be saved by a retry, the user must sign in again. surface it
+            # as a distinct type so handlers return 401 instead of 500.
+            if "invalid_grant" in str(e):
+                raise SessionExpiredError(
+                    "atproto session expired — re-authentication required"
+                ) from e
             raise ValueError(f"failed to refresh access token: {e}") from e
 
 
