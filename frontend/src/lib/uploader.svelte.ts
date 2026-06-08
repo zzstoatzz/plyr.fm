@@ -36,6 +36,30 @@ function isMobileDevice(): boolean {
 
 const MOBILE_LARGE_FILE_THRESHOLD_MB = 50;
 
+/**
+ * Start the one-time OAuth scope upgrade that grants the permissioned-space
+ * (private media) scope, then redirect to the authorization URL. After the user
+ * returns, they retry the upload with the scope granted.
+ */
+async function startPermissionedScopeUpgrade(): Promise<void> {
+	toast.info('one-time approval needed to store private media on your PDS...', 6000);
+	try {
+		const res = await fetch(`${API_URL}/auth/scope-upgrade/start`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			credentials: 'include',
+			// include_teal:false → the backend re-derives existing scopes from the
+			// current session and only ADDS permissioned (doesn't force teal on).
+			body: JSON.stringify({ include_teal: false, include_permissioned: true })
+		});
+		if (!res.ok) throw new Error(`scope upgrade failed (${res.status})`);
+		const data = await res.json();
+		if (browser && data.auth_url) window.location.href = data.auth_url;
+	} catch {
+		toast.error('could not start the approval needed for private media');
+	}
+}
+
 function buildNetworkErrorMessage(progressPercent: number, fileSizeMB: number, isMobile: boolean): string {
 	const progressInfo = progressPercent > 0 ? ` (failed at ${progressPercent}%)` : '';
 
@@ -83,7 +107,8 @@ class UploaderState {
 		label?: string,
 		albumId?: string,
 		unlisted?: boolean,
-		copyright?: object | null
+		copyright?: object | null,
+		isPrivate?: boolean
 	): void {
 		const taskId = crypto.randomUUID();
 		const fileSizeMB = file.size / 1024 / 1024;
@@ -137,6 +162,9 @@ class UploaderState {
 		}
 		if (unlisted) {
 			formData.append('unlisted', 'true');
+		}
+		if (isPrivate) {
+			formData.append('private', 'true');
 		}
 
 		const xhr = new XMLHttpRequest();
@@ -259,6 +287,12 @@ class UploaderState {
 				let errorMsg = `upload failed (${xhr.status} ${xhr.statusText})`;
 				try {
 					const error = JSON.parse(xhr.responseText);
+					// private media needs the permissioned-space scope granted — kick
+					// off the one-time opt-in upgrade, then the user retries the upload.
+					if (xhr.status === 403 && error.detail === 'permissioned_scope_required') {
+						void startPermissionedScopeUpgrade();
+						return;
+					}
 					errorMsg = error.detail || errorMsg;
 				} catch {
 					if (xhr.status === 0) {

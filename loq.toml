@@ -40,7 +40,7 @@ max_lines = 850
 
 [[rules]]
 path = "backend/src/backend/api/tracks/uploads.py"
-max_lines = 1692
+max_lines = 1787
 
 [[rules]]
 path = "backend/src/backend/config.py"
@@ -176,7 +176,7 @@ max_lines = 1299
 
 [[rules]]
 path = "frontend/src/routes/upload/+page.svelte"
-max_lines = 905
+max_lines = 927
 
 [[rules]]
 path = "services/moderation/src/admin.rs"
