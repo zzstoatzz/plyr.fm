@@ -18,7 +18,10 @@ from backend._internal import Session, require_artist_profile
 from backend.config import settings
 from backend.main import app
 
-PERM_SCOPE = settings.atproto.private_media_space_scope
+# the granted token carries the expanded space scope (what the preflight checks for),
+# not the requested `include:` form
+_TYPE = settings.atproto.private_media_space_type
+PERM_SCOPE = f"space:{_TYPE}?action=create&did=*&skey=self&collection={_TYPE}"
 
 
 class _MockSession(Session):

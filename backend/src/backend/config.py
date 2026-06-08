@@ -466,18 +466,23 @@ class AtprotoSettings(AppSettingsSection):
     def private_media_space_type(self) -> str:
         """Permissioned-space type NSID for artist-owned private media.
 
-        the OAuth consent boundary for the permissioned-spaces private-media
-        feature; records inside reuse the public track collection lexicon.
+        also the id of the permission-set lexicon that grants access to it (same
+        NSID). records inside the space reuse the public track collection lexicon.
         """
 
         return f"{self.app_namespace}.privateMedia"
 
     @computed_field
     @property
-    def private_media_space_scope(self) -> str:
-        """granular OAuth scope token granting access to the private-media space."""
+    def private_media_include_scope(self) -> str:
+        """OAuth scope REQUESTED for private-media access.
 
-        return f"space:{self.private_media_space_type}"
+        a permission-set include, not a bare `space:` scope — PDS OAuth servers
+        grant space access only via a published permission set, which the PDS
+        expands into the concrete `space:<type>?action=...` scopes on the token.
+        """
+
+        return f"include:{self.private_media_space_type}"
 
     @computed_field
     @property
@@ -554,7 +559,7 @@ class AtprotoSettings(AppSettingsSection):
         if indiemusi_tokens:
             parts.extend(indiemusi_tokens)
         if permissioned_spaces:
-            parts.append(self.private_media_space_scope)
+            parts.append(self.private_media_include_scope)
         return " ".join(parts)
 
 

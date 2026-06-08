@@ -117,12 +117,16 @@ async def test_detect_capability_transient_fails_closed(monkeypatch):
 
 
 def test_permissioned_scope_opt_in_only():
+    # the private-media scope is requested as a permission-set include, not a bare
+    # `space:` scope (PDS OAuth grants space access only via a published set).
     base = settings.atproto.resolved_scope_with_extras()
-    assert settings.atproto.private_media_space_scope not in base
+    assert settings.atproto.private_media_include_scope not in base
 
     with_perm = settings.atproto.resolved_scope_with_extras(permissioned_spaces=True)
-    assert settings.atproto.private_media_space_scope in with_perm
-    assert settings.atproto.private_media_space_scope == "space:fm.plyr.privateMedia"
+    assert settings.atproto.private_media_include_scope in with_perm
+    assert (
+        settings.atproto.private_media_include_scope == "include:fm.plyr.privateMedia"
+    )
 
 
 # --- space credential caching + renewal ---------------------------------------
