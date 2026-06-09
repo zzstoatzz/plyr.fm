@@ -1,11 +1,13 @@
 """OAuth client config, flows, callback, and artist profile."""
 
+import asyncio
 import json
 import logging
 import secrets
 import time
 from datetime import UTC, datetime
 
+import httpx
 from atproto_oauth import OAuthClient, OAuthState, PromptType
 from atproto_oauth.client import (
     discover_authserver_from_pds_async,
@@ -226,6 +228,43 @@ def _oauth_start_failure(e: Exception, handle: str) -> HTTPException:
     )
 
 
+# PAR can fail transiently when the authserver is slow (a `ReadTimeout` waiting
+# on /oauth/par, a dropped connection, etc.). each attempt mints a fresh
+# request_uri, so retrying is safe and turns a single hiccup into a transparent
+# success instead of a hard sign-in error. NOT a substitute for a fast
+# authserver — if PAR is reliably slow this just delays the failure.
+_OAUTH_START_TRANSIENT_ERRORS: tuple[type[BaseException], ...] = (
+    httpx.TimeoutException,
+    httpx.ConnectError,
+    httpx.ReadError,
+    httpx.RemoteProtocolError,
+    httpx.PoolTimeout,
+)
+_OAUTH_START_ATTEMPTS = 3
+
+
+async def _start_authorization_with_retry(
+    client: OAuthClient, handle: str, prompt: PromptType | None
+) -> tuple[str, str]:
+    """run `start_authorization` (which sends PAR), retrying transient failures.
+
+    the early attempts swallow transient errors and back off; the final attempt
+    is outside the loop so its result — success or error — is the function's,
+    with no unreachable fallthrough.
+    """
+    for attempt in range(1, _OAUTH_START_ATTEMPTS):
+        try:
+            return await client.start_authorization(handle, prompt=prompt)
+        except _OAUTH_START_TRANSIENT_ERRORS as exc:
+            logger.warning(
+                f"OAuth PAR transient failure for {handle} "
+                f"(attempt {attempt}/{_OAUTH_START_ATTEMPTS}), retrying: "
+                f"{type(exc).__name__}"
+            )
+            await asyncio.sleep(0.5 * attempt)
+    return await client.start_authorization(handle, prompt=prompt)
+
+
 async def start_oauth_flow(
     handle: str, prompt: PromptType | None = None
 ) -> tuple[str, str]:
@@ -256,7 +295,7 @@ async def start_oauth_flow(
             client = get_oauth_client()
             logger.info(f"starting OAuth for {handle} (resolution failed, using base)")
 
-        auth_url, state = await client.start_authorization(handle, prompt=prompt)
+        auth_url, state = await _start_authorization_with_retry(client, handle, prompt)
         return auth_url, state
     except HTTPException:
         raise
@@ -283,7 +322,7 @@ async def start_oauth_flow_with_scopes(
             f"(teal={include_teal}, indiemusi={include_indiemusi}, "
             f"permissioned={include_permissioned})"
         )
-        auth_url, state = await client.start_authorization(handle, prompt=prompt)
+        auth_url, state = await _start_authorization_with_retry(client, handle, prompt)
         return auth_url, state
     except HTTPException:
         raise
@@ -297,8 +336,6 @@ async def start_oauth_flow_for_pds(pds_url: str) -> tuple[str, str]:
     discovers auth server from PDS URL and sends PAR with prompt=create.
     """
     from urllib.parse import urlencode
-
-    import httpx
 
     try:
         pds_url = pds_url.rstrip("/")
