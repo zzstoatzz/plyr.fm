@@ -10,6 +10,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { preferences, FONT_OPTIONS, type Theme, type FontFamily } from '$lib/preferences.svelte';
 	import { AT_CLIENTS, DEFAULT_AT_CLIENT } from '$lib/atclients';
 	import { ambient } from '$lib/ambient.svelte';
+	import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
 
 	let loading = $state(true);
 
@@ -115,6 +116,15 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 						// reload auth state with new session
 						await auth.refresh();
 						await preferences.fetch();
+						// honor a pending return target (e.g. an interrupted private
+						// upload) via the same plyr_return_to cookie login consumes on
+						// /portal. absent → this was the teal-from-settings upgrade.
+						const returnTo = getReturnUrl();
+						if (returnTo) {
+							clearReturnUrl();
+							window.location.href = returnTo;
+							return;
+						}
 						toast.success('teal.fm scrobbling connected!');
 					}
 				}
