@@ -337,3 +337,7 @@ max_lines = 525
 [[rules]]
 path = "frontend/src/lib/uploader.svelte.ts"
 max_lines = 502
+
+[[rules]]
+path = "frontend/src/routes/track/[[]id[]]/+page.svelte"
+max_lines = 1721
