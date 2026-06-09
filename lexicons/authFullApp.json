@@ -4,6 +4,7 @@
   "defs": {
     "main": {
       "type": "permission-set",
+      "description": "Write access to a user's plyr.fm data. Clients request include:fm.plyr.authFullApp at sign-in and the PDS expands it into the collections this set currently lists — the set can evolve without clients changing their scope request.",
       "title": "Full plyr.fm Access",
       "detail": "Provides full access to all plyr.fm features including uploading and managing tracks, playlists, likes, and comments.",
       "permissions": [

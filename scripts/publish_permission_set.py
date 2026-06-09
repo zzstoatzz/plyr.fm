@@ -1,99 +1,70 @@
 #!/usr/bin/env python
-"""publish permission set lexicon to ATProto repo with specific rkey."""
+"""publish permission set lexicons from lexicons/ to the plyr.fm ATProto repo.
 
+usage: uv run scripts/publish_permission_set.py authFullApp [privateMedia]
+
+publishes to the namespace in NAMESPACE (default: fm.plyr, i.e. production).
+for staging: NAMESPACE=fm.plyr.stg uv run scripts/publish_permission_set.py ...
+"""
+
+import argparse
 import asyncio
+import json
 from pathlib import Path
+from typing import Any
 
 from atproto import AsyncClient
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).parent.parent
+LEXICON_DIR = ROOT / "lexicons"
+PROD_NAMESPACE = "fm.plyr"
+PERMISSION_SETS = ("authFullApp", "privateMedia")
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(ROOT / ".env"), extra="ignore")
 
-    plyrfm_handle: str = Field(validation_alias="PLYRFM_HANDLE")
+    plyrfm_handle: str = Field(default="plyr.fm", validation_alias="PLYRFM_HANDLE")
     plyrfm_password: str = Field(validation_alias="PLYRFM_PASSWORD")
-    namespace: str = Field(default="fm.plyr", validation_alias="NAMESPACE")
+    namespace: str = Field(default=PROD_NAMESPACE, validation_alias="NAMESPACE")
 
 
-def _auth_full_app(ns: str) -> dict:
-    return {
-        "type": "permission-set",
-        "title": "Full plyr.fm Access",
-        "detail": "Provides full access to all plyr.fm features including uploading and managing tracks, playlists, likes, and comments.",
-        "permissions": [
-            {
-                "type": "permission",
-                "resource": "repo",
-                "action": ["create", "update", "delete"],
-                "collection": [
-                    f"{ns}.track",
-                    f"{ns}.like",
-                    f"{ns}.comment",
-                    f"{ns}.list",
-                    f"{ns}.actor.profile",
-                ],
-            }
-        ],
-    }
+def _renamespace(value: Any, ns: str) -> Any:
+    if isinstance(value, str):
+        return value.replace(f"{PROD_NAMESPACE}.", f"{ns}.")
+    if isinstance(value, list):
+        return [_renamespace(item, ns) for item in value]
+    if isinstance(value, dict):
+        return {key: _renamespace(item, ns) for key, item in value.items()}
+    return value
 
 
-def _private_media(ns: str) -> dict:
-    """permissioned-space set for artist-owned private media (#1528).
-
-    requested progressively as `include:{ns}.privateMedia` only for accounts on a
-    PDS that supports permissioned spaces; the PDS expands the space permission
-    into `space:{ns}.privateMedia?action=...` scopes on the token.
-    """
-    return {
-        "type": "permission-set",
-        "title": "plyr.fm Private Media",
-        "detail": "Access to your private audio — a permissioned space on your PDS that only you (and apps you grant) can read.",
-        "permissions": [
-            {
-                "type": "permission",
-                "resource": "space",
-                "action": ["read", "create", "update", "delete", "manage"],
-                "space": [f"{ns}.privateMedia"],
-                "skey": ["self"],
-                "did": ["*"],
-                "collection": [f"{ns}.track"],
-            }
-        ],
-    }
-
-
-async def _publish(client: AsyncClient, permission_set_id: str, main_def: dict) -> None:
-    record = {
-        "$type": "com.atproto.lexicon.schema",
-        "lexicon": 1,
-        "id": permission_set_id,
-        "defs": {"main": main_def},
-    }
+async def _publish(client: AsyncClient, name: str, ns: str) -> None:
+    schema = _renamespace(json.loads((LEXICON_DIR / f"{name}.json").read_text()), ns)
     result = await client.com.atproto.repo.put_record(
         {
             "repo": client.me.did,
             "collection": "com.atproto.lexicon.schema",
-            "rkey": permission_set_id,
-            "record": record,
+            "rkey": schema["id"],
+            "record": {"$type": "com.atproto.lexicon.schema", **schema},
         }
     )
-    print(f"published {permission_set_id}: {result.uri} (cid {result.cid})")
+    print(f"published {schema['id']}: {result.uri} (cid {result.cid})")
 
 
-async def main():
+async def main(names: list[str]) -> None:
     settings = Settings()
 
     client = AsyncClient()
     await client.login(settings.plyrfm_handle, settings.plyrfm_password)
 
-    ns = settings.namespace
-    await _publish(client, f"{ns}.authFullApp", _auth_full_app(ns))
-    await _publish(client, f"{ns}.privateMedia", _private_media(ns))
+    for name in names:
+        await _publish(client, name, settings.namespace)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("sets", nargs="+", choices=PERMISSION_SETS)
+    asyncio.run(main(parser.parse_args().sets))
