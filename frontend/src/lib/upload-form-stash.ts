@@ -18,9 +18,10 @@ export interface TrackFormStash {
 	featuredArtists: FeaturedArtist[];
 	uploadTags: string[];
 	attestedRights: boolean;
-	supportGated: boolean;
 	autoTag: boolean;
-	trackUnlisted: boolean;
+	// single visibility value (public | unlisted | supporters | private) — the
+	// draft must survive a private-media scope-upgrade redirect with its choice intact.
+	visibility: string;
 }
 
 export function stashTrackForm(state: TrackFormStash): void {
