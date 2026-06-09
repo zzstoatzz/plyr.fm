@@ -39,7 +39,10 @@
 	// receive server-loaded data
 	let { data }: { data: PageData } = $props();
 
-	let track = $state<Track>(data.track);
+	// null when SSR couldn't see it (private track / owner-only); the client
+	// refetch below fills it in for the owner, or flips `notFound`.
+	let track = $state<Track | null>(data.track);
+	let notFound = $state(false);
 
 	// the visible cover and the og:image cascade share the same root rule
 	// (track art → album art); the og:image then fans out to the artist
@@ -48,12 +51,12 @@
 	// image, stale client cache).
 	const OG_FALLBACK_IMAGE = `${APP_CANONICAL_URL}/icons/icon-512.png`;
 	const coverUrl = $derived.by(() => {
-		const url = trackCoverUrl(track);
+		const url = track ? trackCoverUrl(track) : undefined;
 		return url && !moderation.isSensitive(url) ? url : undefined;
 	});
 	const previewImage = $derived.by(() => {
 		if (coverUrl) return coverUrl;
-		if (track.artist_avatar_url && !moderation.isSensitive(track.artist_avatar_url)) {
+		if (track?.artist_avatar_url && !moderation.isSensitive(track.artist_avatar_url)) {
 			return track.artist_avatar_url;
 		}
 		return OG_FALLBACK_IMAGE;
@@ -71,7 +74,7 @@
 
 	// reactive check if this track is currently playing
 	let isCurrentlyPlaying = $derived(
-		player.currentTrack?.id === track.id && !player.paused
+		track != null && player.currentTrack?.id === track.id && !player.paused
 	);
 
 	// mobile detection
@@ -112,12 +115,14 @@
 	}
 
 	function handleLikesClick() {
+		if (!track) return;
 		if (isMobile && track.like_count) {
 			likersSheet.open(track.id, track.like_count);
 		}
 	}
 
 	function handleLikesKeydown(event: KeyboardEvent) {
+		if (!track) return;
 		if (event.key === 'Enter' || event.key === ' ') {
 			event.preventDefault();
 			if (isMobile && track.like_count) {
@@ -133,6 +138,7 @@
 
 
 	async function loadLikedState() {
+		if (!track) return;
 		try {
 			const response = await fetch(`${API_URL}/tracks/${track.id}`, {
 				credentials: 'include'
@@ -152,6 +158,7 @@
 	}
 
 	async function handlePlay() {
+		if (!track) return;
 		if (player.currentTrack?.id === track.id) {
 			// this track is already loaded - just toggle play/pause
 			queue.togglePlayPause();
@@ -167,12 +174,14 @@
 	}
 
 	function addToQueue() {
+		if (!track) return;
 		if (!guardGatedTrack(track, auth.isAuthenticated)) return;
 		queue.addTracks([track]);
 		toast.success(`queued ${track.title}`, 1800);
 	}
 
 	async function loadComments() {
+		if (!track) return;
 		loadingComments = true;
 		try {
 			const response = await fetch(`${API_URL}/tracks/${track.id}/comments`);
@@ -191,7 +200,7 @@
 	}
 
 	async function submitComment() {
-		if (!newCommentText.trim() || submittingComment) return;
+		if (!track || !newCommentText.trim() || submittingComment) return;
 
 		// get current playback position (default to 0 if not playing this track)
 		let timestampMs = 0;
@@ -242,6 +251,7 @@
 	}
 
 	async function seekToTimestamp(ms: number) {
+		if (!track) return;
 		const doSeek = () => {
 			queue.seek(ms);
 		};
@@ -277,6 +287,7 @@
 	}
 
 	async function copyCommentLink(timestampMs: number) {
+		if (!track) return;
 		const seconds = Math.floor(timestampMs / 1000);
 		const url = `${window.location.origin}/track/${track.id}?t=${seconds}`;
 		await navigator.clipboard.writeText(url);
@@ -404,11 +415,39 @@ $effect(() => {
 	}
 });
 
-let shareUrl = $derived(`${typeof window !== 'undefined' ? window.location.origin : ''}/track/${track.id}`);
+// SSR loads anonymously, so a private (owner-only) track arrives as null. retry
+// once on the client WITH the session cookie — an owner can read their own
+// private track; anyone else (or logged-out) gets a real 404 → notFound.
+let triedClientFetch = $state(false);
+$effect(() => {
+	if (track || triedClientFetch || !browser) return;
+	triedClientFetch = true;
+	void (async () => {
+		try {
+			const r = await fetch(`${API_URL}/tracks/${$page.params.id}`, {
+				credentials: 'include'
+			});
+			if (r.ok) {
+				track = await r.json();
+				void loadComments();
+			} else {
+				notFound = true;
+			}
+		} catch {
+			notFound = true;
+		}
+	})();
+});
+
+let shareUrl = $derived(`${typeof window !== 'undefined' ? window.location.origin : ''}/track/${track?.id ?? $page.params.id}`);
 
 // handle ?t= timestamp param for deep linking (youtube-style)
 // handle ?ref= param for share link tracking
 onMount(() => {
+	// deep-link seek + share-ref attribution only apply to a track we already
+	// have (public tracks render server-side); private tracks are owner-only and
+	// don't carry these affordances.
+	if (!track) return;
 	const t = $page.url.searchParams.get('t');
 	if (t) {
 		const seconds = parseInt(t, 10);
@@ -443,6 +482,7 @@ onMount(() => {
 $effect(() => {
 	if (
 		pendingSeekMs !== null &&
+		track != null &&
 		player.currentTrack?.id === track.id &&
 		player.audioElement &&
 		player.audioElement.readyState >= 1
@@ -457,6 +497,9 @@ $effect(() => {
 </script>
 
 <svelte:head>
+	{#if !track}
+		<title>{APP_NAME}</title>
+	{:else}
 	{#if !player.currentTrack || player.currentTrack.id === track.id}
 		<title>{track.title} - {track.artist}{track.album ? ` • ${track.album.title}` : ''}</title>
 	{/if}
@@ -515,9 +558,22 @@ $effect(() => {
 		href="{API_URL}/oembed?url={encodeURIComponent(`${APP_CANONICAL_URL}/track/${track.id}`)}"
 		title="{track.title} - {track.artist}"
 	/>
+	{/if}
 </svelte:head>
 
 <div class="page-container">
+	{#if !track}
+		<Header user={auth.user} isAuthenticated={auth.isAuthenticated} onLogout={handleLogout} />
+		<main>
+			<div class="track-detail">
+				{#if notFound}
+					<p class="track-missing">track not found</p>
+				{:else}
+					<p class="track-missing">loading…</p>
+				{/if}
+			</div>
+		</main>
+	{:else}
 	{#if track.tags && track.tags.length > 0}
 		<TagEffects tags={track.tags} trackTitle={track.title} />
 	{/if}
@@ -810,9 +866,17 @@ $effect(() => {
 			</section>
 		{/if}
 	</main>
+	{/if}
 </div>
 
 <style>
+	.track-missing {
+		text-align: center;
+		color: var(--text-muted);
+		padding: 4rem 1rem;
+		font-size: var(--text-lg);
+	}
+
 	.page-container {
 		min-height: 100vh;
 		display: flex;
