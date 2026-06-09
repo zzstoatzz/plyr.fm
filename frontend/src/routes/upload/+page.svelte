@@ -112,11 +112,7 @@
 			uploadTags = stashed.uploadTags;
 			attestedRights = stashed.attestedRights;
 			autoTag = stashed.autoTag;
-			visibility = stashed.supportGated
-				? 'supporters'
-				: stashed.trackUnlisted
-					? 'unlisted'
-					: 'public';
+			visibility = (stashed.visibility ?? 'public') as typeof visibility;
 			clearTrackFormStash();
 			toast.info(
 				"your draft was restored — please reattach your audio file",
@@ -157,6 +153,22 @@
 		}
 	}
 
+	// everything except the (unserializable) audio/cover files, so a draft can be
+	// restored after a redirect — an expired-session bounce to /login, or the
+	// one-time private-media scope-upgrade consent.
+	function currentFormStash() {
+		return {
+			title,
+			albumTitle,
+			description,
+			featuredArtists: [...featuredArtists],
+			uploadTags: [...uploadTags],
+			attestedRights,
+			autoTag,
+			visibility,
+		};
+	}
+
 	async function handleUpload(e: SubmitEvent) {
 		e.preventDefault();
 		if (!file) return;
@@ -169,17 +181,7 @@
 		// what they typed.
 		const authStatus = await preflightAuth();
 		if (authStatus === "expired") {
-			stashTrackForm({
-				title,
-				albumTitle,
-				description,
-				featuredArtists: [...featuredArtists],
-				uploadTags: [...uploadTags],
-				attestedRights,
-				supportGated: visibility === 'supporters',
-				autoTag,
-				trackUnlisted: visibility === 'unlisted',
-			});
+			stashTrackForm(currentFormStash());
 			setReturnUrl("/upload");
 			toast.error(
 				"your session expired — sign in to continue your upload",
@@ -235,6 +237,14 @@
 			? copyrightRights
 			: null;
 
+		// a private upload may bounce to the one-time scope-upgrade consent (when
+		// the session doesn't yet hold the permissioned-space scope). stash the
+		// draft first so it survives that redirect; cleared on success or on a
+		// terminal error (the scope-upgrade path returns without firing onError).
+		if (uploadVisibility === "private") {
+			stashTrackForm(currentFormStash());
+		}
+
 		uploader.upload(
 			uploadFile,
 			uploadTitle,
@@ -250,9 +260,12 @@
 			},
 			{
 				onSuccess: () => {
+					clearTrackFormStash();
 					clearForm();
 				},
-				onError: () => {},
+				onError: () => {
+					clearTrackFormStash();
+				},
 			},
 			undefined, // label
 			undefined, // albumId

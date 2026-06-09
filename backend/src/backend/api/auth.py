@@ -39,7 +39,7 @@ from backend._internal import (
     start_oauth_flow_with_scopes,
     switch_active_account,
 )
-from backend._internal.atproto.spaces import session_has_permissioned_scope
+from backend._internal.atproto.spaces import detect_permissioned_capability
 from backend._internal.auth import get_refresh_token_lifetime_days
 from backend._internal.copyright import complete_indiemusi_setup
 from backend._internal.tasks import schedule_atproto_sync
@@ -490,10 +490,14 @@ async def get_current_user(
     # get feature flags for current user from dedicated table
     current_user_flags = await get_user_flags(db, session.did)
 
-    # private-media capability == the PDS granted the space scope at login (we
-    # request it with a fallback for PDSes that can't). derived from the granted
-    # scope, never a runtime probe (a scopeless listSpaces probe just 401s).
-    spaces_supported = session_has_permissioned_scope(session)
+    # permissioned-spaces capability is the gate for the private-media feature;
+    # cached per-PDS in redis so this probe is cheap after the first call. never
+    # let it break /auth/me.
+    try:
+        spaces_supported = await detect_permissioned_capability(session)
+    except Exception as exc:
+        logger.debug(f"permissioned capability probe failed: {exc}")
+        spaces_supported = False
 
     return CurrentUserResponse(
         did=session.did,
