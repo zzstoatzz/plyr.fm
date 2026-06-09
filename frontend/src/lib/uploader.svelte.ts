@@ -56,6 +56,10 @@ async function startPermissionedScopeUpgrade(): Promise<void> {
 		});
 		if (!res.ok) throw new Error(`scope upgrade failed (${res.status})`);
 		const data = await res.json();
+		// preserve intent across the consent redirect via the same plyr_return_to
+		// cookie jams/login use — the scope-upgrade lands on /settings, which
+		// consumes it and bounces back to /upload (the stashed draft restores there).
+		setReturnUrl('/upload');
 		if (browser && data.auth_url) window.location.href = data.auth_url;
 	} catch {
 		toast.error('could not start the approval needed for private media');

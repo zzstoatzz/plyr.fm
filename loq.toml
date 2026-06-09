@@ -333,3 +333,7 @@ max_lines = 929
 [[rules]]
 path = "backend/tests/api/test_radio.py"
 max_lines = 525
+
+[[rules]]
+path = "frontend/src/lib/uploader.svelte.ts"
+max_lines = 502
