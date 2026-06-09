@@ -4,7 +4,7 @@
   "defs": {
     "main": {
       "type": "permission-set",
-      "description": "OAuth permission set granting full write access to a user's plyr.fm data. Clients request it at sign-in as include:fm.plyr.authFullApp; the user's PDS expands it into granular repo permissions for each collection. Grants create, update, and delete on five collections in the user's repository: fm.plyr.track (uploaded audio tracks), fm.plyr.like (track likes), fm.plyr.comment (timed comments anchored to a playback position), fm.plyr.list (ordered collections of records, used for playlists), and fm.plyr.actor.profile (creator profile). These records are public — reading them requires no permission.",
+      "description": "Write access to a user's plyr.fm data. Clients request include:fm.plyr.authFullApp at sign-in and the PDS expands it into the collections this set currently lists — the set can evolve without clients changing their scope request.",
       "title": "Full plyr.fm Access",
       "detail": "Provides full access to all plyr.fm features including uploading and managing tracks, playlists, likes, and comments.",
       "permissions": [
