@@ -8,6 +8,7 @@ these tests require:
 run with: uv run pytest tests/test_integration_upload.py -m integration -v
 """
 
+import asyncio
 import json
 import os
 import struct
@@ -22,7 +23,28 @@ API_URL = os.getenv("PLYR_API_URL", "http://localhost:8001")
 TOKEN = os.getenv("PLYR_TOKEN") or os.getenv("PLYRFM_API_TOKEN")
 
 
-def generate_wav_file(duration_seconds: float = 1.0, sample_rate: int = 44100) -> bytes:
+async def _resolve_pds(client: httpx.AsyncClient, did: str) -> str:
+    doc = (await client.get(f"https://plc.directory/{did}")).json()
+    return next(
+        s["serviceEndpoint"] for s in doc["service"] if s["id"] == "#atproto_pds"
+    )
+
+
+async def _record_has_blob(client: httpx.AsyncClient, pds: str, at_uri: str) -> bool:
+    """does the published fm.plyr.track record carry an audioBlob?"""
+    # at://<did>/<collection>/<rkey>
+    _, _, did, collection, rkey = at_uri.split("/")
+    r = await client.get(
+        f"{pds}/xrpc/com.atproto.repo.getRecord",
+        params={"repo": did, "collection": collection, "rkey": rkey},
+    )
+    value = json.loads(r.text, strict=False).get("value", {})
+    return value.get("audioBlob") is not None
+
+
+def generate_wav_file(
+    duration_seconds: float = 1.0, sample_rate: int = 44100, noise: bool = False
+) -> bytes:
     """generate a minimal valid WAV file with silence."""
     num_channels = 1
     bits_per_sample = 16
@@ -47,8 +69,8 @@ def generate_wav_file(duration_seconds: float = 1.0, sample_rate: int = 44100) -
         data_size,
     )
 
-    # silence (zeros)
-    audio_data = b"\x00" * data_size
+    # silence (zeros), or random samples when a unique file is needed
+    audio_data = os.urandom(data_size) if noise else b"\x00" * data_size
 
     return header + audio_data
 
@@ -158,3 +180,84 @@ async def test_upload_and_delete_track(test_audio_file: Path):
         verify_response = await client.get(f"{API_URL}/tracks/{track_id}")
         assert verify_response.status_code == 404, "track should be deleted"
         print("verified track no longer exists")
+
+
+async def _upload_one(client: httpx.AsyncClient, idx: int) -> tuple[int, str | None]:
+    """upload one unique WAV, poll to completion, return (track_id, atproto_uri)."""
+    # unique bytes per upload AND per run so duplicate-detection (file-hash based)
+    # never collapses the batch or collides with leftovers from a prior run
+    wav = generate_wav_file(duration_seconds=1.0 + idx * 0.05, noise=True)
+    files = {"file": (f"concurrent_{idx}.wav", wav, "audio/wav")}
+    data = {"title": f"Concurrent PDS-blob Test {idx} (DELETE ME)"}
+    resp = await client.post(
+        f"{API_URL}/tracks/",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+        files=files,
+        data=data,
+    )
+    assert resp.status_code == 200, f"[{idx}] upload start failed: {resp.text}"
+    upload_id = resp.json()["upload_id"]
+    async with client.stream(
+        "GET",
+        f"{API_URL}/tracks/uploads/{upload_id}/progress",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    ) as response:
+        async for line in response.aiter_lines():
+            if not line.startswith("data: "):
+                continue
+            evt = json.loads(line[6:])
+            if evt.get("status") == "completed":
+                return evt.get("track_id"), evt.get("atproto_uri")
+            if evt.get("status") == "failed":
+                pytest.fail(f"[{idx}] upload failed: {evt.get('error')}")
+    pytest.fail(f"[{idx}] progress stream ended without completion")
+
+
+@pytest.mark.integration
+async def test_concurrent_uploads_all_get_pds_blob(request: pytest.FixtureRequest):
+    """reproduce the R2-only fallback: upload N tracks concurrently and assert
+    every published record ends up with an audioBlob on the PDS. under the bug,
+    some uploads 401 on the PDS uploadBlob and silently fall back to R2-only.
+
+    N defaults to 8 (above the per-artist concurrency cap of 3); override with
+    `--upload-count`.
+    """
+    if not TOKEN:
+        pytest.skip("PLYR_TOKEN or PLYRFM_API_TOKEN not set")
+
+    n = int(os.getenv("UPLOAD_COUNT", "8"))
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        me = await client.get(
+            f"{API_URL}/auth/me", headers={"Authorization": f"Bearer {TOKEN}"}
+        )
+        if me.status_code != 200:
+            pytest.skip(f"token invalid: {me.status_code}")
+        did = me.json()["did"]
+        pds = await _resolve_pds(client, did)
+        print(f"\nuploading {n} tracks concurrently as {me.json()['handle']} ({pds})")
+
+        results = await asyncio.gather(*[_upload_one(client, i) for i in range(n)])
+
+        missing: list[int] = []
+        try:
+            for track_id, at_uri in results:
+                if not at_uri or not at_uri.startswith("at://"):
+                    missing.append(track_id)
+                    print(f"  track {track_id}: NO at:// record uri")
+                    continue
+                has_blob = await _record_has_blob(client, pds, at_uri)
+                print(f"  track {track_id}: audioBlob={'YES' if has_blob else 'NO'}")
+                if not has_blob:
+                    missing.append(track_id)
+        finally:
+            for track_id, _ in results:
+                await client.delete(
+                    f"{API_URL}/tracks/{track_id}",
+                    headers={"Authorization": f"Bearer {TOKEN}"},
+                )
+            print(f"cleaned up {len(results)} tracks")
+
+        assert not missing, (
+            f"{len(missing)}/{n} concurrent uploads fell back to R2-only "
+            f"(no PDS blob): track ids {missing}"
+        )

@@ -1,9 +1,10 @@
 """low-level ATProto PDS client with OAuth and token refresh."""
 
 import asyncio
+import contextlib
 import logging
 import time
-from collections.abc import AsyncIterable, Awaitable, Callable
+from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any, BinaryIO
 
@@ -13,6 +14,7 @@ from atproto import AtUri
 from atproto_oauth.models import OAuthSession
 from atproto_oauth.security import is_safe_url
 from cachetools import LRUCache
+from redis.exceptions import RedisError
 
 from backend._internal import Session as AuthSession
 from backend._internal import get_oauth_client, get_session, update_session_tokens
@@ -20,6 +22,7 @@ from backend._internal.auth import (
     get_client_auth_method,
     get_refresh_token_lifetime_days,
 )
+from backend.utilities.redis import get_async_redis_client
 
 # factory that produces a fresh async iterator over the request body. used
 # for streaming uploads where the body must be re-emitted on retry (DPoP
@@ -146,6 +149,55 @@ BlobRef = dict[str, Any]
 # 2. TTL expiration could evict a lock while a coroutine holds it, breaking mutual exclusion
 _refresh_locks: LRUCache[str, asyncio.Lock] = LRUCache(maxsize=10_000)
 
+# how long a refresh may hold the lock before it auto-expires, and how long a
+# waiter blocks for it. a refresh is a single token-endpoint round-trip (~1-3s);
+# this leaves generous headroom without stranding waiters if a holder dies.
+_REFRESH_LOCK_TIMEOUT_SECONDS = 15
+
+
+@contextlib.asynccontextmanager
+async def _session_refresh_lock(session_id: str) -> AsyncIterator[None]:
+    """serialize a session's token refresh CLUSTER-WIDE via redis.
+
+    the per-process `_refresh_locks` only serializes within one worker — but
+    uploads for one artist run across worker processes/machines, so without a
+    shared lock each one refreshes on an expired token, rotating the refresh
+    token out from under the others (the failure that silently drops blobs to
+    R2-only). a redis lock keyed by session collapses them to a single refresh.
+
+    degrades to the in-process lock if redis is unavailable, so refresh never
+    breaks outright on a redis blip — single-worker correctness is preserved.
+    """
+    redis_lock = None
+    acquired = False
+    try:
+        redis_lock = get_async_redis_client().lock(
+            f"oauth_refresh:{session_id}",
+            timeout=_REFRESH_LOCK_TIMEOUT_SECONDS,
+            blocking=True,
+            blocking_timeout=_REFRESH_LOCK_TIMEOUT_SECONDS,
+        )
+        acquired = await redis_lock.acquire()
+    except RedisError as exc:
+        logger.warning(
+            f"redis refresh-lock unavailable for {session_id}, "
+            f"falling back to in-process lock: {exc}"
+        )
+        acquired = False
+
+    if acquired and redis_lock is not None:
+        try:
+            yield
+        finally:
+            with contextlib.suppress(Exception):
+                await redis_lock.release()
+        return
+
+    # fallback: in-process serialization
+    proc_lock = _refresh_locks.setdefault(session_id, asyncio.Lock())
+    async with proc_lock:
+        yield
+
 
 def reconstruct_oauth_session(oauth_data: dict[str, Any]) -> OAuthSession:
     """reconstruct OAuthSession from serialized data."""
@@ -193,13 +245,7 @@ async def _refresh_session_tokens(
     """
     session_id = auth_session.session_id
 
-    # get or create lock for this session
-    if session_id not in _refresh_locks:
-        _refresh_locks[session_id] = asyncio.Lock()
-
-    lock = _refresh_locks[session_id]
-
-    async with lock:
+    async with _session_refresh_lock(session_id):
         # check if another coroutine already refreshed while we were waiting
         # reload session from DB to get potentially updated tokens
         updated_auth_session = await get_session(session_id)
@@ -538,7 +584,6 @@ async def upload_blob(
         blob_data = data if isinstance(data, bytes) else data.read()
 
     response: httpx.Response | None = None
-    has_refreshed = False
 
     for attempt in range(_PDS_MAX_ATTEMPTS):
         try:
@@ -585,9 +630,14 @@ async def upload_blob(
                 f"blob too large for PDS (limit exceeded): {response.text or '<empty body>'}"
             )
 
-        # 401: refresh once, then retry (same rationale as make_pds_request).
-        if response.status_code == 401 and not has_refreshed:
-            has_refreshed = True
+        # 401: token expired or rotated out from under us by a sibling upload.
+        # refresh on EVERY 401 (not once) — under a concurrent rotation herd a
+        # single refresh isn't enough: the retry can be 401'd again by another
+        # upload's rotation. the redis refresh-lock collapses concurrent
+        # refreshes and the reload picks up the latest token; bounded by
+        # _PDS_MAX_ATTEMPTS so a genuinely dead token still gives up (and an
+        # invalid_grant raises SessionExpiredError, which propagates).
+        if response.status_code == 401 and attempt < _PDS_MAX_ATTEMPTS - 1:
             logger.info(
                 f"access token expired or rejected for {auth_session.did}; refreshing"
             )
