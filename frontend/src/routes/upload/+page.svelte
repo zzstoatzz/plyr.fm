@@ -39,6 +39,17 @@
 		return AUDIO_EXTENSIONS.includes(ext);
 	}
 
+	// formats browsers play natively (no transcode). private media is stored as a
+	// PDS blob with no transcode step, so it only accepts these — mirrors the
+	// backend's AudioFormat.is_web_playable (aiff/aif need conversion).
+	const WEB_PLAYABLE_EXTENSIONS = [".mp3", ".wav", ".m4a", ".flac"];
+
+	function isWebPlayableAudioFile(name: string): boolean {
+		const dotIndex = name.lastIndexOf(".");
+		if (dotIndex === -1) return false;
+		return WEB_PLAYABLE_EXTENSIONS.includes(name.slice(dotIndex).toLowerCase());
+	}
+
 	let loading = $state(true);
 
 	// upload mode: track (single) or album (multi-track)
@@ -173,6 +184,16 @@
 		e.preventDefault();
 		if (!file) return;
 
+		// private media has no transcode step (audio is stored as-is as a PDS
+		// blob), so reject non-web-playable formats here instead of uploading the
+		// whole file and failing server-side.
+		if (visibility === "private" && !isWebPlayableAudioFile(file.name)) {
+			toast.error(
+				"private tracks must be web-playable (mp3, wav, m4a, or flac) — convert aiff first",
+			);
+			return;
+		}
+
 		// pre-flight auth revalidation. the destructive XHR/SSE upload pipeline
 		// surfaces an expired session as a generic "lost connection" error
 		// (see uploader.svelte.ts — eventSource.onerror), which is misleading
@@ -255,18 +276,18 @@
 			uploadVisibility,
 			shouldAutoTag,
 			uploadDescription,
+			// completion (SSE 'completed') — only NOW is it safe to wipe the form and
+			// the stashed draft. clearing on enqueue (the progress callback below)
+			// nuked the form even when the upload then failed in the worker (e.g. a
+			// duplicate), losing everything the user typed.
 			async () => {
+				clearTrackFormStash();
+				clearForm();
 				await loadMyAlbums();
 			},
-			{
-				onSuccess: () => {
-					clearTrackFormStash();
-					clearForm();
-				},
-				onError: () => {
-					clearTrackFormStash();
-				},
-			},
+			// enqueue / terminal-error callbacks: leave the form intact so a failed
+			// upload (duplicate, worker error) is recoverable without re-typing.
+			{},
 			undefined, // label
 			undefined, // albumId
 			copyrightToSend,
