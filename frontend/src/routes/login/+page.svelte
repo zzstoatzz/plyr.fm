@@ -70,22 +70,29 @@
 		return value;
 	}
 
+	function beginSignIn() {
+		if (!handle.trim()) return;
+		loading = true;
+		const normalized = normalizeInput(handle);
+		window.location.href = `${API_URL}/auth/start?handle=${encodeURIComponent(normalized)}`;
+	}
+
 	function startOAuth(e: SubmitEvent) {
 		e.preventDefault();
-		loading = true;
-
 		if (mode === 'signin') {
-			if (!handle.trim()) return;
-			const normalized = normalizeInput(handle);
-			window.location.href = `${API_URL}/auth/start?handle=${encodeURIComponent(normalized)}`;
+			beginSignIn();
 		} else {
 			if (!selectedPds) return;
+			loading = true;
 			window.location.href = `${API_URL}/auth/start?pds_url=${encodeURIComponent(selectedPds)}`;
 		}
 	}
 
 	function handleSelect(selected: string) {
+		// mirror the add-account flow (UserMenu/ProfileMenu): picking from the
+		// typeahead starts sign-in immediately, no separate "sign in" click.
 		handle = selected;
+		beginSignIn();
 	}
 
 	function switchToCreate() {
