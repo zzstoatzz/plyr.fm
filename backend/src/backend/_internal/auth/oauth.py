@@ -208,6 +208,24 @@ def _bsky_edge_block_error(exc: Exception, handle: str) -> HTTPException | None:
     )
 
 
+def _oauth_start_failure(e: Exception, handle: str) -> HTTPException:
+    """turn an OAuth-start failure into a surfaced HTTPException.
+
+    PAR failures from the authserver can arrive as exceptions whose `str()` is
+    empty (notably `httpx.RemoteProtocolError` when the PDS aborts the PAR
+    connection) — which produced an opaque "failed to start OAuth flow: " with
+    no cause. include the exception type + repr in the detail, and log the full
+    traceback so the real cause is always captured.
+    """
+    if friendly := _bsky_edge_block_error(e, handle):
+        return friendly
+    logger.exception("failed to start OAuth flow for %s", handle)
+    detail = str(e).strip() or f"{type(e).__name__}: {e!r}"
+    return HTTPException(
+        status_code=400, detail=f"failed to start OAuth flow: {detail}"
+    )
+
+
 async def start_oauth_flow(
     handle: str, prompt: PromptType | None = None
 ) -> tuple[str, str]:
@@ -243,12 +261,7 @@ async def start_oauth_flow(
     except HTTPException:
         raise
     except Exception as e:
-        if friendly := _bsky_edge_block_error(e, handle):
-            raise friendly from e
-        raise HTTPException(
-            status_code=400,
-            detail=f"failed to start OAuth flow: {e}",
-        ) from e
+        raise _oauth_start_failure(e, handle) from e
 
 
 async def start_oauth_flow_with_scopes(
@@ -275,12 +288,7 @@ async def start_oauth_flow_with_scopes(
     except HTTPException:
         raise
     except Exception as e:
-        if friendly := _bsky_edge_block_error(e, handle):
-            raise friendly from e
-        raise HTTPException(
-            status_code=400,
-            detail=f"failed to start OAuth flow: {e}",
-        ) from e
+        raise _oauth_start_failure(e, handle) from e
 
 
 async def start_oauth_flow_for_pds(pds_url: str) -> tuple[str, str]:
