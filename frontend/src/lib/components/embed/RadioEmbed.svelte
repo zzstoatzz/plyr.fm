@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
-	import type { RadioState, RadioTrack } from '$lib/radio.svelte';
+	import TunerDial from '$lib/components/radio/TunerDial.svelte';
+	import type { RadioState, RadioStation, RadioTrack } from '$lib/radio.svelte';
 
 	// standalone embed player: this is its own iframe context (not the main app),
 	// so it owns a local <audio> and its own station polling.
@@ -10,9 +12,15 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let playing = $state(false);
+	let stations = $state<RadioStation[]>([]);
+	/** selected station slug; null defers to the server default. seeded from
+	 * the iframe url's ?station= so embedders can pin a station. */
+	let station = $state<string | null>(null);
+	let switching = $state(false);
 	let pollTimer: number | null = null;
 
 	let current: RadioTrack | null = $derived(radioState?.current ?? null);
+	let activeSlug = $derived(radioState?.station_slug ?? station);
 
 	function stateProgress(fetched: RadioState): number {
 		const generatedAt = Date.parse(fetched.generated_at);
@@ -41,9 +49,26 @@
 		}
 	}
 
-	async function loadState(sync = false) {
+	async function loadStations() {
 		try {
-			const res = await fetch(`${API_URL}/radio/state`);
+			const res = await fetch(`${API_URL}/radio/stations`);
+			if (!res.ok) return;
+			stations = (await res.json()).stations;
+		} catch (e) {
+			console.error('radio embed: failed to load stations', e);
+		}
+	}
+
+	async function loadState(sync = false): Promise<void> {
+		try {
+			const query = station ? `?station=${encodeURIComponent(station)}` : '';
+			const res = await fetch(`${API_URL}/radio/state${query}`);
+			if (res.status === 404 && station) {
+				// unknown station slug (bad embed param or a renamed station) —
+				// fall back to the server default rather than going "off air"
+				station = null;
+				return loadState(sync);
+			}
 			if (!res.ok) throw new Error(`radio ${res.status}`);
 			radioState = await res.json();
 			error = null;
@@ -53,6 +78,19 @@
 			error = 'radio is off air right now';
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function selectStation(slug: string) {
+		if (slug === activeSlug) return;
+		station = slug;
+		switching = true;
+		try {
+			// sync so a tuned-in listener follows the audio across the flip;
+			// while paused this just preloads the new station's track
+			await loadState(true);
+		} finally {
+			switching = false;
 		}
 	}
 
@@ -69,6 +107,8 @@
 	}
 
 	onMount(() => {
+		station = $page.url.searchParams.get('station');
+		loadStations();
 		loadState(false);
 		pollTimer = window.setInterval(() => loadState(playing), 30000);
 		return () => {
@@ -86,7 +126,7 @@
 ></audio>
 
 <div class="radio-embed">
-	<a class="brand" href="https://plyr.fm/radio" target="_blank" rel="noopener">
+	<a class="brand" href={`https://plyr.fm/radio${activeSlug ? `/${activeSlug}` : ''}`} target="_blank" rel="noopener">
 		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 			<circle cx="12" cy="12" r="2"></circle>
 			<path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"></path>
@@ -94,12 +134,16 @@
 		<span>plyr.fm radio</span>
 	</a>
 
+	<div class="dial-row">
+		<TunerDial {stations} {activeSlug} onSelect={selectStation} />
+	</div>
+
 	{#if loading && !radioState}
 		<div class="status">tuning…</div>
 	{:else if error}
 		<div class="status error">{error}</div>
 	{:else if current}
-		<div class="now">
+		<div class="now" class:tuning={switching}>
 			{#if current.artwork_url}
 				<img class="art" src={current.artwork_url} alt="" />
 			{:else}
@@ -152,6 +196,19 @@
 		text-decoration: underline;
 	}
 
+	.dial-row {
+		display: flex;
+		justify-content: center;
+	}
+
+	/* iframes sized for the pre-dial layout are too short for an extra row —
+	   keep them uncropped and let ?station= still pin the station */
+	@media (max-height: 11.5rem) {
+		.dial-row {
+			display: none;
+		}
+	}
+
 	.status {
 		flex: 1;
 		display: flex;
@@ -170,6 +227,26 @@
 		align-items: center;
 		gap: 1rem;
 		min-height: 0;
+		transition:
+			opacity 0.22s ease,
+			filter 0.22s ease;
+	}
+
+	/* the swappable station content fades while tuning, same as the radio page */
+	.now.tuning {
+		opacity: 0.35;
+		filter: blur(2px);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.now {
+			transition: none;
+		}
+
+		.now.tuning {
+			opacity: 0.6;
+			filter: none;
+		}
 	}
 
 	.art {
