@@ -6,6 +6,19 @@ whose PDS implements it. ports cleanly from today's public track flow: the recor
 is the same `fm.plyr.track` lexicon — only the write target (a permissioned space repo)
 and the read auth (a space credential) differ.
 
+> **update (#1573): the protocol no longer has a reader member list.** ZDS removed the
+> member-list routes (`addMember`/`removeMember`/`getMembers`/`getMemberState`/
+> `getMemberOplog`/`notifyMembership`) and `getSpace`/`listSpaces` no longer expose
+> `members`/`isMember`. the **space credential is the substrate**; reader/group semantics
+> live **above** it, in the app. private-space credentials are owner-only by default.
+> plyr.fm does not depend on any of the removed surface (audited: we never read
+> `members`/`isMember` and never called a member-list route). access for this MVP is
+> **owner-only by plyr's app-layer policy** — see the owner-model section. broader access
+> (label rosters, artist-catalog membership, supporter tiers) is future plyr.fm app-layer
+> state — ideally records in the relevant permissioned space — never a PDS member list.
+> sections below that say "member list" describe the original (now-removed) protocol shape
+> and are kept for history; the binding model is owner-only-by-app-policy.
+
 ## the first space type, and why it's the smallest meaningful one
 
 `fm.plyr.privateMedia` (env-aware: `fm.plyr.dev.privateMedia` in dev). One artist-owned
@@ -38,12 +51,13 @@ Result is cached per-PDS in Redis (6h) and surfaced on `/auth/me` as
 field), swap it in behind the same `detect_permissioned_capability()` function — the one
 isolation point.
 
-## owner model, initial members, and plyr.fm's client ID
+## owner model, access, and plyr.fm's client ID
 
 - **Owner DID = artist DID.** Personal namespaces use the user's own DID (diary 5); no
   dedicated space DID is needed until ownership must transfer (shared/gated spaces).
-- **Members:** exactly one — the artist, auto-added as the owner. The member list is the
-  read ACL; write legitimacy is app policy (below).
+- **Access: owner-only.** Post-#1573 the protocol has no reader member list — private-space
+  credentials are owner-only by default, and any wider read ACL is plyr's app-layer concern.
+  for this MVP the owner is the sole reader; write legitimacy is also app policy (below).
 - **plyr.fm's OAuth client ID is default-allowed.** The space is created with
   `appAccessMode: "allow"` and empty `appExceptions`, so any OAuth client (including
   plyr.fm) may obtain a credential. A future shared-space pass can flip to an allow-list.
