@@ -34,6 +34,9 @@
 		/* accent */
 		--accent: #6a9fff;
 
+		/* type */
+		--text-sm: 0.85rem;
+
 		/* radii */
 		--radius-full: 9999px;
 	}
