@@ -78,9 +78,12 @@ async def ensure_personal_space(
 ) -> str:
     """create (or find) the caller's artist-owned personal space; return its URI.
 
-    owner DID = the artist's DID, single-member (the artist is auto-added).
-    `appAccessMode:"allow"` + empty exceptions leaves plyr.fm's OAuth client
-    default-allowed for credential exchange.
+    owner DID = the artist's DID. the space is owner-only: the protocol no longer
+    has a reader member list (#1573), and private-space credentials are owner-only
+    by default, so for this MVP the owner is the sole reader. any broader access
+    (label/supporter rosters) is plyr.fm app-layer state, not a PDS member list.
+    `appAccessMode:"allow"` + empty exceptions is the app-access policy that leaves
+    plyr.fm's OAuth client default-allowed for the credential exchange.
     """
     space_type = space_type or settings.atproto.private_media_space_type
     space_uri = build_space_uri(auth_session.did, space_type, skey)
