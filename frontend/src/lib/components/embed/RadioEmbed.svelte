@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { API_URL } from '$lib/config';
 	import TunerDial from '$lib/components/radio/TunerDial.svelte';
+	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import type { RadioState, RadioStation, RadioTrack } from '$lib/radio.svelte';
 
 	// standalone embed player: this is its own iframe context (not the main app),
@@ -145,7 +146,9 @@
 	{:else if current}
 		<div class="now" class:tuning={switching}>
 			{#if current.artwork_url}
-				<img class="art" src={current.artwork_url} alt="" />
+				<SensitiveImage src={current.artwork_url} compact respectPreference={false}>
+					<img class="art" src={current.artwork_url} alt="" />
+				</SensitiveImage>
 			{:else}
 				<div class="art fallback"></div>
 			{/if}

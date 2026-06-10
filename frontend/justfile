@@ -11,3 +11,7 @@ run:
 # check svelte types
 check:
     bun run check
+
+# run component tests
+test:
+    bun run test

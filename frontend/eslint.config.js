@@ -12,7 +12,8 @@ export default [
 			'build/**',
 			'node_modules/**',
 			'dist/**',
-			'**/*.config.js'
+			'**/*.config.js',
+			'vitest.config.ts'
 		]
 	},
 	js.configs.recommended,

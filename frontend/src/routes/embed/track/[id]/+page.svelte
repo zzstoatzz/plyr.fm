@@ -126,7 +126,7 @@
 <div class="embed-container" class:is-playing={!paused}>
 	<!-- background image for mobile layout -->
 	{#if coverUrl}
-		<SensitiveImage src={coverUrl}>
+		<SensitiveImage src={coverUrl} respectPreference={false}>
 			<div class="bg-image" style="background-image: url({coverUrl})"></div>
 		</SensitiveImage>
 	{/if}
@@ -135,7 +135,7 @@
 	<!-- desktop: side art -->
 	<div class="art-container">
 		{#if coverUrl}
-			<SensitiveImage src={coverUrl}>
+			<SensitiveImage src={coverUrl} respectPreference={false}>
 				<img src={coverUrl} alt={track.title} class="art" />
 			</SensitiveImage>
 		{:else}
@@ -146,7 +146,7 @@
 	<div class="content">
 		<div class="art-card">
 			{#if coverUrl}
-				<SensitiveImage src={coverUrl}>
+				<SensitiveImage src={coverUrl} respectPreference={false}>
 					<img src={coverUrl} alt={track.title} class="art-card-img" />
 				</SensitiveImage>
 			{:else}
