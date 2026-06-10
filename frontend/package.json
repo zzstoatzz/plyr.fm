@@ -10,6 +10,7 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"test": "vitest run",
 		"lint": "eslint .",
 		"format": "prettier --write .",
 		"format:check": "prettier --check ."
@@ -25,12 +26,14 @@
 		"@vite-pwa/sveltekit": "^1.0.1",
 		"eslint": "^9.39.1",
 		"eslint-plugin-svelte": "^3.13.0",
+		"jsdom": "^29.1.1",
 		"prettier": "^3.7.4",
 		"prettier-plugin-svelte": "^3.4.1",
 		"svelte": "^5.39.5",
 		"svelte-check": "^4.3.2",
 		"typescript": "^5.9.2",
-		"vite": "^7.1.7"
+		"vite": "^7.1.7",
+		"vitest": "^4.1.8"
 	},
 	"dependencies": {
 		"@atproto/api": "^0.18.7",

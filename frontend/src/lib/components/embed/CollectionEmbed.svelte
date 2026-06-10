@@ -171,7 +171,7 @@
 
 <div class="embed-container">
 	{#if collection.imageUrl}
-		<SensitiveImage src={collection.imageUrl}>
+		<SensitiveImage src={collection.imageUrl} respectPreference={false}>
 			<div class="bg-image" style="background-image: url({collection.imageUrl})"></div>
 		</SensitiveImage>
 	{/if}
@@ -179,7 +179,7 @@
 
 	<div class="art-container">
 		{#if collection.imageUrl}
-			<SensitiveImage src={collection.imageUrl}>
+			<SensitiveImage src={collection.imageUrl} respectPreference={false}>
 				<img src={collection.imageUrl} alt={collection.title} class="art" />
 			</SensitiveImage>
 		{:else}
@@ -233,7 +233,9 @@
 		<div class="player-bar" class:is-playing={!paused}>
 			<div class="now-playing">
 				{#if currentTrack?.image_url}
-					<img class="np-art" src={currentTrack.image_url} alt="" />
+					<SensitiveImage src={currentTrack.image_url} compact respectPreference={false}>
+						<img class="np-art" src={currentTrack.image_url} alt="" />
+					</SensitiveImage>
 				{:else}
 					<div class="np-art-placeholder">&#9835;</div>
 				{/if}

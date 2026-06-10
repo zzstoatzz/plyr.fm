@@ -11,19 +11,22 @@
 		tooltipPosition?: 'above' | 'center';
 		/** compact mode - blur only, no tooltip, preserves layout (for avatars in lists) */
 		compact?: boolean;
+		/** pass false in unauthenticated contexts (embeds) where the viewer's
+		 * preference is unknowable - sensitive images then always blur */
+		respectPreference?: boolean;
 	}
 
-	let { src, children, tooltipPosition = 'above', compact = false }: Props = $props();
+	let { src, children, tooltipPosition = 'above', compact = false, respectPreference = true }: Props = $props();
 
 	let isSensitive = $derived(moderation.isSensitive(src));
-	let shouldBlur = $derived(isSensitive && !preferences.showSensitiveArtwork);
+	let shouldBlur = $derived(isSensitive && (!respectPreference || !preferences.showSensitiveArtwork));
 </script>
 
 <div class="sensitive-wrapper" class:blur={shouldBlur} class:compact class:tooltip-center={tooltipPosition === 'center'}>
 	{@render children()}
 	{#if shouldBlur && !compact}
 		<div class="sensitive-tooltip">
-			<span>sensitive - enable in settings</span>
+			<span>{respectPreference ? 'sensitive - enable in settings' : 'sensitive'}</span>
 		</div>
 	{/if}
 </div>

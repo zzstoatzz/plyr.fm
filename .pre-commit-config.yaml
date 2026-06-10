@@ -48,6 +48,13 @@ repos:
         files: ^frontend/.*\.(ts|svelte)$
         pass_filenames: false
 
+      - id: vitest
+        name: frontend tests
+        entry: bash -c 'cd frontend && bun run test'
+        language: system
+        files: ^frontend/.*\.(ts|svelte)$
+        pass_filenames: false
+
       - id: check-legal-dates
         name: check legal dates
         entry: python scripts/check_legal_dates.py
