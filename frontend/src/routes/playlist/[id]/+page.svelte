@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
 	import Header from "$lib/components/Header.svelte";
 	import ShareButton from "$lib/components/ShareButton.svelte";
 	import SensitiveImage from "$lib/components/SensitiveImage.svelte";
@@ -12,7 +13,10 @@
 	import { toast } from "$lib/toast.svelte";
 	import { player } from "$lib/player.svelte";
 	import { queue } from "$lib/queue.svelte";
-	import { playQueue } from "$lib/playback.svelte";
+	import {
+		playCollection,
+		queueCollection,
+	} from "$lib/collection-playback";
 	import { fetchLikedTracks } from "$lib/tracks.svelte";
 	import { createListReorder, moveItem } from "$lib/list-reorder.svelte";
 	import * as playlistActions from "$lib/playlist-actions";
@@ -148,20 +152,11 @@
 	}
 
 	async function playNow() {
-		if (tracks.length > 0) {
-			// use playQueue to check gated access on first track before modifying queue
-			const played = await playQueue(tracks);
-			if (played) {
-				toast.success(`playing ${playlist.name}`, 1800);
-			}
-		}
+		await playCollection(tracks, playlist.name);
 	}
 
 	function addToQueue() {
-		if (tracks.length > 0) {
-			queue.addTracks(tracks);
-			toast.success(`added ${playlist.name} to queue`, 1800);
-		}
+		queueCollection(tracks, playlist.name);
 	}
 
 	async function searchTracks() {
@@ -1223,106 +1218,30 @@
 	</div>
 {/if}
 
-{#if showVisibilityConfirm}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div
-		class="modal-overlay"
-		role="presentation"
-		onclick={() => (showVisibilityConfirm = false)}
-	>
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div
-			class="modal"
-			role="alertdialog"
-			aria-modal="true"
-			aria-labelledby="visibility-confirm-title"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<div class="modal-header">
-				<h3 id="visibility-confirm-title">
-					{playlist.is_private ? "make this playlist public?" : "make this playlist private?"}
-				</h3>
-			</div>
-			<div class="modal-body">
-				<p>
-					{#if playlist.is_private}
-						"{playlist.name}" will be published to your PDS as a public list record. anyone with the link will be able to see it.
-					{:else}
-						"{playlist.name}" will be removed from your PDS and only you will be able to see it. it won't appear in search, on your profile, or in the activity feed.
-					{/if}
-				</p>
-			</div>
-			<div class="modal-footer">
-				<button
-					class="cancel-btn"
-					onclick={() => (showVisibilityConfirm = false)}
-					disabled={togglingVisibility}
-				>
-					cancel
-				</button>
-				<button
-					class="confirm-btn"
-					onclick={toggleVisibility}
-					disabled={togglingVisibility}
-				>
-					{#if togglingVisibility}
-						working...
-					{:else if playlist.is_private}
-						make public
-					{:else}
-						make private
-					{/if}
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
+<ConfirmDialog
+	bind:open={showVisibilityConfirm}
+	title={playlist.is_private
+		? "make this playlist public?"
+		: "make this playlist private?"}
+	body={playlist.is_private
+		? `"${playlist.name}" will be published to your PDS as a public list record. anyone with the link will be able to see it.`
+		: `"${playlist.name}" will be removed from your PDS and only you will be able to see it. it won't appear in search, on your profile, or in the activity feed.`}
+	confirmText={playlist.is_private ? "make public" : "make private"}
+	pending={togglingVisibility}
+	pendingText="working..."
+	onConfirm={toggleVisibility}
+/>
 
-{#if showDeleteConfirm}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div
-		class="modal-overlay"
-		role="presentation"
-		onclick={() => (showDeleteConfirm = false)}
-	>
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div
-			class="modal"
-			role="alertdialog"
-			aria-modal="true"
-			aria-labelledby="delete-confirm-title"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<div class="modal-header">
-				<h3 id="delete-confirm-title">delete playlist?</h3>
-			</div>
-			<div class="modal-body">
-				<p>
-					are you sure you want to delete "{playlist.name}"? this
-					action cannot be undone.
-				</p>
-			</div>
-			<div class="modal-footer">
-				<button
-					class="cancel-btn"
-					onclick={() => (showDeleteConfirm = false)}
-					disabled={deleting}
-				>
-					cancel
-				</button>
-				<button
-					class="confirm-btn danger"
-					onclick={deletePlaylist}
-					disabled={deleting}
-				>
-					{deleting ? "deleting..." : "delete"}
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
+<ConfirmDialog
+	bind:open={showDeleteConfirm}
+	title="delete playlist?"
+	body={`are you sure you want to delete "${playlist.name}"? this action cannot be undone.`}
+	confirmText="delete"
+	variant="danger"
+	pending={deleting}
+	pendingText="deleting..."
+	onConfirm={deletePlaylist}
+/>
 
 <style>
 	.container {
@@ -2028,67 +1947,6 @@
 	}
 
 	.add-result-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.modal-body {
-		padding: 1.5rem;
-	}
-
-	.modal-body p {
-		margin: 0;
-		color: var(--text-secondary);
-		font-size: var(--text-base);
-		line-height: 1.5;
-	}
-
-	.modal-footer {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.75rem;
-		padding: 1rem 1.5rem 1.25rem;
-	}
-
-	.cancel-btn,
-	.confirm-btn {
-		padding: 0.625rem 1.25rem;
-		border-radius: var(--radius-md);
-		font-family: inherit;
-		font-size: var(--text-base);
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.cancel-btn {
-		background: var(--bg-secondary);
-		border: 1px solid var(--border-default);
-		color: var(--text-secondary);
-	}
-
-	.cancel-btn:hover:not(:disabled) {
-		background: var(--bg-hover);
-		color: var(--text-primary);
-	}
-
-	.confirm-btn {
-		background: var(--accent);
-		border: 1px solid var(--accent);
-		color: white;
-	}
-
-	.confirm-btn.danger {
-		background: #ef4444;
-		border-color: #ef4444;
-	}
-
-	.confirm-btn:hover:not(:disabled) {
-		opacity: 0.9;
-	}
-
-	.confirm-btn:disabled,
-	.cancel-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
