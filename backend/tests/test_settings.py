@@ -80,3 +80,41 @@ def test_settings_supports_nested_env(monkeypatch):
     assert settings.frontend.url == "https://cdn.example.com"
     assert settings.atproto.client_id == "https://new/meta.json"
     assert settings.atproto.scope_override == "custom scope"
+
+
+@pytest.mark.parametrize(
+    ("env_url", "expected"),
+    [
+        # driverless URLs — what `createdb` workflows and managed-postgres
+        # consoles hand out — must be upgraded to the async psycopg dialect,
+        # otherwise create_async_engine resolves them to sync psycopg2 and
+        # crashes (#1584)
+        (
+            "postgresql://localhost/plyr",
+            "postgresql+psycopg://localhost/plyr",
+        ),
+        (
+            "postgres://user:pass@host:5432/db",
+            "postgresql+psycopg://user:pass@host:5432/db",
+        ),
+        (
+            "postgresql://u:p@host/db?sslmode=require&channel_binding=require",
+            "postgresql+psycopg://u:p@host/db?sslmode=require&channel_binding=require",
+        ),
+        # explicit drivers are respected as-is
+        (
+            "postgresql+asyncpg://localhost/plyr",
+            "postgresql+asyncpg://localhost/plyr",
+        ),
+        (
+            "postgresql+psycopg://u:p@host/db?sslmode=require",
+            "postgresql+psycopg://u:p@host/db?sslmode=require",
+        ),
+    ],
+)
+def test_database_url_driver_normalization(monkeypatch, env_url, expected):
+    monkeypatch.setenv("DATABASE_URL", env_url)
+
+    settings = Settings()
+
+    assert settings.database.url == expected

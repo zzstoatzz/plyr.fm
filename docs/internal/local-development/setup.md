@@ -41,21 +41,28 @@ visit http://localhost:5173 to see the app.
 
 ### required environment variables
 
-create a `.env` file in the project root:
+create the env file at `backend/.env` (the backend reads it from there, not the repo root):
 
 ```bash
-# database (use neon dev instance or local postgres)
-DATABASE_URL=postgresql+asyncpg://localhost/plyr  # local
+# database (use neon dev instance or local postgres).
+# any standard postgresql:// URL works — the backend upgrades driverless URLs
+# to the async psycopg driver automatically.
+DATABASE_URL=postgresql+psycopg://localhost/plyr  # local
 # DATABASE_URL=<neon-dev-connection-string>        # neon dev
 
-# oauth (uses client metadata discovery - no registration required)
+# oauth (uses client metadata discovery - no registration required).
+# note: real PDSes reject localhost redirect URIs (RFC 8252), so signing in
+# against a real account requires exposing the backend over a public https
+# tunnel (e.g. ngrok) and pointing ATPROTO_CLIENT_ID / ATPROTO_REDIRECT_URI
+# at the tunnel hostname. anonymous browsing works without this.
 ATPROTO_CLIENT_ID=http://localhost:8001/oauth-client-metadata.json
 ATPROTO_CLIENT_SECRET=<your-client-secret>
 ATPROTO_REDIRECT_URI=http://localhost:5173/auth/callback
 OAUTH_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
 
-# storage (r2 or filesystem)
-STORAGE_BACKEND=filesystem  # or "r2" for cloudflare r2
+# storage (cloudflare r2). R2 credentials are required for uploads and
+# cover-image changes; without them those endpoints return 500. playback of
+# existing tracks works without credentials (public bucket URLs).
 R2_BUCKET=audio-dev
 R2_PRIVATE_BUCKET=audio-private-dev  # for supporter-gated content
 R2_IMAGE_BUCKET=images-dev
@@ -99,7 +106,7 @@ brew install postgresql@15  # macos
 createdb plyr
 
 # run migrations
-DATABASE_URL=postgresql+asyncpg://localhost/plyr uv run alembic upgrade head
+DATABASE_URL=postgresql+psycopg://localhost/plyr uv run alembic upgrade head
 ```
 
 ## running services
@@ -341,13 +348,9 @@ echo $R2_BUCKET
 
 # test r2 connectivity
 uv run python -c "
-from backend.storage import get_storage_backend
-storage = get_storage_backend()
-print(storage.bucket_name)
+from backend.storage.r2 import R2Storage
+print(R2Storage().audio_bucket_name)
 "
-
-# or use filesystem backend for local development
-STORAGE_BACKEND=filesystem uv run uvicorn backend.main:app --reload
 ```
 
 ## useful commands

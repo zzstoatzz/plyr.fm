@@ -29,6 +29,11 @@ from backend.models import Base
 from backend.storage.r2 import R2Storage
 from backend.utilities.redis import clear_client_cache
 
+# the suite's scope/collection assertions are written against the production
+# namespace; pin it so a developer's backend/.env (e.g. fm.plyr.dev) can't
+# leak in. CI runs with no .env and is unaffected.
+settings.atproto.app_namespace = "fm.plyr"
+
 
 class MockStorage(R2Storage):
     """Mock storage for tests - no R2 credentials needed."""
