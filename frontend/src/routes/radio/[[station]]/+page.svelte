@@ -154,6 +154,7 @@
 							<p>play <code>current.stream_url</code>, seek to <code>progress_seconds</code>.</p>
 							<p>refresh when <code>current_ends_at</code> passes, or poll every 30s.</p>
 							<p>embedding this page? add <code>?autoplay=1</code> to start playback automatically.</p>
+							<p>or use the compact widget: <code>/embed/radio</code> takes <code>?station=</code> and <code>?autoplay=1</code> too.</p>
 						</div>
 					</details>
 				</div>

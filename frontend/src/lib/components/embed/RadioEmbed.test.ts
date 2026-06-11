@@ -1,10 +1,26 @@
-// regression test for sensitive artwork in the radio embed: embeds are
-// unauthenticated contexts, so flagged artwork must always render blurred.
+// radio embed tests: flagged artwork must always render blurred (embeds are
+// unauthenticated contexts), and ?autoplay=1 tunes in once state loads.
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { mount, unmount } from 'svelte';
 
 const prefs = vi.hoisted(() => ({ showSensitiveArtwork: false }));
 vi.mock('$lib/preferences.svelte', () => ({ preferences: prefs }));
+
+// the shared $app/stores stub pins the url to http://localhost/ — the embed
+// reads ?station= and ?autoplay= from it, so tests need a controllable url
+const pageUrl = vi.hoisted(() => ({ value: 'http://localhost/' }));
+vi.mock('$app/stores', () => ({
+	page: {
+		subscribe(run: (value: { url: URL }) => void) {
+			run({ url: new URL(pageUrl.value) });
+			return () => {};
+		}
+	}
+}));
+
+// jsdom doesn't implement media playback
+const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 
 const SENSITIVE_ART = 'https://images.test/images/sens123.webp';
 const SAFE_ART = 'https://images.test/images/safe456.webp';
@@ -76,6 +92,8 @@ afterEach(() => {
 		component = null;
 	}
 	document.body.innerHTML = '';
+	pageUrl.value = 'http://localhost/';
+	playSpy.mockClear();
 });
 
 describe('RadioEmbed sensitive artwork', () => {
@@ -89,5 +107,20 @@ describe('RadioEmbed sensitive artwork', () => {
 		artworkUrl = SAFE_ART;
 		const img = await mountRadioEmbed();
 		expect(img.closest('.sensitive-wrapper.blur')).toBeNull();
+	});
+});
+
+describe('RadioEmbed autoplay', () => {
+	it('tunes in automatically with ?autoplay=1', async () => {
+		artworkUrl = SAFE_ART;
+		pageUrl.value = 'http://localhost/?autoplay=1';
+		await mountRadioEmbed();
+		await vi.waitFor(() => expect(playSpy).toHaveBeenCalled());
+	});
+
+	it('stays paused without the param', async () => {
+		artworkUrl = SAFE_ART;
+		await mountRadioEmbed();
+		expect(playSpy).not.toHaveBeenCalled();
 	});
 });

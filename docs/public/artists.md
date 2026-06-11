@@ -54,7 +54,7 @@ album and playlist covers accept the same formats except GIF.
 
 ## embeds
 
-share your audio anywhere with embed iframes. plyr.fm supports track, playlist, and album embeds.
+share your audio anywhere with embed iframes. plyr.fm supports track, playlist, album, and radio embeds.
 
 ### track embed
 
@@ -81,6 +81,51 @@ share your audio anywhere with embed iframes. plyr.fm supports track, playlist, 
   loading="lazy"
 ></iframe>
 ```
+
+### album embed
+
+```html
+<iframe
+  src="https://plyr.fm/embed/album/{handle}/{album_slug}"
+  width="100%"
+  height="352"
+  frameborder="0"
+  allow="autoplay; encrypted-media"
+  loading="lazy"
+></iframe>
+```
+
+### radio embed
+
+a live widget for [plyr.fm radio](https://plyr.fm/radio) with a tuner dial for flipping stations:
+
+```html
+<iframe
+  src="https://plyr.fm/embed/radio"
+  width="100%"
+  height="220"
+  frameborder="0"
+  allow="autoplay; encrypted-media"
+  loading="lazy"
+></iframe>
+```
+
+add `?station={slug}` (e.g. `?station=fresh`) to pin the initial station — an unknown slug falls back to the default station. iframes shorter than ~184px hide the tuner dial but keep the pinned station.
+
+### autoplay
+
+every embed accepts `?autoplay=1` to start playback as soon as it loads:
+
+```
+https://plyr.fm/embed/radio?station=fresh&autoplay=1
+```
+
+two caveats:
+
+- the embedding page must grant permission with `allow="autoplay"` on the iframe (all the examples above do).
+- browsers may still block audible autoplay until the visitor has interacted with the embedding site. when blocked, the embed stays paused — no error, just the normal click-to-play state.
+
+the full [radio page](https://plyr.fm/radio) also accepts `?autoplay=1`, useful for browser-source overlays (e.g. OBS) where nothing can click play.
 
 ### oEmbed
 

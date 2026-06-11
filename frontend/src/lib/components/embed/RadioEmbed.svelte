@@ -108,9 +108,16 @@
 	}
 
 	onMount(() => {
-		station = $page.url.searchParams.get('station');
+		const params = $page.url.searchParams;
+		station = params.get('station');
+		const autoplay = params.get('autoplay') === '1';
 		loadStations();
-		loadState(false);
+		// ?autoplay=1 tunes in once the on-air track arrives (same convention as
+		// the other embeds). without a prior gesture, autoplay policy blocks the
+		// play() and toggle's catch leaves the widget in its normal paused state.
+		loadState(false).then(() => {
+			if (autoplay && !playing) toggle();
+		});
 		pollTimer = window.setInterval(() => loadState(playing), 30000);
 		return () => {
 			if (pollTimer) window.clearInterval(pollTimer);
