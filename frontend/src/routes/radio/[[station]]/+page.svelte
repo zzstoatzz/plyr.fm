@@ -29,6 +29,22 @@
 		untrack(() => radio.show(slug));
 	});
 
+	// `?autoplay=1` tunes in automatically once the station's on-air track loads
+	// (same convention as the track embed). built for embeds like an OBS browser
+	// overlay where there's no chance to click "tune in". in a normal browser
+	// without a prior gesture the play() is blocked by autoplay policy and
+	// playRadio's catch quietly leaves it paused — no error, just no sound.
+	let autoplayRequested = $derived($page.url.searchParams.get('autoplay') === '1');
+	// fire once: tune in the moment a current track exists and we're not already on air.
+	let autoTuned = false;
+	$effect(() => {
+		if (!autoplayRequested || autoTuned) return;
+		if (!radio.current || radio.active) return;
+		autoTuned = true;
+		// play/pause button infinite loops without setTimeout
+		setTimeout(() => radio.tuneIn(), 0);
+	});
+
 	/** select a station by navigating, so the URL (and bookmarks/back) stay in sync */
 	function tuneToStation(slug: string) {
 		goto(`/radio/${slug}`, { keepFocus: true, noScroll: true });
@@ -137,6 +153,7 @@
 							<p>poll <code>{endpoint}</code> for the shared station state.</p>
 							<p>play <code>current.stream_url</code>, seek to <code>progress_seconds</code>.</p>
 							<p>refresh when <code>current_ends_at</code> passes, or poll every 30s.</p>
+							<p>embedding this page? add <code>?autoplay=1</code> to start playback automatically.</p>
 						</div>
 					</details>
 				</div>
