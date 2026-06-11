@@ -92,8 +92,8 @@ python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
 ### option 1: use neon dev instance (recommended)
 
 1. get dev database URL from neon console or `.env.example`
-2. set `DATABASE_URL` in `.env`
-3. run migrations: `uv run alembic upgrade head`
+2. set `DATABASE_URL` in `backend/.env`
+3. apply any pending migrations: `uv run alembic upgrade head`
 
 ### option 2: local postgres
 
@@ -105,8 +105,10 @@ brew install postgresql@15  # macos
 # create database
 createdb plyr
 
-# run migrations
-DATABASE_URL=postgresql+psycopg://localhost/plyr uv run alembic upgrade head
+# create the schema (from backend/). a FRESH database needs this instead of
+# `alembic upgrade head` — the migration chain predates alembic adoption and
+# cannot bootstrap from zero. later migrations use `alembic upgrade head`.
+just db-init
 ```
 
 ## running services
