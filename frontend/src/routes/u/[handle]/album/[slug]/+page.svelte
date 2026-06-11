@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
@@ -7,7 +8,7 @@
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
-	import { playQueue } from '$lib/playback.svelte';
+	import { playCollection, queueCollection } from '$lib/collection-playback';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { API_URL } from '$lib/config';
@@ -72,20 +73,11 @@
 	}
 
 	async function playNow() {
-		if (tracks.length > 0) {
-			// use playQueue to check gated access on first track before modifying queue
-			const played = await playQueue(tracks);
-			if (played) {
-				toast.success(`playing ${albumMetadata.title}`, 1800);
-			}
-		}
+		await playCollection(tracks, albumMetadata.title);
 	}
 
 	function addToQueue() {
-		if (tracks.length > 0) {
-			queue.addTracks(tracks);
-			toast.success(`added ${albumMetadata.title} to queue`, 1800);
-		}
+		queueCollection(tracks, albumMetadata.title);
 	}
 
 	function toggleEditMode() {
@@ -567,49 +559,16 @@
 	</main>
 </div>
 
-{#if showDeleteConfirm}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div
-		class="modal-overlay"
-		role="presentation"
-		onclick={() => (showDeleteConfirm = false)}
-	>
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div
-			class="modal"
-			role="alertdialog"
-			aria-modal="true"
-			aria-labelledby="delete-confirm-title"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<div class="modal-header">
-				<h3 id="delete-confirm-title">delete album?</h3>
-			</div>
-			<div class="modal-body">
-				<p>
-					are you sure you want to delete "{albumMetadata.title}"? the tracks will remain as standalone tracks.
-				</p>
-			</div>
-			<div class="modal-footer">
-				<button
-					class="cancel-btn"
-					onclick={() => (showDeleteConfirm = false)}
-					disabled={deleting}
-				>
-					cancel
-				</button>
-				<button
-					class="confirm-btn danger"
-					onclick={deleteAlbum}
-					disabled={deleting}
-				>
-					{deleting ? 'deleting...' : 'delete'}
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
+<ConfirmDialog
+	bind:open={showDeleteConfirm}
+	title="delete album?"
+	body={`are you sure you want to delete "${albumMetadata.title}"? the tracks will remain as standalone tracks.`}
+	confirmText="delete"
+	variant="danger"
+	pending={deleting}
+	pendingText="deleting..."
+	onConfirm={deleteAlbum}
+/>
 
 <style>
 	.container {
@@ -1045,96 +1004,4 @@
 		opacity: 0.5;
 	}
 
-	/* modal styles */
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.7);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-		backdrop-filter: blur(4px);
-	}
-
-	.modal {
-		background: var(--bg-secondary);
-		border-radius: var(--radius-lg);
-		padding: 1.5rem;
-		max-width: 400px;
-		width: calc(100% - 2rem);
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-		border: 1px solid var(--border-subtle);
-	}
-
-	.modal-header {
-		margin-bottom: 1rem;
-	}
-
-	.modal-header h3 {
-		margin: 0;
-		font-size: var(--text-2xl);
-		font-weight: 600;
-		color: var(--text-primary);
-	}
-
-	.modal-body {
-		margin-bottom: 1.5rem;
-	}
-
-	.modal-body p {
-		margin: 0;
-		color: var(--text-secondary);
-		line-height: 1.5;
-	}
-
-	.modal-footer {
-		display: flex;
-		gap: 0.75rem;
-		justify-content: flex-end;
-	}
-
-	.cancel-btn,
-	.confirm-btn {
-		padding: 0.625rem 1.25rem;
-		border-radius: var(--radius-md);
-		font-weight: 500;
-		font-size: var(--text-base);
-		font-family: inherit;
-		cursor: pointer;
-		transition: all 0.2s;
-		border: none;
-	}
-
-	.cancel-btn {
-		background: var(--bg-tertiary);
-		color: var(--text-primary);
-	}
-
-	.cancel-btn:hover {
-		background: var(--bg-hover);
-	}
-
-	.cancel-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.confirm-btn {
-		background: var(--accent);
-		color: var(--bg-primary);
-	}
-
-	.confirm-btn:hover {
-		filter: brightness(1.1);
-	}
-
-	.confirm-btn.danger {
-		background: var(--error);
-	}
-
-	.confirm-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
 </style>
