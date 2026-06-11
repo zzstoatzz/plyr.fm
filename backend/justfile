@@ -31,6 +31,12 @@ migrate MESSAGE:
 migrate-up:
     uv run alembic upgrade head
 
+# create the schema on an EMPTY database and stamp it at alembic head.
+# needed for fresh local databases: the migration chain predates alembic
+# adoption, so `alembic upgrade head` cannot bootstrap from zero.
+db-init:
+    uv run scripts/init_db.py
+
 # show current migration status
 migrate-status:
     uv run alembic current
