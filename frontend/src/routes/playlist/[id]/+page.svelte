@@ -14,6 +14,8 @@
 	import { queue } from "$lib/queue.svelte";
 	import { playQueue } from "$lib/playback.svelte";
 	import { fetchLikedTracks } from "$lib/tracks.svelte";
+	import * as playlistActions from "$lib/playlist-actions";
+	import type { PlaylistTrackCandidate } from "$lib/playlist-actions";
 	import type { PageData } from "./$types";
 	import type { PlaylistWithTracks, Track } from "$lib/types";
 
@@ -105,7 +107,7 @@
 	// search state
 	let showSearch = $state(false);
 	let searchQuery = $state("");
-	let searchResults = $state<any[]>([]);
+	let searchResults = $state<PlaylistTrackCandidate[]>([]);
 	let searching = $state(false);
 	let searchError = $state("");
 
@@ -126,7 +128,7 @@
 	let uploadingCover = $state(false);
 
 	// recommendations state
-	let recommendations = $state<any[]>([]);
+	let recommendations = $state<PlaylistTrackCandidate[]>([]);
 	let loadingRecommendations = $state(false);
 	let recommendationsAvailable = $state(true);
 
@@ -176,28 +178,17 @@
 		searchError = "";
 
 		try {
-			const response = await fetch(
-				`${API_URL}/search/?q=${encodeURIComponent(searchQuery)}&type=tracks&limit=10`,
-				{
-					credentials: "include",
-				},
-			);
-
-			if (!response.ok) {
-				throw new Error("search failed");
-			}
-
-			const data = await response.json();
+			const results = await playlistActions.searchTracks(searchQuery);
 			// filter out tracks already in playlist
-			const existingUris = new Set(
+			const existingUris = new Set<string | null | undefined>(
 				tracks.map((t) => t.atproto_record_uri),
 			);
-			searchResults = data.results.filter(
-				(r: any) =>
+			searchResults = results.filter(
+				(r) =>
 					r.type === "track" &&
 					!existingUris.has(r.atproto_record_uri),
 			);
-		} catch (e) {
+		} catch {
 			searchError = "failed to search tracks";
 			searchResults = [];
 		} finally {
@@ -208,19 +199,13 @@
 	async function fetchRecommendations() {
 		loadingRecommendations = true;
 		try {
-			const res = await fetch(
-				`${API_URL}/lists/playlists/${playlist.id}/recommendations?limit=3`,
-				{ credentials: "include" },
+			const data = await playlistActions.fetchRecommendations(
+				playlist.id,
 			);
-			if (!res.ok) {
-				recommendationsAvailable = false;
-				return;
-			}
-			const data = await res.json();
 			recommendationsAvailable = data.available;
 			// filter out any tracks already in the playlist
 			recommendations = data.tracks.filter(
-				(t: any) => !tracks.some((pt) => pt.id === t.id),
+				(t) => !tracks.some((pt) => pt.id === t.id),
 			);
 		} catch {
 			recommendationsAvailable = false;
@@ -229,56 +214,26 @@
 		}
 	}
 
-	async function addTrack(track: any) {
-		addingTrack = track.id;
+	async function addTrack(candidate: PlaylistTrackCandidate) {
+		addingTrack = candidate.id;
 
 		try {
-			// first fetch full track details to get ATProto URI and CID
-			const trackResponse = await fetch(`${API_URL}/tracks/${track.id}`, {
-				credentials: "include",
-			});
-
-			if (!trackResponse.ok) {
-				throw new Error("failed to fetch track details");
-			}
-
-			const trackData = await trackResponse.json();
-
-			if (
-				!trackData.atproto_record_uri ||
-				!trackData.atproto_record_cid
-			) {
-				throw new Error("track does not have ATProto record");
-			}
-
-			// add to playlist
-			const response = await fetch(
-				`${API_URL}/lists/playlists/${playlist.id}/tracks`,
-				{
-					method: "POST",
-					credentials: "include",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						track_uri: trackData.atproto_record_uri,
-						track_cid: trackData.atproto_record_cid,
-					}),
-				},
+			const trackData = await playlistActions.addTrack(
+				playlist.id,
+				candidate.id,
 			);
 
-			if (!response.ok) {
-				const data = await response.json();
-				throw new Error(data.detail || "failed to add track");
-			}
-
 			// add full track to local state
-			tracks = [...tracks, trackData as Track];
+			tracks = [...tracks, trackData];
 
 			// update playlist track count
 			playlist.track_count = tracks.length;
 
 			// remove from search results and recommendations
-			searchResults = searchResults.filter((r) => r.id !== track.id);
-			recommendations = recommendations.filter((r) => r.id !== track.id);
+			searchResults = searchResults.filter((r) => r.id !== candidate.id);
+			recommendations = recommendations.filter(
+				(r) => r.id !== candidate.id,
+			);
 
 			// re-fetch recommendations (playlist context changed)
 			if (isEditMode) {
@@ -303,18 +258,10 @@
 		removingTrackId = track.id;
 
 		try {
-			const response = await fetch(
-				`${API_URL}/lists/playlists/${playlist.id}/tracks/${encodeURIComponent(track.atproto_record_uri)}`,
-				{
-					method: "DELETE",
-					credentials: "include",
-				},
+			await playlistActions.removeTrack(
+				playlist.id,
+				track.atproto_record_uri,
 			);
-
-			if (!response.ok) {
-				const data = await response.json();
-				throw new Error(data.detail || "failed to remove track");
-			}
 
 			tracks = tracks.filter((t) => t.id !== track.id);
 			playlist.track_count = tracks.length;
@@ -367,28 +314,12 @@
 		showOnProfileChanged: boolean,
 	) {
 		try {
-			const formData = new FormData();
-			if (nameChanged) {
-				formData.append("name", editName.trim());
-			}
-			if (showOnProfileChanged) {
-				formData.append("show_on_profile", String(editShowOnProfile));
-			}
-
-			const response = await fetch(
-				`${API_URL}/lists/playlists/${playlist.id}`,
-				{
-					method: "PATCH",
-					credentials: "include",
-					body: formData,
-				},
-			);
-
-			if (!response.ok) {
-				throw new Error("failed to update playlist");
-			}
-
-			const updated = await response.json();
+			const updated = await playlistActions.updatePlaylist(playlist.id, {
+				...(nameChanged ? { name: editName.trim() } : {}),
+				...(showOnProfileChanged
+					? { show_on_profile: editShowOnProfile }
+					: {}),
+			});
 			playlist.name = updated.name;
 			playlist.show_on_profile = updated.show_on_profile;
 		} catch (e) {
@@ -416,23 +347,9 @@
 				await saveAllChanges();
 			}
 
-			const formData = new FormData();
-			formData.append("is_private", String(goingPrivate));
-			const response = await fetch(
-				`${API_URL}/lists/playlists/${playlist.id}`,
-				{
-					method: "PATCH",
-					credentials: "include",
-					body: formData,
-				},
-			);
-			if (!response.ok) {
-				const err = await response
-					.json()
-					.catch(() => ({ detail: "unknown error" }));
-				throw new Error(err.detail || "failed to change visibility");
-			}
-			const updated = await response.json();
+			const updated = await playlistActions.updatePlaylist(playlist.id, {
+				is_private: goingPrivate,
+			});
 			playlist.is_private = updated.is_private;
 			playlist.atproto_record_uri = updated.atproto_record_uri;
 			playlist.show_on_profile = updated.show_on_profile;
@@ -473,23 +390,10 @@
 	async function uploadCover(file: File) {
 		uploadingCover = true;
 		try {
-			const formData = new FormData();
-			formData.append("image", file);
-
-			const response = await fetch(
-				`${API_URL}/lists/playlists/${playlist.id}/cover`,
-				{
-					method: "POST",
-					credentials: "include",
-					body: formData,
-				},
+			const result = await playlistActions.uploadCover(
+				playlist.id,
+				file,
 			);
-
-			if (!response.ok) {
-				throw new Error("failed to upload cover");
-			}
-
-			const result = await response.json();
 			playlist.image_url = result.image_url;
 			toast.success("cover updated");
 		} catch (e) {
@@ -501,38 +405,15 @@
 	}
 
 	async function saveOrder() {
-		const items = tracks
-			.filter((t) => t.atproto_record_uri && t.atproto_record_cid)
-			.map((t) => ({
-				uri: t.atproto_record_uri!,
-				cid: t.atproto_record_cid!,
-			}));
-
-		if (items.length === 0) return;
-
 		isSavingOrder = true;
 		try {
-			// /lists/playlists/{id}/reorder routes both private and public; the older
-			// /lists/{rkey}/reorder is public-only and is left for backwards
-			// compatibility with non-playlist list types.
-			const response = await fetch(
-				`${API_URL}/lists/playlists/${playlist.id}/reorder`,
-				{
-					method: "PUT",
-					headers: { "Content-Type": "application/json" },
-					credentials: "include",
-					body: JSON.stringify({ items }),
-				},
+			const saved = await playlistActions.reorderTracks(
+				playlist.id,
+				tracks,
 			);
-
-			if (!response.ok) {
-				const error = await response
-					.json()
-					.catch(() => ({ detail: "unknown error" }));
-				throw new Error(error.detail || "failed to save order");
+			if (saved) {
+				toast.success("order saved");
 			}
-
-			toast.success("order saved");
 		} catch (e) {
 			toast.error(
 				e instanceof Error ? e.message : "failed to save order",
@@ -640,17 +521,7 @@
 		deleting = true;
 
 		try {
-			const response = await fetch(
-				`${API_URL}/lists/playlists/${playlist.id}`,
-				{
-					method: "DELETE",
-					credentials: "include",
-				},
-			);
-
-			if (!response.ok) {
-				throw new Error("failed to delete playlist");
-			}
+			await playlistActions.deletePlaylist(playlist.id);
 
 			toast.success("playlist deleted");
 			goto("/library");
