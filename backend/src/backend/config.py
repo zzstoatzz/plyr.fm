@@ -229,11 +229,27 @@ class FrontendSettings(AppSettingsSection):
             return r"^(https://.+|http://localhost:\d+)$"
 
 
+def normalize_postgres_driver(url: str) -> str:
+    """Coerce driverless postgres URLs to the async psycopg dialect.
+
+    SQLAlchemy resolves a plain ``postgresql://`` URL to the synchronous
+    psycopg2 driver, which ``create_async_engine`` cannot use — so the
+    standard connection string every postgres tool hands out crashes the
+    backend. An explicit ``+driver`` in the URL is respected as-is.
+    """
+    if not isinstance(url, str):
+        return url
+    for prefix in ("postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return f"postgresql+psycopg://{url[len(prefix) :]}"
+    return url
+
+
 class DatabaseSettings(AppSettingsSection):
     """Database configuration."""
 
-    url: str = Field(
-        default="postgresql+asyncpg://localhost/plyr",
+    url: Annotated[str, BeforeValidator(normalize_postgres_driver)] = Field(
+        default="postgresql+psycopg://localhost/plyr",
         validation_alias="DATABASE_URL",
         description="PostgreSQL connection string",
     )
