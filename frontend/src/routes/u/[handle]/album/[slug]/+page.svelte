@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { AtUri } from '@atproto/api';
 	import { goto } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import TrackItem from '$lib/components/TrackItem.svelte';
@@ -13,6 +12,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { API_URL } from '$lib/config';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
+	import * as albumActions from '$lib/album-actions';
 	import type { Track } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -124,17 +124,9 @@
 		albumMetadata.title = newTitle;
 
 		// fire off backend call without blocking UI
-		fetch(
-			`${API_URL}/albums/${albumMetadata.id}?title=${encodeURIComponent(newTitle)}`,
-			{
-				method: 'PATCH',
-				credentials: 'include'
-			}
-		)
-			.then(async (response) => {
-				if (!response.ok) {
-					throw new Error('failed to update title');
-				}
+		albumActions
+			.updateTitle(albumMetadata.id, newTitle)
+			.then(() => {
 				toast.success('title updated');
 			})
 			.catch((e) => {
@@ -167,20 +159,7 @@
 	async function uploadCover(file: File) {
 		uploadingCover = true;
 		try {
-			const formData = new FormData();
-			formData.append('image', file);
-
-			const response = await fetch(`${API_URL}/albums/${albumMetadata.id}/cover`, {
-				method: 'POST',
-				credentials: 'include',
-				body: formData
-			});
-
-			if (!response.ok) {
-				throw new Error('failed to upload cover');
-			}
-
-			const result = await response.json();
+			const result = await albumActions.uploadCover(albumMetadata.id, file);
 			albumMetadata.image_url = result.image_url;
 			toast.success('cover updated');
 		} catch (e) {
@@ -195,15 +174,7 @@
 		removingTrackId = track.id;
 
 		try {
-			const response = await fetch(`${API_URL}/albums/${albumMetadata.id}/tracks/${track.id}`, {
-				method: 'DELETE',
-				credentials: 'include'
-			});
-
-			if (!response.ok) {
-				const data = await response.json();
-				throw new Error(data.detail || 'failed to remove track');
-			}
+			await albumActions.removeTrack(albumMetadata.id, track.id);
 
 			tracks = tracks.filter((t) => t.id !== track.id);
 			albumMetadata.track_count = tracks.length;
@@ -221,14 +192,7 @@
 		deleting = true;
 
 		try {
-			const response = await fetch(`${API_URL}/albums/${albumMetadata.id}`, {
-				method: 'DELETE',
-				credentials: 'include'
-			});
-
-			if (!response.ok) {
-				throw new Error('failed to delete album');
-			}
+			await albumActions.deleteAlbum(albumMetadata.id);
 
 			toast.success('album deleted');
 			goto(`/u/${albumMetadata.artist_handle}`);
@@ -253,36 +217,12 @@
 	}
 
 	async function saveOrder() {
-		if (!albumMetadata.list_uri) return;
-
-		const rkey = new AtUri(albumMetadata.list_uri).rkey;
-		if (!rkey) return;
-
-		// build strongRefs from current track order
-		const items = tracks
-			.filter((t) => t.atproto_record_uri && t.atproto_record_cid)
-			.map((t) => ({
-				uri: t.atproto_record_uri!,
-				cid: t.atproto_record_cid!
-			}));
-
-		if (items.length === 0) return;
-
 		isSaving = true;
 		try {
-			const response = await fetch(`${API_URL}/lists/${rkey}/reorder`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({ items })
-			});
-
-			if (!response.ok) {
-				const error = await response.json().catch(() => ({ detail: 'unknown error' }));
-				throw new Error(error.detail || 'failed to save order');
+			const saved = await albumActions.reorderTracks(albumMetadata.list_uri, tracks);
+			if (saved) {
+				toast.success('order saved');
 			}
-
-			toast.success('order saved');
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'failed to save order');
 		} finally {
