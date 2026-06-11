@@ -12,6 +12,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { API_URL } from '$lib/config';
 	import { APP_NAME, APP_CANONICAL_URL } from '$lib/branding';
+	import { createListReorder, moveItem } from '$lib/list-reorder.svelte';
 	import * as albumActions from '$lib/album-actions';
 	import type { Track } from '$lib/types';
 	import type { PageData } from './$types';
@@ -61,15 +62,10 @@
 	// track removal
 	let removingTrackId = $state<number | null>(null);
 
-	// drag state
-	let draggedIndex = $state<number | null>(null);
-	let dragOverIndex = $state<number | null>(null);
-
-	// touch drag state
-	let touchDragIndex = $state<number | null>(null);
-	let touchStartY = $state(0);
-	let touchDragElement = $state<HTMLElement | null>(null);
-	let tracksListElement = $state<HTMLElement | null>(null);
+	// drag-to-reorder (desktop + touch)
+	const reorder = createListReorder((from, to) => {
+		tracks = moveItem(tracks, from, to);
+	});
 
 	function playTrack(track: Track) {
 		queue.playNow(track);
@@ -228,95 +224,6 @@
 		} finally {
 			isSaving = false;
 		}
-	}
-
-	// move track from one index to another
-	function moveTrack(fromIndex: number, toIndex: number) {
-		if (fromIndex === toIndex) return;
-		const newTracks = [...tracks];
-		const [moved] = newTracks.splice(fromIndex, 1);
-		newTracks.splice(toIndex, 0, moved);
-		tracks = newTracks;
-	}
-
-	// desktop drag and drop
-	function handleDragStart(event: DragEvent, index: number) {
-		draggedIndex = index;
-		if (event.dataTransfer) {
-			event.dataTransfer.effectAllowed = 'move';
-		}
-	}
-
-	function handleDragOver(event: DragEvent, index: number) {
-		event.preventDefault();
-		dragOverIndex = index;
-	}
-
-	function handleDrop(event: DragEvent, index: number) {
-		event.preventDefault();
-		if (draggedIndex !== null && draggedIndex !== index) {
-			moveTrack(draggedIndex, index);
-		}
-		draggedIndex = null;
-		dragOverIndex = null;
-	}
-
-	function handleDragEnd() {
-		draggedIndex = null;
-		dragOverIndex = null;
-	}
-
-	// touch drag and drop
-	function handleTouchStart(event: TouchEvent, index: number) {
-		const touch = event.touches[0];
-		touchDragIndex = index;
-		touchStartY = touch.clientY;
-		touchDragElement = event.currentTarget as HTMLElement;
-		touchDragElement.classList.add('touch-dragging');
-	}
-
-	function handleTouchMove(event: TouchEvent) {
-		if (touchDragIndex === null || !touchDragElement || !tracksListElement) return;
-
-		event.preventDefault();
-		const touch = event.touches[0];
-		const offset = touch.clientY - touchStartY;
-		touchDragElement.style.transform = `translateY(${offset}px)`;
-
-		const trackElements = tracksListElement.querySelectorAll('.track-row');
-		for (let i = 0; i < trackElements.length; i++) {
-			const trackEl = trackElements[i] as HTMLElement;
-			const rect = trackEl.getBoundingClientRect();
-			const midY = rect.top + rect.height / 2;
-
-			if (touch.clientY < midY && i > 0) {
-				const targetIndex = parseInt(trackEl.dataset.index || '0');
-				if (targetIndex !== touchDragIndex) {
-					dragOverIndex = targetIndex;
-				}
-				break;
-			} else if (touch.clientY >= midY) {
-				const targetIndex = parseInt(trackEl.dataset.index || '0');
-				if (targetIndex !== touchDragIndex) {
-					dragOverIndex = targetIndex;
-				}
-			}
-		}
-	}
-
-	function handleTouchEnd() {
-		if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
-			moveTrack(touchDragIndex, dragOverIndex);
-		}
-
-		if (touchDragElement) {
-			touchDragElement.classList.remove('touch-dragging');
-			touchDragElement.style.transform = '';
-		}
-
-		touchDragIndex = null;
-		dragOverIndex = null;
-		touchDragElement = null;
 	}
 
 	let shareUrl = $state('');
@@ -571,29 +478,29 @@
 			<div
 				class="tracks-list"
 				class:edit-mode={isEditMode}
-				bind:this={tracksListElement}
-				ontouchmove={isEditMode ? handleTouchMove : undefined}
-				ontouchend={isEditMode ? handleTouchEnd : undefined}
-				ontouchcancel={isEditMode ? handleTouchEnd : undefined}
+				bind:this={reorder.listElement}
+				ontouchmove={isEditMode ? reorder.handleTouchMove : undefined}
+				ontouchend={isEditMode ? reorder.handleTouchEnd : undefined}
+				ontouchcancel={isEditMode ? reorder.handleTouchEnd : undefined}
 			>
 				{#each tracks as track, i (track.id)}
 					{#if isEditMode}
 						<div
 							class="track-row"
-							class:drag-over={dragOverIndex === i && touchDragIndex !== i}
-							class:is-dragging={touchDragIndex === i || draggedIndex === i}
+							class:drag-over={reorder.dragOverIndex === i && reorder.touchDragIndex !== i}
+							class:is-dragging={reorder.touchDragIndex === i || reorder.draggedIndex === i}
 							data-index={i}
 							role="listitem"
 							draggable="true"
-							ondragstart={(e) => handleDragStart(e, i)}
-							ondragover={(e) => handleDragOver(e, i)}
-							ondrop={(e) => handleDrop(e, i)}
-							ondragend={handleDragEnd}
+							ondragstart={(e) => reorder.handleDragStart(e, i)}
+							ondragover={(e) => reorder.handleDragOver(e, i)}
+							ondrop={(e) => reorder.handleDrop(e, i)}
+							ondragend={reorder.handleDragEnd}
 						>
 							{#if canReorder}
 								<button
 									class="drag-handle"
-									ontouchstart={(e) => handleTouchStart(e, i)}
+									ontouchstart={(e) => reorder.handleTouchStart(e, i)}
 									onclick={(e) => e.stopPropagation()}
 									aria-label="drag to reorder"
 									title="drag to reorder"
