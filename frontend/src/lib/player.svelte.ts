@@ -80,7 +80,12 @@ class PlayerState {
 	 * call from a user gesture so the play() isn't blocked by autoplay policy. */
 	playRadio(np: RadioNowPlaying, options: RadioPlaybackOptions = {}) {
 		const autoplay = options.autoplay ?? true;
+		const wasActive = this.radio !== null;
+		const previousTrack = this.currentTrack;
 		this.radio = np;
+		// $state proxies the assigned object, so capture the proxy for the
+		// is-this-tune-in-still-current check in the catch below
+		const assigned = this.radio;
 		this.currentTrack = null; // exit track mode; the track loader bails on null
 		this.paused = !autoplay;
 		const el = this.audioElement;
@@ -89,7 +94,21 @@ class PlayerState {
 		el.load();
 		if (autoplay) {
 			// play immediately (preserve the gesture), then align to station position
-			el.play().catch(() => (this.paused = true));
+			el.play().catch((err: unknown) => {
+				this.paused = true;
+				// autoplay policy blocked a fresh tune-in: roll back to the pre-tune
+				// state so the ui reads "tune in" again instead of a silent on-air
+				// state ("stop" + LIVE). mid-session failures (station flips, track
+				// boundaries) keep radio mode — only the entry is rolled back.
+				if (
+					!wasActive &&
+					this.radio === assigned &&
+					(err as { name?: string })?.name === 'NotAllowedError'
+				) {
+					this.radio = null;
+					this.currentTrack = previousTrack;
+				}
+			});
 		} else {
 			el.pause();
 		}
