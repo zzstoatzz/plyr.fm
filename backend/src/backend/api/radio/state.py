@@ -8,8 +8,9 @@ owns only the HTTP surface and the loop arithmetic.
 
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
+from urllib.parse import urljoin
 
-from fastapi import Depends, HTTPException, Query, Request
+from fastapi import Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session as AuthSession
@@ -25,6 +26,7 @@ from backend.api.radio.schemas import (
     StationsResponse,
     StationSummary,
 )
+from backend.config import settings
 from backend.models import Track, get_db
 from backend.utilities.aggregations import (
     get_like_counts,
@@ -42,9 +44,14 @@ MAX_ROTATION_SIZE = 75
 RANK_DECAY = 12.0
 
 
-def _stream_url(request: Request, track: Track) -> str:
-    """Return the existing audio redirect endpoint as an absolute URL."""
-    return str(request.url_for("stream_audio", file_id=track.file_id))
+def _stream_url(track: Track) -> str:
+    """Return the existing audio redirect endpoint as an absolute URL.
+
+    Built from the configured public base URL rather than the request scheme,
+    which is ``http`` behind Fly's TLS termination and would emit mixed-content
+    URLs to https pages and embedders.
+    """
+    return urljoin(settings.atproto.base_url + "/", f"audio/{track.file_id}")
 
 
 def _duration_seconds(track: Track) -> int:
@@ -95,7 +102,6 @@ async def _select_rotation(
 
 
 async def _to_radio_tracks(
-    request: Request,
     db: AsyncSession,
     tracks: list[Track],
     like_counts: dict[int, int],
@@ -111,7 +117,7 @@ async def _to_radio_tracks(
             artist=track.artist.display_name,
             artist_handle=track.artist.handle,
             artist_did=track.artist_did,
-            stream_url=_stream_url(request, track),
+            stream_url=_stream_url(track),
             file_type=track.file_type,
             duration=_duration_seconds(track),
             artwork_url=track.image_url or track.artist.avatar_url,
@@ -185,7 +191,6 @@ async def list_stations() -> StationsResponse:
 @router.get("/state")
 @router.get("/state.json")
 async def radio_state(
-    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: int = Query(DEFAULT_ROTATION_SIZE, ge=1, le=MAX_ROTATION_SIZE),
     station: str | None = Query(None, description="station slug; omit for default"),
@@ -208,7 +213,7 @@ async def radio_state(
         if session
         else set()
     )
-    rotation = await _to_radio_tracks(request, db, tracks, like_counts, liked_ids)
+    rotation = await _to_radio_tracks(db, tracks, like_counts, liked_ids)
     current_index, progress, started_at, ends_at = _live_window(now, rotation)
     current = rotation[current_index] if current_index is not None else None
 

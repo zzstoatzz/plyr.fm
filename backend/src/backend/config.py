@@ -444,6 +444,18 @@ class AtprotoSettings(AppSettingsSection):
 
     @computed_field
     @property
+    def base_url(self) -> str:
+        """Public base URL of the backend (e.g. ``https://api.plyr.fm``).
+
+        Derived from the OAuth ``redirect_uri`` so it always reflects the
+        configured public scheme/host — never the request scheme, which is
+        ``http`` behind Fly's TLS termination.
+        """
+
+        return self.redirect_uri.rsplit("/", 2)[0]
+
+    @computed_field
+    @property
     def track_collection(self) -> str:
         """Collection name for plyr audio records."""
 

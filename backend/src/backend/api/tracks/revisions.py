@@ -111,8 +111,7 @@ def _audio_url_for_record(revision: TrackRevision) -> str:
     directly.
     """
     if revision.was_gated:
-        backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
-        return urljoin(backend_url + "/", f"audio/{revision.file_id}")
+        return urljoin(settings.atproto.base_url + "/", f"audio/{revision.file_id}")
     if not revision.audio_url:
         # public revision missing a CDN url — this shouldn't happen for any
         # revision created post-CDN-cutover, but guard the assertion anyway

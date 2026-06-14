@@ -827,8 +827,9 @@ async def _create_records(
     elif audio_info.is_gated:
         from urllib.parse import urljoin
 
-        backend_url = settings.atproto.redirect_uri.rsplit("/", 2)[0]
-        audio_url_for_record = urljoin(backend_url + "/", f"audio/{sr.file_id}")
+        audio_url_for_record = urljoin(
+            settings.atproto.base_url + "/", f"audio/{sr.file_id}"
+        )
         uri = f"at://{ctx.artist_did}/{collection}/{rkey}"
     else:
         assert sr.r2_url is not None
