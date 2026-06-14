@@ -13,6 +13,7 @@ from backend._internal import Session, get_optional_session
 from backend.api.radio import lenses
 from backend.api.radio.lenses import LensContext
 from backend.api.radio.sampler import rank_decay_weights
+from backend.config import settings
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
 
@@ -146,8 +147,15 @@ async def test_default_station_returns_public_tracks_only(
     radio_app: FastAPI,
     db_session: AsyncSession,
     radio_artist: Artist,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """default station serves the loved station; unlisted/gated are excluded."""
+    # regression (#1594): stream_url must come from the configured public base
+    # URL, not the request scheme — behind Fly's TLS termination the request is
+    # plain http, which leaked http:// URLs onto https pages/embedders.
+    monkeypatch.setattr(
+        settings.atproto, "redirect_uri", "https://api.plyr.fm/auth/callback"
+    )
     now = datetime.now(UTC) + TEST_TIME_OFFSET
     visible = await _create_track(
         db_session, radio_artist, title="Visible", file_id="visible", created_at=now
@@ -170,9 +178,11 @@ async def test_default_station_returns_public_tracks_only(
     )
     await db_session.commit()
 
+    # request over plain http (as Fly's proxy presents it internally) to prove
+    # the response URL ignores the request scheme.
     async with AsyncClient(
         transport=ASGITransport(app=radio_app),
-        base_url="https://radio.plyr.fm",
+        base_url="http://radio.internal",
     ) as client:
         response = await client.get("/radio/state")
 
@@ -183,7 +193,7 @@ async def test_default_station_returns_public_tracks_only(
     assert data["station"] == "loved"
     assert data["current"]["title"] == "Visible"
     assert data["current"]["stream_url"] == (
-        f"https://radio.plyr.fm/audio/{visible.file_id}"
+        f"https://api.plyr.fm/audio/{visible.file_id}"
     )
     assert data["current"]["duration"] == 123
     assert data["current"]["artwork_url"] == "https://images.example/cover.jpg"
