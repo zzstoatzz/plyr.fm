@@ -244,6 +244,87 @@ async def test_store_audio_web_playable_does_not_need_optimization() -> None:
     assert sr.original_file_id is None
 
 
+async def test_store_audio_flags_alac_m4a_for_optimization() -> None:
+    """regression for #1595: an ALAC-in-m4a source has a web-playable extension
+    but no browser decoder. `needs_transcode` (set at upload from the codec)
+    must force optimization — the raw m4a becomes the preserved original and the
+    deferred task produces the MP3 streaming rendition. without this the track is
+    served raw and unplayable in chromium (and stalls the radio)."""
+    ctx = UploadContext(
+        upload_id="job-alac",
+        auth_session=_MockSession(),
+        audio_file_id="ALACID",
+        filename="locket.m4a",
+        duration=294,
+        title="Locket",
+        artist_did=OWNER_DID,
+        album=None,
+        album_id=None,
+        features_json=None,
+        tags=[],
+        needs_transcode=True,
+    )
+    audio_info = AudioInfo(
+        format=AudioFormat.M4A, duration=294, is_gated=False, needs_transcode=True
+    )
+
+    with (
+        patch(
+            "backend.api.tracks.uploads._transcode_audio",
+            new_callable=AsyncMock,
+        ) as mock_transcode,
+        patch(
+            "backend.api.tracks.uploads.storage.get_url",
+            new_callable=AsyncMock,
+            return_value="https://audio.example/ALACID.m4a",
+        ),
+    ):
+        sr = await _store_audio(ctx, audio_info)
+
+    mock_transcode.assert_not_awaited()
+    assert sr.needs_optimization is True
+    assert sr.file_id == "ALACID"
+    assert sr.original_file_id == "ALACID"
+    assert sr.original_file_type == "m4a"
+    assert sr.playable_format == AudioFormat.M4A
+
+
+async def test_store_audio_aac_m4a_is_web_playable() -> None:
+    """an AAC-in-m4a upload (the common case) stays web-playable — no
+    `needs_transcode`, no optimization, served as-is."""
+    ctx = UploadContext(
+        upload_id="job-aac",
+        auth_session=_MockSession(),
+        audio_file_id="AACID",
+        filename="song.m4a",
+        duration=180,
+        title="Song",
+        artist_did=OWNER_DID,
+        album=None,
+        album_id=None,
+        features_json=None,
+        tags=[],
+    )
+    audio_info = AudioInfo(format=AudioFormat.M4A, duration=180, is_gated=False)
+
+    with (
+        patch(
+            "backend.api.tracks.uploads._transcode_audio",
+            new_callable=AsyncMock,
+        ) as mock_transcode,
+        patch(
+            "backend.api.tracks.uploads.storage.get_url",
+            new_callable=AsyncMock,
+            return_value="https://audio.example/AACID.m4a",
+        ),
+    ):
+        sr = await _store_audio(ctx, audio_info)
+
+    mock_transcode.assert_not_awaited()
+    assert sr.needs_optimization is False
+    assert sr.original_file_id is None
+
+
 async def test_upload_to_pds_skips_when_optimization_pending() -> None:
     """the interim rendition must never be pushed to the user's PDS — the
     deferred optimize task writes the single canonical MP3 blob instead."""

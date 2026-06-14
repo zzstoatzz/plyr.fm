@@ -67,7 +67,7 @@ from backend.config import settings
 from backend.models import Album, Artist, Track, UserPreferences
 from backend.models.job import JobStatus, JobType
 from backend.storage import storage
-from backend.utilities.audio import extract_duration
+from backend.utilities.audio import extract_duration, is_alac
 from backend.utilities.database import db_session
 from backend.utilities.hashing import CHUNK_SIZE, hash_file_chunked
 from backend.utilities.progress import R2ProgressTracker
@@ -137,6 +137,10 @@ class UploadContext:
     # worker rehydrates via TrackRightsInput.model_validate.
     copyright_rights: dict | None = None
 
+    # source has a web-playable extension but a non-browser codec (ALAC-in-m4a),
+    # detected from the bytes in the HTTP handler; forces a deferred transcode.
+    needs_transcode: bool = False
+
     # auto-apply recommended genre tags after classification
     auto_tag: bool = False
 
@@ -175,6 +179,9 @@ class AudioInfo:
     duration: int | None
     is_gated: bool
     is_private: bool = False
+    # True when the source has a web-playable extension but a non-browser codec
+    # (ALAC-in-m4a) and must be transcoded despite `format.is_web_playable`.
+    needs_transcode: bool = False
 
 
 @dataclass
@@ -626,6 +633,7 @@ async def _validate_audio(ctx: UploadContext) -> AudioInfo:
         duration=ctx.duration,
         is_gated=is_gated,
         is_private=ctx.private,
+        needs_transcode=ctx.needs_transcode,
     )
 
 
@@ -650,7 +658,11 @@ async def _store_audio(ctx: UploadContext, audio_info: AudioInfo) -> StorageResu
     the transcode that used to live here moved wholesale into the optimize
     task; see `audio_optimize.optimize_track_audio`.
     """
-    needs_optimization = not audio_info.format.is_web_playable
+    # non-web-playable formats (aiff/webm/ogg) always optimize; a web-playable
+    # extension hiding a non-browser codec (ALAC-in-m4a) does too.
+    needs_optimization = (
+        not audio_info.format.is_web_playable or audio_info.needs_transcode
+    )
 
     # the staged file is the playable file (interim, for lossless). the stored
     # object carries the RAW upload extension (e.g. ".aif"), so serving + the
@@ -1326,6 +1338,7 @@ async def run_track_upload(
     copyright_rights: dict | None = None,
     audio_blob: BlobRef | None = None,
     visibility: str = "public",
+    needs_transcode: bool = False,
     concurrency: ConcurrencyLimit = ConcurrencyLimit("artist_did", max_concurrent=3),
 ) -> None:
     """docket task entry point for track uploads.
@@ -1401,6 +1414,7 @@ async def run_track_upload(
         auto_tag=auto_tag,
         visibility=visibility,
         audio_blob=audio_blob,
+        needs_transcode=needs_transcode,
     )
     await _process_upload_background(ctx)
 
@@ -1441,6 +1455,7 @@ async def schedule_track_upload(ctx: UploadContext) -> None:
         auto_tag=ctx.auto_tag,
         visibility=ctx.visibility,
         audio_blob=ctx.audio_blob,
+        needs_transcode=ctx.needs_transcode,
     )
 
 
@@ -1633,6 +1648,14 @@ async def upload_track(
         with open(file_path, "rb") as f:
             duration = extract_duration(f)
 
+        # an .m4a extension is treated as web-playable, but ALAC-in-m4a has no
+        # browser decoder; detect it from the bytes here so the worker schedules
+        # a streaming-rendition transcode instead of serving the raw file.
+        needs_transcode = False
+        if audio_format is AudioFormat.M4A:
+            with open(file_path, "rb") as f:
+                needs_transcode = is_alac(f)
+
         if is_private:
             # permissioned media: audio lives ON THE PDS, never R2. upload the
             # blob straight to the user's PDS blobstore here (we hold the bytes +
@@ -1714,6 +1737,7 @@ async def upload_track(
             auto_tag=auto_tag == "true",
             visibility=visibility,
             audio_blob=audio_blob,
+            needs_transcode=needs_transcode,
         )
         await schedule_track_upload(ctx)
         enqueued = True
