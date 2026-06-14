@@ -41,3 +41,25 @@ def extract_duration(audio_data: bytes | BinaryIO) -> int | None:
     except Exception as e:
         logger.warning(f"failed to extract duration: {e}")
         return None
+
+
+def is_alac(audio_data: bytes | BinaryIO) -> bool:
+    """True if the file is an MP4/M4A container carrying Apple Lossless (ALAC).
+
+    AAC-in-m4a is browser-playable; ALAC-in-m4a is not (chromium has no ALAC
+    decoder, so `<audio>` fires MEDIA_ERR_SRC_NOT_SUPPORTED), so an ALAC upload
+    must be transcoded to a streaming rendition despite its web-playable `.m4a`
+    extension. mutagen reports the MP4 codec atom as ``alac`` for ALAC and
+    ``mp4a.40.2`` (etc.) for AAC.
+    """
+    try:
+        if isinstance(audio_data, bytes):
+            audio_data = io.BytesIO(audio_data)
+
+        audio = MutagenFile(audio_data)
+        codec = getattr(getattr(audio, "info", None), "codec", None)
+        return codec == "alac"
+
+    except Exception as e:
+        logger.warning(f"failed to detect alac codec: {e}")
+        return False
