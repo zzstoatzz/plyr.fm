@@ -22,6 +22,7 @@ import asyncio
 import json
 import os
 import re
+import urllib.request
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -29,40 +30,61 @@ import typer
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# billing constants
+# AudD is the one cost we derive from our own usage (track durations in our DB),
+# so it stays computed here. Everything else (fly/neon/cloudflare compute) is
+# pulled live from the cost aggregator below — never hardcoded. see COSTS.md.
 AUDD_BILLING_DAY = 24
 AUDD_SECONDS_PER_REQUEST = 12
 AUDD_FREE_REQUESTS = 6000  # 1000 base + 5000 bonus on indie plan
 AUDD_COST_PER_1000 = 5.00  # $5 per 1000 requests
 AUDD_BASE_COST = 5.00  # $5/month base
 
-# fixed monthly costs (updated 2025-12-26)
-# fly.io: manually updated from cost explorer (TODO: use fly billing API)
-# neon: fixed $5/month
-# cloudflare: mostly free tier
-# redis: self-hosted on fly (included in fly_io costs)
-FIXED_COSTS = {
-    "fly_io": {
-        "breakdown": {
-            "relay-api": 5.80,  # prod backend
-            "relay-api-staging": 5.60,
-            "plyr-moderation": 0.24,
-            "plyr-transcoder": 0.02,
-        },
-        "note": "compute (2x shared-cpu VMs + moderation + transcoder)",
-    },
-    "neon": {
-        "total": 5.00,
-        "note": "postgres serverless (fixed)",
-    },
-    "cloudflare": {
-        "r2": 0.16,
-        "pages": 0.00,
-        "domain": 1.00,
-        "total": 1.16,
-        "note": "r2 egress is free, pages free tier",
-    },
-}
+# live infra-cost feed (collected daily by my-prefect-server, surfaced at hub.waow.tech).
+# line items tagged project=="plyr.fm" are this repo's infra. that mapping lives in
+# my-prefect-server (packages/mps/src/mps/costs/projects.py), not here.
+INFRA_COSTS_URL = "https://hub.waow.tech/api/costs.json"
+PROJECT_KEY = "plyr.fm"
+# feed provider -> the key the dashboard frontend expects
+PROVIDER_KEYS = {"fly": "fly_io", "neon": "neon", "cloudflare": "cloudflare"}
+
+
+def fetch_infra_costs() -> dict[str, Any]:
+    """pull this repo's live infra costs (fly/neon/cloudflare) from the aggregator.
+
+    returns one entry per provider with a total, a per-service breakdown, and a
+    note carrying the service count. raises if the feed is unreachable or has no
+    plyr.fm line items, so we never silently publish stale/empty data.
+    """
+    with urllib.request.urlopen(INFRA_COSTS_URL, timeout=15) as resp:
+        feed = json.loads(resp.read())
+
+    lines = [li for li in feed.get("lineItems", []) if li.get("project") == PROJECT_KEY]
+    if not lines:
+        raise RuntimeError(
+            f"no '{PROJECT_KEY}' line items in {INFRA_COSTS_URL}; check the project mapping"
+        )
+
+    providers: dict[str, dict[str, Any]] = {}
+    for li in lines:
+        key = PROVIDER_KEYS.get(li["provider"])
+        if key is None:
+            continue  # provider not surfaced on the dashboard
+        bucket = providers.setdefault(
+            key, {"amount": 0.0, "breakdown": {}, "estimated": False, "services": []}
+        )
+        usd = li["amount"] / 100
+        bucket["amount"] = round(bucket["amount"] + usd, 2)
+        bucket["breakdown"][li["service"]] = round(usd, 2)
+        bucket["estimated"] = bucket["estimated"] or bool(li.get("estimated"))
+        bucket["services"].append(li["service"])
+
+    for b in providers.values():
+        n = len(b["services"])
+        flag = " (estimated)" if b["estimated"] else ""
+        b["note"] = f"{n} service(s) via hub.waow.tech{flag}"
+        del b["services"]
+
+    return {"generated_at": feed.get("generatedAt"), "providers": providers}
 
 
 class Settings(BaseSettings):
@@ -194,40 +216,29 @@ async def get_audd_stats(db_url: str) -> dict[str, Any]:
         await conn.close()
 
 
-def build_cost_data(audd_stats: dict[str, Any]) -> dict[str, Any]:
-    """assemble full cost dashboard data"""
-    # calculate plyr-specific fly costs
-    plyr_fly = sum(FIXED_COSTS["fly_io"]["breakdown"].values())
+def build_cost_data(
+    audd_stats: dict[str, Any], infra: dict[str, Any]
+) -> dict[str, Any]:
+    """assemble full cost dashboard data from live infra + computed AudD usage"""
+    providers = infra["providers"]
 
-    monthly_total = (
-        plyr_fly
-        + FIXED_COSTS["neon"]["total"]
-        + FIXED_COSTS["cloudflare"]["total"]
-        + audd_stats["estimated_cost"]
-    )
+    def provider(key: str) -> dict[str, Any]:
+        # absent provider -> zeroed entry so the frontend always has the key
+        return providers.get(
+            key, {"amount": 0.0, "breakdown": {}, "note": "no plyr.fm line items"}
+        )
+
+    infra_total = sum(p["amount"] for p in providers.values())
+    monthly_total = infra_total + audd_stats["estimated_cost"]
 
     return {
         "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "infra_as_of": infra["generated_at"],
         "monthly_estimate": round(monthly_total, 2),
         "costs": {
-            "fly_io": {
-                "amount": round(plyr_fly, 2),
-                "breakdown": FIXED_COSTS["fly_io"]["breakdown"],
-                "note": FIXED_COSTS["fly_io"]["note"],
-            },
-            "neon": {
-                "amount": FIXED_COSTS["neon"]["total"],
-                "note": FIXED_COSTS["neon"]["note"],
-            },
-            "cloudflare": {
-                "amount": FIXED_COSTS["cloudflare"]["total"],
-                "breakdown": {
-                    "r2_storage": FIXED_COSTS["cloudflare"]["r2"],
-                    "pages": FIXED_COSTS["cloudflare"]["pages"],
-                    "domain": FIXED_COSTS["cloudflare"]["domain"],
-                },
-                "note": FIXED_COSTS["cloudflare"]["note"],
-            },
+            "fly_io": provider("fly_io"),
+            "neon": provider("neon"),
+            "cloudflare": provider("cloudflare"),
             "audd": {
                 "amount": audd_stats["estimated_cost"],
                 "base_cost": audd_stats["base_cost"],
@@ -290,7 +301,8 @@ def main(
     async def run():
         db_url = settings.get_db_url(env)
         audd_stats = await get_audd_stats(db_url)
-        data = build_cost_data(audd_stats)
+        infra = await asyncio.to_thread(fetch_infra_costs)
+        data = build_cost_data(audd_stats, infra)
 
         if dry_run:
             print(json.dumps(data, indent=2))
