@@ -162,7 +162,7 @@
 			<div class="meta">
 				<span class="label">{playing ? 'on air' : "what's on"}</span>
 				<span class="title">{current.title}</span>
-				<a class="artist" href={`https://plyr.fm/u/${current.artist_handle}`} target="_blank" rel="noopener">@{current.artist_handle}</a>
+				<a class="artist" href={`https://plyr.fm/u/${current.artist_handle}`} target="_blank" rel="noopener">{current.artist}</a>
 			</div>
 			<button class="play" onclick={toggle} aria-label={playing ? 'pause radio' : 'play radio'}>
 				{#if playing}
