@@ -30,6 +30,9 @@ primary_region = 'iad'
 [processes]
   app = "uv run --no-sync uvicorn backend.main:app --host 0.0.0.0 --port 8000"
   worker = "uv run --no-sync python -m backend.worker"
+  # mirrors backend/fly.toml — the jetstream consumer runs on its own event
+  # loop, isolated from the worker's blocking tasks. keep at a single machine.
+  jetstream = "uv run --no-sync python -m backend.jetstream"
 
 [http_service]
   internal_port = 8000
@@ -63,6 +66,14 @@ primary_region = 'iad'
   cpu_kind = 'shared'
   cpus = 1
 
+# the docket client registers the full task collection at startup, pulling in
+# the whole backend import graph (~400MB RSS) — 512mb OOM-crash-loops, so 1gb.
+[[vm]]
+  processes = ['jetstream']
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+
 # always restart the worker on exit, with no retry budget. mirrors prod
 # fly.toml — staging needs the same restart policy so the silence /
 # crash-loop alerts can be smoke-tested against staging before going to
@@ -70,6 +81,10 @@ primary_region = 'iad'
 [[restart]]
   policy = "always"
   processes = ["worker"]
+
+[[restart]]
+  policy = "always"
+  processes = ["jetstream"]
 
 # secrets to set via: fly secrets set KEY=value -a relay-api-staging
 # - DATABASE_URL (neon postgres connection string)
