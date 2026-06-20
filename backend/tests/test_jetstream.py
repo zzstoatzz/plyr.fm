@@ -1,15 +1,14 @@
 """tests for Jetstream consumer and ingest tasks."""
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from docket import Perpetual
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal.jetstream import JetstreamConsumer, consume_jetstream
+from backend._internal.jetstream import JetstreamConsumer
 from backend._internal.tasks.ingest import (
     SubjectNotFoundError,
     _write_tombstone,
@@ -212,6 +211,13 @@ class TestJetstreamConsumer:
         mock_docket.add.assert_not_called()
 
     async def test_dispatches_identity_event(self) -> None:
+        """a real (handle-less) identity event dispatches on DID alone.
+
+        regression for the bug where dispatch was gated on `identity.handle`:
+        jetstream `#identity` events carry only `{did, seq, time}` — no handle —
+        so the gate was always false and `ingest_identity_update` never ran.
+        the shape below matches a live jetstream payload.
+        """
         consumer = JetstreamConsumer()
         consumer._known_dids = {"did:plc:jetstream_test"}
 
@@ -227,15 +233,14 @@ class TestJetstreamConsumer:
             "kind": "identity",
             "did": "did:plc:jetstream_test",
             "time_us": 2000000,
-            "identity": {"handle": "new.handle.example"},
+            "identity": {"seq": 31115825625, "time": "2026-06-20T18:11:39.496Z"},
         }
 
         with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
             await consumer._process_event(event)
 
         assert len(dispatched) == 1
-        assert dispatched[0]["did"] == "did:plc:jetstream_test"
-        assert dispatched[0]["handle"] == "new.handle.example"
+        assert dispatched[0] == {"did": "did:plc:jetstream_test"}
         assert consumer._cursor == 2000000
 
     async def test_identity_event_skips_unknown_did(self) -> None:
@@ -248,7 +253,7 @@ class TestJetstreamConsumer:
         event = {
             "kind": "identity",
             "did": "did:plc:unknown",
-            "identity": {"handle": "new.handle"},
+            "identity": {"seq": 1, "time": "2026-06-20T18:11:39.496Z"},
         }
 
         with patch("backend._internal.jetstream.get_docket", return_value=mock_docket):
@@ -321,24 +326,6 @@ class TestJetstreamConsumer:
         """passing collections explicitly bypasses settings."""
         consumer = JetstreamConsumer(collections=["fm.plyr.dev.track"])
         assert consumer._collections == ["fm.plyr.dev.track"]
-
-
-class TestConsumeJetstreamPerpetual:
-    async def test_cancels_perpetual_when_disabled(self) -> None:
-        perpetual = Perpetual(every=timedelta(seconds=0))
-        with patch("backend._internal.jetstream.settings") as mock_settings:
-            mock_settings.jetstream.enabled = False
-            await consume_jetstream(perpetual=perpetual)
-        assert perpetual.cancelled
-
-    async def test_runs_consumer_when_enabled(self) -> None:
-        with (
-            patch("backend._internal.jetstream.settings") as mock_settings,
-            patch.object(JetstreamConsumer, "run", new_callable=AsyncMock) as mock_run,
-        ):
-            mock_settings.jetstream.enabled = True
-            await consume_jetstream()
-            mock_run.assert_called_once()
 
 
 # --- track ingestion tests ---
@@ -1690,27 +1677,39 @@ class TestGhostTrackPrevention:
 # --- identity update tests ---
 
 
-def _mock_did_resolver(pds_url: str = "https://pds.example.com") -> AsyncMock:
-    """create a mock AsyncDidResolver that returns the given PDS URL."""
-    mock_resolver = AsyncMock()
-    mock_data = MagicMock()
-    mock_data.pds = pds_url
-    mock_resolver.resolve_atproto_data = AsyncMock(return_value=mock_data)
-    return mock_resolver
-
-
 def _patch_identity_update(
-    pds_url: str = "https://pds.example.com",
+    *,
+    handle: str | None = None,
+    pds: str = "https://pds.example.com",
     avatar_url: str | None = None,
+    mini_doc_none: bool = False,
 ):
-    """context manager stack for patching DID resolution + avatar fetch."""
+    """context manager stack for patching slingshot resolution + avatar fetch.
+
+    by default the resolved miniDoc keeps the artist's current handle (caller
+    overrides `handle` to simulate a change). `mini_doc_none=True` simulates a
+    slingshot failure (the safe resolver returns None).
+    """
     from contextlib import ExitStack
 
+    from backend._internal.slingshot import MiniDoc
+
     stack = ExitStack()
+    mini_doc = (
+        None
+        if mini_doc_none
+        else MiniDoc(
+            did="did:plc:ignored",
+            handle=handle or "",
+            pds=pds,
+            signing_key="zkey",
+        )
+    )
     stack.enter_context(
         patch(
-            "atproto_identity.did.resolver.AsyncDidResolver",
-            return_value=_mock_did_resolver(pds_url=pds_url),
+            "backend._internal.slingshot.resolve_mini_doc_safe",
+            new_callable=AsyncMock,
+            return_value=mini_doc,
         )
     )
     stack.enter_context(
@@ -1728,8 +1727,8 @@ class TestIngestIdentityUpdate:
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
         new_handle = "updated.handle.example"
-        with _patch_identity_update():
-            await ingest_identity_update(did=artist.did, handle=new_handle)
+        with _patch_identity_update(handle=new_handle):
+            await ingest_identity_update(did=artist.did)
 
         await db_session.refresh(artist)
         assert artist.handle == new_handle
@@ -1747,8 +1746,8 @@ class TestIngestIdentityUpdate:
         await db_session.commit()
 
         new_handle = "updated.handle.example"
-        with _patch_identity_update():
-            await ingest_identity_update(did=artist.did, handle=new_handle)
+        with _patch_identity_update(handle=new_handle):
+            await ingest_identity_update(did=artist.did)
 
         await db_session.refresh(session)
         assert session.handle == new_handle
@@ -1756,10 +1755,10 @@ class TestIngestIdentityUpdate:
     async def test_updates_pds_url(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """PDS migration updates the cached pds_url via DID resolution."""
+        """PDS migration updates the cached pds_url via slingshot resolution."""
         new_pds = "https://new-pds.example.com"
-        with _patch_identity_update(pds_url=new_pds):
-            await ingest_identity_update(did=artist.did, handle=artist.handle)
+        with _patch_identity_update(handle=artist.handle, pds=new_pds):
+            await ingest_identity_update(did=artist.did)
 
         await db_session.refresh(artist)
         assert artist.pds_url == new_pds
@@ -1769,8 +1768,8 @@ class TestIngestIdentityUpdate:
     ) -> None:
         """identity event refreshes avatar from Bluesky profile."""
         new_avatar = "https://cdn.bsky.app/img/avatar/plain/did:plc:test/newcid@jpeg"
-        with _patch_identity_update(avatar_url=new_avatar):
-            await ingest_identity_update(did=artist.did, handle=artist.handle)
+        with _patch_identity_update(handle=artist.handle, avatar_url=new_avatar):
+            await ingest_identity_update(did=artist.did)
 
         await db_session.refresh(artist)
         assert artist.avatar_url == new_avatar
@@ -1783,10 +1782,11 @@ class TestIngestIdentityUpdate:
         original_pds = artist.pds_url
         original_avatar = artist.avatar_url
         with _patch_identity_update(
-            pds_url=original_pds or "",
+            handle=original_handle,
+            pds=original_pds or "",
             avatar_url=original_avatar,
         ):
-            await ingest_identity_update(did=artist.did, handle=original_handle)
+            await ingest_identity_update(did=artist.did)
 
         await db_session.refresh(artist)
         assert artist.handle == original_handle
@@ -1794,33 +1794,22 @@ class TestIngestIdentityUpdate:
         assert artist.avatar_url == original_avatar
 
     async def test_noop_for_unknown_did(self, db_session: AsyncSession) -> None:
-        """unknown DID is silently skipped (no DID resolution attempted)."""
-        await ingest_identity_update(did="did:plc:nonexistent", handle="ghost.handle")
+        """unknown DID is silently skipped (no resolution attempted)."""
+        await ingest_identity_update(did="did:plc:nonexistent")
 
-    async def test_did_resolution_failure_still_updates_handle(
+    async def test_resolution_failure_still_refreshes_avatar(
         self, db_session: AsyncSession, artist: Artist
     ) -> None:
-        """if DID resolution fails, handle and avatar are still updated."""
-        new_handle = "updated.handle.example"
-        mock_resolver = AsyncMock()
-        mock_resolver.resolve_atproto_data = AsyncMock(
-            side_effect=Exception("resolution failed")
-        )
-        with (
-            patch(
-                "atproto_identity.did.resolver.AsyncDidResolver",
-                return_value=mock_resolver,
-            ),
-            patch(
-                "backend._internal.atproto.profile.fetch_user_avatar",
-                new_callable=AsyncMock,
-                return_value=None,
-            ),
-        ):
-            await ingest_identity_update(did=artist.did, handle=new_handle)
+        """if slingshot resolution fails, handle/PDS are left alone but the
+        avatar still refreshes — a partial failure doesn't block the rest."""
+        new_avatar = "https://cdn.bsky.app/img/avatar/plain/did:plc:test/fresh@jpeg"
+        original_handle = artist.handle
+        with _patch_identity_update(mini_doc_none=True, avatar_url=new_avatar):
+            await ingest_identity_update(did=artist.did)
 
         await db_session.refresh(artist)
-        assert artist.handle == new_handle
+        assert artist.handle == original_handle
+        assert artist.avatar_url == new_avatar
 
 
 class TestIngestAccountStatusChange:

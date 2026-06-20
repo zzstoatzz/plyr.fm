@@ -74,22 +74,25 @@ from backend._internal.tasks.sync import (
 
 
 def _build_background_tasks() -> list:
-    """build the task list, deferring jetstream import to break circular dep.
+    """build the task list of docket worker tasks.
 
-    cycle: jetstream.py → tasks.ingest → tasks/__init__.py → jetstream.py
+    the jetstream consumer is NOT here — it runs in its own process
+    (`backend.jetstream`) so its WebSocket keepalive loop is isolated from
+    the worker's blocking/CPU-heavy tasks. it only enqueues the ingest tasks
+    below; the worker consumes them.
 
-    the upload / audio-replace tasks are also imported lazily because their
-    modules (`api.tracks.uploads`, `api.tracks.audio_replace`) pull in the
-    FastAPI router infrastructure, which we don't want to touch at task-module
-    import time.
+    the upload / audio-replace / audio-optimize tasks are imported here (not
+    at module top) to break a circular import: those modules import back from
+    `backend._internal.tasks` (e.g. `schedule_album_list_sync`,
+    `run_post_track_create_hooks`), so a top-level import would re-enter this
+    module while it's still initializing. by worker startup this function runs,
+    `tasks/__init__` is fully initialized and the import resolves.
     """
-    from backend._internal.jetstream import consume_jetstream
     from backend.api.tracks.audio_optimize import optimize_track_audio
     from backend.api.tracks.audio_replace import run_track_audio_replace
     from backend.api.tracks.uploads import run_track_upload
 
     return [
-        consume_jetstream,
         scan_copyright,
         sync_copyright_resolutions,
         process_export,
@@ -137,10 +140,6 @@ def __getattr__(name: str):
         if _background_tasks is None:
             _background_tasks = _build_background_tasks()
         return _background_tasks
-    if name == "consume_jetstream":
-        from backend._internal.jetstream import consume_jetstream
-
-        return consume_jetstream
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -148,7 +147,6 @@ __all__ = [
     "SubjectNotFoundError",
     "background_tasks",
     "classify_genres",
-    "consume_jetstream",
     "generate_embedding",
     "ingest_account_status_change",
     "ingest_comment_create",

@@ -24,8 +24,11 @@ the worker is unhealthy if **both** of these are true in the same window:
 1. the HTTP API is alive (so we know the system isn't fully down) — at
    least one successful `POST /tracks/` in the window
 2. the worker emitted zero task-execution spans
-   (`run_track_upload`, `consume_jetstream`, `sync_copyright_resolutions`,
+   (`run_track_upload`, `sync_copyright_resolutions`,
    `scrobble_to_teal`, `warm_follow_graph`)
+
+   (the jetstream consumer no longer runs on the worker — it has its own
+   `jetstream` process group; see `backend/jetstream.py`.)
 
 condition (1) prevents the alert from firing during a planned full-stack
 deploy. condition (2) is the actual silence we care about. when nobody
@@ -57,7 +60,6 @@ SELECT
   COUNT(*) FILTER (
     WHERE attributes->>'docket.task' IN (
       'run_track_upload',
-      'consume_jetstream',
       'sync_copyright_resolutions',
       'scrobble_to_teal',
       'warm_follow_graph'

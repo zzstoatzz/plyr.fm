@@ -743,18 +743,17 @@ async def ingest_profile_update(
 
 async def ingest_identity_update(
     did: str,
-    handle: str,
 ) -> None:
-    """update artist handle, PDS URL, and avatar when an identity event arrives.
+    """refresh artist handle, PDS URL, and avatar from a verified resolution.
 
-    identity events fire on handle changes, PDS migrations, and account
-    reactivation. resolving the DID gives us the current PDS URL, and
-    re-fetching the profile refreshes the avatar (which may have gone
-    stale during account deactivation).
+    jetstream `#identity` events fire on handle changes, PDS migrations, and
+    account reactivation but carry no handle — only the DID. we resolve the
+    current verified miniDoc (handle + PDS) from slingshot, then re-fetch the
+    profile to refresh the avatar (which may have gone stale during account
+    deactivation).
     """
-    from atproto_identity.did.resolver import AsyncDidResolver
-
     from backend._internal.atproto.profile import fetch_user_avatar
+    from backend._internal.slingshot import resolve_mini_doc_safe
 
     async with db_session() as db:
         artist = await db.get(Artist, did)
@@ -764,25 +763,27 @@ async def ingest_identity_update(
 
         changes: dict[str, tuple[str | None, str | None]] = {}
 
-        if artist.handle != handle:
-            changes["handle"] = (artist.handle, handle)
-            artist.handle = handle
+        # resolve the current verified handle + PDS (the event has neither)
+        if mini_doc := await resolve_mini_doc_safe(did):
+            new_handle = mini_doc["handle"]
+            if new_handle and artist.handle != new_handle:
+                changes["handle"] = (artist.handle, new_handle)
+                artist.handle = new_handle
 
-            # update active sessions so session handles stay current
-            await db.execute(
-                update(UserSession).where(UserSession.did == did).values(handle=handle)
-            )
+                # update active sessions so session handles stay current
+                await db.execute(
+                    update(UserSession)
+                    .where(UserSession.did == did)
+                    .values(handle=new_handle)
+                )
 
-        # resolve DID to get current PDS URL
-        try:
-            atproto_data = await AsyncDidResolver().resolve_atproto_data(did)
-            resolved_pds = atproto_data.pds
-            if resolved_pds and resolved_pds != artist.pds_url:
-                changes["pds_url"] = (artist.pds_url, resolved_pds)
-                artist.pds_url = resolved_pds
-        except Exception as e:
+            new_pds = mini_doc["pds"]
+            if new_pds and artist.pds_url != new_pds:
+                changes["pds_url"] = (artist.pds_url, new_pds)
+                artist.pds_url = new_pds
+        else:
             logger.warning(
-                "ingest_identity_update: DID resolution failed for %s: %s", did, e
+                "ingest_identity_update: miniDoc resolution failed for %s", did
             )
 
         # refresh avatar from Bluesky profile

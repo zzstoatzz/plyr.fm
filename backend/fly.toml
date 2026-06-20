@@ -15,6 +15,11 @@ primary_region = 'iad'
 [processes]
   app = "uv run --no-sync uvicorn backend.main:app --host 0.0.0.0 --port 8000"
   worker = "uv run --no-sync python -m backend.worker"
+  # the jetstream consumer runs on its own event loop, isolated from the
+  # worker's blocking tasks that were starving its WebSocket keepalive (the
+  # connection dropped ~every 50s). keep this at a single machine — two
+  # consumers double-process the firehose. see backend/jetstream.py.
+  jetstream = "uv run --no-sync python -m backend.jetstream"
 
 [http_service]
   internal_port = 8000
@@ -53,6 +58,14 @@ primary_region = 'iad'
   cpu_kind = 'shared'
   cpus = 1
 
+# `jetstream` only holds a WebSocket + enqueues ingest tasks — no audio
+# processing, so it needs little memory.
+[[vm]]
+  processes = ['jetstream']
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
+
 # always restart the worker on exit, with no retry budget. fly's default
 # (`on-failure`, max_retries=10) gave up after 10 consecutive OOMs on
 # 2026-05-06 and left the machine `stopped` for ~4 days; see
@@ -65,6 +78,12 @@ primary_region = 'iad'
 [[restart]]
   policy = "always"
   processes = ["worker"]
+
+# the jetstream consumer is a singleton with no health check; a crash should
+# always restart (cursor resume picks up where it left off).
+[[restart]]
+  policy = "always"
+  processes = ["jetstream"]
 
 [env]
   PORT = '8000'
