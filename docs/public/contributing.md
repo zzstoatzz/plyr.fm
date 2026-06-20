@@ -38,7 +38,7 @@ gh repo fork zzstoatzz/plyr.fm --clone
 cd plyr.fm
 
 # install dependencies
-cd backend && uv sync && cd ..
+uv sync --directory backend
 cd frontend && bun install && cd ..
 
 # configure environment
