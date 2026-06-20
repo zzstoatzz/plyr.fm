@@ -9,17 +9,16 @@ heavy lifting (DB queries, record resolution) happens in docket tasks.
 """
 
 import asyncio
+import contextlib
 import logging
 import random
 import time
-from datetime import timedelta
 from typing import Any
 
 import logfire
 import orjson
 import websockets
 from atproto_core.nsid import NSID
-from docket import Perpetual
 from sqlalchemy import select
 from websockets.asyncio.client import ClientConnection
 
@@ -71,6 +70,18 @@ class JetstreamConsumer:
         self._last_cursor_flush: float = 0.0
         self._last_did_refresh: float = 0.0
         self._shutdown_event = asyncio.Event()
+
+    def stop(self) -> None:
+        """signal the consumer to shut down and unblock the recv loop.
+
+        closing the socket interrupts the `async for raw in ws` loop so a
+        quiet stream doesn't hold the process open until the next message.
+        """
+        self._shutdown_event.set()
+        ws = self._ws
+        if ws is not None:
+            with contextlib.suppress(Exception):
+                asyncio.get_running_loop().create_task(ws.close())
 
     async def run(self) -> None:
         """main loop with auto-reconnect and exponential backoff."""
@@ -137,15 +148,16 @@ class JetstreamConsumer:
         kind = event.get("kind")
 
         if kind == "identity":
+            # the identity event carries no handle (payload is just
+            # {did, seq, time}) — it's only a signal to re-resolve. the task
+            # fetches the current verified handle/PDS from slingshot.
             did = event.get("did")
-            handle = (event.get("identity") or {}).get("handle")
-            if did and handle and did in self._known_dids:
+            if did and did in self._known_dids:
                 docket = get_docket()
-                await docket.add(ingest_identity_update)(did=did, handle=handle)
+                await docket.add(ingest_identity_update)(did=did)
                 logfire.info(
                     "jetstream dispatched identity update",
                     did=did,
-                    handle=handle,
                 )
             if time_us := event.get("time_us"):
                 self._cursor = time_us
@@ -316,19 +328,3 @@ class JetstreamConsumer:
             >= settings.jetstream.did_refresh_interval_seconds
         ):
             await self._refresh_known_dids()
-
-
-async def consume_jetstream(
-    perpetual: Perpetual = Perpetual(every=timedelta(seconds=0), automatic=True),  # noqa: B008
-) -> None:
-    """perpetual task: run the Jetstream WebSocket consumer.
-
-    docket's Redis lock ensures only one instance runs this across all workers.
-    if the consumer exits (crash, disconnect), Perpetual reschedules immediately.
-    """
-    if not settings.jetstream.enabled:
-        perpetual.cancel()
-        return
-
-    consumer = JetstreamConsumer()
-    await consumer.run()
