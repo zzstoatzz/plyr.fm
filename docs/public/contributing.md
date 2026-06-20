@@ -38,7 +38,7 @@ gh repo fork zzstoatzz/plyr.fm --clone
 cd plyr.fm
 
 # install dependencies
-uv sync
+uv sync --directory backend
 cd frontend && bun install && cd ..
 
 # configure environment
@@ -46,6 +46,14 @@ cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 # edit backend/.env — see the setup guide linked below for details
 # frontend/.env defaults to the local backend on :8001 and works as-is
+```
+
+### setup db (if running a local Postgres instance)
+
+```bash
+just backend db-init
+just backend migrate-up
+
 ```
 
 ### running the stack
@@ -79,6 +87,7 @@ just dev-services         # start redis
 just backend test         # run tests (spins up isolated postgres + redis)
 just backend lint         # type check + ruff
 just frontend check       # svelte type check
+just backend db-init      # setup local postgres database
 just backend migrate-up   # apply database migrations
 ```
 
