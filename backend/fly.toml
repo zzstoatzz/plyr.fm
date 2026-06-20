@@ -58,11 +58,13 @@ primary_region = 'iad'
   cpu_kind = 'shared'
   cpus = 1
 
-# `jetstream` only holds a WebSocket + enqueues ingest tasks — no audio
-# processing, so it needs little memory.
+# `jetstream` only holds a WebSocket + enqueues ingest tasks at runtime, but
+# the docket client registers the full task collection at startup, which pulls
+# in the whole backend import graph (~400MB RSS) — same reason `app` needs 1gb.
+# 512mb OOM-crash-looped on first deploy (2026-06-20).
 [[vm]]
   processes = ['jetstream']
-  memory = '512mb'
+  memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
 
