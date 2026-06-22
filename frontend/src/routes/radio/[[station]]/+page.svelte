@@ -9,6 +9,7 @@
 	import { radio } from '$lib/radio.svelte';
 	import { horizontalSwipe } from '$lib/horizontal-swipe';
 	import TunerDial from '$lib/components/radio/TunerDial.svelte';
+	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import LikeButton from '$lib/components/LikeButton.svelte';
 	import type { PageData } from './$types';
@@ -132,7 +133,7 @@
 	<div class="tuner">
 	<section class="station">
 		{#if radio.loading && !radio.state}
-			<div class="status">tuning...</div>
+			<div class="status"><WaveLoading size="lg" message="tuning..." /></div>
 		{:else if radio.error}
 			<div class="status error">{radio.error}</div>
 		{:else if radio.current}
