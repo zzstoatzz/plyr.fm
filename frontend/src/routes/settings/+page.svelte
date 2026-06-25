@@ -9,6 +9,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { preferences, FONT_OPTIONS, type Theme, type FontFamily } from '$lib/preferences.svelte';
 	import { AT_CLIENTS, DEFAULT_AT_CLIENT } from '$lib/atclients';
+	import ClientLogo from '$lib/components/ClientLogo.svelte';
 	import { ambient } from '$lib/ambient.svelte';
 	import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
 
@@ -739,7 +740,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 								onclick={() => selectClient(client.value)}
 								title={client.label}
 							>
-								<img src={client.iconUrl} alt="" width="20" height="20" loading="lazy" />
+								<ClientLogo {client} size={20} />
 								<span>{client.label}</span>
 							</button>
 						{/each}
@@ -1249,18 +1250,6 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		border-color: var(--accent);
 		color: var(--accent);
-	}
-
-	.client-btn img {
-		/* external client logos have arbitrary/transparent backgrounds (blacksky's
-		   mark is black and vanishes on dark) — sit them on a constant light tile so
-		   they stay legible in every theme */
-		width: 24px;
-		height: 24px;
-		padding: 2px;
-		box-sizing: border-box;
-		border-radius: var(--radius-sm);
-		background: #fff;
 	}
 
 	.client-btn span {
