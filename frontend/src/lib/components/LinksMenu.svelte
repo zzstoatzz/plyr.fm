@@ -3,6 +3,7 @@
 	import PlatformStats from './PlatformStats.svelte';
 	import { feedback } from '$lib/feedback.svelte';
 	import { getPreferredClient } from '$lib/atclients';
+	import ClientLogo from './ClientLogo.svelte';
 
 	let showMenu = $state(false);
 	let client = $derived(getPreferredClient());
@@ -83,7 +84,7 @@
 					rel="noopener noreferrer"
 					class="menu-link"
 				>
-					<img src={client.iconUrl} alt="" width="24" height="24" class="menu-icon-img" />
+					<ClientLogo {client} size={24} />
 					<div class="link-info">
 						<span class="link-title">profile</span>
 						<span class="link-subtitle">@plyr.fm on {client.label}</span>
@@ -320,19 +321,6 @@
 
 	.menu-link:hover svg {
 		color: var(--accent);
-	}
-
-	.menu-icon-img {
-		/* light tile so any client logo (e.g. blacksky's black mark) stays legible */
-		border-radius: var(--radius-sm);
-		background: #fff;
-		padding: 2px;
-		box-sizing: border-box;
-		transition: box-shadow 0.2s;
-	}
-
-	.menu-link:hover .menu-icon-img {
-		box-shadow: 0 0 0 2px var(--accent);
 	}
 
 	.link-info {
