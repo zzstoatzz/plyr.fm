@@ -722,6 +722,95 @@ async def test_update_album_title(test_app: FastAPI, db_session: AsyncSession):
         assert updated_album.atproto_record_cid == "new_list_cid"
 
 
+async def test_update_album_title_slug_collision_returns_409(
+    test_app: FastAPI, db_session: AsyncSession
+):
+    """renaming an album onto another album's slug returns a 409, not a 500.
+
+    regression for the (artist_did, slug) unique constraint surfacing as an
+    unhandled UniqueViolation. the artist already has an album at slug
+    "test-albumz", so renaming a second album to a title that slugifies to the
+    same value is rejected with a detail the client can toast instead of 500ing
+    at commit. the ATProto record sync must not run before the rejection.
+    """
+    artist = Artist(
+        did="did:test:user123",
+        handle="test.artist",
+        display_name="Test Artist",
+    )
+    db_session.add(artist)
+    await db_session.flush()
+
+    # existing album already owns the target slug
+    occupying = Album(
+        artist_did=artist.did,
+        slug="test-albumz",
+        title="Test Albumz",
+    )
+    # the album being renamed onto that slug
+    renamed = Album(
+        artist_did=artist.did,
+        slug="demo",
+        title="Demo",
+    )
+    db_session.add_all([occupying, renamed])
+    await db_session.flush()
+
+    # give the renamed album a track with an ATProto record. without the
+    # collision pre-check, update_record would be called before the failing
+    # commit, so asserting it is not called proves the short-circuit.
+    track = Track(
+        title="Demo Track",
+        file_id="test-file-collision",
+        file_type="mp3",
+        artist_did=artist.did,
+        album_id=renamed.id,
+        extra={"album": "Demo"},
+        r2_url="https://r2.example.com/audio/test-file-collision.mp3",
+        atproto_record_uri="at://did:test:user123/fm.plyr.track/collision",
+        atproto_record_cid="collision_cid",
+    )
+    db_session.add(track)
+    await db_session.commit()
+
+    renamed_id = renamed.id
+
+    with (
+        patch(
+            "backend.api.albums.mutations.update_record",
+            new_callable=AsyncMock,
+        ) as mock_track_update,
+        patch(
+            "backend.api.albums.mutations.update_list_record",
+            new_callable=AsyncMock,
+        ) as mock_list_update,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.patch(f"/albums/{renamed_id}?title=Test%20Albumz")
+
+    assert response.status_code == 409
+    assert (
+        response.json()["detail"] == "another of your albums already uses that name"
+    )
+    # the collision is rejected before any ATProto work happens
+    mock_track_update.assert_not_called()
+    mock_list_update.assert_not_called()
+
+    # the rename was rejected cleanly, so title and slug are unchanged
+    from backend.utilities.database import get_engine
+
+    engine = get_engine()
+    async with AsyncSession(engine, expire_on_commit=False) as fresh_session:
+        result = await fresh_session.execute(
+            select(Album).where(Album.id == renamed_id)
+        )
+        unchanged = result.scalar_one()
+        assert unchanged.title == "Demo"
+        assert unchanged.slug == "demo"
+
+
 async def test_update_album_forbidden_for_non_owner(
     test_app: FastAPI, db_session: AsyncSession
 ):
