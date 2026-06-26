@@ -67,3 +67,7 @@ simple-build.log
 
 # claude code local runtime state
 .claude/scheduled_tasks.lock
+
+# status-maintenance audio + transcript (carried between workflow phases as artifacts, never committed)
+update.wav
+podcast_script.txt

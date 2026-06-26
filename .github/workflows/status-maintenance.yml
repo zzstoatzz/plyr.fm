@@ -241,14 +241,21 @@ jobs:
             ### generate audio
 
             run: uv run scripts/generate_tts.py podcast_script.txt update.wav
-            then: rm podcast_script.txt
+
+            keep podcast_script.txt in place — do NOT delete it. a later
+            workflow step uploads both update.wav and podcast_script.txt as a
+            build artifact so the phase-2 upload job can attach the transcript
+            as the track description. neither file is committed to the repo
+            (both are gitignored).
 
             ## task 4: open PR
 
             if any files changed:
             1. first, generate a unique branch name: BRANCH="status-maintenance-$(date +%Y%m%d-%H%M%S)"
             2. git checkout -b $BRANCH
-            3. git add .status_history/ STATUS.md update.wav
+            3. git add .status_history/ STATUS.md
+               (do NOT add update.wav or podcast_script.txt — they are
+               gitignored and carried to phase 2 as a build artifact instead)
             4. git commit -m "chore: status maintenance"
             5. git push -u origin $BRANCH
             6. gh pr create with a title and body you craft:
@@ -262,15 +269,61 @@ jobs:
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
 
+      # carry the generated audio + transcript to phase 2 (the merge run is a
+      # separate run with a fresh checkout, so it can't see these files
+      # otherwise). neither is committed to the repo.
+      #
+      # the artifact name encodes the PR branch claude just created and pushed:
+      # this run was dispatched on main, so its run-level branch/sha point at
+      # main — the only durable join to the merge run is the branch name, which
+      # phase 2 reads from the merged PR's head ref.
+      - name: Resolve PR branch
+        id: prbranch
+        run: echo "branch=$(git branch --show-current)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload audio + transcript artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: status-audio-${{ steps.prbranch.outputs.branch }}
+          path: |
+            update.wav
+            podcast_script.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
   # phase 2: upload audio after PR merge
   upload-audio:
     if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'status-maintenance-')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # read + download the phase-1 build artifact
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: astral-sh/setup-uv@v7
+
+      # the audio + transcript live on the phase-1 run, not in the repo. that
+      # run was dispatched on main, so we can't find it by branch — instead we
+      # look up the artifact by name (it encodes the PR branch) and download it
+      # from its owning run.
+      - name: Fetch audio + transcript from phase-1 run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT: status-audio-${{ github.event.pull_request.head.ref }}
+        run: |
+          RUN_ID=$(gh api \
+            "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq "[.artifacts[] | select(.name==\"$ARTIFACT\" and .expired==false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id")
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "No '$ARTIFACT' artifact found (audio was likely skipped), nothing to upload"
+            exit 0
+          fi
+
+          echo "Downloading $ARTIFACT from run $RUN_ID"
+          gh run download "$RUN_ID" --name "$ARTIFACT" --dir .
 
       - name: Upload audio to plyr.fm
         run: |
@@ -280,7 +333,7 @@ jobs:
           fi
 
           # check existing tracks to determine episode number
-          EXISTING=$(uv run --with plyrfm -- plyrfm tracks my --limit 50 2>/dev/null || echo "")
+          EXISTING=$(uv run --with "plyrfm>=0.0.1a21" -- plyrfm tracks my --limit 50 2>/dev/null || echo "")
           TODAY=$(date +'%B %d, %Y')
           YEAR=$(date +%Y)
 
@@ -297,7 +350,14 @@ jobs:
             TITLE="plyr.fm update - $TODAY"
           fi
 
+          # attach the podcast transcript as the track description, if present
+          DESCRIPTION_ARGS=()
+          if [ -f podcast_script.txt ]; then
+            DESCRIPTION_ARGS=(--description "$(cat podcast_script.txt)")
+          fi
+
           echo "Uploading as: $TITLE"
-          uv run --with plyrfm -- plyrfm tracks upload update.wav "$TITLE" --album "$YEAR" -t "ai"
+          uv run --with "plyrfm>=0.0.1a21" -- plyrfm tracks upload \
+            update.wav "$TITLE" --album "$YEAR" -t "ai" "${DESCRIPTION_ARGS[@]}"
         env:
           PLYR_TOKEN: ${{ secrets.PLYR_BOT_TOKEN }}
