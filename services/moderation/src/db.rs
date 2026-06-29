@@ -717,6 +717,28 @@ impl LabelDb {
         Ok(active_uris)
     }
 
+    /// Get URIs that have an explicit negation (dismissal) copyright label.
+    ///
+    /// A negation means a moderator reviewed the flag and dismissed it. This is
+    /// the only signal the backend uses to clear a flag — absence of an active
+    /// label is not a resolution, since flags no longer auto-emit a label.
+    pub async fn get_negated_labels(&self, uris: &[String]) -> Result<Vec<String>, sqlx::Error> {
+        if uris.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT DISTINCT uri
+            FROM labels
+            WHERE val = 'copyright-violation' AND neg = true AND uri = ANY($1)
+            "#,
+        )
+        .bind(uris)
+        .fetch_all(&self.pool)
+        .await
+    }
+
     /// Get all copyright-violation labels with their resolution status and context.
     ///
     /// A label is resolved if there's a negation label for the same uri+val.

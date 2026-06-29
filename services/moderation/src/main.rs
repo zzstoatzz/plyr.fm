@@ -106,6 +106,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/admin/resolve-htmx", post(admin::resolve_flag_htmx))
         .route("/admin/context", post(admin::store_context))
         .route("/admin/active-labels", post(admin::get_active_labels))
+        .route("/admin/negated-labels", post(admin::get_negated_labels))
         .route("/admin/sensitive-images", post(admin::add_sensitive_image))
         .route(
             "/admin/sensitive-images/remove",

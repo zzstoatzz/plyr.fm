@@ -104,6 +104,12 @@ pub struct ActiveLabelsResponse {
     pub active_uris: Vec<String>,
 }
 
+/// Response with URIs that have an explicit negation (dismissal) label.
+#[derive(Debug, Serialize)]
+pub struct NegatedLabelsResponse {
+    pub negated_uris: Vec<String>,
+}
+
 /// Request to add a sensitive image.
 #[derive(Debug, Deserialize)]
 pub struct AddSensitiveImageRequest {
@@ -316,6 +322,28 @@ pub async fn get_active_labels(
     );
 
     Ok(Json(ActiveLabelsResponse { active_uris }))
+}
+
+/// Get which URIs have an explicit negation (dismissal) copyright label.
+///
+/// Used by the backend to clear flags only when a moderator dismissed them —
+/// absence of an active label is not a resolution (see backend #1602).
+pub async fn get_negated_labels(
+    State(state): State<AppState>,
+    Json(request): Json<ActiveLabelsRequest>,
+) -> Result<Json<NegatedLabelsResponse>, AppError> {
+    let db = state.db.as_ref().ok_or(AppError::LabelerNotConfigured)?;
+
+    tracing::debug!(uri_count = request.uris.len(), "checking negated labels");
+
+    let negated_uris = db.get_negated_labels(&request.uris).await?;
+
+    tracing::debug!(
+        negated_count = negated_uris.len(),
+        "returning negated labels"
+    );
+
+    Ok(Json(NegatedLabelsResponse { negated_uris }))
 }
 
 /// Store context for a label (for backfill without re-emitting labels).
