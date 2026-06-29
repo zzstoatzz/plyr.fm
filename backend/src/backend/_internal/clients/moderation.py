@@ -399,6 +399,51 @@ class ModerationClient:
             )
             return set(uris)
 
+    async def get_negated_labels(self, uris: list[str]) -> set[str]:
+        """check which URIs have an explicit negation (dismissal) label.
+
+        a negation is the only thing that resolves a copyright flag: it means a
+        moderator reviewed the flag and dismissed it. absence of an *active*
+        label is NOT a resolution — post-#703 a scan never auto-emits a label,
+        so flagged-but-never-reviewed tracks have no label at all and must stay
+        flagged (#1602).
+
+        fails closed by returning an EMPTY set (resolve nothing) if the labeler
+        is unreachable — the opposite direction from `get_active_labels`, so an
+        outage can never silently clear a flag.
+
+        args:
+            uris: list of AT URIs to check
+
+        returns:
+            set of URIs that have been explicitly negated
+        """
+        if not uris:
+            return set()
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.labeler_url}/admin/negated-labels",
+                    json={"uris": uris},
+                    headers=self._headers(),
+                )
+                response.raise_for_status()
+                data = response.json()
+                negated_uris = set(data.get("negated_uris", []))
+
+                logfire.info(
+                    "checked negated copyright labels",
+                    total_uris=len(uris),
+                    negated_count=len(negated_uris),
+                )
+                return negated_uris
+
+        except Exception as e:
+            # fail closed: if we can't confirm a negation, resolve nothing
+            logger.warning("failed to check negated labels, resolving nothing: %s", e)
+            return set()
+
     async def _cache_label_status(self, uris: list[str], active_uris: set[str]) -> None:
         """cache label status in redis."""
         try:

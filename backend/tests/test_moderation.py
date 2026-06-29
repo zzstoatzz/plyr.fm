@@ -365,7 +365,13 @@ async def test_get_active_copyright_labels_service_error() -> None:
 
 
 async def test_sync_copyright_resolutions(db_session: AsyncSession) -> None:
-    """test that sync_copyright_resolutions updates flagged scans."""
+    """sync clears a flag only when the labeler reports an explicit negation.
+
+    a flag whose URI was never labelled (the common case post-#703, where the
+    scan no longer auto-emits a label) must survive — absence of an active
+    label is NOT a resolution. only a negation label (a moderator dismissal)
+    clears the flag.
+    """
     from backend._internal.tasks import sync_copyright_resolutions
 
     # create test artist and tracks
@@ -377,7 +383,7 @@ async def test_sync_copyright_resolutions(db_session: AsyncSession) -> None:
     db_session.add(artist)
     await db_session.commit()
 
-    # track 1: flagged, will be resolved
+    # track 1: flagged, moderator dismissed it (negation label emitted)
     track1 = Track(
         title="Flagged Track 1",
         file_id="flagged_1",
@@ -388,7 +394,7 @@ async def test_sync_copyright_resolutions(db_session: AsyncSession) -> None:
     )
     db_session.add(track1)
 
-    # track 2: flagged, will stay flagged
+    # track 2: flagged, never labelled — must stay flagged (the #1602 bug)
     track2 = Track(
         title="Flagged Track 2",
         file_id="flagged_2",
@@ -422,9 +428,9 @@ async def test_sync_copyright_resolutions(db_session: AsyncSession) -> None:
         "backend._internal.clients.moderation.get_moderation_client"
     ) as mock_get_client:
         mock_client = AsyncMock()
-        # only track2's URI is still active
-        mock_client.get_active_labels.return_value = {
-            "at://did:plc:synctest/fm.plyr.track/2"
+        # only track1's URI was explicitly negated by a moderator
+        mock_client.get_negated_labels.return_value = {
+            "at://did:plc:synctest/fm.plyr.track/1"
         }
         mock_get_client.return_value = mock_client
 
@@ -437,8 +443,65 @@ async def test_sync_copyright_resolutions(db_session: AsyncSession) -> None:
     # scan1 should no longer be flagged (label was negated)
     assert scan1.is_flagged is False
 
-    # scan2 should still be flagged
+    # scan2 should still be flagged (never labelled — must not be wiped)
     assert scan2.is_flagged is True
+
+
+async def test_sync_copyright_resolutions_keeps_unlabelled_flags(
+    db_session: AsyncSession,
+) -> None:
+    """regression for #1602: with no negations, every flag survives sync.
+
+    the old logic cleared `is_flagged` for any URI absent from the labeler's
+    active-label set. post-#703 a flag never emits a label, so that absence is
+    universal and the 5-minute sync silently wiped every flag.
+    """
+    from backend._internal.tasks import sync_copyright_resolutions
+
+    artist = Artist(
+        did="did:plc:nolabel",
+        handle="nolabel.bsky.social",
+        display_name="No Label User",
+    )
+    db_session.add(artist)
+    await db_session.commit()
+
+    scans: list[CopyrightScan] = []
+    for i in range(3):
+        track = Track(
+            title=f"Unlabelled Flagged Track {i}",
+            file_id=f"unlabelled_{i}",
+            file_type="mp3",
+            artist_did=artist.did,
+            r2_url=f"https://example.com/unlabelled{i}.mp3",
+            atproto_record_uri=f"at://did:plc:nolabel/fm.plyr.track/{i}",
+        )
+        db_session.add(track)
+        await db_session.commit()
+        scan = CopyrightScan(
+            track_id=track.id,
+            is_flagged=True,
+            highest_score=90,
+            matches=[{"artist": "Test", "title": f"Song {i}"}],
+            raw_response={},
+        )
+        db_session.add(scan)
+        scans.append(scan)
+    await db_session.commit()
+
+    with patch(
+        "backend._internal.clients.moderation.get_moderation_client"
+    ) as mock_get_client:
+        mock_client = AsyncMock()
+        # nothing was negated — no moderator has dismissed any flag
+        mock_client.get_negated_labels.return_value = set()
+        mock_get_client.return_value = mock_client
+
+        await sync_copyright_resolutions()
+
+    for scan in scans:
+        await db_session.refresh(scan)
+        assert scan.is_flagged is True
 
 
 # tests for sensitive images

@@ -38,10 +38,12 @@ async def sync_copyright_resolutions(
 ) -> None:
     """sync resolution status from labeler to backend database.
 
-    finds tracks that are flagged but have no resolution, checks the labeler
-    to see if the labels were negated (dismissed), and marks them as resolved.
+    finds flagged tracks, asks the labeler which of their URIs were explicitly
+    negated (a moderator dismissed the flag), and clears `is_flagged` for only
+    those. a flag that was never labelled is left alone — post-#703 the scan no
+    longer auto-emits a label, so "no active label" is the normal state of a
+    real flag, not a resolution (#1602).
 
-    this replaces the lazy reconciliation that was happening on read paths.
     runs automatically every 5 minutes via docket's Perpetual.
     """
     from backend._internal.clients.moderation import get_moderation_client
@@ -72,13 +74,12 @@ async def sync_copyright_resolutions(
             return
 
         client = get_moderation_client()
-        active_uris = await client.get_active_labels(list(scan_by_uri.keys()))
+        negated_uris = await client.get_negated_labels(list(scan_by_uri.keys()))
 
-        # find scans that are no longer active (label was negated)
+        # clear flags only for URIs a moderator explicitly negated
         resolved_count = 0
         for uri, scan in scan_by_uri.items():
-            if uri not in active_uris:
-                # label was negated - track is no longer flagged
+            if uri in negated_uris:
                 scan.is_flagged = False
                 resolved_count += 1
 
