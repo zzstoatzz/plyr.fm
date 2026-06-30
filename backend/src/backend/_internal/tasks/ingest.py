@@ -9,6 +9,8 @@ unique constraint checks or existence queries.
 
 import logging
 from datetime import UTC, datetime, timedelta
+from pathlib import PurePosixPath
+from urllib.parse import urlparse
 
 import logfire
 from docket import ConcurrencyLimit, ExponentialRetry
@@ -25,6 +27,8 @@ from backend._internal.tasks.pds import is_like_uri_cancelled
 from backend.config import settings
 from backend.models import Artist, Playlist, Track, TrackComment, TrackLike
 from backend.models.session import UserSession
+from backend.storage import storage
+from backend.storage.keys import InvalidMediaExtension
 from backend.utilities.database import db_session
 from backend.utilities.lexicon import validate_record
 from backend.utilities.redis import get_async_redis_client
@@ -34,6 +38,27 @@ logger = logging.getLogger(__name__)
 
 class SubjectNotFoundError(Exception):
     """referenced subject (track) not yet indexed — triggers retry."""
+
+
+async def _audio_object_exists(audio_url: str) -> bool:
+    """HEAD the R2 object a plyr-CDN audioUrl points at.
+
+    origin trust says the URL *names* our CDN; it does not say the bytes are
+    there. a foreign client can mint a well-formed `audio/<hash>.<ext>` URL on
+    our CDN (or a half-failed write can leave the row pointing at one) with no
+    object behind it, which 404s forever on playback. we only call this for a
+    URL that already passed the origin check, so the object — if it exists — is
+    in our own bucket and resolvable via `storage.get_url`.
+    """
+    path = PurePosixPath(urlparse(audio_url).path)
+    if not (stem := path.stem) or not (ext := path.suffix.lstrip(".")):
+        return False
+    try:
+        return (
+            await storage.get_url(stem, file_type="audio", extension=ext)
+        ) is not None
+    except InvalidMediaExtension:
+        return False
 
 
 def _features_to_did_list(features: list | None) -> list[dict[str, str]]:
@@ -218,6 +243,27 @@ async def ingest_track_create(
             else:
                 logfire.warn(
                     "ingest: rejecting track with untrusted audioUrl and no blob",
+                    uri=uri,
+                    audio_url=audio_url,
+                )
+                return
+
+        # origin trust is not existence: a record can claim a plyr-CDN audioUrl
+        # for an object we never stored (a foreign client computing our
+        # content-addressed URL, or an interrupted write). drop the dead URL and
+        # lean on the PDS blob — the real substrate — rather than persisting an
+        # r2_url that 404s forever on playback (issue: natespilman 1153/1154).
+        if audio_url and not await _audio_object_exists(audio_url):
+            if audio_blob:
+                logfire.warn(
+                    "ingest: audioUrl has no backing R2 object, using blob only",
+                    uri=uri,
+                    audio_url=audio_url,
+                )
+                audio_url = None
+            else:
+                logfire.warn(
+                    "ingest: audioUrl has no backing R2 object and no blob, skipping",
                     uri=uri,
                     audio_url=audio_url,
                 )
