@@ -17,6 +17,7 @@ organized knowledge base for plyr.fm development.
 - **[database/](./backend/database/)** - connection pooling, neon-specific patterns
 - **[feature-flags.md](./backend/feature-flags.md)** - per-user feature rollout system
 - **[streaming-uploads.md](./backend/streaming-uploads.md)** - SSE progress tracking
+- **[audio-streaming.md](./backend/audio-streaming.md)** - the `GET /audio` dispatch tree (public / gated / private), driven by visibility + support_gate
 - **[album-uploads.md](./backend/album-uploads.md)** - multi-track album upload flow (create → finalize) and why the ATProto list record is authoritative for track order
 - **[transcoder.md](./backend/transcoder.md)** - rust audio conversion service (lossless support)
 - **[mood-search.md](./backend/mood-search.md)** - semantic search with CLAP embeddings (Modal + turbopuffer)
@@ -24,6 +25,11 @@ organized knowledge base for plyr.fm development.
 - **[playlist-recommendations.md](./backend/playlist-recommendations.md)** - inline track suggestions via CLAP embeddings
 - **[liked-tracks.md](./backend/liked-tracks.md)** - like system and liked tracks endpoint
 - **[atproto-identity.md](./backend/atproto-identity.md)** - ATProto identity resolution and handle management
+
+### architecture
+- **[jetstream-ingest.md](./architecture/jetstream-ingest.md)** - firehose → database; the two ways a track row is born and the origin-trust/existence model
+- **[jams.md](./architecture/jams.md)** - real-time shared listening rooms
+- **[permissioned-private-media.md](./architecture/permissioned-private-media.md)** - private audio in ATProto permissioned spaces (experimental)
 
 ### frontend
 - **[state-management.md](./frontend/state-management.md)** - svelte 5 runes patterns
