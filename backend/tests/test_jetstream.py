@@ -66,6 +66,19 @@ def _mock_trusted_origins():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _mock_audio_object_exists():
+    """default: a trusted audioUrl is backed by a real R2 object.
+
+    the unbacked case (the natespilman 1153/1154 bug) is exercised explicitly
+    by the regression tests below, which override this to False.
+    """
+    with patch(
+        "backend._internal.tasks.ingest._audio_object_exists", return_value=True
+    ) as m:
+        yield m
+
+
 @pytest.fixture
 async def artist(db_session: AsyncSession) -> Artist:
     """create a test artist with a unique DID (xdist-safe)."""
@@ -435,6 +448,73 @@ class TestIngestTrackCreate:
         assert track.audio_storage == "both"
         assert track.pds_blob_cid == "bafyaudioblob"
         assert track.r2_url == "https://r2.example.com/both_001.mp3"
+
+    async def test_unbacked_audio_url_falls_back_to_blob(
+        self,
+        db_session: AsyncSession,
+        artist: Artist,
+        _mock_audio_object_exists: MagicMock,
+    ) -> None:
+        """audioUrl with no backing R2 object is dropped; the track serves from
+        its PDS blob instead of persisting an r2_url that 404s forever.
+
+        regression for natespilman 1153/1154: a firehose record claimed a
+        plyr-CDN audioUrl for an object plyr never stored. without the existence
+        check this lands as audio_storage='both' with a dead r2_url.
+        """
+        _mock_audio_object_exists.return_value = False
+        record = {
+            "title": "Unbacked Both Track",
+            "artist": "Test Artist",
+            "fileId": "unbacked_001",
+            "fileType": "mp3",
+            "audioBlob": {"ref": {"$link": "bafyrealblob"}, "mimeType": "audio/mpeg"},
+            "audioUrl": "https://r2.example.com/unbacked_001.mp3",
+            "createdAt": _recent_ts(),
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/unbacked1"
+
+        await ingest_track_create(
+            did=artist.did, rkey="unbacked1", record=record, uri=uri, cid="bafynew"
+        )
+
+        track = (
+            await db_session.execute(
+                select(Track).where(Track.atproto_record_uri == uri)
+            )
+        ).scalar_one()
+        assert track.audio_storage == "pds"
+        assert track.r2_url is None
+        assert track.pds_blob_cid == "bafyrealblob"
+
+    async def test_unbacked_audio_url_no_blob_skipped(
+        self,
+        db_session: AsyncSession,
+        artist: Artist,
+        _mock_audio_object_exists: MagicMock,
+    ) -> None:
+        """audioUrl with no backing R2 object and no blob is rejected — there is
+        nothing playable to ingest."""
+        _mock_audio_object_exists.return_value = False
+        record = {
+            "title": "Unbacked No Blob",
+            "artist": "Test Artist",
+            "fileId": "unbacked_002",
+            "fileType": "mp3",
+            "audioUrl": "https://r2.example.com/unbacked_002.mp3",
+            "createdAt": _recent_ts(),
+        }
+        uri = "at://did:plc:jetstream_test/fm.plyr.track/unbacked2"
+
+        await ingest_track_create(
+            did=artist.did, rkey="unbacked2", record=record, uri=uri, cid="bafynew"
+        )
+
+        assert (
+            await db_session.execute(
+                select(Track).where(Track.atproto_record_uri == uri)
+            )
+        ).scalar_one_or_none() is None
 
     async def test_pds_only_audio_storage(
         self, db_session: AsyncSession, artist: Artist
