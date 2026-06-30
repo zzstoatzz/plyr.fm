@@ -9,6 +9,7 @@ organized knowledge base for plyr.fm development.
 ### operations
 - **[runbooks/](./runbooks/)** - production incident procedures
   - [connection-pool-exhaustion](./runbooks/connection-pool-exhaustion.md) - 500s, stuck connections
+  - [worker-silence-alert](./runbooks/worker-silence-alert.md) - docket worker stopped or crash-looping
 
 ### backend
 - **[background-tasks.md](./backend/background-tasks.md)** - docket-based task system (copyright scan, export, scrobble, genre classification)
@@ -41,9 +42,10 @@ organized knowledge base for plyr.fm development.
 - **[plyrfm.md](./tools/plyrfm.md)** - Python SDK and MCP server
 - **[tap.md](./tools/tap.md)** - ATProto sync utility for backfilling custom lexicons
 - **[status-maintenance.md](./tools/status-maintenance.md)** - automated status podcasts
+- **[skills.md](./tools/skills.md)** - Claude Code skills for this repo
 
 ### atproto
-- **[lexicons/](./lexicons/)** - record schemas (track, like, comment, list, profile)
+- **[lexicons overview](../public/lexicons/overview.md)** - record schemas (track, like, comment, list, profile)
 - **[authentication.md](./authentication.md)** - OAuth 2.1 flow
 
 ### moderation
