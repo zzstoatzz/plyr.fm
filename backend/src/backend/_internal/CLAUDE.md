@@ -18,7 +18,7 @@ internal services and business logic.
 
 gotchas:
 - ATProto records organized under `_internal/atproto/records/` by lexicon namespace
-- file_id is sha256 hash truncated to 16 chars
+- file_id is sha256 hash truncated to 16 chars on the upload path; firehose-ingested tracks fall back to the record's rkey (`ingest_track_create`), so a `file_id` that isn't a 16-char hex hash means the track came from the firehose, not a plyr upload
 - queue cache is TTL-based (5min), hydration includes duplicate track_ids
 - background tasks use docket (Redis-backed) with asyncio fallback for local dev
 - **OAuth scope coupling**: when adding a new lexicon integration (new `repo:` token),

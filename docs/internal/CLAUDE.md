@@ -11,7 +11,6 @@ structure:
 - **tools/** - logfire queries, neon mcp, pdsx cli, plyr.fm mcp
 - **local-development/** - setup guide for new contributors
 - **moderation/** - copyright detection, sensitive content, ATProto labeler
-- **lexicons/** - ATProto record schemas (track, like, comment, list, profile)
 - **runbooks/** - operational procedures for production incidents
 - **testing/** - pytest patterns, parallel execution, template databases
 

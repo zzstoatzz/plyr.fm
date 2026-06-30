@@ -159,7 +159,7 @@ ORDER BY start_timestamp DESC
 - The `/audio/{file_id}` endpoint redirects to Cloudflare R2 CDN URLs when using R2 storage
 - 307 preserves the GET method during redirect (unlike 302)
 - This offloads bandwidth to R2's CDN instead of proxying through the app
-- See `src/backend/api/audio.py` for implementation
+- See `backend/src/backend/api/audio.py` for implementation
 
 ## Database Query Spans
 
@@ -299,39 +299,6 @@ WHERE otel_status_code = 'ERROR'
 GROUP BY endpoint
 ORDER BY error_count DESC
 ```
-
-## Known Issues
-
-### `/tracks/` 500 Error on First Load
-
-**Trace ID:** `019a46fe0b20c24432f5a7536d8561a6`
-**Timestamp:** 2025-11-02T23:54:05.472754Z
-**Status:** 500
-
-**Symptoms:**
-- First request to `GET /tracks/` fails with 500 error
-- Subsequent requests succeed with 200 status
-- Database connection and SELECT query both execute successfully in the trace
-
-**Root Cause:**
-SSL connection pooling issue with Neon database. The error appears in `otel_status_message`:
-```
-consuming input failed: SSL connection has been closed unexpectedly
-```
-
-**Analysis:**
-- This is a Neon PostgreSQL connection pool issue where SSL connections are being dropped
-- First request attempts to use a stale/closed SSL connection from the pool
-- Subsequent requests work because the pool recovers and establishes a fresh connection
-- The error is captured in `otel_status_code: "ERROR"` and `otel_status_message` fields
-
-**Potential Fixes:**
-1. Configure SQLAlchemy connection pool settings for Neon:
-   - Set `pool_pre_ping=True` to verify connections before use
-   - Adjust `pool_recycle` to match Neon's connection timeout
-2. Review Neon-specific SSL connection settings
-3. Add retry logic for initial database connections
-4. Consider connection pool size tuning
 
 ## Pre-built Dashboards
 
