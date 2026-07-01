@@ -88,6 +88,12 @@ class PlayerState {
 		const assigned = this.radio;
 		this.currentTrack = null; // exit track mode; the track loader bails on null
 		this.paused = !autoplay;
+		// arm play counting for the on-air track. reset BEFORE the src swap so a
+		// stale near-end currentTime from the previous source can't fire, then
+		// unlock immediately — radio bypasses the queue loader whose `loadeddata`
+		// listener normally unlocks, which is why radio never counted or scrobbled.
+		this.resetPlayCount();
+		this.unlockPlayCount();
 		const el = this.audioElement;
 		if (!el) return;
 		el.src = np.stream_url;
@@ -129,7 +135,10 @@ class PlayerState {
 
 	incrementPlayCount() {
 		if (this._playCountLocked) return;
-		if (!this.currentTrack || this.playCountedForTrack === this.currentTrack.id || !this.duration) {
+		// radio plays through the same element — count the on-air track so radio
+		// listening feeds play counts and teal scrobbles like queue playback does
+		const track = this.radio?.track ?? this.currentTrack;
+		if (!track || this.playCountedForTrack === track.id || !this.duration) {
 			return;
 		}
 
@@ -146,7 +155,7 @@ class PlayerState {
 		this._lastProgressTime = now;
 
 		// synchronous check to prevent race condition from batched reactive updates
-		if (this._playCountPending === this.currentTrack.id) {
+		if (this._playCountPending === track.id) {
 			return;
 		}
 
@@ -155,13 +164,13 @@ class PlayerState {
 
 		if (this._playedSeconds >= threshold) {
 			// set synchronous guard immediately (before async fetch)
-			this._playCountPending = this.currentTrack.id;
-			this.playCountedForTrack = this.currentTrack.id;
+			this._playCountPending = track.id;
+			this.playCountedForTrack = track.id;
 
 			// include ref if it's for this track (for share link tracking)
-			const refForTrack = this._refTrackId === this.currentTrack.id ? this.ref : null;
+			const refForTrack = this._refTrackId === track.id ? this.ref : null;
 
-			fetch(`${API_URL}/tracks/${this.currentTrack.id}/play`, {
+			fetch(`${API_URL}/tracks/${track.id}/play`, {
 				method: 'POST',
 				credentials: 'include',
 				headers: refForTrack ? { 'Content-Type': 'application/json' } : undefined,
