@@ -386,10 +386,29 @@ async def update_album(
     title_changed = title is not None and title.strip() != old_title
 
     if title is not None:
-        album.title = title.strip()
         # sync slug when title changes so get_or_create_album lookups work
         if title_changed:
-            album.slug = slugify(title.strip())
+            new_slug = slugify(title.strip())
+            # another of this artist's albums may already own the new slug.
+            # without this guard the (artist_did, slug) unique constraint
+            # surfaces as an unhandled 500 at commit, and only after the
+            # ATProto record sync below has run. reject the collision here,
+            # before mutating the album, like create_album's matching guard.
+            if new_slug != old_slug:
+                slug_owner = await db.execute(
+                    select(Album).where(
+                        Album.artist_did == album.artist_did,
+                        Album.slug == new_slug,
+                        Album.id != album_id,
+                    )
+                )
+                if slug_owner.scalar_one_or_none() is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="another of your albums already uses that name",
+                    )
+            album.slug = new_slug
+        album.title = title.strip()
     if description is not None:
         album.description = description.strip() if description.strip() else None
 
@@ -440,7 +459,17 @@ async def update_album(
             )
             album.atproto_record_cid = new_list_cid
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # a concurrent rename can take the same (artist_did, slug) while the
+        # ATProto sync above is in flight. surface the same 409 the pre-check
+        # returns instead of an unhandled 500.
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="another of your albums already uses that name",
+        ) from None
 
     # invalidate cache for old slug (new slug will be a cache miss)
     await invalidate_album_cache(auth_session.handle, old_slug)
