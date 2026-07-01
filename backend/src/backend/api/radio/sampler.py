@@ -1,11 +1,12 @@
 """Deterministic, per-artist-budgeted rotation sampler.
 
-Turns a scored corpus into a daily rotation that doesn't let one artist stack it:
+Turns a scored corpus into a rotation that doesn't let one artist stack it:
 
-* **Deterministic per (station, day):** seeded by the station slug + calendar day,
-  so every client computes the same rotation for the same day — required by the
-  stateless wall-clock loop that existing consumers depend on. It reshuffles once
-  a day.
+* **Deterministic per (station, period):** seeded by the station slug + a rotation
+  period, so every client computes the same rotation for the same period —
+  required by the stateless wall-clock loop that existing consumers depend on.
+  The caller picks the period granularity (currently a few hours, so a listener
+  with a fixed daily listening window doesn't land on the same slice every day).
 
 * **Per-artist airtime budget:** once an artist has contributed
   ``ARTIST_AIRTIME_CAP_SECONDS`` of clock time they stop being drawn, so a creator
@@ -19,6 +20,12 @@ Turns a scored corpus into a daily rotation that doesn't let one artist stack it
 * **Weighted draw without replacement:** tracks are sampled in proportion to their
   lens weight, so the rotation isn't a fixed top-N chart and the long tail turns
   over.
+
+* **Exploration floor:** a fraction of draws ignore the lens weights and pick
+  uniformly from whatever hasn't been drawn yet. Rank-decay weights alone leave
+  everything past the head effectively unreachable (with a static ranking, ~90%
+  of the corpus never airs); the floor guarantees the dormant tail cycles through
+  while the lens still shapes most of the rotation.
 """
 
 import hashlib
@@ -30,6 +37,7 @@ from backend.models import Track
 DEFAULT_TRACK_SECONDS = 180
 ARTIST_AIRTIME_CAP_SECONDS = 20 * 60  # an artist is done once past ~20 min of airtime
 TARGET_ROTATION_SECONDS = 4 * 60 * 60  # aim for ~4 hours of programming per rotation
+EXPLORATION_FRACTION = 0.25  # share of draws that ignore lens weights entirely
 
 
 def rank_decay_weights(ranked_ids: list[int], scale: float) -> dict[int, float]:
@@ -42,8 +50,10 @@ def rank_decay_weights(ranked_ids: list[int], scale: float) -> dict[int, float]:
     return {item: math.exp(-rank / scale) for rank, item in enumerate(ranked_ids)}
 
 
-def _seed(station_slug: str, day: str) -> int:
-    digest = hashlib.blake2s(f"{station_slug}:{day}".encode(), digest_size=8).digest()
+def _seed(station_slug: str, period: str) -> int:
+    digest = hashlib.blake2s(
+        f"{station_slug}:{period}".encode(), digest_size=8
+    ).digest()
     return int.from_bytes(digest, "big")
 
 
@@ -58,27 +68,30 @@ def build_rotation(
     weights: dict[int, float],
     *,
     station_slug: str,
-    day: str,
+    period: str,
     max_tracks: int,
     target_seconds: int = TARGET_ROTATION_SECONDS,
     artist_airtime_cap_seconds: int = ARTIST_AIRTIME_CAP_SECONDS,
+    exploration: float = EXPLORATION_FRACTION,
 ) -> list[Track]:
     """Draw a deterministic, airtime-fair rotation from scored candidates.
 
     Args:
         candidates: the eligible corpus (already filtered for this station).
         weights: track id -> non-negative lens weight.
-        station_slug: identifies the station for the daily seed.
-        day: ISO calendar day (UTC); rotation is stable within it.
+        station_slug: identifies the station for the rotation seed.
+        period: opaque rotation-period key; rotation is stable within it.
         max_tracks: hard ceiling on rotation length (the API ``limit``).
         target_seconds: stop once the rotation reaches roughly this much airtime.
         artist_airtime_cap_seconds: per-artist airtime budget before they drop out.
+        exploration: probability that a draw is uniform over the remaining pool
+            instead of lens-weighted, so the tail is reachable.
     """
     pool = [t for t in candidates if weights.get(t.id, 0.0) > 0.0]
     if not pool:
         return []
 
-    rng = random.Random(_seed(station_slug, day))
+    rng = random.Random(_seed(station_slug, period))
     remaining = pool[:]
     remaining_weights = [weights[t.id] for t in remaining]
 
@@ -87,7 +100,10 @@ def build_rotation(
     total_seconds = 0
 
     while remaining and len(rotation) < max_tracks and total_seconds < target_seconds:
-        chosen_idx = _weighted_pick(rng, remaining_weights)
+        if rng.random() < exploration:
+            chosen_idx = rng.randrange(len(remaining))
+        else:
+            chosen_idx = _weighted_pick(rng, remaining_weights)
         track = remaining.pop(chosen_idx)
         remaining_weights.pop(chosen_idx)
 

@@ -37,11 +37,11 @@ from backend.utilities.aggregations import (
 DEFAULT_TRACK_SECONDS = 180
 DEFAULT_ROTATION_SIZE = 40
 MAX_ROTATION_SIZE = 75
-# decay over a station's own ranking: the top ~RANK_DECAY*3 tracks by the lens
-# carry the station, the long tail falls off fast. Weighting by rank (not raw lens
-# score) keeps one station's signal from swamping another and bounds the tail mass
-# regardless of catalog size, so e.g. a 200-day-old track can't leak into `fresh`.
-RANK_DECAY = 12.0
+# a rotation lasts one period, then reseeds. Reseeding a few times a day (rather
+# than daily) keeps a listener with a fixed daily listening window from landing
+# on the same slice of the same rotation every day, while every client still
+# computes the identical rotation within a period.
+ROTATION_PERIOD_SECONDS = 4 * 60 * 60
 
 
 def _stream_url(track: Track) -> str:
@@ -88,15 +88,19 @@ async def _select_rotation(
     # rank within this station's pool.
     recency_rank = {track.id: rank for rank, track in enumerate(eligible)}
     ctx = LensContext(like_counts=like_counts, now=now, recency_rank=recency_rank)
-    # rank by the station's lens, then weight by rank-decay (not the raw score)
+    # rank by the station's lens, then weight by rank-decay (not the raw score):
+    # weighting by rank keeps one station's signal from swamping another and
+    # bounds the tail mass regardless of catalog size, so e.g. a 200-day-old
+    # track can't leak into `fresh`. The decay scale is per-station.
     ranked = sorted(eligible, key=lambda t: station.lens(t, ctx), reverse=True)
-    weights = rank_decay_weights([t.id for t in ranked], RANK_DECAY)
+    weights = rank_decay_weights([t.id for t in ranked], station.rank_decay)
     rotation = build_rotation(
         eligible,
         weights,
         station_slug=station.slug,
-        day=now.date().isoformat(),
+        period=str(int(now.timestamp()) // ROTATION_PERIOD_SECONDS),
         max_tracks=limit,
+        exploration=station.exploration,
     )
     return rotation, like_counts
 

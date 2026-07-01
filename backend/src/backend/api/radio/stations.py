@@ -37,6 +37,14 @@ def _only_slop(track: Track, tags: set[str]) -> bool:
     return _has_hidden_tag(tags) and track.artist.handle != PLYR_FM_ACCOUNT_HANDLE
 
 
+# how far down a station's lens ranking the sampler meaningfully reaches: weights
+# decay as exp(-rank/scale), so roughly the top ~3*scale ranks carry the station.
+DEFAULT_RANK_DECAY = 12.0
+# share of draws that ignore the lens and pick uniformly from the un-drawn pool,
+# so the dormant tail cycles through instead of never airing.
+DEFAULT_EXPLORATION = 0.25
+
+
 @dataclass(frozen=True)
 class Station:
     slug: str
@@ -45,6 +53,8 @@ class Station:
     lens: Lens
     # default: keep the same ai/suno tracks out that the homepage hides
     corpus_filter: CorpusFilter = field(default=_exclude_slop)
+    rank_decay: float = DEFAULT_RANK_DECAY
+    exploration: float = DEFAULT_EXPLORATION
 
 
 STATIONS: tuple[Station, ...] = (
@@ -59,12 +69,20 @@ STATIONS: tuple[Station, ...] = (
         name="fresh",
         description="the newest uploads on plyr.fm",
         lens=lenses.fresh,
+        # fresh IS its head — a uniform draw would leak arbitrarily old tracks
+        # into "the newest uploads". its turnover comes from uploads, not from
+        # exploring the back catalog.
+        exploration=0.0,
     ),
     Station(
         slug="deep-cuts",
         name="deep cuts",
         description="underplayed tracks from the back catalog",
         lens=lenses.deep_cuts,
+        # the whole point is the long tail — its lens scores are near-ties across
+        # hundreds of underplayed tracks, so a tight head would freeze one slice
+        # of them into rotation. reach much deeper than the popularity stations.
+        rank_decay=48.0,
     ),
     Station(
         slug="slop",
