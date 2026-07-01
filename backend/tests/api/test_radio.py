@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session, get_optional_session
 from backend.api.radio import lenses
 from backend.api.radio.lenses import LensContext
-from backend.api.radio.sampler import rank_decay_weights
+from backend.api.radio.sampler import build_rotation, rank_decay_weights
 from backend.config import settings
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
@@ -215,12 +215,85 @@ def test_rank_decay_weights_zero_the_long_tail() -> None:
     assert sum(weights.values()) < 20
 
 
-async def test_rotation_is_deterministic_per_day(
+def _sampler_track(track_id: int, *, artist_did: str) -> Track:
+    return Track(
+        id=track_id,
+        artist_did=artist_did,
+        play_count=0,
+        created_at=datetime.now(UTC),
+        extra={"duration": 180},
+    )
+
+
+def test_rotation_reseeds_across_periods() -> None:
+    """different periods produce different rotations from the same corpus.
+
+    Regression: rotations used to reseed once per calendar day, so a listener
+    with a fixed daily listening window heard the same slice every day.
+    """
+    corpus = [_sampler_track(i, artist_did=f"did:plc:a{i}") for i in range(200)]
+    weights = rank_decay_weights([t.id for t in corpus], 12.0)
+    rotations = [
+        [
+            t.id
+            for t in build_rotation(
+                corpus,
+                weights,
+                station_slug="loved",
+                period=str(period),
+                max_tracks=40,
+            )
+        ]
+        for period in range(3)
+    ]
+    assert rotations[0] == [
+        t.id
+        for t in build_rotation(
+            corpus, weights, station_slug="loved", period="0", max_tracks=40
+        )
+    ]  # deterministic within a period
+    assert rotations[0] != rotations[1] != rotations[2]
+
+
+def test_exploration_floor_reaches_the_dormant_tail() -> None:
+    """uniform exploration draws make the deep tail reachable.
+
+    Regression: with a static ranking and rank-decay weights alone, nothing past
+    ~rank 85 ever aired — 14 simulated days touched only ~8% of a 918-track
+    corpus. The exploration floor guarantees deep ranks get airtime.
+    """
+    corpus = [_sampler_track(i, artist_did=f"did:plc:a{i}") for i in range(900)]
+    weights = rank_decay_weights([t.id for t in corpus], 12.0)
+
+    def reach(exploration: float) -> set[int]:
+        drawn: set[int] = set()
+        for period in range(20):
+            drawn.update(
+                t.id
+                for t in build_rotation(
+                    corpus,
+                    weights,
+                    station_slug="loved",
+                    period=str(period),
+                    max_tracks=40,
+                    exploration=exploration,
+                )
+            )
+        return drawn
+
+    weighted_only = reach(0.0)
+    with_floor = reach(0.25)
+    assert max(weighted_only) < 150  # the tail is unreachable without the floor
+    assert max(with_floor) > 500
+    assert len(with_floor) > len(weighted_only)
+
+
+async def test_rotation_is_deterministic_within_a_period(
     radio_app: FastAPI,
     db_session: AsyncSession,
     radio_artist: Artist,
 ) -> None:
-    """same (station, day) yields the same rotation for every client."""
+    """same (station, period) yields the same rotation for every client."""
     now = datetime.now(UTC) + TEST_TIME_OFFSET
     for index in range(8):
         await _create_track(
