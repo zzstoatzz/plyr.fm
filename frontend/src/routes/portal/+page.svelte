@@ -14,7 +14,8 @@
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { checkAtprotofansEligibility } from '$lib/utils/atprotofans';
-	import { preferences } from '$lib/preferences.svelte'; import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
+	import { preferences } from '$lib/preferences.svelte';
+	import { redirectToLogin, resolvePostLogin } from '$lib/utils/auth-redirect';
 
 	let loading = $state(true);
 	let error = $state('');
@@ -68,13 +69,8 @@
 					await preferences.fetch();
 					if (isScopeUpgrade) {
 						toast.success('copyright paradigm configured');
-					} else {
-						const r = getReturnUrl();
-						if (r) {
-							clearReturnUrl();
-							window.location.href = r;
-							return;
-						}
+					} else if (resolvePostLogin()) {
+						return;
 					}
 				}
 			} catch (_e) {
@@ -90,7 +86,7 @@
 		}
 
 		if (!auth.isAuthenticated) {
-			window.location.href = '/login';
+			redirectToLogin();
 			return;
 		}
 

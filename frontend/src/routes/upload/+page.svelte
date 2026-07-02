@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { goto } from "$app/navigation";
 	import Header from "$lib/components/Header.svelte";
 	import HandleSearch from "$lib/components/HandleSearch.svelte";
 	import AlbumSelect from "$lib/components/AlbumSelect.svelte";
@@ -17,7 +16,7 @@
 	import { uploader } from "$lib/uploader.svelte";
 	import { toast } from "$lib/toast.svelte";
 	import { auth } from "$lib/auth.svelte";
-	import { setReturnUrl } from "$lib/utils/return-url";
+	import { redirectToLogin } from "$lib/utils/auth-redirect";
 	import {
 		stashTrackForm,
 		restoreTrackForm,
@@ -107,7 +106,7 @@
 		}
 
 		if (!auth.isAuthenticated) {
-			goto("/login");
+			redirectToLogin();
 			return;
 		}
 
@@ -203,11 +202,10 @@
 		const authStatus = await preflightAuth();
 		if (authStatus === "expired") {
 			stashTrackForm(currentFormStash());
-			setReturnUrl("/upload");
 			toast.error(
 				"your session expired — sign in to continue your upload",
 			);
-			goto("/login");
+			redirectToLogin("/upload");
 			return;
 		}
 		if (authStatus === "unverified") {
