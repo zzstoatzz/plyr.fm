@@ -8,7 +8,7 @@
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
-	import { playCollection, queueCollection } from '$lib/collection-playback';
+	import { playCollection, playCollectionFrom, queueCollection } from '$lib/collection-playback';
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { API_URL } from '$lib/config';
@@ -69,7 +69,7 @@
 	});
 
 	function playTrack(track: Track) {
-		queue.playNow(track);
+		void playCollectionFrom(tracks, track, albumMetadata.title);
 	}
 
 	async function playNow() {

@@ -45,6 +45,7 @@
 	let currentColor = $derived(preferences.accentColor ?? '#6a9fff');
 	let currentFont = $derived(preferences.fontFamily);
 	let keepPlaying = $derived(preferences.keepPlaying);
+	let playThroughCollections = $derived(preferences.playThroughCollections);
 	let currentTheme = $derived(preferences.theme);
 
 	let ambientGradient = $derived(ambient.gradient);
@@ -126,6 +127,11 @@
 	async function handleKeepPlayingToggle(event: Event) {
 		const value = (event.target as HTMLInputElement).checked;
 		await preferences.updateUiSettings({ keep_playing: value });
+	}
+
+	async function handlePlayThroughCollectionsToggle(event: Event) {
+		const value = (event.target as HTMLInputElement).checked;
+		await preferences.updateUiSettings({ play_through_collections: value });
 	}
 
 	function selectTheme(theme: Theme) {
@@ -438,6 +444,14 @@
 
 					<section class="settings-section">
 						<h3>playback</h3>
+						<label class="toggle">
+							<input
+								type="checkbox"
+								checked={playThroughCollections}
+								oninput={handlePlayThroughCollectionsToggle}
+							/>
+							<span class="toggle-text">play through collections</span>
+						</label>
 						<label class="toggle">
 							<input type="checkbox" checked={keepPlaying} oninput={handleKeepPlayingToggle} />
 							<span class="toggle-text">keep playing</span>

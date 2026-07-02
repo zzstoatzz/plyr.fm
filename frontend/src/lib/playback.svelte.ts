@@ -155,6 +155,31 @@ export async function playQueue(tracks: Track[], startIndex = 0): Promise<boolea
 }
 
 /**
+ * play a track from within an ordered collection, queuing the rest of the
+ * collection as a labeled "next from: <label>" tail (see queue.playContext).
+ * checks gated access for the tapped track before modifying queue state.
+ */
+export async function playCollectionContext(
+	tracks: Track[],
+	startIndex: number,
+	label: string
+): Promise<boolean> {
+	if (!browser || tracks.length === 0) return false;
+
+	const startTrack = tracks[startIndex];
+	if (!startTrack) return false;
+
+	const result = await checkAccess(startTrack);
+	if (!result.allowed) {
+		showDeniedToast(result);
+		return false;
+	}
+
+	queue.playContext(tracks, startIndex, label);
+	return true;
+}
+
+/**
  * add tracks to queue and optionally start playing.
  * if playNow is true, checks gated access for the first added track.
  */

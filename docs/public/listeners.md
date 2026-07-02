@@ -45,7 +45,7 @@ even today, other apps (like [aetheros.computer](https://aetheros.computer)) alr
 
    ![Cmd+K search overlay](/screenshots/search-overlay.png)
 
-3. **play it** — click any track to start streaming
+3. **play it** — click any track to start streaming. tap a track inside an album or playlist and the rest of that collection lines up behind it as "next from: \<collection\>"
 
    ![a track card showing title, artist, tags, and play count](/screenshots/feed-track-card.png)
 
