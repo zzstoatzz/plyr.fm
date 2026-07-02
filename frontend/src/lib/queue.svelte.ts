@@ -14,6 +14,15 @@ const SYNC_DEBOUNCE_MS = 250;
 export const CONTINUATION_LOW_WATER = 2;
 const CONTINUATION_BATCH = 20;
 
+/** in-place fisher-yates shuffle; returns the same array for chaining */
+export function shuffleInPlace<T>(arr: T[]): T[] {
+	for (let i = arr.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[arr[i], arr[j]] = [arr[j], arr[i]];
+	}
+	return arr;
+}
+
 /** bridge for routing queue mutations through a jam's WebSocket transport */
 export interface JamBridge {
 	pushQueueState(): void;
@@ -899,7 +908,10 @@ class Queue {
 			}
 
 			if (fresh.length === 0) return;
-			this.appendContinuation(fresh.slice(0, CONTINUATION_BATCH));
+			// the For You feed changes slowly, so appending it in feed order makes
+			// the same top-of-feed track lead the tail after every refill. shuffle
+			// the candidates so continuation stays varied across refills.
+			this.appendContinuation(shuffleInPlace(fresh).slice(0, CONTINUATION_BATCH));
 		} finally {
 			this.backfilling = false;
 		}

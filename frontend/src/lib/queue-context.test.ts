@@ -2,8 +2,8 @@
 // and queues the rest of the collection as a labeled "next from: <label>" tail,
 // preserving the user's explicit up-next across the context switch (Spotify
 // semantics). See queue.playContext.
-import { describe, it, expect, beforeEach } from 'vitest';
-import { queue } from '$lib/queue.svelte';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { queue, shuffleInPlace } from '$lib/queue.svelte';
 import { player } from '$lib/player.svelte';
 import type { Track } from '$lib/types';
 
@@ -106,5 +106,22 @@ describe('queue.playContext', () => {
 		// track 2 stays in the explicit region and is not re-added to the tail
 		expect(queue.tracks.map((t) => t.id)).toEqual([5, 2, 6]);
 		expect(queue.continuationFromIndex).toBe(2);
+	});
+});
+
+// the For You feed changes slowly, so fillContinuation shuffles candidates
+// before appending — otherwise the same top-of-feed track leads the tail after
+// every refill (drove a "same song after everything I play" report).
+describe('shuffleInPlace (continuation ordering)', () => {
+	afterEach(() => vi.restoreAllMocks());
+
+	it('reorders in place and preserves the multiset', () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		const arr = [1, 2, 3, 4];
+		const result = shuffleInPlace(arr);
+
+		expect(result).toBe(arr); // in place
+		expect(result).toEqual([2, 3, 4, 1]); // deterministic under random()=0
+		expect([...result].sort()).toEqual([1, 2, 3, 4]); // permutation, no loss
 	});
 });
