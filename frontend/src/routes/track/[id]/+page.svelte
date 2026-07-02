@@ -22,6 +22,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import { trackCoverUrl } from '$lib/track-cover';
+	import { redirectToLogin } from '$lib/utils/auth-redirect';
 	import type { Track } from '$lib/types';
 
 	interface Comment {
@@ -775,7 +776,7 @@ $effect(() => {
 					</form>
 				{:else if !loadingComments}
 					<p class="login-prompt">
-						<a href="/login">sign in</a> to leave a comment
+						<a href="/login" onclick={(e) => { e.preventDefault(); redirectToLogin(); }}>sign in</a> to leave a comment
 					</p>
 				{/if}
 

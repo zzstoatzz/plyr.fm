@@ -18,6 +18,7 @@
 	} from '$lib/audio-source';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { loginHref } from '$lib/utils/auth-redirect';
 	import TrackInfo from './TrackInfo.svelte';
 	import PlaybackControls from './PlaybackControls.svelte';
 	import type { Track } from '$lib/types';
@@ -396,7 +397,10 @@
 
 	function handleGatedDenial(err: GatedError): void {
 		if (err.requiresAuth) {
-			toast.info('sign in to play supporter-only tracks');
+			toast.info('sign in to play supporter-only tracks', 5000, {
+				label: 'sign in',
+				href: loginHref()
+			});
 		} else {
 			const supportUrl = err.artistDid
 				? `${ATPROTOFANS_URL}/${err.artistDid}`

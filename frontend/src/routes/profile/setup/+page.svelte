@@ -4,7 +4,7 @@
 	import { invalidateAll, replaceState } from '$app/navigation';
 	import { API_URL } from '$lib/config';
 	import { auth } from '$lib/auth.svelte';
-	import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
+	import { redirectToLogin, resolvePostLogin } from '$lib/utils/auth-redirect';
 
 	let loading = true;
 	let saving = false;
@@ -45,7 +45,7 @@
 		}
 
 		if (!auth.isAuthenticated) {
-			window.location.href = '/login';
+			redirectToLogin();
 			return;
 		}
 
@@ -57,7 +57,7 @@
 			await fetchAvatar();
 		} catch {
 			auth.clearSession();
-			window.location.href = '/login';
+			redirectToLogin();
 		} finally {
 			loading = false;
 		}
@@ -108,12 +108,7 @@
 			});
 
 			if (response.ok) {
-				const returnTo = getReturnUrl();
-				if (returnTo) {
-					clearReturnUrl();
-					window.location.href = returnTo;
-					return;
-				}
+				if (resolvePostLogin()) return;
 				window.location.href = '/portal';
 			} else {
 				const errorData = await response.json();

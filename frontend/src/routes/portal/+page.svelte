@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { invalidateAll, replaceState } from '$app/navigation';
+	import { goto, invalidateAll, replaceState } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
@@ -14,7 +14,8 @@
 	import { toast } from '$lib/toast.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { checkAtprotofansEligibility } from '$lib/utils/atprotofans';
-	import { preferences } from '$lib/preferences.svelte'; import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
+	import { preferences } from '$lib/preferences.svelte';
+	import { redirectToLogin, resolvePostLogin } from '$lib/utils/auth-redirect';
 
 	let loading = $state(true);
 	let error = $state('');
@@ -68,12 +69,21 @@
 					await preferences.fetch();
 					if (isScopeUpgrade) {
 						toast.success('copyright paradigm configured');
+					} else if (resolvePostLogin()) {
+						return;
 					} else {
-						const r = getReturnUrl();
-						if (r) {
-							clearReturnUrl();
-							window.location.href = r;
-							return;
+						// no captured intent: creators (with published tracks) land on
+						// their dashboard; everyone else lands on the app itself. only
+						// applies to this just-signed-in arrival — deliberate /portal
+						// navigation is never redirected.
+						try {
+							const r = await fetch(`${API_URL}/tracks/me?limit=1`, { credentials: 'include' });
+							if (r.ok && (await r.json()).total === 0) {
+								await goto('/', { replaceState: true });
+								return;
+							}
+						} catch {
+							// can't tell — stay on the portal
 						}
 					}
 				}
@@ -90,7 +100,7 @@
 		}
 
 		if (!auth.isAuthenticated) {
-			window.location.href = '/login';
+			redirectToLogin();
 			return;
 		}
 

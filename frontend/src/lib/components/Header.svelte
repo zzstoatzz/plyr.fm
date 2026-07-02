@@ -7,6 +7,7 @@
 	import { search } from '$lib/search.svelte';
 	import { feedback } from '$lib/feedback.svelte';
 	import { APP_NAME, APP_TAGLINE, APP_STAGE } from '$lib/branding';
+	import { redirectToLogin } from '$lib/utils/auth-redirect';
 
 	interface Props {
 		user: User | null;
@@ -24,6 +25,12 @@
 			document.documentElement.style.setProperty('--header-height', `${headerHeight}px`);
 		}
 	});
+
+	function signIn(e: MouseEvent) {
+		// preserve where the user was so login brings them back here
+		e.preventDefault();
+		redirectToLogin();
+	}
 </script>
 
 <header bind:clientHeight={headerHeight}>
@@ -84,7 +91,7 @@
 
 			<UserMenu {user} {onLogout} />
 		{:else}
-			<a href="/login" class="btn-primary">sign in</a>
+			<a href="/login" class="btn-primary" onclick={signIn}>sign in</a>
 		{/if}
 	</div>
 
@@ -119,7 +126,7 @@
 		{#if isAuthenticated}
 			<ProfileMenu {user} {onLogout} />
 		{:else}
-			<a href="/login" class="btn-primary">sign in</a>
+			<a href="/login" class="btn-primary" onclick={signIn}>sign in</a>
 		{/if}
 	</div>
 </header>

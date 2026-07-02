@@ -12,6 +12,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import ClientLogo from '$lib/components/ClientLogo.svelte';
 	import { ambient } from '$lib/ambient.svelte';
 	import { getReturnUrl, clearReturnUrl } from '$lib/utils/return-url';
+	import { redirectToLogin } from '$lib/utils/auth-redirect';
 
 	let loading = $state(true);
 
@@ -143,7 +144,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		}
 
 		if (!auth.isAuthenticated) {
-			window.location.href = '/login';
+			redirectToLogin();
 			return;
 		}
 
