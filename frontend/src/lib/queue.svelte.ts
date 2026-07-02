@@ -588,14 +588,20 @@ class Queue {
 	}
 
 	/**
-	 * Drop the auto-generated "next from" tail, keeping the explicit queue (and
-	 * the currently-playing track if playback already advanced into the tail).
-	 * Called when "keep playing" is turned off — the tail is materialized into
-	 * `tracks` and persisted server-side, so declining to refill it isn't enough;
-	 * the existing tail has to be removed or it outlives the setting.
+	 * Drop the For You continuation tail, keeping the explicit queue (and the
+	 * currently-playing track if playback already advanced into the tail). Called
+	 * when "keep playing" is turned off — the tail is materialized into `tracks`
+	 * and persisted server-side, so declining to refill it isn't enough; the
+	 * existing tail has to be removed or it outlives the setting.
+	 *
+	 * Only the For You tail (`continuationLabel === null`) is governed by "keep
+	 * playing". A labeled collection tail is user-initiated playback — tapping
+	 * into an album is not the same opt-in as "keep playing from For You" — so it
+	 * plays through regardless of the setting and is left untouched here.
 	 */
 	clearContinuation() {
 		if (this.jamBridge) return; // jam owns the queue; never a continuation tail
+		if (this.continuationLabel !== null) return; // collection tail — not keep-playing's to clear
 		if (this.continuationFromIndex >= this.tracks.length) return; // no tail
 
 		const keepUpTo = Math.max(this.continuationFromIndex, this.currentIndex + 1);

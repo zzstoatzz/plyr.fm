@@ -73,6 +73,31 @@ describe('queue.playContext', () => {
 		expect(player.radio).toBeNull();
 	});
 
+	// the layout "keep playing" effect calls queue.clearContinuation() whenever
+	// keepPlaying is off (the default). a collection tail lives in the same
+	// continuation region, so it must NOT be torn down by that path — otherwise
+	// the feature is instantly broken for every default-settings user.
+	it('survives clearContinuation (keep-playing off does not drop a collection tail)', () => {
+		queue.playContext(album([1, 2, 3, 4]), 0, 'road mix');
+		expect(queue.tracks.map((t) => t.id)).toEqual([1, 2, 3, 4]);
+
+		queue.clearContinuation();
+
+		expect(queue.tracks.map((t) => t.id)).toEqual([1, 2, 3, 4]);
+		expect(queue.continuationLabel).toBe('road mix');
+	});
+
+	it('clearContinuation still tears down the For You tail (label === null)', () => {
+		queue.setQueue(album([1]), 0);
+		queue.appendContinuation(album([50, 51, 52])); // For You backfill → label null
+		expect(queue.continuationLabel).toBeNull();
+		expect(queue.tracks).toHaveLength(4);
+
+		queue.clearContinuation();
+
+		expect(queue.tracks.map((t) => t.id)).toEqual([1]);
+	});
+
 	it('does not duplicate a track already in the explicit up-next', () => {
 		queue.setQueue(album([1, 2]), 0); // current 1, up-next 2
 		// collection contains track 2 again after the tapped track

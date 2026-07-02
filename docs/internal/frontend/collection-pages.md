@@ -17,7 +17,9 @@ route (+page.svelte)          owns: load glue, optimistic state, toasts,
   │                            (playlist-actions.ts, album-actions.ts)
   │
   ├── shared behavior          $lib modules used by several routes:
-  │                            collection-playback.ts (play/queue + toast),
+  │                            collection-playback.ts (play/queue/play-from + toast;
+  │                            row tap → playCollectionFrom queues the rest as
+  │                            a "next from: <collection>" tail),
   │                            list-reorder.svelte.ts (drag/touch state machine)
   │
   └── presentation             components that render and call back:
