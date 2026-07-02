@@ -453,7 +453,11 @@
 
 						{#if continuationUpcoming.length > 0}
 							<div class="section-header continuation-header">
-								<h3>next from: <a href="/for-you" class="source-link">for you</a></h3>
+								{#if queue.continuationLabel}
+									<h3>next from: <span class="source-link">{queue.continuationLabel}</span></h3>
+								{:else}
+									<h3>next from: <a href="/for-you" class="source-link">for you</a></h3>
+								{/if}
 							</div>
 							{#each continuationUpcoming as { track, index } (`${track.file_id}:${index}`)}
 								{@render queueRow(track, index)}

@@ -2,7 +2,7 @@
 // playlist) on the shared footer player. this is the seam where a labeled
 // playback context ("next from: <collection>") can attach later.
 import { queue } from '$lib/queue.svelte';
-import { playQueue } from '$lib/playback.svelte';
+import { playFromCollection, playQueue } from '$lib/playback.svelte';
 import { toast } from '$lib/toast.svelte';
 import type { Track } from '$lib/types';
 
@@ -19,6 +19,21 @@ export async function playCollection(tracks: Track[], name: string): Promise<boo
 		toast.success(`playing ${name}`, 1800);
 	}
 	return played;
+}
+
+/**
+ * play a track tapped inside a collection and continue through the rest of it
+ * as a "next from: <name>" tail. `startIndex` is the tapped track's position in
+ * `tracks`. no toast — row taps are high-frequency and the playing track is its
+ * own feedback. returns whether playback actually started.
+ */
+export async function playCollectionFrom(
+	tracks: Track[],
+	startIndex: number,
+	name: string
+): Promise<boolean> {
+	if (tracks.length === 0) return false;
+	return playFromCollection(tracks, startIndex, name);
 }
 
 /** append the collection to the current queue. */

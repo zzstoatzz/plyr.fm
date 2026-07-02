@@ -15,7 +15,7 @@
 	import { toast } from '$lib/toast.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
-	import { playCollection, queueCollection } from '$lib/collection-playback';
+	import { playCollection, playCollectionFrom, queueCollection } from '$lib/collection-playback';
 	import { fetchLikedTracks } from '$lib/tracks.svelte';
 	import { createListReorder, moveItem } from '$lib/list-reorder.svelte';
 	import * as playlistActions from '$lib/playlist-actions';
@@ -143,7 +143,8 @@
 	}
 
 	function playTrack(track: Track) {
-		queue.playNow(track);
+		const i = tracks.findIndex((t) => t.id === track.id);
+		void playCollectionFrom(tracks, i < 0 ? 0 : i, playlist.name);
 	}
 
 	async function playNow() {

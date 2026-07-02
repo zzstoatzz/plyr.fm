@@ -51,6 +51,14 @@ class Queue {
 	 * tabs and reloads, not just in the tab that clicked it.
 	 */
 	suppressContinuation = false;
+
+	/**
+	 * Label for the continuation tail, rendered as "next from: <label>".
+	 * `null` means the tail is the For You feed (the default fallback source).
+	 * A collection name (album/playlist) is set by `playContext` when a track is
+	 * tapped inside an ordered collection. Persisted as `continuation_label`.
+	 */
+	continuationLabel = $state<string | null>(null);
 	private backfilling = false;
 
 	/** whether the track at `index` is part of the continuation tail */
@@ -334,6 +342,10 @@ class Queue {
 		// restore the "user cleared it" intent so clear stays authoritative
 		// across tabs/reload (a refilling tab can't undo another's clear)
 		this.suppressContinuation = state.continuation_suppressed ?? false;
+
+		// a tail with no items has no meaningful label
+		this.continuationLabel =
+			this.continuationFromIndex < this.tracks.length ? (state.continuation_label ?? null) : null;
 	}
 
 	resolveCurrentIndex(currentTrackId: string | null, index: number, tracks: Track[]): number {
@@ -410,7 +422,8 @@ class Queue {
 				original_order_ids: this.originalOrder.map((t) => t.file_id),
 				progress_ms: this.progressMs,
 				continuation_from_index: this.continuationFromIndex,
-				continuation_suppressed: this.suppressContinuation
+				continuation_suppressed: this.suppressContinuation,
+				continuation_label: this.continuationLabel
 			};
 
 			const headers: HeadersInit = {
@@ -562,11 +575,16 @@ class Queue {
 		}
 		this.tracks = [...this.tracks, ...fresh];
 		this.originalOrder = [...this.originalOrder, ...fresh];
+		// the For You feed is the source of a backfilled tail. when it tops up a
+		// nearly-drained collection tail, the source has effectively transitioned
+		// to the feed, so the tail is relabeled accordingly.
+		this.continuationLabel = null;
 		this.syncState();
 	}
 
 	private resetContinuation() {
 		this.continuationFromIndex = this.tracks.length;
+		this.continuationLabel = null;
 	}
 
 	/**
@@ -617,6 +635,39 @@ class Queue {
 		this.originalOrder = [...this.tracks];
 		this.currentIndex = 0;
 		this.resetContinuation();
+		this.syncState();
+	}
+
+	/**
+	 * Play a track tapped inside an ordered collection, queuing the rest of the
+	 * collection as a labeled "next from: <label>" tail.
+	 *
+	 * Mirrors `playNow`'s context-switch semantics — a new context keeps the
+	 * user's explicit up-next (Spotify: hand-queued picks survive a context
+	 * switch) and drops the previous auto-generated tail — but instead of
+	 * leaving the tail empty it seeds the collection remainder as the tail. When
+	 * that tail nears empty, "keep playing" backfill falls through to For You.
+	 */
+	playContext(tracks: Track[], startIndex: number, label: string) {
+		if (tracks.length === 0) return;
+		player.radio = null; // playing a track leaves radio mode
+		this.lastUpdateWasLocal = true;
+		this.suppressContinuation = false;
+
+		const start = Math.max(0, Math.min(startIndex, tracks.length - 1));
+		const tapped = tracks[start];
+
+		// preserve explicit up-next across the context switch, then the collection
+		// remainder as the tail; dedupe the tail against what's already ahead
+		const upNext = this.tracks.slice(this.currentIndex + 1, this.continuationFromIndex);
+		const ahead = new Set([tapped.file_id, ...upNext.map((t) => t.file_id)]);
+		const contextTail = tracks.slice(start + 1).filter((t) => !ahead.has(t.file_id));
+
+		this.tracks = [tapped, ...upNext, ...contextTail];
+		this.originalOrder = [...this.tracks];
+		this.currentIndex = 0;
+		this.continuationFromIndex = 1 + upNext.length;
+		this.continuationLabel = contextTail.length > 0 ? label : null;
 		this.syncState();
 	}
 
