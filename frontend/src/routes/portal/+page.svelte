@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { invalidateAll, replaceState } from '$app/navigation';
+	import { goto, invalidateAll, replaceState } from '$app/navigation';
 	import Header from '$lib/components/Header.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import MigrationBanner from '$lib/components/MigrationBanner.svelte';
@@ -71,6 +71,20 @@
 						toast.success('copyright paradigm configured');
 					} else if (resolvePostLogin()) {
 						return;
+					} else {
+						// no captured intent: creators (with published tracks) land on
+						// their dashboard; everyone else lands on the app itself. only
+						// applies to this just-signed-in arrival — deliberate /portal
+						// navigation is never redirected.
+						try {
+							const r = await fetch(`${API_URL}/tracks/me?limit=1`, { credentials: 'include' });
+							if (r.ok && (await r.json()).total === 0) {
+								await goto('/', { replaceState: true });
+								return;
+							}
+						} catch {
+							// can't tell — stay on the portal
+						}
 					}
 				}
 			} catch (_e) {

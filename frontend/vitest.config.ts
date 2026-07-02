@@ -8,6 +8,7 @@ export default defineConfig({
 		alias: {
 			$lib: path.resolve(import.meta.dirname, 'src/lib'),
 			'$app/environment': path.resolve(import.meta.dirname, 'src/tests/stubs/app-environment.ts'),
+			'$app/navigation': path.resolve(import.meta.dirname, 'src/tests/stubs/app-navigation.ts'),
 			'$app/stores': path.resolve(import.meta.dirname, 'src/tests/stubs/app-stores.ts'),
 			'$env/static/public': path.resolve(import.meta.dirname, 'src/tests/stubs/env-static-public.ts')
 		},
