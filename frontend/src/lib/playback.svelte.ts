@@ -159,7 +159,7 @@ export async function playQueue(tracks: Track[], startIndex = 0): Promise<boolea
  * collection as a labeled "next from: <label>" tail (see queue.playContext).
  * checks gated access for the tapped track before modifying queue state.
  */
-export async function playFromCollection(
+export async function playCollectionContext(
 	tracks: Track[],
 	startIndex: number,
 	label: string

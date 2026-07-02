@@ -143,8 +143,7 @@
 	}
 
 	function playTrack(track: Track) {
-		const i = tracks.findIndex((t) => t.id === track.id);
-		void playCollectionFrom(tracks, i < 0 ? 0 : i, playlist.name);
+		void playCollectionFrom(tracks, track, playlist.name);
 	}
 
 	async function playNow() {

@@ -69,8 +69,7 @@
 	});
 
 	function playTrack(track: Track) {
-		const i = tracks.findIndex((t) => t.id === track.id);
-		void playCollectionFrom(tracks, i < 0 ? 0 : i, albumMetadata.title);
+		void playCollectionFrom(tracks, track, albumMetadata.title);
 	}
 
 	async function playNow() {

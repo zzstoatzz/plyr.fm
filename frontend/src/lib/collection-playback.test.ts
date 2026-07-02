@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const playQueueMock = vi.hoisted(() => vi.fn());
-const playFromCollectionMock = vi.hoisted(() => vi.fn());
+const playCollectionContextMock = vi.hoisted(() => vi.fn());
 const playTrackMock = vi.hoisted(() => vi.fn());
 const addTracksMock = vi.hoisted(() => vi.fn());
 const toastSuccessMock = vi.hoisted(() => vi.fn());
@@ -11,7 +11,7 @@ const prefs = vi.hoisted(() => ({ playThroughCollections: true }));
 
 vi.mock('$lib/playback.svelte', () => ({
 	playQueue: playQueueMock,
-	playFromCollection: playFromCollectionMock,
+	playCollectionContext: playCollectionContextMock,
 	playTrack: playTrackMock
 }));
 vi.mock('$lib/queue.svelte', () => ({ queue: { addTracks: addTracksMock } }));
@@ -54,12 +54,13 @@ describe('playCollection', () => {
 });
 
 describe('playCollectionFrom', () => {
-	it('plays through the collection when the setting is on (default)', async () => {
-		playFromCollectionMock.mockResolvedValueOnce(true);
+	it('plays through the collection from the tapped track when the setting is on (default)', async () => {
+		playCollectionContextMock.mockResolvedValueOnce(true);
 
-		await expect(playCollectionFrom(TRACKS, 1, 'road mix')).resolves.toBe(true);
+		await expect(playCollectionFrom(TRACKS, TRACKS[1], 'road mix')).resolves.toBe(true);
 
-		expect(playFromCollectionMock).toHaveBeenCalledWith(TRACKS, 1, 'road mix');
+		// resolves the tapped track's index (1) and continues from there
+		expect(playCollectionContextMock).toHaveBeenCalledWith(TRACKS, 1, 'road mix');
 		expect(playTrackMock).not.toHaveBeenCalled();
 	});
 
@@ -67,15 +68,15 @@ describe('playCollectionFrom', () => {
 		prefs.playThroughCollections = false;
 		playTrackMock.mockResolvedValueOnce(true);
 
-		await expect(playCollectionFrom(TRACKS, 1, 'road mix')).resolves.toBe(true);
+		await expect(playCollectionFrom(TRACKS, TRACKS[1], 'road mix')).resolves.toBe(true);
 
 		expect(playTrackMock).toHaveBeenCalledWith(TRACKS[1]);
-		expect(playFromCollectionMock).not.toHaveBeenCalled();
+		expect(playCollectionContextMock).not.toHaveBeenCalled();
 	});
 
 	it('is a no-op for an empty collection', async () => {
-		await expect(playCollectionFrom([], 0, 'road mix')).resolves.toBe(false);
-		expect(playFromCollectionMock).not.toHaveBeenCalled();
+		await expect(playCollectionFrom([], TRACKS[0], 'road mix')).resolves.toBe(false);
+		expect(playCollectionContextMock).not.toHaveBeenCalled();
 		expect(playTrackMock).not.toHaveBeenCalled();
 	});
 });

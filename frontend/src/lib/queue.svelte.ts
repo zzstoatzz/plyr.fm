@@ -753,17 +753,13 @@ class Queue {
 			return;
 		}
 
-		// fisher-yates shuffle, ensuring we get a DIFFERENT permutation
+		// shuffle, retrying until we get a DIFFERENT permutation
 		let shuffled: typeof after;
 		let attempts = 0;
 		const maxAttempts = 10;
 
 		do {
-			shuffled = [...after];
-			for (let i = shuffled.length - 1; i > 0; i--) {
-				const j = Math.floor(Math.random() * (i + 1));
-				[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-			}
+			shuffled = shuffleInPlace([...after]);
 			attempts++;
 		} while (
 			attempts < maxAttempts &&

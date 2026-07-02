@@ -2,7 +2,7 @@
 // playlist) on the shared footer player. this is the seam where a labeled
 // playback context ("next from: <collection>") can attach later.
 import { queue } from '$lib/queue.svelte';
-import { playFromCollection, playQueue, playTrack } from '$lib/playback.svelte';
+import { playCollectionContext, playQueue, playTrack } from '$lib/playback.svelte';
 import { preferences } from '$lib/preferences.svelte';
 import { toast } from '$lib/toast.svelte';
 import type { Track } from '$lib/types';
@@ -23,26 +23,30 @@ export async function playCollection(tracks: Track[], name: string): Promise<boo
 }
 
 /**
- * play a track tapped inside a collection. with "play through collections" on
+ * play a `track` tapped inside a collection. with "play through collections" on
  * (the default), the rest of the collection lines up as a "next from: <name>"
- * tail; opted out, it plays just the tapped track. `startIndex` is the tapped
- * track's position in `tracks`. gating lives here so every ordered surface that
- * routes through this helper inherits the one setting. no toast — row taps are
- * high-frequency and the playing track is its own feedback.
+ * tail; opted out, it plays just the tapped track. resolves the track's position
+ * in `tracks` here so callers pass the track, not an index. gating lives here so
+ * every ordered surface that routes through this helper inherits the one
+ * setting. no toast — row taps are high-frequency and the playing track is its
+ * own feedback.
  */
 export async function playCollectionFrom(
 	tracks: Track[],
-	startIndex: number,
+	track: Track,
 	name: string
 ): Promise<boolean> {
 	if (tracks.length === 0) return false;
 
 	if (!preferences.playThroughCollections) {
-		const track = tracks[startIndex];
-		return track ? playTrack(track) : false;
+		return playTrack(track);
 	}
 
-	return playFromCollection(tracks, startIndex, name);
+	const startIndex = Math.max(
+		0,
+		tracks.findIndex((t) => t.id === track.id)
+	);
+	return playCollectionContext(tracks, startIndex, name);
 }
 
 /** append the collection to the current queue. */
