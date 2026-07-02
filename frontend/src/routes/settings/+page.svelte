@@ -27,6 +27,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	let currentFont = $derived(preferences.fontFamily);
 	let currentClient = $derived(preferences.atprotoClient ?? DEFAULT_AT_CLIENT);
 	let keepPlaying = $derived(preferences.keepPlaying);
+	let playThroughCollections = $derived(preferences.playThroughCollections);
 	let backgroundImageUrl = $derived(preferences.uiSettings.background_image_url ?? '');
 	let backgroundTile = $derived(preferences.uiSettings.background_tile ?? false);
 	let usePlayingArtwork = $derived(preferences.uiSettings.use_playing_artwork_as_background ?? false);
@@ -243,6 +244,11 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	async function handleKeepPlayingToggle(event: Event) {
 		const value = (event.target as HTMLInputElement).checked;
 		await preferences.updateUiSettings({ keep_playing: value });
+	}
+
+	async function handlePlayThroughCollectionsToggle(event: Event) {
+		const value = (event.target as HTMLInputElement).checked;
+		await preferences.updateUiSettings({ play_through_collections: value });
 	}
 
 	function handleAutoDownloadToggle(enabled: boolean) {
@@ -623,6 +629,21 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 		<section class="settings-section">
 			{@render sectionHeading('playback')}
 			<div class="settings-card">
+				<div class="setting-row">
+					<div class="setting-info">
+						<h3>play through collections</h3>
+						<p>when you play a track in an album or playlist, keep playing the rest of it</p>
+					</div>
+					<label class="toggle-switch">
+						<input
+							type="checkbox"
+							checked={playThroughCollections}
+							onchange={handlePlayThroughCollectionsToggle}
+						/>
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+
 				<div class="setting-row">
 					<div class="setting-info">
 						<h3>keep playing</h3>

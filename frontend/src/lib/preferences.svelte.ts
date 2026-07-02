@@ -27,6 +27,7 @@ export interface UiSettings {
 	font_family?: FontFamily;
 	atproto_client?: string;
 	keep_playing?: boolean;
+	play_through_collections?: boolean;
 }
 
 export interface Preferences {
@@ -133,6 +134,15 @@ class PreferencesManager {
 	/** when the queue runs out, keep playing from the For You feed ("keep playing") */
 	get keepPlaying(): boolean {
 		return this.data?.ui_settings?.keep_playing ?? false;
+	}
+
+	/**
+	 * when a track is played from inside an ordered collection (album, playlist,
+	 * …), continue through the rest of it. default on; opt-out returns to
+	 * single-track playback. surface-general so new ordered sources inherit it.
+	 */
+	get playThroughCollections(): boolean {
+		return this.data?.ui_settings?.play_through_collections ?? true;
 	}
 
 	applyFont(font: FontFamily): void {
