@@ -13,7 +13,9 @@
 		"test": "vitest run",
 		"lint": "eslint .",
 		"format": "prettier --write .",
-		"format:check": "prettier --check ."
+		"format:check": "prettier --check .",
+		"storybook": "storybook dev -p 6006",
+		"build-storybook": "storybook build"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.0",
@@ -33,7 +35,13 @@
 		"svelte-check": "^4.3.2",
 		"typescript": "^5.9.2",
 		"vite": "^7.1.7",
-		"vitest": "^4.1.8"
+		"vitest": "^4.1.8",
+		"storybook": "^10.4.6",
+		"@storybook/sveltekit": "^10.4.6",
+		"@storybook/addon-svelte-csf": "^5.1.2",
+		"@storybook/addon-a11y": "^10.4.6",
+		"@storybook/addon-docs": "^10.4.6",
+		"eslint-plugin-storybook": "^10.4.6"
 	},
 	"dependencies": {
 		"@atproto/api": "^0.18.7",

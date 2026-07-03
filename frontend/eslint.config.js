@@ -3,6 +3,7 @@ import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import sveltePlugin from 'eslint-plugin-svelte';
 import svelteParser from 'svelte-eslint-parser';
+import storybook from 'eslint-plugin-storybook';
 
 export default [
 	{
@@ -12,6 +13,8 @@ export default [
 			'build/**',
 			'node_modules/**',
 			'dist/**',
+			'storybook-static/**',
+			'.storybook/**',
 			'**/*.config.js',
 			'vitest.config.ts'
 		]
@@ -79,5 +82,6 @@ export default [
 		rules: {
 			...sveltePlugin.configs.recommended.rules
 		}
-	}
+	},
+	...storybook.configs['flat/recommended']
 ];

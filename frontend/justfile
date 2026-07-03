@@ -15,3 +15,11 @@ check:
 # run component tests
 test:
     bun run test
+
+# preview components in isolation (storybook, http://localhost:6006)
+storybook:
+    bun run storybook
+
+# build the static storybook (used to sanity-check stories in CI)
+build-storybook:
+    bun run build-storybook
