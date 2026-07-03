@@ -72,6 +72,28 @@ export function isAwaitingPlayableRendition(track: Track): boolean {
 }
 
 /**
+ * Index of the next track after `fromIndex` that can actually play now, or -1
+ * if none remain. Shared by every "the current track can't play, skip ahead"
+ * path (gated denial, still-processing, load/media failure) so auto-advance
+ * never dead-airs on a broken track. `skipAwaiting` also skips tracks still on
+ * an undecodable interim rendition; gated-denial leaves it off to preserve its
+ * original narrower scan.
+ */
+export function findNextPlayableIndex(
+	tracks: Track[],
+	fromIndex: number,
+	{ skipAwaiting = true }: { skipAwaiting?: boolean } = {}
+): number {
+	for (let i = fromIndex + 1; i < tracks.length; i++) {
+		const t = tracks[i];
+		if (t.gated) continue;
+		if (skipAwaiting && isAwaitingPlayableRendition(t)) continue;
+		return i;
+	}
+	return -1;
+}
+
+/**
  * Resolve a track's audio source URL.
  *
  * Returns a structured result so callers don't have to differentiate
