@@ -5,6 +5,7 @@
 	import { jam } from '$lib/jam.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import SensitiveImage from './SensitiveImage.svelte';
+	import ScrollingText from './ScrollingText.svelte';
 	import { trackCoverUrl, trackThumbnailUrl } from '$lib/track-cover';
 	import type { Track, JamParticipant } from '$lib/types';
 
@@ -216,9 +217,14 @@
 {#snippet media(track: Track)}
 	{@render artwork(track)}
 	<div class="track-info">
-		<div class="track-title">{track.title}</div>
+		<div class="track-title"><ScrollingText text={track.title} /></div>
 		<div class="track-artist">
-			<a href="/u/{track.artist_handle}" draggable="false" onclick={(e) => e.stopPropagation()}>
+			<a
+				href="/u/{track.artist_handle}"
+				draggable="false"
+				title={track.artist}
+				onclick={(e) => e.stopPropagation()}
+			>
 				{track.artist}
 			</a>
 		</div>
@@ -454,9 +460,17 @@
 						{#if continuationUpcoming.length > 0}
 							<div class="section-header continuation-header">
 								{#if queue.continuationLabel}
-									<h3>next from: <span class="source-link">{queue.continuationLabel}</span></h3>
+									<h3>
+										<span class="continuation-prefix">next from:</span>
+										<span class="source-link" title={queue.continuationLabel}
+											>{queue.continuationLabel}</span
+										>
+									</h3>
 								{:else}
-									<h3>next from: <a href="/for-you" class="source-link">for you</a></h3>
+									<h3>
+										<span class="continuation-prefix">next from:</span>
+										<a href="/for-you" class="source-link">for you</a>
+									</h3>
 								{/if}
 							</div>
 							{#each continuationUpcoming as { track, index } (`${track.file_id}:${index}`)}
@@ -879,10 +893,25 @@
 		border-top: 1px solid var(--border-subtle);
 	}
 
+	.continuation-header h3 {
+		display: flex;
+		align-items: baseline;
+		gap: 0.4ch;
+		min-width: 0;
+	}
+
+	.continuation-header .continuation-prefix {
+		flex-shrink: 0;
+	}
+
 	.continuation-header .source-link {
 		color: var(--accent);
 		text-decoration: none;
 		transition: color 0.15s ease;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.continuation-header .source-link:hover {
@@ -982,9 +1011,7 @@
 	.track-title {
 		font-weight: 500;
 		color: var(--text-primary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+		min-width: 0;
 		margin-bottom: 0.25rem;
 	}
 
