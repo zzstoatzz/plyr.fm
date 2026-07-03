@@ -19,16 +19,35 @@ uv run pytest tests/integration -m integration -v
 
 ## test accounts
 
-| secret | handle | purpose |
-|--------|--------|---------|
-| `PLYR_TEST_TOKEN_1` | zzstoatzz.io | primary test user - all single-user tests |
-| `PLYR_TEST_TOKEN_2` | plyr.fm | secondary user - cross-user interaction tests |
-| `PLYR_TEST_TOKEN_3` | zzstoatzzdevlog.bsky.social | tertiary user - reserved for future tests |
+CI **mints its tokens just-in-time** and throws them away — no long-lived token is stored, so nothing expires (`SessionExpiredError`) or needs rotating. The `mint JIT dev tokens` step calls `POST /auth/dev-token/app-password` on staging with a stored app-password per account, uses the 1-day token for the run, and revokes it in teardown.
 
-tokens are developer tokens. two ways to mint them:
+| account | tests |
+|--------|---------|
+| zzstoatzz.io | primary - all single-user tests |
+| plyr.fm | secondary - cross-user interaction tests |
+| zzstoatzzdevlog.bsky.social | tertiary - reserved |
 
-- **browser:** [plyr.fm/settings#developer](https://plyr.fm/settings#developer) → "developer tokens" (full OAuth consent flow).
-- **browserless** (for refreshing these when they expire — `SessionExpiredError` in CI): `just mint-dev-token --handle <h> --bootstrap --set-gh-secret PLYR_TEST_TOKEN_N`, which mints a scoped app-password from an account password (`$MAIN_BSKY_PASSWORD`) and rotates the CI secret. Requires `AUTH_ALLOW_APP_PASSWORD_DEV_TOKENS=true` (dev/staging only). See [authentication.md](../authentication.md#browserless-minting-devstaging-test-tokens).
+### secrets (GitHub Actions)
+
+| secret | what |
+|--------|------|
+| `APP_PASSWORD_MINT_SECRET` | admin secret for the mint endpoint (also set on staging as `AUTH_APP_PASSWORD_MINT_SECRET`) |
+| `PLYR_TEST_APP_PASSWORD_{1,2,3}` | an atproto app-password per account above |
+
+### staging setup (one-time)
+
+The mint endpoint is doubly gated and OFF everywhere by default. Enable it **on staging only**:
+
+```
+AUTH_ALLOW_APP_PASSWORD_DEV_TOKENS=true
+AUTH_APP_PASSWORD_MINT_SECRET=<same value as the APP_PASSWORD_MINT_SECRET GH secret>
+```
+
+Generate each account's app-password once (bsky settings → app passwords, or your PDS) and store as the `PLYR_TEST_APP_PASSWORD_*` secrets. To rotate, replace the app-password — the tokens themselves are ephemeral.
+
+### running locally
+
+`just mint-dev-token --handle <h> --bootstrap` mints a token from an account password (`$MAIN_BSKY_PASSWORD`); pass `--verify` to prove the write path. Or export `PLYR_TEST_TOKEN_{1,2,3}` yourself and run `uv run pytest tests/integration -m integration -v`. See [authentication.md](../authentication.md#browserless-minting-devstaging-test-tokens).
 
 ## github actions
 

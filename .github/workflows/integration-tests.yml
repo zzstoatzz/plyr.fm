@@ -38,9 +38,9 @@ jobs:
       - name: check token configuration
         id: check-tokens
         run: |
-          if [ -z "${{ secrets.PLYR_TEST_TOKEN_1 }}" ]; then
+          if [ -z "${{ secrets.APP_PASSWORD_MINT_SECRET }}" ]; then
             echo "has_tokens=false" >> $GITHUB_OUTPUT
-            echo "::warning::PLYR_TEST_TOKEN_1 not configured - integration tests will be skipped"
+            echo "::warning::APP_PASSWORD_MINT_SECRET not configured - integration tests will be skipped"
           else
             echo "has_tokens=true" >> $GITHUB_OUTPUT
           fi
@@ -66,16 +66,53 @@ jobs:
         if: steps.check-tokens.outputs.has_tokens == 'true'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      # mint short-lived dev tokens just-in-time from stored app-passwords, so no
+      # long-lived token is ever stored (nothing to rotate, nothing to expire).
+      # the tokens are revoked in teardown; they also self-GC (1-day TTL).
+      - name: mint JIT dev tokens
+        if: steps.check-tokens.outputs.has_tokens == 'true'
+        env:
+          API: https://api-stg.plyr.fm
+          MINT_SECRET: ${{ secrets.APP_PASSWORD_MINT_SECRET }}
+          AP1: ${{ secrets.PLYR_TEST_APP_PASSWORD_1 }}
+          AP2: ${{ secrets.PLYR_TEST_APP_PASSWORD_2 }}
+          AP3: ${{ secrets.PLYR_TEST_APP_PASSWORD_3 }}
+        run: |
+          set -euo pipefail
+          mint() {
+            local handle="$1" apppw="$2" var="$3" resp token
+            resp=$(curl -sf -X POST "$API/auth/dev-token/app-password" \
+              -H "content-type: application/json" \
+              -H "x-admin-token: $MINT_SECRET" \
+              -d "{\"identifier\":\"$handle\",\"app_password\":\"$apppw\"}")
+            token=$(printf '%s' "$resp" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+            echo "::add-mask::$token"
+            echo "$var=$token" >> "$GITHUB_ENV"
+          }
+          mint "zzstoatzz.io" "$AP1" PLYR_TEST_TOKEN_1
+          mint "plyr.fm" "$AP2" PLYR_TEST_TOKEN_2
+          mint "zzstoatzzdevlog.bsky.social" "$AP3" PLYR_TEST_TOKEN_3
+
       - name: run integration tests
         if: steps.check-tokens.outputs.has_tokens == 'true'
         env:
           PLYR_API_URL: https://api-stg.plyr.fm
-          PLYR_TEST_TOKEN_1: ${{ secrets.PLYR_TEST_TOKEN_1 }}
-          PLYR_TEST_TOKEN_2: ${{ secrets.PLYR_TEST_TOKEN_2 }}
-          PLYR_TEST_TOKEN_3: ${{ secrets.PLYR_TEST_TOKEN_3 }}
         run: |
           cd backend
           uv run pytest tests/integration -m integration -v --tb=short
+
+      # throw the JIT tokens away — revoke even if the tests failed.
+      - name: revoke JIT dev tokens
+        if: always() && steps.check-tokens.outputs.has_tokens == 'true'
+        env:
+          API: https://api-stg.plyr.fm
+        run: |
+          for var in PLYR_TEST_TOKEN_1 PLYR_TEST_TOKEN_2 PLYR_TEST_TOKEN_3; do
+            token="${!var:-}"
+            [ -z "$token" ] && continue
+            curl -s -X DELETE "$API/auth/developer-tokens/${token:0:8}" \
+              -H "Authorization: Bearer $token" >/dev/null || true
+          done
 
       - name: prune uv cache
         if: always()

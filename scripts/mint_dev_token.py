@@ -38,29 +38,10 @@ from dotenv import load_dotenv
 from backend._internal.auth.app_password import (
     AppPasswordAuthError,
     create_app_password_session,
+    resolve_pds,
 )
 
 load_dotenv()
-
-
-async def _resolve_pds(handle: str) -> str:
-    """resolve a handle to its PDS service endpoint via DID document."""
-    async with httpx.AsyncClient(timeout=15) as http:
-        r = await http.get(
-            "https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle",
-            params={"handle": handle},
-        )
-        r.raise_for_status()
-        did = r.json()["did"]
-        if did.startswith("did:web:"):
-            domain = did.removeprefix("did:web:").replace(":", "/")
-            doc = (await http.get(f"https://{domain}/.well-known/did.json")).json()
-        else:
-            doc = (await http.get(f"https://plc.directory/{did}")).json()
-    for svc in doc.get("service", []):
-        if svc.get("id", "").endswith("atproto_pds"):
-            return svc["serviceEndpoint"]
-    raise SystemExit(f"no PDS service endpoint in DID document for {handle}")
 
 
 async def _bootstrap_app_password(
@@ -119,7 +100,7 @@ def _set_gh_secret(name: str, value: str) -> None:
 
 
 async def _run(args: argparse.Namespace) -> str:
-    pds = args.pds or await _resolve_pds(args.handle)
+    pds = args.pds or await resolve_pds(args.handle)
     print(f"  pds: {pds}", file=sys.stderr)
 
     if args.bootstrap:

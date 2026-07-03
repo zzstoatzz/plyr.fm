@@ -1039,6 +1039,14 @@ class AuthSettings(AppSettingsSection):
             "enable only in dev/staging for test-account provisioning, never prod."
         ),
     )
+    app_password_mint_secret: str = Field(
+        default="",
+        description=(
+            "Shared admin secret required by the POST /auth/dev-token/app-password "
+            "endpoint. Empty (default) disables the endpoint even when "
+            "allow_app_password_dev_tokens is on — both must be set for JIT minting."
+        ),
+    )
 
 
 class AccountCreationSettings(AppSettingsSection):
