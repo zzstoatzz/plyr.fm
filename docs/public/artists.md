@@ -161,6 +161,29 @@ this is the one exception to the "your audio, your data" promise: because atprot
 
 we'd also like to support more expressive gating — tiers, time-limited early access, per-track pricing — as the ecosystem matures.
 
+## copyright detection
+
+every upload is automatically scanned for copyrighted audio. if the scan finds a likely match, your track gets a **yellow ⚠ marker** in the [portal](https://plyr.fm/portal) — tap or hover it to see what was matched.
+
+### what a match means
+
+a match is a **flag for review, not a takedown**. your track stays up and playable. the marker is there so you (and plyr.fm) know the audio resembles a known recording — it's a heads-up, not an accusation.
+
+matches can be wrong. common false positives:
+
+- **samples and loops** reused across many songs
+- **covers, remixes, and mashups** — legal gray areas, not necessarily infringement
+- **similar chord progressions or drum patterns**
+- coincidental audio artifacts
+
+that's why a match is flagged rather than auto-enforced — a human decides whether anything actually needs to happen.
+
+### how the scan works
+
+after your upload finishes, plyr.fm scans the audio against [AudD](https://audd.io/)'s recognition database in short segments. the more of your track that consistently matches the *same* recording, the stronger the signal. a match that carries an [ISRC code](https://en.wikipedia.org/wiki/International_Standard_Recording_Code) (a unique recording identifier) is strong evidence of a specific recording, not just similar-sounding audio.
+
+if you believe a match is a false positive, or you hold the rights to the matched work, [get in touch](https://plyr.fm) — nothing about the flag is automatic or final.
+
 ## your data
 
 ![the artist portal — manage your profile, tracks, and albums](/screenshots/portal-dashboard.png)
