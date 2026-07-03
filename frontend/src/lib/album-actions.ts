@@ -17,7 +17,9 @@ export async function updateTitle(albumId: string, title: string): Promise<void>
 	});
 
 	if (!response.ok) {
-		throw new Error('failed to update title');
+		// surface the server detail (e.g. the 409 on a slug collision) so the
+		// caller can toast it, matching removeTrack/reorderTracks below.
+		throw new Error(await detailFrom(response, 'failed to update title'));
 	}
 }
 
