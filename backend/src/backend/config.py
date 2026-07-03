@@ -1031,6 +1031,14 @@ class AuthSettings(AppSettingsSection):
         default=365,
         description="Maximum allowed expiration in days for developer tokens",
     )
+    allow_app_password_dev_tokens: bool = Field(
+        default=False,
+        description=(
+            "Allow minting developer-token sessions from an atproto app-password "
+            "(browserless, via com.atproto.server.createSession). Fail-safe OFF; "
+            "enable only in dev/staging for test-account provisioning, never prod."
+        ),
+    )
 
 
 class AccountCreationSettings(AppSettingsSection):
