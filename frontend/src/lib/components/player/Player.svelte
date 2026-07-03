@@ -9,8 +9,8 @@
 	import { preferences } from '$lib/preferences.svelte';
 	import { toast } from '$lib/toast.svelte';
 	import {
+		findNextPlayableIndex,
 		gatedErrorFromResolution,
-		isAwaitingPlayableRendition,
 		pickFileIdForTrack,
 		resolveAudioSource,
 		type GatedError,
@@ -415,13 +415,9 @@
 		// auto-play the skipped-to track: whether the user clicked a gated
 		// track or natural auto-advance landed on one, the user wants the
 		// next playable track to start. matches pre-fast-path behavior.
-		let nextPlayable = -1;
-		for (let i = queue.currentIndex + 1; i < queue.tracks.length; i++) {
-			if (!queue.tracks[i].gated) {
-				nextPlayable = i;
-				break;
-			}
-		}
+		const nextPlayable = findNextPlayableIndex(queue.tracks, queue.currentIndex, {
+			skipAwaiting: false
+		});
 		if (nextPlayable >= 0) {
 			shouldAutoPlay = true;
 			queue.goTo(nextPlayable);
@@ -436,14 +432,25 @@
 		// skip to the next track that's actually playable now (not gated, not
 		// still awaiting its transcoded rendition in this browser). mirrors
 		// handleGatedDenial so auto-advance never dead-airs on a processing track.
-		let nextPlayable = -1;
-		for (let i = queue.currentIndex + 1; i < queue.tracks.length; i++) {
-			const t = queue.tracks[i];
-			if (!t.gated && !isAwaitingPlayableRendition(t)) {
-				nextPlayable = i;
-				break;
-			}
+		const nextPlayable = findNextPlayableIndex(queue.tracks, queue.currentIndex);
+		if (nextPlayable >= 0) {
+			shouldAutoPlay = true;
+			queue.goTo(nextPlayable);
+		} else {
+			player.paused = true;
 		}
+	}
+
+	// a track's audio failed to load or play (404, dead R2 url, network
+	// error, or a runtime media error). mirror handleGatedDenial/handleProcessing
+	// so auto-advance never dead-airs: skip past the broken track to the next
+	// playable one, or pause at the end of the queue. no toast — a broken track
+	// in a collection tail should skip quietly, and the next track starting is
+	// its own feedback.
+	function handleLoadFailure(reason: unknown): void {
+		console.error('failed to load audio:', reason);
+
+		const nextPlayable = findNextPlayableIndex(queue.tracks, queue.currentIndex);
 		if (nextPlayable >= 0) {
 			shouldAutoPlay = true;
 			queue.goTo(nextPlayable);
@@ -532,7 +539,7 @@
 				handleProcessing();
 				return;
 			}
-			console.error('failed to load audio:', resolved.error);
+			handleLoadFailure(resolved.error);
 		});
 	});
 
@@ -801,6 +808,14 @@
 	onplay={() => { if (!jam.active) player.paused = false; }}
 	onpause={() => { if (!jam.active) player.paused = true; }}
 	onended={() => (player.radio ? radio.onEnded() : handleTrackEnded())}
+	onerror={() => {
+		// a src that resolved `ready` but failed at decode/playback time (dead url
+		// that passed the HEAD pre-check, corrupt body). radio owns its own stream,
+		// and a fresh load hasn't attached a track yet — skip only for the queue.
+		if (player.radio || !player.currentTrack || !player.audioElement?.src) return;
+		if (attachedTrackId !== player.currentTrack.id) return;
+		handleLoadFailure(`media error on ${player.currentTrack.id}`);
+	}}
 ></audio>
 
 {#if nowPlayingTrack}
