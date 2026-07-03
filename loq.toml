@@ -56,7 +56,7 @@ max_lines = 710
 
 [[rules]]
 path = "backend/tests/api/test_albums.py"
-max_lines = 1503
+max_lines = 1579
 
 [[rules]]
 path = "backend/tests/api/test_list_record_sync.py"
@@ -248,7 +248,7 @@ max_lines = 701
 
 [[rules]]
 path = "backend/src/backend/api/albums/mutations.py"
-max_lines = 574
+max_lines = 594
 
 [[rules]]
 path = "backend/src/backend/api/lists/playlists.py"

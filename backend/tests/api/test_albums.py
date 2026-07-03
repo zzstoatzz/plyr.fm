@@ -791,9 +791,7 @@ async def test_update_album_title_slug_collision_returns_409(
             response = await client.patch(f"/albums/{renamed_id}?title=Test%20Albumz")
 
     assert response.status_code == 409
-    assert (
-        response.json()["detail"] == "another of your albums already uses that name"
-    )
+    assert response.json()["detail"] == "another of your albums already uses that name"
     # the collision is rejected before any ATProto work happens
     mock_track_update.assert_not_called()
     mock_list_update.assert_not_called()
