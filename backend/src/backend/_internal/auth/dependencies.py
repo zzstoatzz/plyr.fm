@@ -54,6 +54,13 @@ async def require_auth(
             detail="invalid or expired session",
         )
 
+    # app-password sessions hold full repo access rather than an OAuth grant, so
+    # the scope-coverage gate below — which reasons about granted OAuth scopes —
+    # does not apply. without this they'd 403 with scope_upgrade_required.
+    if session.oauth_session.get("auth_type") == "app_password":
+        _tag_span_with_user(session)
+        return session
+
     # check if session has all required scopes
     granted_scope = session.oauth_session.get("scope", "")
     required_scope = settings.atproto.resolved_scope
