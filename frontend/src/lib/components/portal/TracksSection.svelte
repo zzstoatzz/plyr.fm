@@ -7,6 +7,7 @@
 	import type { TrackRights } from '$lib/components/CopyrightRightsPanel.svelte';
 	import type { Track, FeaturedArtist, AlbumSummary } from '$lib/types';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import CopyrightFlag from '$lib/components/portal/CopyrightFlag.svelte';
 	import AudioRevisionsSheet from '$lib/components/AudioRevisionsSheet.svelte';
 	import { API_URL, getServerConfig } from '$lib/config';
 	import { toast } from '$lib/toast.svelte';
@@ -779,30 +780,10 @@
 									</span>
 								{/if}
 								{#if track.copyright_flagged}
-									{@const matchText = track.copyright_match ? `potential copyright violation: ${track.copyright_match}` : 'potential copyright violation'}
-									{#if track.atproto_record_url}
-										<a
-											href={track.atproto_record_url}
-											target="_blank"
-											rel="noopener noreferrer"
-											class="copyright-flag"
-											title="{matchText}"
-										>
-											<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-												<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-												<line x1="12" y1="9" x2="12" y2="13"></line>
-												<line x1="12" y1="17" x2="12.01" y2="17"></line>
-											</svg>
-										</a>
-									{:else}
-										<span class="copyright-flag" title={matchText}>
-											<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-												<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-												<line x1="12" y1="9" x2="12" y2="13"></line>
-												<line x1="12" y1="17" x2="12.01" y2="17"></line>
-											</svg>
-										</span>
-									{/if}
+									<CopyrightFlag
+										match={track.copyright_match}
+										recordUrl={track.atproto_record_url}
+									/>
 								{/if}
 							</div>
 							<div class="track-meta">
@@ -1233,25 +1214,6 @@
 		flex-shrink: 0;
 	}
 
-	.copyright-flag {
-		display: inline-flex;
-		align-items: center;
-		color: var(--warning);
-		flex-shrink: 0;
-		text-decoration: none;
-	}
-
-	.copyright-flag:hover {
-		color: color-mix(in srgb, var(--warning) 80%, white);
-	}
-
-	a.copyright-flag {
-		cursor: pointer;
-	}
-
-	a.copyright-flag:hover {
-		transform: scale(1.1);
-	}
 
 	.track-meta {
 		font-size: var(--text-base);
