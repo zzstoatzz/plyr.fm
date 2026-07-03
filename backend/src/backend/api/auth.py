@@ -1,9 +1,10 @@
 """authentication api endpoints."""
 
 import logging
+import secrets as secrets_lib
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
@@ -41,6 +42,11 @@ from backend._internal import (
 )
 from backend._internal.atproto.spaces import detect_permissioned_capability
 from backend._internal.auth import get_refresh_token_lifetime_days
+from backend._internal.auth.app_password import (
+    AppPasswordAuthError,
+    create_app_password_session,
+    resolve_pds,
+)
 from backend._internal.copyright import complete_indiemusi_setup
 from backend._internal.tasks import schedule_atproto_sync
 from backend.config import settings
@@ -559,6 +565,61 @@ async def delete_developer_token(
         raise HTTPException(status_code=404, detail="token not found")
 
     return JSONResponse(content={"message": "token revoked successfully"})
+
+
+class AppPasswordTokenRequest(BaseModel):
+    """mint a JIT developer token from an atproto app-password."""
+
+    identifier: str
+    app_password: str
+    pds_url: str | None = None
+    name: str | None = None
+
+
+class AppPasswordTokenResponse(BaseModel):
+    """the minted developer token and the account it belongs to."""
+
+    token: str
+    did: str
+    handle: str
+
+
+@router.post("/dev-token/app-password")
+@limiter.limit(settings.rate_limit.auth_limit)
+async def mint_app_password_dev_token(
+    request: Request,
+    body: AppPasswordTokenRequest,
+    x_admin_token: Annotated[str | None, Header()] = None,
+) -> AppPasswordTokenResponse:
+    """mint a short-lived developer token from an atproto app-password.
+
+    browserless just-in-time provisioning for CI test accounts: the caller
+    presents an app-password (the account authorization) and gets back a token
+    it uses for one job, then throws away. requires BOTH
+    ``AUTH_ALLOW_APP_PASSWORD_DEV_TOKENS=true`` and a matching
+    ``AUTH_APP_PASSWORD_MINT_SECRET`` — dev/staging only, never production. the
+    admin secret keeps the endpoint from being a public credential oracle.
+    """
+    secret = settings.auth.app_password_mint_secret
+    if not settings.auth.allow_app_password_dev_tokens or not secret:
+        # feature off — do not reveal the endpoint exists
+        raise HTTPException(status_code=404, detail="not found")
+    if not x_admin_token or not secrets_lib.compare_digest(x_admin_token, secret):
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    try:
+        pds = body.pds_url or await resolve_pds(body.identifier)
+        result = await create_app_password_session(
+            identifier=body.identifier,
+            app_password=body.app_password,
+            pds_url=pds,
+            token_name=body.name or "ci-jit",
+            expires_in_days=1,
+        )
+    except AppPasswordAuthError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    return AppPasswordTokenResponse(**result)
 
 
 class DevTokenStartRequest(BaseModel):

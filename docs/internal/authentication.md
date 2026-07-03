@@ -492,6 +492,8 @@ AUTH_ALLOW_APP_PASSWORD_DEV_TOKENS=true just mint-dev-token --verify
 - `--set-gh-secret PLYR_TEST_TOKEN_1` rotates a CI secret in the same command.
 - `--verify` proves the write path by uploading a throwaway blob through the backend (the exact path that was 500ing).
 
+For **CI, prefer minting just-in-time** over storing a token: `POST /auth/dev-token/app-password` takes an app-password and returns a short-lived (1-day) token with no DB access on the caller. It's doubly gated — needs `AUTH_ALLOW_APP_PASSWORD_DEV_TOKENS=true` **and** a shared `AUTH_APP_PASSWORD_MINT_SECRET` (sent as the `x-admin-token` header); either unset → 404. The integration workflow mints per-run and revokes in teardown, so no long-lived token is ever stored (see [testing/integration-tests.md](testing/integration-tests.md#test-accounts)).
+
 ## OAuth client types: public vs confidential
 
 ATProto OAuth distinguishes between two types of clients based on their ability to authenticate themselves to the authorization server.
