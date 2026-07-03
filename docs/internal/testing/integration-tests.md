@@ -25,7 +25,10 @@ uv run pytest tests/integration -m integration -v
 | `PLYR_TEST_TOKEN_2` | plyr.fm | secondary user - cross-user interaction tests |
 | `PLYR_TEST_TOKEN_3` | zzstoatzzdevlog.bsky.social | tertiary user - reserved for future tests |
 
-tokens are developer tokens created at [plyr.fm/settings#developer](https://plyr.fm/settings#developer) → "developer tokens".
+tokens are developer tokens. two ways to mint them:
+
+- **browser:** [plyr.fm/settings#developer](https://plyr.fm/settings#developer) → "developer tokens" (full OAuth consent flow).
+- **browserless** (for refreshing these when they expire — `SessionExpiredError` in CI): `just mint-dev-token --handle <h> --bootstrap --set-gh-secret PLYR_TEST_TOKEN_N`, which mints a scoped app-password from an account password (`$MAIN_BSKY_PASSWORD`) and rotates the CI secret. Requires `AUTH_ALLOW_APP_PASSWORD_DEV_TOKENS=true` (dev/staging only). See [authentication.md](../authentication.md#browserless-minting-devstaging-test-tokens).
 
 ## github actions
 
