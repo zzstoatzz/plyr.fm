@@ -45,3 +45,7 @@ loq-relax *FILES:
 # expose backend via ngrok tunnel
 tunnel:
     ngrok http 8001 --domain tunnel.zzstoatzz.io
+
+# mint a browserless dev token from an app-password (see scripts/mint_dev_token.py)
+mint-dev-token *ARGS:
+    uv run --project backend scripts/mint_dev_token.py {{ ARGS }}

@@ -342,6 +342,182 @@ async def _refresh_session_tokens(
             raise ValueError(f"failed to refresh access token: {e}") from e
 
 
+async def _refresh_app_password_session(
+    auth_session: AuthSession, stale_access_token: str
+) -> str:
+    """refresh a bearer app-password session via com.atproto.server.refreshSession.
+
+    mirrors _refresh_session_tokens for the app-password path: serialize per
+    session, skip the network call if another coroutine already rotated, and
+    surface a dead refresh token as SessionExpiredError so handlers return 401.
+    """
+    from backend._internal.auth.app_password import APP_PASSWORD_REFRESH_DAYS
+
+    session_id = auth_session.session_id
+    async with _session_refresh_lock(session_id):
+        updated = await get_session(session_id)
+        if not updated:
+            raise ValueError(f"session {session_id} no longer exists")
+        data = updated.oauth_session
+        if data.get("access_token") != stale_access_token:
+            # another coroutine refreshed while we waited on the lock
+            return data["access_token"]
+
+        pds = data["pds_url"].rstrip("/")
+        async with httpx.AsyncClient(timeout=30) as http:
+            resp = await http.post(
+                f"{pds}/xrpc/com.atproto.server.refreshSession",
+                headers={"Authorization": f"Bearer {data['refresh_token']}"},
+            )
+        if resp.status_code != 200:
+            # a dead/expired refresh token is terminal — a fresh app-password
+            # login is required. surface it like the OAuth path so handlers 401.
+            raise SessionExpiredError(
+                "atproto session expired — re-authentication required"
+            )
+
+        body = resp.json()
+        new_data = {
+            **data,
+            "access_token": body["accessJwt"],
+            "refresh_token": body["refreshJwt"],
+            "refresh_token_expires_at": (
+                datetime.now(UTC) + timedelta(days=APP_PASSWORD_REFRESH_DAYS)
+            ).isoformat(),
+        }
+        await update_session_tokens(session_id, new_data)
+        logger.info("refreshed app-password session for %s", auth_session.did)
+        return body["accessJwt"]
+
+
+async def _app_password_request(
+    auth_session: AuthSession,
+    method: str,
+    endpoint: str,
+    payload: dict[str, Any] | None,
+    params: dict[str, Any] | None,
+    success_codes: tuple[int, ...],
+) -> dict[str, Any]:
+    """make_pds_request for bearer app-password sessions (no DPoP/OAuth client)."""
+    data = auth_session.oauth_session
+    access_token = data["access_token"]
+    url = f"{data['pds_url'].rstrip('/')}/xrpc/{endpoint}"
+    has_refreshed = False
+    response = None
+
+    for attempt in range(_PDS_MAX_ATTEMPTS):
+        kwargs: dict[str, Any] = {}
+        if payload:
+            kwargs["json"] = payload
+        if params:
+            kwargs["params"] = params
+        try:
+            async with httpx.AsyncClient(timeout=30) as http:
+                response = await http.request(
+                    method,
+                    url,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    **kwargs,
+                )
+        except _TRANSIENT_HTTP_ERRORS as e:
+            if attempt < _PDS_MAX_ATTEMPTS - 1:
+                await asyncio.sleep(_backoff_for_attempt(attempt))
+                continue
+            raise Exception(
+                f"PDS request failed after {_PDS_MAX_ATTEMPTS} attempts: {_describe_exc(e)}"
+            ) from e
+
+        if response.status_code in success_codes:
+            return {} if response.status_code == 204 else response.json()
+
+        if response.status_code == 401 and not has_refreshed:
+            has_refreshed = True
+            access_token = await _refresh_app_password_session(
+                auth_session, access_token
+            )
+            continue
+
+        if 500 <= response.status_code < 600 and attempt < _PDS_MAX_ATTEMPTS - 1:
+            await asyncio.sleep(_backoff_for_attempt(attempt))
+            continue
+        break
+
+    if response is None:
+        raise Exception("PDS request failed: no response received")
+    raise Exception(
+        f"PDS request failed: {response.status_code} {response.text or '<empty body>'}"
+    )
+
+
+async def _app_password_upload_blob(
+    auth_session: AuthSession,
+    *,
+    data: bytes | BinaryIO | None,
+    body_factory: StreamBodyFactory | None,
+    content_length: int | None,
+    content_type: str,
+    heartbeat: ProgressHeartbeat | None,
+) -> BlobRef:
+    """upload_blob for bearer app-password sessions (plain bearer, no DPoP nonce)."""
+    sess = auth_session.oauth_session
+    access_token = sess["access_token"]
+    url = f"{sess['pds_url'].rstrip('/')}/xrpc/com.atproto.repo.uploadBlob"
+
+    blob_data: bytes | None = None
+    if body_factory is None:
+        assert data is not None
+        blob_data = data if isinstance(data, bytes) else data.read()
+
+    response: httpx.Response | None = None
+    for attempt in range(_PDS_MAX_ATTEMPTS):
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": content_type,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(None)) as http:
+                if body_factory is not None:
+                    assert content_length is not None
+                    headers["Content-Length"] = str(content_length)
+                    content = (
+                        _heartbeating_body(body_factory, heartbeat)
+                        if heartbeat is not None
+                        else body_factory()
+                    )
+                    response = await http.post(url, headers=headers, content=content)
+                else:
+                    response = await http.post(url, headers=headers, content=blob_data)
+        except _TRANSIENT_HTTP_ERRORS as e:
+            if attempt < _PDS_MAX_ATTEMPTS - 1:
+                await asyncio.sleep(_backoff_for_attempt(attempt))
+                continue
+            raise Exception(
+                f"blob upload failed after {_PDS_MAX_ATTEMPTS} attempts: {_describe_exc(e)}"
+            ) from e
+
+        if response.status_code == 200:
+            return response.json()["blob"]
+        if response.status_code == 413:
+            raise PayloadTooLargeError(
+                f"blob too large for PDS (limit exceeded): {response.text or '<empty body>'}"
+            )
+        if response.status_code == 401 and attempt < _PDS_MAX_ATTEMPTS - 1:
+            access_token = await _refresh_app_password_session(
+                auth_session, access_token
+            )
+            continue
+        if 500 <= response.status_code < 600 and attempt < _PDS_MAX_ATTEMPTS - 1:
+            await asyncio.sleep(_backoff_for_attempt(attempt))
+            continue
+        break
+
+    if response is None:
+        raise Exception("blob upload failed: no response received")
+    raise Exception(
+        f"blob upload failed: {response.status_code} {response.text or '<empty body>'}"
+    )
+
+
 async def make_pds_request(
     auth_session: AuthSession,
     method: str,
@@ -371,6 +547,11 @@ async def make_pds_request(
     if not oauth_data or "access_token" not in oauth_data:
         raise ValueError(
             f"OAuth session data missing or invalid for {auth_session.did}"
+        )
+
+    if oauth_data.get("auth_type") == "app_password":
+        return await _app_password_request(
+            auth_session, method, endpoint, payload, params, success_codes
         )
 
     oauth_session = reconstruct_oauth_session(oauth_data)
@@ -571,6 +752,16 @@ async def upload_blob(
     if not oauth_data or "access_token" not in oauth_data:
         raise ValueError(
             f"OAuth session data missing or invalid for {auth_session.did}"
+        )
+
+    if oauth_data.get("auth_type") == "app_password":
+        return await _app_password_upload_blob(
+            auth_session,
+            data=data,
+            body_factory=body_factory,
+            content_length=content_length,
+            content_type=content_type,
+            heartbeat=heartbeat,
         )
 
     oauth_session = reconstruct_oauth_session(oauth_data)

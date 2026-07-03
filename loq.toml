@@ -44,7 +44,7 @@ max_lines = 1841
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 1142
+max_lines = 1150
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
@@ -80,7 +80,7 @@ max_lines = 781
 
 [[rules]]
 path = "docs/internal/authentication.md"
-max_lines = 631
+max_lines = 643
 
 [[rules]]
 path = "docs/internal/backend/liked-tracks.md"
@@ -284,7 +284,7 @@ max_lines = 2589
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/client.py"
-max_lines = 683
+max_lines = 874
 
 [[rules]]
 path = "backend/src/backend/_internal/auth/oauth.py"

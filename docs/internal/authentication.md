@@ -477,6 +477,21 @@ the PDS enforces these scopes at the protocol level — not just plyr.fm's API. 
 
 **security notes**: tokens grant full access to plyr.fm features, but are namespace-scoped at the protocol level. each token is independent — revoke individually via [settings](https://plyr.fm/settings#developer) or API.
 
+### browserless minting (dev/staging test tokens)
+
+the OAuth flow above needs a browser consent redirect, which is painful for CI test accounts whose sessions periodically expire (`SessionExpiredError`). for **dev/staging only**, a token can be minted without a browser from an atproto **app-password**:
+
+```bash
+# needs ZAT_TEST_HANDLE / ZAT_TEST_PASSWORD / ZAT_TEST_PDS in .env
+AUTH_ALLOW_APP_PASSWORD_DEV_TOKENS=true just mint-dev-token --verify
+```
+
+`create_app_password_session` (`_internal/auth/app_password.py`) logs in via `com.atproto.server.createSession`, wraps the returned bearer JWTs into a developer-token session tagged `auth_type: "app_password"`, and returns the token. The atproto client (`_internal/atproto/client.py`) dispatches these sessions to a bearer write path (refresh via `com.atproto.server.refreshSession`) — the OAuth/DPoP path is untouched.
+
+- **gated OFF by default** (`AUTH_ALLOW_APP_PASSWORD_DEV_TOKENS`); never enable in production. app-password sessions carry full repo access, unlike the namespace-scoped OAuth grants above — acceptable only for throwaway test accounts.
+- `--set-gh-secret PLYR_TEST_TOKEN_1` rotates a CI secret in the same command.
+- `--verify` proves the write path by uploading a throwaway blob through the backend (the exact path that was 500ing).
+
 ## OAuth client types: public vs confidential
 
 ATProto OAuth distinguishes between two types of clients based on their ability to authenticate themselves to the authorization server.
