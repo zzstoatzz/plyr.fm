@@ -54,10 +54,20 @@ describe('updateTitle', () => {
 		expect(init.credentials).toBe('include');
 	});
 
-	it('throws on failure', async () => {
+	it('throws the generic fallback when the response has no detail', async () => {
 		fetchMock.mockResolvedValueOnce(jsonResponse({}, 500));
 
 		await expect(updateTitle(ALBUM_ID, 'x')).rejects.toThrow('failed to update title');
+	});
+
+	it('surfaces the server detail so a slug-collision 409 reaches the toast', async () => {
+		fetchMock.mockResolvedValueOnce(
+			jsonResponse({ detail: 'another of your albums already uses that name' }, 409)
+		);
+
+		await expect(updateTitle(ALBUM_ID, 'x')).rejects.toThrow(
+			'another of your albums already uses that name'
+		);
 	});
 });
 
