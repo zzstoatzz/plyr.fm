@@ -33,6 +33,6 @@
 
 <Story name="Playing" args={{ isPlaying: true }} />
 
-<Story name="Copyright flagged" args={{ track: { ...track, copyright_flagged: true, copyright_match: 'Matryoshka by Gui Boratto' } }} />
+<Story name="Copyright flagged" args={{ track: { ...track, copyright_flagged: true, copyright_match: 'Example Song by Placeholder Artist' } }} />
 
 <Story name="Logged out" args={{ isAuthenticated: false }} />
