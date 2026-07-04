@@ -17,8 +17,8 @@
 	const numBars = 5;
 </script>
 
-<div class="wave-loading">
-	<div class="bars" style:--bar-width="{config.barWidth}px" style:--bar-height="{config.barHeight}px" style:--gap="{config.gap}px">
+<div class="wave-loading" role="status" aria-label={message ?? 'loading'}>
+	<div class="bars" aria-hidden="true" style:--bar-width="{config.barWidth}px" style:--bar-height="{config.barHeight}px" style:--gap="{config.gap}px">
 		{#each Array(numBars) as _, i}
 			<div class="bar" style:--delay="{i * 0.1}s"></div>
 		{/each}

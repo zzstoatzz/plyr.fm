@@ -1,0 +1,59 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Introduction" />
+
+# plyr.fm components
+
+this is the component library for [plyr.fm](https://plyr.fm) — an audio streaming
+app built on [atproto](https://atproto.com), where your audio lives in a data
+store *you* control.
+
+it's a working reference of the pieces the app is built from: badges, inputs,
+overlays, media, feedback, and track surfaces. browse them in isolation, flip
+between states, and see how they behave in both themes without spinning up the
+whole app.
+
+## the design language
+
+- **lowercase, quiet.** copy is lowercase by default; the UI stays out of the
+  way of the audio. proper nouns and code keep their casing.
+- **georgia serif.** the default typeface is a serif — deliberately editorial,
+  not the usual product sans. (readers can pick another font in the app; the
+  serif is the house default.)
+- **theme-aware.** every component works in **dark** (default) and **light**.
+  use the **theme** toggle in the toolbar to switch — the tokens swap underneath.
+- **user-configurable accent.** the accent color is a token
+  (`--accent`), so listeners can recolor the app. components reference the token,
+  never a hard-coded blue.
+- **tokens, not magic numbers.** colors, type sizes, and radii all come from CSS
+  custom properties. see **Foundations** for the full set.
+
+## how to read this
+
+- **Foundations** — the raw material: color tokens, the type scale, the radius
+  scale. these update live when you flip the theme.
+- the component groups (**badges**, **inputs**, **overlays**, …) — each story is
+  a real state of a real component. the **Controls** tab lets you change props;
+  the **Accessibility** tab runs axe against what's on screen.
+
+## contributing a story
+
+drop a `*.stories.svelte` next to any component and it shows up here on the next
+merge to `main` (it auto-publishes to
+[storybook.plyr.fm](https://storybook.plyr.fm)). the format is
+[Svelte CSF](https://github.com/storybookjs/addon-svelte-csf):
+
+```svelte
+<script module lang="ts">
+	import { defineMeta } from '@storybook/addon-svelte-csf';
+	import MyComponent from './MyComponent.svelte';
+
+	const { Story } = defineMeta({
+		title: 'group/MyComponent',
+		component: MyComponent,
+		parameters: { layout: 'centered' }
+	});
+</script>
+
+<Story name="Default" args={{ /* props */ }} />
+```
