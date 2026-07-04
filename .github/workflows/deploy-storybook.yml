@@ -1,0 +1,33 @@
+name: deploy storybook
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-storybook.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: deploy storybook
+    runs-on: ubuntu-latest
+    concurrency: deploy-storybook
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: build
+        run: cd frontend && bun install && bun run build-storybook
+
+      - name: deploy to cloudflare pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy frontend/storybook-static --project-name plyr-storybook --branch main
