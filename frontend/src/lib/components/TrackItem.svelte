@@ -828,14 +828,14 @@
 
 	.track-meta {
 		font-size: var(--text-sm);
-		color: var(--text-tertiary);
+		color: var(--text-secondary);
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 	}
 
 	.plays {
-		color: var(--text-tertiary);
+		color: var(--text-secondary);
 		font-family: inherit;
 	}
 
@@ -845,7 +845,7 @@
 	}
 
 	.likes {
-		color: var(--text-tertiary);
+		color: var(--text-secondary);
 		font-family: inherit;
 		position: relative;
 		cursor: help;
@@ -871,7 +871,7 @@
 	}
 
 	.comments {
-		color: var(--text-tertiary);
+		color: var(--text-secondary);
 		font-family: inherit;
 		display: inline-flex;
 		align-items: center;

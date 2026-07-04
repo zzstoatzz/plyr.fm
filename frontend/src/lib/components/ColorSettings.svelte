@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { preferences } from '$lib/preferences.svelte';
+	import { preferences, getContrastColor } from '$lib/preferences.svelte';
 
 	let showSettings = $state(false);
 
@@ -40,6 +40,7 @@
 		const b = parseInt(color.slice(5, 7), 16);
 		const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
 		document.documentElement.style.setProperty('--accent-hover', hover);
+		document.documentElement.style.setProperty('--accent-contrast', getContrastColor(color));
 	}
 
 	async function applyColor(color: string) {

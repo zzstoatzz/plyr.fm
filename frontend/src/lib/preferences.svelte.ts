@@ -19,6 +19,22 @@ export const FONT_OPTIONS: { value: FontFamily; label: string; stack: string }[]
 
 export const DEFAULT_FONT: FontFamily = 'georgia';
 
+// pick readable text (near-black or white) for a solid fill of the given hex —
+// the accent is user-chosen, so a fixed text color can't guarantee WCAG contrast.
+// returns whichever of dark/white has the higher contrast against the color.
+export function getContrastColor(hex: string): string {
+	const toLinear = (channel: number) => {
+		const c = channel / 255;
+		return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+	};
+	const luminance =
+		0.2126 * toLinear(parseInt(hex.slice(1, 3), 16)) +
+		0.7152 * toLinear(parseInt(hex.slice(3, 5), 16)) +
+		0.0722 * toLinear(parseInt(hex.slice(5, 7), 16));
+	// crossover (~0.179) where dark text starts to out-contrast white text
+	return luminance >= 0.179 ? '#0a0a0a' : '#ffffff';
+}
+
 export interface UiSettings {
 	background_image_url?: string;
 	background_tile?: boolean;
@@ -195,6 +211,7 @@ class PreferencesManager {
 		const b = parseInt(color.slice(5, 7), 16);
 		const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
 		root.style.setProperty('--accent-hover', hover);
+		root.style.setProperty('--accent-contrast', getContrastColor(color));
 	}
 
 	applyTheme(theme: Theme): void {

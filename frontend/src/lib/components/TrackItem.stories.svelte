@@ -21,10 +21,12 @@
 		tags: ['house', 'disco']
 	};
 
-	// a11y 'todo': the meta line (play count / tags) uses --text-tertiary on the
-	// track background, which falls just under WCAG AA contrast (3.8:1). bumping it
-	// changes the app-wide visual hierarchy of track lists — a design decision, not
-	// a per-story fix. tracked for a dedicated contrast pass; still surfaced here.
+	// a11y 'todo' (structural, not contrast — contrast is fixed): the whole track
+	// row is a <button> (click-to-play) that contains other interactive controls
+	// (likes, comments, the actions menu), which axe flags as nested-interactive —
+	// invalid HTML and a keyboard/screen-reader problem. fixing it means reworking
+	// how a track row's click-to-play is wired (a real interaction-model change),
+	// so it's tracked for a focused refactor rather than rushed here. still warns.
 	const { Story } = defineMeta({
 		title: 'track/TrackItem',
 		component: TrackItem,

@@ -2,14 +2,10 @@
 	import { defineMeta } from '@storybook/addon-svelte-csf';
 	import RichText from './RichText.svelte';
 
-	// a11y 'todo': auto-linked text renders in --accent, which fails WCAG AA
-	// contrast on some backgrounds. accent is the app's user-configurable link
-	// color — a token-level design decision, not a per-story fix. tracked for a
-	// dedicated contrast pass; still surfaced here as a warning.
 	const { Story } = defineMeta({
 		title: 'content/RichText',
 		component: RichText,
-		parameters: { layout: 'padded', a11y: { test: 'todo' } },
+		parameters: { layout: 'padded' },
 		argTypes: { text: { control: 'text' } }
 	});
 </script>

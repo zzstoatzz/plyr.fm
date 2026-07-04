@@ -174,12 +174,15 @@
 	.confirm-btn {
 		background: var(--accent);
 		border: 1px solid var(--accent);
-		color: white;
+		/* accent is user-chosen, so derive readable text instead of assuming white */
+		color: var(--accent-contrast, white);
 	}
 
 	.confirm-btn.danger {
-		background: #ef4444;
-		border-color: #ef4444;
+		/* darkened error red so white text meets WCAG AA contrast */
+		background: color-mix(in srgb, var(--error) 80%, black);
+		border-color: color-mix(in srgb, var(--error) 80%, black);
+		color: white;
 	}
 
 	.confirm-btn:hover:not(:disabled) {
