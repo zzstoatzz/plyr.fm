@@ -1,0 +1,38 @@
+name: storybook a11y
+
+# accessibility gate: renders every story in real chromium and fails on axe
+# violations (a11y.test='error' in .storybook/preview.ts). kept as its own job so
+# the fast unit-test path (pre-commit) stays browser- and Playwright-free.
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/test-storybook.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: storybook-a11y-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  a11y:
+    name: story accessibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: install deps
+        run: cd frontend && bun install
+
+      - name: install chromium
+        run: cd frontend && bunx playwright install --with-deps chromium
+
+      - name: run storybook a11y gate
+        run: cd frontend && bun run test-storybook
+        env:
+          # stories import $lib/config, which needs this at build time; it's never
+          # actually called (components only render).
+          PUBLIC_API_URL: https://api.plyr.fm

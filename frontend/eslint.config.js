@@ -16,7 +16,7 @@ export default [
 			'storybook-static/**',
 			'.storybook/**',
 			'**/*.config.js',
-			'vitest.config.ts'
+			'vitest*.config.ts'
 		]
 	},
 	js.configs.recommended,

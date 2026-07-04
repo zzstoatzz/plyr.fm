@@ -27,7 +27,7 @@
 			<div style="display:flex; align-items:baseline; gap:1rem; padding:0.5rem 0; border-bottom:1px solid var(--border-subtle)">
 				<span style="font-size:var({size.token})">the quick brown fox jumps</span>
 				<code style="margin-left:auto; font-size:var(--text-xs); color:var(--text-tertiary); white-space:nowrap">{size.token}</code>
-				<span style="font-size:var(--text-xs); color:var(--text-muted); white-space:nowrap; min-width:8rem; text-align:right">{size.use}</span>
+				<span style="font-size:var(--text-xs); color:var(--text-secondary); white-space:nowrap; min-width:8rem; text-align:right">{size.use}</span>
 			</div>
 		{/each}
 	</div>
