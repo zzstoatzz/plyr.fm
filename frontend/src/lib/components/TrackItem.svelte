@@ -184,9 +184,6 @@
 	}
 
 	function handleCommentsKeydown(event: KeyboardEvent) {
-		if (event.key === 'Enter' || event.key === ' ') {
-			// don't prevent default - let the link navigate
-		}
 		if (event.key === 'Escape') {
 			showCommentersTooltip = false;
 		}
@@ -210,21 +207,22 @@
 	{#if showIndex}
 		<span class="track-index">{index + 1}</span>
 	{/if}
-	<button
-		class="track"
-		onclick={async (e) => {
-			// only play if clicking the track itself, not a link inside
-			if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('a')) {
-				return;
-			}
-			// use playTrack for gated content checks, fall back to onPlay for non-gated
-			if (track.gated) {
-				await playTrack(track);
-			} else {
-				onPlay(track);
-			}
-		}}
-	>
+	<div class="track">
+		<!-- the primary action (play) is a real button stretched across the row as
+		     its background; the links/controls sit above it (z-index), so clicking
+		     the background plays and clicking a link navigates — same behavior as
+		     before, without nesting interactive controls inside a button. -->
+		<button
+			class="track-play"
+			aria-label="play {track.title}"
+			onclick={async () => {
+				if (track.gated) {
+					await playTrack(track);
+				} else {
+					onPlay(track);
+				}
+			}}
+		></button>
 		<div class="track-image-wrapper" class:gated={track.gated}>
 			{#if (coverFullUrl || coverThumbUrl) && !trackImageError}
 				<SensitiveImage src={coverThumbUrl ?? coverFullUrl}>
@@ -362,22 +360,18 @@
 				{/if}
 				{#if commentCount > 0}
 					<span class="meta-separator">•</span>
-					<span
-						class="comments-wrapper"
-						role="button"
-						tabindex="0"
-						aria-label="{commentCount} {commentCount === 1 ? 'comment' : 'comments'} (focus to view participants)"
-						aria-expanded={showCommentersTooltip}
-						onmouseenter={handleCommentsMouseEnter}
-						onmouseleave={handleCommentsMouseLeave}
-						onfocus={handleCommentsMouseEnter}
-						onblur={handleCommentsMouseLeave}
-						onkeydown={handleCommentsKeydown}
-					>
+					<span class="comments-wrapper">
 						<a
 							href="/track/{track.id}"
 							class="comments"
 							title="view comments"
+							aria-label="{commentCount} {commentCount === 1 ? 'comment' : 'comments'} (view comments)"
+							aria-expanded={showCommentersTooltip}
+							onmouseenter={handleCommentsMouseEnter}
+							onmouseleave={handleCommentsMouseLeave}
+							onfocus={handleCommentsMouseEnter}
+							onblur={handleCommentsMouseLeave}
+							onkeydown={handleCommentsKeydown}
 						>
 							<svg class="comment-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 								<path d="M2 3h12v8H5l-3 3V3z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
@@ -400,7 +394,7 @@
 			{/if}
 			</div>
 		</div>
-	</button>
+	</div>
 	<div class="track-actions" role="presentation" onclick={(e) => e.stopPropagation()}>
 		<!-- desktop: show individual buttons -->
 		<div class="desktop-actions">
@@ -524,17 +518,41 @@
 	}
 
 	.track {
-		background: transparent;
-		border: none;
-		cursor: pointer;
+		position: relative;
 		text-align: left;
-		padding: 0;
 		flex: 1;
 		min-width: 0;
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
 		font-family: inherit;
+	}
+
+	/* stretched primary action: clicking the row background plays the track */
+	.track-play {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		margin: 0;
+		padding: 0;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		font: inherit;
+	}
+
+	.track-play:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
+		border-radius: var(--radius-base);
+	}
+
+	/* real links/controls sit above the play overlay so they stay clickable and
+	   keyboard-focusable — this is what removes the nested-interactive violation */
+	.track a,
+	.track [role='button'] {
+		position: relative;
+		z-index: 1;
 	}
 
 	.track-image-wrapper {
