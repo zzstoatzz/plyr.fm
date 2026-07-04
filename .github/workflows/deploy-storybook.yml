@@ -24,6 +24,10 @@ jobs:
 
       - name: build
         run: cd frontend && bun install && bun run build-storybook
+        env:
+          # $env/static/public requires this to exist at build time; storybook
+          # only renders components, so the value is never actually called.
+          PUBLIC_API_URL: https://api.plyr.fm
 
       - name: deploy to cloudflare pages
         uses: cloudflare/wrangler-action@v3

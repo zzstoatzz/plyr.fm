@@ -22,4 +22,4 @@ storybook:
 
 # build the static storybook (used to sanity-check stories in CI)
 build-storybook:
-    bun run build-storybook
+    PUBLIC_API_URL="${PUBLIC_API_URL:-https://api.plyr.fm}" bun run build-storybook
