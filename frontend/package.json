@@ -11,6 +11,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
+		"test-storybook": "vitest run --config vitest.storybook.config.ts",
 		"lint": "eslint .",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
@@ -41,7 +42,10 @@
 		"@storybook/addon-svelte-csf": "^5.1.2",
 		"@storybook/addon-a11y": "^10.4.6",
 		"@storybook/addon-docs": "^10.4.6",
-		"eslint-plugin-storybook": "^10.4.6"
+		"@storybook/addon-vitest": "^10.4.6",
+		"eslint-plugin-storybook": "^10.4.6",
+		"@vitest/browser-playwright": "4.1.8",
+		"playwright": "^1.61.1"
 	},
 	"dependencies": {
 		"@atproto/api": "^0.18.7",

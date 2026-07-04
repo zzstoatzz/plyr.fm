@@ -36,8 +36,10 @@ const preview: Preview = {
 		controls: {
 			matchers: { color: /(background|color)$/i, date: /Date$/i }
 		},
-		// surface accessibility findings in the a11y panel for every story
-		a11y: { test: 'todo' },
+		// accessibility is enforced: axe violations fail `bun run test-storybook`
+		// (and the CI gate). flip a specific story to 'todo' only with a documented
+		// reason if it has an accepted, intentional violation.
+		a11y: { test: 'error' },
 		options: {
 			storySort: {
 				order: [

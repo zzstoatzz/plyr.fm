@@ -12,9 +12,14 @@ run:
 check:
     bun run check
 
-# run component tests
+# run component tests (jsdom, fast — no browser)
 test:
     bun run test
+
+# accessibility gate: render every story in chromium, fail on axe violations
+# (needs `bunx playwright install chromium` once)
+test-storybook:
+    PUBLIC_API_URL="${PUBLIC_API_URL:-https://api.plyr.fm}" bun run test-storybook
 
 # preview components in isolation (storybook, http://localhost:6006)
 storybook:
