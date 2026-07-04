@@ -92,11 +92,9 @@
 <style>
 	.rich-text-link {
 		color: var(--accent);
-		text-decoration: none;
-		word-break: break-all;
-	}
-
-	.rich-text-link:hover {
+		/* underline so links are distinguishable from body text by more than color
+		   (WCAG link-in-text-block) */
 		text-decoration: underline;
+		word-break: break-all;
 	}
 </style>

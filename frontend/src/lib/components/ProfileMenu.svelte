@@ -2,7 +2,7 @@
 	import { portal } from 'svelte-portal';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { preferences, FONT_OPTIONS, type Theme, type FontFamily } from '$lib/preferences.svelte';
+	import { preferences, getContrastColor, FONT_OPTIONS, type Theme, type FontFamily } from '$lib/preferences.svelte';
 	import { ambient } from '$lib/ambient.svelte';
 	import { API_URL } from '$lib/config';
 	import type { User, LinkedAccount } from '$lib/types';
@@ -101,6 +101,7 @@
 		const b = parseInt(color.slice(5, 7), 16);
 		const hover = `rgb(${Math.min(255, r + 30)}, ${Math.min(255, g + 30)}, ${Math.min(255, b + 30)})`;
 		document.documentElement.style.setProperty('--accent-hover', hover);
+		document.documentElement.style.setProperty('--accent-contrast', getContrastColor(color));
 	}
 
 	async function applyColor(color: string) {

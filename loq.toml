@@ -100,7 +100,7 @@ max_lines = 801
 
 [[rules]]
 path = "frontend/src/lib/components/ProfileMenu.svelte"
-max_lines = 1192
+max_lines = 1193
 
 [[rules]]
 path = "frontend/src/lib/components/Queue.svelte"
@@ -132,7 +132,7 @@ max_lines = 950
 
 [[rules]]
 path = "frontend/src/routes/+layout.svelte"
-max_lines = 843
+max_lines = 846
 
 [[rules]]
 path = "frontend/src/routes/costs/+page.svelte"

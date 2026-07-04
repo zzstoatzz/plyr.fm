@@ -17,7 +17,7 @@
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
-	import { preferences } from '$lib/preferences.svelte';
+	import { preferences, getContrastColor } from '$lib/preferences.svelte';
 	import { ambient } from '$lib/ambient.svelte';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
@@ -377,6 +377,7 @@
 		if (savedAccent) {
 			document.documentElement.style.setProperty('--accent', savedAccent);
 			document.documentElement.style.setProperty('--accent-hover', getHoverColor(savedAccent));
+			document.documentElement.style.setProperty('--accent-contrast', getContrastColor(savedAccent));
 		}
 
 		// apply saved theme from localStorage
@@ -575,6 +576,8 @@
 		--accent-hover: #8ab3ff;
 		--accent-muted: #4a7ddd;
 		--accent-rgb: 106, 159, 255;
+		/* readable text on a solid --accent fill; recomputed in JS per chosen accent */
+		--accent-contrast: #0a0a0a;
 
 		/* backgrounds */
 		--bg-primary: #0a0a0a;
