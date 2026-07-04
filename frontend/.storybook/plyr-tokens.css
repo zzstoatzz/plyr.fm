@@ -1,0 +1,87 @@
+/*
+ * plyr.fm design tokens for Storybook.
+ *
+ * mirrored from the app's source of truth in src/routes/+layout.svelte
+ * (:root and :root.theme-light). the app defines these inside a component
+ * <style>, which Storybook's preview iframe can't import — so they're copied
+ * here. keep in sync when the app's tokens change. extracting them to a shared
+ * stylesheet imported by both is the proper follow-up.
+ */
+
+:root {
+	/* accent colors — user-configurable in the app */
+	--accent: #6a9fff;
+	--accent-hover: #8ab3ff;
+	--accent-muted: #4a7ddd;
+	--accent-rgb: 106, 159, 255;
+
+	/* backgrounds */
+	--bg-primary: #0a0a0a;
+	--bg-secondary: #141414;
+	--bg-tertiary: #1a1a1a;
+	--bg-hover: #1f1f1f;
+
+	/* borders */
+	--border-subtle: #282828;
+	--border-default: #333333;
+	--border-emphasis: #444444;
+
+	/* text */
+	--text-primary: #e8e8e8;
+	--text-secondary: #b0b0b0;
+	--text-tertiary: #808080;
+	--text-muted: #666666;
+
+	/* typography scale */
+	--text-xs: 0.75rem;
+	--text-sm: 0.85rem;
+	--text-base: 0.9rem;
+	--text-lg: 1rem;
+	--text-xl: 1.1rem;
+	--text-2xl: 1.25rem;
+	--text-3xl: 1.5rem;
+
+	/* radius scale */
+	--radius-sm: 4px;
+	--radius-base: 6px;
+	--radius-md: 8px;
+	--radius-lg: 12px;
+	--radius-xl: 16px;
+	--radius-2xl: 24px;
+	--radius-full: 9999px;
+
+	/* semantic */
+	--success: #4ade80;
+	--warning: #fbbf24;
+	--error: #ef4444;
+}
+
+:root.theme-light {
+	--bg-primary: #fafafa;
+	--bg-secondary: #ffffff;
+	--bg-tertiary: #f5f5f5;
+	--bg-hover: #ebebeb;
+
+	--border-subtle: #e5e5e5;
+	--border-default: #d4d4d4;
+	--border-emphasis: #a3a3a3;
+
+	--text-primary: #171717;
+	--text-secondary: #525252;
+	--text-tertiary: #737373;
+	--text-muted: #a3a3a3;
+
+	--accent-muted: color-mix(in srgb, var(--accent) 70%, black);
+
+	--success: #16a34a;
+	--warning: #d97706;
+	--error: #dc2626;
+}
+
+/* the app's default typeface (georgia) + base colors on the story canvas */
+body {
+	font-family: 'Georgia', 'Times New Roman', serif;
+	background-color: var(--bg-primary);
+	color: var(--text-primary);
+	-webkit-font-smoothing: antialiased;
+}

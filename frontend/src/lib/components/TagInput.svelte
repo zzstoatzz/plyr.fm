@@ -126,6 +126,7 @@
 				<button
 					type="button"
 					class="tag-remove"
+					aria-label="remove {tag}"
 					onclick={() => onRemove(tag)}
 					{disabled}
 				>×</button>
@@ -133,6 +134,7 @@
 		{/each}
 		<input
 			type="text"
+			aria-label="add tag"
 			bind:value={inputValue}
 			oninput={handleInput}
 			onkeydown={handleKeydown}
