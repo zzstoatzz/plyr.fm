@@ -1,5 +1,5 @@
 // preferred atproto client — open profiles and records in the app of your choice.
-// the registry mirrors the shared client list in leaflet-search / status
+// the registry mirrors the shared client list in pub-search / status
 // (@zzstoatzz.io); keep it in sync with those rather than inventing entries.
 import { preferences } from '$lib/preferences.svelte';
 
