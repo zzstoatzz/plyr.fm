@@ -332,3 +332,19 @@ async def test_envelope_carries_opensubsonic_fields(
     body = response.json()["subsonic-response"]
     assert body["openSubsonic"] is True
     assert isinstance(body["serverVersion"], str) and body["serverVersion"]
+
+
+async def test_navidrome_native_login(live_server: str, dev_token: str) -> None:
+    """shelv (navidrome-first) saves a server via POST /auth/login and needs `id`."""
+    async with httpx.AsyncClient() as client:
+        ok = await client.post(
+            f"{live_server}/auth/login",
+            json={"username": HANDLE, "password": dev_token},
+        )
+        bad = await client.post(
+            f"{live_server}/auth/login",
+            json={"username": HANDLE, "password": "not-a-token"},
+        )
+    assert ok.status_code == 200
+    assert ok.json()["id"] == DID
+    assert bad.status_code == 401
