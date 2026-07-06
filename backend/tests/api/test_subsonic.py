@@ -249,3 +249,62 @@ async def test_xml_is_the_default_format(live_server: str, dev_token: str) -> No
     assert response.text.startswith('<?xml version="1.0"')
     assert 'status="ok"' in response.text
     assert 'xmlns="http://subsonic.org/restapi"' in response.text
+
+
+async def test_get_album_list2_and_get_album(
+    live_server: str,
+    dev_token: str,
+    library: dict[str, object],
+    db_session: AsyncSession,
+) -> None:
+    """album browsing: the home-screen sync amperfy does on every launch."""
+    from backend.models import Album
+
+    album = Album(artist_did=DID, slug="demo", title="demo album")
+    db_session.add(album)
+    await db_session.flush()
+    track = library["tracks"][0]  # type: ignore[index]
+    track.album_id = album.id
+    await db_session.commit()
+
+    conn = _connection(live_server, dev_token)
+    result = await asyncio.to_thread(lambda: conn.getAlbumList2(ltype="newest"))
+    albums = result["albumList2"]["album"]
+    assert [a["name"] for a in albums] == ["demo album"]
+    assert albums[0]["songCount"] == 1
+
+    detail = await asyncio.to_thread(conn.getAlbum, albums[0]["id"])
+    songs = detail["album"]["song"]
+    assert [s["title"] for s in songs] == ["first upload"]
+
+
+async def test_scrobble_increments_play_count(
+    live_server: str,
+    dev_token: str,
+    library: dict[str, object],
+    db_session: AsyncSession,
+) -> None:
+    track = library["tracks"][0]  # type: ignore[index]
+    assert track.play_count == 0
+    conn = _connection(live_server, dev_token)
+    await asyncio.to_thread(lambda: conn.scrobble(sid=str(track.id), submission=True))
+    await db_session.refresh(track)
+    assert track.play_count == 1
+    # now-playing notifications (submission=false) are acknowledged, not counted
+    await asyncio.to_thread(lambda: conn.scrobble(sid=str(track.id), submission=False))
+    await db_session.refresh(track)
+    assert track.play_count == 1
+
+
+async def test_unknown_method_returns_error_envelope_not_404(
+    live_server: str, dev_token: str
+) -> None:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{live_server}/rest/getStarred2.view",
+            params={"u": HANDLE, "p": dev_token, "f": "json"},
+        )
+    assert response.status_code == 200
+    body = response.json()["subsonic-response"]
+    assert body["status"] == "failed"
+    assert "not implemented" in body["error"]["message"]
