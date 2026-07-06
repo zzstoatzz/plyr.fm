@@ -15,6 +15,14 @@ from backend.models import Album, Artist, Track, get_db
 router = APIRouter(tags=["meta"])
 
 
+@router.get("/")
+async def root() -> dict[str, str]:
+    """API root. some clients (e.g. subsonic apps like Amperfy) probe the bare
+    server URL for reachability before touching real endpoints — a 404 here
+    reads as "server doesn't exist" to them."""
+    return {"service": "plyr.fm api", "docs": "https://docs.plyr.fm"}
+
+
 @router.get("/health")
 async def health() -> dict[str, str]:
     """health check endpoint."""
