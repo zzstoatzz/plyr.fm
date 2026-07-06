@@ -276,6 +276,10 @@ async def test_get_album_list2_and_get_album(
     detail = await asyncio.to_thread(conn.getAlbum, albums[0]["id"])
     songs = detail["album"]["song"]
     assert [s["title"] for s in songs] == ["first upload"]
+    # offline-first clients resolve album views by these linkage fields
+    assert songs[0]["albumId"] == albums[0]["id"]
+    assert songs[0]["parent"] == albums[0]["id"]
+    assert songs[0]["artistId"] == DID
 
 
 async def test_scrobble_increments_play_count(

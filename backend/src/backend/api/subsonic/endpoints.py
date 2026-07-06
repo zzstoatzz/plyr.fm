@@ -103,8 +103,14 @@ def _require(params: Params, name: str) -> str:
 
 
 def _song(track: Track) -> dict[str, Any]:
+    # offline-first clients (Amperfy) store songs locally and resolve album
+    # views by albumId — songs without the linkage fields sync but never
+    # appear under their album
     entry: dict[str, Any] = {
         "id": str(track.id),
+        "parent": track.album_id,
+        "albumId": track.album_id,
+        "artistId": track.artist_did,
         "isDir": False,
         "type": "music",
         "title": track.title,
