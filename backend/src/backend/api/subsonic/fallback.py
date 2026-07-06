@@ -13,7 +13,7 @@ from backend.api.subsonic.responses import ERROR_GENERIC, SubsonicError, error_r
 from backend.api.subsonic.router import router
 
 
-@router.api_route("/{method}", methods=["GET", "POST"])
+@router.api_route("/{method}", methods=["GET", "POST"], include_in_schema=False)
 async def unimplemented(method: str, request: Request) -> Response:
     params = await _request_params(request)
     name = method.removesuffix(".view")

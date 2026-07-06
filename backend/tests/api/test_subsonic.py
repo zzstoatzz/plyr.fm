@@ -308,3 +308,9 @@ async def test_unknown_method_returns_error_envelope_not_404(
     body = response.json()["subsonic-response"]
     assert body["status"] == "failed"
     assert "not implemented" in body["error"]["message"]
+
+
+async def test_subsonic_routes_stay_out_of_openapi_schema() -> None:
+    """the /rest surface is experimental — it must not appear in the API reference."""
+    paths = app.openapi()["paths"]
+    assert not [p for p in paths if p.startswith("/rest")]
