@@ -13,6 +13,11 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let playing = $state(false);
+	/** listener intent: true while the user wants to stay tuned in. `playing`
+	 * tracks the raw element state, which flips false at every track boundary
+	 * (the browser fires pause before ended) — resume decisions key off this
+	 * flag so auto-advance survives the boundary. */
+	let tunedIn = $state(false);
 	let stations = $state<RadioStation[]>([]);
 	/** selected station slug; null defers to the server default. seeded from
 	 * the iframe url's ?station= so embedders can pin a station. */
@@ -41,7 +46,7 @@
 		const seek = () => {
 			if (!el || !fetched.current) return;
 			if (Number.isFinite(target)) el.currentTime = Math.min(target, fetched.current.duration);
-			if (playing) el.play().catch(() => (playing = false));
+			if (tunedIn) el.play().catch(() => (playing = tunedIn = false));
 		};
 		if (el.readyState >= 1 && !changed) {
 			if (Math.abs(el.currentTime - target) > 5) seek();
@@ -99,11 +104,23 @@
 		const el = audioElement;
 		if (!el || !current) return;
 		if (playing) {
+			tunedIn = false;
 			el.pause();
 		} else {
 			// user gesture — safe to start audio
+			tunedIn = true;
 			syncAudio(radioState!);
-			el.play().then(() => (playing = true)).catch(() => (playing = false));
+			el.play().then(() => (playing = true)).catch(() => (playing = tunedIn = false));
+		}
+	}
+
+	/** at a track boundary the server rotation may not have flipped yet — retry
+	 * briefly so the embed doesn't sit silent until the next 30s poll. */
+	async function advance(endedSrc: string): Promise<void> {
+		for (let attempt = 0; attempt < 5; attempt++) {
+			await loadState(true);
+			if (!tunedIn || (current && current.stream_url !== endedSrc)) return;
+			await new Promise((resolve) => setTimeout(resolve, 2000));
 		}
 	}
 
@@ -118,7 +135,7 @@
 		loadState(false).then(() => {
 			if (autoplay && !playing) toggle();
 		});
-		pollTimer = window.setInterval(() => loadState(playing), 30000);
+		pollTimer = window.setInterval(() => loadState(tunedIn), 30000);
 		return () => {
 			if (pollTimer) window.clearInterval(pollTimer);
 		};
@@ -128,9 +145,14 @@
 <audio
 	bind:this={audioElement}
 	preload="metadata"
-	onended={() => loadState(true)}
+	onended={(e) => advance(e.currentTarget.src)}
 	onplay={() => (playing = true)}
-	onpause={() => (playing = false)}
+	onpause={(e) => {
+		playing = false;
+		// pause fired by reaching the end of a track keeps the listener tuned
+		// in; only an explicit pause (media keys, OS controls) drops intent
+		if (!e.currentTarget.ended) tunedIn = false;
+	}}
 ></audio>
 
 <div class="radio-embed">
