@@ -26,6 +26,7 @@ const SENSITIVE_ART = 'https://images.test/images/sens123.webp';
 const SAFE_ART = 'https://images.test/images/safe456.webp';
 
 let artworkUrl = SENSITIVE_ART;
+let trackNum = 1;
 
 function jsonResponse(body: unknown): Response {
 	return new Response(JSON.stringify(body), {
@@ -40,12 +41,12 @@ function radioState() {
 		generated_at: new Date().toISOString(),
 		progress_seconds: 10,
 		current: {
-			id: 1,
-			title: 'a track',
+			id: trackNum,
+			title: `track ${trackNum}`,
 			artist_handle: 'artist.test',
 			artwork_url: artworkUrl,
 			duration: 100,
-			stream_url: 'https://audio.test/1.mp3'
+			stream_url: `https://audio.test/${trackNum}.mp3`
 		},
 		rotation: []
 	};
@@ -93,6 +94,7 @@ afterEach(() => {
 	}
 	document.body.innerHTML = '';
 	pageUrl.value = 'http://localhost/';
+	trackNum = 1;
 	playSpy.mockClear();
 });
 
@@ -121,6 +123,42 @@ describe('RadioEmbed autoplay', () => {
 	it('stays paused without the param', async () => {
 		artworkUrl = SAFE_ART;
 		await mountRadioEmbed();
+		expect(playSpy).not.toHaveBeenCalled();
+	});
+});
+
+// regression for the boundary bug: the browser fires pause before ended, which
+// used to clear the playing flag and leave the next track loaded but silent
+describe('RadioEmbed auto-advance', () => {
+	async function tuneIn(): Promise<HTMLAudioElement> {
+		artworkUrl = SAFE_ART;
+		pageUrl.value = 'http://localhost/?autoplay=1';
+		await mountRadioEmbed();
+		await vi.waitFor(() => expect(playSpy).toHaveBeenCalled());
+		playSpy.mockClear();
+		return document.querySelector('audio')!;
+	}
+
+	it('keeps playing the next track when the current one ends', async () => {
+		const audio = await tuneIn();
+		trackNum = 2;
+		// jsdom pins .ended to false; a real end-of-track pause sees ended=true
+		const endedSpy = vi.spyOn(HTMLMediaElement.prototype, 'ended', 'get').mockReturnValue(true);
+		audio.dispatchEvent(new Event('pause')); // browsers fire pause first…
+		audio.dispatchEvent(new Event('ended')); // …then ended
+		endedSpy.mockRestore();
+		await vi.waitFor(() => expect(audio.src).toBe('https://audio.test/2.mp3'));
+		audio.dispatchEvent(new Event('loadedmetadata'));
+		await vi.waitFor(() => expect(playSpy).toHaveBeenCalled());
+	});
+
+	it('does not resume after an explicit pause', async () => {
+		const audio = await tuneIn();
+		audio.dispatchEvent(new Event('pause')); // user pause: element not ended
+		trackNum = 2;
+		audio.dispatchEvent(new Event('ended'));
+		await vi.waitFor(() => expect(audio.src).toBe('https://audio.test/2.mp3'));
+		audio.dispatchEvent(new Event('loadedmetadata'));
 		expect(playSpy).not.toHaveBeenCalled();
 	});
 });
