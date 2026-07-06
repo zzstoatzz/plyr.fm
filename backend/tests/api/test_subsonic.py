@@ -318,3 +318,17 @@ async def test_subsonic_routes_stay_out_of_openapi_schema() -> None:
     """the /rest surface is experimental — it must not appear in the API reference."""
     paths = app.openapi()["paths"]
     assert not [p for p in paths if p.startswith("/rest")]
+
+
+async def test_envelope_carries_opensubsonic_fields(
+    live_server: str, dev_token: str
+) -> None:
+    """opensubsonic-era clients decode serverVersion/openSubsonic as required."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{live_server}/rest/ping",
+            params={"u": HANDLE, "p": dev_token, "f": "json"},
+        )
+    body = response.json()["subsonic-response"]
+    assert body["openSubsonic"] is True
+    assert isinstance(body["serverVersion"], str) and body["serverVersion"]
