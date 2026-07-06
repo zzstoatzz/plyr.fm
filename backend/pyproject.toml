@@ -56,6 +56,7 @@ dev = [
     "ruff>=0.12.0",
     "httpx>=0.28.0",
     "ty>=0.0.1a25",
+    "py-sonic>=1.1.2",
 ]
 
 [build-system]
@@ -127,6 +128,10 @@ extend-select = [
     "B008",
 ] # Allow Depends() and File() in FastAPI route defaults
 "src/backend/main.py" = ["E402"] # Need warnings filter before imports
+# the local alembic/ migrations dir makes ruff versions disagree on whether
+# `alembic` is first- or third-party, so import sorting here can never satisfy
+# both the pre-commit hook and the locked ruff
+"scripts/init_db.py" = ["I001"]
 
 [tool.coverage.run]
 source = ["src"]

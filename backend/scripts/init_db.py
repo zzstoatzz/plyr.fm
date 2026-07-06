@@ -9,9 +9,9 @@ import asyncio
 import sys
 
 import sqlalchemy as sa
+from alembic.config import Config
 
 from alembic import command
-from alembic.config import Config
 from backend.models import Base
 from backend.utilities.database import get_engine
 

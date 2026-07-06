@@ -45,6 +45,7 @@ from backend.api import (
 from backend.api.albums import router as albums_router
 from backend.api.lists import router as lists_router
 from backend.api.migration import router as migration_router
+from backend.api.subsonic import router as subsonic_router
 from backend.config import settings
 from backend.utilities.database import get_engine
 from backend.utilities.middleware import SecurityHeadersMiddleware
@@ -201,4 +202,5 @@ app.include_router(stats_router)
 app.include_router(users_router)
 app.include_router(meta_router)
 app.include_router(xrpc_router)
+app.include_router(subsonic_router)
 app.include_router(copyright_router)
