@@ -61,7 +61,10 @@ def _rest(path: str) -> Callable[[Handler], Handler]:
 
     def wrap(handler: Handler) -> Handler:
         for route_path in (f"/{path}.view", f"/{path}"):
-            router.api_route(route_path, methods=["GET", "POST"])(handler)
+            # experimental surface: kept out of the published OpenAPI schema
+            router.api_route(
+                route_path, methods=["GET", "POST"], include_in_schema=False
+            )(handler)
         return handler
 
     return wrap
