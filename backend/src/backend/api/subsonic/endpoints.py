@@ -9,6 +9,7 @@ surfaces rather than re-serving bytes.
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
+from atproto_oauth.scopes import ScopesSet
 from fastapi import Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend._internal import Session
+from backend._internal.tasks import schedule_teal_scrobble
 from backend._internal.track_visibility import track_visible_filter
 from backend.api.lists.playlists import _can_view, _read_playlist_items
 from backend.api.subsonic.auth import authenticate
@@ -29,7 +31,14 @@ from backend.api.subsonic.responses import (
     subsonic_response,
 )
 from backend.api.subsonic.router import router
-from backend.models import Artist, Playlist, Track
+from backend.api.tracks.playback import (
+    _PLAY_DEDUP_DEFAULT_TTL_S,
+    _PLAY_DEDUP_MAX_TTL_S,
+    _PLAY_DEDUP_MIN_TTL_S,
+    _claim_play,
+)
+from backend.config import settings
+from backend.models import Album, Artist, Playlist, Track, UserPreferences
 from backend.utilities.database import db_session
 
 _AUDIO_CONTENT_TYPES = {
@@ -267,6 +276,55 @@ async def stream(request: Request) -> Response:
     return await _run(request, impl)
 
 
+@_rest("scrobble")
+async def scrobble(request: Request) -> Response:
+    async def impl(session: Session, params: Params) -> dict[str, Any]:
+        raw_id = _require(params, "id")
+        # submission=false is a "now playing" notification — acknowledged, not counted
+        if params.get("submission", "true").lower() == "false":
+            return {}
+        try:
+            track_id = int(raw_id)
+        except ValueError:
+            raise SubsonicError(ERROR_NOT_FOUND, "song not found") from None
+        async with db_session() as db:
+            result = await db.execute(
+                select(Track)
+                .options(selectinload(Track.artist), selectinload(Track.album_rel))
+                .where(Track.id == track_id)
+                .where(track_visible_filter(session.did))
+            )
+            if not (track := result.scalar_one_or_none()):
+                raise SubsonicError(ERROR_NOT_FOUND, "song not found")
+            ttl = max(
+                _PLAY_DEDUP_MIN_TTL_S,
+                min(track.duration or _PLAY_DEDUP_DEFAULT_TTL_S, _PLAY_DEDUP_MAX_TTL_S),
+            )
+            if not await _claim_play(f"did:{session.did}", track.id, ttl):
+                return {}
+            track.play_count += 1
+            await db.commit()
+            prefs = await db.scalar(
+                select(UserPreferences).where(UserPreferences.did == session.did)
+            )
+        if prefs and prefs.enable_teal_scrobbling:
+            scopes = ScopesSet.from_string(session.oauth_session.get("scope", ""))
+            if scopes.matches(
+                "repo", collection=settings.teal.play_collection, action="create"
+            ):
+                await schedule_teal_scrobble(
+                    session_id=session.session_id,
+                    track_id=track.id,
+                    track_title=track.title,
+                    artist_name=track.artist.display_name or track.artist.handle,
+                    duration=track.duration,
+                    album_name=track.album_rel.title if track.album_rel else None,
+                )
+        return {}
+
+    return await _run(request, impl)
+
+
 @_rest("getCoverArt")
 async def get_cover_art(request: Request) -> Response:
     async def impl(session: Session, params: Params) -> Response:
@@ -280,6 +338,14 @@ async def get_cover_art(request: Request) -> Response:
             if not playlist or not _can_view(session.did, playlist):
                 raise SubsonicError(ERROR_NOT_FOUND, "cover art not found")
             url = playlist.image_url or playlist.thumbnail_url
+        elif art_id.startswith("al-"):
+            async with db_session() as db:
+                album = await db.scalar(
+                    select(Album).where(Album.id == art_id.removeprefix("al-"))
+                )
+            if not album:
+                raise SubsonicError(ERROR_NOT_FOUND, "cover art not found")
+            url = album.image_url or album.thumbnail_url
         else:
             track = await _track_by_id(params, session.did)
             url = track.image_url or track.thumbnail_url
