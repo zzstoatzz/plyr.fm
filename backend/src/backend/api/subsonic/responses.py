@@ -8,6 +8,7 @@ inside a `status="failed"` envelope with HTTP 200, not as HTTP error codes.
 
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 import orjson
@@ -15,6 +16,11 @@ from fastapi import Response
 
 SUBSONIC_API_VERSION = "1.16.1"
 _XMLNS = "http://subsonic.org/restapi"
+
+try:
+    _SERVER_VERSION = version("backend")
+except PackageNotFoundError:
+    _SERVER_VERSION = "0"
 
 # subsonic protocol error codes
 ERROR_GENERIC = 0
@@ -63,11 +69,15 @@ def subsonic_response(
     params: Mapping[str, str], payload: dict[str, Any], *, status: str = "ok"
 ) -> Response:
     """wrap a payload in the subsonic-response envelope, honoring `f`."""
+    # serverVersion + openSubsonic: OpenSubsonic-era clients (Shelv, Feishin)
+    # decode these as required envelope fields and fail without them
     body = _prune(
         {
             "status": status,
             "version": SUBSONIC_API_VERSION,
             "type": "plyr.fm",
+            "serverVersion": _SERVER_VERSION,
+            "openSubsonic": True,
             **payload,
         }
     )
