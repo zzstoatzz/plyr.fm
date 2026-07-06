@@ -78,6 +78,8 @@ async def _album_list_payload(session: Session, params: Params) -> list[dict[str
         order_by = Album.created_at.desc()
     elif list_type == "random":
         order_by = func.random()
+    elif list_type in ("frequent", "highest"):
+        order_by = func.sum(Track.play_count).desc()
     else:
         order_by = func.lower(Album.title)
     async with db_session() as db:
@@ -201,6 +203,24 @@ async def get_artist(request: Request) -> Response:
                 "album": albums,
             }
         }
+
+    return await _run(request, impl)
+
+
+@_rest("getRandomSongs")
+async def get_random_songs(request: Request) -> Response:
+    async def impl(session: Session, params: Params) -> dict[str, Any]:
+        size = min(_int_param(params, "size", 10), _MAX_LIST_SIZE)
+        async with db_session() as db:
+            result = await db.execute(
+                select(Track)
+                .options(selectinload(Track.artist))
+                .where(track_visible_filter(session.did))
+                .order_by(func.random())
+                .limit(size)
+            )
+            tracks = list(result.scalars().all())
+        return {"randomSongs": {"song": [_song(track) for track in tracks]}}
 
     return await _run(request, impl)
 

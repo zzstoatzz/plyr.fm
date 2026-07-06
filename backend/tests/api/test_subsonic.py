@@ -348,3 +348,39 @@ async def test_navidrome_native_login(live_server: str, dev_token: str) -> None:
     assert ok.status_code == 200
     assert ok.json()["id"] == DID
     assert bad.status_code == 401
+
+
+async def test_get_random_songs(
+    live_server: str, dev_token: str, library: dict[str, object]
+) -> None:
+    """shelv's shuffle button."""
+    conn = _connection(live_server, dev_token)
+    result = await asyncio.to_thread(lambda: conn.getRandomSongs(size=10))
+    titles = {s["title"] for s in result["randomSongs"]["song"]}
+    assert titles == {"first upload", "second upload"}
+
+
+async def test_album_list_frequent_orders_by_play_count(
+    live_server: str,
+    dev_token: str,
+    library: dict[str, object],
+    db_session: AsyncSession,
+) -> None:
+    """'most played' asks for type=frequent — real play counts, not alphabetical."""
+    from backend.models import Album
+
+    quiet = Album(artist_did=DID, slug="quiet", title="a quiet album")
+    loud = Album(artist_did=DID, slug="loud", title="z loud album")
+    db_session.add_all([quiet, loud])
+    await db_session.flush()
+    track_one, track_two = library["tracks"]  # type: ignore[misc]
+    track_one.album_id = quiet.id
+    track_one.play_count = 1
+    track_two.album_id = loud.id
+    track_two.play_count = 50
+    await db_session.commit()
+
+    conn = _connection(live_server, dev_token)
+    result = await asyncio.to_thread(lambda: conn.getAlbumList2(ltype="frequent"))
+    names = [a["name"] for a in result["albumList2"]["album"]]
+    assert names == ["z loud album", "a quiet album"]
