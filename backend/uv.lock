@@ -366,6 +366,7 @@ dev = [
     { name = "pdbpp" },
     { name = "plyrfm" },
     { name = "prek" },
+    { name = "py-sonic" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -416,6 +417,7 @@ dev = [
     { name = "pdbpp", specifier = ">=0.10.3" },
     { name = "plyrfm", git = "https://github.com/zzstoatzz/plyr-python-client?subdirectory=packages%2Fplyrfm" },
     { name = "prek", specifier = ">=0.2.13" },
+    { name = "py-sonic", specifier = ">=1.1.2" },
     { name = "pytest", specifier = ">=8.3.3" },
     { name = "pytest-asyncio", specifier = ">=1.0.0" },
     { name = "pytest-cov", specifier = ">=6.1.1" },
@@ -2389,6 +2391,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/7b/e4/1971dfc4620a3a15b
 wheels = [
     { url = "https://files.pythonhosted.org/packages/51/e4/b8b0a03ece72f47dce2307d36e1c34725b7223d209fc679315ffe6a4e2c3/py_key_value_shared-0.3.0-py3-none-any.whl", hash = "sha256:5b0efba7ebca08bb158b1e93afc2f07d30b8f40c2fc12ce24a4c0d84f42f9298", size = 19560, upload-time = "2025-11-17T16:50:05.954Z" },
 ]
+
+[[package]]
+name = "py-sonic"
+version = "1.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ce/a1/c458ca52c6e18eb0fc139fb0b5641f06ddce1050f97da8935d7d2ebfbaa3/py_sonic-1.1.2.tar.gz", hash = "sha256:5b3ca04cf61caaa89f1762b6d437ccc386e300b5609464b730e8a3617c1bd1d9", size = 35939, upload-time = "2026-04-18T21:46:12.8Z" }
 
 [[package]]
 name = "pyasn1"
