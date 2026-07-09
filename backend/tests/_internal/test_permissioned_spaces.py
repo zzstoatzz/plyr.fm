@@ -5,6 +5,9 @@ helpers, the OAuth scope composition, and space-credential caching/renewal. the
 full data path is exercised against a live ZDS by scripts/permissioned_smoke.py.
 """
 
+from unittest.mock import AsyncMock
+
+import httpx
 import pytest
 
 from backend._internal import Session
@@ -162,6 +165,103 @@ def test_permissioned_scope_opt_in_only():
 
 
 # --- space credential caching + renewal ---------------------------------------
+
+
+async def test_ensure_personal_space_uses_simplespace_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = AsyncMock(return_value={"uri": "unused"})
+    monkeypatch.setattr(space_client, "make_pds_request", request)
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://x"},
+    )
+
+    space = await space_client.ensure_personal_space(
+        session, space_type="fm.plyr.privateMedia", skey="self"
+    )
+
+    assert space == "ats://did:plc:x/fm.plyr.privateMedia/self"
+    request.assert_awaited_once_with(
+        session,
+        "POST",
+        "com.atproto.simplespace.createSpace",
+        payload={
+            "type": "fm.plyr.privateMedia",
+            "skey": "self",
+            "managingApp": settings.atproto.client_id,
+            "policy": "member-list",
+            "appAccess": {"type": "open"},
+        },
+    )
+
+
+async def test_mint_credential_uses_delegation_token_flow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pds_request = AsyncMock(return_value={"token": "delegation-token"})
+    bearer_request = AsyncMock(
+        return_value=httpx.Response(200, json={"credential": "space-credential"})
+    )
+    monkeypatch.setattr(space_client, "make_pds_request", pds_request)
+    monkeypatch.setattr(space_client, "_raw_bearer_request", bearer_request)
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://pds.test"},
+    )
+    space = "ats://did:plc:x/fm.plyr.privateMedia/self"
+
+    credential = await space_client._mint_credential(session, space)
+
+    assert credential == "space-credential"
+    pds_request.assert_awaited_once_with(
+        session,
+        "GET",
+        "com.atproto.space.getDelegationToken",
+        params={"space": space},
+    )
+    bearer_request.assert_awaited_once_with(
+        "https://pds.test",
+        "POST",
+        "com.atproto.space.getSpaceCredential",
+        "delegation-token",
+        json={"space": space},
+    )
+
+
+async def test_mint_credential_maps_zds_access_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        space_client,
+        "make_pds_request",
+        AsyncMock(return_value={"token": "delegation-token"}),
+    )
+    monkeypatch.setattr(
+        space_client,
+        "_raw_bearer_request",
+        AsyncMock(
+            return_value=httpx.Response(
+                403,
+                json={"error": "NotPermitted", "message": "requester denied"},
+            )
+        ),
+    )
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://pds.test"},
+    )
+
+    with pytest.raises(space_client.SpaceAccessError, match="authority refused"):
+        await space_client._mint_credential(
+            session, "ats://did:plc:x/fm.plyr.privateMedia/self"
+        )
 
 
 async def test_space_credential_cache_and_force_refresh(monkeypatch):

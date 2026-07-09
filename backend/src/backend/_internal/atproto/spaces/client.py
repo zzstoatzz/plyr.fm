@@ -1,15 +1,16 @@
-"""client for the permissioned-data space surface (com.atproto.space.*).
+"""client for the permissioned-data space surfaces.
 
 owner/author writes go through the DPoP-protected OAuth path
 ([make_pds_request][backend._internal.atproto.client.make_pds_request]); the
-credential exchange and credential-gated reads use plain Bearer tokens (member
-grants and space credentials are JWTs, not DPoP-bound), so those go through a
-small raw-bearer helper.
+credential exchange and credential-gated reads use plain Bearer tokens
+(delegation tokens and space credentials are JWTs, not DPoP-bound), so those go
+through a small raw-bearer helper.
 
 read path (per permissioned-data diary 6):
 
-    user OAuth -> getMemberGrant (member PDS, DPoP) -> getSpaceCredential
-    (space owner, plain Bearer grant) -> getRecord / getBlob (plain Bearer credential)
+    user OAuth -> getDelegationToken (requester PDS, DPoP) -> getSpaceCredential
+    (space authority, plain Bearer token) -> getRecord / getBlob
+    (plain Bearer credential)
 """
 
 import logging
@@ -53,7 +54,7 @@ async def _raw_bearer_request(
     json: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
 ) -> httpx.Response:
-    """call an XRPC method with a plain Bearer token (member grant / space credential)."""
+    """call XRPC with a plain Bearer token (delegation token / space credential)."""
     url = f"{pds_url}/xrpc/{endpoint}"
     if not is_safe_url(url):
         raise ValueError(f"unsafe PDS URL: {url}")
@@ -82,8 +83,8 @@ async def ensure_personal_space(
     has a reader member list (#1573), and private-space credentials are owner-only
     by default, so for this MVP the owner is the sole reader. any broader access
     (label/supporter rosters) is plyr.fm app-layer state, not a PDS member list.
-    `appAccessMode:"allow"` + empty exceptions is the app-access policy that leaves
-    plyr.fm's OAuth client default-allowed for the credential exchange.
+    `appAccess:{"type":"open"}` leaves plyr.fm's OAuth client allowed for the
+    credential exchange.
     """
     space_type = space_type or settings.atproto.private_media_space_type
     space_uri = build_space_uri(auth_session.did, space_type, skey)
@@ -91,15 +92,13 @@ async def ensure_personal_space(
         await make_pds_request(
             auth_session,
             "POST",
-            "com.atproto.space.createSpace",
+            "com.atproto.simplespace.createSpace",
             payload={
-                "did": auth_session.did,
                 "type": space_type,
                 "skey": skey,
                 "managingApp": settings.atproto.client_id,
-                "isPublic": False,
-                "appAccessMode": "allow",
-                "appExceptions": [],
+                "policy": "member-list",
+                "appAccess": {"type": "open"},
             },
         )
     except Exception as exc:
@@ -145,26 +144,36 @@ _credential_cache: dict[str, tuple[str, float]] = {}
 
 async def _mint_credential(auth_session: AuthSession, space: str) -> str:
     pds_url = _pds_url(auth_session)
-    grant_resp = await make_pds_request(
+    delegation_resp = await make_pds_request(
         auth_session,
         "GET",
-        "com.atproto.space.getMemberGrant",
+        "com.atproto.space.getDelegationToken",
         params={"space": space},
     )
-    grant = grant_resp["grant"]
+    delegation_token = delegation_resp["token"]
 
-    # exchange the grant (plain Bearer) for an owner-signed space credential
+    # exchange the delegation token (plain Bearer) for an authority-signed
+    # space credential. plyr.fm has no notification receiver to register.
     cred_resp = await _raw_bearer_request(
         pds_url,
         "POST",
         "com.atproto.space.getSpaceCredential",
-        grant,
+        delegation_token,
         json={"space": space},
     )
     if cred_resp.status_code != 200:
         body = cred_resp.text
-        if any(e in body for e in ("AppNotPermitted", "NotAMember", "SpaceDeleted")):
-            raise SpaceAccessError(f"space owner refused credential: {body}")
+        refused_errors = (
+            "AppNotPermitted",
+            "AppNotAuthorized",
+            "NotAMember",
+            "NotAuthorized",
+            "NotPermitted",
+            "SpaceDeleted",
+            "UserNotAuthorized",
+        )
+        if any(error in body for error in refused_errors):
+            raise SpaceAccessError(f"space authority refused credential: {body}")
         raise Exception(f"getSpaceCredential failed: {cred_resp.status_code} {body}")
     return cred_resp.json()["credential"]
 
