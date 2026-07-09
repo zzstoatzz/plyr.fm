@@ -424,13 +424,30 @@
 				<section class="now-playing">
 					<div class="section-label">
 						<span>now playing</span>
-						{#if player.radio}
-							<a class="source-chip radio-source" href="/radio">{currentSourceLabel}</a>
-						{:else if jam.active && jam.code}
-							<a class="source-chip" href={`/jam/${jam.code}`}>{currentSourceLabel}</a>
-						{:else}
-							<span class="source-chip">{currentSourceLabel}</span>
-						{/if}
+						<span class="label-chips">
+							{#if queue.repeatMode === 'one' && !player.radio && !jam.active}
+								<button
+									class="repeat-chip"
+									onclick={() => queue.toggleRepeatMode()}
+									title="repeating this track — click to stop"
+								>
+									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="m17 2 4 4-4 4"></path>
+										<path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
+										<path d="m7 22-4-4 4-4"></path>
+										<path d="M21 13v1a4 4 0 0 1-4 4H3"></path>
+										<path d="M11 10h1v4"></path>
+									</svg>
+								</button>
+							{/if}
+							{#if player.radio}
+								<a class="source-chip radio-source" href="/radio">{currentSourceLabel}</a>
+							{:else if jam.active && jam.code}
+								<a class="source-chip" href={`/jam/${jam.code}`}>{currentSourceLabel}</a>
+							{:else}
+								<span class="source-chip">{currentSourceLabel}</span>
+							{/if}
+						</span>
 					</div>
 					<div class="now-playing-card">
 						{@render media(currentTrack)}
@@ -790,10 +807,35 @@
 		margin-bottom: 0.5rem;
 	}
 
+	.label-chips {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		min-width: 0;
+		max-width: 55%;
+	}
+
+	.repeat-chip {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.16rem 0.45rem;
+		border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+		border-radius: var(--radius-full);
+		background: transparent;
+		color: var(--accent);
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.repeat-chip:hover {
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
 	.source-chip {
 		display: inline-flex;
 		align-items: center;
-		max-width: 45%;
+		max-width: 100%;
 		padding: 0.1rem 0.45rem;
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-full);
