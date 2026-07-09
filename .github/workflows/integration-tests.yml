@@ -115,5 +115,5 @@ jobs:
           done
 
       - name: prune uv cache
-        if: always()
+        if: always() && steps.check-tokens.outputs.has_tokens == 'true'
         run: uv cache prune --ci
