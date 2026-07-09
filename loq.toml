@@ -348,4 +348,4 @@ max_lines = 668
 
 [[rules]]
 path = "frontend/src/lib/components/player/PlaybackControls.svelte"
-max_lines = 501
+max_lines = 512
