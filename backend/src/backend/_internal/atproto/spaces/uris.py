@@ -18,6 +18,13 @@ class SpaceUri(NamedTuple):
     skey: str
 
 
+class SpaceRecordUri(NamedTuple):
+    space: str
+    author_did: str
+    collection: str
+    rkey: str
+
+
 def build_space_uri(owner_did: str, space_type: str, skey: str) -> str:
     return f"{ATS_SCHEME}{owner_did}/{space_type}/{skey}"
 
@@ -39,3 +46,18 @@ def parse_space_uri(uri: str) -> SpaceUri:
     if len(segments) < 3 or not all(segments[:3]):
         raise ValueError(f"space URI needs 3 non-empty segments: {uri!r}")
     return SpaceUri(owner_did=segments[0], space_type=segments[1], skey=segments[2])
+
+
+def parse_space_record_uri(uri: str) -> SpaceRecordUri:
+    """parse a full 6-segment permissioned-space record URI."""
+    if not uri.startswith(ATS_SCHEME):
+        raise ValueError(f"not an ats:// URI: {uri!r}")
+    segments = uri[len(ATS_SCHEME) :].split("/")
+    if len(segments) != 6 or not all(segments):
+        raise ValueError(f"space record URI needs 6 non-empty segments: {uri!r}")
+    return SpaceRecordUri(
+        space=build_space_uri(segments[0], segments[1], segments[2]),
+        author_did=segments[3],
+        collection=segments[4],
+        rkey=segments[5],
+    )

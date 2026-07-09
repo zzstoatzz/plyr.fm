@@ -16,6 +16,7 @@ from backend._internal.atproto.spaces import client as space_client
 from backend._internal.atproto.spaces.uris import (
     build_record_uri,
     build_space_uri,
+    parse_space_record_uri,
     parse_space_uri,
 )
 from backend.config import settings
@@ -39,6 +40,12 @@ def test_space_and_record_uri_roundtrip():
         assert parsed.space_type == "fm.plyr.privateMedia"
         assert parsed.skey == "self"
 
+    parsed_record = parse_space_record_uri(record)
+    assert parsed_record.space == space
+    assert parsed_record.author_did == "did:plc:abc"
+    assert parsed_record.collection == "fm.plyr.track"
+    assert parsed_record.rkey == "rkey1"
+
 
 @pytest.mark.parametrize(
     "bad", ["at://did:plc:abc/x/y", "ats://did:plc:abc", "ats://did:plc:abc//self", ""]
@@ -46,6 +53,20 @@ def test_space_and_record_uri_roundtrip():
 def test_parse_space_uri_rejects_malformed(bad):
     with pytest.raises(ValueError):
         parse_space_uri(bad)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "at://did:plc:abc/x/y",
+        "ats://did:plc:abc/x/self",
+        "ats://did:plc:abc/x/self/did:plc:abc/y",
+        "ats://did:plc:abc/x/self/did:plc:abc/y/rkey/extra",
+    ],
+)
+def test_parse_space_record_uri_rejects_malformed(bad: str) -> None:
+    with pytest.raises(ValueError):
+        parse_space_record_uri(bad)
 
 
 # --- capability probe interpretation -----------------------------------------
@@ -195,6 +216,7 @@ async def test_ensure_personal_space_uses_simplespace_shape(
             "policy": "member-list",
             "appAccess": {"type": "open"},
         },
+        parse_response=False,
     )
 
 
@@ -262,6 +284,37 @@ async def test_mint_credential_maps_zds_access_refusal(
         await space_client._mint_credential(
             session, "ats://did:plc:x/fm.plyr.privateMedia/self"
         )
+
+
+async def test_delete_space_record_uses_record_uri_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = AsyncMock(return_value={})
+    monkeypatch.setattr(space_client, "make_pds_request", request)
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://x"},
+    )
+
+    await space_client.delete_space_record(
+        session,
+        "ats://did:plc:x/fm.plyr.privateMedia/self/did:plc:x/fm.plyr.track/rk",
+    )
+
+    request.assert_awaited_once_with(
+        session,
+        "POST",
+        "com.atproto.space.deleteRecord",
+        payload={
+            "space": "ats://did:plc:x/fm.plyr.privateMedia/self",
+            "repo": "did:plc:x",
+            "collection": "fm.plyr.track",
+            "rkey": "rk",
+        },
+        success_codes=(200, 201, 204),
+    )
 
 
 async def test_space_credential_cache_and_force_refresh(monkeypatch):

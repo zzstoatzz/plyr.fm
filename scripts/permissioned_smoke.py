@@ -101,7 +101,9 @@ def main() -> int:
         print("✓ createSpace → already exists (idempotent)")
     else:
         created.raise_for_status()
-        assert created.json()["uri"] == space_uri, created.text
+        # Current ZDS appends an extra closing brace to the successful create
+        # response. The client intentionally ignores this unneeded body.
+        assert f'"uri":"{space_uri}"' in created.text, created.text
         print(f"✓ createSpace  uri={space_uri}")
 
     # write the private track record (reuses the fm.plyr track lexicon body)

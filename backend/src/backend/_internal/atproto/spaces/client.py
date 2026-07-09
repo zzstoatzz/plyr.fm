@@ -24,7 +24,10 @@ from atproto_oauth.security import is_safe_url
 
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import make_pds_request
-from backend._internal.atproto.spaces.uris import build_space_uri
+from backend._internal.atproto.spaces.uris import (
+    build_space_uri,
+    parse_space_record_uri,
+)
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -100,6 +103,10 @@ async def ensure_personal_space(
                 "policy": "member-list",
                 "appAccess": {"type": "open"},
             },
+            # The returned config is not needed. Current ZDS appends one extra
+            # closing brace to this otherwise-successful response, so decoding
+            # it would turn a created space into a failed upload.
+            parse_response=False,
         )
     except Exception as exc:
         if "SpaceAlreadyExists" not in str(exc):
@@ -133,6 +140,23 @@ async def create_space_record(
         endpoint = "com.atproto.space.createRecord"
     result = await make_pds_request(auth_session, "POST", endpoint, payload=payload)
     return result["uri"], result["cid"]
+
+
+async def delete_space_record(auth_session: AuthSession, record_uri: str) -> None:
+    """delete a record from its permissioned space."""
+    record = parse_space_record_uri(record_uri)
+    await make_pds_request(
+        auth_session,
+        "POST",
+        "com.atproto.space.deleteRecord",
+        payload={
+            "space": record.space,
+            "repo": record.author_did,
+            "collection": record.collection,
+            "rkey": record.rkey,
+        },
+        success_codes=(200, 201, 204),
+    )
 
 
 # --- credential exchange (diary-6 read path) ----------------------------------
