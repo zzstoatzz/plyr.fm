@@ -159,18 +159,18 @@
 		</button>
 
 		<button
-			class="control-btn"
+			class="control-btn repeat"
 			class:active={queue.repeatMode === 'one'}
 			onclick={() => queue.toggleRepeatMode()}
 			title={queue.repeatMode === 'one' ? 'stop repeating' : 'repeat this track'}
 		>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<polyline points="17 1 21 5 17 9"></polyline>
-				<path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
-				<polyline points="7 23 3 19 7 15"></polyline>
-				<path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="m17 2 4 4-4 4"></path>
+				<path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
+				<path d="m7 22-4-4 4-4"></path>
+				<path d="M21 13v1a4 4 0 0 1-4 4H3"></path>
 				{#if queue.repeatMode === 'one'}
-					<text x="12" y="17" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" stroke="none">1</text>
+					<path d="M11 10h1v4"></path>
 				{/if}
 			</svg>
 		</button>
@@ -280,6 +280,12 @@
 
 	.control-btn.active {
 		color: var(--accent);
+	}
+
+	/* secondary control: quieter than transport buttons */
+	.control-btn.repeat svg {
+		width: 18px;
+		height: 18px;
 	}
 
 	.control-btn.play-pause:active {
@@ -470,6 +476,11 @@
 		.control-btn svg {
 			width: 28px;
 			height: 28px;
+		}
+
+		.control-btn.repeat svg {
+			width: 22px;
+			height: 22px;
 		}
 
 		.control-btn.play-pause svg {
