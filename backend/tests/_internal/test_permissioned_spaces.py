@@ -5,6 +5,9 @@ helpers, the OAuth scope composition, and space-credential caching/renewal. the
 full data path is exercised against a live ZDS by scripts/permissioned_smoke.py.
 """
 
+from unittest.mock import AsyncMock
+
+import httpx
 import pytest
 
 from backend._internal import Session
@@ -13,6 +16,7 @@ from backend._internal.atproto.spaces import client as space_client
 from backend._internal.atproto.spaces.uris import (
     build_record_uri,
     build_space_uri,
+    parse_space_record_uri,
     parse_space_uri,
 )
 from backend.config import settings
@@ -36,6 +40,12 @@ def test_space_and_record_uri_roundtrip():
         assert parsed.space_type == "fm.plyr.privateMedia"
         assert parsed.skey == "self"
 
+    parsed_record = parse_space_record_uri(record)
+    assert parsed_record.space == space
+    assert parsed_record.author_did == "did:plc:abc"
+    assert parsed_record.collection == "fm.plyr.track"
+    assert parsed_record.rkey == "rkey1"
+
 
 @pytest.mark.parametrize(
     "bad", ["at://did:plc:abc/x/y", "ats://did:plc:abc", "ats://did:plc:abc//self", ""]
@@ -43,6 +53,20 @@ def test_space_and_record_uri_roundtrip():
 def test_parse_space_uri_rejects_malformed(bad):
     with pytest.raises(ValueError):
         parse_space_uri(bad)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "at://did:plc:abc/x/y",
+        "ats://did:plc:abc/x/self",
+        "ats://did:plc:abc/x/self/did:plc:abc/y",
+        "ats://did:plc:abc/x/self/did:plc:abc/y/rkey/extra",
+    ],
+)
+def test_parse_space_record_uri_rejects_malformed(bad: str) -> None:
+    with pytest.raises(ValueError):
+        parse_space_record_uri(bad)
 
 
 # --- capability probe interpretation -----------------------------------------
@@ -162,6 +186,135 @@ def test_permissioned_scope_opt_in_only():
 
 
 # --- space credential caching + renewal ---------------------------------------
+
+
+async def test_ensure_personal_space_uses_simplespace_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = AsyncMock(return_value={"uri": "unused"})
+    monkeypatch.setattr(space_client, "make_pds_request", request)
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://x"},
+    )
+
+    space = await space_client.ensure_personal_space(
+        session, space_type="fm.plyr.privateMedia", skey="self"
+    )
+
+    assert space == "ats://did:plc:x/fm.plyr.privateMedia/self"
+    request.assert_awaited_once_with(
+        session,
+        "POST",
+        "com.atproto.simplespace.createSpace",
+        payload={
+            "type": "fm.plyr.privateMedia",
+            "skey": "self",
+            "managingApp": settings.atproto.client_id,
+            "policy": "member-list",
+            "appAccess": {"type": "open"},
+        },
+        parse_response=False,
+    )
+
+
+async def test_mint_credential_uses_delegation_token_flow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pds_request = AsyncMock(return_value={"token": "delegation-token"})
+    bearer_request = AsyncMock(
+        return_value=httpx.Response(200, json={"credential": "space-credential"})
+    )
+    monkeypatch.setattr(space_client, "make_pds_request", pds_request)
+    monkeypatch.setattr(space_client, "_raw_bearer_request", bearer_request)
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://pds.test"},
+    )
+    space = "ats://did:plc:x/fm.plyr.privateMedia/self"
+
+    credential = await space_client._mint_credential(session, space)
+
+    assert credential == "space-credential"
+    pds_request.assert_awaited_once_with(
+        session,
+        "GET",
+        "com.atproto.space.getDelegationToken",
+        params={"space": space},
+    )
+    bearer_request.assert_awaited_once_with(
+        "https://pds.test",
+        "POST",
+        "com.atproto.space.getSpaceCredential",
+        "delegation-token",
+        json={"space": space},
+    )
+
+
+async def test_mint_credential_maps_zds_access_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        space_client,
+        "make_pds_request",
+        AsyncMock(return_value={"token": "delegation-token"}),
+    )
+    monkeypatch.setattr(
+        space_client,
+        "_raw_bearer_request",
+        AsyncMock(
+            return_value=httpx.Response(
+                403,
+                json={"error": "NotPermitted", "message": "requester denied"},
+            )
+        ),
+    )
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://pds.test"},
+    )
+
+    with pytest.raises(space_client.SpaceAccessError, match="authority refused"):
+        await space_client._mint_credential(
+            session, "ats://did:plc:x/fm.plyr.privateMedia/self"
+        )
+
+
+async def test_delete_space_record_uses_record_uri_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = AsyncMock(return_value={})
+    monkeypatch.setattr(space_client, "make_pds_request", request)
+    session = Session(
+        session_id="s",
+        did="did:plc:x",
+        handle="x.test",
+        oauth_session={"pds_url": "https://x"},
+    )
+
+    await space_client.delete_space_record(
+        session,
+        "ats://did:plc:x/fm.plyr.privateMedia/self/did:plc:x/fm.plyr.track/rk",
+    )
+
+    request.assert_awaited_once_with(
+        session,
+        "POST",
+        "com.atproto.space.deleteRecord",
+        payload={
+            "space": "ats://did:plc:x/fm.plyr.privateMedia/self",
+            "repo": "did:plc:x",
+            "collection": "fm.plyr.track",
+            "rkey": "rk",
+        },
+        success_codes=(200, 201, 204),
+    )
 
 
 async def test_space_credential_cache_and_force_refresh(monkeypatch):

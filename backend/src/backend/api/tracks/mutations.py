@@ -30,6 +30,7 @@ from backend._internal.atproto.records import (
     rebuild_track_pds_record,
     update_record,
 )
+from backend._internal.atproto.spaces.client import delete_space_record
 from backend._internal.atproto.tid import datetime_to_tid
 from backend._internal.audio import AudioFormat
 from backend._internal.image_uploads import process_image_upload
@@ -76,7 +77,10 @@ async def delete_track(
     # delete ATProto record if it exists
     if track.atproto_record_uri:
         try:
-            await delete_record_by_uri(auth_session, track.atproto_record_uri)
+            if track.atproto_record_uri.startswith("ats://"):
+                await delete_space_record(auth_session, track.atproto_record_uri)
+            else:
+                await delete_record_by_uri(auth_session, track.atproto_record_uri)
             logfire.info(
                 "deleted ATProto record",
                 track_id=track_id,
@@ -103,11 +107,12 @@ async def delete_track(
                 ) from e
 
     # delete audio file from storage
-    try:
-        await storage.delete(track.file_id, track.file_type)
-    except Exception as e:
-        # log but don't fail - maybe file was already deleted
-        logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)
+    if not track.is_private:
+        try:
+            await storage.delete(track.file_id, track.file_type)
+        except Exception as e:
+            # log but don't fail - maybe file was already deleted
+            logger.warning(f"failed to delete file {track.file_id}: {e}", exc_info=True)
 
     # delete image file from storage (if album doesn't share it)
     if track.image_id:

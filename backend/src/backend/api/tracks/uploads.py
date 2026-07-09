@@ -1590,9 +1590,11 @@ async def upload_track(
         # passes without it). the granted token carries the expanded
         # `space:<nsid>?...` scopes, so match on the NSID. absent → tell the
         # frontend to run the opt-in scope upgrade (which requests include:<nsid>).
-        if settings.atproto.private_media_space_type not in (
-            auth_session.oauth_session or {}
-        ).get("scope", ""):
+        auth_data = auth_session.oauth_session or {}
+        has_space_access = auth_data.get("auth_type") == "app_password" or (
+            settings.atproto.private_media_space_type in auth_data.get("scope", "")
+        )
+        if not has_space_access:
             raise HTTPException(status_code=403, detail="permissioned_scope_required")
         if not audio_format.is_web_playable:
             raise HTTPException(

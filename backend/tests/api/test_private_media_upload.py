@@ -26,7 +26,9 @@ PERM_SCOPE = f"space:{_TYPE}?action=create&did=*&skey=self&collection={_TYPE}"
 
 
 class _MockSession(Session):
-    def __init__(self, *, with_space_scope: bool = False) -> None:
+    def __init__(
+        self, *, with_space_scope: bool = False, app_password: bool = False
+    ) -> None:
         self.did = "did:test:artist"
         self.handle = "artist.test"
         self.session_id = "test_session_private_media"
@@ -44,6 +46,8 @@ class _MockSession(Session):
             "dpop_authserver_nonce": "",
             "dpop_pds_nonce": "",
         }
+        if app_password:
+            self.oauth_session["auth_type"] = "app_password"
 
 
 def _auth_app(*, with_space_scope: bool) -> Generator[FastAPI, None, None]:
@@ -101,6 +105,34 @@ def test_private_capable_but_scope_missing_requests_upgrade(app_no_scope: FastAP
         resp = _post(client, data={"visibility": "private"})
     assert resp.status_code == 403
     assert resp.json()["detail"] == "permissioned_scope_required"
+
+
+def test_private_app_password_session_bypasses_oauth_scope_gate(
+    app_no_scope: FastAPI,
+) -> None:
+    async def _profile() -> Session:
+        return _MockSession(app_password=True)
+
+    app_no_scope.dependency_overrides[require_artist_profile] = _profile
+    fake_blob = {
+        "$type": "blob",
+        "ref": {"$link": "bafkreiappassword"},
+        "mimeType": "audio/wav",
+        "size": len(_WAV),
+    }
+
+    with (
+        patch(
+            "backend.api.tracks.uploads.detect_permissioned_capability",
+            return_value=True,
+        ),
+        patch("backend.api.tracks.uploads.upload_blob", return_value=fake_blob),
+        patch("backend.api.tracks.uploads.schedule_track_upload"),
+        TestClient(app_no_scope) as client,
+    ):
+        resp = _post(client, data={"visibility": "private"})
+
+    assert resp.status_code == 200, resp.text
 
 
 def test_private_rejects_non_web_playable(app_with_scope: FastAPI):

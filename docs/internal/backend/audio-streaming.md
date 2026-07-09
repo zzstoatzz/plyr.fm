@@ -38,7 +38,7 @@ otherwise (public/unlisted, ungated)   → public path
 audio + record live in the artist's ATProto permissioned space on their PDS,
 never R2. the browser has no space credential, so we cannot redirect — we
 **proxy** the bytes through the owner's credential (`open_space_blob` →
-`getMemberGrant` → `getSpaceCredential` → ranged `getBlob`). access is
+`getDelegationToken` → `getSpaceCredential` → ranged `getBlob`). access is
 **owner-only by plyr's app-layer policy** (the protocol no longer enumerates
 readers — ZDS dropped member lists, #1573); a non-owner or anonymous request
 gets a `404`, identical to a missing file, so private tracks don't leak their

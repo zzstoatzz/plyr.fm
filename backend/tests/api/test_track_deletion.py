@@ -227,6 +227,59 @@ async def test_atproto_cleanup_on_track_delete(
     assert result.scalar_one_or_none() is None
 
 
+async def test_private_track_delete_uses_space_api_and_never_r2(
+    test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
+) -> None:
+    """permissioned records delete through space.deleteRecord; their synthetic
+    content-hash file IDs must never be interpreted as R2 object keys."""
+    record_uri = (
+        "ats://did:plc:artist123/fm.plyr.privateMedia/self/"
+        "did:plc:artist123/fm.plyr.track/private1"
+    )
+    track = Track(
+        title="private track",
+        artist_did=test_artist.did,
+        file_id="contenthashcollision",
+        file_type="wav",
+        extra={},
+        visibility="private",
+        audio_storage="pds",
+        space_uri="ats://did:plc:artist123/fm.plyr.privateMedia/self",
+        pds_blob_cid="bafkreiprivate",
+        atproto_record_uri=record_uri,
+        atproto_record_cid="bafyprivate",
+    )
+    db_session.add(track)
+    await db_session.commit()
+    await db_session.refresh(track)
+
+    with (
+        patch(
+            "backend.api.tracks.mutations.delete_space_record",
+            new_callable=AsyncMock,
+        ) as delete_space,
+        patch(
+            "backend.api.tracks.mutations.delete_record_by_uri",
+            new_callable=AsyncMock,
+        ) as delete_public,
+        patch(
+            "backend.api.tracks.mutations.storage.delete",
+            new_callable=AsyncMock,
+        ) as delete_storage,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete(f"/tracks/{track.id}")
+
+    assert response.status_code == 200
+    assert delete_space.await_count == 1
+    assert delete_space.await_args is not None
+    assert delete_space.await_args.args[1] == record_uri
+    delete_public.assert_not_awaited()
+    delete_storage.assert_not_awaited()
+
+
 async def test_atproto_cleanup_handles_404(
     test_app: FastAPI, db_session: AsyncSession, test_artist: Artist
 ):

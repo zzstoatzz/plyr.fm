@@ -397,6 +397,7 @@ async def _app_password_request(
     payload: dict[str, Any] | None,
     params: dict[str, Any] | None,
     success_codes: tuple[int, ...],
+    parse_response: bool,
 ) -> dict[str, Any]:
     """make_pds_request for bearer app-password sessions (no DPoP/OAuth client)."""
     data = auth_session.oauth_session
@@ -428,7 +429,11 @@ async def _app_password_request(
             ) from e
 
         if response.status_code in success_codes:
-            return {} if response.status_code == 204 else response.json()
+            return (
+                response.json()
+                if parse_response and response.status_code != 204
+                else {}
+            )
 
         if response.status_code == 401 and not has_refreshed:
             has_refreshed = True
@@ -525,6 +530,7 @@ async def make_pds_request(
     payload: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
     success_codes: tuple[int, ...] = (200, 201),
+    parse_response: bool = True,
 ) -> dict[str, Any]:
     """make an authenticated request to the PDS with automatic token refresh.
 
@@ -535,6 +541,8 @@ async def make_pds_request(
         payload: request JSON payload (for POST)
         params: query parameters (for GET)
         success_codes: HTTP status codes considered successful
+        parse_response: decode successful response JSON; disable when the body
+            is not needed
 
     returns:
         response JSON dict (empty dict for 204 responses)
@@ -551,7 +559,13 @@ async def make_pds_request(
 
     if oauth_data.get("auth_type") == "app_password":
         return await _app_password_request(
-            auth_session, method, endpoint, payload, params, success_codes
+            auth_session,
+            method,
+            endpoint,
+            payload,
+            params,
+            success_codes,
+            parse_response,
         )
 
     oauth_session = reconstruct_oauth_session(oauth_data)
@@ -588,7 +602,7 @@ async def make_pds_request(
             ) from e
 
         if response.status_code in success_codes:
-            if response.status_code == 204:
+            if response.status_code == 204 or not parse_response:
                 return {}
             return response.json()
 

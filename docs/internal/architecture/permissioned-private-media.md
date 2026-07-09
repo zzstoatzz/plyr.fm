@@ -6,11 +6,13 @@ whose PDS implements it. ports cleanly from today's public track flow: the recor
 is the same `fm.plyr.track` lexicon — only the write target (a permissioned space repo)
 and the read auth (a space credential) differ.
 
-> **update (#1573): the protocol no longer has a reader member list.** ZDS removed the
-> member-list routes (`addMember`/`removeMember`/`getMembers`/`getMemberState`/
+> **update (#1573): the generic space protocol no longer has a reader member list.** ZDS
+> removed its old member-list routes (`addMember`/`removeMember`/`getMembers`/`getMemberState`/
 > `getMemberOplog`/`notifyMembership`) and `getSpace`/`listSpaces` no longer expose
-> `members`/`isMember`. the **space credential is the substrate**; reader/group semantics
-> live **above** it, in the app. private-space credentials are owner-only by default.
+> `members`/`isMember`. the newer `com.atproto.simplespace.*` baseline does have a
+> `member-list` access policy, but it is space management rather than a generic sync
+> surface. the **space credential is the substrate**; richer reader/group semantics live
+> **above** it, in the app. simplespace adds the authority as a member by default.
 > plyr.fm does not depend on any of the removed surface (audited: we never read
 > `members`/`isMember` and never called a member-list route). access for this MVP is
 > **owner-only by plyr's app-layer policy** — see the owner-model section. broader access
@@ -55,32 +57,33 @@ isolation point.
 
 - **Owner DID = artist DID.** Personal namespaces use the user's own DID (diary 5); no
   dedicated space DID is needed until ownership must transfer (shared/gated spaces).
-- **Access: owner-only.** Post-#1573 the protocol has no reader member list — private-space
-  credentials are owner-only by default, and any wider read ACL is plyr's app-layer concern.
-  for this MVP the owner is the sole reader; write legitimacy is also app policy (below).
+- **Access: owner-only.** The personal simplespace uses the baseline `member-list` policy;
+  its authority is added automatically and plyr.fm adds nobody else. any wider read ACL
+  remains plyr's app-layer concern. write legitimacy is also app policy (below).
 - **plyr.fm's OAuth client ID is default-allowed.** The space is created with
-  `appAccessMode: "allow"` and empty `appExceptions`, so any OAuth client (including
-  plyr.fm) may obtain a credential. A future shared-space pass can flip to an allow-list.
+  `appAccess: {"type": "open"}`, so any OAuth client (including plyr.fm) may obtain a
+  credential for an authorized user. A future shared-space pass can flip to an allow-list.
   ZDS binds the issued credential to the requesting client ID and enforces
   `spaceAllowsClient` at `getSpaceCredential` time.
 
-## the read path: OAuth → member grant → space credential (with renewal/errors)
+## the read path: OAuth → delegation token → space credential (with renewal/errors)
 
-1. `getMemberGrant?space=<uri>` — authenticated with the user's **OAuth (DPoP)** token via
-   `make_pds_request`. Returns a short-lived, one-use grant signed by the member's PDS,
+1. `getDelegationToken?space=<uri>` — authenticated with the user's **OAuth (DPoP)** token
+   via `make_pds_request`. Returns a short-lived token signed by the requester's PDS and
    bound to plyr.fm's client ID.
-2. `getSpaceCredential` (POST) — authenticated with the grant as a **plain Bearer** token
-   (grants/credentials are JWTs, *not* DPoP-bound, so they bypass `make_pds_request`'s DPoP
-   path via a raw-bearer helper). Returns an owner-signed space credential (~hours TTL,
-   client-ID-bound), verifiable offline by any member PDS.
+2. `getSpaceCredential` (POST) — authenticated with the delegation token as a **plain
+   Bearer** token (delegation tokens/credentials are JWTs, *not* DPoP-bound, so they bypass
+   `make_pds_request`'s DPoP path via a raw-bearer helper). Returns an authority-signed
+   space credential (~hours TTL, client-ID-bound).
 3. reads (`getRecord`/`listRecords`/`getBlob`) accept the credential as a plain Bearer
    token.
 
 **Renewal:** credentials are cached per `(space, client_id)` for ~50 min; a read that gets
-`401`/`InvalidToken` triggers one re-mint (grant → credential) and retry.
-**Errors:** `AppNotPermitted` / `NotAMember` / `SpaceDeleted` surface as a typed
-`SpaceAccessError`; `getSpaceCredential` requires the member DID to be PLC-resolvable (the
-owner's PDS verifies the grant signature). Code: `backend/_internal/atproto/spaces/client.py`.
+`401`/`InvalidToken` triggers one re-mint (delegation token → credential) and retry.
+**Errors:** authorization refusals and `SpaceDeleted` surface as a typed
+`SpaceAccessError`; `getSpaceCredential` requires the requester DID to be resolvable (the
+authority's PDS verifies the delegation token signature). Code:
+`backend/_internal/atproto/spaces/client.py`.
 
 ## the record, and how it references the blob
 
@@ -108,9 +111,9 @@ richer write/role policy.
 
 ## ZDS endpoints plyr.fm depends on (MVP)
 
-`createSpace`, `getSpace`/`listSpaces` (capability probe + idempotent ensure),
+`simplespace.createSpace`, `space.getSpace`/`listSpaces` (capability probe + idempotent ensure),
 `com.atproto.repo.uploadBlob`, `space.createRecord`/`putRecord`, `space.getRecord`,
-`space.listRecords`, `space.getMemberGrant`, `space.getSpaceCredential`, `space.getBlob`
+`space.listRecords`, `space.getDelegationToken`, `space.getSpaceCredential`, `space.getBlob`
 (with Range). All exist in the current ZDS source; the data path
 (`createSpace`→`uploadBlob`→`createRecord`→`getRecord`/`listRecords`→`getBlob` ranged) is
 verified against a local `ZDS_PERMISSIONED_DATA=true` build by `scripts/permissioned_smoke.py`.

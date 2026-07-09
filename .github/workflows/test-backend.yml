@@ -65,6 +65,23 @@ jobs:
           DOCKET_URL: redis://localhost:6379
         run: cd backend && uv run pytest tests/ -n auto
 
+      # Repository secrets are unavailable to fork PRs. Keep them scoped to the
+      # one live-boundary test rather than exposing them to the whole suite.
+      - name: run live private-media integration
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          DATABASE_URL: postgresql+asyncpg://relay_test:relay_test@localhost:5432/relay_test
+          DOCKET_URL: redis://localhost:6379
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+        run: |
+          test -n "$ZAT_TEST_PDS"
+          test -n "$ZAT_TEST_HANDLE"
+          test -n "$ZAT_TEST_PASSWORD"
+          cd backend
+          uv run pytest tests/integration/test_private_media.py -v --tb=short
+
       - name: prune uv cache
         if: always()
         run: uv cache prune --ci
