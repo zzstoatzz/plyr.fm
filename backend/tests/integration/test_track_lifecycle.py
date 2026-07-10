@@ -22,7 +22,7 @@ async def test_upload_verify_delete(user1_client: AsyncPlyrClient, drone_a4: Pat
     client = user1_client
 
     # upload
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_a4,
         "Test Drone A4",
         tags={"integration-test", "drone"},
@@ -32,7 +32,7 @@ async def test_upload_verify_delete(user1_client: AsyncPlyrClient, drone_a4: Pat
 
     try:
         # verify upload succeeded
-        track = await client.get_track(track_id)
+        track = await client.tracks.get(track_id)
         assert track.title == "Test Drone A4"
         assert "integration-test" in track.tags
         assert "drone" in track.tags
@@ -40,11 +40,11 @@ async def test_upload_verify_delete(user1_client: AsyncPlyrClient, drone_a4: Pat
 
     finally:
         # always cleanup
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
         # verify deletion
         with pytest.raises(Exception):  # noqa: B017
-            await client.get_track(track_id)
+            await client.tracks.get(track_id)
 
 
 async def test_upload_edit_title(user1_client: AsyncPlyrClient, drone_e4: Path):
@@ -54,7 +54,7 @@ async def test_upload_edit_title(user1_client: AsyncPlyrClient, drone_e4: Path):
     client = user1_client
 
     # upload
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_e4,
         "Test Drone E4 - Original",
         tags={"integration-test"},
@@ -63,22 +63,22 @@ async def test_upload_edit_title(user1_client: AsyncPlyrClient, drone_e4: Path):
 
     try:
         # verify original title
-        track = await client.get_track(track_id)
+        track = await client.tracks.get(track_id)
         assert track.title == "Test Drone E4 - Original"
 
         # edit title
-        updated = await client.update_track(
+        updated = await client.tracks.update(
             track_id,
             TrackPatch(title="Test Drone E4 - Edited"),
         )
         assert updated.title == "Test Drone E4 - Edited"
 
         # verify edit persisted
-        track = await client.get_track(track_id)
+        track = await client.tracks.get(track_id)
         assert track.title == "Test Drone E4 - Edited"
 
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_upload_edit_tags(user1_client: AsyncPlyrClient, drone_c4: Path):
@@ -88,7 +88,7 @@ async def test_upload_edit_tags(user1_client: AsyncPlyrClient, drone_c4: Path):
     client = user1_client
 
     # upload with initial tags
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_c4,
         "Test Drone C4",
         tags={"integration-test", "original-tag"},
@@ -97,12 +97,12 @@ async def test_upload_edit_tags(user1_client: AsyncPlyrClient, drone_c4: Path):
 
     try:
         # verify initial tags
-        track = await client.get_track(track_id)
+        track = await client.tracks.get(track_id)
         assert "integration-test" in track.tags
         assert "original-tag" in track.tags
 
         # edit tags
-        updated = await client.update_track(
+        updated = await client.tracks.update(
             track_id,
             TrackPatch(tags=["integration-test", "new-tag", "another-tag"]),
         )
@@ -110,7 +110,7 @@ async def test_upload_edit_tags(user1_client: AsyncPlyrClient, drone_c4: Path):
         assert "another-tag" in updated.tags
 
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_upload_appears_in_my_tracks(
@@ -120,7 +120,7 @@ async def test_upload_appears_in_my_tracks(
     """uploaded track appears in user's track list."""
     client = user1_client
 
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_a4,
         "Test Drone - My Tracks",
         tags={"integration-test"},
@@ -129,12 +129,12 @@ async def test_upload_appears_in_my_tracks(
 
     try:
         # verify track appears in my_tracks
-        my_tracks = await client.my_tracks(limit=100)
+        my_tracks = await client.tracks.my(limit=100)
         track_ids = [t.id for t in my_tracks]
         assert track_id in track_ids
 
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_upload_searchable(user1_client: AsyncPlyrClient, drone_a4: Path):
@@ -146,7 +146,7 @@ async def test_upload_searchable(user1_client: AsyncPlyrClient, drone_a4: Path):
     # use unique title for search
     unique_title = "TestDroneSearchable12345"
 
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_a4,
         unique_title,
         tags={"integration-test"},
@@ -157,7 +157,7 @@ async def test_upload_searchable(user1_client: AsyncPlyrClient, drone_a4: Path):
         # search may take a moment to index - retry a few times
         found = False
         for _ in range(5):
-            search_result = await client.search(unique_title, type="tracks")
+            search_result = await client.discover.search(unique_title, type="tracks")
             # search results are in search_result.results, filter for tracks
             for item in search_result.results:
                 if item.type == "track" and getattr(item, "id", None) == track_id:
@@ -170,4 +170,4 @@ async def test_upload_searchable(user1_client: AsyncPlyrClient, drone_a4: Path):
         assert found, f"track {track_id} not found in search results"
 
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)

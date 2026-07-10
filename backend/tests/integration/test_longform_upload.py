@@ -115,8 +115,8 @@ async def test_longform_upload_completes(
                     )
         assert track_id is not None, "upload stream ended without a terminal event"
 
-        track = await client.get_track(track_id)
+        track = await client.tracks.get(track_id)
         assert track.title == "longform streaming regression"
     finally:
         if track_id is not None:
-            await client.delete(track_id)
+            await client.tracks.delete(track_id)

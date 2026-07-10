@@ -28,7 +28,7 @@ async def test_cross_user_like(
     client2 = user2_client
 
     # user1 uploads a track
-    result = await client1.upload(
+    result = await client1.tracks.upload(
         drone_a4,
         "Test Drone - Cross User Like",
         tags={"integration-test"},
@@ -37,35 +37,35 @@ async def test_cross_user_like(
 
     try:
         # get initial like count
-        track = await client1.get_track(track_id)
+        track = await client1.tracks.get(track_id)
         initial_likes = track.like_count
 
         # user2 likes the track
-        await client2.like(track_id)
+        await client2.tracks.like(track_id)
 
         # verify like count increased
-        track = await client1.get_track(track_id)
+        track = await client1.tracks.get(track_id)
         assert track.like_count == initial_likes + 1
 
         # verify track appears in user2's liked tracks
-        liked = await client2.liked_tracks(limit=100)
+        liked = await client2.tracks.liked(limit=100)
         liked_ids = [t.id for t in liked]
         assert track_id in liked_ids
 
         # user2 unlikes the track
-        await client2.unlike(track_id)
+        await client2.tracks.unlike(track_id)
 
         # verify like count decreased
-        track = await client1.get_track(track_id)
+        track = await client1.tracks.get(track_id)
         assert track.like_count == initial_likes
 
         # verify track no longer in user2's liked tracks
-        liked = await client2.liked_tracks(limit=100)
+        liked = await client2.tracks.liked(limit=100)
         liked_ids = [t.id for t in liked]
         assert track_id not in liked_ids
 
     finally:
-        await client1.delete(track_id)
+        await client1.tracks.delete(track_id)
 
 
 async def test_cannot_delete_others_track(
@@ -78,7 +78,7 @@ async def test_cannot_delete_others_track(
     client2 = user2_client
 
     # user1 uploads a track
-    result = await client1.upload(
+    result = await client1.tracks.upload(
         drone_e4,
         "Test Drone - Cannot Delete",
         tags={"integration-test"},
@@ -88,7 +88,7 @@ async def test_cannot_delete_others_track(
     try:
         # user2 tries to delete - should fail
         with pytest.raises(Exception) as exc_info:
-            await client2.delete(track_id)
+            await client2.tracks.delete(track_id)
 
         # verify it's a permission error (403 or similar)
         assert (
@@ -96,12 +96,12 @@ async def test_cannot_delete_others_track(
         )
 
         # verify track still exists
-        track = await client1.get_track(track_id)
+        track = await client1.tracks.get(track_id)
         assert track.id == track_id
 
     finally:
         # user1 cleans up
-        await client1.delete(track_id)
+        await client1.tracks.delete(track_id)
 
 
 async def test_cannot_edit_others_track(
@@ -116,7 +116,7 @@ async def test_cannot_edit_others_track(
     client2 = user2_client
 
     # user1 uploads a track
-    result = await client1.upload(
+    result = await client1.tracks.upload(
         drone_c4,
         "Test Drone - Cannot Edit",
         tags={"integration-test"},
@@ -126,7 +126,7 @@ async def test_cannot_edit_others_track(
     try:
         # user2 tries to edit - should fail
         with pytest.raises(Exception) as exc_info:
-            await client2.update_track(
+            await client2.tracks.update(
                 track_id,
                 TrackPatch(title="Malicious Edit"),
             )
@@ -137,11 +137,11 @@ async def test_cannot_edit_others_track(
         )
 
         # verify title unchanged
-        track = await client1.get_track(track_id)
+        track = await client1.tracks.get(track_id)
         assert track.title == "Test Drone - Cannot Edit"
 
     finally:
-        await client1.delete(track_id)
+        await client1.tracks.delete(track_id)
 
 
 async def test_public_track_visibility(
@@ -154,7 +154,7 @@ async def test_public_track_visibility(
     client2 = user2_client
 
     # user1 uploads a track
-    result = await client1.upload(
+    result = await client1.tracks.upload(
         drone_a4,
         "Test Drone - Public Visibility",
         tags={"integration-test"},
@@ -163,9 +163,9 @@ async def test_public_track_visibility(
 
     try:
         # user2 can see the track
-        track = await client2.get_track(track_id)
+        track = await client2.tracks.get(track_id)
         assert track.id == track_id
         assert track.title == "Test Drone - Public Visibility"
 
     finally:
-        await client1.delete(track_id)
+        await client1.tracks.delete(track_id)

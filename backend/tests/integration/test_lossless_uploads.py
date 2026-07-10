@@ -10,46 +10,24 @@ requires:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import httpx
 import pytest
 
 from .conftest import IntegrationSettings
+from .utils.tracks import poll_until_file_type
 
 if TYPE_CHECKING:
     from plyrfm import AsyncPlyrClient
 
 pytestmark = [pytest.mark.integration, pytest.mark.timeout(180)]
 
-POLL_INTERVAL_SEC = 1.0
-POLL_MAX_ATTEMPTS = 90
-
 
 def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
-
-
-async def _poll_until_file_type(
-    client: AsyncPlyrClient,
-    track_id: int,
-    expected_file_type: str,
-) -> Any:
-    """wait for background optimization to swap the track to the target type."""
-    for _ in range(POLL_MAX_ATTEMPTS):
-        track = await client.get_track(track_id)
-        if track.file_type == expected_file_type:
-            return track
-        await asyncio.sleep(POLL_INTERVAL_SEC)
-
-    track = await client.get_track(track_id)
-    raise AssertionError(
-        f"track {track_id} did not become {expected_file_type} within "
-        f"{POLL_MAX_ATTEMPTS * POLL_INTERVAL_SEC}s; still {track.file_type}"
-    )
 
 
 async def _wait_for_upload(
@@ -88,7 +66,7 @@ async def _upload_support_gated_track(
     audio_path: Path,
     title: str,
 ) -> int:
-    """upload a supporter-gated track via raw HTTP; the SDK lacks support_gate."""
+    """upload a supporter-gated track via raw HTTP; the SDK lacks visibility."""
     with audio_path.open("rb") as audio_file:
         response = await http.post(
             f"{api_url}/tracks/",
@@ -96,7 +74,9 @@ async def _upload_support_gated_track(
             data={
                 "title": title,
                 "tags": json.dumps(["integration-test", "lossless", "gated"]),
-                "support_gate": json.dumps({"type": "any"}),
+                # visibility is the single visibility/access input (#1557);
+                # the server derives support_gate {"type": "any"} from it
+                "visibility": "supporters",
             },
             files={
                 "file": (
@@ -115,7 +95,7 @@ async def test_upload_flac(user1_client: AsyncPlyrClient, drone_flac: Path):
     """upload FLAC file - stored directly as FLAC (web-playable, no transcoding)."""
     client = user1_client
 
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_flac,
         "Test FLAC Upload",
         tags={"integration-test", "lossless", "flac"},
@@ -124,20 +104,20 @@ async def test_upload_flac(user1_client: AsyncPlyrClient, drone_flac: Path):
     assert track_id is not None
 
     try:
-        track = await client.get_track(track_id)
+        track = await client.tracks.get(track_id)
         assert track.title == "Test FLAC Upload"
         # FLAC is web-playable — stored directly, no transcoding
         assert track.file_type == "flac", f"expected flac, got {track.file_type}"
 
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_upload_aiff(user1_client: AsyncPlyrClient, drone_aiff: Path):
     """upload AIFF file - should eventually optimize to MP3."""
     client = user1_client
 
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_aiff,
         "Test AIFF Upload",
         tags={"integration-test", "lossless", "aiff"},
@@ -146,19 +126,19 @@ async def test_upload_aiff(user1_client: AsyncPlyrClient, drone_aiff: Path):
     assert track_id is not None
 
     try:
-        track = await _poll_until_file_type(client, track_id, "mp3")
+        track = await poll_until_file_type(client, track_id, "mp3")
         assert track.title == "Test AIFF Upload"
         assert track.file_type == "mp3", f"expected mp3, got {track.file_type}"
 
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_upload_aif(user1_client: AsyncPlyrClient, drone_aif: Path):
     """upload AIF file (AIFF alias) - should eventually optimize to MP3."""
     client = user1_client
 
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_aif,
         "Test AIF Upload",
         tags={"integration-test", "lossless", "aif"},
@@ -167,12 +147,12 @@ async def test_upload_aif(user1_client: AsyncPlyrClient, drone_aif: Path):
     assert track_id is not None
 
     try:
-        track = await _poll_until_file_type(client, track_id, "mp3")
+        track = await poll_until_file_type(client, track_id, "mp3")
         assert track.title == "Test AIF Upload"
         assert track.file_type == "mp3", f"expected mp3, got {track.file_type}"
 
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_upload_support_gated_aiff_optimizes_to_private_mp3(
@@ -216,12 +196,13 @@ async def test_upload_support_gated_aiff_optimizes_to_private_mp3(
                 drone_aiff,
                 "Test Support-Gated AIFF Upload",
             )
-            track = await _poll_until_file_type(client, track_id, "mp3")
+            track = await poll_until_file_type(client, track_id, "mp3")
 
             assert track.title == "Test Support-Gated AIFF Upload"
             assert track.file_type == "mp3"
+            assert track.visibility == "supporters"
             assert track.support_gate == {"type": "any"}
-            assert track.r2_url is None
+            assert track.audio_url is None  # gated: no public r2 url
             assert track.audio_storage == "r2"
             assert track.pds_blob_cid is None
             assert track.original_file_id is not None
@@ -229,7 +210,7 @@ async def test_upload_support_gated_aiff_optimizes_to_private_mp3(
 
         finally:
             if track_id is not None:
-                await client.delete(track_id)
+                await client.tracks.delete(track_id)
 
             restore_response = await http.post(
                 f"{api_url}/preferences/",

@@ -91,14 +91,14 @@ async def test_replace_audio_creates_revision(
     assert integration_settings.token_1
     token = integration_settings.token_1
 
-    upload = await client.upload(
+    upload = await client.tracks.upload(
         drone_a4,
         "integration: replace creates revision",
         tags={"integration-test", "audio-revisions"},
     )
     track_id = upload.track_id
     try:
-        original = await client.get_track(track_id)
+        original = await client.tracks.get(track_id)
         original_file_id = original.file_id
 
         # before any replace: history is empty
@@ -133,7 +133,7 @@ async def test_replace_audio_creates_revision(
             assert "file_id" not in rev
             assert "audio_url" not in rev
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_restore_swaps_audio_and_rotates_revision(
@@ -150,14 +150,14 @@ async def test_restore_swaps_audio_and_rotates_revision(
     assert integration_settings.token_1
     token = integration_settings.token_1
 
-    upload = await client.upload(
+    upload = await client.tracks.upload(
         drone_a4,
         "integration: restore rotates revision",
         tags={"integration-test", "audio-revisions"},
     )
     track_id = upload.track_id
     try:
-        original = await client.get_track(track_id)
+        original = await client.tracks.get(track_id)
         original_file_id = original.file_id
 
         async with httpx.AsyncClient(timeout=60.0) as http:
@@ -206,7 +206,7 @@ async def test_restore_swaps_audio_and_rotates_revision(
             assert revisions_after[0]["id"] == snapshot_payload["id"]
             del replaced_file_id  # asserted indirectly via the snapshot id mapping
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_non_owner_cannot_list_or_restore(
@@ -225,7 +225,7 @@ async def test_non_owner_cannot_list_or_restore(
     token2 = integration_settings.token_2
     del user2_client  # only used to surface the multi-user skip via the fixture
 
-    upload = await user1_client.upload(
+    upload = await user1_client.tracks.upload(
         drone_a4,
         "integration: ownership check on revisions",
         tags={"integration-test", "audio-revisions"},
@@ -268,4 +268,4 @@ async def test_non_owner_cannot_list_or_restore(
             )
             assert restore_resp.status_code == 403
     finally:
-        await user1_client.delete(track_id)
+        await user1_client.tracks.delete(track_id)
