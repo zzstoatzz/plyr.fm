@@ -10,46 +10,24 @@ requires:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import httpx
 import pytest
 
 from .conftest import IntegrationSettings
+from .utils.tracks import poll_until_file_type
 
 if TYPE_CHECKING:
     from plyrfm import AsyncPlyrClient
 
 pytestmark = [pytest.mark.integration, pytest.mark.timeout(180)]
 
-POLL_INTERVAL_SEC = 1.0
-POLL_MAX_ATTEMPTS = 90
-
 
 def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
-
-
-async def _poll_until_file_type(
-    client: AsyncPlyrClient,
-    track_id: int,
-    expected_file_type: str,
-) -> Any:
-    """wait for background optimization to swap the track to the target type."""
-    for _ in range(POLL_MAX_ATTEMPTS):
-        track = await client.get_track(track_id)
-        if track.file_type == expected_file_type:
-            return track
-        await asyncio.sleep(POLL_INTERVAL_SEC)
-
-    track = await client.get_track(track_id)
-    raise AssertionError(
-        f"track {track_id} did not become {expected_file_type} within "
-        f"{POLL_MAX_ATTEMPTS * POLL_INTERVAL_SEC}s; still {track.file_type}"
-    )
 
 
 async def _wait_for_upload(
@@ -146,7 +124,7 @@ async def test_upload_aiff(user1_client: AsyncPlyrClient, drone_aiff: Path):
     assert track_id is not None
 
     try:
-        track = await _poll_until_file_type(client, track_id, "mp3")
+        track = await poll_until_file_type(client, track_id, "mp3")
         assert track.title == "Test AIFF Upload"
         assert track.file_type == "mp3", f"expected mp3, got {track.file_type}"
 
@@ -167,7 +145,7 @@ async def test_upload_aif(user1_client: AsyncPlyrClient, drone_aif: Path):
     assert track_id is not None
 
     try:
-        track = await _poll_until_file_type(client, track_id, "mp3")
+        track = await poll_until_file_type(client, track_id, "mp3")
         assert track.title == "Test AIF Upload"
         assert track.file_type == "mp3", f"expected mp3, got {track.file_type}"
 
@@ -216,11 +194,16 @@ async def test_upload_support_gated_aiff_optimizes_to_private_mp3(
                 drone_aiff,
                 "Test Support-Gated AIFF Upload",
             )
-            track = await _poll_until_file_type(client, track_id, "mp3")
+            track = await poll_until_file_type(client, track_id, "mp3")
 
             assert track.title == "Test Support-Gated AIFF Upload"
             assert track.file_type == "mp3"
-            assert track.support_gate == {"type": "any"}
+            # the SDK Track model doesn't carry support_gate; assert via the API
+            gated_response = await http.get(
+                f"{api_url}/tracks/{track_id}", headers=_auth_headers(token)
+            )
+            gated_response.raise_for_status()
+            assert gated_response.json()["support_gate"] == {"type": "any"}
             assert track.r2_url is None
             assert track.audio_storage == "r2"
             assert track.pds_blob_cid is None

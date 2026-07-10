@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from .utils.tracks import poll_until_file_type
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -40,7 +42,10 @@ async def test_upload_webm(user1_client: AsyncPlyrClient, drone_webm: Path):
     try:
         track = await client.get_track(track_id)
         assert track.title == "Test WEBM Upload"
-        assert track.file_type == "mp3", f"expected mp3, got {track.file_type}"
+        # transcode is a deferred optimize task, not part of the upload path —
+        # wait for the mp3 rendition to be swapped in
+        track = await poll_until_file_type(client, track_id, "mp3")
+        assert track.file_type == "mp3"
     finally:
         await client.delete(track_id)
 
@@ -60,6 +65,9 @@ async def test_upload_ogg(user1_client: AsyncPlyrClient, drone_ogg: Path):
     try:
         track = await client.get_track(track_id)
         assert track.title == "Test OGG Upload"
-        assert track.file_type == "mp3", f"expected mp3, got {track.file_type}"
+        # transcode is a deferred optimize task, not part of the upload path —
+        # wait for the mp3 rendition to be swapped in
+        track = await poll_until_file_type(client, track_id, "mp3")
+        assert track.file_type == "mp3"
     finally:
         await client.delete(track_id)

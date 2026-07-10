@@ -106,7 +106,10 @@ jobs:
           PLYR_API_URL: https://api-stg.plyr.fm
         run: |
           cd backend
-          uv run pytest tests/integration -m integration -v --tb=short
+          # test_private_media.py needs local postgres/redis fixtures and runs
+          # in test-backend.yml; this workflow only has the staging API
+          uv run pytest tests/integration -m integration -v --tb=short \
+            --ignore=tests/integration/test_private_media.py
 
       # throw the JIT tokens away — revoke even if the tests failed.
       - name: revoke JIT dev tokens
