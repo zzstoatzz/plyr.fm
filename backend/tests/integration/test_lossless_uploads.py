@@ -66,7 +66,7 @@ async def _upload_support_gated_track(
     audio_path: Path,
     title: str,
 ) -> int:
-    """upload a supporter-gated track via raw HTTP; the SDK lacks support_gate."""
+    """upload a supporter-gated track via raw HTTP; the SDK lacks visibility."""
     with audio_path.open("rb") as audio_file:
         response = await http.post(
             f"{api_url}/tracks/",
@@ -74,7 +74,9 @@ async def _upload_support_gated_track(
             data={
                 "title": title,
                 "tags": json.dumps(["integration-test", "lossless", "gated"]),
-                "support_gate": json.dumps({"type": "any"}),
+                # visibility is the single visibility/access input (#1557);
+                # the server derives support_gate {"type": "any"} from it
+                "visibility": "supporters",
             },
             files={
                 "file": (
