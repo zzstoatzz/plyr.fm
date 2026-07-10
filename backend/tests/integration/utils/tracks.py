@@ -19,12 +19,12 @@ async def poll_until_file_type(
 ) -> Any:
     """wait for the deferred optimize task to swap the track to the target type."""
     for _ in range(POLL_MAX_ATTEMPTS):
-        track = await client.get_track(track_id)
+        track = await client.tracks.get(track_id)
         if track.file_type == expected_file_type:
             return track
         await asyncio.sleep(POLL_INTERVAL_SEC)
 
-    track = await client.get_track(track_id)
+    track = await client.tracks.get(track_id)
     raise AssertionError(
         f"track {track_id} did not become {expected_file_type} within "
         f"{POLL_MAX_ATTEMPTS * POLL_INTERVAL_SEC}s; still {track.file_type}"

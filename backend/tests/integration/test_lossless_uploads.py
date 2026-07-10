@@ -95,7 +95,7 @@ async def test_upload_flac(user1_client: AsyncPlyrClient, drone_flac: Path):
     """upload FLAC file - stored directly as FLAC (web-playable, no transcoding)."""
     client = user1_client
 
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_flac,
         "Test FLAC Upload",
         tags={"integration-test", "lossless", "flac"},
@@ -104,20 +104,20 @@ async def test_upload_flac(user1_client: AsyncPlyrClient, drone_flac: Path):
     assert track_id is not None
 
     try:
-        track = await client.get_track(track_id)
+        track = await client.tracks.get(track_id)
         assert track.title == "Test FLAC Upload"
         # FLAC is web-playable — stored directly, no transcoding
         assert track.file_type == "flac", f"expected flac, got {track.file_type}"
 
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_upload_aiff(user1_client: AsyncPlyrClient, drone_aiff: Path):
     """upload AIFF file - should eventually optimize to MP3."""
     client = user1_client
 
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_aiff,
         "Test AIFF Upload",
         tags={"integration-test", "lossless", "aiff"},
@@ -131,14 +131,14 @@ async def test_upload_aiff(user1_client: AsyncPlyrClient, drone_aiff: Path):
         assert track.file_type == "mp3", f"expected mp3, got {track.file_type}"
 
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_upload_aif(user1_client: AsyncPlyrClient, drone_aif: Path):
     """upload AIF file (AIFF alias) - should eventually optimize to MP3."""
     client = user1_client
 
-    result = await client.upload(
+    result = await client.tracks.upload(
         drone_aif,
         "Test AIF Upload",
         tags={"integration-test", "lossless", "aif"},
@@ -152,7 +152,7 @@ async def test_upload_aif(user1_client: AsyncPlyrClient, drone_aif: Path):
         assert track.file_type == "mp3", f"expected mp3, got {track.file_type}"
 
     finally:
-        await client.delete(track_id)
+        await client.tracks.delete(track_id)
 
 
 async def test_upload_support_gated_aiff_optimizes_to_private_mp3(
@@ -200,13 +200,9 @@ async def test_upload_support_gated_aiff_optimizes_to_private_mp3(
 
             assert track.title == "Test Support-Gated AIFF Upload"
             assert track.file_type == "mp3"
-            # the SDK Track model doesn't carry support_gate; assert via the API
-            gated_response = await http.get(
-                f"{api_url}/tracks/{track_id}", headers=_auth_headers(token)
-            )
-            gated_response.raise_for_status()
-            assert gated_response.json()["support_gate"] == {"type": "any"}
-            assert track.r2_url is None
+            assert track.visibility == "supporters"
+            assert track.support_gate == {"type": "any"}
+            assert track.audio_url is None  # gated: no public r2 url
             assert track.audio_storage == "r2"
             assert track.pds_blob_cid is None
             assert track.original_file_id is not None
@@ -214,7 +210,7 @@ async def test_upload_support_gated_aiff_optimizes_to_private_mp3(
 
         finally:
             if track_id is not None:
-                await client.delete(track_id)
+                await client.tracks.delete(track_id)
 
             restore_response = await http.post(
                 f"{api_url}/preferences/",
