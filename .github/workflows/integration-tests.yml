@@ -39,8 +39,15 @@ jobs:
         id: check-tokens
         run: |
           if [ -z "${{ secrets.APP_PASSWORD_MINT_SECRET }}" ]; then
-            echo "has_tokens=false" >> $GITHUB_OUTPUT
-            echo "::warning::APP_PASSWORD_MINT_SECRET not configured - integration tests will be skipped"
+            # a missing secret on our own main is a broken pipeline, not a skip;
+            # only a manual dispatch that explicitly opts in may skip
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.skip_if_no_tokens }}" = "true" ]; then
+              echo "has_tokens=false" >> $GITHUB_OUTPUT
+              echo "::warning::APP_PASSWORD_MINT_SECRET not configured - integration tests skipped by request"
+            else
+              echo "::error::APP_PASSWORD_MINT_SECRET is not configured - integration tests cannot run"
+              exit 1
+            fi
           else
             echo "has_tokens=true" >> $GITHUB_OUTPUT
           fi
