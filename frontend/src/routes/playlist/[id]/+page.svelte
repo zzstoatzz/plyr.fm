@@ -128,6 +128,7 @@
 	let editShowOnProfile = $state(false);
 	let coverInputElement = $state<HTMLInputElement | null>(null);
 	let uploadingCover = $state(false);
+	let removingCover = $state(false);
 
 	// recommendations state
 	let recommendations = $state<PlaylistTrackCandidate[]>([]);
@@ -318,6 +319,20 @@
 		uploadCover(file);
 	}
 
+	async function removeCover() {
+		removingCover = true;
+		try {
+			const updated = await playlistActions.removeCover(playlist.id);
+			playlist.image_url = undefined;
+			playlist.preview_thumbnails = updated.preview_thumbnails;
+			toast.success('cover removed');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'failed to remove cover');
+		} finally {
+			removingCover = false;
+		}
+	}
+
 	async function uploadCover(file: File) {
 		uploadingCover = true;
 		try {
@@ -453,6 +468,7 @@
 				hidden
 			/>
 			{#if isEditMode && isOwner}
+				<div class="playlist-art-col">
 				<button
 					class="playlist-art-wrapper clickable"
 					onclick={() => coverInputElement?.click()}
@@ -521,6 +537,17 @@
 						{/if}
 					</div>
 				</button>
+				{#if playlist.image_url}
+					<button
+						class="remove-cover-btn"
+						type="button"
+						onclick={removeCover}
+						disabled={removingCover}
+					>
+						{removingCover ? 'removing…' : 'remove cover'}
+					</button>
+				{/if}
+				</div>
 			{:else}
 				<div class="playlist-art-wrapper">
 					{#if playlist.image_url}
@@ -756,6 +783,33 @@
 		width: 200px;
 		height: 200px;
 		flex-shrink: 0;
+	}
+
+	.playlist-art-col {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		flex-shrink: 0;
+	}
+
+	.remove-cover-btn {
+		background: none;
+		border: none;
+		padding: 0.25rem 0.5rem;
+		font-family: inherit;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+
+	.remove-cover-btn:hover:not(:disabled) {
+		color: var(--error);
+	}
+
+	.remove-cover-btn:disabled {
+		cursor: default;
+		opacity: 0.6;
 	}
 
 	button.playlist-art-wrapper {

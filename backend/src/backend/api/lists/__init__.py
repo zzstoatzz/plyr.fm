@@ -7,5 +7,6 @@ from .router import router
 from . import reorder as _reorder  # /liked/reorder, /{rkey}/reorder
 from . import resolver as _resolver  # /by-uri
 from . import playlists as _playlists  # /playlists, /playlists/{id}, ...
+from . import covers as _covers  # /playlists/{id}/cover
 
 __all__ = ["router"]

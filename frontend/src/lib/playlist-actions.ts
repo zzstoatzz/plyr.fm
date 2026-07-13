@@ -150,6 +150,20 @@ export async function uploadCover(playlistId: string, file: File): Promise<{ ima
 	return response.json();
 }
 
+/** remove the explicit cover — the composite (member-track artwork) takes over. */
+export async function removeCover(playlistId: string): Promise<Playlist> {
+	const response = await fetch(`${API_URL}/lists/playlists/${playlistId}/cover`, {
+		method: 'DELETE',
+		credentials: 'include'
+	});
+
+	if (!response.ok) {
+		throw new Error(await detailFrom(response, 'failed to remove cover'));
+	}
+
+	return response.json();
+}
+
 /**
  * persist the current track order. returns false when no track has an ATProto
  * record to reference (nothing to persist), true after a successful save.
