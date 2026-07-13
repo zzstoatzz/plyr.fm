@@ -167,6 +167,36 @@ async def test_previews_refresh_on_remove(
         assert resp.json()["preview_thumbnails"] == ["https://img.test/thumb1.webp"]
 
 
+async def test_remove_cover_falls_back_to_composite(
+    app_as_owner: FastAPI,
+    db_session: AsyncSession,
+    owner: Artist,
+    tracks: list[Track],
+) -> None:
+    """DELETE /cover clears the explicit image so clients composite from
+    `preview_thumbnails`; a second call is a 400 (nothing to remove)."""
+    async with _client(app_as_owner) as client:
+        playlist = await _create_private_playlist(client)
+        await _add_track(client, playlist["id"], tracks[0])
+
+    row = await db_session.get(Playlist, playlist["id"])
+    assert row is not None
+    row.image_id = "coverimageid"
+    row.image_url = "https://img.test/cover.jpg"
+    row.thumbnail_url = "https://img.test/cover_thumb.webp"
+    await db_session.commit()
+
+    async with _client(app_as_owner) as client:
+        resp = await client.delete(f"/lists/playlists/{playlist['id']}/cover")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["image_url"] is None
+        assert body["preview_thumbnails"] == ["https://img.test/thumb0.webp"]
+
+        resp = await client.delete(f"/lists/playlists/{playlist['id']}/cover")
+        assert resp.status_code == 400
+
+
 async def test_legacy_private_playlist_heals_on_list(
     app_as_owner: FastAPI,
     db_session: AsyncSession,
