@@ -32,6 +32,9 @@ class PlaylistResponse(BaseModel):
     """null for private playlists (no public ATProto record)."""
     is_private: bool
     created_at: str
+    preview_thumbnails: list[str] = []
+    """up to 4 distinct member-track artwork URLs, in playlist order.
+    clients render a composite cover from these when `image_url` is null."""
 
 
 class PlaylistWithTracksResponse(PlaylistResponse):

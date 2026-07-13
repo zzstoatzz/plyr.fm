@@ -3,6 +3,8 @@
 	import Header from '$lib/components/Header.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import PlaylistCover from '$lib/components/PlaylistCover.svelte';
+	import { hasPlaylistArt } from '$lib/playlist-cover';
 	import AddTracksModal from '$lib/components/playlist/AddTracksModal.svelte';
 	import OwnerActionButtons from '$lib/components/playlist/OwnerActionButtons.svelte';
 	import PlaylistTrackList from '$lib/components/playlist/PlaylistTrackList.svelte';
@@ -458,8 +460,14 @@
 					aria-label="change cover image"
 					disabled={uploadingCover}
 				>
-					{#if playlist.image_url}
-						<img src={playlist.image_url} alt="{playlist.name} artwork" class="playlist-art" />
+					{#if hasPlaylistArt(playlist)}
+						<div class="playlist-art">
+							<PlaylistCover
+								imageUrl={playlist.image_url}
+								previews={playlist.preview_thumbnails}
+								alt="{playlist.name} artwork"
+							/>
+						</div>
 					{:else}
 						<div class="playlist-art-placeholder">
 							<svg
@@ -519,6 +527,13 @@
 						<SensitiveImage src={playlist.image_url} tooltipPosition="center">
 							<img src={playlist.image_url} alt="{playlist.name} artwork" class="playlist-art" />
 						</SensitiveImage>
+					{:else if playlist.preview_thumbnails?.length}
+						<div class="playlist-art">
+							<PlaylistCover
+								previews={playlist.preview_thumbnails}
+								alt="{playlist.name} artwork"
+							/>
+						</div>
 					{:else}
 						<div class="playlist-art-placeholder">
 							<svg
@@ -720,6 +735,7 @@
 		height: 200px;
 		border-radius: var(--radius-md);
 		object-fit: cover;
+		overflow: hidden;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 	}
 

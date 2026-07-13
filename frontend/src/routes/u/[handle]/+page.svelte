@@ -10,6 +10,8 @@
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
 	import SupporterBadge from '$lib/components/SupporterBadge.svelte';
 	import RichText from '$lib/components/RichText.svelte';
+	import PlaylistCover from '$lib/components/PlaylistCover.svelte';
+	import { hasPlaylistArt } from '$lib/playlist-cover';
 	import { moderation } from '$lib/moderation.svelte';
 	import { player } from '$lib/player.svelte';
 	import { queue } from '$lib/queue.svelte';
@@ -667,8 +669,12 @@ $effect(() => {
 					{#each publicPlaylists as playlist}
 						<a href="/playlist/{playlist.id}" class="collection-link">
 							<div class="collection-icon playlist">
-								{#if playlist.image_url}
-									<img src={playlist.image_url} alt="{playlist.name} cover" />
+								{#if hasPlaylistArt(playlist)}
+									<PlaylistCover
+										imageUrl={playlist.image_url}
+										previews={playlist.preview_thumbnails}
+										alt="{playlist.name} cover"
+									/>
 								{:else}
 									<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<path d="M9 18V5l12-2v13"/>
@@ -1389,12 +1395,6 @@ $effect(() => {
 	.collection-icon.playlist {
 		background: var(--bg-tertiary);
 		color: var(--text-secondary);
-	}
-
-	.collection-icon.playlist img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
 	}
 
 	.collection-info {

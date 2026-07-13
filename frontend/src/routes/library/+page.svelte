@@ -8,6 +8,8 @@
 	import type { PageData } from './$types';
 	import type { Playlist } from '$lib/types';
 	import { toast } from '$lib/toast.svelte';
+	import PlaylistCover from '$lib/components/PlaylistCover.svelte';
+	import { hasPlaylistArt } from '$lib/playlist-cover';
 
 	let { data }: { data: PageData } = $props();
 	let playlists = $state<Playlist[]>(data.playlists);
@@ -183,8 +185,10 @@
 			<div class="playlists-list">
 				{#each playlists as playlist}
 					<a href="/playlist/{playlist.id}" class="collection-card">
-						{#if playlist.image_url}
-							<img src={playlist.image_url} alt="" class="playlist-artwork" />
+						{#if hasPlaylistArt(playlist)}
+							<div class="playlist-artwork">
+								<PlaylistCover imageUrl={playlist.image_url} previews={playlist.preview_thumbnails} />
+							</div>
 						{:else}
 							<div class="collection-icon playlist">
 								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -361,7 +365,7 @@
 		width: 48px;
 		height: 48px;
 		border-radius: var(--radius-md);
-		object-fit: cover;
+		overflow: hidden;
 		flex-shrink: 0;
 	}
 

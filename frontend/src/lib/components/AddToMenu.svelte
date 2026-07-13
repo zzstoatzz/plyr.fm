@@ -3,6 +3,8 @@
 	import { toast } from '$lib/toast.svelte';
 	import { API_URL } from '$lib/config';
 	import type { Playlist } from '$lib/types';
+	import PlaylistCover from '$lib/components/PlaylistCover.svelte';
+	import { hasPlaylistArt } from '$lib/playlist-cover';
 
 	interface Props {
 		trackId: number;
@@ -397,8 +399,10 @@
 										onclick={(e) => addToPlaylist(playlist, e)}
 										disabled={addingToPlaylist === playlist.id}
 									>
-										{#if playlist.image_url}
-											<img src={playlist.image_url} alt="" class="playlist-thumb" />
+										{#if hasPlaylistArt(playlist)}
+											<div class="playlist-thumb">
+												<PlaylistCover imageUrl={playlist.image_url} previews={playlist.preview_thumbnails} />
+											</div>
 										{:else}
 											<div class="playlist-thumb-placeholder">
 												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -612,7 +616,7 @@
 	}
 
 	.playlist-thumb {
-		object-fit: cover;
+		overflow: hidden;
 	}
 
 	.playlist-thumb-placeholder {
