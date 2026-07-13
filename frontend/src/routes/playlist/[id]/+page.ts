@@ -28,6 +28,7 @@ export async function load({ params, data }: LoadEvent): Promise<PageData> {
 				atproto_record_uri: serverData?.playlistMeta?.atproto_record_uri ?? null,
 				is_private: serverData?.playlistMeta?.is_private ?? false,
 				created_at: serverData?.playlistMeta?.created_at ?? '',
+				preview_thumbnails: serverData?.playlistMeta?.preview_thumbnails ?? [],
 				tracks: [],
 			},
 			playlistMeta: serverData?.playlistMeta ?? null,
