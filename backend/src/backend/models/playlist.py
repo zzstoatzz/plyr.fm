@@ -62,6 +62,10 @@ class Playlist(Base):
     )
     """only populated for private playlists. shape: `[{"uri", "cid"}, ...]`."""
     track_count: Mapped[int] = mapped_column(default=0)
+    preview_thumbnails: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    """up to 4 distinct member-track artwork URLs, in playlist order. cached
+    for composite covers when no explicit image is set; refreshed on item
+    mutations and self-healed on detail reads."""
     show_on_profile: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )

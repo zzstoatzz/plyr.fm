@@ -96,7 +96,7 @@ max_lines = 523
 
 [[rules]]
 path = "frontend/src/lib/components/AddToMenu.svelte"
-max_lines = 801
+max_lines = 805
 
 [[rules]]
 path = "frontend/src/lib/components/ProfileMenu.svelte"
@@ -252,7 +252,7 @@ max_lines = 594
 
 [[rules]]
 path = "backend/src/backend/api/lists/playlists.py"
-max_lines = 1050
+max_lines = 1086
 
 [[rules]]
 path = "backend/src/backend/api/tracks/audio_replace.py"

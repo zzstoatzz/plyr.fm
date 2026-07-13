@@ -49,6 +49,7 @@ from backend.storage import storage
 from backend.utilities.redis import get_async_redis_client
 
 from .hydration import hydrate_tracks_from_uris
+from .previews import compute_preview_thumbnails, heal_preview_thumbnails
 from .router import router
 from .schemas import (
     AddTrackRequest,
@@ -82,6 +83,7 @@ def _build_playlist_response(playlist: Playlist, owner_handle: str) -> PlaylistR
         atproto_record_uri=playlist.atproto_record_uri,
         is_private=playlist.is_private,
         created_at=playlist.created_at.isoformat(),
+        preview_thumbnails=playlist.preview_thumbnails or [],
     )
 
 
@@ -296,6 +298,24 @@ async def list_playlists(
         .order_by(Playlist.created_at.desc())
     )
     rows = result.all()
+
+    # legacy private playlists predate the preview cache; their items are
+    # local, so backfill inline. public ones heal on their next detail read.
+    healed = False
+    for playlist, _ in rows:
+        if playlist.preview_thumbnails is None and playlist.is_private:
+            playlist.preview_thumbnails = await compute_preview_thumbnails(
+                db,
+                [
+                    item["uri"]
+                    for item in (playlist.items_json or [])
+                    if item.get("uri")
+                ],
+            )
+            healed = True
+    if healed:
+        await db.commit()
+
     return [
         _build_playlist_response(playlist, artist.handle) for playlist, artist in rows
     ]
@@ -362,6 +382,8 @@ async def get_playlist_by_uri(
         [ref["uri"] for ref in item_refs],
         session_did=session.did if session else None,
     )
+
+    await heal_preview_thumbnails(db, playlist, tracks)
 
     return _build_playlist_with_tracks(playlist, artist.handle, tracks)
 
@@ -435,6 +457,8 @@ async def get_playlist(
         [ref["uri"] for ref in item_refs],
         session_did=session.did if session else None,
     )
+
+    await heal_preview_thumbnails(db, playlist, tracks)
 
     return _build_playlist_with_tracks(playlist, artist.handle, tracks)
 
@@ -523,6 +547,10 @@ async def add_track_to_playlist(
 
         playlist.atproto_record_cid = cid
         playlist.track_count = len(new_items)
+
+    playlist.preview_thumbnails = await compute_preview_thumbnails(
+        db, [item["uri"] for item in new_items if item.get("uri")]
+    )
 
     if not playlist.is_private:
         # private additions don't go in the platform-wide activity feed
@@ -625,6 +653,10 @@ async def remove_track_from_playlist(
         playlist.atproto_record_cid = cid
         playlist.track_count = len(new_items)
 
+    playlist.preview_thumbnails = await compute_preview_thumbnails(
+        db, [item["uri"] for item in new_items if item.get("uri")]
+    )
+
     await db.commit()
     await db.refresh(playlist)
 
@@ -683,6 +715,10 @@ async def reorder_playlist(
             raise HTTPException(
                 status_code=500, detail=f"failed to reorder playlist: {e}"
             ) from e
+
+    playlist.preview_thumbnails = await compute_preview_thumbnails(
+        db, [item["uri"] for item in body.items if item.get("uri")]
+    )
 
     await db.commit()
     await db.refresh(playlist)

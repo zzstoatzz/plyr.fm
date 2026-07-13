@@ -156,6 +156,9 @@ export interface Playlist {
 	atproto_record_uri: string | null;
 	is_private: boolean;
 	created_at: string;
+	/** up to 4 distinct member-track artwork URLs, in playlist order —
+	 * used for the composite cover when no explicit image is set */
+	preview_thumbnails?: string[];
 }
 
 export interface PlaylistWithTracks extends Playlist {
