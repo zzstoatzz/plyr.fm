@@ -7,13 +7,16 @@ live locally, so the full add/remove/list flow runs without a PDS.
 """
 
 from collections.abc import Generator
+from io import BytesIO
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from PIL import Image as PILImage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session, require_auth
+from backend.api.lists import covers
 from backend.main import app
 from backend.models import Artist, Playlist, Track
 
@@ -195,6 +198,81 @@ async def test_remove_cover_falls_back_to_composite(
 
         resp = await client.delete(f"/lists/playlists/{playlist['id']}/cover")
         assert resp.status_code == 400
+
+
+async def test_og_cover_redirects_to_explicit_cover(
+    app_as_owner: FastAPI,
+    db_session: AsyncSession,
+    owner: Artist,
+    tracks: list[Track],
+) -> None:
+    async with _client(app_as_owner) as client:
+        playlist = await _create_private_playlist(client)
+        await _add_track(client, playlist["id"], tracks[0])
+
+    row = await db_session.get(Playlist, playlist["id"])
+    assert row is not None
+    row.image_url = "https://img.test/cover.jpg"
+    await db_session.commit()
+
+    async with _client(app_as_owner) as client:
+        resp = await client.get(f"/lists/playlists/{playlist['id']}/og-cover")
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "https://img.test/cover.jpg"
+
+
+async def test_og_cover_below_four_redirects_to_full_size_first_artwork(
+    app_as_owner: FastAPI, tracks: list[Track]
+) -> None:
+    """the cache stores 96px thumbnails; the og redirect upgrades to the
+    track's full-size artwork."""
+    async with _client(app_as_owner) as client:
+        playlist = await _create_private_playlist(client)
+        await _add_track(client, playlist["id"], tracks[0])
+        await _add_track(client, playlist["id"], tracks[1])
+
+        resp = await client.get(f"/lists/playlists/{playlist['id']}/og-cover")
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "https://img.test/full0.jpg"
+
+
+async def test_og_cover_404_without_artwork(
+    app_as_owner: FastAPI, tracks: list[Track]
+) -> None:
+    async with _client(app_as_owner) as client:
+        playlist = await _create_private_playlist(client)
+        await _add_track(client, playlist["id"], tracks[4])
+
+        resp = await client.get(f"/lists/playlists/{playlist['id']}/og-cover")
+    assert resp.status_code == 404
+
+
+async def test_og_cover_composes_mosaic_at_four(
+    app_as_owner: FastAPI,
+    tracks: list[Track],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tile_buf = BytesIO()
+    PILImage.new("RGB", (64, 64), color=(200, 40, 40)).save(tile_buf, format="PNG")
+    tile = tile_buf.getvalue()
+
+    async def fake_fetch(client: object, url: str) -> bytes:
+        return tile
+
+    monkeypatch.setattr(covers, "_fetch_image", fake_fetch)
+
+    async with _client(app_as_owner) as client:
+        playlist = await _create_private_playlist(client)
+        for track in tracks[:4]:
+            await _add_track(client, playlist["id"], track)
+
+        resp = await client.get(f"/lists/playlists/{playlist['id']}/og-cover")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    assert "max-age" in resp.headers["cache-control"]
+    composed = PILImage.open(BytesIO(resp.content))
+    assert composed.size == (600, 600)
 
 
 async def test_legacy_private_playlist_heals_on_list(

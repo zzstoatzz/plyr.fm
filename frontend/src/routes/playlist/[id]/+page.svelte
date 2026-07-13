@@ -431,10 +431,12 @@
 	<meta property="og:site_name" content={APP_NAME} />
 	{#if playlist.image_url}
 		<meta property="og:image" content={playlist.image_url} />
+	{:else if playlist.preview_thumbnails?.length}
+		<meta property="og:image" content="{API_URL}/lists/playlists/{playlist.id}/og-cover" />
 	{/if}
 
 	<!-- Twitter -->
-	<meta name="twitter:card" content={playlist.image_url ? 'summary_large_image' : 'summary'} />
+	<meta name="twitter:card" content={hasPlaylistArt(playlist) ? 'summary_large_image' : 'summary'} />
 	<meta name="twitter:title" content={playlist.name} />
 	<meta
 		name="twitter:description"
@@ -445,6 +447,8 @@
 	/>
 	{#if playlist.image_url}
 		<meta name="twitter:image" content={playlist.image_url} />
+	{:else if playlist.preview_thumbnails?.length}
+		<meta name="twitter:image" content="{API_URL}/lists/playlists/{playlist.id}/og-cover" />
 	{/if}
 	<link
 		rel="alternate"
