@@ -764,6 +764,24 @@ class Queue {
 		this.syncState();
 	}
 
+	/**
+	 * Promote a continuation-tail track into the explicit up-next region
+	 * (dropped on the up-next zone). It lands at the end of the explicit
+	 * picks, just before the tail.
+	 */
+	promoteToUpNext(fromIndex: number) {
+		if (!this.isContinuationIndex(fromIndex)) return;
+
+		this.lastUpdateWasLocal = true;
+		const updated = [...this.tracks];
+		const [moved] = updated.splice(fromIndex, 1);
+		const insertAt = Math.max(this.currentIndex + 1, Math.min(this.continuationFromIndex, updated.length));
+		updated.splice(insertAt, 0, moved);
+		this.tracks = updated;
+		this.continuationFromIndex = Math.min(this.continuationFromIndex + 1, updated.length);
+		this.syncState();
+	}
+
 	moveTrack(fromIndex: number, toIndex: number) {
 		if (fromIndex === toIndex) return;
 		if (fromIndex < 0 || fromIndex >= this.tracks.length) return;
