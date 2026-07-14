@@ -106,8 +106,6 @@ export interface QueueState {
 	progress_ms?: number;
 	/** index where the auto-generated continuation tail begins (== length when none) */
 	continuation_from_index?: number;
-	/** user explicitly cleared the queue — suppress backfill until next play context */
-	continuation_suppressed?: boolean;
 	/** label for the continuation tail ("next from: <label>"); null/absent => the For You feed */
 	continuation_label?: string | null;
 	repeat_mode?: RepeatMode;
