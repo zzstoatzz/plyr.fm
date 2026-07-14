@@ -55,14 +55,6 @@ class Queue {
 	continuationFromIndex = $state(0);
 
 	/**
-	 * "the user explicitly cleared the queue" intent. Suppresses backfill until
-	 * the next explicit play context so "clear upcoming" actually clears.
-	 * Persisted (`continuation_suppressed`) so the clear is authoritative across
-	 * tabs and reloads, not just in the tab that clicked it.
-	 */
-	suppressContinuation = false;
-
-	/**
 	 * Label for the continuation tail, rendered as "next from: <label>".
 	 * `null` means the tail is the For You feed (the default fallback source).
 	 * A collection name (album/playlist) is set by `playContext` when a track is
@@ -350,10 +342,6 @@ class Queue {
 				? Math.max(0, Math.min(restored, this.tracks.length))
 				: this.tracks.length;
 
-		// restore the "user cleared it" intent so clear stays authoritative
-		// across tabs/reload (a refilling tab can't undo another's clear)
-		this.suppressContinuation = state.continuation_suppressed ?? false;
-
 		// a tail with no items has no meaningful label
 		this.continuationLabel =
 			this.continuationFromIndex < this.tracks.length ? (state.continuation_label ?? null) : null;
@@ -434,7 +422,6 @@ class Queue {
 				original_order_ids: this.originalOrder.map((t) => t.file_id),
 				progress_ms: this.progressMs,
 				continuation_from_index: this.continuationFromIndex,
-				continuation_suppressed: this.suppressContinuation,
 				continuation_label: this.continuationLabel
 			};
 
@@ -543,7 +530,6 @@ class Queue {
 		if (tracks.length === 0) return;
 
 		this.lastUpdateWasLocal = true;
-		this.suppressContinuation = false;
 
 		// explicit adds slot ahead of the continuation tail (so the user's own picks
 		// play before recommendations) but never before the current track —
@@ -634,7 +620,6 @@ class Queue {
 		}
 
 		this.lastUpdateWasLocal = true;
-		this.suppressContinuation = false;
 		this.tracks = [...tracks];
 		this.originalOrder = [...tracks];
 		this.currentIndex = this.clampIndex(startIndex);
@@ -645,7 +630,6 @@ class Queue {
 	playNow(track: Track, autoPlay = true) {
 		player.radio = null; // playing a track leaves radio mode
 		this.lastUpdateWasLocal = autoPlay;
-		this.suppressContinuation = false;
 		// keep explicitly-queued up-next, but drop the stale "next from" tail —
 		// the new track is a new context, so let backfill regenerate it
 		const upNext = this.tracks.slice(this.currentIndex + 1, this.continuationFromIndex);
@@ -670,7 +654,6 @@ class Queue {
 		if (tracks.length === 0) return;
 		player.radio = null; // playing a track leaves radio mode
 		this.lastUpdateWasLocal = true;
-		this.suppressContinuation = false;
 
 		const start = Math.max(0, Math.min(startIndex, tracks.length - 1));
 		const tapped = tracks[start];
@@ -691,7 +674,6 @@ class Queue {
 
 	clear() {
 		this.lastUpdateWasLocal = true;
-		this.suppressContinuation = false;
 		this.tracks = [];
 		this.originalOrder = [];
 		this.currentIndex = 0;
@@ -862,21 +844,21 @@ class Queue {
 		this.syncState();
 	}
 
+	/**
+	 * Clear the explicit up-next picks — the tracks the user consciously queued.
+	 * The continuation tail (a collection remainder or the For You backfill) is
+	 * not a conscious pick, so it stays; "keep playing" keeps playing.
+	 */
 	clearUpNext() {
-		if (this.tracks.length === 0) return;
+		const start = this.currentIndex + 1;
+		const end = Math.max(start, Math.min(this.continuationFromIndex, this.tracks.length));
+		if (end <= start) return;
 
 		this.lastUpdateWasLocal = true;
-
-		// keep only the current track
-		const currentTrack = this.tracks[this.currentIndex];
-		if (!currentTrack) return;
-
-		// explicit "clear" intent — don't let backfill immediately refill it
-		this.suppressContinuation = true;
-		this.tracks = [currentTrack];
-		this.originalOrder = [currentTrack];
-		this.currentIndex = 0;
-		this.resetContinuation();
+		const removedIds = new Set(this.tracks.slice(start, end).map((t) => t.file_id));
+		this.tracks = [...this.tracks.slice(0, start), ...this.tracks.slice(end)];
+		this.originalOrder = this.originalOrder.filter((t) => !removedIds.has(t.file_id));
+		this.continuationFromIndex = start;
 
 		this.syncState();
 	}
@@ -890,7 +872,6 @@ class Queue {
 	async fillContinuation(): Promise<void> {
 		if (!browser) return;
 		if (this.jamBridge) return;
-		if (this.suppressContinuation) return;
 		if (this.backfilling) return;
 
 		this.backfilling = true;

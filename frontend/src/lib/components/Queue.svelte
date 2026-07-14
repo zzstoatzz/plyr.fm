@@ -360,7 +360,8 @@
 					<button
 						class="shuffle-btn"
 						onclick={() => queue.toggleShuffle()}
-						title="shuffle up next"
+						disabled={explicitUpcoming.length < 2}
+						title={explicitUpcoming.length < 2 ? 'nothing to shuffle' : 'shuffle up next'}
 					>
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<polyline points="16 3 21 3 21 8"></polyline>
@@ -386,11 +387,11 @@
 							{/if}
 						</svg>
 					</button>
-					{#if upcoming.length > 0}
+					{#if explicitUpcoming.length > 0}
 						<button
 							class="clear-btn"
 							onclick={() => queue.clearUpNext()}
-							title="clear upcoming tracks"
+							title="clear your queued tracks"
 						>
 							clear
 						</button>
@@ -733,11 +734,16 @@
 		transition: all 0.15s ease;
 	}
 
-	.shuffle-btn:hover,
+	.shuffle-btn:hover:not(:disabled),
 	.repeat-btn:hover {
 		color: var(--text-secondary);
 		border-color: var(--border-default);
 		background: var(--bg-secondary);
+	}
+
+	.shuffle-btn:disabled {
+		opacity: 0.4;
+		cursor: default;
 	}
 
 	.repeat-btn.active {

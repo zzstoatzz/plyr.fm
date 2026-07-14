@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { queue, shuffleInPlace } from '$lib/queue.svelte';
 import { player } from '$lib/player.svelte';
+import { forYouCache } from '$lib/for-you.svelte';
 import type { Track } from '$lib/types';
 
 function track(id: number): Track {
@@ -106,6 +107,58 @@ describe('queue.playContext', () => {
 		// track 2 stays in the explicit region and is not re-added to the tail
 		expect(queue.tracks.map((t) => t.id)).toEqual([5, 2, 6]);
 		expect(queue.continuationFromIndex).toBe(2);
+	});
+});
+
+// "clear" clears the conscious picks — the tracks the user explicitly queued.
+// it must never touch the continuation tail or veto keep-playing backfill
+// (a persisted suppression flag used to silently kill keep-playing until the
+// next explicit add).
+describe('queue.clearUpNext', () => {
+	it('removes explicit up-next but keeps the continuation tail', () => {
+		queue.setQueue(album([1, 2, 3]), 0); // current 1, explicit up-next 2, 3
+		queue.appendContinuation(album([50, 51])); // For You tail
+
+		queue.clearUpNext();
+
+		expect(queue.tracks.map((t) => t.id)).toEqual([1, 50, 51]);
+		expect(queue.currentIndex).toBe(0);
+		expect(queue.continuationFromIndex).toBe(1);
+	});
+
+	it('keeps a labeled collection tail too', () => {
+		queue.setQueue(album([1, 2]), 0); // explicit up-next: 2
+		queue.playContext(album([10, 11, 12]), 0, 'road mix'); // tapped 10, explicit 2, tail 11, 12
+
+		queue.clearUpNext();
+
+		expect(queue.tracks.map((t) => t.id)).toEqual([10, 11, 12]);
+		expect(queue.continuationLabel).toBe('road mix');
+	});
+
+	it('does not block keep-playing backfill afterwards', async () => {
+		queue.setQueue(album([1, 2]), 0);
+		queue.clearUpNext();
+		expect(queue.tracks.map((t) => t.id)).toEqual([1]);
+
+		// keep-playing tops the tail back up — a past clear must not veto it
+		forYouCache.tracks = album([60, 61]);
+		forYouCache.hasMore = false;
+		await queue.fillContinuation();
+
+		// the tail is shuffled on append, so assert membership not order
+		expect(queue.tracks.map((t) => t.id).sort()).toEqual([1, 60, 61]);
+		expect(queue.currentTrack?.id).toBe(1);
+		expect(queue.isContinuationIndex(1)).toBe(true);
+	});
+
+	it('no-ops when there are no explicit picks (tail-only queue)', () => {
+		queue.setQueue(album([1]), 0);
+		queue.appendContinuation(album([50, 51]));
+
+		queue.clearUpNext();
+
+		expect(queue.tracks.map((t) => t.id)).toEqual([1, 50, 51]);
 	});
 });
 
