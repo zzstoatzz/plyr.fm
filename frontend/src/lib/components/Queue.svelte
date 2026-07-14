@@ -359,9 +359,8 @@
 					</button>
 					<button
 						class="shuffle-btn"
-						class:active={queue.shuffle}
 						onclick={() => queue.toggleShuffle()}
-						title={queue.shuffle ? 'disable shuffle' : 'enable shuffle'}
+						title="shuffle up next"
 					>
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<polyline points="16 3 21 3 21 8"></polyline>
@@ -444,8 +443,6 @@
 							<a class="source-chip radio-source" href="/radio">{currentSourceLabel}</a>
 						{:else if jam.active && jam.code}
 							<a class="source-chip" href={`/jam/${jam.code}`}>{currentSourceLabel}</a>
-						{:else}
-							<span class="source-chip">{currentSourceLabel}</span>
 						{/if}
 					</div>
 					<div class="now-playing-card">
@@ -497,6 +494,7 @@
 				{:else}
 					<div class="empty-up-next">
 						<span>nothing else in the queue</span>
+						<a href="/for-you" class="empty-cta">find something to play</a>
 					</div>
 				{/if}
 			</section>
@@ -742,7 +740,6 @@
 		background: var(--bg-secondary);
 	}
 
-	.shuffle-btn.active,
 	.repeat-btn.active {
 		color: var(--accent);
 		border-color: var(--accent);
@@ -1084,11 +1081,26 @@
 	}
 
 	.empty-up-next {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
 		border: 1px dashed var(--border-subtle);
 		border-radius: var(--radius-base);
 		padding: 1.25rem;
 		text-align: center;
 		color: var(--text-tertiary);
+	}
+
+	.empty-cta {
+		font-size: var(--text-sm);
+		color: var(--accent);
+		text-decoration: none;
+		transition: color 0.15s ease;
+	}
+
+	.empty-cta:hover {
+		text-decoration: underline;
 	}
 
 	.queue.empty {
