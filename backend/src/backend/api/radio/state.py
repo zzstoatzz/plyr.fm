@@ -127,6 +127,7 @@ async def _to_radio_tracks(
             artwork_url=track.image_url or track.artist.avatar_url,
             thumbnail_url=track.thumbnail_url,
             atproto_record_uri=track.atproto_record_uri,
+            atproto_record_cid=track.atproto_record_cid,
             created_at=track.created_at.isoformat(),
             tags=sorted(tag_map.get(track.id, set())),
             like_count=like_counts.get(track.id, 0),
