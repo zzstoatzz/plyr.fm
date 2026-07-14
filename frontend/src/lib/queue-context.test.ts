@@ -162,6 +162,41 @@ describe('queue.clearUpNext', () => {
 	});
 });
 
+// dragging a tail track onto the (possibly empty) up-next zone promotes it
+// into the explicit picks — the tail is auto-generated, a drag is a conscious
+// choice.
+describe('queue.promoteToUpNext', () => {
+	it('moves a tail track to the end of the explicit picks', () => {
+		queue.setQueue(album([1, 2]), 0); // current 1, explicit 2
+		queue.appendContinuation(album([50, 51, 52]));
+
+		queue.promoteToUpNext(3); // 51
+
+		expect(queue.tracks.map((t) => t.id)).toEqual([1, 2, 51, 50, 52]);
+		expect(queue.continuationFromIndex).toBe(3);
+		expect(queue.isContinuationIndex(2)).toBe(false); // 51 now explicit
+		expect(queue.isContinuationIndex(3)).toBe(true); // 50 still tail
+	});
+
+	it('works when the explicit up-next is empty (the zero-height drop zone case)', () => {
+		queue.setQueue(album([1]), 0);
+		queue.appendContinuation(album([50, 51]));
+		expect(queue.continuationFromIndex).toBe(1); // no explicit picks
+
+		queue.promoteToUpNext(2); // 51
+
+		expect(queue.tracks.map((t) => t.id)).toEqual([1, 51, 50]);
+		expect(queue.continuationFromIndex).toBe(2);
+		expect(queue.isContinuationIndex(1)).toBe(false);
+	});
+
+	it('ignores non-tail indexes', () => {
+		queue.setQueue(album([1, 2, 3]), 0);
+		queue.promoteToUpNext(1); // explicit, not tail
+		expect(queue.tracks.map((t) => t.id)).toEqual([1, 2, 3]);
+	});
+});
+
 // the For You feed changes slowly, so fillContinuation shuffles candidates
 // before appending — otherwise the same top-of-feed track leads the tail after
 // every refill (drove a "same song after everything I play" report).

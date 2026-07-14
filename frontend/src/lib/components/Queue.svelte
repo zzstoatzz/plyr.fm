@@ -21,6 +21,10 @@
 	let touchDragElement = $state<HTMLElement | null>(null);
 	let queueTracksElement = $state<HTMLElement | null>(null);
 
+	// drop target for promoting a tail track when the explicit up-next is empty
+	let dropZoneElement = $state<HTMLElement | null>(null);
+	let dropZoneActive = $state(false);
+
 	// per-track artwork load failures (file_id), so a broken thumbnail falls
 	// back to the placeholder rather than showing a busted image
 	let imgErrored = $state(new Set<string>());
@@ -149,6 +153,16 @@
 		const offset = touchCurrentY - touchStartY;
 		touchDragElement.style.transform = `translateY(${offset}px)`;
 
+		// hovering the empty up-next drop zone promotes instead of reordering
+		if (dropZoneElement) {
+			const rect = dropZoneElement.getBoundingClientRect();
+			dropZoneActive = touch.clientY >= rect.top && touch.clientY <= rect.bottom;
+			if (dropZoneActive) {
+				dragOverIndex = null;
+				return;
+			}
+		}
+
 		// find which track we're hovering over
 		const tracks = queueTracksElement.querySelectorAll('.queue-track');
 		for (let i = 0; i < tracks.length; i++) {
@@ -173,9 +187,12 @@
 	}
 
 	function handleTouchEnd() {
-		if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
+		if (touchDragIndex !== null && dropZoneActive) {
+			queue.promoteToUpNext(touchDragIndex);
+		} else if (touchDragIndex !== null && dragOverIndex !== null && touchDragIndex !== dragOverIndex) {
 			queue.moveTrack(touchDragIndex, dragOverIndex);
 		}
+		dropZoneActive = false;
 
 		// cleanup
 		if (touchDragElement) {
@@ -470,6 +487,31 @@
 						{#each explicitUpcoming as { track, index } (`${track.file_id}:${index}`)}
 							{@render queueRow(track, index)}
 						{/each}
+
+						{#if explicitUpcoming.length === 0 && continuationUpcoming.length > 0}
+							<!-- with no explicit picks the up-next region has zero height, so a
+							     dragged tail track would have nowhere to land — give it a target -->
+							<div
+								class="up-next-drop-zone"
+								class:drag-over={dropZoneActive}
+								role="listitem"
+								bind:this={dropZoneElement}
+								ondragover={(e) => {
+									e.preventDefault();
+									dropZoneActive = true;
+									dragOverIndex = null;
+								}}
+								ondragleave={() => (dropZoneActive = false)}
+								ondrop={(e) => {
+									e.preventDefault();
+									if (draggedIndex !== null) queue.promoteToUpNext(draggedIndex);
+									dropZoneActive = false;
+									draggedIndex = null;
+								}}
+							>
+								<span>drag here to play next</span>
+							</div>
+						{/if}
 
 						{#if continuationUpcoming.length > 0}
 							<div class="section-header continuation-header">
@@ -1084,6 +1126,22 @@
 		.remove-btn {
 			opacity: 1;
 		}
+	}
+
+	.up-next-drop-zone {
+		border: 1px dashed var(--border-subtle);
+		border-radius: var(--radius-base);
+		padding: 0.85rem;
+		text-align: center;
+		color: var(--text-muted);
+		font-size: var(--text-sm);
+		transition: all 0.15s ease;
+	}
+
+	.up-next-drop-zone.drag-over {
+		border-color: var(--accent);
+		color: var(--text-secondary);
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
 	}
 
 	.empty-up-next {
