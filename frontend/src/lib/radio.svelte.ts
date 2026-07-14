@@ -18,6 +18,7 @@ export interface RadioTrack {
 	artwork_url: string | null;
 	thumbnail_url: string | null;
 	atproto_record_uri: string | null;
+	atproto_record_cid: string | null;
 	created_at: string;
 	tags: string[];
 	like_count: number;

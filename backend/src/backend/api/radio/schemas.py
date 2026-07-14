@@ -22,6 +22,7 @@ class RadioTrack(BaseModel):
     artwork_url: str | None
     thumbnail_url: str | None
     atproto_record_uri: str | None
+    atproto_record_cid: str | None
     created_at: str
     tags: list[str]
     like_count: int

@@ -11,7 +11,7 @@
 	import TunerDial from '$lib/components/radio/TunerDial.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
-	import LikeButton from '$lib/components/LikeButton.svelte';
+	import AddToMenu from '$lib/components/AddToMenu.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -200,7 +200,13 @@
 					{/if}
 					{#if auth.isAuthenticated}
 						{#key radio.current.id}
-							<LikeButton trackId={radio.current.id} trackTitle={radio.current.title} initialLiked={radio.current.liked} />
+							<AddToMenu
+								trackId={radio.current.id}
+								trackTitle={radio.current.title}
+								trackUri={radio.current.atproto_record_uri ?? undefined}
+								trackCid={radio.current.atproto_record_cid ?? undefined}
+								initialLiked={radio.current.liked}
+							/>
 						{/key}
 					{/if}
 				</div>
