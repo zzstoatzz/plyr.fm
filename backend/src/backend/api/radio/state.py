@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session
 from backend.api.radio import stations
-from backend.api.radio.cache import get_cached_rotation, set_cached_rotation
+from backend.api.radio.cache import get_rotation
 from backend.api.radio.corpus import load_corpus
 from backend.api.radio.lenses import LensContext
 from backend.api.radio.router import router
@@ -150,15 +150,13 @@ async def _load_rotation(
     listener volume that recomputation was enough to saturate the database and
     slow every other endpoint down (2026-07-14).
     """
-    period = str(int(now.timestamp()) // ROTATION_PERIOD_SECONDS)
-    if cached := await get_cached_rotation(station.slug, limit, period):
-        return cached
 
-    tracks, like_counts = await _select_rotation(db, station, limit, now)
-    rotation = await _to_radio_tracks(db, tracks, like_counts)
-    if rotation:
-        await set_cached_rotation(station.slug, limit, period, rotation)
-    return rotation
+    async def build() -> list[RadioTrack]:
+        tracks, like_counts = await _select_rotation(db, station, limit, now)
+        return await _to_radio_tracks(db, tracks, like_counts)
+
+    period = str(int(now.timestamp()) // ROTATION_PERIOD_SECONDS)
+    return await get_rotation(station.slug, limit, period, build)
 
 
 async def _with_liked_state(

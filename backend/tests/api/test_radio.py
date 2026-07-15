@@ -1,5 +1,6 @@
 """tests for public radio state and the station lineup."""
 
+import asyncio
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 
@@ -15,6 +16,7 @@ from backend.api.radio import lenses
 from backend.api.radio import state as radio_state
 from backend.api.radio.lenses import LensContext
 from backend.api.radio.sampler import build_rotation, rank_decay_weights
+from backend.api.radio.schemas import RadioTrack
 from backend.config import settings
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
@@ -43,13 +45,25 @@ class _FakeRedis:
     """minimal in-memory stand-in for the async redis client."""
 
     def __init__(self) -> None:
-        self.store: dict[str, bytes] = {}
+        self.store: dict[str, bytes | str] = {}
 
-    async def get(self, key: str) -> bytes | None:
+    async def get(self, key: str) -> bytes | str | None:
         return self.store.get(key)
 
-    async def set(self, key: str, value: bytes, ex: int | None = None) -> None:
+    async def set(
+        self,
+        key: str,
+        value: bytes | str,
+        ex: int | None = None,
+        nx: bool = False,
+    ) -> bool | None:
+        if nx and key in self.store:
+            return None
         self.store[key] = value
+        return True
+
+    async def delete(self, key: str) -> None:
+        self.store.pop(key, None)
 
 
 # --- lens semantics (pure functions, no sampler randomness) -----------------
@@ -740,3 +754,44 @@ async def test_cached_rotation_is_anonymous_with_per_request_likes(
     finally:
         del radio_app.dependency_overrides[get_optional_session]
     assert {t["id"]: t["liked"] for t in hit.json()["rotation"]}[liked.id] is True
+
+
+async def test_concurrent_cache_misses_build_once(
+    rotation_cache: _FakeRedis,
+) -> None:
+    """expiry doesn't stampede: concurrent misses coalesce onto one build."""
+    builds = 0
+
+    async def build() -> list[RadioTrack]:
+        nonlocal builds
+        builds += 1
+        # hold the build lock long enough for the other misses to arrive
+        await asyncio.sleep(0.3)
+        return [
+            RadioTrack(
+                id=1,
+                title="t",
+                artist="a",
+                artist_handle="a.plyr.fm",
+                artist_did="did:plc:a",
+                stream_url="https://api.plyr.fm/audio/t",
+                file_type="mp3",
+                duration=180,
+                artwork_url=None,
+                thumbnail_url=None,
+                atproto_record_uri=None,
+                atproto_record_cid=None,
+                created_at="2026-07-14T00:00:00+00:00",
+                tags=[],
+                like_count=0,
+                play_count=0,
+            )
+        ]
+
+    results = await asyncio.gather(
+        *(radio_cache.get_rotation("loved", 40, "period", build) for _ in range(10))
+    )
+
+    assert builds == 1
+    assert all(rotation == results[0] for rotation in results)
+    assert all(rotation[0].id == 1 for rotation in results)
