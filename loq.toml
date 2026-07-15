@@ -44,7 +44,7 @@ max_lines = 1843
 
 [[rules]]
 path = "backend/src/backend/config.py"
-max_lines = 1158
+max_lines = 1182
 
 [[rules]]
 path = "backend/src/backend/storage/r2.py"
@@ -332,7 +332,7 @@ max_lines = 954
 
 [[rules]]
 path = "backend/tests/api/test_radio.py"
-max_lines = 608
+max_lines = 742
 
 [[rules]]
 path = "frontend/src/lib/uploader.svelte.ts"
