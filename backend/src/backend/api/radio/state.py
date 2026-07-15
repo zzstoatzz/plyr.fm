@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend._internal import Session as AuthSession
 from backend._internal import get_optional_session
 from backend.api.radio import stations
+from backend.api.radio.cache import get_rotation
 from backend.api.radio.corpus import load_corpus
 from backend.api.radio.lenses import LensContext
 from backend.api.radio.router import router
@@ -109,9 +110,8 @@ async def _to_radio_tracks(
     db: AsyncSession,
     tracks: list[Track],
     like_counts: dict[int, int],
-    liked_ids: set[int],
 ) -> list[RadioTrack]:
-    """Serialize tracks for public radio consumers."""
+    """Serialize tracks for public radio consumers (anonymous: liked=False)."""
     track_ids = [track.id for track in tracks]
     tag_map = await get_track_tags(db, track_ids)
     return [
@@ -132,9 +132,48 @@ async def _to_radio_tracks(
             tags=sorted(tag_map.get(track.id, set())),
             like_count=like_counts.get(track.id, 0),
             play_count=track.play_count,
-            liked=track.id in liked_ids,
         )
         for track in tracks
+    ]
+
+
+async def _load_rotation(
+    db: AsyncSession,
+    station: stations.Station,
+    limit: int,
+    now: datetime,
+) -> list[RadioTrack]:
+    """Return the station's anonymous rotation, cached per (station, limit, period).
+
+    The rotation is deterministic within a period, so recomputing it on every
+    poll only reloads the same full catalog from the database; under real
+    listener volume that recomputation was enough to saturate the database and
+    slow every other endpoint down (2026-07-14).
+    """
+
+    async def build() -> list[RadioTrack]:
+        tracks, like_counts = await _select_rotation(db, station, limit, now)
+        return await _to_radio_tracks(db, tracks, like_counts)
+
+    period = str(int(now.timestamp()) // ROTATION_PERIOD_SECONDS)
+    return await get_rotation(station.slug, limit, period, build)
+
+
+async def _with_liked_state(
+    db: AsyncSession,
+    rotation: list[RadioTrack],
+    session: AuthSession | None,
+) -> list[RadioTrack]:
+    """Overlay the requesting user's likes on an anonymous rotation."""
+    if session is None or not rotation:
+        return rotation
+    liked_ids = await get_user_liked_track_ids(
+        db, session.did, [track.id for track in rotation]
+    )
+    if not liked_ids:
+        return rotation
+    return [
+        track.model_copy(update={"liked": track.id in liked_ids}) for track in rotation
     ]
 
 
@@ -212,13 +251,9 @@ async def radio_state(
         raise HTTPException(status_code=404, detail=f"unknown station: {station}")
 
     now = datetime.now(UTC)
-    tracks, like_counts = await _select_rotation(db, resolved, limit, now)
-    liked_ids = (
-        await get_user_liked_track_ids(db, session.did, [t.id for t in tracks])
-        if session
-        else set()
+    rotation = await _with_liked_state(
+        db, await _load_rotation(db, resolved, limit, now), session
     )
-    rotation = await _to_radio_tracks(db, tracks, like_counts, liked_ids)
     current_index, progress, started_at, ends_at = _live_window(now, rotation)
     current = rotation[current_index] if current_index is not None else None
 

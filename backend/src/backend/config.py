@@ -899,6 +899,26 @@ class TurbopufferSettings(AppSettingsSection):
     )
 
 
+class RadioSettings(AppSettingsSection):
+    """Public radio settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="RADIO_",
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    rotation_cache_ttl_seconds: int = Field(
+        default=60,
+        description=(
+            "TTL for the cached per-station rotation. Every /radio/state poll "
+            "rebuilds the rotation from the full eligible catalog, so this "
+            "bounds that work to once per station per TTL. 0 disables caching."
+        ),
+    )
+
+
 class JetstreamSettings(AppSettingsSection):
     """ATProto Jetstream consumer settings for real-time record ingestion."""
 
@@ -1144,6 +1164,10 @@ class Settings(AppSettingsSection):
     modal: ModalSettings = Field(
         default_factory=ModalSettings,
         description="Modal CLAP embedding service settings",
+    )
+    radio: RadioSettings = Field(
+        default_factory=RadioSettings,
+        description="Public radio settings",
     )
     turbopuffer: TurbopufferSettings = Field(
         default_factory=TurbopufferSettings,

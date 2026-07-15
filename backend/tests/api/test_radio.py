@@ -1,5 +1,6 @@
 """tests for public radio state and the station lineup."""
 
+import asyncio
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 
@@ -10,9 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, get_optional_session
+from backend.api.radio import cache as radio_cache
 from backend.api.radio import lenses
+from backend.api.radio import state as radio_state
 from backend.api.radio.lenses import LensContext
 from backend.api.radio.sampler import build_rotation, rank_decay_weights
+from backend.api.radio.schemas import RadioTrack
 from backend.config import settings
 from backend.main import app
 from backend.models import Artist, Tag, Track, TrackLike, TrackTag, get_db
@@ -29,6 +33,37 @@ class _MockSession(Session):
 
 # clear_database only removes timestamped rows created after test start.
 TEST_TIME_OFFSET = timedelta(minutes=10)
+
+
+@pytest.fixture(autouse=True)
+def _rotation_cache_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """keep tests hermetic: each request rebuilds its rotation from this test's data."""
+    monkeypatch.setattr(settings.radio, "rotation_cache_ttl_seconds", 0)
+
+
+class _FakeRedis:
+    """minimal in-memory stand-in for the async redis client."""
+
+    def __init__(self) -> None:
+        self.store: dict[str, bytes | str] = {}
+
+    async def get(self, key: str) -> bytes | str | None:
+        return self.store.get(key)
+
+    async def set(
+        self,
+        key: str,
+        value: bytes | str,
+        ex: int | None = None,
+        nx: bool = False,
+    ) -> bool | None:
+        if nx and key in self.store:
+            return None
+        self.store[key] = value
+        return True
+
+    async def delete(self, key: str) -> None:
+        self.store.pop(key, None)
 
 
 # --- lens semantics (pure functions, no sampler randomness) -----------------
@@ -606,3 +641,157 @@ async def test_radio_marks_liked_tracks_for_authenticated_user(
     rotation = {track["id"]: track["liked"] for track in response.json()["rotation"]}
     assert rotation[liked.id] is True
     assert rotation[plain.id] is False
+
+
+# --- rotation cache (#1671) --------------------------------------------------
+# regression: every /radio/state poll rebuilt the rotation from the full
+# eligible catalog; under real listener volume that saturated the database
+# (2026-07-14) and slowed every endpoint. The rotation is deterministic per
+# (station, limit, period), so it's cached anonymously and the requesting
+# user's likes are overlaid per request.
+
+
+@pytest.fixture
+def rotation_cache(monkeypatch: pytest.MonkeyPatch) -> _FakeRedis:
+    """enable the rotation cache against an in-memory redis."""
+    fake = _FakeRedis()
+    monkeypatch.setattr(settings.radio, "rotation_cache_ttl_seconds", 60)
+    monkeypatch.setattr(radio_cache, "get_async_redis_client", lambda: fake)
+    return fake
+
+
+async def test_cached_rotation_skips_corpus_reload(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+    rotation_cache: _FakeRedis,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """the second poll within the TTL serves the cached rotation."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    await _create_track(
+        db_session, radio_artist, title="Cached", file_id="cached", created_at=now
+    )
+    await db_session.commit()
+
+    corpus_calls = 0
+    real_load_corpus = radio_state.load_corpus
+
+    async def counting_load_corpus(db: AsyncSession) -> list[Track]:
+        nonlocal corpus_calls
+        corpus_calls += 1
+        return await real_load_corpus(db)
+
+    monkeypatch.setattr(radio_state, "load_corpus", counting_load_corpus)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app),
+        base_url="https://radio.plyr.fm",
+    ) as client:
+        first = await client.get("/radio/state.json")
+        second = await client.get("/radio/state.json")
+
+    assert first.status_code == second.status_code == 200
+    assert corpus_calls == 1
+    assert rotation_cache.store  # the rotation actually landed in the cache
+    assert [t["id"] for t in first.json()["rotation"]] == [
+        t["id"] for t in second.json()["rotation"]
+    ]
+
+
+async def test_cached_rotation_is_anonymous_with_per_request_likes(
+    radio_app: FastAPI,
+    db_session: AsyncSession,
+    radio_artist: Artist,
+    rotation_cache: _FakeRedis,
+) -> None:
+    """a signed-in warmup can't leak liked=True to others; hits still get likes."""
+    now = datetime.now(UTC) + TEST_TIME_OFFSET
+    liked = await _create_track(
+        db_session, radio_artist, title="Liked", file_id="liked", created_at=now
+    )
+    db_session.add(
+        TrackLike(
+            track_id=liked.id,
+            user_did="did:test:user123",
+            atproto_like_uri="at://did:test:user123/fm.plyr.like/liked",
+        )
+    )
+    await db_session.commit()
+
+    async def mock_session() -> Session:
+        return _MockSession("did:test:user123")
+
+    # signed-in request warms the cache
+    radio_app.dependency_overrides[get_optional_session] = mock_session
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app),
+            base_url="https://radio.plyr.fm",
+        ) as client:
+            warm = await client.get("/radio/state.json")
+    finally:
+        del radio_app.dependency_overrides[get_optional_session]
+
+    assert {t["id"]: t["liked"] for t in warm.json()["rotation"]}[liked.id] is True
+
+    # anonymous cache hit: no liked state leaks
+    async with AsyncClient(
+        transport=ASGITransport(app=radio_app),
+        base_url="https://radio.plyr.fm",
+    ) as client:
+        anon = await client.get("/radio/state.json")
+    assert all(not track["liked"] for track in anon.json()["rotation"])
+
+    # signed-in cache hit: likes overlaid on the cached rotation
+    radio_app.dependency_overrides[get_optional_session] = mock_session
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=radio_app),
+            base_url="https://radio.plyr.fm",
+        ) as client:
+            hit = await client.get("/radio/state.json")
+    finally:
+        del radio_app.dependency_overrides[get_optional_session]
+    assert {t["id"]: t["liked"] for t in hit.json()["rotation"]}[liked.id] is True
+
+
+async def test_concurrent_cache_misses_build_once(
+    rotation_cache: _FakeRedis,
+) -> None:
+    """expiry doesn't stampede: concurrent misses coalesce onto one build."""
+    builds = 0
+
+    async def build() -> list[RadioTrack]:
+        nonlocal builds
+        builds += 1
+        # hold the build lock long enough for the other misses to arrive
+        await asyncio.sleep(0.3)
+        return [
+            RadioTrack(
+                id=1,
+                title="t",
+                artist="a",
+                artist_handle="a.plyr.fm",
+                artist_did="did:plc:a",
+                stream_url="https://api.plyr.fm/audio/t",
+                file_type="mp3",
+                duration=180,
+                artwork_url=None,
+                thumbnail_url=None,
+                atproto_record_uri=None,
+                atproto_record_cid=None,
+                created_at="2026-07-14T00:00:00+00:00",
+                tags=[],
+                like_count=0,
+                play_count=0,
+            )
+        ]
+
+    results = await asyncio.gather(
+        *(radio_cache.get_rotation("loved", 40, "period", build) for _ in range(10))
+    )
+
+    assert builds == 1
+    assert all(rotation == results[0] for rotation in results)
+    assert all(rotation[0].id == 1 for rotation in results)
