@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { onMount, tick } from 'svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
 	import {
 		clearMediaSessionMetadata,
 		setMediaSessionActionHandlers,
@@ -234,7 +235,7 @@
 			<div class="now-playing">
 				{#if currentTrack?.image_url}
 					<SensitiveImage src={currentTrack.image_url} compact respectPreference={false}>
-						<img class="np-art" src={currentTrack.image_url} alt="" />
+						<img class="np-art" src={resizedImageUrl(currentTrack.image_url, IMAGE_WIDTHS.thumb)} alt="" />
 					</SensitiveImage>
 				{:else}
 					<div class="np-art-placeholder">&#9835;</div>

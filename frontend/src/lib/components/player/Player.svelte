@@ -8,6 +8,7 @@
 	import { moderation } from '$lib/moderation.svelte';
 	import { preferences } from '$lib/preferences.svelte';
 	import { toast } from '$lib/toast.svelte';
+	import { resizedImageUrl } from '$lib/utils/display-image';
 	import {
 		findNextPlayableIndex,
 		gatedErrorFromResolution,
@@ -40,10 +41,10 @@
 		// build artwork array, respecting sensitive content settings
 		const artwork: MediaImage[] = [];
 		if (shouldShowArtwork(track.image_url)) {
-			artwork.push({ src: track.image_url!, sizes: '512x512', type: 'image/jpeg' });
+			artwork.push({ src: resizedImageUrl(track.image_url, 512)!, sizes: '512x512' });
 		} else if (shouldShowArtwork(track.album?.image_url)) {
 			// fall back to album artwork if no track artwork (or track artwork is sensitive)
-			artwork.push({ src: track.album!.image_url!, sizes: '512x512', type: 'image/jpeg' });
+			artwork.push({ src: resizedImageUrl(track.album!.image_url, 512)!, sizes: '512x512' });
 		} else if (shouldShowArtwork(track.artist_avatar_url)) {
 			// fall back to artist avatar if no album artwork (or album artwork is sensitive)
 			artwork.push({ src: track.artist_avatar_url!, sizes: '256x256', type: 'image/jpeg' });

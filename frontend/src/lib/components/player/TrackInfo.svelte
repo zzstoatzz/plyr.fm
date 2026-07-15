@@ -2,6 +2,7 @@
 	import type { Track } from '$lib/types';
 	import { onMount } from 'svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
 
 	interface Props {
 		track: Track;
@@ -60,7 +61,7 @@
 		<a href="/track/{track.id}" class="player-artwork" aria-label={`view ${track.title}`}>
 			{#if (track.image_url || track.album?.image_url) && !imageError}
 				<img
-					src={track.image_url || track.album?.image_url}
+					src={resizedImageUrl(track.image_url || track.album?.image_url, IMAGE_WIDTHS.thumb)}
 					alt="{track.title} artwork"
 					onerror={() => imageError = true}
 				/>
