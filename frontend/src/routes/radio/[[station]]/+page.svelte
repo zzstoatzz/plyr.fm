@@ -11,6 +11,7 @@
 	import TunerDial from '$lib/components/radio/TunerDial.svelte';
 	import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import SensitiveImage from '$lib/components/SensitiveImage.svelte';
+	import { IMAGE_WIDTHS, resizedImageUrl } from '$lib/utils/display-image';
 	import AddToMenu from '$lib/components/AddToMenu.svelte';
 	import type { PageData } from './$types';
 
@@ -167,12 +168,12 @@
 				<div class="now-block" class:tuning={radio.switching}>
 				<div class="art-stage">
 					{#if radio.current.artwork_url}
-						<img class="art-bg" src={radio.current.artwork_url} alt="" aria-hidden="true" />
+						<img class="art-bg" src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.tile)} alt="" aria-hidden="true" />
 					{/if}
 					<SensitiveImage src={radio.current.artwork_url} tooltipPosition="center">
 						<a class="art-link" href={`/track/${radio.current.id}`} aria-label={`view ${radio.current.title}`}>
 							{#if radio.current.artwork_url}
-								<img src={radio.current.artwork_url} alt="" class="art" />
+								<img src={resizedImageUrl(radio.current.artwork_url, IMAGE_WIDTHS.hero)} alt="" class="art" />
 							{:else}
 								<div class="art fallback"></div>
 							{/if}
@@ -238,7 +239,7 @@
 						>
 							<SensitiveImage src={track.thumbnail_url ?? track.artwork_url} compact>
 								{#if track.thumbnail_url || track.artwork_url}
-									<img src={track.thumbnail_url ?? track.artwork_url ?? ''} alt="" />
+									<img src={track.thumbnail_url ?? resizedImageUrl(track.artwork_url, IMAGE_WIDTHS.thumb) ?? ''} alt="" />
 								{:else}
 									<div class="rotation-fallback"></div>
 								{/if}
